@@ -32,6 +32,7 @@
 #include <bcos-evm/ledger/LedgerSeed.h>
 #include <bcos-evm/ledger/Storage2Ledger.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
@@ -47,8 +48,10 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <gtest/gtest.h>
 #include <cstdint>
+#include <evmone_precompiles/secp256k1.hpp>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -56,6 +59,8 @@
 #include <string>
 #include <vector>
 
+#include <bcos-evm/eth/state/transaction.hpp>
+#include <bcos-evm/eth/utils/rlp.hpp>
 #include <bcos-evm/eth/utils/statetest.hpp>
 #include <bcos-evm/eth/utils/test_state.hpp>
 
@@ -66,6 +71,7 @@ namespace fs = std::filesystem;
 
 namespace
 {
+using namespace evmc::literals;
 
 // ---- hex-string -> bcos:: type conversions (EthBlockHeaderTest.cpp:82-101 precedent, same
 // task family, same golden sources) ----
@@ -292,6 +298,115 @@ struct StubExecutor
 static_assert(bcos::scheduler_v1::TransactionScheduler<bcos::evm::engine::OpSchedulerImpl<ViewType>,
     ViewType, StubExecutor, std::vector<bcos::protocol::Transaction::Ptr>>);
 
+// ---- synthetic raw-tx builders for the malformed-input tests below (coordinator review items
+// C2/C3/C4 + the yParity test gap) ----
+//
+// All four checks these builders exercise fire during Step 1 (decode), strictly before Step 2
+// (Storage2Ledger bridge construction) — so none of the tests below need a real storage2 fixture,
+// a genuine ECDSA signature, or even well-formed r/s values except where a test is *specifically*
+// exercising the r/s range check itself: the gas-limit check (C4) fires while reading field 5
+// (gas_limit), before yParity/r/s (fields 10-12) are ever decoded; the chain-id check (C2) fires
+// while reading field 1 (chain_id), before everything else; the yParity range check fires while
+// reading field 10, before r/s (fields 11-12); the low-s check (C3) is the only one that runs
+// after full decode, inside recoverTxSender, which is why its test needs every earlier field
+// (chain id, gas limit, yParity) to be valid.
+//
+// `to` is a fixed placeholder address (a plain value transfer), NOT contract-creation
+// (evmc::bytes_view{}/nullopt): an earlier draft of these builders used contract-creation, which
+// needs TX_BASE_COST + TX_CREATE_COST = 21000 + 32000 = 53000 intrinsic gas
+// (eth/state/state.cpp::compute_tx_intrinsic_cost) — every "otherwise valid" test tx in this file
+// uses gasLimit=21000, so that draft's contract-creation shape failed intrinsic-gas validation
+// for reasons having nothing to do with whichever field a given test claims to isolate, silently
+// making every C2/C3/(non-huge-gas-limit) test pass regardless of whether its target check
+// actually fired — caught by this task's own red/green self-verification (see
+// final-batch1-report.md). A plain transfer's floor is exactly TX_BASE_COST = 21000, matching
+// every gasLimit=21000 test tx here precisely (not by a wide margin that could mask a different
+// off-by-one).
+inline constexpr evmc::address kPlaceholderTransferTo =
+    0x0000000000000000000000000000000000dead_address;
+
+bcos::bytes buildEip1559RawTx(uint64_t chainId, uint64_t gasLimit, const intx::uint256& yParity,
+    const intx::uint256& r, const intx::uint256& s)
+{
+    auto body = evmone::rlp::encode_tuple(chainId, uint64_t{0}, intx::uint256{0}, intx::uint256{0},
+        gasLimit, kPlaceholderTransferTo, intx::uint256{0}, evmc::bytes{},
+        evmone::state::AccessList{}, yParity, r, s);
+    bcos::bytes out{0x02};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+bcos::bytes buildSetCodeRawTx(uint64_t chainId, uint64_t gasLimit, const intx::uint256& yParity,
+    const intx::uint256& r, const intx::uint256& s)
+{
+    auto body = evmone::rlp::encode_tuple(chainId, uint64_t{0}, intx::uint256{0}, intx::uint256{0},
+        gasLimit, kPlaceholderTransferTo, intx::uint256{0}, evmc::bytes{},
+        evmone::state::AccessList{}, evmone::state::AuthorizationList{}, yParity, r, s);
+    bcos::bytes out{0x04};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+bcos::bytes buildDepositRawTx(uint64_t gasLimit)
+{
+    // [sourceHash, from, to, mint, value, gas, isSystemTransaction, data] — decodeDepositTx's
+    // field order (OpSchedulerImpl.h). `from`/`to` are set to OP_DEPOSITOR/OP_L1_BLOCK
+    // (bcos-evm/bcos-evm/opstack/OpPredeploys.h) — NOT arbitrary placeholders: as the block's
+    // only transaction, this deposit must satisfy processOpBlock's own "first tx is the L1
+    // attributes deposit" gate (OpBlockExecute.cpp) to reach the deeper runDeposit/
+    // validate_transaction path the gas_limit narrowing bug (C4) actually lives in — an earlier
+    // draft of this builder used zero addresses here and the resulting test passed even with the
+    // narrowing fix reverted, for the wrong reason (it was tripping the unrelated "not the L1
+    // attributes deposit" check, already covered by FirstTxNotAttributesDepositIsConsensusError,
+    // never reaching the gas_limit code path at all). isSystemTransaction is encoded via the
+    // uint64_t{0} "empty string" shape decodeBoolField expects (see OpSchedulerImpl.h's
+    // decodeBoolField comment on why a native RLP bool encoding would be the wrong match here).
+    auto body = evmone::rlp::encode_tuple(evmc::bytes32{}, bcos::evm::opstack::OP_DEPOSITOR,
+        bcos::evm::opstack::OP_L1_BLOCK, intx::uint256{0}, intx::uint256{0}, gasLimit, uint64_t{0},
+        evmc::bytes{});
+    bcos::bytes out{0x7e};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+/// A well-formed L1-attributes deposit (index-0 filler) for the eip1559/setcode malformed-input
+/// tests below. Those tests need their malicious tx to be at index 1, NOT index 0: processOpBlock
+/// requires the block's first transaction to satisfy "is the L1 attributes deposit"
+/// (OpBlockExecute.cpp) — a bare single-tx block whose only transaction is a typed (non-deposit)
+/// tx would, if the check under test happened to be broken and let decode succeed, still throw
+/// `OpConsensusError` from that *unrelated* gate once Step 3 (processOpBlock) runs, producing the
+/// exact same exception *type* the test asserts on and masking a real regression as a false
+/// "still passes". (Caught during this task's own red/green self-verification: an earlier
+/// single-tx-block draft of these tests stayed green even with the guard under test deleted, for
+/// this reason — see the coordinator-review self-verification notes in
+/// final-batch1-report.md.) Decode failures on the malicious tx (index 1) still fire during
+/// Step 1, before processOpBlock/Step 3 ever runs — so this filler deposit's own semantic
+/// validity under execution never matters, only that it decodes without error and passes the
+/// first-tx gate; `buildDepositRawTx`'s own gas value is deliberately unrelated to whatever gas
+/// value the malicious index-1 tx carries.
+bcos::bytes leadingL1AttributesDeposit()
+{
+    return buildDepositRawTx(1'000'000);
+}
+
+/// A minimal, self-consistent OpBlockEnv for the decode-only failure tests below — field values
+/// beyond `fiscoHeader` are never read (decode throws before `executeOpBlock` reaches
+/// `detail::toBlockInfo`), so zero/empty defaults are sufficient.
+bcos::evm::engine::OpBlockEnv minimalEnv(const bcos::protocol::BlockHeader& header)
+{
+    return bcos::evm::engine::OpBlockEnv{
+        .fiscoHeader = header,
+        .parentHash = {},
+        .prevRandao = {},
+        .baseFeePerGas = 0,
+        .feeRecipient = {},
+        .parentBeaconBlockRoot = {},
+        .gasLimit = 30000000,
+        .extraData = {},
+        .blobGasUsed = 0,
+    };
+}
+
 }  // namespace
 
 // (a) dummy executeBlock: throws immediately, message contains "OP mode".
@@ -442,4 +557,177 @@ TEST(OpSchedulerImpl, ConfigAtThresholds)
         bcos::evm::opstack::configAt(2000, thresholds).fork, bcos::evm::opstack::OpFork::Jovian);
     EXPECT_EQ(bcos::evm::opstack::configAt(1'000'000, thresholds).fork,
         bcos::evm::opstack::OpFork::Jovian);
+}
+
+// ---- final-batch1 coordinator review: C2/C3/C4 + yParity test-gap regression tests ----
+// All six below use a bare MutableStorage with no seeding — decode failures happen in Step 1,
+// strictly before the Storage2Ledger bridge is ever touched (see the builder-helpers comment
+// above `minimalEnv`).
+
+// (f) C4: a canonical 8-byte deposit gas scalar 0xFFFFFFFFFFFFFFFF must not silently become a
+// negative int64_t (the coordinator-traced blockGasLeft-inflation / gasUsed-wraparound chain).
+TEST(OpSchedulerImpl, DepositGasLimitOverflowIsConsensusError)
+{
+    MutableStorage storage;
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+
+    std::vector<bcos::bytes> rawTxBytes{buildDepositRawTx(std::numeric_limits<uint64_t>::max())};
+
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        bcos::evm::engine::OpConsensusError);
+}
+
+// (g) C4: the same narrowing guard applied at the eip1559 and set-code gas_limit sites — the
+// coordinator's review explicitly calls out that these two must not rely on the "signature
+// preimage happens to self-destruct" coincidence. The malicious tx is index 1 of a two-tx block
+// (index 0 is a well-formed L1-attributes deposit filler) — see leadingL1AttributesDeposit's
+// comment for why a bare single-tx block would falsely "pass" this test regardless of whether
+// the guard under test actually fires.
+TEST(OpSchedulerImpl, TypedTxGasLimitOverflowIsConsensusError)
+{
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+    const auto hugeGas = std::numeric_limits<uint64_t>::max();
+
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildEip1559RawTx(kChainId, hugeGas, intx::uint256{0},
+                                              intx::uint256{1}, intx::uint256{1})};
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+            bcos::evm::engine::OpConsensusError)
+            << "eip1559";
+    }
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildSetCodeRawTx(kChainId, hugeGas, intx::uint256{0},
+                                              intx::uint256{1}, intx::uint256{1})};
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+            bcos::evm::engine::OpConsensusError)
+            << "setcode";
+    }
+}
+
+// (h) C2: a transaction whose decoded chain_id does not match the scheduler's own chainId must
+// be rejected — nothing downstream (validate_transaction) checks chain id, so an unchecked
+// cross-chain replay would otherwise execute normally and produce a VALID block. Two-tx block,
+// same rationale as (g).
+TEST(OpSchedulerImpl, TypedTxChainIdMismatchIsConsensusError)
+{
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+    constexpr uint64_t kWrongChainId = kChainId + 1;
+
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildEip1559RawTx(kWrongChainId, 21000, intx::uint256{0},
+                                              intx::uint256{1}, intx::uint256{1})};
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+            bcos::evm::engine::OpConsensusError)
+            << "eip1559";
+    }
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildSetCodeRawTx(kWrongChainId, 21000, intx::uint256{0},
+                                              intx::uint256{1}, intx::uint256{1})};
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+            bcos::evm::engine::OpConsensusError)
+            << "setcode";
+    }
+}
+
+// (i) C3: a signature with s > secp256k1n/2 (the EIP-2 malleable form of an otherwise-valid
+// signature) must be rejected, even though the plain ECRECOVER-PRECOMPILE semantics
+// (evmmax::secp256k1::ecrecover) would happily recover a sender from it. r/s here are not a real
+// signature over this preimage — the check under test fires before any consistency with the
+// preimage would even matter, exactly like every other malformed-input test in this file.
+// Two-tx block, same rationale as (g)/(h).
+TEST(OpSchedulerImpl, HighSSignatureIsConsensusError)
+{
+    MutableStorage storage;
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+
+    constexpr auto kSecpOrder = evmmax::secp256k1::Curve::ORDER;
+    const intx::uint256 highS = kSecpOrder - 1;  // > n/2 for this curve's n.
+    std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
+        buildEip1559RawTx(kChainId, 21000, intx::uint256{0}, intx::uint256{1}, highS)};
+
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        bcos::evm::engine::OpConsensusError);
+}
+
+// (j)/(k) test-gap item: yParity > 1 rejection had zero test coverage (the review's own repro:
+// deleting the `if (yParity > 1) throw` lines still left 206/206 green). Two boundary values:
+// yParity=2 (smallest invalid value) and yParity=256 (probes the exact truncation hazard the
+// I1 fix's own comment describes — `static_cast<uint8_t>(256) == 0`, which would silently look
+// like a valid parity=0 if the guard were absent). Two-tx blocks, same rationale as (g)/(h)/(i).
+TEST(OpSchedulerImpl, YParityEquals2IsConsensusError)
+{
+    MutableStorage storage;
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+
+    std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
+        buildEip1559RawTx(kChainId, 21000, intx::uint256{2}, intx::uint256{1}, intx::uint256{1})};
+
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        bcos::evm::engine::OpConsensusError);
+}
+
+TEST(OpSchedulerImpl, YParityEquals256IsConsensusError)
+{
+    MutableStorage storage;
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+
+    std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
+        buildEip1559RawTx(kChainId, 21000, intx::uint256{256}, intx::uint256{1}, intx::uint256{1})};
+
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        bcos::evm::engine::OpConsensusError);
 }

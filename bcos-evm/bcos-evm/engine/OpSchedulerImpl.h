@@ -160,6 +160,54 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
     return static_cast<uint64_t>(v);
 }
 
+/// uint64_t -> int64_t, explicit bounds-checked narrowing — same "widen -> explicit check ->
+/// narrow" discipline as `narrowU256ToU64` above, applied to the wire-decoded gas_limit scalar
+/// (coordinator review C4). DepositTx::gas_limit / evmone::state::Transaction::gas_limit are
+/// both `int64_t`; a canonical 8-byte RLP scalar (e.g. `0xFFFFFFFFFFFFFFFF`) decodes to a
+/// `uint64_t` that silently becomes *negative* under a raw `static_cast<int64_t>`. Traced attack
+/// chain for the deposit path specifically (`dep.gas_limit`): `validate_transaction` rejects the
+/// negative gas_limit as below the intrinsic-gas floor -> `runDeposit` (OpDepositTx.cpp) only
+/// special-cases `GAS_LIMIT_REACHED`, so this falls into the generic failed-deposit branch and
+/// sets `receipt.gas_used = dep.gas_limit` (still negative) -> `OpBlockExecute.cpp`'s
+/// `blockGasLeft -= gas_used` then *raises* the remaining block gas pool by roughly 2^63,
+/// letting later transactions in the same block exceed the real gasLimit, while `gasUsed` itself
+/// wraps to a huge-but-plausible `uint64_t` on the `OpExecuteBlockResult` projection — an
+/// attacker supplying the same wrapped value on the payload side would pass the six-way
+/// comparison surface and get a block VALID that op-geth rejects outright (`GasPool.SubGas`
+/// returns `ErrGasLimitReached`, and `state_transition.go`'s failed-deposit branch explicitly
+/// excludes that error from the "still charge, still succeed" path — the whole block is invalid).
+inline int64_t narrowGasLimit(uint64_t v)
+{
+    if (v > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: gas limit exceeds int64_t range");
+    return static_cast<int64_t>(v);
+}
+
+/// EIP-2 signature-malleability guard (r,s in [1, n-1], s <= n/2). `evmmax::secp256k1::ecrecover`
+/// implements ECRECOVER-PRECOMPILE semantics, which only require `0 < r,s < n` — real Ethereum
+/// signers additionally reject high-s (op-geth's `crypto.ValidateSignatureValues`, invoked with
+/// `homestead=true` from `transaction_signing.go`, crypto/crypto.go:244-248). Without this check,
+/// an attacker can rewrite a legitimately-signed transaction's `(r,s,yParity)` to
+/// `(r, n-s, 1-yParity)`: sender recovery and execution outcome are unchanged, but the raw bytes
+/// (hence txRoot/blockHash) differ from the canonical signing — this scheduler would accept the
+/// rewritten block as VALID where op-geth rejects the whole block. Mirrors
+/// bcos-evm/test/opstack/T8nReplayHarness.h's `structurallyUnrecoverable` predicate (same
+/// four-way r/s bound check), applied here to the *outer* transaction's own signature rather
+/// than an EIP-7702 authorization tuple — same underlying curve constant
+/// (`evmmax::secp256k1::Curve::ORDER`) already used for exactly this bound in
+/// bcos-evm/bcos-evm/eth/state/state.cpp:21/117 and OpTransition.cpp:28/71 (both for
+/// authorization tuples; this codebase never previously validated the *outer* tx signature this
+/// way, because nothing before this task decoded an outer tx signature from raw bytes at all).
+inline void requireLowSSignature(const intx::uint256& r, const intx::uint256& s)
+{
+    constexpr auto kSecpOrder = evmmax::secp256k1::Curve::ORDER;
+    constexpr auto kSecpHalfOrder = kSecpOrder / 2;
+    if (r == 0 || r >= kSecpOrder || s == 0 || s >= kSecpOrder || s > kSecpHalfOrder)
+        throw OpConsensusError(
+            "OpSchedulerImpl: raw tx decode: invalid signature (r/s out of [1,n-1], or s exceeds "
+            "secp256k1n/2 — EIP-2 malleable signature)");
+}
+
 /// BlockHashes answering exactly one query (block number - 1 -> the injected parent hash),
 /// mirroring bcos-evm/test/opstack/T8nReplayHarness.h's ParentOnlyBlockHashes: EIP-2935's
 /// system call at block 1 only ever queries the immediate parent within this loop's scope; any
@@ -369,6 +417,7 @@ inline evmc::bytes_view toAddressView(const std::optional<evmc::address>& addr) 
 inline evmc::address recoverTxSender(const evmc::bytes& signingPreimage,
     const intx::uint256& yParity, const intx::uint256& r, const intx::uint256& s)
 {
+    requireLowSSignature(r, s);  // C3 (coordinator review): EIP-2 malleability guard.
     const auto hash =
         evmone::keccak256(evmc::bytes_view{signingPreimage.data(), signingPreimage.size()});
     const auto rBytes = intx::be::store<evmc::bytes32>(r);
@@ -405,7 +454,7 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
     // reasons this decoder cannot recover from the wire bytes alone.
     dep.mint = decodeU256Scalar(listBody);
     dep.value = decodeU256Scalar(listBody);
-    dep.gas_limit = static_cast<int64_t>(decodeU64Scalar(listBody));
+    dep.gas_limit = narrowGasLimit(decodeU64Scalar(listBody));  // C4 (coordinator review).
     dep.is_system_tx = decodeBoolField(listBody);
     dep.data = decodeBytesField(listBody);
     expectExhausted(listBody, "deposit envelope fields");
@@ -415,7 +464,16 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 
 /// EIP-1559 (type 0x02): [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit, to,
 /// value, data, accessList, yParity, r, s] — field order per rlp_encode.cpp:43-47.
-inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry)
+///
+/// `chainId` (the scheduler's own chain id, threaded in from `executeOpBlock`'s `m_chainId` via
+/// `decodeOneRawTx`) is compared against the decoded `tx.chain_id` immediately below (C2,
+/// coordinator review): nothing downstream (`OpValidate.cpp` -> `validate_transaction`,
+/// eth/state/state.cpp:420-529) checks chain id at all — it is used only for the CHAINID opcode
+/// and EIP-7702 authorization matching — so a transaction signed for a *different* chain replays
+/// unmodified here (ecrecover succeeds, sender is correct, execution is normal, block is VALID),
+/// while op-geth's own signer rejects it at decode time (`ErrInvalidChainId`,
+/// transaction_signing.go:284-285) and the whole block never reaches execution.
+inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
     // envelope shape: 0x02 || rlp([...]) — same list-header fix as decodeDepositTx (C1).
@@ -424,10 +482,12 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry)
     evmone::state::Transaction tx;
     tx.type = evmone::state::Transaction::Type::eip1559;
     tx.chain_id = decodeU64Scalar(listBody);
+    if (tx.chain_id != chainId)
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: chain id mismatch (eip1559)");
     tx.nonce = decodeU64Scalar(listBody);
     tx.max_priority_gas_price = decodeU256Scalar(listBody);
     tx.max_gas_price = decodeU256Scalar(listBody);
-    tx.gas_limit = static_cast<int64_t>(decodeU64Scalar(listBody));
+    tx.gas_limit = narrowGasLimit(decodeU64Scalar(listBody));  // C4 (coordinator review).
     tx.to = decodeOptionalAddressField(listBody);
     tx.value = decodeU256Scalar(listBody);
     tx.data = decodeBytesField(listBody);
@@ -458,8 +518,10 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry)
 
 /// EIP-7702 set-code (type 0x04): [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit,
 /// to, value, data, accessList, authorizationList, yParity, r, s] — field order per
-/// rlp_encode.cpp:66-70.
-inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry)
+/// rlp_encode.cpp:66-70. `chainId` cross-check: see decodeEip1559Tx's comment (C2, same rationale,
+/// same outer-tx-only scope — EIP-7702 authorization tuples carry their own independent chain_id
+/// field, already checked inside evmone::state::process_authorization_list, and are unaffected).
+inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
     // envelope shape: 0x04 || rlp([...]) — same list-header fix as decodeDepositTx (C1).
@@ -468,10 +530,12 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry)
     evmone::state::Transaction tx;
     tx.type = evmone::state::Transaction::Type::set_code;
     tx.chain_id = decodeU64Scalar(listBody);
+    if (tx.chain_id != chainId)
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: chain id mismatch (setcode)");
     tx.nonce = decodeU64Scalar(listBody);
     tx.max_priority_gas_price = decodeU256Scalar(listBody);
     tx.max_gas_price = decodeU256Scalar(listBody);
-    tx.gas_limit = static_cast<int64_t>(decodeU64Scalar(listBody));
+    tx.gas_limit = narrowGasLimit(decodeU64Scalar(listBody));  // C4 (coordinator review).
     tx.to = decodeOptionalAddressField(listBody);
     tx.value = decodeU256Scalar(listBody);
     tx.data = decodeBytesField(listBody);
@@ -501,7 +565,16 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry)
 /// Dispatches on the EIP-2718 type byte (design §4.3 step 1 "分拣"). Deliberately narrow: only
 /// the three shapes processOpBlock's OpBlockTx variant understands (matching the t8n corpus's
 /// own three `_op_type` values, T8nReplayHarness.h:465-596 — no legacy/access_list/blob).
-inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry)
+///
+/// `chainId` is threaded straight through to the two typed-tx decoders (C2, coordinator review)
+/// — deposit has no chain_id field and does not take the parameter. This function stays a free
+/// function in `detail`, not a member of `OpSchedulerImpl`, precisely so this parameter never
+/// touches the class template's own member-function signatures (which are eagerly instantiated
+/// whenever `OpSchedulerImpl<Storage>` is named, unlike member bodies — see the "engine-facing
+/// seam surface" block on the class below, and engine's `EngineServiceImpl.h` c_opMode comment,
+/// task-5b, for the "OP dependent name must not leak into a signature the generic composition
+/// root also instantiates" failure mode this avoids).
+inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     if (rawEntry.empty())
         throw OpConsensusError("OpSchedulerImpl: raw tx decode: empty envelope");
@@ -512,9 +585,9 @@ inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry)
     if (typeByte == kDepositTypeByte)
         return decodeDepositTx(std::move(rawEntry));
     if (typeByte == kEip1559TypeByte)
-        return decodeEip1559Tx(std::move(rawEntry));
+        return decodeEip1559Tx(std::move(rawEntry), chainId);
     if (typeByte == kSetCodeTypeByte)
-        return decodeSetCodeTx(std::move(rawEntry));
+        return decodeSetCodeTx(std::move(rawEntry), chainId);
     throw OpConsensusError("OpSchedulerImpl: raw tx decode: unsupported tx type byte 0x" +
                            std::to_string(static_cast<unsigned>(typeByte)));
 }
@@ -647,11 +720,14 @@ public:
     task::Task<OpExecuteBlockResult> executeOpBlock(
         Storage& storage, OpBlockEnv const& env, ::ranges::input_range auto const& rawTxBytes)
     {
-        // Step 1: sort/decode.
+        // Step 1: sort/decode. m_chainId is passed as a plain uint64_t argument (not a new
+        // parameter on this method, and not an OP-specific type) — see decodeOneRawTx's comment
+        // on why the OP dependent-name-in-signature hazard does not apply here (C2, coordinator
+        // review).
         std::vector<bcos::evm::opstack::OpBlockTx> txs;
         for (auto const& rawItem : rawTxBytes)
-            txs.push_back(
-                detail::decodeOneRawTx(bcos::bytes(std::begin(rawItem), std::end(rawItem))));
+            txs.push_back(detail::decodeOneRawTx(
+                bcos::bytes(std::begin(rawItem), std::end(rawItem)), m_chainId));
 
         // Step 2: one bridge instance for this block.
         bcos::evm::ledger::Storage2Ledger<Storage> bridge(storage);
