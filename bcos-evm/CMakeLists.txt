@@ -33,18 +33,20 @@ endif()
 # are unavailable.
 set(EVMONE_PKG_SHIM_DIR "${CMAKE_CURRENT_BINARY_DIR}/pkg-include-shim")
 file(MAKE_DIRECTORY "${EVMONE_PKG_SHIM_DIR}/test")
-if(NOT EXISTS "${EVMONE_PKG_SHIM_DIR}/test/state")
-    # Prefer a symlink (stays live as eth/state changes). CREATE_LINK's COPY_ON_ERROR only
-    # copies regular files, not directories, so it cannot serve as the fallback here; do the
-    # directory copy explicitly when the symlink cannot be created (e.g. Windows without the
-    # symlink privilege). The copied tree is a configure-time snapshot — remove the build dir
-    # to refresh it after editing eth/state on such platforms.
-    file(CREATE_LINK "${CMAKE_CURRENT_SOURCE_DIR}/bcos-evm/eth/state"
-        "${EVMONE_PKG_SHIM_DIR}/test/state" SYMBOLIC RESULT _shim_link_result)
-    if(NOT _shim_link_result STREQUAL "0")
-        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/bcos-evm/eth/state"
-            DESTINATION "${EVMONE_PKG_SHIM_DIR}/test")
-    endif()
+# Refreshed on every configure, deliberately not guarded by an existence check. A symlink is
+# preferred and stays live as eth/state changes; CREATE_LINK is idempotent and replaces a stale
+# or dangling link cleanly. Where symlinks are unavailable (Windows without the privilege) the
+# fallback is a directory copy, and that copy is a configure-time snapshot: guarding it with
+# "already exists" would leave the first developer who edits eth/state building against stale
+# headers — not a compile error, a wrong build. Re-copying each configure is cheap and removes
+# that failure mode. (CREATE_LINK's COPY_ON_ERROR only handles regular files, not directories,
+# so the fallback has to be spelled out.)
+file(CREATE_LINK "${CMAKE_CURRENT_SOURCE_DIR}/bcos-evm/eth/state"
+    "${EVMONE_PKG_SHIM_DIR}/test/state" SYMBOLIC RESULT _shim_link_result)
+if(NOT _shim_link_result STREQUAL "0")
+    file(REMOVE_RECURSE "${EVMONE_PKG_SHIM_DIR}/test/state")
+    file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/bcos-evm/eth/state"
+        DESTINATION "${EVMONE_PKG_SHIM_DIR}/test")
 endif()
 
 add_library(bcos-evm-eth STATIC
@@ -62,9 +64,15 @@ add_library(bcos-evm-eth STATIC
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
+# Shim first: ${CMAKE_CURRENT_SOURCE_DIR} is <repo>/bcos-evm, which contains a real test/
+# directory (test/eth, test/opstack). With it searched first, <test/state/...> and
+# <test/utils/...> resolve to the shim and the package only for as long as bcos-evm/test/state/
+# and bcos-evm/test/utils/ happen not to exist — adding either would silently shadow evmone's
+# headers for every TU in the module, with no diagnostic. The shim holds nothing but test/, so
+# putting it first costs nothing and removes the coincidence.
 target_include_directories(bcos-evm-eth PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${EVMONE_PKG_SHIM_DIR})
+    ${EVMONE_PKG_SHIM_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
 
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
