@@ -99,11 +99,9 @@ struct SRMockExecutor
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
