@@ -183,14 +183,20 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     evmc::bytes_view signedTxEnvelope, const OpForkConfig& cfg, const OpFeeParams& fee,
     int64_t blockGasLeft)
 {
-    // 0x7E must go through runDeposit, never this path. It is not merely unsupported here: 0x7E
-    // is a cast-in Transaction::Type value outside the enumeration, and validate_transaction's
-    // type switch (state.cpp:365-383) has no default label, so it would fall through every
-    // revision gate and be validated as a legacy transaction. opTransition would then buy gas,
-    // charge L1 and operator fees and enforce the nonce - none of which a deposit gets - and
-    // emit an OpTxReceipt, whose encodeReceiptForRoot omits deposit_nonce and
-    // deposit_receipt_version, i.e. a wrong receipts-root leaf for a 0x7E-tagged transaction.
-    if (tx.type == evmone::state::Transaction::Type::blob || tx.type == kDepositTxType)
+    // Whitelist, not a blacklist. Transaction::Type has uint8_t as its underlying type and
+    // validate_transaction's type switch (state.cpp:365-383) carries no default label, so EVERY
+    // value above set_code — 0x05..0xFF, which includes the 0x7E deposit type — falls through
+    // each revision gate and is validated as if it were legacy. Rejecting only 0x7E would close
+    // one instance of that hole and leave the rest open.
+    //
+    // The consequence is a consensus one: rlp_encode emits the raw type byte as the typed
+    // envelope prefix, so an accepted out-of-enum transaction contributes a leaf carrying that
+    // prefix to the receipts root, priced under legacy rules. For 0x7E specifically it would
+    // also skip runDeposit entirely — buying gas, charging L1 and operator fees and enforcing
+    // the nonce, none of which a deposit gets — and emit an OpTxReceipt without deposit_nonce
+    // or deposit_receipt_version.
+    if (tx.type == evmone::state::Transaction::Type::blob ||
+        tx.type > evmone::state::Transaction::Type::set_code)
         return make_error_code(std::errc::not_supported);
 
     if (signedTxEnvelope.empty())

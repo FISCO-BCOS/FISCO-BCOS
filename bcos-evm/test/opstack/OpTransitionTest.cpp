@@ -378,4 +378,76 @@ BOOST_AUTO_TEST_CASE(OperatorFeeConservesWhenCfgDisagreesWithProps)
         (totalSupply(ts)) == (before), "operator fee must conserve across cfg/props disagreement");
 }
 
+// 回执元数据必须描述交易「实际按哪个分叉定价/收费」，而不是 opTransition 手上那份 cfg。
+//
+// 这条必须在 opTransition 这一层驱动，而不是直接调 deriveOpReceiptMeta：缺陷位于**调用点**
+// （传 cfg 还是传 props），直接给 deriveOpReceiptMeta 喂字面布尔值的用例只能证明该函数尊重
+// 自己的参数，无法证明 opTransition 传对了参数——把调用点改回 cfg 时那种用例照样全绿。
+BOOST_AUTO_TEST_CASE(ReceiptMetaFollowsSnapshotNotTransitionCfg)
+{
+    constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
+    ts[dest] = {};
+    seedOpPredeploys(ts);
+    test::TestBlockHashes hashes;
+
+    state::BlockInfo block;
+    block.number = 1;
+    block.gas_limit = 30000000;
+    block.base_fee = 7;
+    block.coinbase = OP_SEQUENCER_FEE_VAULT;
+
+    state::Transaction tx;
+    tx.type = state::Transaction::Type::eip1559;
+    tx.sender = sender;
+    tx.to = dest;
+    tx.gas_limit = 100000;
+    tx.max_gas_price = 1000;
+    tx.max_priority_gas_price = 10;
+    tx.value = intx::uint256{0};
+    tx.nonce = 0;
+
+    OpFeeParams fee{.l1_base_fee = 0_u256,
+        .base_fee_scalar = 0,
+        .blob_base_fee_scalar = 0,
+        .blob_base_fee = 0_u256,
+        .operator_fee_scalar = 1000000,
+        .operator_fee_constant = 500,
+        .da_footprint_gas_scalar = 3};
+    std::vector<uint8_t> env{0x02, 0x11};
+
+    // validate：Isthmus —— operator fee 生效、DA footprint 未生效，快照如实记录。
+    const auto v =
+        opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
+    const auto& props = std::get<OpTxProperties>(v);
+    BOOST_REQUIRE(props.has_operator_fee);
+    BOOST_REQUIRE(!props.has_da_footprint);
+
+    // transition：cfg 两位都与 props 相反（operator fee 关、DA footprint 开）。
+    OpForkConfig cfg = isthmusConfig();
+    cfg.has_operator_fee = false;
+    cfg.has_da_footprint = true;
+    BOOST_REQUIRE(cfg.has_operator_fee != props.has_operator_fee);
+    BOOST_REQUIRE(cfg.has_da_footprint != props.has_da_footprint);
+
+    const auto txR = opTransition(ts, block, hashes, tx, cfg, vm, props, 1234);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
+
+    // 发送方被收了 operator fee（props 说了算），回执就必须报出来——读 cfg 会整个漏掉。
+    BOOST_CHECK_MESSAGE(txR.meta.operator_fee.has_value(),
+        "receipt must report the operator fee the sender was actually charged");
+    // 交易并非按 DA footprint 定价，回执不得凭 transition 期 cfg 凭空添上该字段。
+    BOOST_CHECK_MESSAGE(!txR.meta.da_footprint_gas_scalar.has_value(),
+        "receipt must not report a DA footprint the transaction was not priced under");
+    BOOST_CHECK_MESSAGE(!txR.meta.da_footprint.has_value(),
+        "receipt must not report a DA footprint the transaction was not priced under");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -80,6 +80,52 @@ BOOST_AUTO_TEST_CASE(RejectsDepositTxOnTheNonDepositPath)
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
 }
 
+// 0x7E 只是这个洞里的一个值。Transaction::Type 的底层类型是 uint8_t，而 validate_transaction
+// 的类型 switch 没有 default 标号，所以 set_code(0x04) 以上的每一个字节都会穿过全部 revision
+// 门控、被当作 legacy 校验通过。rlp_encode 会把原始类型字节作为 typed 前缀写进回执，于是这类
+// 交易会给 receipts root 贡献一个带该前缀、却按 legacy 规则定价的叶子。
+//
+// 因此拒绝必须是白名单。只黑名单 0x7E 的实现能通过上面那条用例，却通不过这一条。
+BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
+{
+    test::TestState ts;
+    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const std::vector<uint8_t> env{0x11, 0x22};
+
+    for (const unsigned t : {0x05u, 0x40u, 0x7eu, 0x7fu, 0xffu})
+    {
+        auto tx = baseTx();
+        tx.type = static_cast<state::Transaction::Type>(t);
+        tx.to = 0x0000000000000000000000000000000000001234_address;
+        const auto r = opValidate(
+            ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+        BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(r),
+            "out-of-enum tx type 0x" << std::hex << t << " must not be accepted");
+        BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
+    }
+
+    // 反向守卫：五种合法类型不得被白名单误伤（blob 另有其独立拒绝理由，已由 RejectsBlobTx 覆盖）。
+    for (const auto t : {state::Transaction::Type::legacy, state::Transaction::Type::access_list,
+             state::Transaction::Type::eip1559, state::Transaction::Type::set_code})
+    {
+        auto tx = baseTx();
+        tx.type = t;
+        tx.to = 0x0000000000000000000000000000000000001234_address;
+        if (t == state::Transaction::Type::set_code)
+            tx.authorization_list = {state::Authorization{.chain_id = 1,
+                .addr = 0x00000000000000000000000000000000000000cc_address,
+                .nonce = 0,
+                .signer = std::nullopt,
+                .r = 1_u256,
+                .s = 1_u256,
+                .v = intx::uint256{0}}};
+        const auto r = opValidate(
+            ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+        BOOST_CHECK_MESSAGE(std::holds_alternative<OpTxProperties>(r),
+            "valid tx type " << static_cast<unsigned>(t) << " must not be rejected");
+    }
+}
+
 BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
 {
     test::TestState ts;
