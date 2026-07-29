@@ -30,12 +30,13 @@
 //     encoding, where the hash comparison only says "somewhere". On failure the 21 reconstructed
 //     fields are dumped through `RecordProperty` for exactly that localisation.
 //
-// The single, explicitly-scoped exception: the mutation matrix's cases #8.1-#8.5 mutate a header
-// field and must then re-seal the blockHash locally, because op-geth has no golden hash for a
-// block that never existed. Those cases pin the *comparison chain*, not the mapping (which the
-// 33-vector gate above them already pinned externally); `resealBlockHash` is the only place a
-// self-computed blockHash appears in this file, and it is never reached by the 33 vectors or by
-// the chained pair.
+// The explicitly-scoped exceptions, both inside the mutation matrix and both unavoidable (op-geth
+// has no golden hash for a block that never existed): cases #8.1-#8.5 mutate a header field and
+// re-seal via `resealBlockHash`, and case #7 hashes a header whose `requestsHash` was displaced.
+// Those cases pin the *comparison chain* and the *bucket assignment*, not the mapping — which the
+// 33-vector gate above them has already pinned externally. The invariant that matters:
+// **neither the 33 vectors nor the chained pair passes through any self-computed blockHash**;
+// every one of them is judged against op-geth's own `block.Hash()`.
 //
 // ── Where the golden values come from ────────────────────────────────────────────────────────
 //
@@ -558,35 +559,47 @@ std::string hexOfBytes(bcos::bytes const& data)
     return bcos::toHexStringWithPrefix(data);
 }
 
+/// `RecordProperty` OVERWRITES an existing key rather than appending (gtest's documented
+/// behaviour), and the 33-vector sweep below records from inside one single test — so a fixed key
+/// would leave only the last vector's value and silently discard the other 32. Every key this
+/// file emits is therefore namespaced by vector id (task-6 review I3).
+std::string recordKey(std::string const& id, std::string_view suffix)
+{
+    return "v_" + id + "_" + std::string(suffix);
+}
+
 /// Dumps all 21 reconstructed header fields so a failing `encode()` comparison can be localised
 /// to a field rather than to "the hash differs" (裁定 C3's stated purpose).
 void recordHeaderFields(std::string const& id, bcos::codec::rlp::EthBlockHeader const& header)
 {
     using ::testing::Test;
-    Test::RecordProperty("hdr_id", id);
-    Test::RecordProperty("hdr_01_parentHash", header.parentHash.hexPrefixed());
-    Test::RecordProperty("hdr_02_ommersHash", header.ommersHash.hexPrefixed());
-    Test::RecordProperty("hdr_03_feeRecipient", header.feeRecipient.hexPrefixed());
-    Test::RecordProperty("hdr_04_stateRoot", header.stateRoot.hexPrefixed());
-    Test::RecordProperty("hdr_05_transactionsRoot", header.transactionsRoot.hexPrefixed());
-    Test::RecordProperty("hdr_06_receiptsRoot", header.receiptsRoot.hexPrefixed());
-    Test::RecordProperty("hdr_07_logsBloom", header.logsBloom.hexPrefixed());
-    Test::RecordProperty("hdr_08_difficulty", boost::lexical_cast<std::string>(header.difficulty));
-    Test::RecordProperty("hdr_09_number", std::to_string(header.number));
-    Test::RecordProperty("hdr_10_gasLimit", std::to_string(header.gasLimit));
-    Test::RecordProperty("hdr_11_gasUsed", std::to_string(header.gasUsed));
-    Test::RecordProperty("hdr_12_timestamp", std::to_string(header.timestamp));
-    Test::RecordProperty("hdr_13_extraData", hexOfBytes(header.extraData));
-    Test::RecordProperty("hdr_14_prevRandao", header.prevRandao.hexPrefixed());
-    Test::RecordProperty("hdr_15_nonce", header.nonce.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_01_parentHash"), header.parentHash.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_02_ommersHash"), header.ommersHash.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_03_feeRecipient"), header.feeRecipient.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_04_stateRoot"), header.stateRoot.hexPrefixed());
     Test::RecordProperty(
-        "hdr_16_baseFeePerGas", boost::lexical_cast<std::string>(header.baseFeePerGas));
-    Test::RecordProperty("hdr_17_withdrawalsRoot", header.withdrawalsRoot.hexPrefixed());
-    Test::RecordProperty("hdr_18_blobGasUsed", std::to_string(header.blobGasUsed));
-    Test::RecordProperty("hdr_19_excessBlobGas", std::to_string(header.excessBlobGas));
+        recordKey(id, "hdr_05_transactionsRoot"), header.transactionsRoot.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_06_receiptsRoot"), header.receiptsRoot.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_07_logsBloom"), header.logsBloom.hexPrefixed());
     Test::RecordProperty(
-        "hdr_20_parentBeaconBlockRoot", header.parentBeaconBlockRoot.hexPrefixed());
-    Test::RecordProperty("hdr_21_requestsHash", header.requestsHash.hexPrefixed());
+        recordKey(id, "hdr_08_difficulty"), boost::lexical_cast<std::string>(header.difficulty));
+    Test::RecordProperty(recordKey(id, "hdr_09_number"), std::to_string(header.number));
+    Test::RecordProperty(recordKey(id, "hdr_10_gasLimit"), std::to_string(header.gasLimit));
+    Test::RecordProperty(recordKey(id, "hdr_11_gasUsed"), std::to_string(header.gasUsed));
+    Test::RecordProperty(recordKey(id, "hdr_12_timestamp"), std::to_string(header.timestamp));
+    Test::RecordProperty(recordKey(id, "hdr_13_extraData"), hexOfBytes(header.extraData));
+    Test::RecordProperty(recordKey(id, "hdr_14_prevRandao"), header.prevRandao.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_15_nonce"), header.nonce.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_16_baseFeePerGas"),
+        boost::lexical_cast<std::string>(header.baseFeePerGas));
+    Test::RecordProperty(
+        recordKey(id, "hdr_17_withdrawalsRoot"), header.withdrawalsRoot.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_18_blobGasUsed"), std::to_string(header.blobGasUsed));
+    Test::RecordProperty(
+        recordKey(id, "hdr_19_excessBlobGas"), std::to_string(header.excessBlobGas));
+    Test::RecordProperty(
+        recordKey(id, "hdr_20_parentBeaconBlockRoot"), header.parentBeaconBlockRoot.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_21_requestsHash"), header.requestsHash.hexPrefixed());
 }
 
 // ────────────────────────────────── composition root ──────────────────────────────────
@@ -701,8 +714,11 @@ public:
         ViewType& storage, BlockEnv const& env, ::ranges::input_range auto const& rawTxBytes)
     {
         auto result = co_await m_inner.executeOpBlock(storage, env, rawTxBytes);
-        // The one displacement. Any value other than the real root works; the zero hash is the
-        // most obviously-not-a-trie-root choice.
+        // The one displacement. The zero hash is chosen because it can never collide with the
+        // real value: a transactions trie root is a keccak256 output (`computeOpTxRoot` ->
+        // `MPT::hash()`; even the empty-list case yields the well-known
+        // 0x56e81f...b421 empty-root constant, not zero), so `h256{}` is provably != the value
+        // the comparison is fed — the mutation cannot silently degenerate into a no-op.
         result.txRoot = bcos::h256{};
         co_return result;
     }
@@ -766,8 +782,9 @@ void runGoldenVector(std::string const& id)
     if (encoded != goldenEncoded)
     {
         recordHeaderFields(id, header);
-        ::testing::Test::RecordProperty("hdr_encoded_actual", hexOfBytes(encoded));
-        ::testing::Test::RecordProperty("hdr_encoded_golden", hexOfBytes(goldenEncoded));
+        ::testing::Test::RecordProperty(recordKey(id, "hdr_encoded_actual"), hexOfBytes(encoded));
+        ::testing::Test::RecordProperty(
+            recordKey(id, "hdr_encoded_golden"), hexOfBytes(goldenEncoded));
     }
     EXPECT_EQ(encoded, goldenEncoded) << id
                                       << ": rebuildOpEthHeader().encode() != "
@@ -783,12 +800,13 @@ void runGoldenVector(std::string const& id)
     // (4) The verdict.
     auto status = bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
 
-    ::testing::Test::RecordProperty("gate_vector_id", id);
-    ::testing::Test::RecordProperty("gate_status", static_cast<int>(status.status));
-    ::testing::Test::RecordProperty("gate_block_hash", goldenBlockHash.hexPrefixed());
-    ::testing::Test::RecordProperty("gate_tx_root", goldenTxRoot.hexPrefixed());
+    // Per-vector keys (review I3): the 33-vector sweep runs this whole function 33 times inside
+    // ONE test, and `RecordProperty` overwrites by key — fixed keys would keep only the last.
+    ::testing::Test::RecordProperty(recordKey(id, "status"), static_cast<int>(status.status));
+    ::testing::Test::RecordProperty(recordKey(id, "block_hash"), goldenBlockHash.hexPrefixed());
+    ::testing::Test::RecordProperty(recordKey(id, "tx_root"), goldenTxRoot.hexPrefixed());
     ::testing::Test::RecordProperty(
-        "gate_tx_count", static_cast<int>(payload.rawTransactions->size()));
+        recordKey(id, "tx_count"), static_cast<int>(payload.rawTransactions->size()));
 
     ASSERT_EQ(status.status, bcos::engine::PayloadValidationStatus::Valid)
         << id << ": expected VALID, validationError=" << status.validationError.value_or("<none>");
@@ -930,13 +948,27 @@ TEST(EngineNewPayloadGate, ChainedPairParentKnownThroughBlockRegistration)
 
 // ═════════════ Step 3: the mutation matrix — 13 classes / 18 cases (spec §7.3) ═════════════
 //
-// latestValidHash discipline, stated once (spec §7.3's note, reconciled with §6.1's steps):
-//   - classes #2-#7 all reject inside design §6.1 step 2, i.e. BEFORE parentKnown is evaluated,
-//     so no ancestor has been established valid and `latestValidHash` is null. That is the
-//     "blockHash 失配桶" the spec exempts from the parentHash rule — the bucket is defined by
-//     *where* the rejection happens, not by which field was mutated.
+// latestValidHash discipline, stated once — and stated honestly about its provenance:
+//
+//   - classes #3-#6 (and #2/#7) reject inside design §6.1 step 2, i.e. BEFORE parentKnown is
+//     evaluated, and the implementation returns `latestValidHash = null` for all of them
+//     (`EngineServiceImpl.h:664-687`).
 //   - classes #8.1-#8.6 reject after parentKnown succeeded, so they assert
 //     `latestValidHash == parentHash`.
+//
+// **Provenance (task-6 review I1/I2, do not read past this):** spec §7.3's note as written says
+// "非 blockHash 桶的 INVALID 用例同时断言 latestValidHash==parentHash", which taken literally
+// would demand parentHash for #3-#6. The null answer above is an **implementation choice made in
+// task-5b**, and the argument for it (the "bucket is defined by where the rejection happens")
+// comes from that implementation's own comments — NOT from spec text, and it must not be cited as
+// though it were. The coordinator has since adjudicated the conflict in the implementation's
+// favour, on the merits: at step 2 the parent has not been looked up at all, so claiming it as
+// the "latest valid ancestor" would be an unverified assertion; the Engine API permits null; and
+// null is the more honest answer. Spec §7.3's note and §8's third acceptance line are to be
+// revised in T7 to "非 blockHash 桶**且已过 parentKnown**的 INVALID 才断言 parentHash". Until
+// that edit lands, these cases are correct against the implementation and knowingly divergent
+// from the spec's current wording — recorded in task-6-report.md §5, not papered over.
+//
 // Each case below asserts whichever of the two applies, never neither.
 
 // ── #1 timestamp x version gate -> JSON-RPC -38005 ────────────────────────────────────────────
@@ -1023,8 +1055,10 @@ TEST(EngineNewPayloadMutation, NonZeroExcessBlobGasIsInvalid)
 // ── #6 blobGasUsed != 0 under Isthmus -> INVALID ──────────────────────────────────────────────
 // Fork-gated on purpose: from Jovian on, the same header slot is the DA footprint and is checked
 // by seal comparison instead (design §5.1 / OpBlockSeal.h:31-38). The Jovian half of that rule is
-// covered positively by the 17 jovian vectors in the gate above, several of which carry a
-// non-zero blobGasUsed and are VALID.
+// covered positively in the gate above by exactly ONE vector — `jovian_da_mix`, the only one of
+// the 17 jovian vectors whose `_op_expected.header.blobGasUsed` is non-zero (0x90ec0); it is
+// VALID there, which is what proves the Isthmus rule is not applied past Jovian. The other 16
+// jovian vectors carry blobGasUsed = 0 and so exercise neither side of this distinction.
 TEST(EngineNewPayloadMutation, NonZeroBlobGasUsedIsInvalidUnderIsthmus)
 {
     auto scenario = prepareScenario("isthmus_transfer_basic");
