@@ -681,6 +681,30 @@ public:
                 throw OpStorageError(std::string(bridge.firstError()));
             throw OpConsensusError(e.what());
         }
+        catch (...)
+        {
+            // Typed-catch RTTI bypass (the same phenomenon bcos-evm/test/opstack/
+            // T8nReplayHarness.h already documents and works around, docs/audits/
+            // 2026-07-12-typed-catch-rtti-investigation.md): libevmone.a (-fno-rtti) brings in a
+            // hidden non-unique typeinfo for std::exception, so `catch (const std::exception&)`
+            // above does NOT reliably bind std::runtime_error thrown by evmone/opstack-linked
+            // code (or, empirically, by *any* std::runtime_error surfacing through this call —
+            // confirmed via a diagnostic build: both processOpBlock's own "first tx is not the
+            // L1 attributes deposit" throw and a ThrowingStorage-injected failure propagating
+            // through Storage2Ledger::applyDiff's write-back path escaped the typed catch above
+            // as an uncaught St13runtime_error). Without this fallback, both of those cases would
+            // propagate out of executeOpBlock as raw, unclassified exceptions instead of
+            // OpConsensusError/OpStorageError — silently breaking the INVALID vs -32603 dispatch
+            // T5b/T6 build on top of this classification (design §4.3). Re-applies the *same*
+            // poisoned()-first classification without relying on typeid matching; the original
+            // message is unrecoverable here (no typed handle on the caught object).
+            if (bridge.poisoned())
+                throw OpStorageError(std::string(bridge.firstError()));
+            throw OpConsensusError(
+                "OpSchedulerImpl: processOpBlock threw a block-level error (typed catch bypassed "
+                "by a known RTTI issue across the -fno-rtti evmone library boundary; original "
+                "exception message unavailable, see this catch(...) clause's comment)");
+        }
         if (bridge.poisoned())
             throw OpStorageError(std::string(bridge.firstError()));
 
