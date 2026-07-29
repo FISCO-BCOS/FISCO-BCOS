@@ -81,15 +81,14 @@ uint32_t flzCompressLenImpl(evmc::bytes_view ib) noexcept
 
     for (uint32_t ip = a + 2; ip < ipLimit;)
     {
-        uint32_t r = 0;
-        uint32_t d = 0;
+        uint32_t r = 0;  // read after the loop by cmp(); must outlive it
         for (;;)
         {
             auto const s = u24(ip);
             auto const h = hash(s);
             r = ht[h];
             ht[h] = ip;
-            d = ip - r;
+            const uint32_t d = ip - r;
             if (ip >= ipLimit)
             {
                 break;
