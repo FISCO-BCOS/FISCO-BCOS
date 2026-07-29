@@ -466,7 +466,7 @@ private:
 
             if (fieldKey.size() != kStorageSlotKeySize)
                 throw std::runtime_error(
-                    "Storage2Ledger::visitAccounts: unknown key in account table '" + tableName +
+                    "Storage2Ledger::fetchAllStorage: unknown key in account table '" + tableName +
                     "' (neither a known ACCOUNT_TABLE_FIELDS name nor a 32-byte storage slot "
                     "key)");
 

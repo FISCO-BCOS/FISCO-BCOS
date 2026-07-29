@@ -23,6 +23,14 @@
 //   (k) OpStorageError -> -32603, never INVALID;
 //   (l) non-consecutive blockNumber -> INVALID (task-5b review I2).
 //
+// Final review batch 2 adds four more (all stub-driven, same reasoning):
+//   (m) an execution escape matching NEITHER typed handler is still classified as -32603 (B2-1);
+//   (n) re-delivering an already-accepted payload short-circuits to VALID without re-executing
+//       (B2-2(a), op-geth eth/catalyst/api.go:872-876);
+//   (o) a non-tip parent is refused explicitly instead of executed against the wrong base state
+//       (B2-2(b));
+//   (p)/(q) gasLimit > 2^63-1 and extraData > 32 bytes are rejected (B2-3/B2-4).
+//
 // What still cannot be tested here at all: whether `rebuildOpEthHeader`'s payload-field ->
 // header-field mapping is the RIGHT one. Every blockHash in this file is computed by that same
 // mapping, so a systematically wrong mapping passes silently (see `rebuiltHeader`'s comment).
@@ -77,6 +85,7 @@
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <gtest/gtest.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
 #include <memory>
@@ -185,6 +194,31 @@ std::optional<bcos::storage::Entry> readEntry(
 std::string_view asStringView(bcos::bytes const& data)
 {
     return {reinterpret_cast<const char*>(data.data()), data.size()};
+}
+
+/// Runs `action` and returns the thrown exception's full diagnostic text (empty if it did not
+/// throw). Needed because `OpExecutionInternalError` is now the single type covering several
+/// distinct refusals (the unclassified-escape fallback, the non-tip-parent refusal, the
+/// receipt-count invariant): asserting the type alone no longer identifies which path ran, so
+/// these tests assert on the message marker as well (batch-1 review lesson).
+template <class Action>
+std::string thrownDiagnostic(Action&& action)
+{
+    try
+    {
+        action();
+    }
+    catch (const boost::exception& e)
+    {
+        // `errinfo_comment` is attached with `<<`, so it only shows up in the boost diagnostic,
+        // not in `what()`.
+        return boost::diagnostic_information(e);
+    }
+    catch (const std::exception& e)
+    {
+        return e.what();
+    }
+    return {};
 }
 
 // ---- stand-ins (EngineVersionGateTest.cpp) ----
@@ -444,6 +478,10 @@ struct StubOpScheduler
     ExecuteResult result;
     std::optional<std::string> consensusErrorToThrow;
     std::optional<std::string> storageErrorToThrow;
+    /// Neither `ConsensusError` nor `StorageError` — stands in for the real scheduler's
+    /// unclassified escapes (decode-loop `bad_alloc`, evmone-side `std::runtime_error` out of
+    /// seal/stateRoot/txRoot, ...), all of which are raised OUTSIDE `executeOpBlock`'s own try.
+    std::optional<std::string> unclassifiedErrorToThrow;
     // ---- observation ----
     unsigned executeOpBlockCalls = 0;
 
@@ -491,6 +529,10 @@ struct StubOpScheduler
         if (storageErrorToThrow.has_value())
         {
             throw StorageError(*storageErrorToThrow);
+        }
+        if (unclassifiedErrorToThrow.has_value())
+        {
+            throw std::runtime_error(*unclassifiedErrorToThrow);
         }
         co_return result;
     }
@@ -926,4 +968,144 @@ TEST(EngineOpBranch, NonConsecutiveBlockNumberIsInvalid)
     // Rejected before execution — the height check precedes step 4.
     EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
     EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+}
+
+// ═════════════════ final review batch 2: consensus safety (B2-1 … B2-4) ═════════════════
+
+// (m) B2-1: an exception that is neither `ConsensusError` nor `StorageError` must still be
+// classified. Most of `executeOpBlock` runs outside its own try (the raw-tx decode loop, the
+// seal/stateRoot step, the txRoot/receipt step), and this repo additionally has a known
+// typed-catch RTTI bypass (evmone is `-fno-rtti`), so "an escape that matches neither handler" is
+// a live path, not a hypothetical. Uncaught it would leave the call with NO classification at
+// all — neither INVALID nor -32603 — which is the one outcome design §4.3 rules out.
+TEST(EngineOpBranch, UnclassifiedExecutionEscapeIsInternalErrorNotEscaping)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    fixture.scheduler.unclassifiedErrorToThrow = "evmone MPT blew up";
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
+        bcos::engine::OpExecutionInternalError);
+
+    // Type alone is no longer discriminating (three different refusals share it) — the marker is.
+    const auto diagnostic = thrownDiagnostic(
+        [&] { bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)); });
+    EXPECT_NE(diagnostic.find("unclassified exception"), std::string::npos) << diagnostic;
+    // Not INVALID, and nothing registered: an unknown local failure must not become a vote
+    // against the block, nor leave a half-written block behind.
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+}
+
+// (n) B2-2(a): re-delivering an already-accepted payload returns VALID without re-executing —
+// op-geth `eth/catalyst/api.go:872-876`. Re-delivery is routine (CL timeout re-sends, op-node
+// replaying unsafe blocks after a restart); before this short-circuit the second delivery
+// re-executed on top of its own committed state and answered INVALID, i.e. this node would have
+// called a block it had just accepted bad.
+TEST(EngineOpBranch, AlreadyKnownBlockShortCircuitsToValidWithoutReExecuting)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    auto const& payload = scenario.request.executionPayload;
+
+    auto first = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+    ASSERT_EQ(first.status, bcos::engine::PayloadValidationStatus::Valid);
+    ASSERT_EQ(fixture.scheduler.executeOpBlockCalls, 1U);
+
+    auto second = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+
+    EXPECT_EQ(second.status, bcos::engine::PayloadValidationStatus::Valid);
+    ASSERT_TRUE(second.latestValidHash.has_value());
+    EXPECT_EQ(*second.latestValidHash, payload.blockHash);
+    EXPECT_FALSE(second.validationError.has_value());
+    // The load-bearing assertion: the verdict came from the registry, not from a second
+    // execution. (Without the short-circuit the call still reaches `executeOpBlock`, so a count
+    // of 2 here is exactly what a regression looks like.)
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 1U);
+}
+
+// (o) B2-2(b): a payload whose parent is NOT the current chain tip is refused explicitly. The
+// forked view is always the tip's state, so executing such a block would run against the wrong
+// base state and report a guaranteed mismatch as INVALID — a wrong verdict dressed as a consensus
+// judgement. Answering -32603 says the truthful thing: this node cannot evaluate it. Serving
+// arbitrary-parent base state needs a blockHash -> MLS layer mapping (spec §6.4).
+TEST(EngineOpBranch, NonTipParentIsRefusedExplicitly)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto accepted = prepareValidScenario(fixture, parentHash);
+
+    ASSERT_EQ(bcos::task::syncWait(fixture.service.newPayload(accepted.request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
+
+    // A sibling of the accepted block: same parent, same height, different content (hence a
+    // different blockHash, so the known-block short-circuit does not apply).
+    auto sibling =
+        makeOpRequest({bcos::bytes{0x7e, 0x09, 0x09, 0x09}}, kIsthmusTimestamp, parentHash);
+    sealWithBlockHash(sibling);
+    ASSERT_NE(sibling.executionPayload.blockHash, accepted.request.executionPayload.blockHash);
+    fixture.scheduler.result.commitments = matchingCommitments(sibling, rebuiltHeader(sibling));
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(sibling, 4)),
+        bcos::engine::OpExecutionInternalError);
+    const auto diagnostic =
+        thrownDiagnostic([&] { bcos::task::syncWait(fixture.service.newPayload(sibling, 4)); });
+    EXPECT_NE(diagnostic.find("non-tip parent"), std::string::npos) << diagnostic;
+    // Refused before execution, and nothing registered for the sibling.
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 1U);
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, sibling.executionPayload.blockHash));
+}
+
+// (p) B2-3: `gasLimit` above 2^63-1 is rejected. The execution side narrows it once more with a
+// plain `static_cast<int64_t>` into `BlockInfo::gas_limit`, so an unchecked value becomes a
+// NEGATIVE block gas pool — same unchecked-signed-narrowing class as batch 1's deposit gas_limit
+// finding. op-geth pins the same bound (`params.MaxGasLimit`).
+TEST(EngineOpBranch, GasLimitAboveInt64MaxIsInvalid)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+
+    scenario.request.executionPayload.gasLimit = bcos::u256(1) << 63;  // 2^63, one past the bound
+    sealWithBlockHash(scenario.request);  // self-consistent hash: only the bound can reject it
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    EXPECT_FALSE(status.latestValidHash.has_value());  // static-validation bucket
+    ASSERT_TRUE(status.validationError.has_value());
+    EXPECT_NE(status.validationError->find("gasLimit"), std::string::npos);
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
+}
+
+// (q) B2-4: `extraData` longer than 32 bytes is rejected — op-geth
+// `beacon/engine/types.go:294-296`. Distinct from the OP *shape* check parked in §6.4 (Isthmus 9
+// bytes / Jovian 17 bytes): this is the chain-agnostic length bound that keeps an unbounded
+// caller-supplied blob out of the header RLP.
+TEST(EngineOpBranch, ExtraDataAboveThirtyTwoBytesIsInvalid)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+
+    scenario.request.executionPayload.extraData = bcos::bytes(33, 0xab);  // one byte too many
+    sealWithBlockHash(scenario.request);
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    EXPECT_FALSE(status.latestValidHash.has_value());
+    ASSERT_TRUE(status.validationError.has_value());
+    EXPECT_NE(status.validationError->find("extraData"), std::string::npos);
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
+    // 32 bytes exactly is still accepted (the bound is inclusive, as in op-geth).
+    StubFixture atBound;
+    auto boundary = prepareValidScenario(atBound, parentHash);
+    boundary.request.executionPayload.extraData = bcos::bytes(32, 0xab);
+    sealWithBlockHash(boundary.request);
+    atBound.scheduler.result.commitments =
+        matchingCommitments(boundary.request, rebuiltHeader(boundary.request));
+    EXPECT_EQ(bcos::task::syncWait(atBound.service.newPayload(boundary.request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
 }

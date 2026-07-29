@@ -257,6 +257,30 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         return std::string("gasLimit exceeds the uint64 range of the ETH header field");
     }
+    // gasLimit's *effective* ceiling is int64, not uint64 (final review B2-3): the execution side
+    // narrows it once more with a plain `static_cast<int64_t>` when filling
+    // `evmone::state::BlockInfo::gas_limit` (OpSchedulerImpl.h's `toBlockInfo`), so anything above
+    // 2^63-1 becomes a NEGATIVE block gas pool. Same "unchecked signed narrowing" class as the
+    // batch-1 deposit `gas_limit` finding, fixed the same way -- explicitly, at the boundary.
+    // op-geth pins the identical bound as `params.MaxGasLimit`
+    // (consensus/beacon/consensus.go:262-264). No acceptance surface changes: such a block is
+    // rejected either way today (the first deposit cannot be paid out of a negative pool); what
+    // changes is that it is rejected for the stated reason instead of by accident.
+    if (*narrowU256ToU64(payload.gasLimit) >
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    {
+        return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
+    }
+    // extraData: at most 32 bytes (final review B2-4), op-geth
+    // beacon/engine/types.go:294-296. This is NOT the OP-shape check parked in §6.4 (Isthmus 9
+    // bytes / Jovian 17 bytes, version byte, decodability) -- that one is about the *contents* of
+    // a well-sized field, whereas this is the plain ETH-level length bound that applies to every
+    // chain, and it is the one that keeps an unbounded caller-supplied blob out of the header RLP.
+    constexpr std::size_t c_maxExtraDataSize = 32;
+    if (payload.extraData.size() > c_maxExtraDataSize)
+    {
+        return std::string("extraData exceeds the 32-byte maximum");
+    }
     if (!narrowU256ToU64(payload.gasUsed).has_value())
     {
         return std::string("gasUsed exceeds the uint64 range of the ETH header field");

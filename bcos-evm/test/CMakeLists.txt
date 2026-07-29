@@ -86,14 +86,19 @@ if(TARGET bcos-framework)
         # EngineServiceImpl.cpp. That .cpp is compiled straight into this test binary rather than
         # obtained by linking the `engine` CMake target.
         #
-        # These two options are MUTUALLY EXCLUSIVE: `engine` is built from exactly this .cpp
-        # (engine/CMakeLists.txt GLOBs `bcos-engine/*.cpp`), so doing both yields duplicate
-        # symbols at link time. Compiling it in is the chosen side, because linking `engine`
-        # would drag its PUBLIC dependency closure (and, through the engine test precedent,
-        # `mempool`) into a bcos-evm test binary that needs none of it.
+        # Pick ONE of the two — but note the guardrail is a CONVENTION, not something the build
+        # enforces (final review B2-6 corrects the earlier claim that doing both "yields duplicate
+        # symbols at link time"; static archives do not work that way). `engine` is a default
+        # STATIC library with UNITY_BUILD ON, i.e. one archive member. A linker pulls an archive
+        # member in only to resolve an *undefined* symbol; since this binary already defines those
+        # symbols from the source entry below, the member is simply never extracted and adding
+        # `engine` to target_link_libraries would link clean and SILENTLY. The failure mode is
+        # therefore not a build error but a stale/duplicated definition nobody notices.
         #
-        # If you ever add `engine` to target_link_libraries below, delete this source entry in
-        # the same edit — never keep both.
+        # Compiling the .cpp in is the chosen side, because linking `engine` would drag its PUBLIC
+        # dependency closure (and, through the engine test precedent, `mempool`) into a bcos-evm
+        # test binary that needs none of it. If you ever add `engine` to target_link_libraries
+        # below, delete this source entry in the same edit — nothing will complain if you don't.
         ${CMAKE_SOURCE_DIR}/engine/bcos-engine/EngineServiceImpl.cpp)
     target_link_libraries(bcos-evm-opstack-tests PRIVATE bcos-framework)
     # Header search paths for the engine tests above (all in-tree-only, hence inside this gate):

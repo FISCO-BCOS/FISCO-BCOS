@@ -728,6 +728,63 @@ private:
                 std::string("blockNumber must be exactly one greater than the parent's"));
         }
 
+        // ---- Step 3b: already-known block -> VALID short-circuit (final review B2-2(a)) ----
+        //
+        // op-geth does exactly this (`eth/catalyst/api.go:872-876`): a payload whose block is
+        // already in the chain returns VALID without re-executing. Re-delivery is a routine
+        // path, not a reorg -- CL timeouts re-send, and op-node replays unsafe blocks after a
+        // restart. Without this short-circuit the second delivery re-executes ON TOP OF the
+        // state the first delivery already committed, which produces a guaranteed-wrong result
+        // and answers INVALID: user-transaction blocks fail inside `processOpBlock` (the sender
+        // nonce has already advanced), deposit-only blocks fail the receiptsRoot comparison (the
+        // mint is credited twice). Answering INVALID there would make op-node mark a block it
+        // itself just accepted as bad -- the one case in this implementation where a block
+        // op-geth accepts would be rejected.
+        //
+        // Placement is load-bearing: AFTER step 2, so a malformed payload is still rejected on
+        // its own merits rather than waved through on a hash match; AFTER parentKnown/continuity,
+        // so the answer is only ever given for a block that sits where it claims to sit; and
+        // BEFORE the non-tip check below, because a re-delivered block always has a child height
+        // occupied (by itself) and would otherwise trip that check.
+        //
+        // `SYS_HASH_2_NUMBER` is written only by the VALID branch below, so presence there means
+        // "this exact block was executed and accepted by this node" -- the same operational
+        // definition step 5 uses for the parent.
+        if (auto knownBlockNumber = co_await bcos::ledger::getBlockNumber(
+                view, payload.blockHash, bcos::ledger::fromStorage);
+            knownBlockNumber.has_value())
+        {
+            co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+        }
+
+        // ---- Step 3c: the parent must be the current chain tip (final review B2-2(b)) ----
+        //
+        // `fork()` above hands back the top of the layer stack -- the CURRENT tip's state -- not
+        // the state as of `payload.parentHash`. Whenever those differ, execution would silently
+        // run against the wrong base state and produce a result that cannot match the payload,
+        // reported as INVALID: a wrong verdict dressed up as a consensus judgement.
+        //
+        // Detecting it needs no new bookkeeping: the parent is the tip iff nothing is registered
+        // at the child's height yet. (A block already occupying that height that IS this payload
+        // was short-circuited immediately above, so reaching here with an occupied height means a
+        // genuine sibling/side-chain delivery.)
+        //
+        // Answering `OpExecutionInternalError` (-32603) rather than INVALID is the honest
+        // reply: this node cannot evaluate the block, which is a capability limit, not a verdict.
+        // Serving arbitrary-parent base state needs a `blockHash -> MLS layer` mapping that does
+        // not exist today; that is architecture work, parked in spec §6.4 (this cycle delivers
+        // the explicit refusal, not the capability).
+        const auto childNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
+        if (auto occupiedHeight = co_await storage2::readOne(
+                view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, childNumberStr});
+            occupiedHeight.has_value())
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "non-tip parent not supported: a different block is already registered at "
+                    "this height, so the forked view's base state is not the payload's parent"});
+        }
+
         // ---- Step 4: execute ----
         view.newMutable();
         auto fiscoHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
@@ -769,6 +826,39 @@ private:
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     std::string("OP block execution hit a storage failure: ") + e.what()});
+        }
+        catch (...)
+        {
+            // Unclassified escape (final review B2-1). The two typed handlers above cover only
+            // what `executeOpBlock` explicitly classifies, and only part of that function is
+            // inside its own try: its raw-tx decode loop, its seal/stateRoot step and its
+            // txRoot/receipt step all run outside it, so a `std::bad_alloc`, an evmone-side
+            // `std::runtime_error`, or anything else can reach here as neither
+            // `ConsensusError` nor `StorageError`. Left uncaught it would escape
+            // `handleOpNewPayload` entirely and be re-thrown at the caller's `co_await` — the
+            // outcome would be neither INVALID nor -32603, i.e. the design §4.3 rule "a storage
+            // fault must never be reported as INVALID" would degrade into "no classification at
+            // all" on precisely the paths that lack one.
+            //
+            // There is a second, concrete reason this cannot be treated as theoretical: this
+            // repo has a known typed-catch RTTI bypass (evmone is built `-fno-rtti`, so
+            // `std::exception`'s typeinfo is not unique across the boundary). `OpSchedulerImpl`
+            // and `Storage2Ledger` already pair every typed handler with a `catch (...)` for
+            // that reason; the engine boundary was the last layer without one, and it is the
+            // layer that decides consensus verdicts.
+            //
+            // -32603 rather than INVALID is the safe default: an unknown local failure must not
+            // make this node vote against a block. The message deliberately carries a
+            // distinctive marker, because a bare `catch (...)` otherwise collapses every
+            // block-level rejection into one indistinguishable exception type and leaves tests
+            // no way to tell which path they exercised (batch-1 review lesson).
+            //
+            // No `co_await` here — an await-expression may not appear in a handler
+            // ([expr.await]/2); `BOOST_THROW_EXCEPTION` is the same shape the handler above uses.
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "OP block execution threw an unclassified exception (typed classification "
+                    "bypassed)"});
         }
 
         // ---- Step 5: the six-way comparison surface ----
