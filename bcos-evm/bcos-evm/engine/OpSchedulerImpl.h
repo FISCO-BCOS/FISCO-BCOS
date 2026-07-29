@@ -272,26 +272,84 @@ inline void throwOnDecodeError(bcos::Error::UniquePtr&& err)
             std::string("OpSchedulerImpl: raw tx decode failed: ") + err->what());
 }
 
-inline intx::uint256 decodeU256Scalar(bcos::bytesRef& in)
+// ---- canonical-encoding strictness (final review B4-2) ----
+//
+// Go's `rlp` (which produced every byte this decoder will ever legitimately see, via
+// `tx.MarshalBinary()`) rejects non-canonical encodings outright: `ErrCanonInt` for a leading zero
+// byte or a single `0x00`, "input string too long for uint64", "input string too short/long for
+// common.Address|common.Hash", "rlp: invalid boolean value". The primitives in
+// `bcos-codec/rlp/RLPDecode.h` are permissive by comparison — `fromBigEndian` silently keeps only
+// the low 8 bytes of an over-long uint64 payload, and `FixedBytes`' constructor right-pads a short
+// payload and truncates a long one. Those defaults are fine for their other consumers, so the
+// strictness is added HERE, on the OP path, rather than by changing shared primitives.
+//
+// The sharpest consequence of NOT doing this: a deposit envelope carries no signature, so nothing
+// else cross-checks its fields. A 19-byte `from`/`to` or a 33-byte `sourceHash` would have been
+// silently padded/truncated into a DIFFERENT account and executed as if it were the one the bytes
+// named.
+//
+// It also closes a blockHash-derivation gap: `computeOpTxRoot` (OpEngineSeam.h) hashes the raw
+// wire bytes, whereas op-geth's `DeriveSha` re-encodes each transaction canonically from the
+// parsed struct. For canonical input the two agree; for non-canonical input they do not, so
+// without this check the two implementations could compute different block hashes for the same
+// payload. With it, non-canonical input never survives decoding, and the equivalence holds for
+// everything that does.
+
+/// Reads one RLP string payload, requiring it to be a canonical unsigned scalar: no leading zero
+/// byte, no wider than `maxBytes`. Returns a view of the payload and advances `in` past it.
+inline bcos::bytesRef readCanonicalScalar(
+    bcos::bytesRef& in, std::size_t maxBytes, const char* fieldKind)
 {
     auto&& [err, header] = bcos::codec::rlp::decodeHeader(in);
     throwOnDecodeError(std::move(err));
     if (header.isList)
-        throw OpConsensusError("OpSchedulerImpl: raw tx decode: expected scalar, got list");
-    if (header.payloadLength > 32)
-        throw OpConsensusError("OpSchedulerImpl: raw tx decode: scalar exceeds 32 bytes");
-    evmc::bytes32 buf{};
-    if (header.payloadLength > 0)
-        std::memcpy(buf.bytes + (32 - header.payloadLength), in.data(), header.payloadLength);
+        throw OpConsensusError(std::string("OpSchedulerImpl: raw tx decode: expected scalar (") +
+                               fieldKind + "), got list");
+    if (header.payloadLength > maxBytes)
+        throw OpConsensusError(
+            std::string("OpSchedulerImpl: raw tx decode: scalar too wide for ") + fieldKind);
+    if (header.payloadLength > 0 && in[0] == 0)
+        throw OpConsensusError(
+            std::string("OpSchedulerImpl: raw tx decode: non-canonical leading zero in ") +
+            fieldKind);
+    auto payload = in.getCroppedData(0, header.payloadLength);
     in = in.getCroppedData(header.payloadLength);
+    return payload;
+}
+
+/// Reads one RLP string payload, requiring EXACTLY `size` bytes (op-geth's
+/// "input string too short/long for common.Address|common.Hash").
+inline bcos::bytesRef readFixedWidth(bcos::bytesRef& in, std::size_t size, const char* fieldKind)
+{
+    auto&& [err, header] = bcos::codec::rlp::decodeHeader(in);
+    throwOnDecodeError(std::move(err));
+    if (header.isList)
+        throw OpConsensusError(std::string("OpSchedulerImpl: raw tx decode: expected string (") +
+                               fieldKind + "), got list");
+    if (header.payloadLength != size)
+        throw OpConsensusError(
+            std::string("OpSchedulerImpl: raw tx decode: wrong length for ") + fieldKind);
+    auto payload = in.getCroppedData(0, size);
+    in = in.getCroppedData(size);
+    return payload;
+}
+
+inline intx::uint256 decodeU256Scalar(bcos::bytesRef& in)
+{
+    auto payload = readCanonicalScalar(in, 32, "uint256");
+    evmc::bytes32 buf{};
+    if (!payload.empty())
+        std::memcpy(buf.bytes + (32 - payload.size()), payload.data(), payload.size());
     return intx::be::load<intx::uint256>(buf);
 }
 
 inline uint64_t decodeU64Scalar(bcos::bytesRef& in)
 {
-    uint64_t v = 0;
-    throwOnDecodeError(bcos::codec::rlp::decode(in, v));
-    return v;
+    auto payload = readCanonicalScalar(in, sizeof(uint64_t), "uint64");
+    uint64_t value = 0;
+    for (auto byteValue : payload)
+        value = (value << 8U) | byteValue;
+    return value;
 }
 
 /// isSystemTransaction (op-geth's DepositTx.IsSystemTransaction, encoded as a plain RLP scalar
@@ -304,23 +362,39 @@ inline uint64_t decodeU64Scalar(bcos::bytesRef& in)
 /// and therefore rejects the empty-string encoding of `false` — is the WRONG decode overload for
 /// this field; decoding it as a generic scalar (decodeU64Scalar, which does treat
 /// payloadLength==0 as value 0) is the byte-correct match for what op-geth actually emits.
+///
+/// Strictness (B4-2): Go's `rlp` accepts exactly two encodings for a bool -- the empty string
+/// (false) and single-byte `0x01` (true) -- and answers "rlp: invalid boolean value" to anything
+/// else, including the single byte `0x00`. Accepting "any non-zero scalar" (or a canonical `0x00`,
+/// which does not exist in Go's output) would let two different encodings mean the same
+/// transaction, i.e. two block hashes for one block.
 inline bool decodeBoolField(bcos::bytesRef& in)
 {
-    return decodeU64Scalar(in) != 0;
+    auto payload = readCanonicalScalar(in, 1, "bool");
+    if (payload.empty())
+        return false;
+    if (payload[0] != 1)
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid boolean value");
+    return true;
 }
 
 inline evmc::address decodeAddressField(bcos::bytesRef& in)
 {
-    bcos::Address addr{};
-    throwOnDecodeError(bcos::codec::rlp::decode(in, addr));
-    return toEvmcAddress(addr);
+    // Exactly 20 bytes (B4-2). The previous `decode(in, bcos::Address&)` route accepted any
+    // length and right-padded/truncated -- on a deposit envelope (no signature to cross-check it)
+    // that silently substitutes a DIFFERENT address.
+    auto payload = readFixedWidth(in, sizeof(evmc::address::bytes), "address");
+    evmc::address out{};
+    std::memcpy(out.bytes, payload.data(), sizeof(out.bytes));
+    return out;
 }
 
 inline evmc::bytes32 decodeHashField(bcos::bytesRef& in)
 {
-    bcos::h256 h{};
-    throwOnDecodeError(bcos::codec::rlp::decode(in, h));
-    return toEvmcBytes32(h);
+    auto payload = readFixedWidth(in, sizeof(evmc::bytes32::bytes), "hash");
+    evmc::bytes32 out{};
+    std::memcpy(out.bytes, payload.data(), sizeof(out.bytes));
+    return out;
 }
 
 inline evmc::bytes decodeBytesField(bcos::bytesRef& in)

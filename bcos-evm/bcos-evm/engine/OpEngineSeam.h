@@ -121,8 +121,23 @@ inline OpBlockCommitments commitmentsOf(const bcos::evm::opstack::OpBlockSeal& s
     return out;
 }
 
-/// transactionsRoot over the block's raw EIP-2718 envelopes (op-geth `DeriveSha` convention:
-/// trie key = canonical RLP of the index, trie value = the raw tx bytes as-is).
+/// transactionsRoot over the block's raw EIP-2718 envelopes: trie key = canonical RLP of the
+/// index, trie value = **the raw wire bytes as received**.
+///
+/// Relationship to op-geth (corrected by final review B4-2 — the earlier "op-geth `DeriveSha`
+/// convention" phrasing was not accurate): `types.DeriveSha` builds its leaves from
+/// `EncodeIndex`, which RE-ENCODES each transaction canonically from the parsed struct, whereas
+/// this function hashes the bytes exactly as they arrived. The two agree for canonical input and
+/// **disagree for non-canonical input** — the same payload would then yield two different
+/// transactionsRoots and therefore two different block hashes.
+///
+/// What makes the two equivalent in practice is not this function but the decoder: since B4-2,
+/// `OpSchedulerImpl`'s raw-tx decoders reject every non-canonical encoding Go's `rlp` rejects
+/// (leading-zero scalars, over-wide integers, wrong-width address/hash fields, non-`0x01`
+/// booleans), so no block containing a non-canonically encoded transaction survives step 1. Every
+/// input that reaches this function is canonical, and on canonical input "hash the wire bytes"
+/// and "re-encode then hash" are the same computation. If that decoder strictness is ever
+/// relaxed, this equivalence lapses with it.
 ///
 /// Factored out of `OpSchedulerImpl::executeOpBlock`'s step 6 (which now calls this) because the
 /// engine needs the *same* value **before** execution: `ExecutionPayload` carries no

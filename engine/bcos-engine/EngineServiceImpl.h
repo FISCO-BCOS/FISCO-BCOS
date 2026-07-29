@@ -537,6 +537,37 @@ private:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
+        // ---- opMode silent-failure guardrail (final review B4-3) ----
+        //
+        // `c_opMode` is a SFINAE probe on `executeOpBlock`'s exact signature shape. Changing
+        // `rawTxBytes` to a concrete type, adding a second `auto` parameter, or adding an overload
+        // each make the `requires` evaluate to false **silently, with no diagnostic** -- and the
+        // consequence is not "OP support disappears", it is far worse: the V4 request falls
+        // through to the generic path, where `validateExecutionPayload` accepts an OP payload
+        // (version >= 2 with a present, empty withdrawals list), `parentKnown` is satisfied by the
+        // in-memory forkchoice head that op-node just set, and the request is answered
+        // **VALID with the payload's own self-reported blockHash without the block ever being
+        // executed**. A validator that rubber-stamps is worse than one that refuses.
+        //
+        // The only thing standing between that and reality was `maxEngineVersion` defaulting to
+        // 3 -- but the OP composition root passes 4 explicitly, so if `c_opMode` collapsed there,
+        // that 4 becomes the key that unlocks the rubber stamp. Hence: a non-OP build refuses V4
+        // outright, independently of `maxEngineVersion`.
+        //
+        // Zero behavioural drift for the generic composition root as configured today: it leaves
+        // `maxEngineVersion` at 3, so `isVersionSupported(4)` above already threw the same
+        // exception type before this statement was reachable. This is defence in depth for the
+        // mis-configuration, not a new rule for the existing one.
+        if constexpr (!c_opMode)
+        {
+            if (version >= static_cast<std::uint32_t>(EngineApiVersion::V3) + 1)
+            {
+                BOOST_THROW_EXCEPTION(
+                    UnsupportedEngineApiVersion{} << bcos::errinfo_comment{
+                        "engine_newPayloadV4 requires an OP-mode scheduler; this build's "
+                        "c_opMode probe did not detect one"});
+            }
+        }
         // OP branch (task-5b, design §6.1). Compile-time dispatch on `c_opMode` (task-5a): the
         // generic composition root never instantiates `handleOpNewPayload`, and its own path
         // below is the unconditional `else`, i.e. byte-for-byte the pre-existing body.
@@ -786,6 +817,57 @@ private:
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("blockNumber must be exactly one greater than the parent's"));
+        }
+
+        // ---- Step 3a: timestamp strictly increases (final review B4-1) ----
+        //
+        // op-geth rejects this twice over: `eth/catalyst/api.go:891-894`
+        // (`block.Time() <= parent.Time()` -> invalid, latestValidHash = parent) and
+        // `consensus/beacon/consensus.go:253-256` (`errInvalidTimestamp`).
+        //
+        // Why it matters more here than "a block with a silly clock": in this loop the timestamp
+        // is the FORK SELECTOR. `OpSchedulerImpl` picks its `OpForkConfig` with
+        // `configAt(fiscoHeader.timestamp(), ...)`, and step 1's -38005 gate reads the same field.
+        // Without monotonicity, block N+1 can name a timestamp EARLIER than block N and thereby
+        // roll the active fork backwards (Jovian -> Isthmus), changing DA accounting and baseFee
+        // semantics mid-chain.
+        //
+        // This is also the first read of `s_eth_block_header`. Until now that table was written
+        // and never read anywhere in the tree, which is the shared root cause of several
+        // parent/child rules being absent: the Holocene baseFee consistency check and the
+        // gasLimit change bound (both still parked in spec §6.4) need exactly this — the parent's
+        // decoded header — and now have somewhere to stand.
+        //
+        // Missing parent header => SKIP, deliberately (this is the genesis/first-block case, and
+        // the behaviour is part of the contract, not an oversight): a trusted starting point is
+        // established by seeding `SYS_HASH_2_NUMBER` alone -- both the test fixtures and any
+        // future production bootstrap do that -- so the very first block after it has no stored
+        // parent header to compare against. Rejecting on absence would make the loop unable to
+        // accept its own first block. Every block registered BY this loop does store its header,
+        // so the check is live for every subsequent block.
+        const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
+        if (auto parentHeaderEntry = co_await storage2::readOne(view,
+                executor_v1::StateKeyView{SchedulerType::c_ethBlockHeaderTable, parentNumberStr});
+            parentHeaderEntry.has_value())
+        {
+            const auto storedHeader = parentHeaderEntry->get();
+            bcos::bytes headerBytes(storedHeader.begin(), storedHeader.end());
+            bcos::codec::rlp::EthBlockHeader parentHeader;
+            if (auto decodeError =
+                    parentHeader.decode(bcos::bytesRef(headerBytes.data(), headerBytes.size())))
+            {
+                // Our own stored bytes failed to parse: a local storage/consistency fault, not a
+                // verdict on the incoming payload (design §4.3's rule cuts both ways).
+                BOOST_THROW_EXCEPTION(
+                    OpExecutionInternalError{} << bcos::errinfo_comment{
+                        std::string("stored parent block header is undecodable: ") +
+                        decodeError->errorMessage()});
+            }
+            if (payload.timestamp <= parentHeader.timestamp)
+            {
+                co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                    std::string("timestamp must be strictly greater than the parent's"));
+            }
         }
 
         // ---- Step 3b: already-known block -> VALID short-circuit (final review B2-2(a)) ----

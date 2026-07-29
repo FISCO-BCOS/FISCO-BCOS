@@ -22,6 +22,7 @@
 
 #pragma once
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <cstdint>
 
@@ -76,6 +77,24 @@ struct EthBlockHeader
     [[nodiscard]] bcos::bytes encode() const;
     // keccak256(encode()) — the ETH/OP block hash.
     [[nodiscard]] bcos::h256 hash() const;
+
+    // Inverse of encode(): parses the 21-field header RLP into *this, returning nullptr on
+    // success and a `DecodingError` otherwise (the error convention of bcos-codec/rlp/RLPDecode.h).
+    // `in` must contain exactly one header list — trailing bytes are an error, not ignored.
+    //
+    // Added by final review B4-1 to open the *read* path on the stored header RLP: until then the
+    // `s_eth_block_header` table was written and never read, which is the common root cause behind
+    // several parent/child consistency rules being absent (timestamp monotonicity, and — still
+    // parked — Holocene baseFee and the gasLimit change bound, all of which need the parent's
+    // header fields).
+    //
+    // Stricter than the generic `decode` overloads in RLPDecode.h on purpose, and this is
+    // load-bearing rather than incidental: fixed-width fields must arrive at EXACTLY their width
+    // (the generic FixedBytes path silently right-pads a short payload and truncates a long one)
+    // and scalars must be canonical (no leading zeros), matching go-ethereum's `rlp` behaviour for
+    // header fields. A header that does not round-trip byte-for-byte through encode() would
+    // otherwise hash to something other than the block hash it was stored under.
+    [[nodiscard]] bcos::Error::UniquePtr decode(bcos::bytesRef in);
 };
 
 }  // namespace bcos::codec::rlp

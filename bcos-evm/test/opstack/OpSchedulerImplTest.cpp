@@ -422,6 +422,89 @@ bcos::evm::engine::OpBlockEnv minimalEnv(const bcos::protocol::BlockHeader& head
     };
 }
 
+/// ---- hand-rolled RLP writers for the NON-canonical encodings B4-2 must reject ----
+///
+/// `evmone::rlp::encode*` only ever emits canonical output, so the malformed inputs below have to
+/// be assembled byte by byte. These two writers are canonical *framing* around a caller-supplied
+/// payload: the non-canonicality lives in the payload the test hands them (a leading zero byte, a
+/// 9-byte integer, a 19-byte address, ...), never in the framing itself — otherwise the decoder
+/// would reject the frame and the test would pass without ever reaching the field check.
+bcos::bytes rlpString(bcos::bytes const& payload)
+{
+    bcos::bytes out;
+    if (payload.size() == 1 && payload[0] < 0x80)
+    {
+        return payload;  // single low byte encodes as itself
+    }
+    if (payload.size() < 56)
+    {
+        out.push_back(static_cast<bcos::byte>(0x80 + payload.size()));
+    }
+    else
+    {
+        bcos::bytes lengthBytes;
+        for (auto size = payload.size(); size > 0; size >>= 8U)
+        {
+            lengthBytes.insert(lengthBytes.begin(), static_cast<bcos::byte>(size & 0xFFU));
+        }
+        out.push_back(static_cast<bcos::byte>(0xb7 + lengthBytes.size()));
+        out.insert(out.end(), lengthBytes.begin(), lengthBytes.end());
+    }
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+
+bcos::bytes rlpList(bcos::bytes const& payload)
+{
+    bcos::bytes out;
+    if (payload.size() < 56)
+    {
+        out.push_back(static_cast<bcos::byte>(0xc0 + payload.size()));
+    }
+    else
+    {
+        bcos::bytes lengthBytes;
+        for (auto size = payload.size(); size > 0; size >>= 8U)
+        {
+            lengthBytes.insert(lengthBytes.begin(), static_cast<bcos::byte>(size & 0xFFU));
+        }
+        out.push_back(static_cast<bcos::byte>(0xf7 + lengthBytes.size()));
+        out.insert(out.end(), lengthBytes.begin(), lengthBytes.end());
+    }
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+
+/// The 8 deposit fields as ALREADY-ENCODED RLP items, each defaulting to the canonical encoding a
+/// well-formed L1-attributes deposit would carry. A test overrides exactly one of them with a
+/// non-canonical encoding, so any rejection can only be attributed to that field.
+struct DepositFieldEncodings
+{
+    bcos::bytes sourceHash{rlpString(bcos::bytes(32, 0x00))};
+    bcos::bytes from{rlpString(bcos::bytes(std::begin(bcos::evm::opstack::OP_DEPOSITOR.bytes),
+        std::end(bcos::evm::opstack::OP_DEPOSITOR.bytes)))};
+    bcos::bytes to{rlpString(bcos::bytes(std::begin(bcos::evm::opstack::OP_L1_BLOCK.bytes),
+        std::end(bcos::evm::opstack::OP_L1_BLOCK.bytes)))};
+    bcos::bytes mint{rlpString({})};
+    bcos::bytes value{rlpString({})};
+    bcos::bytes gas{rlpString({0x0f, 0x42, 0x40})};  // 1'000'000
+    bcos::bytes isSystemTx{rlpString({})};           // false == empty string
+    bcos::bytes data{rlpString({})};
+
+    [[nodiscard]] bcos::bytes envelope() const
+    {
+        bcos::bytes payload;
+        for (auto const* field : {&sourceHash, &from, &to, &mint, &value, &gas, &isSystemTx, &data})
+        {
+            payload.insert(payload.end(), field->begin(), field->end());
+        }
+        bcos::bytes out{0x7e};
+        auto list = rlpList(payload);
+        out.insert(out.end(), list.begin(), list.end());
+        return out;
+    }
+};
+
 /// Asserts `invoke()` throws `bcos::evm::engine::OpConsensusError` whose `what()` contains
 /// `expectedSubstring` (coordinator review I-1). Plain `EXPECT_THROW(..., OpConsensusError)` only
 /// distinguishes exception *type*, and `OpSchedulerImpl::executeOpBlock`'s `catch(...)` fallback
@@ -837,4 +920,98 @@ TEST(OpSchedulerImpl, YParityEquals256IsConsensusError)
             [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
             "invalid y parity (setcode)");
     }
+}
+
+// ══════════════ final review batch 4: B4-2 non-canonical RLP is rejected ══════════════
+//
+// Go's `rlp` — which produced every byte this decoder will legitimately see — rejects each of
+// these outright (`ErrCanonInt`, "input string too long for uint64", "input string too
+// short/long for common.Address|common.Hash", "rlp: invalid boolean value"), and any such failure
+// makes op-geth's `DecodeTransactions` reject the whole block. The permissive primitives in
+// `bcos-codec/rlp/RLPDecode.h` did not: over-wide integers kept their low 8 bytes, and
+// wrong-width fixed fields were right-padded or truncated into a DIFFERENT address/hash — on a
+// deposit envelope, which carries no signature, nothing else would have caught that.
+//
+// Construction notes (both load-bearing, per this file's own earlier lessons):
+//   * the malformed transaction is at index 1, behind a well-formed L1-attributes deposit filler.
+//     A single-tx block would throw `OpConsensusError` from the unrelated "first tx must be the
+//     L1 attributes deposit" gate even with the strictness removed — a false pass.
+//   * assertions are on the message, not just the type: `executeOpBlock`'s `catch (...)`
+//     reclassifies anything into the same type, so type-only assertions cannot tell "my check
+//     fired" from "something else did".
+namespace
+{
+void expectDepositFieldRejected(
+    DepositFieldEncodings const& fields, std::string_view expectedSubstring)
+{
+    MutableStorage storage;
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+
+    std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(), fields.envelope()};
+
+    expectOpConsensusErrorWithMessage(
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+        expectedSubstring);
+}
+}  // namespace
+
+// (l) B4-2: a scalar with a leading zero byte (`ErrCanonInt`).
+TEST(OpSchedulerImpl, NonCanonicalLeadingZeroScalarIsConsensusError)
+{
+    DepositFieldEncodings fields;
+    fields.mint = rlpString({0x00, 0x01});  // canonical would be a bare 0x01
+    expectDepositFieldRejected(fields, "non-canonical leading zero");
+}
+
+// (m) B4-2: a uint64 field wider than 8 bytes. Previously `fromBigEndian` kept only the low 8
+// bytes, i.e. a 9-byte gas value silently became a different, smaller gas value.
+TEST(OpSchedulerImpl, OverWideUint64ScalarIsConsensusError)
+{
+    DepositFieldEncodings fields;
+    fields.gas = rlpString({0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});  // 9 bytes
+    expectDepositFieldRejected(fields, "too wide for uint64");
+}
+
+// (n) B4-2: a 19-byte address. This is the sharpest case in the set — a deposit envelope has no
+// signature, so a right-padded 19-byte `from` would have been executed as a DIFFERENT account
+// with nothing to contradict it.
+TEST(OpSchedulerImpl, ShortAddressFieldIsConsensusError)
+{
+    DepositFieldEncodings fields;
+    fields.from = rlpString(bcos::bytes(19, 0x11));
+    expectDepositFieldRejected(fields, "wrong length for address");
+}
+
+// (o) B4-2: a 33-byte hash (truncation, the mirror of the case above).
+TEST(OpSchedulerImpl, OverLongHashFieldIsConsensusError)
+{
+    DepositFieldEncodings fields;
+    fields.sourceHash = rlpString(bcos::bytes(33, 0x22));
+    expectDepositFieldRejected(fields, "wrong length for hash");
+}
+
+// (p) B4-2: a bool that is neither the empty string nor `0x01` ("rlp: invalid boolean value").
+// Two encodings meaning one transaction would mean two block hashes for one block.
+TEST(OpSchedulerImpl, NonBooleanBoolFieldIsConsensusError)
+{
+    DepositFieldEncodings fields;
+    fields.isSystemTx = rlpString({0x02});
+    expectDepositFieldRejected(fields, "invalid boolean value");
+}
+
+// (q) B4-2: the single byte `0x00` as a bool — Go rejects it as a non-canonical integer rather
+// than as a bad boolean, and so does this decoder (the canonical encoding of false is the empty
+// string). Kept as its own case because it is the encoding a naive writer produces.
+TEST(OpSchedulerImpl, ZeroByteBoolFieldIsConsensusError)
+{
+    DepositFieldEncodings fields;
+    fields.isSystemTx = rlpString({0x00});
+    expectDepositFieldRejected(fields, "non-canonical leading zero");
 }

@@ -234,6 +234,39 @@ void expectHeaderMatchesGolden(std::string const& id)
     const h256 hash = header.hash();
     const h256 expectedHash = asH256(sample.golden.at("blockHash").get<std::string>());
     EXPECT_EQ(hash, expectedHash) << id << ": hash() != golden.blockHash";
+
+    // decode() 反向断言(终审 B4-1 打通读路后新增):golden 的 encodedHeaderHex 必须解回一枚
+    // 与 buildHeader 逐字段相同的头,且再 encode() 回同一批字节。这条把 decode 钉在 op-geth
+    // 金值上——它是 s_eth_block_header 读路的正确性锚,engine 的 timestamp 单调校验(以及日后
+    // Holocene baseFee / gasLimit 变化率)都建立在它之上。
+    // 断言给的是**字段级**比较而非仅 re-encode 相等:后者在"decode 把两个同类型字段读反了、
+    // encode 又按同样的错序写回"时会假绿(相邻防线失效仍通过 —— spec §11)。
+    bytes decodableCopy = expectedEncoded;
+    EthBlockHeader decoded;
+    auto decodeError = decoded.decode(bcos::bytesRef(decodableCopy.data(), decodableCopy.size()));
+    ASSERT_EQ(decodeError, nullptr) << id << ": decode() rejected golden.encodedHeaderHex";
+    EXPECT_EQ(decoded.parentHash, header.parentHash) << id;
+    EXPECT_EQ(decoded.ommersHash, header.ommersHash) << id;
+    EXPECT_EQ(decoded.feeRecipient, header.feeRecipient) << id;
+    EXPECT_EQ(decoded.stateRoot, header.stateRoot) << id;
+    EXPECT_EQ(decoded.transactionsRoot, header.transactionsRoot) << id;
+    EXPECT_EQ(decoded.receiptsRoot, header.receiptsRoot) << id;
+    EXPECT_EQ(decoded.logsBloom, header.logsBloom) << id;
+    EXPECT_EQ(decoded.difficulty, header.difficulty) << id;
+    EXPECT_EQ(decoded.number, header.number) << id;
+    EXPECT_EQ(decoded.gasLimit, header.gasLimit) << id;
+    EXPECT_EQ(decoded.gasUsed, header.gasUsed) << id;
+    EXPECT_EQ(decoded.timestamp, header.timestamp) << id;
+    EXPECT_EQ(decoded.extraData, header.extraData) << id;
+    EXPECT_EQ(decoded.prevRandao, header.prevRandao) << id;
+    EXPECT_EQ(decoded.nonce, header.nonce) << id;
+    EXPECT_EQ(decoded.baseFeePerGas, header.baseFeePerGas) << id;
+    EXPECT_EQ(decoded.withdrawalsRoot, header.withdrawalsRoot) << id;
+    EXPECT_EQ(decoded.blobGasUsed, header.blobGasUsed) << id;
+    EXPECT_EQ(decoded.excessBlobGas, header.excessBlobGas) << id;
+    EXPECT_EQ(decoded.parentBeaconBlockRoot, header.parentBeaconBlockRoot) << id;
+    EXPECT_EQ(decoded.requestsHash, header.requestsHash) << id;
+    EXPECT_EQ(decoded.encode(), expectedEncoded) << id << ": decode()->encode() is not identity";
 }
 
 }  // namespace

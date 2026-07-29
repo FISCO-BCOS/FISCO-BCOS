@@ -684,6 +684,27 @@ ValidScenario prepareValidScenario(StubFixture& fixture, bcos::h256 const& paren
     return scenario;
 }
 
+/// Builds the block that FOLLOWS an already-accepted scenario: parent = that block's hash, height
+/// +1, caller-chosen timestamp. Unlike `prepareValidScenario`'s first block, this one's parent
+/// header IS in `s_eth_block_header` (the accepted block registered it), which is what makes the
+/// timestamp-monotonicity check live.
+ValidScenario prepareFollowOnScenario(
+    StubFixture& fixture, ValidScenario const& acceptedParent, uint64_t timestamp)
+{
+    ValidScenario scenario;
+    scenario.rawTransaction = bcos::bytes{0x7e, 0x11, 0x22, 0x33};
+    scenario.request = makeOpRequest(
+        {scenario.rawTransaction}, timestamp, acceptedParent.request.executionPayload.blockHash);
+    scenario.request.executionPayload.blockNumber =
+        acceptedParent.request.executionPayload.blockNumber + 1;
+    sealWithBlockHash(scenario.request);
+    scenario.header = rebuiltHeader(scenario.request);
+    scenario.receipt = makeReceipt(fixture.receiptFactory, 21000);
+    fixture.scheduler.result.receipts = {scenario.receipt};
+    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, scenario.header);
+    return scenario;
+}
+
 /// Everything the OP composition root needs, as named members so that scheduler/executor/storage
 /// all outlive the service holding references to them (the lifetime trap called out in the file
 /// header).
@@ -1348,4 +1369,175 @@ TEST(EngineOpBranch, NullReceiptIsRefusedNotSkipped)
     EXPECT_NE(diagnostic.find("returned a null receipt"), std::string::npos) << diagnostic;
     EXPECT_EQ(diagnostic.find("unclassified exception"), std::string::npos) << diagnostic;
     EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+}
+
+// ══════════ final review batch 4: B4-1 timestamp monotonicity / header read path ══════════
+//
+// These are the first tests of the `s_eth_block_header` READ path: until B4-1 that table was
+// written and never read anywhere in the tree. The parent header is not seeded by hand — it gets
+// there because the previous block was accepted and registered, so these also re-prove the
+// registration/read round-trip end to end.
+
+// (u) Equal timestamps are rejected: op-geth's condition is `<=`, not `<`
+// (eth/catalyst/api.go:891-894), because equal timestamps make block ordering ambiguous and,
+// here, leave the fork selector stationary across a height change.
+TEST(EngineOpBranch, EqualParentTimestampIsInvalid)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto accepted = prepareValidScenario(fixture, parentHash);
+    ASSERT_EQ(bcos::task::syncWait(fixture.service.newPayload(accepted.request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
+    const auto executeCallsAfterParent = fixture.scheduler.executeOpBlockCalls;
+
+    auto child = prepareFollowOnScenario(
+        fixture, accepted, accepted.request.executionPayload.timestamp);  // equal, not earlier
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(child.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    ASSERT_TRUE(status.latestValidHash.has_value());
+    EXPECT_EQ(*status.latestValidHash, accepted.request.executionPayload.blockHash);
+    ASSERT_TRUE(status.validationError.has_value());
+    EXPECT_NE(status.validationError->find("timestamp"), std::string::npos);
+    // Rejected before execution, and not registered.
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, executeCallsAfterParent);
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, child.request.executionPayload.blockHash));
+}
+
+// (v) A timestamp EARLIER than the parent's is rejected — the case with teeth, since it is the one
+// that could roll the active fork backwards (Jovian -> Isthmus) and with it the DA accounting and
+// baseFee semantics. The child here is still Isthmus-active, so it clears the -38005 version gate
+// and is refused by the monotonicity rule specifically.
+TEST(EngineOpBranch, EarlierThanParentTimestampIsInvalid)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto accepted = prepareValidScenario(fixture, parentHash);
+    ASSERT_EQ(bcos::task::syncWait(fixture.service.newPayload(accepted.request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
+    ASSERT_GT(accepted.request.executionPayload.timestamp, kIsthmusTime + 1);
+
+    auto child = prepareFollowOnScenario(fixture, accepted, kIsthmusTime + 1);
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(child.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    ASSERT_TRUE(status.validationError.has_value());
+    EXPECT_NE(status.validationError->find("timestamp"), std::string::npos);
+}
+
+// (w) The positive control: a strictly increasing timestamp is accepted, and the child registers
+// its own header in turn. Without this the two rejections above would also pass if the check had
+// been implemented as "always reject a child whose parent header exists".
+TEST(EngineOpBranch, IncreasingTimestampIsAcceptedAndRegisters)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto accepted = prepareValidScenario(fixture, parentHash);
+    ASSERT_EQ(bcos::task::syncWait(fixture.service.newPayload(accepted.request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
+
+    auto child =
+        prepareFollowOnScenario(fixture, accepted, accepted.request.executionPayload.timestamp + 1);
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(child.request, 4));
+
+    ASSERT_EQ(status.status, bcos::engine::PayloadValidationStatus::Valid);
+    EXPECT_EQ(*status.latestValidHash, child.request.executionPayload.blockHash);
+    // The child's own header is now readable, i.e. the read path this test exercises is fed by
+    // the write path under test.
+    auto childHeaderEntry = readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER,
+        boost::lexical_cast<std::string>(child.request.executionPayload.blockNumber));
+    ASSERT_TRUE(childHeaderEntry.has_value());
+    EXPECT_EQ(childHeaderEntry->get(), asStringView(child.header.encode()));
+}
+
+// (x) The documented skip: a block whose parent was seeded as a trusted starting point (only
+// `SYS_HASH_2_NUMBER`, no stored header) is accepted regardless of how its timestamp compares,
+// because there is nothing to compare against. This is the genesis/first-block contract — and it
+// is what keeps the 33 golden vectors and the chained pair working, so it is asserted rather than
+// left implicit.
+TEST(EngineOpBranch, MissingParentHeaderSkipsTimestampCheck)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    // Deliberately the earliest timestamp the fork gate still admits: if the check were applied
+    // with any default parent timestamp of 0 or above, this is where it would misfire.
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    scenario.request.executionPayload.timestamp = kIsthmusTime;
+    sealWithBlockHash(scenario.request);
+    scenario.header = rebuiltHeader(scenario.request);
+    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, scenario.header);
+
+    ASSERT_FALSE(
+        readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, "0").has_value());
+    EXPECT_EQ(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
+}
+
+// ══════════════ final review batch 4: B4-3 opMode silent-failure guardrail ══════════════
+
+/// A scheduler that is EXACTLY `StubOpScheduler` except that `executeOpBlock` has one extra
+/// deduced parameter — the smallest realistic signature drift, and the kind a future refactor
+/// could introduce without any diagnostic. `c_opMode`'s probe
+/// (`&SchedulerType::template executeOpBlock<std::vector<bcos::bytes>>`) stops resolving, so the
+/// class silently reverts to the generic engine path.
+struct SignatureDriftedOpScheduler
+{
+    struct ExecuteResult
+    {
+    };
+
+    bcos::task::Task<std::vector<bcos::protocol::TransactionReceipt::Ptr>> executeBlock(ViewType&,
+        auto&, bcos::protocol::BlockHeader const&, ::ranges::input_range auto const&,
+        bcos::ledger::LedgerConfig const&)
+    {
+        throw std::logic_error("SignatureDriftedOpScheduler::executeBlock must not be called");
+        co_return {};
+    }
+
+    /// The drift: a second deduced parameter. Everything else about this class is unchanged.
+    bcos::task::Task<ExecuteResult> executeOpBlock(
+        ViewType&, auto const&, ::ranges::input_range auto const&)
+    {
+        co_return ExecuteResult{};
+    }
+};
+
+using DriftedEngineService =
+    bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, SignatureDriftedOpScheduler>;
+static_assert(!DriftedEngineService::c_opMode,
+    "the drifted signature must be what makes c_opMode collapse — if this fires, the test no "
+    "longer reproduces the scenario it claims to");
+
+// (y) B4-3: with `c_opMode` silently false, a V4 request must be REFUSED, not rubber-stamped.
+// Before this guardrail the same request was answered VALID with the payload's own blockHash and
+// the block was never executed — the failure mode a validator must not have. The composition root
+// here deliberately passes `maxEngineVersion = 4`, exactly as the OP root does: that argument is
+// what would otherwise unlock the generic path.
+TEST(EngineOpBranch, DriftedOpModeProbeRefusesV4InsteadOfRubberStamping)
+{
+    StorageFixture storage;
+    StubMemPool memPool;
+    StubExecutor executor;
+    SignatureDriftedOpScheduler scheduler;
+    auto blockFactory = makeBlockFactory();
+    DriftedEngineService service(memPool, storage.multiLayerStorage, executor, scheduler,
+        blockFactory, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4);
+
+    // A payload shaped exactly like the one op-node sends: present-and-empty withdrawals, blob gas
+    // fields present — i.e. one that the GENERIC static validation accepts.
+    auto request = makeOpRequest({bcos::bytes{0x7e, 0x01}}, kIsthmusTimestamp, hashOf("parent"));
+    sealWithBlockHash(request);
+
+    EXPECT_THROW(bcos::task::syncWait(service.newPayload(request, 4)),
+        bcos::engine::UnsupportedEngineApiVersion);
+
+    // And the refusal must not be an accident of `maxEngineVersion`: V3 (which the generic gate
+    // does admit) still reaches the generic body, proving the V4 refusal above is the guardrail
+    // and not the version gate. The V3 payload is Isthmus-timestamped, which the generic path has
+    // no opinion about; it lands on the generic parentBeaconBlockRoot rule instead.
+    auto v3Status = bcos::task::syncWait(service.newPayload(request, 3));
+    EXPECT_NE(v3Status.status, bcos::engine::PayloadValidationStatus::Valid);
 }
