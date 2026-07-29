@@ -82,6 +82,14 @@ extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::seve
     std::string>
     StatFileLoggerHandler;
 
+// <wingdi.h> (via <windows.h>) defines ERROR as 0, which would turn the enumerator below into
+// `0 = ...` and every BCOS_LOG(ERROR) into `bcos::LogLevel::0`. The build defines NOGDI so the
+// macro never appears in this project, but this is a public header: a downstream consumer that
+// includes <windows.h> without NOGDI would otherwise fail here rather than in its own code.
+#if defined(_WIN32) && defined(ERROR)
+#undef ERROR
+#endif
+
 enum LogLevel
 {
     TRACE = boost::log::trivial::severity_level::trace,

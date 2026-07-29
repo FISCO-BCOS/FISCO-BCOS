@@ -177,6 +177,12 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     add_compile_definitions(NOMINMAX)
+    # <windows.h> pulls in <wingdi.h>, which does `#define ERROR 0`. That collides with
+    # bcos::LogLevel::ERROR, so BCOS_LOG(ERROR) expands to `bcos::LogLevel::0` (C2589).
+    # It only bites where some sibling in a unity batch happens to include <windows.h>
+    # first, which makes it look intermittent. NOGDI keeps wingdi.h out entirely; nothing
+    # in this project draws to a device context. Same class of fix as NOMINMAX above.
+    add_compile_definitions(NOGDI)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
     add_compile_options(/utf-8)
