@@ -46,19 +46,18 @@
 // (task-5a "opMode 编译期判据") a machine-checked witness independent of the runtime
 // assertions below.
 //
-// CMake note (task-5-brief.md Task 5b's own fixture-closure note applies identically here,
-// since this file has the exact same build requirements): this file is NOT yet wired into
-// bcos-evm/test/CMakeLists.txt. It needs (1) `${CMAKE_SOURCE_DIR}` on the include path so
+// CMake note (Task 6 wired this in; the requirements below are what that pass had to satisfy):
+// this file is built inside `bcos-evm/test/CMakeLists.txt`'s `if(TARGET bcos-framework)` gate,
+// with (1) `${CMAKE_SOURCE_DIR}` on the include path so
 // `"engine/bcos-engine/EngineServiceImpl.h"` resolves (mirroring engine/test/CMakeLists.txt's
 // own `target_include_directories(... PRIVATE . ${CMAKE_SOURCE_DIR})`), and (2)
 // `engine/bcos-engine/EngineServiceImpl.cpp` compiled directly into this test's sources (NOT
-// linking the `engine` CMake target, which would pull in `ledger`/mempool/etc. and risks
-// duplicate symbols) — both deferred to Task 6's `bcos-evm/test/CMakeLists.txt` pass, same
-// "编入与链 engine 库二选一" guardrail Task 5b's brief already pins for `EngineOpBranchTest.cpp`.
+// linking the `engine` CMake target, which is built from that same .cpp — the two are mutually
+// exclusive, "编入与链 engine 库二选一", and the guardrail is spelled out at the source entry).
 //
 // **未编译验证**: written and committed without cmake/ctest per the project's development-phase
-// protocol (not yet wired into CMakeLists.txt either, see note above); see task-5a-report.md for
-// the static walkthrough / API-precedent cross-check that substitutes for it.
+// protocol; see task-5a-report.md for the static walkthrough / API-precedent cross-check that
+// substitutes for it.
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 

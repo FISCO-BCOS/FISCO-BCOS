@@ -36,17 +36,19 @@
 // EngineServiceTest.cpp:221-229's local-factory pattern — scheduler/executor/storage here are
 // named locals that outlive the `EngineServiceImpl` referring to them.
 //
-// CMake note: this file is NOT yet wired into bcos-evm/test/CMakeLists.txt. It needs (1)
-// `${CMAKE_SOURCE_DIR}` on the include path so `"engine/bcos-engine/EngineServiceImpl.h"`
-// resolves, and (2) `engine/bcos-engine/EngineServiceImpl.cpp` compiled directly into this
-// test's sources — "编入与链 engine 库二选一": compiling the .cpp in and linking the `engine`
-// CMake target are mutually exclusive (duplicate symbols), and compiling it in is the choice, to
-// avoid dragging `ledger`/mempool into this binary. Both land in Task 6's CMakeLists pass, inside
-// the `if(TARGET bcos-framework)` gate.
+// CMake note: Task 6 wired this file into bcos-evm/test/CMakeLists.txt, inside the
+// `if(TARGET bcos-framework)` gate, with (1) `${CMAKE_SOURCE_DIR}` on the include path so
+// `"engine/bcos-engine/EngineServiceImpl.h"` resolves, and (2)
+// `engine/bcos-engine/EngineServiceImpl.cpp` compiled directly into this test's sources —
+// "编入与链 engine 库二选一": compiling the .cpp in and linking the `engine` CMake target are
+// mutually exclusive (duplicate symbols), and compiling it in is the choice, to avoid dragging
+// `engine`'s dependency closure into this binary.
+//
+// The Task 6 gate promised below now exists: `EngineNewPayloadGateTest.cpp`, in this directory.
 //
 // **未编译验证**: written and committed without cmake/ctest per the project's development-phase
-// protocol (and not yet wired into CMakeLists.txt either); see task-5b-report.md for the
-// API-precedent map and static walkthrough that substitute for it.
+// protocol; see task-5b-report.md for the API-precedent map and static walkthrough that
+// substitute for it.
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 

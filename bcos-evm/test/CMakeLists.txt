@@ -72,8 +72,53 @@ if(TARGET bcos-framework)
         opstack/LedgerRootTest.cpp
         opstack/EbT8nReplayTest.cpp
         opstack/EthBlockHeaderTest.cpp
-        opstack/OpSchedulerImplTest.cpp)
+        opstack/OpSchedulerImplTest.cpp
+        # op-validator-minimal-loop engine tests (Tasks 5a/5b/6). They drive
+        # `bcos::engine::EngineServiceImpl` directly — the OP `newPayload` branch has no RPC
+        # endpoint this cycle (spec §6.3/§6.4, 裁定 A6), so there is nothing else to drive.
+        opstack/EngineVersionGateTest.cpp
+        opstack/EngineOpBranchTest.cpp
+        opstack/EngineNewPayloadGateTest.cpp
+        # ── 编入与链 engine 库二选一(护栏,裁定 B2)────────────────────────────────────
+        # The three files above `#include "engine/bcos-engine/EngineServiceImpl.h"`, whose
+        # non-template helpers (detail::validateOpNewPayloadRequest / rebuildOpEthHeader /
+        # toEthLogsBloom / narrowU256ToU64 / encodePayloadSequence / ...) live in
+        # EngineServiceImpl.cpp. That .cpp is compiled straight into this test binary rather than
+        # obtained by linking the `engine` CMake target.
+        #
+        # These two options are MUTUALLY EXCLUSIVE: `engine` is built from exactly this .cpp
+        # (engine/CMakeLists.txt GLOBs `bcos-engine/*.cpp`), so doing both yields duplicate
+        # symbols at link time. Compiling it in is the chosen side, because linking `engine`
+        # would drag its PUBLIC dependency closure (and, through the engine test precedent,
+        # `mempool`) into a bcos-evm test binary that needs none of it.
+        #
+        # If you ever add `engine` to target_link_libraries below, delete this source entry in
+        # the same edit — never keep both.
+        ${CMAKE_SOURCE_DIR}/engine/bcos-engine/EngineServiceImpl.cpp)
     target_link_libraries(bcos-evm-opstack-tests PRIVATE bcos-framework)
+    # Header search paths for the engine tests above (all in-tree-only, hence inside this gate):
+    #   - ${CMAKE_SOURCE_DIR}          : resolves `#include "engine/bcos-engine/EngineServiceImpl.h"`
+    #                                    — the same repo-root-on-the-include-path convention
+    #                                    engine/test/CMakeLists.txt:12 already uses.
+    #   - .../bcos-ledger              : EngineServiceImpl.h includes <bcos-ledger/LedgerMethods.h>.
+    #   - .../transaction-scheduler    : the generic-composition-root zero-drift cases instantiate
+    #                                    <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+    #                                    (header-only; no link edge needed).
+    # These are spelled as raw source paths rather than taken from the `ledger` /
+    # `transaction-scheduler` targets' usage requirements because the root CMakeLists.txt adds
+    # both of those directories AFTER bcos-evm — so `if(TARGET ledger)` is false at this point,
+    # even in a full in-tree build. (`target_link_libraries(... ledger)` below still works: CMake
+    # resolves target names at generate time, so a target created later in the same project is
+    # linked correctly.)
+    target_include_directories(bcos-evm-opstack-tests PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/bcos-ledger
+        ${CMAKE_SOURCE_DIR}/transaction-scheduler)
+    # `ledger` supplies LedgerMethods.cpp's non-template symbols (the templated
+    # `getBlockNumber(storage, hash, fromStorage)` overload the OP branch uses is header-only, but
+    # LedgerMethods.h's non-template declarations are not) — the same library the `engine` target
+    # itself links PUBLIC (engine/CMakeLists.txt:14).
+    target_link_libraries(bcos-evm-opstack-tests PRIVATE ledger)
     # bcos-tars-protocol (`protocol-tars`) and bcos-crypto: OpSchedulerImplTest.cpp needs a
     # concrete bcos::protocol::TransactionReceiptFactory/BlockHeader implementation
     # (bcostars::protocol::TransactionReceiptFactoryImpl/BlockHeaderImpl) and a CryptoSuite to
