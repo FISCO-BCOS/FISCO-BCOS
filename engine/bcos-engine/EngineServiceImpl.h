@@ -1066,7 +1066,20 @@ private:
 
         // Receipts through the existing receipt channel: same table, same key (tx hash) and same
         // value (`TransactionReceipt::encode`) as `bcos-ledger/LedgerMethods.h:106-119`'s
-        // `prewriteBlockToBuffer`. The tx hash is keccak over the raw EIP-2718 envelope -- the ETH
+        // `prewriteBlockToBuffer`.
+        //
+        // NOT written here, and deliberately called out because the very precedent cited above
+        // does write it: **`SYS_HASH_2_TX`** (`LedgerMethods.h:121-155`, the same function's next
+        // block). Consequence: for an OP-accepted block the RECEIPT is retrievable by transaction
+        // hash, but the TRANSACTION ITSELF is not -- any read path that resolves a tx hash to the
+        // transaction (an `eth_getTransactionByHash`-shaped one) has no data for OP blocks. The OP
+        // path carries raw EIP-2718 envelopes rather than `bcos::protocol::Transaction` objects,
+        // so writing that table is a real decision (what to store, in whose encoding), not an
+        // oversight to patch in passing -- it is on spec §6.4's ledger as item (f), disclosed
+        // there and in bcos-evm/README.md's "明确不构成的宣称" list. Before this comment it was a
+        // silent omission (final review, perspective 4, Critical-1).
+        //
+        // The tx hash below is keccak over the raw EIP-2718 envelope -- the ETH
         // transaction-hash definition, and the only one available here: the OP path carries raw
         // bytes, not `bcos::protocol::Transaction` objects. (This is also why OP mode requires a
         // keccak256 `hashImpl` in its BlockFactory's crypto suite.)

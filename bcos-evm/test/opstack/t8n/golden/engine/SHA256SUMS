@@ -1,0 +1,72 @@
+# SHA256SUMS — provenance tripwire for the engine-gate golden corpus
+# (op-validator-minimal-loop, final review batch 3 / B3-5).
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# The gate in ../../../EngineNewPayloadGateTest.cpp derives ALL of its judging
+# power from these files being op-geth's output and not this repository's own.
+# Feed it values regenerated from our own implementation and every assertion in
+# it still passes -- the gate silently degenerates into a tautology, green.
+# Nothing in the data itself said otherwise: a *.golden.json carries six data
+# keys and no provenance whatsoever, and the op-geth pin lived only in README
+# prose. These checksums are the machine-checked half of that pin.
+#
+# WHAT IT DOES AND DOES NOT PROVE
+# -------------------------------
+# It proves: these bytes have not changed since the values were generated from
+# pinned op-geth. Any regeneration -- accidental, or "let me just refresh the
+# goldens" -- turns EngineNewPayloadGate.GoldenCorpusProvenanceIsPinned red
+# instead of passing unnoticed.
+# It does NOT prove: that a determined regenerator who also refreshes this file
+# used op-geth. Nothing local can prove that; the defence there is that
+# updating a file called SHA256SUMS is a deliberate, reviewable act, and that
+# the companion assertion in the same test checks every vectors/*.json still
+# declares `_op_test_vectors.generator_commit ==
+# e8800cffe53d459cde8a07c8e8f1de9d86e79e07` (op-geth v1.101702.2).
+#
+# REGENERATING (only alongside a real golden regeneration, per README's ritual)
+# ---------------------------------------------------------------------------
+#   cd bcos-evm/test/opstack/t8n/golden/engine
+#   { for f in $(ls *.golden.json | sort); do shasum -a 256 "$f"; done; \
+#     for f in $(ls chained/*.json | sort); do shasum -a 256 "$f"; done; }
+# Standard format: verifiable from a shell with
+#   grep -v '^#' SHA256SUMS | shasum -a 256 -c
+0b8b4ac95f1835265d3f69fb3149785eefb26ce1e7d2919d28ac7ed1b933c677  isthmus_access_list.golden.json
+47ab774ae73c7525f313590b717bcb9b5429da270dfbbf64f4dc7d70cc03749b  isthmus_big_block_130tx.golden.json
+2a6a4312d20c47f48e754f5b91a2ad99f4bab9ca0a2991e2a20cc34f32106488  isthmus_contract_create.golden.json
+96b1e97fb75ef21d281001759978cb17975f66940f106f11e934b3a7653deed9  isthmus_contract_logs.golden.json
+b34aed8b140c3672eb0b6fe35cfeebce3cd6297149123740711b8b3751cef6db  isthmus_deposit_failed.golden.json
+b4ee9c9c863460207d28a9069c583d290fe4698f2981e55d38cacf572eab6d32  isthmus_deposit_mint.golden.json
+8f35b0526c4240981bf101b1f0435b36eb7d75f719775bc9e36250b3970ca3a3  isthmus_deposit_only.golden.json
+8c562f023b62710cdd4dfb551ed3541467548a9f2c39d388ad266be74530a254  isthmus_empty_account_cleanup.golden.json
+f1fca3f5b8ef4f20a925d75937c3294368aa554f11388048491e597b163b110b  isthmus_fee_env_observer.golden.json
+1148b79ba70a525419954484d8388140b8cc9883c0efe93e9c9819d9639a3b88  isthmus_message_passer_write.golden.json
+88f4fceda6c8dba32a227bfc46afaece1d15d5454bc4dcf181cb4628f986febb  isthmus_setcode_7702_skips.golden.json
+eb99d8a207906b2996001e51d051eab618c1dcd8119000a7b8fe6b320e4d4674  isthmus_setcode_7702.golden.json
+f81087d7f1bfbbb2f870ecdbd6baea0a3b32eb8c258904d5ba6dc0963e76a84d  isthmus_system_contracts_real.golden.json
+534f24db0124baa3ed75f667698870a4ddde2272abc5489428c49db42ffe358d  isthmus_transfer_basic.golden.json
+872fc3ee1f756a893ed1f12cd70532888c5c46f120fe9ab6aad611b020067832  isthmus_transfer_multi.golden.json
+2f0ea47f8fd4e56164a8b361964b0b1e1f3a6fbc7d58e1730b6908b23fb49c10  isthmus_tx_reverted.golden.json
+9c6a7e60242c070f51e57f1f8bdbf731b156741c2ba4dcfd553c27e56ae86884  jovian_access_list.golden.json
+7d7926f488d8277dd7a2b2058898b9d37e9d0ecf14942d5f62ac92d828811117  jovian_contract_create.golden.json
+a11aec37b73661e2e4ea87ba55d6eb03066d0a8437411500a0b3b8ff7f8e828b  jovian_contract_logs.golden.json
+bb9f95fb93d3950f6b1a0d2007d1fb81d25e8181990027cced8a8546f76d149e  jovian_da_mix.golden.json
+8abd2012ca5771e88b6cf0ad236f704e8cef9a299194307285e59b204cc7e7fd  jovian_deposit_failed.golden.json
+44c173880badb08445fe300665bccb33906eadfcf0f247dc7923ed87e54b6f3f  jovian_deposit_mint.golden.json
+0c7c087545530f34560d632e9260147bbb6f62021110f90fba154ab079de2d72  jovian_deposit_only.golden.json
+097b067dfd893377b22271e72e5ad510860d9cc5d75a57138a0b42d6bb67ea2a  jovian_empty_account_cleanup.golden.json
+8d9651dc49dbccd9c2901effcdbd7fd21f93843654a1f72ae19350f5a20833b3  jovian_fee_env_observer.golden.json
+ad39daaecce95eb5c3f2042583e50bad22a93a6c32d85b5a96b1da85198a0611  jovian_first_block.golden.json
+9e6b75c8edaa421330e32dc69de27ced1dee2bca20b193b4784330f94e2a8923  jovian_message_passer_write.golden.json
+692028f2c9ac148ece8fba0fe0d1d18fbc8416bdc2b1b2777607a1047df2c1b0  jovian_setcode_7702_skips.golden.json
+4fd61e28c5a7543ab6288fd6d2ac1e409815547ca1a32e5ebdc637f9b02b217d  jovian_setcode_7702.golden.json
+b63ddbbe1d25377de0b51a81963502c866e271f2501b45afb19e476fe3e93550  jovian_system_contracts_real.golden.json
+09a60e7da2dbf7f3e473ae2df836ad683a4e59cab2851a77a60706c6821053ff  jovian_transfer_basic.golden.json
+5c4fe8f5b461987f92aad640e3e2892c5b458b7e98c0113dd37ea238207366c7  jovian_transfer_multi.golden.json
+991ea25a9890775c863d823856bc144b7f01ce68e958f45be94b00fa35c460e1  jovian_tx_reverted.golden.json
+09d2eefb6fcd4991624ec4d6cf0cc8174dec78b2be5e2dac2899ba5e86213d47  chained/chainA.golden.json
+6a956868b11ad7e0e6d035bc7a317cc6ed9b4927c937e716557c46ed64b4ea35  chained/chainA.post.json
+e07be2ea79b8b2fab0a391fe33108b837132ec2e1fe5a778c159e3ce02072c72  chained/chainA.pre.json
+3041a30ab502730e0bc376b81d2271fbb7d2b5c7d1be8bea86f0599e430f8e50  chained/chainB.golden.json
+701c7b77e361812cedd518a225da7a21de154045e6625e191539081d96e44a3b  chained/chainB.post.json
+320ded36e7937ec26495f8bb1608ef9beb1d174090fcbdb7ed04a61698da3854  chained/chainB.pre.json

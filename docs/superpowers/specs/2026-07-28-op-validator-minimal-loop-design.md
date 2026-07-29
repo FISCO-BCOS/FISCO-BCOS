@@ -296,6 +296,16 @@ baseFee 并比对——真实 op-geth 会拒绝的 baseFee 错块本验证者放
 | d | **`engine_newPayloadV4` / `engine_getPayloadV4` 的 RPC 端点注册** | 与上文同条,此处重述以并列成表:本期 `bcos-rpc`/`EngineEndpoint` **零改动**(裁定 A6),V4 只在 `EngineServiceImpl` 层生效;OP 异常类型(`UnsupportedFork`/`UnsupportedOpPayloadAttributes`/`OpExecutionInternalError` 等)携带的 -38005/-38003/-32603 **是意图文档,不是线上 JSON-RPC 码**——异常类型→错误码的映射在本仓任何位置都尚未实现(既有通用异常同样如此)。测试断言的是**异常类型**,不是线上码,不得被读作"错误码已验证"(T6 审查 M4) |
 | e | **Holocene EIP-1559 baseFee 父子一致性校验** | 与上文同条,并列备查:真实 op-geth 会拒绝的 baseFee 错块,本验证者放行(裁定 A7) |
 
+**rev.3.2 追加(2026-07-29,整分支终审批 3 落地;来源=终审视角 3/4 的变异实验与文档诚实性审查,
+逐条不得被"224/224 全绿"掩盖)**:
+
+| # | 欠账 | 事实与后果 |
+|---|---|---|
+| f | **`SYS_HASH_2_TX` 从不写入** | `registerOpBlock`(`EngineServiceImpl.h`)写四张表:`SYS_HASH_2_NUMBER` / `SYS_NUMBER_2_HASH` / ETH 头表 / `SYS_HASH_2_RECEIPT`。它援引的生产先例 `bcos-ledger/LedgerMethods.h:106-119` 的 `prewriteBlockToBuffer` **同一函数(:121-155)还写 `SYS_HASH_2_TX`**,本实现跳过。**后果**:OP 接受的块,回执可按 tx hash 查到,**原始交易本体无法按 hash 取回**——任何按交易哈希取回交易的读路径(RPC `eth_getTransactionByHash` 一类)对 OP 块无数据可返。**本轮裁定:只补披露,不补实现**(补写与否是独立决策,不在终审批 3 的零生产代码改动范围内);`registerOpBlock` 处已加一行注释点明,不再是无声跳过(终审视角 4 Critical-1) |
+| g | **缺参 `rawTransactions` 判 INVALID 而非 -32602** | §6.1 步骤 2 提到"缺参为 -32602"的约定,但 `validateOpNewPayloadRequest`(`EngineServiceImpl.cpp:200-206`)对缺失的 `rawTransactions` 返回 **INVALID + 点名字段**。理由:`NewPayloadRequest` 对象层**无法区分"缺参"与"空数组"**——那是 RPC 解析层的区分,而 RPC 端点本期整体豁免(条目 d)。此前该偏离只在未入库的 `task-5b-report.md` §7 交代过,读者从 spec 看不出(终审视角 4 Imp-3) |
+| h | **`OpConsensusError → INVALID` 的覆盖不如 `OpStorageError → -32603` 对称** | `StorageError → -32603` 有真调度器 + 真桥的端到端覆盖(探针③、`EngineNewPayloadGateTest` 的存储布局故障注入);`OpConsensusError → INVALID` 在 engine 层有一条真调度器用例(`EngineOpBranch.ConsensusErrorFromExecutionMapsToInvalid`,坏类型字节 → 解码期抛),但 **`OpSchedulerImpl.h` 的 `catch(...)` 重抛路径**(即 T4 修复真正针对的场景:`processOpBlock` 内部逃逸的非 typed 异常被兜底重分类为 `OpConsensusError` 后抵达 engine)engine 侧**无用例**。两条分类腿因此**不等价可信**,读者从 spec/README 此前完全看不出(终审视角 4 Imp-4) |
+| i | **零散记账(此前仅存于 `progress.md` 一行)** | ①`computeOpTxRoot` 对同一批 raw 字节**算两次**(engine step 2 一次、`executeOpBlock` step 6 一次),且形参声明为 `input_range` 而语义要求可重复遍历,**应为 `forward_range`**——当前调用点全是 `std::vector`,故未爆;②`c_opMode` 只探测 `executeOpBlock` **一个成员名**,签名漂移会静默退化为通用分支(护栏只有三个测试里的 `static_assert`);③三个 engine 测试 TU 的匿名命名空间含**同名类型**,当前无 ODR 问题,但 `UNITY_BUILD` 打开后是硬冲突(`engine` target 已 `UNITY_BUILD ON`,测试 target 未开);④`${CMAKE_SOURCE_DIR}` 进 include 路径**作用于整个测试 target 的 20+ 个源文件**,不止三个 engine 测试——实测无遮蔽(仓库根无无扩展名文件,同名目录项被跳过),但 CMake 注释里"暴露面有界"的表述弱化了实际范围 |
+
 ## 7. 金向量 gate 与测试(rev.3 重写)
 
 ### 7.1 金值策略(事实 Critical 落地,rev.3 修正 A2/A3)
@@ -386,6 +396,27 @@ OpSchedulerImpl(双签名:通用签名调用即 throw;分拣/首笔违约/毒旗
 比对面**完整性——seal 三字段 + result 三独立成员);engine OP 分支单测
 (版本闸/attributes 语义/latestValidHash 取值)。
 
+**rev.3.2 补(终审批 3 落地的单测层增量)**:
+
+- **step 5 的比对是 8 条,不是 6 条**。§4.1 的"六项比对面"之外还有 §5.1 的两条
+  (`blobGasUsed` 的 Jovian DA footprint、`requestsHash` 的常量漂移),终审视角 3 的变异实验
+  把这两条同时短路为恒假,**50 例 engine 测试全绿**——即它们此前被任何用例触碰过。
+  `EngineOpBranch.EachComparisonSurfaceFieldMismatchIsNamed` 的 mismatch 表因此从 6 行扩到
+  **8 行**;§4.1/§5.1 的分类是文档区分,不是覆盖豁免;
+- **块登记的写侧需要真实块的证据**,不能只有桩:gate 的每条向量现在逐笔断言
+  `SYS_HASH_2_RECEIPT` 的键 = `keccak(raw EIP-2718 envelope)`,并断言**存储回执的 gasUsed 之和
+  等于该块的 golden `gasUsed`**(`mapOpReceipt` 存的是每笔自身的 `gas_used`,故和恰为头字段);
+- **收据数护栏**(数量不等 → 拒绝、空收据 → 拒绝,而非 `std::min` 截断 + 跳过)由两条用例固定
+  ——此前该设计辩论的结论无任何测试守护;
+- **`number`/`timestamp`/`baseFeePerGas` 的唯一支点**是链式对(33 条向量这三字段全常量),
+  链式用例内已就此加显式断言并置于所有 fatal `ASSERT_*` 之前,注明不得删除;
+- **金值 provenance 机内钉死**:`golden/engine/SHA256SUMS`(标准 shasum 格式,39 个文件)+ 每条
+  `vectors/*.json` 的 `_op_test_vectors.generator_commit == e8800cff…`,由
+  `EngineNewPayloadGate.GoldenCorpusProvenanceIsPinned` 校验。它挡的是"有人用**本实现**重新生成
+  金值"——那会让 gate 静默退化成同义反复且全绿。它**不能**证明重新生成者用的是 op-geth,只能让
+  重新生成成为一次**必须显式修改 SHA256SUMS 的、可审查的动作**;
+- **`validationError` 断言一律精确匹配或前缀锚定**(§11 检查单末条),子串匹配已全部移除。
+
 ## 8. 验收清单(N0 相对基线 + 命令化,rev.3 修正 C5/C6)
 
 **实测回填口径(2026-07-29,T7,分支 `feat-op-validator-loop` @ `fe2a40c29`)**:全部条目
@@ -423,6 +454,24 @@ OpSchedulerImpl(双签名:通用签名调用即 throw;分拣/首笔违约/毒旗
 - [x] 库目标纯净:`grep -rl "nlohmann\|gtest" bcos-evm/bcos-evm/ | grep -v statetest.hpp`
       为空;`bcos-codec/bcos-codec/rlp/`、`engine/bcos-engine/` 同法为空
 
+**终审后回填(2026-07-29,批 1/2/3 落地后)**:上表的实测数字是 T7 收尾时(`fe2a40c29`)的快照。
+整分支终审的三批修复之后,in-tree `bcos-evm-opstack-tests` **224/224**,本闭环新增 **57** 例
+(相对 merge-base `42e62fcef` 的 156 例;T7 时为 50 例,批 1 +11、批 2 +2、批 3 +4),
+`test-bcos-engine` 仍"No errors detected"。standalone 名单**未重新测量**:批 1/2/3 的测试改动
+全部落在 `if(TARGET bcos-framework)` 守卫内,standalone 侧源列表逐字未动。
+
+### 8.1 报告归档标准(rev.3.2 新增,终审视角 4 Imp-5 / 批 3 B3-12)
+
+此前 8 份 `task-N-report.md` 只归档 3 份,无成文标准,并因此产生过一处悬空引用(§7.3 曾引用
+未入库的 `task-6-report.md`)。**标准(自本次起适用,采用"全归档"口径)**:
+
+- `.superpowers/sdd/<epic>/` 下的 **`task-N-report.md`、`final-batch-N-report.md`、
+  `n0-*.txt`、探针报告**一律入库(`git add -f`——该目录受 `.git/info/exclude` 覆盖,
+  不加 `-f` 会被静默跳过,这正是此前漏归档的直接原因);
+- `*-brief.md`(控制器下发的任务书)与 `review-*.diff`(中间产物)**不入库**;
+- **spec / README 只允许引用已入库的文件**。引用未入库文件即悬空引用,视同文档缺陷——
+  这条是上面那条的存在理由,不是附注。
+
 ## 9. 风险与预案
 
 | 风险 | 预案 |
@@ -440,3 +489,29 @@ OpSchedulerImpl(双签名:通用签名调用即 throw;分拣/首笔违约/毒旗
 本闭环交付**验证者模式的 engine 层等价证据**(金向量驱动 + 因果闭环用例);
 §6.4 欠账清单未清前,不构成与真实 op-node 互操作的宣称。E-b park 其余层
 (编排完整接入、生产可用、Karst 真适配)边界不变。
+
+## 11. 审查检查单:兜底断言与假绿(rev.3.2 新增,批 3 B3-13a)
+
+同一类假绿在本分支的终审修复中**连续三轮**成为问题来源。这不是三次巧合,是一个可复现的
+机制:**只断言异常类型的测试,在"两条不同防线抛同一类型"时无法区分谁在起作用**。三次实证:
+
+1. **批 1**:`processOpBlock` 的 `catch(...)` 兜底把不同的块级拒绝抹成同一异常**类型**。
+   只断言类型的用例在被测修复被删除后**仍然通过**——兜底把逃逸接住了,类型没变。
+   → 必须改用**消息子串**断言。
+2. **批 2 自验**:屏障消息与执行期兜底消息**共有** `unclassified exception` 子串。
+   只禁用执行期兜底时,逃逸被外层屏障接住,原断言照样通过。
+   → 子串断言本身不够,必须收紧为"**必须含 A 且不得含 B**"。
+3. **批 2 复审**:删除透传分支(`catch (const OpExecutionInternalError&) { throw; }`)后,
+   屏障会用**自己的消息重新构造**新异常,把内层原始消息**覆盖**掉——于是"删掉内层防线"
+   这件事在只看内层消息的断言下依然不可见。
+
+**规则(适用于本仓任何新增 `catch(...)` 兜底,或任何会重写/包装异常消息的屏障)**:
+
+- 该防线的测试必须同时给**正例标识**(消息必须含本层的标识串)与**反例标识**
+  (消息不得含相邻层的标识串)。缺任何一半,相邻防线都能顶替它而测试不红。
+- **每条防线要有独立的翻红实验**:逐条注释掉/删除该防线的代码,确认**恰好**是为它写的
+  用例翻红。若删掉防线 X 时红的是为防线 Y 写的用例,说明两者没被区分开。
+- 同一条规则的自然推论,适用于**所有** `validationError` 断言而不只是异常:子串匹配
+  (`find("blobGasUsed") != npos`)会同时命中静态校验桶与比对桶两条**语义不同**的消息,
+  两者的 `latestValidHash` 取值还相反。→ **用精确匹配或前缀锚定**,让消息同一性把桶钉死
+  (批 3 B3-6 已按此改写 engine 两个测试文件的全部 15 处)。

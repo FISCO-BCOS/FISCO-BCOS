@@ -65,11 +65,15 @@ design:`docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md`(r
 - 判据是**离线 op-geth 金值**(pinned v1.101702.2,`test/opstack/t8n/golden/engine/`),
   不是自算自验:`payload.blockHash` 一律取 `golden.blockHash`,`result.txRoot` 对
   `golden.transactionsRoot`;
-- 实测(in-tree `build/bcos-evm-opstack-tests`):金向量 gate **33/33 VALID**、两块链式对
-  绿(parent-known 经块登记因果成立)、变异矩阵 **13 类 18 例** 全绿、engine/编解码新增测试
-  合计 **50/50**、全量 opstack **206/206**、standalone **131/131**、engine Boost
-  `test-bcos-engine` **11/11**;五探针翻红复绿留痕
-  `.superpowers/sdd/probe-op-validator-gate-report.md`;
+- 实测(in-tree `build/bcos-evm-opstack-tests`,**2026-07-29 整分支终审批 1/2/3 落地后**):
+  金向量 gate **33/33 VALID**、两块链式对绿(parent-known 经块登记因果成立)、变异矩阵
+  **13 类 18 例** 全绿、金值 provenance 校验(SHA256 清单 + op-geth pin)绿、engine/编解码
+  新增测试合计 **57/57**、全量 opstack **224/224**、engine Boost `test-bcos-engine`
+  "No errors detected";五探针翻红复绿留痕
+  `.superpowers/sdd/probe-op-validator-gate-report.md`,终审三批的变异自验留痕
+  `.superpowers/sdd/2026-07-28-op-validator-minimal-loop/final-batch{1,2,3}-report.md`;
+  standalone 侧未重新测量——三批改动全部落在 `if(TARGET bcos-framework)` 守卫内,
+  standalone 源列表逐字未动(T7 快照 **131/131**);
 - 通用组合根**行为零漂移**:版本上界是构造参数(默认 V3),只有 OP 组合根放宽到 V4;
   探针⑤ 反证(把默认值改成 4 → 三条通用闸测试立刻翻红)。
 
@@ -90,6 +94,16 @@ design:`docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md`(r
   (以 `static_assert` 钉住,载体一旦加入立刻翻红);
 - **extraData 形状校验、Holocene EIP-1559 baseFee 父子一致性校验未做**:真实 op-geth 会拒绝的
   baseFee 错块,本验证者放行;
+- **`SYS_HASH_2_TX` 从不写入**(2026-07-29 终审补披露,design §6.4 条目 f):块登记写四张表
+  (`SYS_HASH_2_NUMBER` / `SYS_NUMBER_2_HASH` / ETH 头表 / `SYS_HASH_2_RECEIPT`),而它援引的
+  生产先例 `prewriteBlockToBuffer` 同时还写 `SYS_HASH_2_TX`。**后果:OP 接受的块,回执可按 tx
+  hash 查到,原始交易本体无法按 hash 取回**。本轮只补披露、不补实现;
+- **两条错误分类腿的覆盖不对称**(design §6.4 条目 h):`OpStorageError → -32603` 有真调度器 +
+  真桥的端到端覆盖;`OpConsensusError → INVALID` 只覆盖了解码期抛出这一条路径,
+  `OpSchedulerImpl` 的 `catch(...)` 重分类路径抵达 engine 的链路 engine 侧无用例。不要把两条腿
+  读作等价可信;
+- **缺参与空数组不可分**(design §6.4 条目 g):缺失的 `rawTransactions` 判 INVALID 而非
+  -32602——该区分属于 RPC 解析层,而 RPC 端点本期整体豁免;
 - SYNCING 完整语义(缓存回填 / 侧链 ACCEPTED)、JWT、重组窗口、增量 stateRoot 均未做。
 
 ## Build(standalone)

@@ -221,6 +221,39 @@ std::string thrownDiagnostic(Action&& action)
     return {};
 }
 
+// ---- exact-match validationError assertions (final review B3-6) ----
+//
+// Every assertion in this file used to be `validationError->find("<word>") != npos`. Substring
+// matching is too loose here in two concrete, already-live ways:
+//   - `find("blockHash")` is satisfied by ANY message containing the word — a future
+//     "parentBlockHash ..." or "blockHash of the parent ..." message would keep a test written
+//     for the header-reconstruction bucket green while the bucket itself moved;
+//   - `find("blobGasUsed")` matches BOTH "blobGasUsed must be zero before Jovian (OP Isthmus)"
+//     (the static-validation bucket, latestValidHash = null) AND "execution result does not
+//     match payload field: blobGasUsed" (the comparison bucket, latestValidHash = parent). Those
+//     are two different code paths with two different verdicts, and the substring told them
+//     apart not at all.
+// Exact equality pins which message — and therefore which bucket — actually produced the verdict.
+
+/// The one prefix every step-5 comparison mismatch carries (`EngineServiceImpl.h:993-995`).
+constexpr std::string_view c_comparisonMismatchPrefix =
+    "execution result does not match payload field: ";
+
+void expectValidationError(
+    bcos::engine::PayloadStatus const& status, std::string_view expectedMessage)
+{
+    ASSERT_TRUE(status.validationError.has_value()) << "expected a validationError, got none";
+    EXPECT_EQ(*status.validationError, expectedMessage);
+}
+
+/// Comparison-surface mismatch: the message must be the prefix above followed by EXACTLY the
+/// named field — so naming a different field, or a message that merely mentions the field
+/// somewhere, both fail.
+void expectComparisonMismatch(bcos::engine::PayloadStatus const& status, std::string_view field)
+{
+    expectValidationError(status, std::string(c_comparisonMismatchPrefix) + std::string(field));
+}
+
 // ---- stand-ins (EngineVersionGateTest.cpp) ----
 
 /// The OP branch never touches the mempool: `handleOpNewPayload` does not, and the only generic
@@ -715,8 +748,7 @@ TEST(EngineOpBranch, BlockHashMismatchIsInvalidWithNullLatestValidHash)
     // step 2).
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("blockHash"), std::string::npos);
+    expectValidationError(status, "blockHash does not match the reconstructed block header");
 }
 
 // (c) Step 3, design §6.1 (rev.2): an unknown parent yields SYNCING — decided by a storage
@@ -821,9 +853,15 @@ TEST(EngineOpBranch, ConsensusErrorFromExecutionMapsToInvalid)
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     ASSERT_TRUE(status.latestValidHash.has_value());
     EXPECT_EQ(*status.latestValidHash, parentHash);
+    // Names the execution stage, not a static field — i.e. it did not短路 in step 2. The
+    // message is only prefix-anchored (not exact-matched) because its tail is the decoder's
+    // own `what()`, which this test does not own; the positive marker is the execution-stage
+    // prefix and the negative marker is the static bucket's (B3-6/B3-13a pairing).
     ASSERT_TRUE(status.validationError.has_value());
-    // Names the execution stage, not a static field — i.e. it did not短路 in step 2.
-    EXPECT_NE(status.validationError->find("OP block execution rejected"), std::string::npos);
+    EXPECT_TRUE(status.validationError->starts_with("OP block execution rejected the payload: "))
+        << *status.validationError;
+    EXPECT_EQ(status.validationError->find(c_comparisonMismatchPrefix), std::string::npos)
+        << *status.validationError;
     // A rejected block is not registered.
     EXPECT_FALSE(isBlockRegistered(fixture.storage, request.executionPayload.blockHash));
 }
@@ -847,8 +885,9 @@ TEST(EngineOpBranch, NonZeroBlobGasUsedIsInvalidUnderIsthmus)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("blobGasUsed"), std::string::npos);
+    // Exact, because "blobGasUsed" alone also matches the step-5 comparison message — a
+    // different bucket with a different latestValidHash (B3-6).
+    expectValidationError(status, "blobGasUsed must be zero before Jovian (OP Isthmus)");
 }
 
 // (h) Design §6.3: `getPayload` in OP mode reports an explicit "block building is not OP-ized"
@@ -919,10 +958,16 @@ TEST(EngineOpBranch, ValidPayloadRegistersAllFourTables)
     EXPECT_EQ(receiptEntry->get(), asStringView(encodedReceipt));
 }
 
-// (j) Step 4/5, design §6.1 "六项比对面": each of the six fields, perturbed one at a time, must
-// produce INVALID + latestValidHash = parent + a validationError naming that field. One
-// perturbation per case, so a comparison that is silently missing from the chain shows up as
-// exactly one failing case instead of being masked by its neighbours.
+// (j) Step 4/5, design §6.1: every comparison in step 5, perturbed one at a time, must produce
+// INVALID + latestValidHash = parent + a validationError naming that field. One perturbation per
+// case, so a comparison that is silently missing from the chain shows up as exactly one failing
+// case instead of being masked by its neighbours.
+//
+// Eight rows, not six (final review B3-1). The six named "六项比对面" (design §4.1) are the first
+// six; the last two are design §5.1's additional comparisons, which the final review's mutation
+// experiment proved were reached by NO test at all — short-circuiting both of them to constant
+// false left the whole 50-case engine suite green. The §4.1/§5.1 split is a documentation
+// distinction, not a coverage licence: all eight decide verdicts.
 TEST(EngineOpBranch, EachComparisonSurfaceFieldMismatchIsNamed)
 {
     struct MismatchCase
@@ -943,6 +988,22 @@ TEST(EngineOpBranch, EachComparisonSurfaceFieldMismatchIsNamed)
         {"stateRoot", [](StubCommitments& c) { c.stateRoot = bcos::h256{}; }},
         {"gasUsed", [](StubCommitments& c) { c.gasUsed = bcos::u256(1); }},
         {"transactionsRoot", [](StubCommitments& c) { c.txRoot = bcos::h256{}; }},
+        // §5.1 #7 — the Jovian DA-footprint slot. The comparison is gated on the OPTIONAL being
+        // engaged, not on the fork: `matchingCommitments` leaves it `nullopt` (pre-Jovian), so
+        // engaging it with a value that differs from the payload's slot (0 under Isthmus, pinned
+        // there by static validation) is exactly the "seal reports a DA footprint the header does
+        // not claim" condition. `jovian_da_mix` in the golden gate covers only the agreeing
+        // direction; this covers the refusing one.
+        {"blobGasUsed", [](StubCommitments& c) { c.blobGasUsed = std::optional<uint64_t>{1}; }},
+        // §5.1 #8 — drift between this library's copy of the OP empty-requests constant (used to
+        // rebuild the header) and the OP side's own `OP_EMPTY_REQUESTS_HASH`. Displacing the
+        // seal's copy is precisely the drift the comparison exists to catch.
+        {"requestsHash",
+            [](StubCommitments& c) {
+                auto drifted = c.requestsHash.value_or(bcos::h256{});
+                drifted.data()[0] ^= 0x01;
+                c.requestsHash = drifted;
+            }},
     };
 
     for (auto const& mismatchCase : cases)
@@ -959,8 +1020,7 @@ TEST(EngineOpBranch, EachComparisonSurfaceFieldMismatchIsNamed)
         EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
         ASSERT_TRUE(status.latestValidHash.has_value());
         EXPECT_EQ(*status.latestValidHash, parentHash);
-        ASSERT_TRUE(status.validationError.has_value());
-        EXPECT_NE(status.validationError->find(mismatchCase.fieldName), std::string::npos);
+        expectComparisonMismatch(status, mismatchCase.fieldName);
         // A rejected block must leave the registry untouched.
         EXPECT_FALSE(
             isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
@@ -1003,8 +1063,7 @@ TEST(EngineOpBranch, NonConsecutiveBlockNumberIsInvalid)
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     ASSERT_TRUE(status.latestValidHash.has_value());
     EXPECT_EQ(*status.latestValidHash, parentHash);
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("blockNumber"), std::string::npos);
+    expectValidationError(status, "blockNumber must be exactly one greater than the parent's");
     // Rejected before execution — the height check precedes step 4.
     EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
     EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
@@ -1122,8 +1181,8 @@ TEST(EngineOpBranch, GasLimitAboveInt64MaxIsInvalid)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());  // static-validation bucket
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("gasLimit"), std::string::npos);
+    // Exact: "gasLimit" also appears in the uint64-range message, a different bound.
+    expectValidationError(status, "gasLimit exceeds the maximum block gas limit (2^63-1)");
     EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
 }
 
@@ -1144,8 +1203,7 @@ TEST(EngineOpBranch, ExtraDataAboveThirtyTwoBytesIsInvalid)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("extraData"), std::string::npos);
+    expectValidationError(status, "extraData exceeds the 32-byte maximum");
     EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
     // 32 bytes exactly is still accepted (the bound is inclusive, as in op-geth).
     StubFixture atBound;
@@ -1228,5 +1286,66 @@ TEST(EngineOpBranch, RegistrationPhaseEscapeIsInternalError)
     EXPECT_NE(diagnostic.find("outside block execution"), std::string::npos) << diagnostic;
     // A block whose registration failed must not be visible as registered: the writes that did
     // land are discarded with the un-pushed view.
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+}
+
+// ═══════════ final review batch 3: the receipt-count invariant (B3-3) ═══════════
+//
+// `registerOpBlock` refuses to register a block whose execution returned a receipt count
+// differing from the transaction count, and refuses a null receipt — instead of the
+// `std::min()`-truncate + `continue`-on-null shape that task-5b review M2 explicitly rejected
+// (truncating would drop receipts from the registry while still reporting the block VALID).
+//
+// That design decision had NO test holding it: the final review restored the rejected shape and
+// the entire 206-case suite stayed green. These two cases fix the decision in place.
+//
+// Marker discipline (B3-13a): both assert the registration invariant's OWN message AND assert the
+// classification barrier's marker is absent. Without the negative half, deleting the invariant
+// would still leave the test green whenever the resulting damage happened to trip the barrier
+// instead — the exact false green batches 1 and 2 both hit.
+
+TEST(EngineOpBranch, ReceiptCountMismatchIsRefusedNotSilentlyTruncated)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    // One transaction in the payload, zero receipts back from execution. Under the rejected
+    // `std::min()` design this registers the block as VALID with an empty receipt index.
+    ASSERT_EQ(scenario.request.executionPayload.rawTransactions->size(), 1U);
+    fixture.scheduler.result.receipts.clear();
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
+        bcos::engine::OpExecutionInternalError);
+    const auto diagnostic = thrownDiagnostic(
+        [&] { bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)); });
+    EXPECT_NE(
+        diagnostic.find("receipt count differing from the transaction count"), std::string::npos)
+        << diagnostic;
+    EXPECT_EQ(diagnostic.find("unclassified exception"), std::string::npos) << diagnostic;
+
+    // Not VALID and not registered: a block whose receipts cannot be indexed is not accepted.
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+    const auto txHash =
+        fixture.blockFactory->cryptoSuite()->hashImpl()->hash(scenario.rawTransaction);
+    EXPECT_FALSE(readEntry(fixture.storage, bcos::ledger::SYS_HASH_2_RECEIPT,
+        bcos::concepts::bytebuffer::toView(txHash))
+                     .has_value());
+}
+
+TEST(EngineOpBranch, NullReceiptIsRefusedNotSkipped)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    // Count matches (1 == 1), so only the per-entry null check can reject this. Under the
+    // rejected `continue`-on-null design the block registers VALID with a missing receipt.
+    fixture.scheduler.result.receipts = {nullptr};
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
+        bcos::engine::OpExecutionInternalError);
+    const auto diagnostic = thrownDiagnostic(
+        [&] { bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)); });
+    EXPECT_NE(diagnostic.find("returned a null receipt"), std::string::npos) << diagnostic;
+    EXPECT_EQ(diagnostic.find("unclassified exception"), std::string::npos) << diagnostic;
     EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
 }

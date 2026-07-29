@@ -82,6 +82,7 @@
 #include <bcos-codec/rlp/EthBlockHeader.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-evm/engine/OpEngineSeam.h>
 #include <bcos-evm/engine/OpSchedulerImpl.h>
@@ -117,6 +118,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -569,6 +571,36 @@ std::string hexOfBytes(bcos::bytes const& data)
     return bcos::toHexStringWithPrefix(data);
 }
 
+// ---- exact-match validationError assertions (final review B3-6) ----
+//
+// Every assertion below used to be `validationError->find("<word>") != npos`. Two concrete ways
+// that is too loose, both live in this very file:
+//   - `find("blockHash")` is satisfied by ANY message containing the word, so a future
+//     "parentBlockHash ..." message would keep a test written for the header-reconstruction
+//     bucket green while the bucket moved out from under it;
+//   - `find("blobGasUsed")` matches BOTH "blobGasUsed must be zero before Jovian (OP Isthmus)"
+//     (static-validation bucket, latestValidHash = null) AND "execution result does not match
+//     payload field: blobGasUsed" (comparison bucket, latestValidHash = parent) — two different
+//     paths with two different verdicts, told apart by the substring not at all.
+// Exact equality pins which message, and therefore which bucket, produced the verdict.
+
+/// The one prefix every step-5 comparison mismatch carries (`EngineServiceImpl.h:993-995`).
+constexpr std::string_view c_comparisonMismatchPrefix =
+    "execution result does not match payload field: ";
+
+void expectValidationError(
+    bcos::engine::PayloadStatus const& status, std::string_view expectedMessage)
+{
+    ASSERT_TRUE(status.validationError.has_value()) << "expected a validationError, got none";
+    EXPECT_EQ(*status.validationError, expectedMessage);
+}
+
+/// Comparison-surface mismatch: prefix + EXACTLY the named field.
+void expectComparisonMismatch(bcos::engine::PayloadStatus const& status, std::string_view field)
+{
+    expectValidationError(status, std::string(c_comparisonMismatchPrefix) + std::string(field));
+}
+
 /// `RecordProperty` OVERWRITES an existing key rather than appending (gtest's documented
 /// behaviour), and the 33-vector sweep below records from inside one single test — so a fixed key
 /// would leave only the last vector's value and silently discard the other 32. Every key this
@@ -610,6 +642,67 @@ void recordHeaderFields(std::string const& id, bcos::codec::rlp::EthBlockHeader 
     Test::RecordProperty(
         recordKey(id, "hdr_20_parentBeaconBlockRoot"), header.parentBeaconBlockRoot.hexPrefixed());
     Test::RecordProperty(recordKey(id, "hdr_21_requestsHash"), header.requestsHash.hexPrefixed());
+}
+
+// ─────────────────── golden-corpus provenance (final review B3-5) ───────────────────
+
+/// The op-geth checkout every value in `golden/engine/` and `vectors/` was generated from
+/// (tag v1.101702.2). It is recorded machine-readably in each vector's `_op_test_vectors`
+/// block; the golden files themselves carry no provenance at all, which is what `SHA256SUMS`
+/// next to them is for.
+constexpr std::string_view c_pinnedOpGethCommit = "e8800cffe53d459cde8a07c8e8f1de9d86e79e07";
+constexpr std::string_view c_pinnedGeneratorName = "opt8n-ref";
+
+/// One `<sha256hex>  <relative path>` line of `golden/engine/SHA256SUMS`.
+struct ChecksumEntry
+{
+    std::string sha256Hex;
+    std::string relativePath;
+};
+
+std::vector<ChecksumEntry> loadGoldenChecksums()
+{
+    std::vector<ChecksumEntry> entries;
+    const fs::path sumsPath = fs::path(OP_T8N_GOLDEN_ENGINE_DIR) / "SHA256SUMS";
+    std::ifstream in(sumsPath);
+    if (!in.is_open())
+    {
+        ADD_FAILURE() << "cannot open " << sumsPath.string()
+                      << " — the golden corpus provenance tripwire is missing (B3-5)";
+        return entries;
+    }
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (line.empty() || line[0] == '#')
+        {
+            continue;
+        }
+        // shasum(1) format: 64 hex chars, two spaces, path.
+        const auto separator = line.find("  ");
+        if (separator == std::string::npos)
+        {
+            ADD_FAILURE() << "malformed SHA256SUMS line: " << line;
+            continue;
+        }
+        entries.push_back(ChecksumEntry{line.substr(0, separator), line.substr(separator + 2)});
+    }
+    return entries;
+}
+
+std::string sha256HexOfFile(const fs::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    if (!in.is_open())
+    {
+        ADD_FAILURE() << "cannot open " << path.string();
+        return {};
+    }
+    const std::string content(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const auto digest = bcos::crypto::sha256Hash(
+        bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(content.data()), content.size()));
+    return digest.hex();
 }
 
 // ────────────────────────────────── composition root ──────────────────────────────────
@@ -834,9 +927,129 @@ void runGoldenVector(std::string const& id)
     EXPECT_EQ(headerEntry->get(),
         std::string_view(reinterpret_cast<const char*>(goldenEncoded.data()), goldenEncoded.size()))
         << id << ": the registered header RLP must be op-geth's encodedHeaderHex byte for byte";
+
+    // (6) The receipt index, per transaction (final review B3-2).
+    //
+    // Before this, `SYS_HASH_2_RECEIPT` was guarded by ONE stub-driven case with a hand-made
+    // receipt: deleting every receipt write from `registerOpBlock` turned exactly that one case
+    // red, and the receipts 33 real blocks actually produce were compared against nothing at all.
+    //
+    // Two things are asserted, and the second is the one with teeth:
+    //   (a) every transaction's envelope hash is a key in the table — the index is complete, not
+    //       just non-empty (a loop that registered only the first receipt would pass an
+    //       "is anything there" check);
+    //   (b) the sum of the STORED receipts' gasUsed equals the block's gasUsed, which is
+    //       `_op_expected.header.gasUsed` — an op-geth golden number. `mapOpReceipt` stores each
+    //       transaction's own `gas_used` (not the cumulative counter, OpReceiptMap.h:75-80), so
+    //       the sum is exactly the header field. That turns the receipt index from "some bytes
+    //       are present" into "these bytes decode to the gas op-geth charged".
+    const auto& hashImpl = *scenario.fixture->blockFactory->cryptoSuite()->hashImpl();
+    bcos::u256 storedGasUsedSum = 0;
+    std::set<bcos::h256> seenTxHashes;
+    for (std::size_t index = 0; index < payload.rawTransactions->size(); ++index)
+    {
+        auto const& rawTransaction = (*payload.rawTransactions)[index];
+        const auto txHash = hashImpl.hash(rawTransaction);
+        // Distinctness matters for the sum below: two identical envelopes would collide onto one
+        // key and the sum would silently lose a term. No vector in the corpus has duplicates.
+        EXPECT_TRUE(seenTxHashes.insert(txHash).second)
+            << id << ": duplicate transaction envelope at index " << index;
+        auto receiptEntry = readEntry(scenario.fixture->storage, bcos::ledger::SYS_HASH_2_RECEIPT,
+            bcos::concepts::bytebuffer::toView(txHash));
+        ASSERT_TRUE(receiptEntry.has_value())
+            << id << ": no receipt registered for transaction index " << index
+            << " (key = keccak(raw EIP-2718 envelope) = " << txHash.hexPrefixed() << ")";
+        const auto stored = receiptEntry->get();
+        auto decoded = scenario.fixture->receiptFactory->createReceipt(
+            bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(stored.data()), stored.size()));
+        ASSERT_TRUE(decoded) << id << ": stored receipt " << index << " failed to decode";
+        storedGasUsedSum += decoded->gasUsed();
+    }
+    EXPECT_EQ(storedGasUsedSum, payload.gasUsed)
+        << id << ": stored receipts' gasUsed must sum to the golden header's gasUsed";
 }
 
 }  // namespace
+
+// ═════════ Step 0: golden-corpus provenance (final review B3-5) ═════════
+//
+// This runs before anything else in the gate reads a golden value, and it is the only thing
+// standing between "the gate proves the mapping matches op-geth" and "the gate proves the
+// mapping matches itself".
+//
+// The failure mode it closes is not hypothetical hand-waving: `*.golden.json` carries six data
+// keys and no provenance field, so a well-meaning "the goldens look stale, let me regenerate
+// them" — done with THIS implementation instead of pinned op-geth — leaves every assertion in
+// this file passing while the gate has silently become a tautology. Nothing in the corpus, and
+// nothing in any test, would have said a word.
+//
+// Two independent halves, because neither alone is enough:
+//   (a) checksums over the golden files: catches ANY change to the bytes, whatever produced it;
+//   (b) the op-geth pin declared inside every `vectors/*.json` (`_op_test_vectors
+//       .generator_commit`, which the golden ritual never rewrote): ties the corpus those
+//       goldens extend to a specific op-geth checkout, machine-readably, instead of to README
+//       prose.
+TEST(EngineNewPayloadGate, GoldenCorpusProvenanceIsPinned)
+{
+    // ---- (a) every golden file matches its recorded checksum ----
+    auto checksums = loadGoldenChecksums();
+    ASSERT_FALSE(checksums.empty()) << "SHA256SUMS listed no files";
+    // 33 golden vectors + the chained pair's 6 files (2 golden + 2 pre + 2 post).
+    EXPECT_EQ(checksums.size(), 39U)
+        << "SHA256SUMS file count drifted from the 33-vector corpus + chained pair";
+
+    std::set<std::string> listed;
+    for (auto const& entry : checksums)
+    {
+        SCOPED_TRACE(entry.relativePath);
+        listed.insert(entry.relativePath);
+        const auto path = fs::path(OP_T8N_GOLDEN_ENGINE_DIR) / entry.relativePath;
+        ASSERT_TRUE(fs::exists(path)) << "listed in SHA256SUMS but missing on disk";
+        EXPECT_EQ(sha256HexOfFile(path), entry.sha256Hex)
+            << entry.relativePath
+            << ": golden bytes changed since the op-geth generation ritual. If this is a genuine "
+               "regeneration, it must come from pinned op-geth "
+            << c_pinnedOpGethCommit
+            << " (README's ritual), and SHA256SUMS must be refreshed in the same commit — never "
+               "from this repository's own implementation, which would turn the whole gate into a "
+               "tautology.";
+    }
+
+    // The listing must also be COMPLETE: an unlisted golden file would be judged by nothing.
+    std::set<std::string> onDisk;
+    for (auto const& dirEntry : fs::directory_iterator(fs::path(OP_T8N_GOLDEN_ENGINE_DIR)))
+    {
+        if (dirEntry.is_regular_file() &&
+            dirEntry.path().filename().string().ends_with(".golden.json"))
+        {
+            onDisk.insert(dirEntry.path().filename().string());
+        }
+    }
+    for (auto const& dirEntry :
+        fs::directory_iterator(fs::path(OP_T8N_GOLDEN_ENGINE_DIR) / "chained"))
+    {
+        if (dirEntry.is_regular_file() && dirEntry.path().extension() == ".json")
+        {
+            onDisk.insert("chained/" + dirEntry.path().filename().string());
+        }
+    }
+    EXPECT_EQ(onDisk, listed)
+        << "the set of golden files on disk differs from the set SHA256SUMS covers";
+
+    // ---- (b) the corpus these goldens extend declares the pinned op-geth checkout ----
+    auto ids = loadManifestIds();
+    ASSERT_EQ(ids.size(), 33U);
+    for (auto const& id : ids)
+    {
+        SCOPED_TRACE(id);
+        const auto vectorDoc = loadJsonOrFail(fs::path(OP_T8N_VECTORS_DIR) / (id + ".json"));
+        auto const& provenance = vectorDoc.at("_op_test_vectors");
+        EXPECT_EQ(provenance.at("generator_commit").get<std::string>(), c_pinnedOpGethCommit)
+            << id << ": vector was not generated from the pinned op-geth checkout";
+        EXPECT_EQ(provenance.at("generator").get<std::string>(), c_pinnedGeneratorName)
+            << id << ": vector was not generated by the pinned generator";
+    }
+}
 
 // ══════════════════════════ Step 1: the 33-vector golden gate ══════════════════════════
 
@@ -909,6 +1122,38 @@ TEST(EngineNewPayloadGate, ChainedPairParentKnownThroughBlockRegistration)
     const auto hashA = requestA.executionPayload.blockHash;
     const auto hashB = requestB.executionPayload.blockHash;
 
+    // ── DO NOT DELETE: sole support point for three header fields (final review B3-4) ──
+    //
+    // `number` / `timestamp` / `baseFeePerGas` are CONSTANT across all 33 isolated vectors
+    // (0x1 / 0x3f2 / 0x3a699d00). `chainB` is the only second data point in the entire suite, so
+    // it is the only thing that can distinguish "the mapping reads the payload field" from "the
+    // mapping happens to emit the one value every vector has". The final review proved it by
+    // hard-coding `rebuildOpEthHeader`'s `.number` to 1: this test was the ONLY one that turned
+    // red, out of the whole suite.
+    //
+    // The three EXPECT_EQs below are hoisted here — ahead of every fatal ASSERT in this test —
+    // deliberately: previously the guard was implicit in the end-to-end VALID verdict at step 5,
+    // which sits behind several `ASSERT_*`s, so any earlier fatal failure (or a future decision
+    // to skip/split this test "for stability") silently took all three fields' only coverage with
+    // it. Here they are evaluated before anything can abort the test, and they name themselves.
+    {
+        const auto headerB = productionHeaderOf(requestB);
+        auto const& envB = chainB.vector.at("env");
+        EXPECT_EQ(headerB.number, asU64(envB.at("currentNumber")))
+            << "sole non-constant `number` assertion in the suite (B3-4)";
+        EXPECT_EQ(headerB.timestamp, asU64(envB.at("currentTimestamp")))
+            << "sole non-constant `timestamp` assertion in the suite (B3-4)";
+        EXPECT_EQ(headerB.baseFeePerGas, asU256(envB.at("currentBaseFee")))
+            << "sole non-constant `baseFeePerGas` assertion in the suite (B3-4)";
+
+        // And they really are a second data point: each differs from block A's value, so a
+        // mapping that emitted A's (or the 33-vector constant) would fail above.
+        auto const& envA = chainA.vector.at("env");
+        EXPECT_NE(asU64(envB.at("currentNumber")), asU64(envA.at("currentNumber")));
+        EXPECT_NE(asU64(envB.at("currentTimestamp")), asU64(envA.at("currentTimestamp")));
+        EXPECT_NE(asU256(envB.at("currentBaseFee")), asU256(envA.at("currentBaseFee")));
+    }
+
     // Only A's parent is pre-registered. B's parent is NOT — that is the whole experiment.
     registerVerifiedBlock(fixture.storage, requestA.executionPayload.parentHash, 0);
 
@@ -954,6 +1199,64 @@ TEST(EngineNewPayloadGate, ChainedPairParentKnownThroughBlockRegistration)
         readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, "1").has_value());
     EXPECT_TRUE(
         readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, "2").has_value());
+}
+
+// ══════ Step 2b: re-delivery of an accepted block, with REAL execution (B3-7) ══════
+//
+// `EngineOpBranch.AlreadyKnownBlockShortCircuitsToValidWithoutReExecuting` (batch 2) already pins
+// the mechanism with a stub, counting `executeOpBlockCalls`. This is the other half: the same
+// scenario driven by the REAL scheduler over REAL seeded state, which is the only place the
+// short-circuit's actual justification is visible.
+//
+// Without the short-circuit the second delivery does not merely waste work — it re-executes on
+// top of the state the FIRST delivery committed and is guaranteed to disagree, so the node
+// answers INVALID for a block it accepted moments earlier. The two vectors below are the two
+// distinct ways that happens, and neither is reachable with a stub:
+//   - `isthmus_transfer_basic` carries a user transaction, whose sender nonce has already
+//     advanced -> `processOpBlock` rejects -> OpConsensusError -> INVALID;
+//   - `isthmus_deposit_only` carries only the L1-attributes deposit, whose mint would be
+//     credited a second time -> the receipts/state comparison fails -> INVALID.
+// A stub cannot show either, because a stub's "execution" has no state to re-apply.
+//
+// The discriminator here is therefore the VERDICT itself, not a call count: with the
+// short-circuit removed, both sub-cases come back INVALID.
+TEST(EngineNewPayloadGate, GoldenVectorRedeliveryIsValidWithoutReExecution)
+{
+    for (auto const& id : {"isthmus_transfer_basic", "isthmus_deposit_only"})
+    {
+        SCOPED_TRACE(id);
+        auto scenario = prepareScenario(id);
+        auto const& payload = scenario.request.executionPayload;
+        const auto blockHash = payload.blockHash;
+        const auto blockNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
+
+        auto first =
+            bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
+        ASSERT_EQ(first.status, bcos::engine::PayloadValidationStatus::Valid)
+            << "first delivery: " << first.validationError.value_or("<none>");
+        auto headerAfterFirst = readEntry(
+            scenario.fixture->storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, blockNumberStr);
+        ASSERT_TRUE(headerAfterFirst.has_value());
+        const std::string registeredHeader{headerAfterFirst->get()};
+
+        // Byte-identical request object, re-delivered exactly as a CL timeout re-send would.
+        auto second =
+            bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
+
+        EXPECT_EQ(second.status, bcos::engine::PayloadValidationStatus::Valid)
+            << "re-delivery must not be judged INVALID: "
+            << second.validationError.value_or("<none>");
+        ASSERT_TRUE(second.latestValidHash.has_value());
+        EXPECT_EQ(*second.latestValidHash, blockHash);
+        EXPECT_FALSE(second.validationError.has_value());
+
+        // The registry is untouched by the second delivery — no second layer of writes for the
+        // same height, and the stored header is still the one the first delivery wrote.
+        auto headerAfterSecond = readEntry(
+            scenario.fixture->storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, blockNumberStr);
+        ASSERT_TRUE(headerAfterSecond.has_value());
+        EXPECT_EQ(std::string{headerAfterSecond->get()}, registeredHeader);
+    }
 }
 
 // ═════════════ Step 3: the mutation matrix — 13 classes / 18 cases (spec §7.3) ═════════════
@@ -1017,8 +1320,7 @@ TEST(EngineNewPayloadMutation, TamperedBlockHashIsInvalidWithNullLatestValidHash
     // `Invalid`, never the deprecated-since-Shanghai `InvalidBlockHash` (design §6.1 step 2).
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("blockHash"), std::string::npos);
+    expectValidationError(status, "blockHash does not match the reconstructed block header");
     EXPECT_FALSE(isBlockRegistered(scenario.fixture->storage, blockHash));
 }
 
@@ -1033,8 +1335,8 @@ TEST(EngineNewPayloadMutation, NonEmptyWithdrawalsIsInvalid)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("withdrawals"), std::string::npos);
+    // Exact: "withdrawals" alone is also a substring of the withdrawalsRoot messages.
+    expectValidationError(status, "withdrawals must be present and empty on the OP path");
 }
 
 // ── #4 expectedBlobVersionedHashes non-empty -> INVALID ───────────────────────────────────────
@@ -1047,8 +1349,8 @@ TEST(EngineNewPayloadMutation, NonEmptyExpectedBlobVersionedHashesIsInvalid)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("expectedBlobVersionedHashes"), std::string::npos);
+    expectValidationError(
+        status, "expectedBlobVersionedHashes must be an empty array on the OP path");
 }
 
 // ── #5 excessBlobGas != 0 -> INVALID ──────────────────────────────────────────────────────────
@@ -1061,8 +1363,7 @@ TEST(EngineNewPayloadMutation, NonZeroExcessBlobGasIsInvalid)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("excessBlobGas"), std::string::npos);
+    expectValidationError(status, "excessBlobGas must be present and zero on the OP path");
 }
 
 // ── #6 blobGasUsed != 0 under Isthmus -> INVALID ──────────────────────────────────────────────
@@ -1082,8 +1383,9 @@ TEST(EngineNewPayloadMutation, NonZeroBlobGasUsedIsInvalidUnderIsthmus)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("blobGasUsed"), std::string::npos);
+    // Exact, and load-bearing: the substring "blobGasUsed" ALSO matches the step-5 comparison
+    // message, which is a different bucket with a different latestValidHash (B3-6).
+    expectValidationError(status, "blobGasUsed must be zero before Jovian (OP Isthmus)");
 }
 
 // ── #7 executionRequests non-empty -> INVALID + null (the blockHash bucket) ───────────────────
@@ -1112,8 +1414,7 @@ TEST(EngineNewPayloadMutation, NonEmptyExecutionRequestsLandsInBlockHashBucket)
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("blockHash"), std::string::npos);
+    expectValidationError(status, "blockHash does not match the reconstructed block header");
 }
 
 // ── #8.1-#8.5 five of the six comparison surfaces, one mutation each ──────────────────────────
@@ -1141,9 +1442,7 @@ void expectComparisonSurfaceMismatch(
     ASSERT_TRUE(status.latestValidHash.has_value())
         << "post-parentKnown rejections must report the parent as the latest valid ancestor";
     EXPECT_EQ(*status.latestValidHash, scenario.parentHash);
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find(fieldName), std::string::npos)
-        << "validationError must name the offending field, got: " << *status.validationError;
+    expectComparisonMismatch(status, fieldName);
     EXPECT_FALSE(
         isBlockRegistered(scenario.fixture->storage, scenario.request.executionPayload.blockHash));
 }
@@ -1204,9 +1503,7 @@ TEST(EngineNewPayloadMutation, ComparisonSurfaceTransactionsRoot)
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     ASSERT_TRUE(status.latestValidHash.has_value());
     EXPECT_EQ(*status.latestValidHash, parentHash);
-    ASSERT_TRUE(status.validationError.has_value());
-    EXPECT_NE(status.validationError->find("transactionsRoot"), std::string::npos)
-        << "got: " << *status.validationError;
+    expectComparisonMismatch(status, "transactionsRoot");
     EXPECT_FALSE(isBlockRegistered(fixture.storage, request.executionPayload.blockHash));
 }
 
