@@ -856,9 +856,20 @@ private:
     /// (`SYS_NUMBER_2_HASH`: key = number as a decimal string, value = the hash's raw 32 bytes;
     /// `SYS_HASH_2_NUMBER`: key = the hash's raw 32 bytes, value = number as a decimal string) --
     /// which is also what makes step 3's `getBlockNumber(..., fromStorage)` lookup find them.
+    ///
+    /// `OpExecuteResult` is a deduced template parameter rather than the spelled-out
+    /// `typename SchedulerType::ExecuteResult` (build-verification fix, task-5b): a member
+    /// function's *declaration* is instantiated together with the enclosing class, and only its
+    /// *body* is instantiated lazily. Naming an OP-only associated type in the signature would
+    /// therefore demand `SchedulerType::ExecuteResult` from every instantiation -- including the
+    /// generic composition root (`SchedulerSerialImpl`), which has no such member -- a hard error
+    /// no `if constexpr` can shield, because the discarded-statement rule governs bodies, not
+    /// signatures. Deduction moves the requirement to the call site, which lives inside
+    /// `if constexpr (c_opMode)` and so is only instantiated in OP mode. The engine's other
+    /// dependent OP names are all inside `handleOpNewPayload`'s body and were already fine.
+    template <class OpExecuteResult>
     bcos::task::Task<void> registerOpBlock(ViewType& view, const ExecutionPayload& payload,
-        const bcos::codec::rlp::EthBlockHeader& ethHeader,
-        const typename SchedulerType::ExecuteResult& executeResult)
+        const bcos::codec::rlp::EthBlockHeader& ethHeader, const OpExecuteResult& executeResult)
     {
         const auto blockNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
 

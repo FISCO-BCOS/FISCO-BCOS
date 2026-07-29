@@ -362,8 +362,18 @@ static_assert(!GenericEngineService::c_opMode, "generic composition root must no
 /// "executionRequests 在场且空" constraint is *vacuously* satisfied rather than enforced by
 /// `validateOpNewPayloadRequest`. The day a carrier is added this assertion fires and forces the
 /// real check (and a real test) to be written, instead of the constraint silently staying unmet.
-static_assert(
-    !requires(bcos::engine::NewPayloadRequest request) { request.executionRequests; },
+///
+/// The probe has to go through a *templated* concept: inside a requires-expression whose operand
+/// is already a concrete (non-dependent) type, `request.executionRequests` is not a substitution
+/// failure but a plain "no member named" error, so the naive
+/// `static_assert(!requires(NewPayloadRequest r) { r.executionRequests; })` fails to compile
+/// rather than evaluating to `true` (build-verification fix). Parameterising on the request type
+/// makes the member access dependent, which is what turns the failure into an unsatisfied
+/// constraint.
+template <class Request>
+concept HasExecutionRequestsCarrier = requires(Request request) { request.executionRequests; };
+
+static_assert(!HasExecutionRequestsCarrier<bcos::engine::NewPayloadRequest>,
     "NewPayloadRequest gained an executionRequests carrier: design §6.1 step 2's non-empty -> "
     "INVALID check must now be implemented in validateOpNewPayloadRequest, and mutation case #7 "
     "below must stop using the requestsHash surrogate and mutate the real field");

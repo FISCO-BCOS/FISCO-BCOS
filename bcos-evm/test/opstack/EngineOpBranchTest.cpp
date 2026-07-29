@@ -309,7 +309,11 @@ static_assert(!GenericEngineService::c_opMode, "generic composition root must no
 bcos::h256 hashOf(std::string const& seed)
 {
     bcos::crypto::Keccak256 keccak;
-    return keccak.hash(seed);
+    // `Keccak256` overrides only `hash(bytesConstRef)`, which HIDES the base `crypto::Hash`'s
+    // other `hash` overloads (including the `std::string const&` one) for calls made through the
+    // derived type. Hence the explicit `bytesConstRef` -- its `std::string const&` constructor is
+    // explicit, so it will not be applied implicitly.
+    return keccak.hash(bcos::bytesConstRef(seed));
 }
 
 /// A structurally well-formed OP payload: every static check of design §6.1 step 2 passes except
