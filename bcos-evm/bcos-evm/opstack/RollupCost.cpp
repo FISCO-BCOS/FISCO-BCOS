@@ -162,13 +162,21 @@ intx::uint256 computeL1CostFromFlz(
     (void)cfg;
     if (flzLen == 0)
         return intx::uint256{0};
-    const auto calldataPerByte = params.l1_base_fee * intx::uint256{params.base_fee_scalar} *
-                                 intx::uint256{kNonzeroByteCost};
-    const auto blobPerByte = params.blob_base_fee * intx::uint256{params.blob_base_fee_scalar};
+    // 512-bit like the opValidate balance cap: the two whole-slot fee reads let these products
+    // cross 2^256, where op-geth's big.Int evaluation does not wrap. Saturate on return — a fee
+    // >= 2^256 exceeds any representable balance, so the cap rejects it either way.
+    const auto calldataPerByte = intx::umul(params.l1_base_fee,
+        intx::uint256{params.base_fee_scalar} * intx::uint256{kNonzeroByteCost});
+    const auto blobPerByte =
+        intx::umul(params.blob_base_fee, intx::uint256{params.blob_base_fee_scalar});
     // op-geth Fjord+:
     // estimatedDaSizeScaled(flz)*(l1BaseFee*16*baseScalar+blobBaseFee*blobScalar)/1e12
     const auto scaled = estimatedDaSizeScaled(flzLen);
-    return scaled * (calldataPerByte + blobPerByte) / intx::uint256{kFjordDivisor};
+    const auto fee =
+        (calldataPerByte + blobPerByte) * intx::uint512{scaled} / intx::uint512{kFjordDivisor};
+    if (fee > intx::uint512{~intx::uint256{0}})
+        return ~intx::uint256{0};
+    return static_cast<intx::uint256>(fee);
 }
 
 intx::uint256 computeL1Cost(
@@ -181,11 +189,16 @@ intx::uint256 computeL1Cost(
     {
         // op-geth newL1CostFuncEcotone:
         //   calldataGas*(l1BaseFee*16*baseScalar + blobBaseFee*blobScalar)/16e6
-        const auto calldataPerByte = params.l1_base_fee * intx::uint256{params.base_fee_scalar} *
-                                     intx::uint256{kNonzeroByteCost};
-        const auto blobPerByte = params.blob_base_fee * intx::uint256{params.blob_base_fee_scalar};
+        const auto calldataPerByte = intx::umul(params.l1_base_fee,
+            intx::uint256{params.base_fee_scalar} * intx::uint256{kNonzeroByteCost});
+        const auto blobPerByte =
+            intx::umul(params.blob_base_fee, intx::uint256{params.blob_base_fee_scalar});
         const auto calldataGas = intx::uint256{bedrockCalldataGasUsed(signedTxEnvelope)};
-        return calldataGas * (calldataPerByte + blobPerByte) / intx::uint256{16'000'000};
+        const auto fee = (calldataPerByte + blobPerByte) * intx::uint512{calldataGas} /
+                         intx::uint512{16'000'000};
+        if (fee > intx::uint512{~intx::uint256{0}})
+            return ~intx::uint256{0};
+        return static_cast<intx::uint256>(fee);
     }
 
     // Fjord+ (current implementation):

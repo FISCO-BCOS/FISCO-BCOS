@@ -110,6 +110,44 @@ BOOST_AUTO_TEST_CASE(EcotoneL1DiffersFromFjordSameEnvelope)
     BOOST_CHECK_EQUAL(ecotone, expected);
 }
 
+// The whole-slot fee reads (l1_base_fee slot 1, blob_base_fee slot 7) can hold values whose
+// products cross 2^256. op-geth evaluates the formula in big.Int; a wrapping uint256 evaluation
+// returned a small or zero fee for such values — l1BaseFee = 2^252 made l1BaseFee*scalar*16 a
+// multiple of 2^256, collapsing the fee to exactly 0 on both formula paths. Reachable only
+// through the L1 attributes deposit writing astronomical slot values — defence-in-depth, same
+// class as the opValidate balance cap. Expected values are independently computed with
+// arbitrary-precision arithmetic; a true fee >= 2^256 saturates to uint256 max (it exceeds any
+// representable balance, so validation rejects either way).
+BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues)
+{
+    const evmc::bytes_view env = kEmptyTx;  // flz 31 -> daScaled floors to 1e8; calldataGas 480
+
+    OpFeeParams fee{.l1_base_fee = intx::uint256{1} << 252,
+        .base_fee_scalar = 1368,
+        .blob_base_fee_scalar = 0,
+        .blob_base_fee = intx::uint256{0},
+        .operator_fee_scalar = 0,
+        .operator_fee_constant = 0};
+    BOOST_CHECK_EQUAL(computeL1Cost(fee, env, fjordConfig()),
+        0x2305532617c1bda5119ce075f6fd21ff2e48e8a71de69ad42c3c9eecbfb15b57_u256);
+    BOOST_CHECK_EQUAL(computeL1Cost(fee, env, ecotoneConfig()),
+        0xa8198f1d3ed527e52157689ca18bd66277c45cbbc2b94d940789613d31b9b66_u256);
+
+    // A true fee >= 2^256 saturates instead of wrapping to a small value.
+    fee.l1_base_fee = ~intx::uint256{0};
+    BOOST_CHECK_EQUAL(computeL1Cost(fee, env, fjordConfig()), ~intx::uint256{0});
+
+    // The blob term wraps independently of the calldata term.
+    const OpFeeParams blobFee{.l1_base_fee = intx::uint256{0},
+        .base_fee_scalar = 0,
+        .blob_base_fee_scalar = 0xffffffff,
+        .blob_base_fee = intx::uint256{1} << 250,
+        .operator_fee_scalar = 0,
+        .operator_fee_constant = 0};
+    BOOST_CHECK_EQUAL(computeL1Cost(blobFee, env, fjordConfig()), ~intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeL1Cost(blobFee, env, ecotoneConfig()), ~intx::uint256{0});
+}
+
 BOOST_AUTO_TEST_CASE(OperatorCostIsthmus)
 {
     const auto p = feeParams(0, 0, 0, 0, /*opScalar=*/2000000, /*opConst=*/500);
