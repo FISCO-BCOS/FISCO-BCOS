@@ -112,6 +112,12 @@
         "hsm-crypto"
       ]
     },
+    "cppsdk": {
+      "description": "C++ SDK only build. bcos-framework's LedgerConfig.h is part of the SDK surface (via bcos-tars-protocol/Common.h) and declares evmc_uint256be / evmc_revision members, so the evmc headers are needed even with FULLNODE=OFF. This overlay's evmone port is where they come from.",
+      "dependencies": [
+        "evmone"
+      ]
+    },
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [
