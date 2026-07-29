@@ -66,7 +66,9 @@ RunTxResult runTxMessage(evmone::state::State& state, OpHost& host,
             continue;
         // OpHost::access_account returns early for override-table addresses without inserting
         // the account; State::get_storage requires it to exist.
-        state.get_or_insert(a, {.erase_if_empty = true});
+        evmone::state::Account fresh;
+        fresh.erase_if_empty = true;
+        state.get_or_insert(a, std::move(fresh));
         for (const auto& key : storage_keys)
             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }

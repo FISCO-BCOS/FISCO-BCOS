@@ -84,10 +84,6 @@ set_source_files_properties(
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
     ${EVMONE_TEST_UTILS_DIR}/utils.cpp
-    # opstack/OpTransition.cpp carries the evmone transition() copy surface
-    # (process_authorization_list), whose get_or_insert(addr, {.erase_if_empty=true}) partial
-    # aggregate-init trips GCC's stricter -Wmissing-field-initializers (AppleClang does not).
-    bcos-evm/opstack/OpTransition.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 
 add_library(bcos-evm-opstack STATIC

@@ -94,7 +94,13 @@ inline int64_t processAuthorizationList(evmone::state::State& state, uint64_t ch
 
         // Get or create the authority account.
         // It is still empty at this point until nonce bump following successful authorization.
-        auto& authority = state.get_or_insert(*signer, {.erase_if_empty = true});
+        // Default-construct then set the one field rather than writing {.erase_if_empty = true}:
+        // a partial designated initialiser for Account (12 members) trips GCC's
+        // -Wmissing-field-initializers, and this is a HEADER — expressing it that way would
+        // oblige every future includer to carry the per-source suppression, not just today's two.
+        evmone::state::Account fresh;
+        fresh.erase_if_empty = true;
+        auto& authority = state.get_or_insert(*signer, std::move(fresh));
 
         // 4. Add authority to accessed_addresses (as defined in EIP-2929.)
         authority.access_status = EVMC_ACCESS_WARM;
