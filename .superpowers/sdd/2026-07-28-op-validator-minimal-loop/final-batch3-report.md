@@ -390,6 +390,57 @@ spec §6.4 新增条目 **(j)**:`catch(...)` 重分类**丢弃 `e.what()`**,导�
 - **C1(语料 `currentRandom`/`currentCoinbase` 恒定)属批 5**;其中"重跑 opt8n-ref 必须同步刷新
   本批新加的 `SHA256SUMS`"已由控制器记入台账。
 
+# Fix 轮 2(批 3 fix 复审:I-1/M-2/M-4/§6.4(j) 均 ADDRESSED;**M-3 NOT ADDRESSED**)
+
+回归:**in-tree 225/225**、`test-bcos-engine` "No errors detected"、零新增用例(本轮纯引用修正)。
+
+## M-3【第四处悬空引用,由上一轮 fix commit 自己引入】——已修
+
+**事实**:我在上一轮新写的 spec §6.4 条目 (j) 引用了
+`docs/audits/2026-07-12-typed-catch-rtti-investigation.md`,**该文件在本分支不存在**。
+已核实(`git log --all --diff-filter=A`):它只存在于无关分支 `feat-evm-mb1-block-execution`
+(commit `d0937e8a1`),且真实路径带前缀,为 `bcos-evm-ref/docs/audits/…`。
+于是我上一轮在 §8.1 写下的"**复扫结果:悬空引用 0 处**"这句**结论失实**——新引用晚于我的扫描。
+这是同一份 fix 里"修悬空引用"和"引入悬空引用"同时发生,值得单独记下。
+
+**修法(按裁定:不迁移该文档,不扩大本分支范围)**——四处一并改,取"指向本分支内确实存在的
+载体 + 明确交代原始报告不在本分支"这一路,而不是把引用悄悄删掉:
+
+| 位置 | 性质 | 改动 |
+|---|---|---|
+| spec §6.4 条目 (j) | 文档 | 机理载体改指**本分支内**的 `OpSchedulerImpl.h` 该 `catch(...)` 注释 + `T8nReplayHarness.h` 两处同类兜底;并写明"原始排查报告不在本分支——在 `feat-evm-mb1-block-execution`(`d0937e8a1`)的 `bcos-evm-ref/docs/audits/…`,未随移植带入" |
+| `bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:771-776` | **生产文件,纯注释**(裁定授权) | 同样交代"该路径在本分支解析不到 / 报告在无关分支",并把机理**完整重述**在注释里而不是委托给链接 |
+| `bcos-evm/test/opstack/T8nReplayHarness.h:628` | 测试注释 | 同上 |
+| `bcos-evm/test/opstack/T8nReplayHarness.h:927` | 测试注释 | 原文"机理见 docs/audits/ 排查报告"改为"机理见本文件上一处 `catch(...)` 的注释" |
+
+`git diff -U0 | grep -v '^\s*[+-]\s*//'` 对这两个源文件为空,即**改动全部落在注释行**,零语义。
+
+**复扫(这次把代码注释一并纳入,并按职责面分组)**:
+
+- **A 面(本轮职责面:engine/opstack 代码注释 + 本闭环 spec + README)**:`docs/audits` 悬空引用
+  **0 处**。剩余 5 处属**其他 epic** 的文档,不在本批范围,如实列出而非静默忽略:
+  `docs/superpowers/specs/2026-07-24-opstack-block-execution-port-design.md` 引用
+  `.superpowers/sdd/task-{6,7}-report.md`(存在但未入库)、
+  `docs/superpowers/specs/2026-07-27-eth-utils-removal-c-route-todo.md` 引用
+  `.superpowers/sdd/task-7-brief.md`(brief 按 §8.1 本就不入库,应改引用)、
+  `t8n/vectors/{DIVERGENCES.md,manifest.txt}` 引用
+  `docs/superpowers/plans/2026-07-11-…-mb3-m6.md`(`plans/` 整目录未入库)。
+- **B 面(已归档的历史报告)**:6 处,含 `task-4/task-7-report.md` 与
+  `probe-op-validator-gate-report.md` 里同源的 `docs/audits/…` 引用。**本轮不改写历史报告**
+  ——它们是当时的记录,追改会掩盖"这条引用一直是悬空的"这个事实本身;如实列出。
+
+## §8.1 表述更正 + CI 检查提议(裁定第 3 条)
+
+§8.1 里"扫描才闭合"的说法已被自身证伪,原文改写为:一次性扫描只能证明"扫描那一刻干净",
+管不住此后写下的每一行——**人工纪律不足以闭合,应做成 CI 检查**。具体后续项(本轮不实现):
+
+> **CI 引用完整性检查**:对 spec / README / **代码注释**抽出所有形如 `.superpowers/…`、
+> `docs/…` 且以 `.md`/`.txt`/`.json` 结尾的路径,逐个比对 `git ls-files`,不匹配即失败。
+> 代码注释必须纳入——本轮四处悬空引用里有**三处**在代码注释,只扫文档会全部漏掉。
+> 例外机制:确实指向仓外/他分支的路径必须写成带分支或仓前缀的形式(如
+> `bcos-evm-ref/docs/audits/…`),或用省略号形式(`docs/audits/…`)表明它不是一个可解析路径
+> ——本轮的四处修正都已按这个约定书写,可直接作为检查器的正样本。
+
 # CONCERNS(交控制器裁定)
 
 1. **`SYS_HASH_2_TX` 只披露未实现**——按裁定执行,但重申后果:任何按交易哈希取回交易的读路径

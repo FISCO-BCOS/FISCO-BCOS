@@ -625,7 +625,10 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     }
     catch (...)
     {
-        // typed-catch RTTI 兜底（docs/audits/2026-07-12-typed-catch-rtti-investigation.md）：
+        // typed-catch RTTI 兜底（机理见下；原始排查报告**不在本分支**——它写在无关分支
+        // `feat-evm-mb1-block-execution` 的 d0937e8a1，路径
+        // `bcos-evm-ref/docs/audits/2026-07-12-typed-catch-rtti-investigation.md`，未随移植带入，
+        // 故此处不再引用那个在本分支解析不到的路径）：
         // libevmone.a（-fno-rtti）带入 hidden 非唯一 typeinfo for std::exception 拷贝，
         // 链接后本二进制所有 catch(std::exception&) 与 libc++ 抛出侧基类 typeinfo
         // 判不等而漏接（arm64 非唯一 RTTI 位混合比较规则）。诊断不吞：点名动态
@@ -924,7 +927,7 @@ void replayAllVectors(const char* legName)
         }
         catch (...)
         {
-            // typed-catch RTTI 兜底（同上：机理见 docs/audits/ 排查报告）——点名类型，
+            // typed-catch RTTI 兜底（同上：机理见本文件上一处 catch(...) 的注释）——点名类型，
             // 与 typed 分支同语义（记 FAILURE 后继续下一向量文件）。
             const auto* excType = abi::__cxa_current_exception_type();
             ADD_FAILURE() << name << ": exception escaped typed catch (exception type: "

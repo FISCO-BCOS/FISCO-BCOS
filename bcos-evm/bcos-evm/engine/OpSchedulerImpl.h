@@ -769,8 +769,13 @@ public:
         catch (...)
         {
             // Typed-catch RTTI bypass (the same phenomenon bcos-evm/test/opstack/
-            // T8nReplayHarness.h already documents and works around, docs/audits/
-            // 2026-07-12-typed-catch-rtti-investigation.md): libevmone.a (-fno-rtti) brings in a
+            // T8nReplayHarness.h already documents and works around, in its own two `catch (...)`
+            // clauses). NOTE: the original investigation write-up is NOT in this branch -- it was
+            // written on the unrelated `feat-evm-mb1-block-execution` branch (commit d0937e8a1) at
+            // `bcos-evm-ref/docs/audits/2026-07-12-typed-catch-rtti-investigation.md` and was never
+            // carried over, so the `docs/audits/...` path this comment used to cite resolved to
+            // nothing here. The mechanism is therefore restated in full below rather than
+            // delegated to a link: libevmone.a (-fno-rtti) brings in a
             // hidden non-unique typeinfo for std::exception, so `catch (const std::exception&)`
             // above does NOT reliably bind std::runtime_error thrown by evmone/opstack-linked
             // code (or, empirically, by *any* std::runtime_error surfacing through this call —
