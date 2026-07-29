@@ -53,4 +53,12 @@ bcos::h256 slotKeyHash(bcos::h256 const& slot);
 /// so the empty return is unambiguous.)
 bcos::bytes encodeStorageValue(bcos::bytesConstRef value);
 
+/// The inverse of encodeStorageValue: decode one storage-trie leaf back into the slot value.
+/// Kept next to the encoder so a change to one is impossible to miss in the other (proof
+/// generation and historical reads both decode; only MPTBuilder encodes).
+/// @throws MPTDecodeError on malformed RLP, on trailing bytes after the value, or when the value
+/// is not a minimal big-endian byte string of at most 32 bytes (over-long or leading-zero
+/// payloads decode into a plausible wrong value rather than an error if left unchecked).
+bcos::u256 decodeStorageValue(bcos::bytesConstRef leaf);
+
 }  // namespace bcos::ledger::mpt
