@@ -1102,6 +1102,17 @@ TEST(EngineNewPayloadGate, AllThirtyThreeGoldenVectors)
 /// `chainA.post.json` key-set check), so if step 5 passes, A's execution really did leave its
 /// post-state in the storage the engine reads — the storage half of the closure, on top of the
 /// registration half.
+///
+/// **DO NOT DELETE OR MERGE AWAY — sole golden anchor for the timestamp-monotonicity check.**
+/// (batch-4 review) B4-1's `payload.timestamp > parent.timestamp` rule only fires when the parent's
+/// header is in `s_eth_block_header`, and the 33 isolated vectors are all block 1 whose parent is
+/// a fixture-seeded trusted genesis with no stored header — by contract they SKIP the check.
+/// A counter instrumented over the whole binary shows the check reaching a real comparison exactly
+/// 4 times: three synthetic cases in EngineOpBranchTest (`EqualParentTimestamp` /
+/// `EarlierThanParentTimestamp` / `IncreasingTimestamp`) and **this test, which is the only place
+/// it runs against op-geth-generated timestamps**. Delete this pair, or fold it into a
+/// single-block gate, and the rule keeps passing with zero golden coverage. Same reasoning as the
+/// chainB three-field pin (batch-3 M-4).
 TEST(EngineNewPayloadGate, ChainedPairParentKnownThroughBlockRegistration)
 {
     auto chainA = loadChainedSample("chainA");

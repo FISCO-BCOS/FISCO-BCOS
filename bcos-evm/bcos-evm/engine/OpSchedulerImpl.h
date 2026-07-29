@@ -891,13 +891,19 @@ public:
         if (bridge.poisoned())
             throw OpStorageError(std::string(bridge.firstError()));
 
-        // Step 6: txRoot (op-geth DeriveSha convention: trie key = canonical RLP encoding of the
-        // index, trie value = the raw tx bytes as-is — MPT::insert's value parameter is the leaf
-        // payload, not re-wrapped by the caller, same contract stateRootOf<Ledger>'s account
-        // leaves rely on via encode_tuple) + gasUsed. The trie construction itself moved to
-        // `OpEngineSeam.h`'s `computeOpTxRoot` (task-5b) because the engine's newPayload OP branch
-        // must derive the same value *before* execution, for the header reconstruction the
-        // blockHash check depends on — same function, two call sites, no second implementation.
+        // Step 6: txRoot (trie key = canonical RLP encoding of the index, trie value = the raw
+        // tx bytes as-is — MPT::insert's value parameter is the leaf payload, not re-wrapped by
+        // the caller, same contract stateRootOf<Ledger>'s account leaves rely on via
+        // encode_tuple) + gasUsed. NOTE (B4-2 review M-3): this used to be described as "the
+        // op-geth DeriveSha convention", which is not accurate — `DeriveSha` re-encodes each
+        // transaction canonically from the parsed struct, while this hashes the wire bytes. The
+        // two coincide only because the decoders above reject every non-canonical encoding; see
+        // `computeOpTxRoot`'s comment in OpEngineSeam.h for the full statement of that
+        // dependency (this is the second copy of the same claim — keep them in step). The trie
+        // construction itself moved to `OpEngineSeam.h`'s `computeOpTxRoot` (task-5b) because the
+        // engine's newPayload OP branch must derive the same value *before* execution, for the
+        // header reconstruction the blockHash check depends on — same function, two call sites, no
+        // second implementation.
         const auto txRoot = computeOpTxRoot(rawTxBytes);
 
         std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;

@@ -838,6 +838,26 @@ private:
         // gasLimit change bound (both still parked in spec §6.4) need exactly this — the parent's
         // decoded header — and now have somewhere to stand.
         //
+        // Keyed by NUMBER, where op-geth keys by HASH (`api.go:887` looks the parent up by
+        // `block.ParentHash()`). That is only equivalent while number -> header is injective,
+        // which today is guaranteed by step 3c refusing any payload whose parent is not the chain
+        // tip: at most one block is ever registered per height. **This is a real dependency, not
+        // a coincidence** (review M-5): the moment a reorg window is opened -- i.e. the moment
+        // step 3c is relaxed, which is exactly what the arbitrary-parent base state item in spec
+        // §6.4 would do -- two blocks can share a height and this lookup starts comparing against
+        // the WRONG parent header. Whoever lifts that restriction must re-key this read by hash
+        // (which needs a hash -> header index that does not exist yet) in the same change.
+        //
+        // Ordering (review M-7): this check sits BEFORE step 3b's already-known-block
+        // short-circuit, whereas op-geth does the known-block return first (`api.go:872-876`) and
+        // the timestamp check after (`:891-894`). The two orders are observationally equivalent
+        // here -- a block already registered by this loop necessarily passed this same check when
+        // it was first accepted, so re-running it on a re-delivery can only pass -- but the
+        // difference is deliberate and worth naming, because step 3b's own comment claims its
+        // placement is load-bearing: 3b must precede 3c (a re-delivered block always occupies its
+        // own child height and would otherwise trip the non-tip refusal), while 3a is free on
+        // either side of 3b. If 3a ever becomes non-idempotent, move it after 3b to match op-geth.
+        //
         // Missing parent header => SKIP, deliberately (this is the genesis/first-block case, and
         // the behaviour is part of the contract, not an oversight): a trusted starting point is
         // established by seeding `SYS_HASH_2_NUMBER` alone -- both the test fixtures and any

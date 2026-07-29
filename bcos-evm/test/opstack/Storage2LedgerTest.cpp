@@ -691,3 +691,43 @@ TEST(Storage2Ledger, VisitAccountsUsesCacheAndSkipsHasStorageProbe)
     //     它是本条修复的语义,而具体数值只是它今天的取值。
     EXPECT_LT(warmVisitReads, coldVisitReads);
 }
+
+// (B4-4 复审 I-1)缓存不得被"字段没算完"的 Account 污染。
+//
+// `fetchAccountForVisit` 在缓存未命中时以 `computeHasStorage=false` 读取,并**刻意不把结果写
+// 进 m_accountCache**。上一轮我把这个风险点写进了注释,却没配断言——审查者的反证实验证明这
+// 是真空档:把 miss 结果 emplace 回缓存后,全量 237/237 照绿。本例即为那条缺失的断言(§11:
+// 注释写明的风险点必须有会翻红的断言)。
+//
+// 后果链(非理论):`Account::has_storage` 默认 false(eth/state/state_view.hpp),
+// `eth/state/state.cpp` 的 `has_initial_storage` 直接取它,进而影响 EIP-161/7610 空账户清除
+// 与 CREATE 碰撞判定。今天的窗口窄(executeOpBlock 在 visitAccounts 之后不再 get_account),
+// 但窄不等于不存在,而且窄窗口正是最容易在后续重排中被悄悄拉宽的那种。
+TEST(Storage2Ledger, VisitAccountsMissDoesNotPoisonAccountCache)
+{
+    MutableStorage storage;
+    {
+        Storage2Ledger<MutableStorage> seeder(storage);
+        evmone::state::StateDiff seedDiff;
+        // 带槽账户:has_storage 的正确值是 true,默认值是 false —— 两者可区分,断言才有意义。
+        seedDiff.modified_accounts.push_back(
+            {0x01_address, 3, 10, evmc::bytes{0x60, 0x00}, {{slotKey(1), slotKey(7)}}});
+        seeder.applyDiff(seedDiff);
+        ASSERT_FALSE(seeder.poisoned());
+    }
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+
+    // visitAccounts 先跑:缓存全空,该账户走的正是 miss 分支(computeHasStorage=false)。
+    const bool visited = bridge.visitAccounts([](const auto&) { return true; });
+    ASSERT_TRUE(visited);
+    ASSERT_FALSE(bridge.poisoned());
+
+    // 随后的 get_account 必须看到**真实算过**的 has_storage,而不是 miss 分支的默认 false。
+    auto account = bridge.get_account(0x01_address);
+    ASSERT_TRUE(account.has_value());
+    EXPECT_TRUE(account->has_storage)
+        << "visitAccounts 的 miss 结果污染了 m_accountCache:get_account 拿到了一个 "
+           "has_storage 未计算的 Account";
+    EXPECT_FALSE(bridge.poisoned());
+}
