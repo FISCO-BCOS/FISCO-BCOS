@@ -12,6 +12,7 @@
 #include "state_diff.hpp"
 #include "state_view.hpp"
 #include "transaction.hpp"
+#include <optional>
 #include <variant>
 
 namespace evmone::state
@@ -143,16 +144,23 @@ public:
 
 /// Executes a valid transaction.
 ///
-/// @param chain_id the NODE's chain id, from the caller — not tx.chain_id. EIP-7702 step 1
+/// @param chain_id the NODE's chain id, from the caller — NOT tx.chain_id. EIP-7702 step 1
 /// compares each authorization's chain id against it, and validate_transaction never checks
-/// tx.chain_id, so feeding tx.chain_id here would compare sender-supplied input against
-/// sender-supplied input and accept an authorization signed for any other chain. The opstack
-/// path (opTransition) takes it the same way.
+/// tx.chain_id, so feeding tx.chain_id here compares sender-supplied input against
+/// sender-supplied input: an authorization signed for any other chain is then accepted by
+/// setting tx.chain_id to that chain. Every consensus caller must pass the node's value; the
+/// opstack path (opTransition) takes it the same way.
+///
+/// It is optional only because upstream's own helper — test/utils/test_state.cpp, which this
+/// port compiles into bcos-evm-eth (see the TODO(eth-utils-removal) note in CMakeLists.txt) —
+/// calls the upstream 7-argument form and cannot be edited here. Passing nullopt reproduces
+/// that upstream behaviour and is unsafe on a consensus path. Once test/utils no longer builds
+/// into this library, make the parameter required again.
 ///
 /// @return Transaction receipt with state diff.
 TransactionReceipt transition(const StateView& state, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props, uint64_t chain_id);
+    const TransactionProperties& tx_props, std::optional<uint64_t> chain_id = std::nullopt);
 
 /// Validate a transaction.
 ///
