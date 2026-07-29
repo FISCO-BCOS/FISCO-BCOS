@@ -307,7 +307,7 @@ BOOST_AUTO_TEST_CASE(revertLogsClearedWithFeature)
         execCtx.m_data->m_evmcResult->status = bcos::protocol::TransactionStatus::RevertInstruction;
 
         // Finish and verify logs cleared
-        auto receipt = co_await execCtx.template executeStep<2>();
+        auto receipt = co_await execCtx.finish();
         BOOST_CHECK_NE(receipt->status(), 0);
         BOOST_CHECK(receipt->logEntries().empty());
     }());
@@ -356,7 +356,7 @@ BOOST_AUTO_TEST_CASE(revertLogsRemainWithoutFeature)
         execCtx.m_data->m_evmcResult->status = bcos::protocol::TransactionStatus::RevertInstruction;
 
         // Finish and verify logs remain (bugfix is off)
-        auto receipt = co_await execCtx.template executeStep<2>();
+        auto receipt = co_await execCtx.finish();
         BOOST_CHECK_NE(receipt->status(), 0);
         BOOST_CHECK(!receipt->logEntries().empty());
     }());

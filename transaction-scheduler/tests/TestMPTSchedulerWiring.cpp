@@ -175,8 +175,9 @@ struct MWExecutor
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
             co_return {};
         }

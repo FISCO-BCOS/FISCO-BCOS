@@ -12,7 +12,8 @@ namespace bcos::executor_v1
 template <class TransactionExecutorType, class Storage>
 concept TransactionExecutor = requires(TransactionExecutorType& executor, Storage& storage,
     const protocol::BlockHeader& blockHeader, const protocol::Transaction& transaction,
-    int contextID, const ledger::LedgerConfig& ledgerConfig, bool call) {
+    int contextID, const ledger::LedgerConfig& ledgerConfig, bool call,
+    typename TransactionExecutorType::template ExecuteContext<Storage>& execCtx) {
     {
         executor.executeTransaction(
             storage, blockHeader, transaction, contextID, ledgerConfig, call)
@@ -27,6 +28,12 @@ concept TransactionExecutor = requires(TransactionExecutorType& executor, Storag
             storage, blockHeader, transaction, contextID, ledgerConfig, call)
     } -> task::IsAwaitableReturnValue<
         typename TransactionExecutorType::template ExecuteContext<Storage>>;
+
+    // ExecuteContext must expose three lifecycle methods: prepare, execute, finish
+    { execCtx.prepare() } -> task::IsAwaitableReturnValue<void>;
+    { execCtx.execute() } -> task::IsAwaitableReturnValue<void>;
+    { execCtx.finish() } -> task::IsAwaitableReturnValue<
+        bcos::protocol::TransactionReceipt::Ptr>;
 };
 
 }  // namespace bcos::executor_v1
