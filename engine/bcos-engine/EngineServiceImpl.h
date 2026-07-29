@@ -316,9 +316,9 @@ private:
         std::optional<std::string> validationError = std::nullopt)
     {
         return PayloadStatus{
-            .status = status,
             .latestValidHash = latestValidHash,
             .validationError = std::move(validationError),
+            .status = status,
         };
     }
 
