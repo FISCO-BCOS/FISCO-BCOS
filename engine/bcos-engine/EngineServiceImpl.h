@@ -349,6 +349,7 @@ private:
             .blockValue = it->second.blockValue,
             .blobsBundle = it->second.blobsBundle,
             .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
+            .executionRequests = std::nullopt,
         });
     }
 
@@ -448,23 +449,25 @@ private:
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
         ExecutionPayload executionPayload{
+            .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
-            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .stateRoot = detail::syntheticHash(std::string("state") + payloadId),
             .receiptsRoot = detail::syntheticHash(std::string("receipts") + payloadId),
-            .logsBloom = Bloom{},
             .prevRandao = payloadAttributes.prevRandao,
-            .blockNumber = nextBlockNumber,
             .gasLimit = 0,
             .gasUsed = 0,
-            .timestamp = payloadAttributes.timestamp,
-            .extraData = {},
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(sealedTxs),
+            .extraData = {},
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .timestamp = payloadAttributes.timestamp,
+            .blockNumber = nextBlockNumber,
             .withdrawals = std::nullopt,
             .blobGasUsed = std::nullopt,
             .excessBlobGas = std::nullopt,
+            .blockAccessList = std::nullopt,
+            .slotNumber = std::nullopt,
         };
 
         if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
