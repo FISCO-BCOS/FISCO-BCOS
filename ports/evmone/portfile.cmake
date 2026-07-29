@@ -98,9 +98,22 @@ file(INSTALL "${SOURCE_PATH}/lib/evmone_precompiles/pairing"
 #     ("statetest.hpp", "stdx/utility.hpp") resolve in-directory, and the <test/state/...>
 #     cross-references are satisfied by the consumer (bcos-evm forwards them to its vendored
 #     eth/state copy, which is byte-identical to upstream test/state modulo include paths).
-file(INSTALL "${SOURCE_PATH}/test/utils/"
-     DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils"
-     FILES_MATCHING PATTERN "*.hpp" PATTERN "*.cpp" PATTERN "*.h")
+#     Install only what bcos-evm actually consumes, not the whole harness. The closure is
+#     rlp.hpp / rlp_encode.{hpp,cpp} / test_state.{hpp,cpp} plus stdx/ — verified by taking the
+#     files bcos-evm includes and following their in-directory quoted includes to a fixed point.
+#     A blanket glob additionally shipped statetest*, blockchaintest* and bytecode.hpp, two of
+#     which (statetest.hpp, statetest_loader.cpp) include <nlohmann/json.hpp> — a dependency this
+#     port does not declare, i.e. a header that cannot compile, placed on the include path of
+#     every evmone consumer in the tree, not just this module.
+file(INSTALL
+        "${SOURCE_PATH}/test/utils/rlp.hpp"
+        "${SOURCE_PATH}/test/utils/rlp_encode.hpp"
+        "${SOURCE_PATH}/test/utils/rlp_encode.cpp"
+        "${SOURCE_PATH}/test/utils/test_state.hpp"
+        "${SOURCE_PATH}/test/utils/test_state.cpp"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils")
+file(INSTALL "${SOURCE_PATH}/test/utils/stdx"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils")
 
 # 4e. bcos-evm's state::transition() takes the node's chain id as an explicit trailing argument
 #     (EIP-7702 step 1 must not compare tx.chain_id against itself — see
