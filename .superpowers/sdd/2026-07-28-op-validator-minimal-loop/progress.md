@@ -182,3 +182,15 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
   【两条对既有结论的精化】①E1c/E2b(实验者自加的反向对照)**收窄** P5 I-1:这两个字段**并非无人读**——任何偏离语料常量的取值会让 11 个测试翻红;真正的盲区精确地是"硬编码成语料常量"这一种,而这恰是 prevRandao 最现实的回归(语料 0x0,生产是 L1 mixDigest)。②P3 I-2 **比原报更糟**:`firstError()` 是字面量 `"std::exception"`(boost 的 non_hex_input 从不覆写 what()),运维在既有链上会看到每个块都 -32603 且**理由为空内容**。
   未做项:P5 建议的 4 条 UB 检查的 ASan 变体——语料的 optional 恒有值,普通构建下解引用根本不发生,ASan 无信号;要观察它需要 I-2 建议的**新测试**,不属本验证轮。
 终审批9 已派(账本桥零值槽,P3 I-1 已实测确认存在)。构建目录移交批 9;状态分歧审计(只读)并行中。
+【控制器亲自完成批 9 第一步调研(三次 529 过载后接手,纯读任务)——结论与假设方向相反,批次划分需改】
+  **Q3「零值槽会不会进 state trie」答案:不会。** `fetchAllStorage`(Storage2Ledger.h:485-494)对零值槽**直接 throw**,而非收进 map:
+    `if (evmc::is_zero(slotValue)) throw std::runtime_error("...zero-valued storage slot ... indicates a write-back leak")`
+  该 throw 被 `visitAccounts`(:250-265)的 `catch(const std::exception&)` 接住 → `poison()` → 遍历中止、产物全部作废。而 `stateRootOf` 正是走 visitAccounts → visitAccountsImpl(:536)→ fetchAllStorage。
+  **所以没有静默的 stateRoot 分歧(好消息,比担心的情况好),代价是响亮的全面失败:生产账本上每个块都 -32603。**
+  **而这一点桥自己在 :486-489 的注释里逐字预言过**:"此规则仅在桥自写的 E-b 世界成立……**不得被继承到编排接入层**(生产 HostContext::set 对零值照写不删,真实链账户表**必然**含零值槽行)"。**但全仓不存在任何 E-b/生产模式开关**(grep ProductionMode/strictInvariant/mode 皆空),规则是硬编码的——"不得被继承"没有任何机制保证。
+  **两处判据互相矛盾且方向相反**:fetchAllStorage:485 **查**零值 → throw(节点瘫);probeHasStorage:682 **不查**零值 → 返回 true(EIP-7610 误判)。以太坊正解是"零值槽 = 槽不存在",两处都不对。
+  → **批 9 范围重定义**:不是"三行加个 is_zero",而是把零值语义在三处统一到"零值 = 不存在":①fetchAllStorage 从 throw 改 skip;②probeHasStorage 加 is_zero;③读单槽路径与前两者一致。**同时必须保住 E-b 世界的写回泄漏检查**(那条 poison 有真实价值,直接删会丢一条不变量守护)——需要一个"不得被继承"的落地机制,而不是把检查一删了之。
+  → **优先级上调**:与条目 q 同级,列入 op-node 实连前置清单(它和 P3 I-2 的 /apps/ 非 hex 表名是同一个 poison 机制的两个生产触发点,后者已被上一轮实测确认 poisoned=1)。
+  【复现的失败模式】这条与终审视角 4 的总评同型:**"发现了但没传播到位"**——桥的注释精确预言了生产后果,却始终停在注释,没进 §6.4 台账、没进接入前置清单,于是五轮审查里没人把它当接入阻塞项看。
+  【运维可见性叠加】P3 I-2 已实测 `firstError()` 是字面量 "std::exception"(boost non_hex_input 不覆写 what()),故上述 -32603 抵达运维时**理由为空内容**。
+基础设施状况:批 9 连续三次因服务端 529 Overloaded 在第一步终止(工作区每次均干净、零损失);状态分歧审计同因 529 终止,报告未创建。派发暂停,待服务端恢复。
