@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BaselineSchedulerMPTHelpers.h"
+#include "HistoricalCallStorage.h"
 #include "MPTNodeStorage.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
@@ -20,6 +21,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
@@ -902,18 +904,109 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork();
-            view.newMutable();
-            auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-            auto ledgerConfig =
-                co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
-            auto block = co_await ledger::getBlockData(
-                view, blockNumber, ledger::HEADER, self->m_blockFactory.get());
-            auto receipt = co_await self->m_executor.get().executeTransaction(
-                view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
-
-            callback(nullptr, std::move(receipt));
+            callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
         }(this, std::move(transaction), std::move(callback)));
+    }
+
+    /// The pre-existing latest-state call, verbatim: fork the live view and execute on top
+    /// of it. Shared by call() and by callAtBlock() when the requested height IS the latest.
+    task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
+        protocol::Transaction::Ptr transaction)
+    {
+        auto view = m_multiLayerStorage.get().fork();
+        view.newMutable();
+        auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+        auto ledgerConfig =
+            co_await ledger::getLedgerConfig(view, blockNumber, m_blockFactory.get());
+        auto block =
+            co_await ledger::getBlockData(view, blockNumber, ledger::HEADER, m_blockFactory.get());
+        co_return co_await m_executor.get().executeTransaction(
+            view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
+    }
+
+    /// eth_call pinned at @p blockNumber (M13.2, spec §5.13): execute against the state
+    /// block N committed — the MPT at block N's header stateRoot — with the call's own
+    /// writes landing in a fresh mutable layer stacked on a HistoricalStateBackend
+    /// (read-your-writes inside the call, nothing persisted; HistoricalCallStorage.h).
+    ///
+    /// Gated to scenario B (feature_l2_ethereum_compat): only there is the trie the
+    /// COMPLETE state at the root. A scenario-A trie excludes every account dormant since
+    /// activation, so a historical call could silently execute against a state where such
+    /// accounts read as absent — refused loudly instead (OQ6 resolution, MPTAccount.h:83-85).
+    /// Blocks above the latest height and blocks whose header records no state root
+    /// (a scenario-B genesis) are refused with explicit errors. Trie-read failures
+    /// (MPTMissingNode / MPTDecodeError / MPTInvariantViolation) surface as Error results,
+    /// never as swallowed wrong answers.
+    void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
+    {
+        task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
+                       protocol::BlockNumber blockNumber,
+                       decltype(callback) callback) -> task::Task<void> {
+            try
+            {
+                auto latestView = self->m_multiLayerStorage.get().fork();
+                auto latestNumber =
+                    co_await ledger::getCurrentBlockNumber(latestView, ledger::fromStorage);
+                if (blockNumber > latestNumber)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                                 fmt::format("eth_call: block {} does not exist (latest: {})",
+                                     blockNumber, latestNumber)),
+                        nullptr);
+                    co_return;
+                }
+                if (blockNumber == latestNumber)
+                {
+                    callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
+                    co_return;
+                }
+                auto ledgerConfig = co_await ledger::getLedgerConfig(
+                    latestView, blockNumber, self->m_blockFactory.get());
+                if (!ledgerConfig->features().get(
+                        ledger::Features::Flag::feature_l2_ethereum_compat))
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                                 fmt::format(
+                                     "eth_call: historical call at block {} requires the "
+                                     "full-fidelity MPT of an L2 Ethereum-compat chain "
+                                     "(feature_l2_ethereum_compat, scenario B); this chain's state "
+                                     "at that block is not completely committed to an MPT",
+                                     blockNumber)),
+                        nullptr);
+                    co_return;
+                }
+                auto block = co_await ledger::getBlockData(
+                    latestView, blockNumber, ledger::HEADER, self->m_blockFactory.get());
+                auto stateRoot = block->blockHeader()->stateRoot();
+                if (stateRoot == crypto::HashType{})
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                                 fmt::format("eth_call: no MPT state root recorded in block {}'s "
+                                             "header",
+                                     blockNumber)),
+                        nullptr);
+                    co_return;
+                }
+
+                HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
+                    latestView, stateRoot);
+                storage2::View<typename MultiLayerStorage::MutableStorage, void,
+                    HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
+                    historicalView(std::addressof(historicalBackend));
+                historicalView.newMutable();
+                auto receipt = co_await self->m_executor.get().executeTransaction(
+                    historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
+                callback(nullptr, std::move(receipt));
+            }
+            catch (std::exception const& e)
+            {
+                callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                             fmt::format("eth_call at block {} failed: {}", blockNumber,
+                                 boost::diagnostic_information(e))),
+                    nullptr);
+            }
+        }(this, std::move(transaction), blockNumber, std::move(callback)));
     }
 
     void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override

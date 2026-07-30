@@ -99,6 +99,37 @@ struct Executable
 template <class Storage>
 using Account = ledger::account::EVMAccount<Storage>;
 
+/// True when @p Storage is (or wraps) a historical state stack — a storage pinned to a past
+/// block's state, marked by a `isHistoricalStateStorage` member (HistoricalCallStorage.h).
+/// The walk sees through the two wrappers a storage reaches getExecutable in: Rollbackable
+/// (via its StorageType alias) and storage2::View (via its BackendStorage alias).
+///
+/// getExecutable consults it because the global executable cache is keyed by address alone
+/// and shared with the latest-state paths, so historical execution must bypass it both
+/// ways: a hit would execute the code the address holds TODAY (possibly deployed after the
+/// pinned block), and a fill would poison latest-path lookups with the pinned block's code.
+template <class Storage>
+consteval bool isHistoricalStorage()
+{
+    using StorageType = std::decay_t<Storage>;
+    if constexpr (requires { StorageType::isHistoricalStateStorage; })
+    {
+        return true;
+    }
+    else if constexpr (requires { typename StorageType::StorageType; })
+    {
+        return isHistoricalStorage<typename StorageType::StorageType>();
+    }
+    else if constexpr (requires { typename StorageType::BackendStorage; })
+    {
+        return isHistoricalStorage<typename StorageType::BackendStorage>();
+    }
+    else
+    {
+        return false;
+    }
+}
+
 using CacheExecutables =
     storage2::memory_storage::MemoryStorage<evmc_address, std::shared_ptr<Executable>,
         storage2::memory_storage::Attribute(
@@ -109,16 +140,23 @@ CacheExecutables& getCacheExecutables();
 task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
-    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+    constexpr bool useGlobalCache = !isHistoricalStorage<decltype(storage)>();
+    if constexpr (useGlobalCache)
     {
-        co_return std::move(*executable);
+        if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+        {
+            co_return std::move(*executable);
+        }
     }
 
     if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
         auto codeEntry = co_await account.code())
     {
         auto executable = std::make_shared<Executable>(std::move(*codeEntry));
-        co_await storage2::writeOne(getCacheExecutables(), address, executable);
+        if constexpr (useGlobalCache)
+        {
+            co_await storage2::writeOne(getCacheExecutables(), address, executable);
+        }
         co_return executable;
     }
     co_return {};
