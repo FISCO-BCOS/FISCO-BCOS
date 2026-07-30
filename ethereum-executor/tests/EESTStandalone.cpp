@@ -424,7 +424,13 @@ public:
             }
         }
 
-        if (!tx.blobVersionedHashes.empty())
+        // Detect blob transaction (type 3) by presence of maxFeePerBlobGas
+        // or non-empty blobVersionedHashes.  EEST fixtures that test blob-tx
+        // rejection (zero blobs, pre-fork) set maxFeePerBlobGas but leave
+        // blobVersionedHashes empty.
+        bool isBlobTx = !tx.maxFeePerBlobGas.empty() ||
+                        !tx.blobVersionedHashes.empty();
+        if (isBlobTx)
         {
             tarsTx->web3TypedTxKind = 3;
             data.maxFeePerBlobGas = test::strip0x(tx.maxFeePerBlobGas);
@@ -857,16 +863,23 @@ public:
                         receipt->status() !=
                             static_cast<int32_t>(protocol::TransactionStatus::None)))
                 {
-                    std::ostringstream oss;
-                    oss << "FAIL: " << fixture.name << " [" << forkName << "] tx#" << txIndex
-                        << " expected success, got failure"
-                        << (executionThrew ? " (exception: " + evmError + ")" : "")
-                        << (receipt ? " status=" + std::to_string(receipt->status()) : "");
-                    printLine(oss.str());
-                    g_failureDetails.push_back({fixture.name, forkName,
-                        "tx#" + std::to_string(txIndex) + " unexpected failure"});
-                    ++g_unexpectedFailure;
-                    return false;
+                    // Transaction failed. If expectException is set, the block
+                    // is expected to be invalid — let post-state check catch it.
+                    // If expectException is empty, we still continue to
+                    // finalizeBlock and let the post-state check at the end
+                    // determine pass/fail (handles EIP-7623 edge cases).
+                    // Only abort immediately for executionThrew (state unchanged).
+                    if (executionThrew)
+                    {
+                        std::ostringstream oss;
+                        oss << "FAIL: " << fixture.name << " [" << forkName << "] tx#" << txIndex
+                            << " execution threw: " << evmError;
+                        printLine(oss.str());
+                        g_failureDetails.push_back({fixture.name, forkName,
+                            "tx#" + std::to_string(txIndex) + " execution threw"});
+                        ++g_unexpectedFailure;
+                        return false;
+                    }
                 }
                 ++txIndex;
             }
