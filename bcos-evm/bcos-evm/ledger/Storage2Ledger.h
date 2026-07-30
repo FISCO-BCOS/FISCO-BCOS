@@ -55,6 +55,15 @@
 //
 // has_storage 判据:账户表 range seek 探测是否存在至少一个 32 字节原始键(区别于
 // ACCOUNT_TABLE_FIELDS 中的已知短字段名),冷读时探测一次并入账户缓存(design §4.4)。
+//
+// 零值槽语义(终审批 9):**槽值为 0 等价于该槽不存在**——以太坊 trie 会删掉零值槽,本仓
+// accountStorageRoot/opStorageRoot 也是 is_zero → continue。该语义在本桥的**所有**判据上统一:
+// probeHasStorage 不因零值行判 has_storage=true;fetchAllStorage 跳过零值行(既不 throw 也不进
+// 建根 map);fetchStorage/get_storage 对"行不存在"与"行存在但值为零"返回同一个全零 bytes32。
+// 理由:该语义必须对生产账本成立——生产写路径(transaction-executor HostContext::set、
+// bcos-ledger 创世 alloc 导入)对零值照写不删,真实链账户表**必然**含零值槽行。反过来,
+// "桥的写回从不留下零值槽行"(契约②)这条 E-b 不变量的守护在写路径:applyModifiedEntry 的
+// 删槽后置回读,而不再在读路径上拦(在读路拦会让节点每块 -32603)。
 
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/EVMAccount.h>
@@ -64,6 +73,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Overloaded.h>
 #include <boost/algorithm/hex.hpp>
+#include <algorithm>
 #include <array>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
@@ -240,7 +250,8 @@ public:
     /// Traverses every live account under the /apps/ namespace (design §6). noexcept +
     /// poison-flag contract — the same shape as get_account/get_account_code/get_storage:
     /// storage2 errors (including layout-invariant violations — an unknown key in an account
-    /// table, or a stored zero-valued slot, see fetchAllStorage) are caught here, poison() is
+    /// table, or a slot value whose length is not 32 bytes; a stored *zero-valued* slot is NOT
+    /// one of them any more, see fetchAllStorage / final batch 9) are caught here, poison() is
     /// called, and the traversal stops early returning false. The visitor is invoked
     /// synchronously per live account and must itself return bool: false aborts the traversal
     /// early without poisoning (a plain "visitor is done" signal, distinct from a
@@ -313,6 +324,24 @@ private:
                     reinterpret_cast<const char*>(key.bytes), sizeof(key.bytes));
                 co_await storage2::removeOne(
                     m_storage.get(), executor_v1::StateKeyView{tableName, keyView});
+
+                // 契约②的不变量守护(终审批 9,方案 A:守护搬到写回路径)。原先这条守护长在读路
+                // ——fetchAllStorage 见到零值槽行就 throw+毒旗——但读路同时必须服务**不遵守本契约**
+                // 的生产账本(HostContext.h:288 与 Ledger.cpp:1844 的 setStorage 对零值照写不删,
+                // 真实链账户表必然含零值槽行),在那里检查等于让节点每块 -32603。不变量的主体是
+                // **写**,守护随之搬回写路径:检查只针对本次 diff 自己写零的这些键,与账本里既有的
+                // 零值行无关(后者按以太坊语义由读路跳过)。
+                // 形态刻意不是 setStorage 前的 assert(!is_zero(value)):上面的 if/else 结构令这种
+                // 断言永不可达、也永不可测(六步自验无从翻红),它防呆而不守护。改为**删槽后置回读**
+                // ——校验的是结果而非意图:removeOne 未生效、或被底层降级成一次写入,都会当场响。
+                if (co_await storage2::existsOne(
+                        m_storage.get(), executor_v1::StateKeyView{tableName, keyView}))
+                    throw std::runtime_error(
+                        "Storage2Ledger::applyDiff: zero-valued slot write left the row alive in "
+                        "account table '" +
+                        tableName +
+                        "' (contract ② write-back leak: the bridge's write-back must never leave a "
+                        "zero-valued storage slot row behind — zero means the slot is deleted)");
             }
             else
             {
@@ -418,6 +447,19 @@ private:
                fieldKey == Fields::FROZEN || fieldKey == Fields::SHARD;
     }
 
+    /// 零值槽判据(终审批 9):以太坊语义下"槽值为 0 ≡ 该槽不存在",所以一行内容恰为 32 字节
+    /// 全零的槽行,在**所有**判据上都必须等同于"该行不在"(fetchAllStorage 跳过、probeHasStorage
+    /// 不因它判 has_storage=true)。
+    /// 长度不为 32 的内容**不**在此判真:它不是合法槽值,把它降级成"零/不存在"就是终审 M-1 已
+    /// 修过的那类静默降级。此处保守地判它"有内容"(probeHasStorage 因而给出 has_storage=true,
+    /// EIP-7610 方向上偏保守 = 拒绝在其上 CREATE),真正的长度校验与 throw+毒旗留给权威读路
+    /// (fetchStorage / fetchAllStorage)。
+    static bool isZeroSlotValue(std::string_view content) noexcept
+    {
+        return content.size() == sizeof(evmc_bytes32::bytes) &&
+               std::all_of(content.begin(), content.end(), [](char byte) { return byte == '\0'; });
+    }
+
     /// Decodes the address embedded in a "/apps/<hex(addr)>" SYS_TABLES key (the inverse of
     /// accountTableName's hex_lower encoding).
     static evmc::address addressFromTableName(std::string_view tableKey)
@@ -440,9 +482,11 @@ private:
     /// tableName as one of ACCOUNT_TABLE_FIELDS (skipped — read separately by fetchAccount) / a
     /// 32-byte raw storage slot key (collected into the returned map) / anything else (a
     /// storage2 layout invariant violation the bridge cannot interpret — throws, caught and
-    /// poisoned by the public visitAccounts entry point). Tombstoned rows (design §6 Critical)
-    /// are skipped before classification, so a logically-deleted slot neither counts as a
-    /// zero-valued-slot violation nor resurrects into the returned map.
+    /// poisoned by the public visitAccounts entry point). Two kinds of row are skipped before
+    /// they can reach the returned map, and the two filters are cumulative, not alternatives:
+    /// tombstoned rows (design §6 Critical, so a logically-deleted slot cannot resurrect) and
+    /// zero-valued slot rows (final batch 9: zero ≡ the slot does not exist, matching what
+    /// accountStorageRoot/opStorageRoot already do when building the trie).
     task::Task<std::map<evmc::bytes32, evmc::bytes32>> fetchAllStorage(std::string tableName) const
     {
         std::map<evmc::bytes32, evmc::bytes32> storage;
@@ -482,16 +526,16 @@ private:
             evmc::bytes32 slotValue{};
             std::memcpy(slotValue.bytes, content->data(), content->size());
 
+            // 零值槽跳过(终审批 9):以太坊语义下**槽值为 0 等价于该槽不存在**(geth 的 trie 会
+            // 删掉零值槽;本仓 accountStorageRoot/opStorageRoot 同样 is_zero → continue,零值槽本
+            // 就不进 trie)。此处**曾经**是 throw+毒旗,理由是"applyDiff 的契约②从不写零值槽,
+            // 真实值为零而仍落一行只能是写回路径有漏"——该理由只在桥自写的 E-b 世界成立,而这条
+            // 读路同时要服务生产账本(HostContext.h:288 / Ledger.cpp:1844 的 setStorage 对零值照写
+            // 不删,真实链账户表必然含零值槽行,创世 alloc 里一个 "0x00…00" 就是一行),留在读路
+            // 的后果是 stateRootOf → visitAccounts → 这里每个 OP 块都毒旗 → 节点每块 -32603。
+            // 写回泄漏的守护没有消失,它搬去了它真正的归属地:applyModifiedEntry 的删槽后置回读。
             if (evmc::is_zero(slotValue))
-                // 零值槽毒旗(design §6):此规则仅在桥自写的 E-b 世界成立——applyDiff 的契约②
-                // 从不写零值槽(零值=删槽),真实值为零而仍落一行,只能是写回路径有漏;该规则
-                // 不得被继承到编排接入层(生产 HostContext::set 对零值照写不删,真实链账户表
-                // 必然含零值槽行)。
-                throw std::runtime_error(
-                    "Storage2Ledger::visitAccounts: zero-valued storage slot in account table '" +
-                    tableName +
-                    "' (bridge write-back never writes zero-valued slots — indicates "
-                    "a write-back leak)");
+                continue;
 
             storage.emplace(slotKey, slotValue);
         }
@@ -662,11 +706,19 @@ private:
         co_return co_await fetchAccount(tableName, /*computeHasStorage=*/false);
     }
 
-    /// has_storage 判据(design §4.4):账户表 range seek 探测首个存活(非墓碑)的 32 字节
-    /// 原始键(区别于 ACCOUNT_TABLE_FIELDS 的已知短字段名)。终审 I-1:range 扫描不判值
-    /// 变体会把逻辑删除的墓碑行(storage2::DELETED_TYPE)当成活槽——"删至最后一个槽"后
-    /// has_storage 仍会翻不回 false。与 fetchAllStorage/visitAccountsImpl 同源,用
-    /// liveContent() 过滤墓碑(design §6 Critical)。
+    /// has_storage 判据(design §4.4):账户表 range seek 探测首个存活(非墓碑)、且值**非零**的
+    /// 32 字节原始键(区别于 ACCOUNT_TABLE_FIELDS 的已知短字段名)。两层过滤都是修过的缺陷,
+    /// **叠加**而非替代:
+    ///   * 终审 I-1(墓碑层):range 扫描不判值变体会把逻辑删除的墓碑行(storage2::DELETED_TYPE)
+    ///     当成活槽——"删至最后一个槽"后 has_storage 翻不回 false。用 liveContent() 过滤
+    ///     (design §6 Critical),与 fetchAllStorage/visitAccountsImpl 同源。
+    ///   * 终审批 9(零值层):一行**存活但值为零**的槽行,按以太坊语义等于该槽不存在,不得
+    ///     判 has_storage=true。误真的后果不是性能而是共识:has_storage → state.cpp:259
+    ///     `.has_initial_storage` → host.cpp:91 `is_create_collision`,同一个 CREATE2 会在
+    ///     op-geth 成功而在本桥 INVALID(EIP-7610 误判)。而生产账本必然含零值槽行
+    ///     (HostContext.h:288 / Ledger.cpp:1844 对零值照写不删)。
+    /// 注意 KEEP 契约不受影响:"零值槽 = 槽不存在"与"账户存在但字段全默认 = 账户存在"是两件事,
+    /// 后者仍由 fetchAccount 的 existsOne 判据保证返回 Account 而非 nullopt。
     task::Task<bool> probeHasStorage(std::string_view tableName) const
     {
         auto iterator = co_await storage2::range(m_storage.get(), storage2::RANGE_SEEK,
@@ -679,10 +731,15 @@ private:
             auto [table, fieldKey] = view.get();
             if (table != tableName)
                 co_return false;
-            if (fieldKey.size() == kStorageSlotKeySize && liveContent(rawValue).has_value())
-                co_return true;
-            // 已知字段名(codeHash/code/balance/abi/nonce/alive/frozen/shard)或已墓碑化的槽
-            // (逻辑删除,liveContent 判负)——继续找下一行,不能提前判定 has_storage=true。
+            if (fieldKey.size() == kStorageSlotKeySize)
+            {
+                if (auto content = liveContent(rawValue);
+                    content.has_value() && !isZeroSlotValue(*content))
+                    co_return true;
+            }
+            // 已知字段名(codeHash/code/balance/abi/nonce/alive/frozen/shard)、已墓碑化的槽
+            // (逻辑删除,liveContent 判负)、或值为全零的槽行(零值 ≡ 不存在)——继续找下一行,
+            // 不能提前判定 has_storage=true。
         }
         co_return false;
     }

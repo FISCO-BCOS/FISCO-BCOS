@@ -731,3 +731,250 @@ TEST(Storage2Ledger, VisitAccountsMissDoesNotPoisonAccountCache)
            "has_storage 未计算的 Account";
     EXPECT_FALSE(bridge.poisoned());
 }
+
+// ══════════ 终审批 9:零值槽语义统一("槽值为 0 ≡ 该槽不存在") ══════════
+//
+// 修复前两处判据方向相反,以太坊正解是两处都不对:
+//   * fetchAllStorage 见到零值槽行 → throw → visitAccounts 毒旗 → stateRootOf 产物全废。
+//     stateRootOf 正走 visitAccounts → visitAccountsImpl → fetchAllStorage,而生产账本
+//     必然含零值槽行(transaction-executor HostContext::set 与 bcos-ledger 创世 alloc 导入
+//     对零值照写不删),后果是节点每个 OP 块都 -32603。
+//   * probeHasStorage 只看键长与墓碑、不看值 → 零值槽行让 has_storage 误真 →
+//     eth/state/state.cpp `has_initial_storage` → host.cpp `is_create_collision` →
+//     同一个 CREATE2 在 op-geth 成功而在本桥 INVALID(EIP-7610 误判)。
+// 正解两处都是"跳过":零值槽既不 throw,也不算有内容。零值槽本就不进 trie
+// (adapter/StateRootCompute.cpp::accountStorageRoot 与 opstack/OpBlockSeal.cpp::opStorageRoot
+// 都是 is_zero → continue),所以"跳过"与"该槽不存在"建出的根字节相同——(z1) 钉的就是这条。
+//
+// fixture 说明:本组用 EVMAccount::setStorage(key, evmc_bytes32{}) 直接落一行 32 字节全零的槽
+// 行——这是**绕过 applyDiff** 的写入(生产写路径正是这样),也是构造该布局的唯一手段;
+// applyDiff 自己永远走不到这个形状(契约②:零值 = removeOne),那条不变量现在由
+// applyModifiedEntry 的删槽后置回读守护,见 (z6)。
+
+namespace
+{
+// (z6) 专用装饰器(仅测试用):removeOne 是**空操作**,其余算子直通底层。用于模拟"写回路径
+// 漏了删槽"——契约② 的零值分支调了 removeOne 却没生效,行仍然存活。这是 applyDiff 写路径
+// 后置回读守护唯一可达的触发方式(仿 support/ThrowingStorage.h 的装饰器写法)。
+template <class Storage>
+class LeakyDeleteStorage
+{
+public:
+    explicit LeakyDeleteStorage(Storage& storage) noexcept : m_storage(storage) {}
+
+    bcos::task::Task<std::optional<bcos::storage::Entry>> readOne(auto key, auto&&... args)
+    {
+        co_return co_await bcos::storage2::readOne(
+            m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
+    bcos::task::Task<bool> existsOne(auto key, auto&&... args)
+    {
+        co_return co_await bcos::storage2::existsOne(
+            m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
+    bcos::task::Task<typename Storage::Iterator> range(auto&&... args)
+    {
+        co_return co_await bcos::storage2::range(
+            m_storage.get(), std::forward<decltype(args)>(args)...);
+    }
+
+    bcos::task::Task<void> writeOne(auto key, auto value, auto&&... args)
+    {
+        co_await bcos::storage2::writeOne(m_storage.get(), std::move(key), std::move(value),
+            std::forward<decltype(args)>(args)...);
+    }
+
+    /// 刻意什么都不做:注入"删槽没生效"的写回泄漏。
+    bcos::task::Task<void> removeOne(auto /*key*/, auto&&... /*args*/) { co_return; }
+
+private:
+    std::reference_wrapper<Storage> m_storage;
+};
+
+}  // namespace
+
+// (z1) 本批最核心的一条:stateRootOf 在含零值槽的账户表上不再毒旗,且算出的根与"该槽根本
+//      不存在"时逐字节相等 —— 同时钉死"不 throw"(旧行为在此翻红)和"不进 trie"。
+TEST(Storage2Ledger, StateRootIgnoresZeroValuedSlotRow)
+{
+    // 甲:一个非零槽 + 一行直接落库的零值槽行。
+    MutableStorage withZeroRow;
+    {
+        Account acc(withZeroRow, 0x01_address, false);
+        bcos::task::syncWait(acc.create());
+        bcos::task::syncWait(acc.setStorage(slotKey(1), slotKey(7)));
+        bcos::task::syncWait(acc.setStorage(slotKey(2), evmc_bytes32{}));  // 零值槽行
+    }
+    // 乙:同一状态,但那个零值槽压根不存在。
+    MutableStorage withoutZeroRow;
+    {
+        Account acc(withoutZeroRow, 0x01_address, false);
+        bcos::task::syncWait(acc.create());
+        bcos::task::syncWait(acc.setStorage(slotKey(1), slotKey(7)));
+    }
+
+    Storage2Ledger<MutableStorage> bridgeWithZeroRow(withZeroRow);
+    Storage2Ledger<MutableStorage> bridgeWithoutZeroRow(withoutZeroRow);
+
+    // 遍历本身必须成功、不毒旗(旧行为:fetchAllStorage throw → visitAccounts 返回 false 且毒旗)。
+    std::map<evmc::bytes32, evmc::bytes32> seenStorage;
+    const bool ok = bridgeWithZeroRow.visitAccounts([&](const auto& av) {
+        seenStorage = av.storage;
+        return true;
+    });
+    ASSERT_TRUE(ok);
+    ASSERT_FALSE(bridgeWithZeroRow.poisoned()) << bridgeWithZeroRow.firstError();
+    ASSERT_EQ(seenStorage.size(), 1U);  // 零值槽不进建根 map
+    EXPECT_EQ(seenStorage.at(evmc::bytes32(slotKey(1))), evmc::bytes32(slotKey(7)));
+
+    const auto rootWithZeroRow = bcos::evm::stateRootOf(bridgeWithZeroRow);
+    const auto rootWithoutZeroRow = bcos::evm::stateRootOf(bridgeWithoutZeroRow);
+    EXPECT_FALSE(bridgeWithZeroRow.poisoned());
+    EXPECT_FALSE(bridgeWithoutZeroRow.poisoned());
+    EXPECT_EQ(rootWithZeroRow, rootWithoutZeroRow);
+    // 反向哨兵:根不是空状态的根,否则上面的相等可能是"两边都全废/都空"的空真。
+    MutableStorage emptyStorage;
+    Storage2Ledger<MutableStorage> emptyBridge(emptyStorage);
+    EXPECT_NE(rootWithZeroRow, bcos::evm::stateRootOf(emptyBridge));
+}
+
+// (z2) 账户只有一个零值槽 → has_storage 必须为 false(EIP-7610 误判修复)。
+TEST(Storage2Ledger, HasStorageFalseWhenOnlyZeroValuedSlot)
+{
+    MutableStorage storage;
+    Account acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    bcos::task::syncWait(acc.setStorage(slotKey(1), evmc_bytes32{}));
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+    auto account = bridge.get_account(0x01_address);
+    // KEEP 契约不得被改坏:账户依然**存在**(不是 nullopt),只是没有存储。
+    ASSERT_TRUE(account.has_value());
+    EXPECT_FALSE(account->has_storage);
+    EXPECT_FALSE(bridge.poisoned());
+    // 单槽读路早就是"零值 ≡ 不存在"的口径,这里顺手钉死三处判据同口径。
+    EXPECT_EQ(bridge.get_storage(0x01_address, evmc::bytes32(slotKey(1))), evmc::bytes32{});
+    EXPECT_EQ(bridge.get_storage(0x01_address, evmc::bytes32(slotKey(9))), evmc::bytes32{});
+}
+
+// (z3) 防改过头:账户有非零槽 → has_storage 仍为 true。
+TEST(Storage2Ledger, HasStorageTrueWithNonZeroSlotOnly)
+{
+    MutableStorage storage;
+    Account acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    bcos::task::syncWait(acc.setStorage(slotKey(1), slotKey(7)));
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+    auto account = bridge.get_account(0x01_address);
+    ASSERT_TRUE(account.has_value());
+    EXPECT_TRUE(account->has_storage);
+    EXPECT_FALSE(bridge.poisoned());
+}
+
+// (z4) 零值槽 + 非零槽混合 → has_storage 为 true,且 stateRootOf 只计入非零槽。
+//      零值行**排在非零行之前**(slotKey(1) 零、slotKey(2) 非零,ORDERED 存储按键序扫),
+//      这样 probeHasStorage 必须真的往后继续扫,而不能在第一行就判负。
+TEST(Storage2Ledger, MixedZeroAndNonZeroSlots)
+{
+    MutableStorage mixed;
+    {
+        Account acc(mixed, 0x01_address, false);
+        bcos::task::syncWait(acc.create());
+        bcos::task::syncWait(acc.setStorage(slotKey(1), evmc_bytes32{}));  // 先零
+        bcos::task::syncWait(acc.setStorage(slotKey(2), slotKey(7)));      // 后非零
+    }
+    MutableStorage nonZeroOnly;
+    {
+        Account acc(nonZeroOnly, 0x01_address, false);
+        bcos::task::syncWait(acc.create());
+        bcos::task::syncWait(acc.setStorage(slotKey(2), slotKey(7)));
+    }
+
+    Storage2Ledger<MutableStorage> bridge(mixed);
+    auto account = bridge.get_account(0x01_address);
+    ASSERT_TRUE(account.has_value());
+    EXPECT_TRUE(account->has_storage);
+
+    std::map<evmc::bytes32, evmc::bytes32> seenStorage;
+    ASSERT_TRUE(bridge.visitAccounts([&](const auto& av) {
+        seenStorage = av.storage;
+        return true;
+    }));
+    ASSERT_FALSE(bridge.poisoned()) << bridge.firstError();
+    ASSERT_EQ(seenStorage.size(), 1U);
+    EXPECT_EQ(seenStorage.begin()->first, evmc::bytes32(slotKey(2)));
+
+    Storage2Ledger<MutableStorage> reference(nonZeroOnly);
+    EXPECT_EQ(bcos::evm::stateRootOf(bridge), bcos::evm::stateRootOf(reference));
+    EXPECT_FALSE(reference.poisoned());
+}
+
+// (z5) 零值槽 + 墓碑混合:新增的零值过滤是**叠加**在终审 I-1 的墓碑过滤之上的第二层,不是
+//      替代——两层都在,has_storage 为 false,建根 map 为空,且不毒旗。
+TEST(Storage2Ledger, ZeroValuedSlotAndTombstoneBothFiltered)
+{
+    LogicalDeleteStorage storage;
+    LogicalDeleteAccount acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    const auto tombstoned = slotKey(1);
+    bcos::task::syncWait(acc.setStorage(tombstoned, slotKey(9)));
+    bcos::task::syncWait(acc.setStorage(slotKey(2), evmc_bytes32{}));  // 存活但零值
+
+    // slotKey(1) 逻辑删除:保留 DELETED_TYPE 墓碑行,range() 仍会扫到它(不带
+    // BYPASS_LOGICAL_DELETE_TYPE,与生产 MultiLayerStorage 同语义)。
+    const auto tableName = tableNameOf(0x01_address);
+    std::string_view tombstonedView(
+        reinterpret_cast<const char*>(tombstoned.bytes), sizeof(tombstoned.bytes));
+    bcos::task::syncWait(bcos::storage2::removeOne(
+        storage, bcos::executor_v1::StateKeyView{tableName, tombstonedView}));
+
+    Storage2Ledger<LogicalDeleteStorage> bridge(storage);
+    auto account = bridge.get_account(0x01_address);
+    ASSERT_TRUE(account.has_value());
+    EXPECT_FALSE(account->has_storage);  // 墓碑层 + 零值层都得生效
+
+    std::map<evmc::bytes32, evmc::bytes32> seenStorage;
+    bool sawAccount = false;
+    ASSERT_TRUE(bridge.visitAccounts([&](const auto& av) {
+        sawAccount = true;
+        seenStorage = av.storage;
+        return true;
+    }));
+    EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+    EXPECT_TRUE(sawAccount);
+    EXPECT_TRUE(seenStorage.empty());
+}
+
+// (z6) 不变量守护迁移后的归属地测试(方案 A):契约②"桥的写回从不留下零值槽行"这条不变量,
+//      现在在**写**的时候就断言 —— 注入一个 removeOne 为空操作的存储,applyDiff 的零值分支
+//      删不掉行,后置回读当场 throw。
+//      为什么不是 setStorage 前的 assert(!is_zero(value)):applyModifiedEntry 的 if/else 结构
+//      令那种断言永不可达、也就永不可测(六步自验无从翻红);后置回读校验的是**结果**,可达可测。
+TEST(Storage2Ledger, ApplyDiffZeroSlotWriteBackLeakThrows)
+{
+    MutableStorage backend;
+    LeakyDeleteStorage<MutableStorage> leaky(backend);
+
+    // 先用直通的 writeOne 落一行非零槽(不经 removeOne,所以不受注入影响)。
+    Storage2Ledger<LeakyDeleteStorage<MutableStorage>> bridge(leaky);
+    evmone::state::StateDiff seedDiff;
+    seedDiff.modified_accounts.push_back({0x01_address, 1, 10, std::nullopt,
+        {{evmc::bytes32(slotKey(1)), evmc::bytes32(slotKey(7))}}});
+    ASSERT_NO_THROW(bridge.applyDiff(seedDiff));
+
+    // 再写零 = 删槽:removeOne 被注入成空操作 → 行仍然存活 → 写路径守护必须响。
+    evmone::state::StateDiff zeroDiff;
+    zeroDiff.modified_accounts.push_back(
+        {0x01_address, 1, 10, std::nullopt, {{evmc::bytes32(slotKey(1)), evmc::bytes32{}}}});
+    EXPECT_THROW(bridge.applyDiff(zeroDiff), std::runtime_error);
+
+    // 对照:同样的两枚 diff 打在正常存储上,不得抛(守护不能对合法写回误报)。
+    MutableStorage healthy;
+    Storage2Ledger<MutableStorage> healthyBridge(healthy);
+    EXPECT_NO_THROW(healthyBridge.applyDiff(seedDiff));
+    EXPECT_NO_THROW(healthyBridge.applyDiff(zeroDiff));
+    EXPECT_FALSE(healthyBridge.poisoned());
+}
