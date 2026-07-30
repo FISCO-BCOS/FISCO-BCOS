@@ -62,7 +62,7 @@ constexpr inline struct SyncWait
         std::atomic<waitStatus> status = waitStatus::INIT;
 
         auto handle = [](Task&& task, decltype(result)& result, std::atomic<waitStatus>& status,
-                          auto&&... args) -> task::Task<void> {
+                          auto&&... args) -> task::AsyncTask {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)
