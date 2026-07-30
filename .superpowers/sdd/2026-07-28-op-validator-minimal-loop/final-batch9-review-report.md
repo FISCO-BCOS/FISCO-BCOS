@@ -108,3 +108,130 @@ auto existsOne(const auto& key) -> task::Task<bool>
 - 之所以 INJ-E 零红而不是"E-b 三腿翻红",是因为**没有任何测试在 MLS View 之上走过桥的零值写分支**——`EbT8nReplayTest` 虽然是 `Storage2Ledger<CountingStorage<MLS view>>`,但它的 diff 里显然不含零值槽写入。这既解释了零红,也指出了补法。
 
 **建议(不强制本批修)**:给 z7 补一条 MLS View 之上的孪生用例(或把 z7 参数化到两种存储),让"墓碑 ≡ 不存在"这条**跨层判据**在生产实际走的那条路上也有红绿见证。成本很低(EbT8nReplayTest 已有 MLS fixture 先例),收益是把一条"生产会每块失败"的隐患从"靠巧合"变成"被钉住"。
+
+---
+
+## 派单第 1 点:语义正确性
+
+逐条到源码核对,**四处判据确实同口径**:
+
+| 判据 | 位置 | 零值行为 | 核实 |
+|---|---|---|---|
+| 建根(通用) | `adapter/StateRootCompute.cpp:25-26` | `is_zero → continue` | ✅ 原文核对 |
+| 建根(OP) | `opstack/OpBlockSeal.cpp:21-22` | `is_zero → continue` | ✅ 原文核对 |
+| 全量读 | `Storage2Ledger.h:543-544` | 跳过 | ✅ |
+| 单槽读 | `Storage2Ledger.h:771-791` `fetchStorage` | 行缺失与"行存在且 32 字节全零"都返回 `bytes32{}` | ✅ 本就一致,不是本批改的 |
+| `has_storage` | `Storage2Ledger.h:739-745` | 零值行不判真 | ✅ |
+
+因为建根侧本来就 `is_zero → continue`,**"跳过"与"槽不存在"建出的根必然逐字节相同**——z1 的根相等断言是恒真的那一半(它无论改不改都过),z1 真正的判别力来自 `ASSERT_FALSE(poisoned())` 与 `seenStorage.size()==1`。INJ-A 下 z1 翻红即由前者贡献。**结论正确、断言略有冗余,不是缺陷。**
+
+KEEP 契约未被破坏:`probeHasStorage` 只影响 `Account::has_storage` 字段,账户存在性由 `fetchAccount` 的 `existsOne` 判据决定(两条独立路径),`GetAccountKeepsEmptyAccount` 一类既有用例在全部注入下都没红过。✅
+
+`isZeroSlotValue` 实现正确:`size()==32 && 全 '\0'`,`noexcept` 诚实(`std::all_of` + 无抛谓词)。新增 `#include <algorithm>` 到位。
+
+写路守护的形态判断我同意实施者:`assert(!is_zero(value))` 放在 `else` 分支前确实**结构上不可达**,永不可测;后置回读校验的是结果,可达可测,并且 INJ-C 证明它真的会响。**"测不出来的守护等于没有"这条与 §11 通则同构,应予确认。**
+
+一个此前无人提的**新发现(Important)**——见下节"错误通道"。
+
+### 新发现(Important):新守护的 throw 落在**共识**错误通道,而它守护的是**节点本地 bug**
+
+`applyDiff` 刻意不 `noexcept`、也**从不置毒旗**(`Storage2Ledger.h:222` "strict tripwire 允许上抛";`:223-229` 无 try)。因此新守护的 `std::runtime_error` 沿 `processOpBlock` 上抛,落到 `OpSchedulerImpl.h:834-844` 的 catch:`bridge.poisoned()` 为 **false**(这条 throw 不经毒旗)→ 抛 `OpConsensusError` → 按 `OpSchedulerImpl.h:72-79` 的契约 **"Maps to INVALID on the caller side, never -32603"**。
+
+问题:这条守护的触发含义是"**桥自己的写回有 bug,零值行没删掉**",属于节点本地故障,不是"这个 payload 不合法"。用 INVALID 回答一个**合法** payload,在 OP Stack 上的后果是节点拒绝规范链并永久分叉 —— 比 -32603(不承诺、可重试)严格更坏。这正是既有用例 `EngineNewPayloadMutation.StorageLayoutFaultIsInternalErrorNotInvalid`(`EngineNewPayloadGateTest.cpp:1696-1720`)专门防的那一类错误分类,而新守护站错了边。
+
+诚实标注:这不是本批**新造**的通道缺陷 —— `applyDiff` 既有的两处 tripwire(`:289` `/sys/` 路由、`:385` ghost 账户)走的是同一条误分类通道。**但本批在这条通道上新增了一个触发点,把爆炸半径扩大了。** 最省的修法是让 `applyModifiedEntry` 的不变量违规走毒旗(或抛一个 `executeOpBlock` 能与共识错误区分的类型),使其映射到 -32603;同时可顺手把两处既有 tripwire 一并归位。**建议记为跟进项,由协调者裁定是否本批修。**
+
+### 新发现(Minor):非 32 字节槽**值**这条路**全无测试**
+
+`grep` 全 `bcos-evm/test/opstack/*.cpp`:`size mismatch` / `length_error` / 类似断言 **零命中**。也就是说:
+
+- 实施者诚实边界 ② 说的是"`isZeroSlotValue` 对'32 字节键 + 非 32 字节值'有意判有内容,与 `fetchAllStorage` throw 形成有意不对称且**无专门用例**";
+- 实测更进一步:**这条不对称的两侧都没有用例** —— 连**终审 M-1 自己修的那个 throw**(`fetchStorage:781-785` / `fetchAllStorage:526-530`,"值长度 != 32 不再静默降级为零值")也从来没有红绿见证。
+- 唯一沾边的 `StorageLayoutFaultIsInternalErrorNotInvalid` 注入的是 `op_gate_injected_layout_fault`(29 字节**键**),走的是 `fieldKey.size() != 32` 那条 throw,**不是**值长度那条。
+
+方向上的判断我同意实施者(`has_storage=true` 在 EIP-7610 方向偏保守 = 拒绝 CREATE,安全侧);**但"有意"的不对称如果没有用例,下一个人有极大概率把它"顺手统一掉"**。建议补一条两句话的用例把不对称钉住(同时白捡 M-1 的覆盖)。
+
+---
+
+## 派单第 5 点:见证归属
+
+**实施者的自陈完全成立,已独立复核:**
+
+- `bcos-evm/test/CMakeLists.txt:69-71`:`Storage2LedgerTest.cpp` 在 `if(TARGET bcos-framework)` 门控内(连同 `LedgerRootTest / EbT8nReplayTest / OpSchedulerImplTest / Engine*Test`)。
+- standalone 二进制 `bcos-evm/build/test/bcos-evm-opstack-tests` 时间戳 **2026-07-29 21:44:09**(批 9 之前),`--gtest_list_tests` **131 例、`Storage2Ledger` 命中 0**。→ **131/131 对本批是彻底的空真,实施者主动声明这一点是对的。**
+- 追加核实"空真是否掩盖了编译风险":`Storage2Ledger.h` 的全部 includer 是 `engine/OpSchedulerImpl.h`、`engine/OpEngineSeam.h`(均 header-only,无生产 `.cpp` 包含)+ 5 个 in-tree 门控测试。standalone 的 `bcosevm::opstack` 库**根本不编译这个头**,所以"没重建 standalone"不隐藏编译失败。✅
+
+唯一见证是 in-tree 的 246,这个归属是诚实的。
+
+---
+
+## 派单第 6 点:文档 t·u 与四条诚实边界
+
+### 记账条目 t / u —— 逐条到源码核对
+
+| 断言 | 核实 |
+|---|---|
+| t①`addressFromTableName` 对非 20 字节 hex 的 `/apps/` 表名抛 → 毒旗 → `stateRootOf` 每块作废 | ✅ `Storage2Ledger.h:471-485` 确有 `decoded.size() != 20 → throw std::length_error`;`visitAccounts:261-276` 无条件 catch → `poison()`。**Minor 精度问题**:`/apps/HelloWorld` 这个具体例子先在 `boost::algorithm::unhex`(`:476`)上抛 `non_hex_input`,而不是文档写的 `std::length_error`;结论(毒旗、每块 -32603)不变,机制描述不准 |
+| t 通则"任何新增 `poison()` 调用点都必须回答'真实链上会不会命中'" | ✅ 值得固化,建议一并进 §11 |
+| u①`MemoryLedger.cpp` `has_storage = !storage.empty()` 是同类缺口 | ✅ `MemoryLedger.cpp:18-19` 原文 `!account.storage.empty()`;`:54-59` `applyDiff` 零值 `erase`;`MemoryLedger.h:94` `accounts()` 返回可变引用。"触发面限于测试代码" + "正确修法是收窄 `accounts()` 而不是加零值过滤" —— 两条判断都成立 |
+| u②生产写路径对零值照写不删 | ✅ `transaction-executor/.../vm/HostContext.h:286-289` `set` 无条件 `setStorage`;`bcos-ledger/Ledger.cpp:1844` 创世 alloc `setStorage(evmKey, evmValue)` 无零值判断。行号准确 |
+| 桥 design §6 撤销 rev.2 限定 | ✅ 用删除线保留原文 + rev.3 说明,可追溯性做对了 |
+
+**无灌水。** t 与 q 同级置顶的判断我同意:q 是"请求进不来",t 是"进来了被自家守护打死",两者都是接入阻塞项而不是精度问题。
+
+### 四条诚实边界的复审判定
+
+| # | 实施者自陈 | 我的判定 |
+|---|---|---|
+| ① "每块 -32603" 是合成推理,未在真实节点端到端复现 | **诚实,且若有偏差是偏保守(低估了严重性)**。两端我都独立核对了:触发链 `stateRootOf → visitAccounts → visitAccountsImpl:536 → fetchAllStorage` 在代码里成立;零值行的生产来源在 `HostContext::set` 成立(任何 Solidity 的 `delete`/清零 SSTORE 都造一行)。关键在于 `visitAccounts` 是**全量**遍历(design §6 "全量重建=正确性版"),所以**全状态里只要存在一行零值槽,就会毒掉每一个块**——不需要"这个块碰到了它"。"每块"因此不是夸张而是下界。剩余缺口只是"某条真实链上是否确有这样一行",这需要真节点,合理保留 |
+| ② `isZeroSlotValue` 对非 32 字节值的有意不对称、无专门用例 | **诚实但低估**:不对称的**两侧都无用例**,连 M-1 自己修的值长度 throw 也无覆盖。见上节 Minor 发现 |
+| ③ 后置回读多一次层内查表,未做性能测量 | **可接受**。成本上界 = 每块 SSTORE-to-zero 的条数 × 一次 `readOneRaw`,与已有的每槽写入同阶,且只在零值分支付出。不需要本批测量 |
+| ④ 接入阻塞项 t① 未修(牵涉"OP 状态根如何覆盖非 20 字节地址的 FISCO 原生账户",无裁定) | **诚实且判断正确**。它确实不是三行能修的语义裁定问题,标为阻塞项 + 留待裁定是对的处置 |
+
+**四条边界无一条是掩饰;其中 ① 若有偏差是偏保守,② 应扩写。**
+
+---
+
+## 派单第 7 点:边界遵守
+
+`git diff --name-only dbc2a3e2f~4 dbc2a3e2f` 全量 7 个文件:
+
+```
+.superpowers/sdd/.../final-batch9-report.md
+.superpowers/sdd/.../progress.md
+.superpowers/sdd/.../review-batch9.diff
+bcos-evm/bcos-evm/ledger/Storage2Ledger.h        ← 生产代码 1
+bcos-evm/test/opstack/Storage2LedgerTest.cpp     ← 测试 1
+docs/superpowers/specs/2026-07-27-real-ledger-bridge-design.md
+docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md
+```
+
+- `ports/` / `vectors/` / `golden/` / `transaction-scheduler/` / `bcos-rpc/` —— **零触碰**(grep 过滤后空)✅
+- 通用组合根零漂移:唯一生产代码文件是 OP 专属的 `bcos-evm/bcos-evm/ledger/Storage2Ledger.h`,未碰任何通用调度/组合根 ✅
+- 派单第二步约束"只动 `Storage2Ledger.h`;若 (A) 需要动 `applyDiff` 所在文件可以动" —— `applyDiff` 就在同一文件,**实际只动了 1 个生产文件**,严格守住 ✅
+
+---
+
+## 回归(我自己跑的,不重复实施者)
+
+| 腿 | 二进制时间戳 | 结果 |
+|---|---|---|
+| in-tree `bcos-evm-opstack-tests` | 19:55:21(收尾复绿) | `--gtest_list_tests` **246** / **246 PASSED** |
+| `test-bcos-engine` | 20:00:23(本次重建) | `*** No errors detected` |
+| `bcos-evm-eth-tests` | 15:12:12(源未变,重建为 no-op) | 4 test cases,`*** No errors detected` |
+| E-b 桥三腿(`EbT8n*` + `AllThirtyThreeGoldenVectors`) | 同 in-tree | 3/3 PASSED |
+| standalone `bcos-evm/build` | **2026-07-29 21:44:09,未重建** | 对本批**空真**,不作证据(与实施者口径一致) |
+
+**收尾:所有注入(INJ-A / B / C / D / E / E′)全部还原 + 重建 + 复绿,`git status` 干净。**
+
+---
+
+## 汇总判定
+
+**通过。** 修复的语义方向正确(以太坊"零值 ≡ 不存在"),范围最小(1 个生产文件),守护搬家的归属判断正确,三探针判别力自陈**逐例核实成立**,文档 t/u 无灌水,四条诚实边界无掩饰,边界零越界。
+
+需要协调者裁定的三条跟进(均**不影响本批通过**):
+
+1. **(Important)** 新守护的 throw 走 `OpConsensusError` → **INVALID**,而它守护的是节点本地 bug,按 §4.3 原则应是 **-32603**。既有的两处 `applyDiff` tripwire 同病,本批把爆炸半径扩大了一个触发点。
+2. **(Important)** "`existsOne` 把墓碑判为不存在"这条判据,只在 `MemoryStorage` 一侧被 z7 钉住(INJ-D → z7 三条断言全响);**生产实际走的 `MultiLayerStorage::View::readOne → getValue` 一侧零钉住**(INJ-E → 0 红,INJ-E′ 12 红证明实验有效)。一旦漂移,写路守护会在每一次合法零值写入上抛,而 246 例全绿。
+3. **(Minor)** 非 32 字节槽**值**这条路全无测试(不只是不对称无用例,M-1 自己修的 throw 也无覆盖);t① 的 `/apps/HelloWorld` 例子实际抛 `non_hex_input` 而非文档写的 `std::length_error`。
