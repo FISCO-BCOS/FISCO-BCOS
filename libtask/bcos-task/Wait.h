@@ -16,7 +16,6 @@
 
 #pragma once
 #include "AsyncTask.h"
-#include "Task.h"
 #include "Trait.h"
 #include <boost/atomic/atomic_flag.hpp>
 #include <exception>
@@ -59,7 +58,7 @@ constexpr inline struct SyncWait
         auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
                           std::shared_ptr<boost::atomic_flag>& waitFlagSlot,
                           boost::atomic_flag& slotReady,
-                          auto&&... args) -> task::Task<void> {
+                          auto&&... args) -> task::AsyncTask {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)
