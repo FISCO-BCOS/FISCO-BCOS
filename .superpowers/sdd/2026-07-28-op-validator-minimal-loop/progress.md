@@ -153,3 +153,21 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
     - 代码忠实实现了 :219(EngineServiceImpl.h:694 `isthmusActive != (version==4)`,pre-Isthmus+V3 → false!=false → 放行),随后撞上 .cpp:219-225 **无条件**要求 withdrawalsRoot → INVALID;
     - op-geth api_optimism.go 反向:pre-Isthmus **必须** withdrawalsRoot 为 nil(非 nil 才报错)。
     → 故本实现对一个 op-geth 会接受的合法 pre-Isthmus 块投 INVALID。**关键在于桶错了**:超范围应答"我处理不了"(-38005/-32603),而不是"这个块是坏的"——与 §4.3"存储故障绝不能报 INVALID"同一条纪律。最小修法约 3 行:闸改为对 pre-Isthmus 一律 -38005。
+全分支复审 P2/P3/P4 回收(P5 未回)。
+【P2 解码与执行】Critical 3 / Important 3 / Minor 3,三条 Critical **均不在 §6.4 台账内**:
+  C-1 **RLP 长形态长度前缀的前导零未被拒绝**。RLPDecode.h:92-113 只查 `payloadLength < 56`,不查长度字节自身前导零;op-geth rlp/decode.go:1113 `if buffer[start] == 0 → ErrCanonSize`。攻击面:把 `0x7e f9 01 04 …` 改写成 `0x7e fa 00 01 04 …`(payload 一字不动),本实现解出**完全相同**的 DepositTx;而 computeOpTxRoot(OpEngineSeam.h:172-185)对**原始线上字节**建根 → 攻击者只要让 payload.transactionsRoot 与非规范字节自洽,本实现判 VALID、op-geth 判 INVALID。**证伪 spec §6.4 (n) 与 OpEngineSeam.h 两处"已拒绝 Go 会拒的一切非规范编码"的断言。** 测试打不到的原因已定位:OpSchedulerImplTest.cpp:425-476 两个手写 writer 的注释明写"non-canonicality 只放 payload 不放 framing"。
+  C-2 EIP-7702 授权项 yParity 解成 uint256(OpSchedulerImpl.h:477 decodeU256Scalar),op-geth tx_setcode.go 是 **uint8**;yParity 编成 `0x82 0x01 0x00` 时本实现在 OpTransition.cpp:67 `continue` 跳过该授权、块可 VALID,op-geth 整笔解不出判 INVALID。
+  C-3 legacy / 0x01 被硬拒 → op-geth 正常处理的块本实现判 INVALID;spec:311 "唯二 op-geth 能处理而本实现硬拒"**不实**(实为三条,且第三条触发频率最高)。
+  Imp-3 规范性严格层在 OpSchedulerImpl.h 与 EthBlockHeader.cpp **被复制成两份独立实现**,六条严格性用例只测了其中一份。
+  Imp-2 mapOpReceipt 丢 cumulativeGasUsed/contractAddress/output,而这些回执**要落库**,不在 §2 非目标覆盖内。
+  【控制器独立核实 C-1:确认】RLPDecode.h:92-113 逐行读过,确无长度前导零检查;op-geth readUint(decode.go:1098-1114)的 `buffer[start]==0` 分支已打开原文。C-1 成立,且是本轮唯一"可被主动构造、当前即可达"的共识分歧。
+【P3 存储与生命周期】Critical 0 / Important 6 / Minor 4。E-b 世界内四条正确性性质**全部成立**(写回原子性:pushView 在全部成功之后;失败块零残留;桥一块一实例;缓存写穿一致)。
+  I-1 **probeHasStorage 不判零值**(Storage2Ledger.h:682 判据不含 is_zero),而同文件 :486-489 自己写明"生产 HostContext::set 对零值照写不删,真实链账户表必然含零值槽行" → 生产账本上 has_storage 误真 → 消费链已跟到底(state.cpp:259 `.has_initial_storage` → host.cpp:88 `if (acc.has_initial_storage) return true` 的 is_create_collision)→ **同一个 CREATE2 在 op-geth 成功、在本桥 INVALID**。
+  I-2 /apps/ 下任一非 20 字节 hex 表名(BFS 建的表)→ 每个 OP 块永久 -32603。 I-4(新)executeOpBlock 为取一个已知地址的槽做了全量 visitAccounts,白白物化约 26% 账户的完整槽表。
+  I-5(新)SYS_NUMBER_2_BLOCK_HEADER / SYS_NUMBER_2_TXS **同样不写**,§6.4 (f) 只记了 SYS_HASH_2_TX → 通用"按块号取块"对 OP 块抛异常。
+  **I-6 台账 (r)/(s) 被 P3 下修(与批 6 复审不矛盾:批 6 核的是行号与代码形态属实,P3 核的是可达性与后果)**:(r) LedgerMethods.h:235 确为未判 has_value 的解引用,但守门是 :217-218 的 SYS_HASH_2_TXS 行,而 registerOpBlock 连 SYS_NUMBER_2_TXS 都不写 → 对 OP 块**结构性不可达**,台账"会先由 OP 块暴露"的**因果是反的**;(s) 双回调形态确凿,但 double-resume 需异常从 handle.resume() 逃逸,而 bcos-task/Task.h:62-70 有 continuation 时已捕获、syncWait(Wait.h:56-91)根任务全包 try/catch → 后果是**错误分类而非 UB**。
+【P4 代码组织】Critical 0 / Important 5 / Minor 8。
+  I-1 engine 对 SchedulerType 有 **11 条要求,只有 1 条被 c_opMode 编译期探测**(EngineServiceImpl.h:186 只探 executeOpBlock),OpEngineSeam.h:5-26 自称"公开接缝面"却只公开 3 条。给 OpBlockCommitments 加第 9 个成员 → EngineServiceImpl.h:1052-1093 的 else-if 链**一字不改继续编译通过,新字段永不比对 → 错判 VALID**;给 OpBlockEnv 加字段 → engine 静默传 0 → 好块判 INVALID。§6.4 (i)② 只覆盖了反方向。
+  I-2 decodeEip1559Tx/decodeSetCodeTx 是 **40 行克隆、5 处校验各写两遍**——正是 a47b00e78 yParity 事故的同一结构;P4 预言"下一个必然只补一边的是 op-geth ErrTipAboveFeeCap"。
+  I-5 CMake 注释与 §6.4 (i)④ 共同断言的"仓库根无无扩展名文件"**被证伪**(LICENSE 存在)——结论对、论据错,而论据错会让下一个在根加 `version`(真实 C++20 标准头名)的人误判。
+  **【P4 证伪一条既有欠账,控制器复核确认删除】**"EthBlockHeader::decode 靠测试二进制传递链接、生产接入须处理"**不成立**:基线 42e62fcef 的 rlp/ 只有 3 个 .h 无 .cpp,故基线无需该行;本分支新增 bcos-codec/CMakeLists.txt:24 `aux_source_directory(bcos-codec/rlp SRC_LIST)` 已把 EthBlockHeader.cpp 编进 codec,bcos-ledger/CMakeLists.txt:27 链 codec 为 PUBLIC、engine/CMakeLists.txt:14 链 ledger 为 PUBLIC → engine 传递拿到定义与 include。残留仅"engine 未具名 codec"这条弱隐患(改 ledger PUBLIC→PRIVATE 会打断,一行可修)。依赖方向零违反:engine/ 内所有 "bcos-evm" 命中均为注释,无一条 #include。
