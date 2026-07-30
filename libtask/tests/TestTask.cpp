@@ -13,12 +13,15 @@
 #include <boost/multiprecision/fwd.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
+#include <atomic>
 #include <chrono>
+#include <coroutine>
 #include <future>
 #include <iostream>
 #include <memory_resource>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 using namespace bcos::task;
 
@@ -288,6 +291,62 @@ BOOST_AUTO_TEST_CASE(u256)
     handle.start();
     // auto sum = syncWait(testU256());
     // BOOST_CHECK_GE(sum, 3000);
+}
+
+Task<int> crossThreadTask(std::atomic_int& activeResumers)
+{
+    struct CrossThreadAwaitable
+    {
+        std::atomic_int& active;
+        bool await_ready() const noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> handle)
+        {
+            active.fetch_add(1, std::memory_order_relaxed);
+            // Bind the counter directly, not through the awaitable: the awaitable lives in
+            // the coroutine frame, which is destroyed during resume()
+            std::thread([handle, &active = active]() mutable {
+                handle.resume();
+                active.fetch_sub(1, std::memory_order_release);
+            }).detach();
+        }
+        int await_resume() const noexcept { return 42; }
+    };
+    co_return co_await CrossThreadAwaitable{.active = activeResumers};
+}
+
+BOOST_AUTO_TEST_CASE(syncWaitCrossThreadTeardown)
+{
+    // Regression test: syncWait used to keep the result and wake flags on the waiter's
+    // stack and let the waiter destroy the coroutine frame. When the task completed on
+    // another thread, that thread kept touching the waiter's stack and the frame after
+    // the waiter could wake and return (use-after-free, SIGSEGV in the resumer thread).
+    constexpr int WAITERS = 8;
+    constexpr int ITERATIONS = 1000;
+    std::atomic_int activeResumers{0};
+    std::atomic_int successCount{0};
+    std::vector<std::thread> waiters;
+    waiters.reserve(WAITERS);
+    for (int i = 0; i < WAITERS; ++i)
+    {
+        waiters.emplace_back([&]() {
+            for (int j = 0; j < ITERATIONS; ++j)
+            {
+                if (syncWait(crossThreadTask(activeResumers)) == 42)
+                {
+                    successCount.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+        });
+    }
+    for (auto& thread : waiters)
+    {
+        thread.join();
+    }
+    while (activeResumers.load(std::memory_order_acquire) != 0)
+    {
+        std::this_thread::yield();
+    }
+    BOOST_CHECK_EQUAL(successCount.load(), WAITERS * ITERATIONS);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
