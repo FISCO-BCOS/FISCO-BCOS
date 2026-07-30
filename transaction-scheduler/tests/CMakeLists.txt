@@ -21,6 +21,7 @@ set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "FullChainFixtureSmokeTest.cpp" "BaselineSchedulerMPTL1UpgradeTest.cpp"
     "BaselineSchedulerMPTGenesisTest.cpp" "MPTFirstTouchLatencyBench.cpp"
+    "MPTSubsequentTouchP99Gate.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")
@@ -43,4 +44,8 @@ if(MPT_ACCEPTANCE_GATES)
         COMMAND test-transaction-scheduler -t MPTFirstTouchLatencyBenchSuite)
     set_tests_properties(acceptance/MPTFirstTouchLatencyBench PROPERTIES
         LABELS "acceptance;benchmark" ENVIRONMENT "MPT_ACCEPTANCE=1" TIMEOUT 3600)
+    add_test(NAME acceptance/MPTSubsequentTouchP99Gate WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMAND test-transaction-scheduler -t MPTSubsequentTouchP99GateSuite)
+    set_tests_properties(acceptance/MPTSubsequentTouchP99Gate PROPERTIES
+        LABELS "acceptance;gate" ENVIRONMENT "MPT_ACCEPTANCE=1" TIMEOUT 3600)
 endif()
