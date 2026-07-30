@@ -334,6 +334,12 @@ private:
                 // 形态刻意不是 setStorage 前的 assert(!is_zero(value)):上面的 if/else 结构令这种
                 // 断言永不可达、也永不可测(六步自验无从翻红),它防呆而不守护。改为**删槽后置回读**
                 // ——校验的是结果而非意图:removeOne 未生效、或被底层降级成一次写入,都会当场响。
+                // 判据为什么是 existsOne 而不是本文件的 liveContent():removeOne 在
+                // LOGICAL_DELETION 语义的存储(生产 MultiLayerStorage)上写的是 DELETED_TYPE
+                // **墓碑**而非物理擦除,判据若把墓碑当"存在",这条守护就会在每一次正常的零值写入上
+                // 误报。已实测(测试 (z7) 两段:range() 仍能扫到该墓碑行,而 existsOne 对同一键返回
+                // false):existsOne/readOne 在层间解析里已经做完了 liveContent() 对 range() 原始变体
+                // 手工做的那件事(墓碑 → 不存在),它们的返回值里没有变体可判,两者同源不重复。
                 if (co_await storage2::existsOne(
                         m_storage.get(), executor_v1::StateKeyView{tableName, keyView}))
                     throw std::runtime_error(

@@ -978,3 +978,69 @@ TEST(Storage2Ledger, ApplyDiffZeroSlotWriteBackLeakThrows)
     EXPECT_NO_THROW(healthyBridge.applyDiff(zeroDiff));
     EXPECT_FALSE(healthyBridge.poisoned());
 }
+
+// (z7) 协调者裁定要求的实测:(z6) 的后置回读判据用的是 `storage2::existsOne`,而 `removeOne`
+//      在 LOGICAL_DELETION 存储(与生产 MultiLayerStorage 同语义)上写的是 **DELETED_TYPE 墓碑**
+//      而非物理擦除。若 `existsOne` 对墓碑返回 true,(z6) 那条守护就会在**每一次正常的零值写入**
+//      上误报 —— 不是"会响的守护",而是"永远在响"。本例把这件事测掉,而不是靠推理:
+//        第一段:直接测原语 —— removeOne 后 range() 仍能扫到该行(墓碑物理存在),而 existsOne
+//                对同一个键返回 false(层间解析把 DELETED_TYPE 映射为"不存在")。
+//        第二段:测集成 —— 在 LOGICAL_DELETION 存储上跑 applyDiff 的零值分支,必须不抛。
+//      注:后置回读不能写成 "readOne + liveContent()":liveContent() 判别的是 range() 交出的
+//      **原始变体** storage2::StorageValueType<Value>;readOne/existsOne 已经在层间解析里做完了
+//      同一件事(墓碑 → nullopt),它们的返回值里没有变体可判。两者同源、不重复。
+TEST(Storage2Ledger, ExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFalseFire)
+{
+    LogicalDeleteStorage storage;
+    LogicalDeleteAccount acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    const auto slot = slotKey(1);
+    bcos::task::syncWait(acc.setStorage(slot, slotKey(9)));
+
+    const auto tableName = tableNameOf(0x01_address);
+    std::string_view slotView(reinterpret_cast<const char*>(slot.bytes), sizeof(slot.bytes));
+    const bcos::executor_v1::StateKeyView slotStateKey{tableName, slotView};
+
+    ASSERT_TRUE(bcos::task::syncWait(bcos::storage2::existsOne(storage, slotStateKey)));
+    bcos::task::syncWait(bcos::storage2::removeOne(storage, slotStateKey));
+
+    // ── 第一段:原语实测 ───────────────────────────────────────────────────────
+    // 墓碑行物理存在:range() 一定还能扫到这个 32 字节键。
+    bool rangeStillSeesTheRow = false;
+    bcos::task::syncWait([&]() -> bcos::task::Task<void> {
+        auto iterator = co_await bcos::storage2::range(storage, bcos::storage2::RANGE_SEEK,
+            bcos::executor_v1::StateKeyView{tableName, std::string_view{}});
+        while (auto item = co_await iterator.next())
+        {
+            bcos::executor_v1::StateKeyView view(std::get<0>(*item));
+            auto [table, fieldKey] = view.get();
+            if (table != tableName)
+                break;
+            if (fieldKey == slotView)
+                rangeStillSeesTheRow = true;
+        }
+    }());
+    EXPECT_TRUE(rangeStillSeesTheRow)
+        << "LOGICAL_DELETION 存储上 removeOne 应保留墓碑行,本例的前提不成立";
+    // 而 existsOne 必须判"不存在" —— 这正是后置回读判据可用的依据。
+    EXPECT_FALSE(bcos::task::syncWait(bcos::storage2::existsOne(storage, slotStateKey)))
+        << "existsOne 把 DELETED_TYPE 墓碑当成存在:applyModifiedEntry 的删槽后置回读会在每一次"
+           "正常的零值写入上误报,必须换判据";
+
+    // ── 第二段:集成实测 —— 零值分支在墓碑语义存储上不得误报 ─────────────────────
+    Storage2Ledger<LogicalDeleteStorage> bridge(storage);
+    evmone::state::StateDiff nonZeroDiff;
+    nonZeroDiff.modified_accounts.push_back(
+        {0x01_address, 1, 10, std::nullopt, {{evmc::bytes32(slot), evmc::bytes32(slotKey(9))}}});
+    ASSERT_NO_THROW(bridge.applyDiff(nonZeroDiff));
+
+    evmone::state::StateDiff zeroDiff;
+    zeroDiff.modified_accounts.push_back(
+        {0x01_address, 1, 10, std::nullopt, {{evmc::bytes32(slot), evmc::bytes32{}}}});
+    EXPECT_NO_THROW(bridge.applyDiff(zeroDiff));
+
+    auto account = bridge.get_account(0x01_address);
+    ASSERT_TRUE(account.has_value());
+    EXPECT_FALSE(account->has_storage);
+    EXPECT_FALSE(bridge.poisoned());
+}
