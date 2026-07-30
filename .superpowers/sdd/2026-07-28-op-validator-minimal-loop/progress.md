@@ -194,3 +194,13 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
   【复现的失败模式】这条与终审视角 4 的总评同型:**"发现了但没传播到位"**——桥的注释精确预言了生产后果,却始终停在注释,没进 §6.4 台账、没进接入前置清单,于是五轮审查里没人把它当接入阻塞项看。
   【运维可见性叠加】P3 I-2 已实测 `firstError()` 是字面量 "std::exception"(boost non_hex_input 不覆写 what()),故上述 -32603 抵达运维时**理由为空内容**。
 基础设施状况:批 9 连续三次因服务端 529 Overloaded 在第一步终止(工作区每次均干净、零损失);状态分歧审计同因 529 终止,报告未创建。派发暂停,待服务端恢复。
+终审批9 完成(3d96d0665 三问初稿 + 900ee0e22 修复+6例 + 6f4359ac4 墓碑实测 + f735b07a9 文档,**239→246**),复审已派。
+  裁定落地:读路零值槽改为**跳过**(以太坊语义,geth trie 删零值槽);「applyDiff 从不留下零值槽行」这条不变量的守护**移到写路径**,形态为「removeOne 后回读该键,行仍存活则 throw」(后置**结果**校验,非意图断言)。只动 Storage2Ledger.h + Storage2LedgerTest.cpp 两个代码文件。
+  **【本批最有价值的发现·实施者答第二问答出来的】** fetchAllStorage:485 那条 throw **零测试覆盖**(删掉无一用例翻红);而契约②有一条**间接**覆盖 —— Storage2LedgerTest.cpp:274 的 `EXPECT_FALSE(has_storage)`,**其有力恰恰因为 probeHasStorage 不判零值**。故按派单把读路改对之后,applyDiff 即使漏写一行零值槽那条断言照样通过 → **"只改读路造成守护净减少"是确定会发生的,不是风险**。若不在写路补一条真会响的检查,本批是净负。**这正是派单强制先答第二问的收益。**
+  **【实施者拒绝形式主义断言,与 §11 通则独立同构】** 它指出 `assert(!is_zero(value))` 写在 setStorage 前是**同义反复**——该分支结构上不可能带零值走到那里,断言永不触发、永远无法被测试,原话"**测不出来的守护等于没有**"。此认识与批 4 固化进 §11 的通则(风险点必须当场配会翻红的断言)独立同构,由实施者自行推到。
+  **【控制器一条技术警告被实测否决】** 我警告 removeOne 写的是 DELETED_TYPE 墓碑、故 existsOne 可能对刚删的键返回 true 使后置校验"永远在响",并建议改用 readOne + liveContent。实施者**实测**:existsOne 把 DELETED_TYPE **判为不存在**(而 range() 仍能扫到该行),判据保留 existsOne;且 "readOne + liveContent" **在类型上不可组合**(liveContent 判的是 range() 的原始变体,existsOne 已在层间解析里做完同一件事)。**控制器建议的技术判断有误;"要求实测而非推理"这一条是对的,实测把它了结。**
+  三问结论:①applyDiff 是桥世界**唯一**写槽者(:314/319/370/374),绕过它的写入源(transaction-executor/HostContext.h:288、bcos-ledger/Ledger.cpp:1844/1873、旧执行器 EVMHostInterface.cpp:81)**全在桥的世界之外且不经桥写回** → (A) 成立;③第三处 fetchStorage/get_storage **本就一致**,第 4-9 处(建根侧 is_zero→continue 等)亦一致,**没有第五处**。
+  **【实施者从正面找到控制器反推的结论的出处】** #6 `adapter/StateRootCompute.cpp:25-26` 的 `is_zero → continue` 才是"零值槽不进 trie"的**实际实现依据**;控制器原是从 fetchAllStorage 抛异常反推。两条独立路径同结论 → 该结论可当定论。
+  新记 §6.4 条目 t/u;桥 design §6 撤销 rev.2 限定。新发现 #8 `MemoryLedger.cpp:19` + `accounts()` 可变暴露面为 #2 同类缺口,触发面限于测试代码,按裁定不在本批修(正确修法=收窄 accounts() 暴露面,已记 u①)。
+  测试:in-tree **246/246**;standalone 131/131 但**二进制时间戳停在 7-29 未变,对本批是空真、不作红绿证据**(实施者主动声明,唯一见证是 in-tree);test-bcos-engine 干净;E-b 三腿 33×3。三探针各自翻红且**互不重叠**:读路 throw 复原→3 红;probeHasStorage 去零值层→2 红;删写路后置回读→1 红。
+  实施者自陈四条诚实边界(待复审判是否低估):①"每块 -32603" 是读码+同路径实证的**合成推理**,未在真实节点端到端复现;②isZeroSlotValue 对"32 字节键 + 非 32 字节值"有意判"有内容",与 fetchAllStorage 同情形 throw 形成**有意不对称且无专门用例**;③后置回读多一次层内查表,未做性能测量;④**接入阻塞项仍在**:条目 t 第一个生产毒旗触发点(非 20 字节 hex 的 /apps/ 表名)本批未修,它牵涉"OP 状态根如何覆盖非 20 字节地址的 FISCO 原生账户"这一**尚无裁定的语义问题**。
