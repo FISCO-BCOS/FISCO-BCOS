@@ -142,3 +142,14 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
   其余 Minor: M-1 命名债(审查者判实施者"不改名"的取舍**方向反了**——一次性重定向成本 < 持续误读成本,但有注释兜底故仅 Minor,下次触碰时改名+注记);M-2 EngineServiceImpl.h:1243 注释方位词写反;M-4 断言 3 对 0x02/0x04 用同一谓词未用尽判别力;M-5 OpSchedulerImpl.h:717 表名再发布无测试锚定(替身与断言同源,沿袭 c_ethBlockHeaderTable 既有形状);M-7 spec 与 README 日期口径不一。
   零漂移独立复核: git diff -w 42 增 10 删、非注释删除 0;OP 依赖名未进签名——**由 test-bcos-engine 用无该成员的 StubScheduler/BloomScheduler 实例化通过反证**(比读代码更强的证据)。
   ⚠️ spec §11 修订与 M-6 补记**故意延后**:5 个全分支复审视角正在读 spec 做一致性核对,此刻改它会让 P5 读到移动的靶子、行号失效。待 5 视角回收后合并处置。
+全分支复审 P1(共识语义)回收:Critical 3 / Important 7 / Minor 5。报告 wb-review-p1-report.md。
+  C1 baseFeePerGas **零校验**(EngineServiceImpl.cpp:334 与 .h:978 原样送进重组头与 OpBlockEnv;validateOpNewPayloadRequest .cpp:185-302 与六项比对面 .h:1044-1098 全文无该字段)——op-geth consensus/misc/eip1559/eip1559.go:53-56 强制 expectedBaseFee 相等。已记账条目 e,但**优先级被低估且零测试覆盖**(gate 测试 :534 直取向量 baseFee,变异矩阵无该项 → "33/33 全绿"对此零信息)。
+  C2 -38005 闸放行 pre-Isthmus V3 → 随即必判 INVALID。C3 bad_alloc 等本地故障被 OpSchedulerImpl 的 catch(...) 改写成 ConsensusError → engine 判 INVALID(engine 两道 -32603 防线对该路径是**死代码**)。
+  I1 FCU safe/finalized 零哈希答 SYNCING 致永久停滞 / I2 FCU head 跳跃>1 抛协议外异常 / I3 缺 gasUsed<=gasLimit 头校验 / I4 c_opMode 塌陷护栏**只挡 V4,V3 橡皮图章仍开**(台账 m 只覆盖 V4) / I5-I7 为记账项复核成立。
+  **P1 主动删除两条既有欠账表述(有 op-geth 出处,控制器采纳)**: ①gasLimit 变化率对 OP 链不适用——op-geth eip1559.go:37-42 的 `if !config.IsOptimism()` 明确放行瞬时调整,本实现只查 ≤2^63-1 是**正确对齐而非缺口**;②excessBlobGas 恒钉 0 同样正确——CalcExcessBlobGas 对 OP 短路 return 0,Jovian 也不例外。
+  【控制器独立核实 C2,结论比 P1 更强:这是 spec 自身两处规定打架】
+    - spec:64 目标版本 = "newPayloadV4 + FCU V3(**Isthmus/Jovian**)" → pre-Isthmus **设计上不在范围内**;
+    - spec:219 却把 -38005 闸写成双向 "Isthmus+ 禁 V3,**pre-Isthmus 禁 V4**" → 即闸**故意放行** pre-Isthmus V3;
+    - 代码忠实实现了 :219(EngineServiceImpl.h:694 `isthmusActive != (version==4)`,pre-Isthmus+V3 → false!=false → 放行),随后撞上 .cpp:219-225 **无条件**要求 withdrawalsRoot → INVALID;
+    - op-geth api_optimism.go 反向:pre-Isthmus **必须** withdrawalsRoot 为 nil(非 nil 才报错)。
+    → 故本实现对一个 op-geth 会接受的合法 pre-Isthmus 块投 INVALID。**关键在于桶错了**:超范围应答"我处理不了"(-38005/-32603),而不是"这个块是坏的"——与 §4.3"存储故障绝不能报 INVALID"同一条纪律。最小修法约 3 行:闸改为对 pre-Isthmus 一律 -38005。
