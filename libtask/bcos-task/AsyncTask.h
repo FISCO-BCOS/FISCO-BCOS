@@ -16,7 +16,9 @@
 
 #pragma once
 #include <coroutine>
+#include <cstdint>
 #include <exception>
+#include <atomic>
 
 namespace bcos::task
 {
@@ -55,8 +57,71 @@ public:
     AsyncTask(AsyncTask&& task) noexcept = delete;
     AsyncTask& operator=(const AsyncTask&) = delete;
     AsyncTask& operator=(AsyncTask&& task) = delete;
-    ~AsyncTask() noexcept = default;
+    ~AsyncTask() noexcept  = default;
     void start() { m_handle.resume(); }
+
+private:
+    std::coroutine_handle<promise_type> m_handle;
+};
+
+enum class waitStatus: uint8_t {
+    INIT,
+    WAITING,
+    FINISHED,
+};
+
+class [[nodiscard]] SyncTask
+{
+public:
+    struct promise_type
+    {
+        // 持有handle的计数器
+        std::atomic<uint8_t> m_count{2};
+        // 用于记录任务的等待状态以及获取状态的引用
+        std::atomic<waitStatus> m_status{waitStatus::INIT};
+
+        static constexpr std::suspend_always initial_suspend() noexcept { return {}; }
+        static constexpr auto final_suspend() noexcept
+        {
+            struct FinalAwaitable
+            {
+                static constexpr bool await_ready() noexcept { return false; }
+                static void await_suspend(std::coroutine_handle<promise_type> handle) noexcept
+                {
+                    if (handle.promise().m_count.fetch_sub(1) == 1)
+                    {
+                        handle.destroy();
+                    }
+                }
+                constexpr void await_resume() noexcept {}
+            };
+            return FinalAwaitable{};
+        }
+        SyncTask get_return_object()
+        {
+            auto handle = std::coroutine_handle<promise_type>::from_promise(
+                *static_cast<promise_type*>(this));
+            return SyncTask{handle};
+        }
+        static void unhandled_exception() { std::rethrow_exception(std::current_exception()); }
+        constexpr static void return_void() noexcept {}
+    };
+
+    explicit SyncTask(std::coroutine_handle<promise_type> handle) : m_handle(handle) {}
+    SyncTask(const SyncTask&) = delete;
+    SyncTask(SyncTask&& task) noexcept = delete;
+    SyncTask& operator=(const SyncTask&) = delete;
+    SyncTask& operator=(SyncTask&& task) = delete;
+    ~SyncTask() noexcept 
+    {
+        if (m_handle.promise().m_count.fetch_sub(1) == 1)
+        {
+            m_handle.destroy();
+        }
+    }
+    void start() { m_handle.resume(); }
+
+    std::atomic<waitStatus>& getStatus() { return m_handle.promise().m_status; }
 
 private:
     std::coroutine_handle<promise_type> m_handle;
