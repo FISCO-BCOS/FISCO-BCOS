@@ -243,3 +243,187 @@ payload 值离开语料常量,`encode()` 就会变,因此该敏感性用例在�
   结果:**239/239 全绿**。
 - **结论**:**证实**。`gasLimit` 字段的全部判别力**集中在一份向量上**,
   该向量一旦被删/改,整个 `gasLimit` 映射即刻零守护。
+
+---
+
+## 5. P3 · 存储与生命周期
+
+两条都是**只加探针,不改生产代码**(`Storage2LedgerTest.cpp` 末尾临时追加),
+探针以"缺陷不存在"为断言,**红 = 缺陷存在**。
+
+### P3 I-1 零值槽被算作"有存储"
+
+- **来源**:`wb-review-p3-report.md` I-1
+- **改了什么**:`Account(storage, 0x01_address, false).create()` 后,用
+  `storage2::writeOne(storage, StateKey{tableNameOf(addr), <32 字节键>}, Entry{32 个 0 字节})`
+  **绕过 `applyDiff`** 直写一行零值槽(模拟通用 FISCO 执行器 `HostContext::set` 的写法),
+  再读 `bridge.get_account(addr)->has_storage`。
+- **实测现象**:`PROBE[P3-I1] has_storage=1 poisoned=0`
+- **结论**:**证实**。`probeHasStorage` 对零值槽**静默答 true 且不毒旗**,
+  与同文件 `fetchAllStorage` 对零值槽**抛异常**的判据完全相反 ——
+  报告描述的不对称属实。E-b 世界今日不可达,编排接入后即 CREATE2 碰撞判定分歧。
+
+### P3 I-2 `/apps/` 下非 20 字节 hex 表名 ⇒ 毒旗
+
+- **来源**:`wb-review-p3-report.md` I-2
+- **改了什么**:往 `SYS_TABLES` 插一行键 `/apps/HelloWorld`(值为任意标记串),
+  再调 `bcos::evm::stateRootOf(bridge)`。
+- **实测现象**:
+
+  ```
+  PROBE[P3-I2] threw=0 root=a6b5d50f…39b71 poisoned=1 firstError=std::exception
+  ```
+
+- **结论**:**证实**。`stateRootOf` **不抛**、返回一个(错误的)根,但 `poisoned()==true` ——
+  正是 `OpSchedulerImpl.h:888/893` 会转成 `OpStorageError` → engine **-32603** 的形态,
+  且**每块必走**。
+- **一条原报告没提到、但更糟的实测细节**:`firstError()` 的内容是字面的 **`"std::exception"`**,
+  不是 `boost::algorithm::non_hex_input` 的任何有用信息
+  (boost 的该异常类型没有覆写 `what()`,落到 `std::exception::what()` 的默认串)。
+  也就是说,一条既有链上的运维人员看到的是"每个块 -32603,原因:`std::exception`" ——
+  **零定位能力**。这与 P5 的 I-5(信息湮灭点)是同一类问题,建议合并处置。
+
+### P3 I-3(性能:`visitAccountsImpl` 无谓物化)
+
+- **无法执行 / 不适用**。该 `[需验证]` 项写的是"**改完之后**跑 standalone 131 例即可"——
+  它是对一个**尚未落地的修法**的验收步骤,而不是一个可以验证既有论断的实验。
+  本次不实现修法,故不执行;记录在案。
+
+---
+
+## 6. P1 · 共识语义
+
+三条,前两条只加探针,C3 需要一行生产注入。
+
+### P1 C2 pre-Isthmus 块被判 INVALID 而非 -38005
+
+- **来源**:`wb-review-p1-report.md` C2(第 230 行 `[需验证]`)
+- **改了什么**:`EngineOpBranchTest.cpp` 末尾临时加探针 ——
+  `makeOpRequest({}, kPreIsthmusTimestamp, …)`(时间戳 999 < `kIsthmusTime`=1000),
+  把 `withdrawalsRoot` 置 `std::nullopt`(Holocene 块的合法形态),投 `newPayload(request, 3)`。
+  (与原报告"把 `isthmusTime` 改大"等价,且不用动 fixture。)
+- **实测现象**:
+
+  ```
+  PROBE[P1-C2] status=1 (Invalid=1) validationError=withdrawalsRoot is required on the OP path (Isthmus+)
+                latestValidHash=<none>
+  ```
+
+- **结论**:**证实**,连 `validationError` 文本都与原报告预测**逐字一致**。
+  step 1 的闸("fork 与版本必须一致")放行了 pre-Isthmus + V3,随后 Isthmus-only 的
+  `withdrawalsRoot` 静态校验把一条**完全合法的 Holocene 块**判成 INVALID。
+
+### P1 C3 本地 `bad_alloc` 被重分类成共识否决
+
+- **来源**:`wb-review-p1-report.md` C3(第 277 行 `[需验证]`)
+- **改了什么**:`OpSchedulerImpl.h` 的 `executeOpBlock` Step 3+4 的 `try` 内**第一行**插
+  `throw std::bad_alloc{};`(即报告写的"step 3 前插一行")。
+- **实测现象**(`EngineNewPayloadGate.IsthmusSingleTransfer`):
+
+  ```
+  isthmus_transfer_basic: expected VALID,
+    validationError=OP block execution rejected the payload: std::bad_alloc
+  ```
+
+  状态码实测为 `1` = `Invalid`(gtest 打印 `Which is: 1-byte object <01>` vs 期望 `<00>`=Valid)。
+- **结论**:**证实**。一次纯本地的内存耗尽产出的是
+  **INVALID + latestValidHash = parentHash**,而不是 -32603 ——
+  engine 层的两道 `catch(...)` → -32603 防线对这条路径确实是死代码
+  (`OpSchedulerImpl` 在更内层已把它改写成 `OpConsensusError`)。
+
+### P1 I1 FCU 零 safe/finalized 哈希 ⇒ SYNCING
+
+- **来源**:`wb-review-p1-report.md` I1(第 316 行 `[需验证]`)
+- **改了什么**:`EngineOpBranchTest.cpp` 末尾临时加探针 ——
+  `headBlockHash` = 已登记块,`safeBlockHash = finalizedBlockHash = bcos::h256{}`,
+  `payloadAttributes = nullptr`,调 `updateForkchoice(..., 3)`。
+- **实测现象**:
+
+  ```
+  PROBE[P1-I1] status=2 (Valid=0, Syncing=2) latestValidHash=<none> trackedSafe=<none>
+  ```
+
+- **结论**:**证实**,与原报告预测一致。而且**跟踪态也没推进**
+  (`getSafeBlockNumber()` 仍是 `<none>`)—— 这正是"下一轮 CL 还发同样的零哈希 → 永久停滞"
+  的机制,原报告推断的这一半也一并坐实。
+
+---
+
+## 7. P4 · 代码组织
+
+### P4 §3.1 `OpBlockCommitments` 加成员 ⇒ engine 比对链静默漏比(含绊线验证)
+
+- **来源**:`wb-review-p4-report.md` §3.1
+- **实验 A(证明漏洞存在)**:在 `OpEngineSeam.h:121` 后加 `bcos::h256 probe;` 成员,
+  **不加**任何绊线 → **编译通过,239/239 全绿**。
+  ⇒ **证实**:比对链对聚合元数变化零感知。
+- **实验 B(证明修法可行)**:保留 `probe` 成员,在 `EngineServiceImpl.h:1050` 之后加
+  报告提议的结构化绑定绊线(8 个名字)→ **编译失败**:
+
+  ```
+  engine/bcos-engine/EngineServiceImpl.h:1052:21: error:
+    type 'const OpBlockCommitments' decomposes into 9 elements, but only 8 names were provided
+  ```
+
+  (报告预测的文本是 `cannot decompose ... into 8 names`,clang 21 的实际措辞是
+  `decomposes into 9 elements, but only 8 names were provided` —— 语义完全一致,仅措辞差异。)
+- **实验 C(证明修法无副作用)**:去掉 `probe` 成员、**保留**绊线 →
+  **239/239 全绿 + `test-bcos-engine` 全绿**。特别地,`EngineOpBranchTest.cpp:375` 的
+  `static_assert(!GenericEngineService::c_opMode)` 与通用组合根的实例化**都没有受影响**,
+  印证了"依赖类型上的结构化绑定在模板里合法,实例化期才解析,不破坏库纯净"这条论证。
+- **结论**:**三条全部证实**。这是本次验证里**最便宜且已实测可落地**的修法(1 行 + 8 个名字)。
+
+### P4 §3.3 I-1 concept 的嵌套 `requires` 在通用组合根上是软失败还是硬错
+
+这是派单单独点名的一条,做了两层验证。
+
+- **第一层:最小 TU(语言层面)**。scratchpad `p4_concept.cpp`,
+  用 `OpLike`(有全部成员)/ `GenericLike`(一个都没有)两个 stand-in,
+  concept 同时含
+  (i) 形参 `typename S::BlockEnv const& env` / `typename S::ExecuteResult const& r`,
+  (ii) 嵌套 `requires std::derived_from<typename S::ConsensusError, std::exception>;` ×2。
+  `c++ -std=c++20 -fsyntax-only` → **exit 0**,即
+  `static_assert(OpSchedulerSeam<OpLike>)` 与 `static_assert(!OpSchedulerSeam<GenericLike>)`
+  **同时成立** ⇒ **软失败**。
+- **第二层:真类型(工程层面,更有说服力)**。在 `EngineOpBranchTest.cpp` 里临时落地
+  P4 提议的 `OpSchedulerSeam`(**逐字包含**那两条嵌套 `requires`,并把
+  `BlockEnv` 的 9 个字段全部展开),对**真实的**
+  `OpScheduler`(= `OpSchedulerImpl<ViewType>`)与
+  `bcos::scheduler_v1::SchedulerSerialImpl` 分别求值:
+
+  ```cpp
+  static_assert(OpSchedulerSeam<OpScheduler>);
+  static_assert(!OpSchedulerSeam<bcos::scheduler_v1::SchedulerSerialImpl>);
+  static_assert(EngineLike<OpScheduler>::c_opMode);
+  static_assert(!EngineLike<bcos::scheduler_v1::SchedulerSerialImpl>::c_opMode);
+  ```
+
+  **四条 `static_assert` 全部通过,编译零错误,探针用例绿。**
+- **结论**:**证实软失败**。P4 §3.3 方案**不需要退化**为
+  「探针保持现状 + `if constexpr` 内首行 `static_assert`」——完整版可以直接驱动探针本身。
+  (退化版也在最小 TU 里一并试编过,同样编译通过,可作为备选。)
+  这条与 `c0288b8b0` 踩过的坑**不是同一类**:那次的失败是 OP 依赖名进了**成员函数签名**
+  (签名在类模板被命名时就急切实例化,`if constexpr` 救不了);
+  而 concept 的 `requires` 表达式内部是替换失败友好的,两者的求值时机不同。
+
+### P4 §7.1 CMake 护栏(「编入源码 vs 链 engine 库二选一」)
+
+- **来源**:`wb-review-p4-report.md` §7.1
+- **实验 A(护栏无假阳性)**:只加报告提议的 4 行 `get_target_property` + `IN_LIST` + `FATAL_ERROR`,
+  **不加**违规 link → 在**全新目录** `scratchpad/cfgA` 上 `cmake -B … -S .` → **exit 0,配置成功**。
+- **实验 B(护栏真会响)**:再加一行
+  `target_link_libraries(bcos-evm-opstack-tests PRIVATE engine)` → 全新目录 `cfgB` →
+  **exit 1**:
+
+  ```
+  CMake Error at bcos-evm/test/CMakeLists.txt:156 (message):
+    bcos-evm-opstack-tests linked `engine` AND compiles in EngineServiceImpl.cpp
+  ```
+
+- **实验 C(证明"今天确实静默"这个前提)**:去掉护栏、**保留**违规 link,
+  在 in-tree `build/` 上 reconfigure + 构建 → **链接成功、239/239 全绿**,
+  链接器只给了一条与本议题无关的
+  `ld: warning: ignoring duplicate libraries: …` 提示,**没有任何 duplicate symbol 错误**。
+  ⇒ 注释里"会静默链过、失败形态是无人察觉的陈旧定义"这条论断**实测属实**,
+  §7.1 提议的 4 行护栏是可落地的可执行断言。
+- **结论**:**三条全部证实**。
