@@ -237,10 +237,20 @@ public:
             auto timeStr = forkName.substr(atPos + 6);  // "AtTime" = 6 chars
             try
             {
+                // Handle 'k' suffix meaning ×1000 (e.g., "15k" = 15000)
+                int64_t transitionTime = 0;
+                if (!timeStr.empty() && timeStr.back() == 'k')
+                {
+                    transitionTime = std::stoll(timeStr.substr(0, timeStr.size() - 1)) * 1000;
+                }
+                else
+                {
+                    transitionTime = std::stoll(timeStr);
+                }
                 m_forkTransition = ForkTransition{
                     test::forkNameToRevision(fromFork),
                     test::forkNameToRevision(toFork),
-                    std::stoll(timeStr)
+                    transitionTime
                 };
             }
             catch (...)
