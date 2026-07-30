@@ -171,3 +171,14 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
   I-2 decodeEip1559Tx/decodeSetCodeTx 是 **40 行克隆、5 处校验各写两遍**——正是 a47b00e78 yParity 事故的同一结构;P4 预言"下一个必然只补一边的是 op-geth ErrTipAboveFeeCap"。
   I-5 CMake 注释与 §6.4 (i)④ 共同断言的"仓库根无无扩展名文件"**被证伪**(LICENSE 存在)——结论对、论据错,而论据错会让下一个在根加 `version`(真实 C++20 标准头名)的人误判。
   **【P4 证伪一条既有欠账,控制器复核确认删除】**"EthBlockHeader::decode 靠测试二进制传递链接、生产接入须处理"**不成立**:基线 42e62fcef 的 rlp/ 只有 3 个 .h 无 .cpp,故基线无需该行;本分支新增 bcos-codec/CMakeLists.txt:24 `aux_source_directory(bcos-codec/rlp SRC_LIST)` 已把 EthBlockHeader.cpp 编进 codec,bcos-ledger/CMakeLists.txt:27 链 codec 为 PUBLIC、engine/CMakeLists.txt:14 链 ledger 为 PUBLIC → engine 传递拿到定义与 include。残留仅"engine 未具名 codec"这条弱隐患(改 ledger PUBLIC→PRIVATE 会打断,一行可修)。依赖方向零违反:engine/ 内所有 "bcos-evm" 命中均为注释,无一条 #include。
+`[需验证]` 实验统一执行完成(wb-verify-report.md,4 次增量提交):**20 个实验,19 证实 / 1 证伪**。全部注入已还原,build 重配重建,in-tree 239/239 + test-bcos-engine 绿,standalone 131/131,git status 干净。
+  【硬证据升级】P2 C-1 从"读代码得出"升级为**实测**:`0xf9 0x00 LL` 被接受,且 txRoot **实算出两个不同值**(0xe7fe64f3… vs 0xd1c4b2f3…)→ 共识分歧不再是推理。同时证伪 OpEngineSeam.h:156-163 的"解码器已拒绝 Go 会拒的一切非规范编码"。
+  P2 C-2 实测(auth.v=256 被接受)/ P3 I-1 实测(零值槽上 has_storage=1)/ P3 I-2 实测(/apps/HelloWorld → poisoned=1)/ P1 C2 实测(pre-Isthmus+V3 → Invalid,validationError 逐字命中预测)/ P1 C3 实测(bad_alloc → INVALID,消息 "…rejected the payload: std::bad_alloc")/ P1 I1 实测(零 safe/finalized → Syncing,tracked head 未推进)。
+  P5 E3 **8/8**:每一条零覆盖静态校验删掉后 239/239 全绿。E5(expectExhausted 的 throw 可删,8 个调用点全无守护)、E6(gasLimit 只靠 isthmus_big_block_130tx 单条向量)同样证实。
+  **【批 8 解锁】P4 §3.3 实测:嵌套 `requires std::derived_from<typename S::ConsensusError, std::exception>` **软失败**,两次独立证明(最小 TU + 真实 OpSchedulerImpl vs SchedulerSerialImpl,四条 static_assert 全过)→ concept 方案**无需退化**,c0288b8b0 那类硬错不会重演。**
+  P4 §3.1 三腿全证实:给结构体加成员**静默编译通过且全绿**(= 新字段永不比对的后果链闭合);结构化绑定 tripwire 硬报错;tripwire 在 8 成员下无害(含通用组合根)。§7.1 三腿证实 CMake 护栏可真正强制。
+  **【E4 证伪 —— 且证伪的是测试自己的注释】** 删掉已知块短路后测试确实翻红,但**不是文档所述的机制**:step 3c 抛 OpExecutionInternalError("non-tip parent not supported",即生产 -32603),在第一个子用例就中止整个 TEST。单跑 isthmus_deposit_only 得到同一异常 → `EngineNewPayloadGateTest.cpp:1216-1234` 声称"两个子用例都以 INVALID 返回、经由两种不同机制"**两处都假**,且与其上方 10 行的放置理由自相矛盾。
+  【实验者自己抓到的操作事故·比结论更值钱】它险些记下错误的见证声明:`Storage2LedgerTest.cpp` 与 `OpSchedulerImplTest.cpp` **同样在 if(TARGET bcos-framework) 门控内**,故 **standalone 对本轮每一个实验都是空真**,不止 engine 那几个。发现途径:standalone 重建报 "Built target" 但**二进制日期是 7-29、源码是 7-30**。→ 印证批 6 复审提的 §11 三句修订(点名见证目录 / 空真不计入证据 / 每批至少一个真见证)是必需的,已在报告 §0 更正。
+  【两条对既有结论的精化】①E1c/E2b(实验者自加的反向对照)**收窄** P5 I-1:这两个字段**并非无人读**——任何偏离语料常量的取值会让 11 个测试翻红;真正的盲区精确地是"硬编码成语料常量"这一种,而这恰是 prevRandao 最现实的回归(语料 0x0,生产是 L1 mixDigest)。②P3 I-2 **比原报更糟**:`firstError()` 是字面量 `"std::exception"`(boost 的 non_hex_input 从不覆写 what()),运维在既有链上会看到每个块都 -32603 且**理由为空内容**。
+  未做项:P5 建议的 4 条 UB 检查的 ASan 变体——语料的 optional 恒有值,普通构建下解引用根本不发生,ASan 无信号;要观察它需要 I-2 建议的**新测试**,不属本验证轮。
+终审批9 已派(账本桥零值槽,P3 I-1 已实测确认存在)。构建目录移交批 9;状态分歧审计(只读)并行中。
