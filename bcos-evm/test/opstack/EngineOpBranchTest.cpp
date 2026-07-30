@@ -511,6 +511,7 @@ struct StubOpScheduler
 
     static constexpr std::string_view c_ethBlockHeaderTable =
         bcos::evm::engine::SYS_ETH_BLOCK_HEADER;
+    static constexpr std::string_view c_ethRawTxTable = bcos::evm::engine::SYS_ETH_HASH_2_RAWTX;
 
     // ---- script ----
     ExecuteResult result;
@@ -1540,4 +1541,115 @@ TEST(EngineOpBranch, DriftedOpModeProbeRefusesV4InsteadOfRubberStamping)
     // no opinion about; it lands on the generic parentBeaconBlockRoot rule instead.
     auto v3Status = bcos::task::syncWait(service.newPayload(request, 3));
     EXPECT_NE(v3Status.status, bcos::engine::PayloadValidationStatus::Valid);
+}
+
+// ══════════ final review batch 6: raw-envelope transaction registry (decision (B)) ══════════
+//
+// `registerOpBlock` now stores each transaction's raw EIP-2718 envelope in the OP-specific
+// `s_eth_hash_2_rawtx`, keyed by `keccak(envelope)` — the same key `SYS_HASH_2_RECEIPT` uses, so
+// one key resolves both the transaction and its receipt.
+//
+// The generic `SYS_HASH_2_TX` stays empty for OP blocks BY DESIGN, and the last assertion below
+// pins that: writing an Ethereum envelope there would not fail loudly (every
+// `bcostars::Transaction` field is `optional` and tars' tag scanner swallows decode errors), it
+// would yield a plausible-looking transaction with a recomputed hash that does not match its own
+// key — reaching `eth_getTransactionByHash` and txpool's `requestMissedTxs`. "Not written" is the
+// feature; the assertion is what stops someone from "fixing" it later.
+namespace
+{
+/// Canonical envelopes for the three types the OP decoder accepts. Built with
+/// `evmone::rlp::encode_tuple` (canonical by construction, which B4-2's strictness requires) so
+/// the stored bytes can be decoded back through the production decoder — that is what proves the
+/// value is readable *as an envelope*, not merely byte-equal.
+///
+/// `r = 1` is load-bearing for the two signed types, for the reason documented at length in
+/// OpSchedulerImplTest.cpp: it is a valid secp256k1 x-coordinate, so `ecrecover` inside
+/// `decodeOneRawTx` always succeeds and the decode cannot fail for an unrelated reason.
+bcos::bytes makeDepositEnvelope()
+{
+    auto body = evmone::rlp::encode_tuple(evmc::bytes32{}, bcos::evm::opstack::OP_DEPOSITOR,
+        bcos::evm::opstack::OP_L1_BLOCK, intx::uint256{0}, intx::uint256{0}, uint64_t{1000000},
+        uint64_t{0}, evmc::bytes{});
+    bcos::bytes out{0x7e};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+bcos::bytes makeEip1559Envelope()
+{
+    auto body = evmone::rlp::encode_tuple(uint64_t{kChainId}, uint64_t{0}, intx::uint256{0},
+        intx::uint256{0}, uint64_t{21000}, evmc::address{}, intx::uint256{0}, evmc::bytes{},
+        evmone::state::AccessList{}, intx::uint256{0}, intx::uint256{1}, intx::uint256{1});
+    bcos::bytes out{0x02};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+bcos::bytes makeSetCodeEnvelope()
+{
+    auto body = evmone::rlp::encode_tuple(uint64_t{kChainId}, uint64_t{0}, intx::uint256{0},
+        intx::uint256{0}, uint64_t{21000}, evmc::address{}, intx::uint256{0}, evmc::bytes{},
+        evmone::state::AccessList{}, evmone::state::AuthorizationList{}, intx::uint256{0},
+        intx::uint256{1}, intx::uint256{1});
+    bcos::bytes out{0x04};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+}  // namespace
+
+// (z) Batch 6: all three envelope types are stored verbatim, under keccak(envelope), and remain
+// decodable as envelopes; the receipt shares the key; and `SYS_HASH_2_TX` stays empty.
+TEST(EngineOpBranch, RawTransactionEnvelopesAreRegisteredUnderEthTxHash)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    registerVerifiedBlock(fixture.storage, parentHash, 0);
+
+    const std::vector<bcos::bytes> envelopes{
+        makeDepositEnvelope(), makeEip1559Envelope(), makeSetCodeEnvelope()};
+
+    auto request = makeOpRequest(envelopes, kIsthmusTimestamp, parentHash);
+    sealWithBlockHash(request);
+    const auto header = rebuiltHeader(request);
+    fixture.scheduler.result.commitments = matchingCommitments(request, header);
+    fixture.scheduler.result.receipts = {makeReceipt(fixture.receiptFactory, 21000),
+        makeReceipt(fixture.receiptFactory, 22000), makeReceipt(fixture.receiptFactory, 23000)};
+
+    ASSERT_EQ(bcos::task::syncWait(fixture.service.newPayload(request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
+
+    auto& hashImpl = *fixture.blockFactory->cryptoSuite()->hashImpl();
+    const char* names[] = {"deposit 0x7E", "eip1559 0x02", "setcode 0x04"};
+    for (std::size_t index = 0; index < envelopes.size(); ++index)
+    {
+        SCOPED_TRACE(names[index]);
+        auto const& envelope = envelopes[index];
+        const auto txHash = hashImpl.hash(envelope);
+
+        // 1. Stored under keccak(envelope) — the Ethereum tx hash.
+        auto stored = readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_HASH_2_RAWTX,
+            bcos::concepts::bytebuffer::toView(txHash));
+        ASSERT_TRUE(stored.has_value());
+        // 2. Byte-for-byte verbatim.
+        EXPECT_EQ(stored->get(), asStringView(envelope));
+        // 3. Readable with ENVELOPE semantics: the production decoder accepts the stored bytes
+        //    and recovers the right shape (deposit vs typed transaction). Byte equality alone
+        //    would still pass if the value had been stored in some other encoding that happens
+        //    to compare equal to what the test wrote — this asserts what the bytes MEAN.
+        const bcos::bytes roundTripped(stored->get().begin(), stored->get().end());
+        auto decoded = bcos::evm::engine::detail::decodeOneRawTx(roundTripped, kChainId);
+        EXPECT_EQ(std::holds_alternative<bcos::evm::opstack::DepositTx>(decoded.tx), index == 0);
+
+        // 4. Same key resolves the receipt (the cross-verification the one-key design buys).
+        EXPECT_TRUE(readEntry(fixture.storage, bcos::ledger::SYS_HASH_2_RECEIPT,
+            bcos::concepts::bytebuffer::toView(txHash))
+                        .has_value());
+
+        // 5. The generic table stays EMPTY — deliberate, see this section's header comment.
+        EXPECT_FALSE(readEntry(fixture.storage, bcos::ledger::SYS_HASH_2_TX,
+            bcos::concepts::bytebuffer::toView(txHash))
+                         .has_value())
+            << "SYS_HASH_2_TX must stay empty for OP blocks: an Ethereum envelope there decodes "
+               "into a plausible-looking transaction whose hash does not match its key";
+    }
 }

@@ -713,6 +713,8 @@ public:
     using StorageError = OpStorageError;
     /// Table for the ETH/OP header RLP written on VALID (design §6.1 step 6, 裁定 B5).
     static constexpr std::string_view c_ethBlockHeaderTable = SYS_ETH_BLOCK_HEADER;
+    /// Table for the raw EIP-2718 transaction envelopes written on VALID (batch 6, decision (B)).
+    static constexpr std::string_view c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX;
 
     /// The six-way comparison surface (+ the two §5.1 seal outputs) in bcos:: types.
     static OpBlockCommitments commitmentsOf(const OpExecuteBlockResult& result)

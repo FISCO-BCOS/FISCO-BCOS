@@ -1170,16 +1170,34 @@ private:
         // value (`TransactionReceipt::encode`) as `bcos-ledger/LedgerMethods.h:106-119`'s
         // `prewriteBlockToBuffer`.
         //
-        // NOT written here, and deliberately called out because the very precedent cited above
-        // does write it: **`SYS_HASH_2_TX`** (`LedgerMethods.h:121-155`, the same function's next
-        // block). Consequence: for an OP-accepted block the RECEIPT is retrievable by transaction
-        // hash, but the TRANSACTION ITSELF is not -- any read path that resolves a tx hash to the
-        // transaction (an `eth_getTransactionByHash`-shaped one) has no data for OP blocks. The OP
-        // path carries raw EIP-2718 envelopes rather than `bcos::protocol::Transaction` objects,
-        // so writing that table is a real decision (what to store, in whose encoding), not an
-        // oversight to patch in passing -- it is on spec §6.4's ledger as item (f), disclosed
-        // there and in bcos-evm/README.md's "明确不构成的宣称" list. Before this comment it was a
-        // silent omission (final review, perspective 4, Critical-1).
+        // The transaction body IS now stored (final review batch 6) -- but in the OP-specific
+        // `s_eth_hash_2_rawtx`, as the raw EIP-2718 envelope, NOT in the generic `SYS_HASH_2_TX`
+        // that the cited precedent writes (`LedgerMethods.h:121-155`). That table stays empty for
+        // OP blocks **on purpose**, and the reason is the opposite of an omission:
+        //
+        //   * `SYS_HASH_2_TX` holds tars-encoded `bcos::protocol::Transaction`. Its readers
+        //     (`Ledger.cpp:1440-1443`, `LedgerMethods.h:235-239`, lightnode, storage-tool) pass
+        //     the bytes straight to `createTransaction(..., checkSig=false, checkHash=false)`.
+        //     An Ethereum envelope there does NOT fail loudly: every `bcostars::Transaction`
+        //     field is `optional` and tars' tag scanner swallows decode errors, so it yields an
+        //     all-default object that the factory then stamps with a freshly computed,
+        //     self-consistent hash -- a non-null, plausible transaction whose hash does not equal
+        //     the key it was stored under, which nobody checks. It would surface in
+        //     `eth_getTransactionByHash` responses and in txpool's `requestMissedTxs`, i.e.
+        //     consensus proposal verification.
+        //   * Mapping the envelope into a real `protocol::Transaction` is not available either:
+        //     the only such mapper (`Web3Transaction::takeToTarsTransaction`) rejects types
+        //     `0x04`/`0x7E` outright, the tars IDL has nowhere for `sourceHash`/`mint`/
+        //     `authorizationList`, and `Transaction::verify` would ecrecover a signature-less
+        //     deposit into a fabricated sender.
+        //
+        // Known boundary, stated rather than hidden: leaving the row absent is not perfectly
+        // clean either -- `LedgerMethods.h:233-235` dereferences the entry WITHOUT checking
+        // `has_value()`, so a missing row is UB on that path. That is a pre-existing defect
+        // unrelated to OP (any block whose tx metadata outruns `SYS_HASH_2_TX` hits it), it has no
+        // OP consumer today, and writing a fake transaction would not fix it -- it would replace a
+        // discoverable crash with an undiscoverable wrong answer. Full argument and the ledger
+        // entries: spec §6.4 (f) and bcos-evm/README.md.
         //
         // The tx hash below is keccak over the raw EIP-2718 envelope -- the ETH
         // transaction-hash definition, and the only one available here: the OP path carries raw
@@ -1217,6 +1235,20 @@ private:
                 executor_v1::StateKey{
                     ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
                 std::move(receiptEntry));
+
+            // The transaction itself, as its raw EIP-2718 envelope, under the SAME key (final
+            // review batch 6, decision (B)). One key, two tables: `SYS_HASH_2_RECEIPT` answers
+            // "the receipt for this tx hash", `s_eth_hash_2_rawtx` answers "the transaction".
+            //
+            // The generic `SYS_HASH_2_TX` is deliberately still NOT written -- see the comment
+            // below and `OpEngineSeam.h`'s `SYS_ETH_HASH_2_RAWTX` for why writing it would be
+            // actively harmful rather than merely wrong.
+            storage::Entry rawTxEntry;
+            rawTxEntry.set(rawTransactions[index]);
+            co_await storage2::writeOne(view,
+                executor_v1::StateKey{
+                    SchedulerType::c_ethRawTxTable, bcos::concepts::bytebuffer::toView(txHash)},
+                std::move(rawTxEntry));
         }
     }
 

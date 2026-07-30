@@ -786,6 +786,7 @@ public:
     using ConsensusError = OpScheduler::ConsensusError;
     using StorageError = OpScheduler::StorageError;
     static constexpr std::string_view c_ethBlockHeaderTable = OpScheduler::c_ethBlockHeaderTable;
+    static constexpr std::string_view c_ethRawTxTable = OpScheduler::c_ethRawTxTable;
 
     static bcos::evm::engine::OpBlockCommitments commitmentsOf(const ExecuteResult& result)
     {

@@ -50,6 +50,29 @@ namespace bcos::evm::engine
 /// 21-field RLP whose keccak is the block hash, stored as raw bytes.
 inline constexpr std::string_view SYS_ETH_BLOCK_HEADER{"s_eth_block_header"};
 
+/// Table holding each accepted OP block's transactions as their **raw EIP-2718 envelopes**, keyed
+/// by `keccak(envelope)` — i.e. the Ethereum transaction hash, and the same key
+/// `SYS_HASH_2_RECEIPT` uses, so a transaction and its receipt are retrievable under one key
+/// (final review batch 6, decision (B)). Same placement rule as above (裁定 B5): OP-only table,
+/// its name lives here and not in bcos-framework's LedgerTypeDef.h.
+///
+/// **Why a separate table instead of the generic `SYS_HASH_2_TX`** — this is a deliberate refusal,
+/// not an omission. `SYS_HASH_2_TX` holds *tars-encoded* `bcos::protocol::Transaction` objects, and
+/// its readers (`Ledger.cpp:1440-1443` and friends) hand whatever bytes they find straight to
+/// `TransactionFactoryImpl::createTransaction(..., checkSig=false, checkHash=false)`. Feeding an
+/// Ethereum envelope into that path does not fail loudly: every field of `bcostars::Transaction`
+/// is `optional` and tars' tag scanner swallows decode errors, so the value decodes into an
+/// all-default object, which the factory then hands a freshly computed, self-consistent hash. The
+/// consumer receives a **non-null, plausible-looking transaction whose hash does not match the key
+/// it was stored under**, and nothing checks that — it would reach `eth_getTransactionByHash`
+/// responses and txpool's `requestMissedTxs` (i.e. consensus proposal verification). Mapping the
+/// envelope into a real `protocol::Transaction` instead is not available either: the only such
+/// mapper rejects type `0x04`/`0x7E` outright, the tars IDL has nowhere to put
+/// `sourceHash`/`mint`/`authorizationList`, and `Transaction::verify` would ecrecover a
+/// **signature-less** deposit into a fabricated sender. Storing the faithful bytes under an
+/// OP-specific name keeps every option open and invents nothing. Full argument: spec §6.4 (f).
+inline constexpr std::string_view SYS_ETH_HASH_2_RAWTX{"s_eth_hash_2_rawtx"};
+
 namespace detail
 {
 /// evmc::bytes32 -> bcos::h256 (the `FixedBytes(byte const*, size_t)` constructor, same
