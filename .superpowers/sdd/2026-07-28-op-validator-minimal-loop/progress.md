@@ -125,3 +125,10 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
   复审附注: standalone 套件经 if(TARGET bcos-framework) 门控**结构性排除** Storage2LedgerTest/EngineNewPayloadGateTest 等,I-1 守护测试在 standalone 不运行——属设计如此,报告未误称,记录备查。
   "置顶"的实现方式: k/l 是 rev.3.3 新增子表的前两行而非物理移到 a-j 之上,符合该文档"逐版追加不重排"的既有约定,正文已显式标注 k/l 为全清单最高优先级。
 批4 收口。修复阶段测试增量总计 206 → 238(+32),每条增量均经"注释掉修复→必须翻红→还原→重建→复绿"自验。
+终审批6 完成(f898e0a6c + 7b7e0afb3,238→239),复审已派(未回):
+  **设计先行是本批最大价值**。用户裁定"需要补写实现"后,brief 要求先给方案再动手。调研结果推翻了"方案 A 只是代价高"的预设——(A) 写通用 SYS_HASH_2_TX **会造出假交易**:takeToTarsTransaction() 只覆盖类型 0/1/2/3(0x04/0x7E 在 Web3Transaction.cpp:408-413 硬拒);tars IDL 无 sourceHash/mint/authorizationList 承载位;Transaction::verify 无条件 ecrecover 并对 Web3 类型 forceSender → 未签名 deposit 得到**伪造 sender**;且 tars 反序列化任意字节**通常不抛**(字段全 optional + Tars.h:328-356 空 catch),工厂在 checkHash=false 下重算自洽哈希,返回**非空、看起来合法的假交易**,hash() != key 而无人校验 → 流入 eth_getTransactionByHash **与 txpool requestMissedTxs(共识/提案校验)**。
+  裁定 **(B)**:raw envelope 写 OP 专用表 s_eth_hash_2_rawtx(表名常量按 B5 放 bcos-evm/engine/,未动 LedgerTypeDef.h),通用表**刻意不写**并在 spec/README 写明这是 OP 专用检索面。拒绝 (A) 与 (C)。
+  新用例 RawTransactionEnvelopesAreRegisteredUnderEthTxHash 覆盖三类型各五条断言,含**反例断言 SYS_HASH_2_TX 必须仍为空**。registerOpBlock 现写五张表。
+  §6.4 新增 q/r/s: q = bcos-rpc/EngineEndpoint.cpp:164 把以太坊 RLP 信封喂 tars 反序列化器且 rawTransactions 在任何生产路径从未赋值 → **op-node 实连第一道墙,已置顶于 k/l 之上**;r = LedgerMethods.h:233-235 未 has_value() 即解引用;s = RocksDBStorage.cpp:228-233 成功回调在 try 内 → 双回调 → 同一协程 handle resume() 两次(UB)。r/s 均 pre-existing,记账不修。
+  实施者自陈三条待复审核实: ①**standalone 腿对本条不是红绿见证**——engine 测试仅编入 in-tree(if(TARGET bcos-framework) 门控),禁用写入时 standalone 照样 131/131,它只是无回归检查;建议把"各做一次自验"与"都构成红绿见证"这层区分补进 §11(控制器倾向采纳)。②命名债 ValidPayloadRegistersAllFourTables 现写五张表,**故意不改名**保批 3 报告的按名可追溯性。③零漂移:EngineServiceImpl.h 42 增/10 删,10 行删除全是注释行,-w 过滤后非注释删除为 0。
+  【控制器操作纪律】本批与批 4 各有一次 watchdog 停滞,两次都停在"改完代码正要动文档"的节点(未提交 ~818 行 / ~180 行)。**已改为:代码一到绿就先提交,再动文档。**
