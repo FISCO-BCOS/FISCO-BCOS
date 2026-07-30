@@ -87,3 +87,60 @@ I-1 建议的字段敏感性用例(逐字段扰动 payload 断言 `encode()` 必
 换句话说 **I-1 提议的修法确实能堵住这条**,这一点本实验间接证实了:E1c/E2b 表明只要
 payload 值离开语料常量,`encode()` 就会变,因此该敏感性用例在硬编码实现下必然翻红。
 **建议采纳 I-1 的修法。**
+
+---
+
+## 3. P2 · C-1 / C-2 —— 两条 Critical(只加测试,不改生产代码)
+
+两条都通过**直接调用** `bcos::evm::engine::detail::decodeOneRawTx(rawEntry, chainId)`
+(它是 `detail` 里的自由 `inline` 函数,测试 TU 可直接触及)来观测,
+避免走 `executeOpBlock` 时被 `catch(...)` 重分类或被不相关的 first-tx 闸误伤。
+探针是**报告式**的(打印是否抛 + 抛了什么),不是断言式的 —— 用 `EXPECT_TRUE(threw)`
+把"没抛"表现为红,红即缺口存在。见证目录:**in-tree `build/`**
+(该文件亦在 standalone 编译,但本次以 in-tree 为准)。
+
+### C-1 长形态 RLP 长度前缀的前导零未被拒绝
+
+- **来源**:`wb-review-p2-report.md` C-1
+- **改了什么**:`OpSchedulerImplTest.cpp` 末尾临时加 `VerifyProbe.C1NonCanonicalListLengthPrefix`。
+  取 `DepositFieldEncodings::envelope()` 的规范字节(86 B,外层 `0x7e f8 0x53 …`),
+  把外层列表头改写成 `0xf9 0x00 0x53`(lenOfLen=2,长度字节带前导零),payload 一字不动 → 87 B。
+- **实测现象**:
+
+  ```
+  PROBE[C1] canonical size=86 mutated size=87
+  PROBE[C1] decoded OK; gas=1000000 same-as-canonical=1
+  PROBE[C1] DID NOT THROW
+  PROBE[C1] txRoot(canonical)=0xe7fe64f3cf4769c3d01d423035da8c7d8eef30db62c5be56c6bc379d6b6d625e
+  PROBE[C1] txRoot(mutated) =0xd1c4b2f390677cc8de81b4f863f5992123c45a4890d402117618a8dd222a0e0a  differ=1
+  ```
+
+  即:**解码成功,解出与规范形态完全相同的 `DepositTx`**(`gas` 一致),
+  而 `computeOpTxRoot` 对同一笔语义交易给出**不同的 txRoot**。
+- **结论**:**证实**。C-1 描述的两条链路(解码器接受 + txRoot 依赖线上字节)**都**实测坐实。
+- **一处需要更正原报告的细节(非实质)**:探针顺带打印 `signedEnvelope-bytes-differ=0`。
+  这不是"解码器做了规范化",而是 **deposit 的 `signedEnvelope` 按设计恒为 `{}`**
+  (`OpSchedulerImpl.h:543`,deposit 无签名)。txRoot 的分歧来自 `computeOpTxRoot`
+  直接哈希 `rawTxBytes`(`OpEngineSeam.h:174-185`),与 `signedEnvelope` 无关 ——
+  C-1 原文的机制描述正确,此处只是提醒后来者别用 `signedEnvelope` 去复现。
+- **顺带证实**:`OpEngineSeam.h:156-163` 那句
+  「decoders reject every non-canonical encoding Go's `rlp` rejects」**实测为假**。
+
+### C-2 EIP-7702 授权项 `yParity` 宽度未与 op-geth 的 `uint8` 对齐
+
+- **来源**:`wb-review-p2-report.md` C-2
+- **改了什么**:`OpSchedulerImplTest.cpp` 末尾临时加 `VerifyProbe.C2AuthorizationYParityTooWideForUint8`。
+  用 `evmone::rlp::encode_tuple` 造一笔 0x04 setcode,`authorizationList` 含一项
+  `Authorization{.chain_id = kChainId, .v = 256, .r = 1, .s = 1}` ——
+  `rlp_encode(const Authorization&)`(`eth/utils/rlp_encode.cpp:96-100`)把 `v` 当 `uint256` 编,
+  256 正好编成 **`0x82 0x01 0x00`**,即报告要求的那个字节序列(无前导零,规范编码)。
+- **实测现象**:
+
+  ```
+  PROBE[C2] decoded OK; authList size=1 auth.v=256
+  PROBE[C2] DID NOT THROW
+  ```
+
+- **结论**:**证实**。`decodeAuthorizationList`(`OpSchedulerImpl.h:477`)的
+  `decodeU256Scalar` 接受了一个 op-geth 会以 `rlp: input string too long for uint8` 整笔拒绝的值,
+  整笔交易正常解出。
