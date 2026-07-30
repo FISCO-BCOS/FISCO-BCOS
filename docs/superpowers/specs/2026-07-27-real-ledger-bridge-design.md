@@ -200,9 +200,22 @@ trie "0≡缺席"规约一致)。
 - **值变体判别(rev.2 补,Critical)**:storage2 逻辑删除,range 归并**不过滤墓碑**
   ——遍历必须自行跳过 `DELETED_TYPE`/`NOT_EXISTS_TYPE` 变体,否则块内刚删除的
   槽/账户还魂进 stateRoot。墓碑 ≠ 零值:零值槽计数规则只统计**实值为零**的行。
-- **零值槽毒旗的适用域(rev.2 限定)**:"零值槽计数非零=写回有漏→毒旗"**仅在
+- ~~**零值槽毒旗的适用域(rev.2 限定)**:"零值槽计数非零=写回有漏→毒旗"**仅在
   桥自写的 E-b 世界成立**(生产 `HostContext::set` 对零值照写不删,真实链账户表
-  必然含零值槽行)——此规则不得被继承到编排接入层。
+  必然含零值槽行)——此规则不得被继承到编排接入层。~~
+  **rev.3(终审批 9 撤销该规则)**:上述"限定"没有任何机制承载——全仓不存在
+  E-b/生产模式开关,规则是硬编码在读路里的,"不得被继承"只是一句注释。而
+  `stateRootOf → visitAccounts → fetchAllStorage` 正是生产 OP 块的必经路径,
+  该毒旗因此等价于"接真实链后每块 -32603"。现改为:
+  **读路统一实现以太坊语义"槽值为 0 ≡ 该槽不存在"**(`fetchAllStorage` 跳过零值行,
+  `probeHasStorage` 不因零值行判 `has_storage=true`;单槽 `fetchStorage`/`get_storage`
+  本就对"行不存在"与"行存在但值为零"返回同一个全零值;建根侧 `accountStorageRoot`/
+  `opStorageRoot` 本就 `is_zero → continue`,故"跳过"与"槽不存在"建出的根字节相同);
+  **契约②"桥的写回从不留下零值槽行"这条 E-b 不变量的守护搬到写路径**——
+  `applyModifiedEntry` 在零值分支 `removeOne` 之后回读一次,行仍存活即 throw
+  (校验结果而非意图;判据用 `existsOne`,已实测其把 `DELETED_TYPE` 墓碑判为不存在,
+  故对 LOGICAL_DELETION/MultiLayerStorage 语义不误报)。两处判据原先方向相反,
+  以太坊正解是两处都不对,见 op-validator-loop design §6.4 条目 t/u。
 - **性能边界**:全量重建=正确性版;TA-1d~1f 不在本期。
 
 ## 7. 测试与探针

@@ -329,6 +329,17 @@ op-node 实连的最高优先级前置——它们是本清单里唯二"op-geth 
 | r | **`LedgerMethods.h:233-235` 缺行未判 `has_value()` 即解引用** | `getBlockData` 的 storage2 重载取 `SYS_HASH_2_TX` 行后直接 `txEntry->get()`,**缺行是 UB 而非错误**。**与 OP 无关的既有缺陷**(任何"块有交易元数据但该表缺行"的情形都会触发),但**会先由 OP 块暴露**——因为条目 (f) 裁定 OP 块不写该表。今天该路径无 OP 消费者(`BaselineScheduler.h:742` 只传 `HEADER` flag) |
 | s | **解码异常导致双重回调 → 同一 coroutine handle `resume()` 两次** | `Ledger.cpp:1417-1465` 的解码 lambda **无 try/catch**,而 `RocksDBStorage.cpp:228-233` 的**成功回调在 `try` 内部**:lambda 抛出 → 存储层接住 → **第二次**调用同一 `_callback`(带 error)。沿链 `asyncBatchGetTransactions` → `asyncGetBatchTxsByHashList` → `LedgerMethods.cpp:558-568` 对同一 `coroutine_handle` **`resume()` 两次**,即 UB/崩溃而非干净的 RPC 错误。**同为与 OP 无关的既有缺陷**,但它是条目 (f) 中"写错编码"危害链的最后一环,一并记录 |
 
+**rev.3.5 追加(2026-07-30,终审批 9 落地)。条目 t 与 q 同级并置顶**——q 是"请求进不来",
+t 是"请求进来了也会被自己的守护打死":两者都是**接入阻塞项**,而不是语义精度问题。t 今天
+之所以没被五轮审查当阻塞项看,是因为它**只存在于代码注释里**(`Storage2Ledger.h` 旧
+`:486-489` 逐字预言过"该规则不得被继承到编排接入层",却没有任何机制、清单或测试承载这句话)
+——这是本闭环"发现了但没传播到位"的又一例,故此处成条目而非注释:
+
+| # | 欠账 | 事实与后果 |
+|---|---|---|
+| **t**(**与 q 同级置顶**) | **毒旗(poison)机制在真实账本上的触发点,必须逐个清完才能实连 op-node** | 毒旗的消费契约是"置位即整块失败"(§4.3),在 Engine API 上表现为 **-32603**;因此毒旗的**每一个**触发点都是一条"这类账本让节点每块失败"的判据,而桥的触发点是按**桥自写的 E-b 世界**校准的,不是按真实链校准的。已确认的生产触发点两个:①**非 20 字节 hex 的 `/apps/` 表名**——`addressFromTableName` 抛 `std::length_error`,而真实链上 `/apps/HelloWorld` 这类**合法的** FISCO 合约表名普遍存在,实测 `poisoned=1`,后果是 `stateRootOf` 每块作废;②**零值槽行**——已于本批修掉(见下)。**本期只修了 ②**;① 未修(它牵涉"OP 状态根该不该、以及如何覆盖非 20 字节地址的 FISCO 原生账户"这个尚未有裁定的语义问题,不是三行能修的),实连前必须有裁定。同时留一条通则:**任何新增的 `poison()` 调用点都必须回答"真实链上会不会命中"**,否则就是又造一个每块 -32603 |
+| u | **零值槽语义已统一,但残留两处同类缺口** | 本批把"槽值为 0 ≡ 该槽不存在"统一到桥的全部判据(`fetchAllStorage` 由 throw 改跳过、`probeHasStorage` 新增零值层过滤、`fetchStorage`/`get_storage` 本就一致、建根侧 `accountStorageRoot`/`opStorageRoot` 本就 `is_zero → continue`),并把契约②"桥的写回从不留下零值槽行"这条 E-b 不变量的守护从**读路**搬到**写路**(`applyModifiedEntry` 删槽后置回读)。残留:①`MemoryLedger.cpp:19` 的 `has_storage = !storage.empty()` **与修复前的 `probeHasStorage` 是同类缺口**(都以"行/键存在"代替"有非零内容"),只是触发面窄——`MemoryLedger` 的 `storage` map 由 `applyDiff` 保证不含零值(`MemoryLedger.cpp:56-59` 零值 `erase`),而唯一能绕过它的是 public 可变引用 `accounts()`("for test/seed callers"),即只有测试代码能触发,不构成接入阻塞;**正确修法不是给 `get_account` 加一层零值过滤,而是收窄 `accounts()` 的可变暴露面**(把播种改走 `applyDiff`,让 map 的"不含零值"从约定变成不可绕过的性质),故本批不做。②生产写路径本身仍然对零值照写不删(`transaction-executor/.../HostContext.h:288`、`bcos-ledger/Ledger.cpp:1844` 创世 alloc 导入)——这**不是缺陷**(FISCO 原生语义如此),记录在此是为了钉住"读路必须容忍零值行"这个前提的来源,防止后人再把它当成"写回泄漏"去 throw |
+
 ## 7. 金向量 gate 与测试(rev.3 重写)
 
 ### 7.1 金值策略(事实 Critical 落地,rev.3 修正 A2/A3)

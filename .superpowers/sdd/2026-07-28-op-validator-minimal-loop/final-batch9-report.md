@@ -80,6 +80,131 @@
 
 ---
 
-## 第二步/第三步:实现与测试
+## 裁定与协调者补充(2026-07-30)
 
-(裁定后填写)
+控制器批准 **(A) + 后置回读校验形态**,并给出一条必须先验的技术警告:`removeOne` 在
+MultiLayerStorage 可变层上写的是 `DELETED_TYPE` **墓碑**而非物理擦除,若判据把墓碑当"存在",
+后置校验会在**每一次正常的零值写入**上误报——"不是会响的守护,是永远在响"。要求**实测**而非推理。
+
+**实测结论(测试 (z7),两段)**:
+
+1. **原语段**:在 `LOGICAL_DELETION` 存储上 `setStorage` 一槽后 `removeOne`,断言
+   (a) `range()` **仍能扫到**该 32 字节键(墓碑物理存在,前提成立);
+   (b) `storage2::existsOne` 对**同一个键返回 false**。
+   → `existsOne` 把墓碑判为不存在,后置回读判据可用,不会误报。
+2. **集成段**:在同一 `LOGICAL_DELETION` 存储上跑 `applyDiff` 的零值分支,`EXPECT_NO_THROW`,
+   且随后 `has_storage == false`、不毒旗。
+
+**判据保留 `existsOne`,不改成 "`readOne` + `liveContent()`"**,理由已写进源码注释:
+`liveContent()` 判别的是 `range()` 交出的**原始变体** `storage2::StorageValueType<Value>`;
+`readOne`/`existsOne` 已经在层间解析里做完了同一件事(墓碑 → `nullopt`,
+`MemoryStorage.h:233-240 toOptional` / `MultiLayerStorage.h:32-36,227-256`),它们的返回值里
+**没有变体可判**。两者同源、不重复——"readOne + liveContent" 在类型上不可组合。
+
+协调者点 1(`LeakyDeleteStorage` 的红是否纯):**纯**。它只在 (z6) 内局部构造;同一用例里先用
+非零 diff 播种并 `ASSERT_NO_THROW`(证明 `removeOne` 空操作不干扰正常写回路径),再用零值 diff
+触发守护;并附一段对照——同样两枚 diff 打在正常 `MutableStorage` 上 `EXPECT_NO_THROW`。
+反证实验(见下)证明 (z6) 是**唯一**因该守护翻红的用例。
+
+协调者点 2(#8 记账要写清同类性与正确修法):已照办,见 §6.4 条目 **u** ①。
+
+## 第二步:实现
+
+只动 `bcos-evm/bcos-evm/ledger/Storage2Ledger.h`(方案 (A) 的写路径改动也落在同一文件——
+`applyDiff` 就在这个文件里,未触碰第二个源文件)。
+
+| 处 | 改动 |
+|---|---|
+| `fetchAllStorage`(旧 `:485-494`)| 零值槽行由 `throw std::runtime_error` 改为 `continue`。注释写明:旧行为的理由只在 E-b 世界成立,而这条读路同时服务生产账本,留在读路的后果是 `stateRootOf → visitAccounts` 每个 OP 块毒旗 → 节点每块 -32603;守护没消失,搬去了 `applyModifiedEntry` |
+| `probeHasStorage`(旧 `:682`)| 新增**零值层**过滤:`fieldKey.size()==32` 且 `liveContent()` 判活后,再要求 `!isZeroSlotValue(*content)` 才 `co_return true`。文档注释写明两层过滤(终审 I-1 墓碑层 + 本批零值层)是**叠加**而非替代,并写明误真的后果链是共识级(`state.cpp:259 has_initial_storage` → `host.cpp:91 is_create_collision` → CREATE2 在 op-geth 成功而在本桥 INVALID) |
+| 新增 `isZeroSlotValue(std::string_view)` | 仅当内容**恰为 32 字节全零**时判真。长度不为 32 的内容**不**在此判真——那不是合法槽值,把它降级成"零/不存在"正是终审 M-1 修过的静默降级;此处保守判"有内容"(`has_storage=true`,EIP-7610 方向偏保守=拒绝在其上 CREATE),真正的长度校验与 throw+毒旗留给权威读路 `fetchStorage`/`fetchAllStorage` |
+| `applyModifiedEntry` 零值分支 | `removeOne` 之后 `existsOne` 回读,行仍存活即 `throw std::runtime_error`(契约② write-back leak)。注释写明为何不是 `assert(!is_zero(value))`(同义反复、不可达、不可测)、为何判据是 `existsOne` 而不是 `liveContent()`、以及实测依据 |
+| 文件头 + 三处 doc 注释 | 新增"零值槽语义"整段(统一到所有判据 / 理由是生产写路径对零值照写不删 / 守护在写路);`visitAccounts` 的 poison 触发面描述里把"stored zero-valued slot"删掉改为"长度不为 32 的槽值";`fetchAllStorage` doc 写明两层过滤叠加 |
+
+**KEEP 契约未被改坏**(派单硬约束):"零值槽 = 槽不存在"只作用于**槽**;"账户存在但字段全默认 =
+账户存在"仍由 `fetchAccount` 的 `existsOne` 判据保证返回 `Account` 而非 `nullopt`。(z2) 用
+`ASSERT_TRUE(account.has_value())` + `EXPECT_FALSE(has_storage)` 同时钉住这两件事。
+**墓碑过滤未被破坏**:(z5) 专测零值层与墓碑层同时生效。
+
+## 第三步:测试(+7,全部在 `bcos-evm/test/opstack/Storage2LedgerTest.cpp`)
+
+| 编号 | 用例 | 钉住什么 |
+|---|---|---|
+| (z1) | `StateRootIgnoresZeroValuedSlotRow` | **本批最核心**:含零值槽行的账户表上 `visitAccounts` 不毒旗、零值槽不进建根 map,且 `stateRootOf` 与"该槽压根不存在"的账本**逐字节相等**;附反向哨兵 `EXPECT_NE(空状态根)`,排除"两边都全废/都空"的空真 |
+| (z2) | `HasStorageFalseWhenOnlyZeroValuedSlot` | 只有一个零值槽 → `has_storage == false`;同时断言账户**仍然存在**(KEEP 契约)+ 单槽读路同口径 |
+| (z3) | `HasStorageTrueWithNonZeroSlotOnly` | 防改过头 |
+| (z4) | `MixedZeroAndNonZeroSlots` | 混合 → `has_storage == true`,建根 map 只含非零槽,根与"只有非零槽"的账本相等。**零值行刻意排在非零行之前**(ORDERED 存储按键序扫),迫使 `probeHasStorage` 真的继续往后扫而不能第一行就判负 |
+| (z5) | `ZeroValuedSlotAndTombstoneBothFiltered` | 零值层与终审 I-1 墓碑层**叠加**生效:`LOGICAL_DELETION` 存储上一槽墓碑 + 一槽存活零值 → `has_storage == false`、建根 map 空、不毒旗 |
+| (z6) | `ApplyDiffZeroSlotWriteBackLeakThrows` | 方案 (A) 的守护在**写**的时候就失败:`LeakyDeleteStorage`(`removeOne` 空操作)→ `EXPECT_THROW(applyDiff, std::runtime_error)`;附正常存储的 `EXPECT_NO_THROW` 对照 |
+| (z7) | `ExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFalseFire` | 协调者要求的实测(见上) |
+
+### 自验六步(反证实验:三个改动点各注入一次)
+
+**红绿见证目录点名:in-tree `build/`。** `Storage2LedgerTest` 在 `if(TARGET bcos-framework)` 门控内,
+**standalone `bcos-evm/build` 对本批全部改动是"依赖图无边"的空真**——`Storage2Ledger.h` 的
+唯一非测试 includer 是 `bcos-evm/bcos-evm/engine/OpSchedulerImpl.h`,它同样在该门控内;
+本轮 standalone 重配重建后二进制时间戳**停在 7-29 21:44 未变**,131/131 不作为红绿证据,
+只作为"没碰到 standalone 覆盖面"的无回归检查(§11 通则 (a)(b)(c))。
+
+| 注入 | 改回的旧判据 | 重建后翻红 |
+|---|---|---|
+| PROBE-1 | `fetchAllStorage` 零值行改回 `throw` | **3 例红**:(z1) / (z4) / (z5),其余 27 绿 |
+| PROBE-2 | `probeHasStorage` 去掉零值层过滤 | **2 例红**:(z2) / (z5),其余 28 绿 |
+| PROBE-3 | 删掉 `applyModifiedEntry` 的删槽后置回读 | **1 例红**:(z6),其余 29 绿 |
+| 还原 | — | **重建 → 246/246 复绿** |
+
+三个探针各自命中不同的用例集合,没有一个探针"全绿"(即没有哪个改动点是无覆盖的),
+也没有哪个探针把整套打崩(红的原因纯)。
+
+## 回归(全部亲跑,非推理)
+
+| 腿 | 结果 |
+|---|---|
+| in-tree `build/` `bcos-evm-opstack-tests` | **246 / 246 PASSED**(基线 239 + 本批 7) |
+| standalone `bcos-evm/build`(**先 `cmake -S bcos-evm -B bcos-evm/build` 重配**) | **131 / 131 PASSED**(空真,见上) |
+| `test-bcos-engine` | `*** No errors detected` |
+| E-b 桥回放三腿 | `EbT8nReplay.Vectors` / `MemoryLedgerT8nReplay.Vectors` / `OpT8nReplay.Vectors` **全绿**(33×3) |
+
+**零触碰核验**:`git diff --name-only 6771dffa0..HEAD` 仅 3 个文件(报告 + `Storage2Ledger.h` +
+`Storage2LedgerTest.cpp`)+ 本次文档提交;`ports/` `vectors/` `golden/` `transaction-scheduler/`
+`bcos-rpc/` 零触碰。
+**通用组合根零漂移**:`Storage2Ledger.h` 的非测试 includer 只有 `OpSchedulerImpl.h`,而后者的
+`executeBlock`(通用路径)直接 `throw std::logic_error`,桥在通用路径上**结构性不可达**,
+零漂移不是"测出来的",是依赖图上就不成立。
+
+## 文档
+
+- **`op-validator-minimal-loop-design.md` §6.4 新增 rev.3.5 两条**:
+  - **t(与 q 同级置顶)**:把"**毒旗机制在生产账本上的触发点**"列为 op-node 实连前置清单项。
+    已确认的生产触发点两个:①**非 20 字节 hex 的 `/apps/` 表名**(`addressFromTableName` 抛
+    `length_error`;真实链上 `/apps/HelloWorld` 这类**合法**的 FISCO 合约表名普遍存在,实测
+    `poisoned=1`)——**本期未修**,它牵涉"OP 状态根该不该、以及如何覆盖非 20 字节地址的 FISCO
+    原生账户"这个尚无裁定的语义问题;②零值槽行——本批已修。并附一条通则:**任何新增的
+    `poison()` 调用点都必须回答"真实链上会不会命中"**。条目里明写它此前**只存在于代码注释里**,
+    五轮审查没人当接入阻塞项看,是"发现了但没传播到位"的又一例。
+  - **u**:零值槽语义修复的落地范围 + 残留边界两条(`MemoryLedger` 同类缺口及其**正确修法是
+    收窄 `accounts()` 可变暴露面**、而非给 `get_account` 再加一层过滤;生产写路径对零值照写不删
+    **不是缺陷**,记录它是为了钉住"读路必须容忍零值行"这个前提的出处)。
+- **`real-ledger-bridge-design.md` §6**:原 "零值槽毒旗的适用域(rev.2 限定)" 那条**加删除线并
+  写明 rev.3 撤销理由**——该"限定"没有任何机制承载(全仓无 E-b/生产模式开关),而
+  `stateRootOf` 是生产必经路径,规则等价于"接真实链后每块 -32603";改写为读路统一以太坊语义 +
+  守护搬写路的完整表述。
+- `bcos-evm/README.md` 未提及零值槽/`has_storage`,无需同步。
+
+## 诚实边界(主动披露)
+
+1. **PROBE-2 下 (z1)/(z4) 不翻红**:它们走 `visitAccounts` 而不读 `has_storage`。即
+   `probeHasStorage` 的零值层由 (z2)/(z5) 独家见证,不是被四条用例重复覆盖。
+2. **"每块 -32603" 未在真实链上端到端复现**:本批的证据链是"生产写路径不过滤零值(已读码确认
+   `HostContext.h:288` / `Ledger.cpp:1844`)"+"零值行会让 `fetchAllStorage` throw 并被
+   `visitAccounts` 接住置毒旗(`VisitAccountsUnknownKeyPoisons` 同路径实证)"+"`stateRootOf`
+   必经 `visitAccounts`(`OpSchedulerImpl.h:892`)"三段推理的合成,不是一次真实节点复现。
+   同理,§6.4 条目 t 里"非 20 字节表名"的 `poisoned=1` 是控制器的实测,我复核了机理未复跑。
+3. **`isZeroSlotValue` 对"长度不为 32 的槽值"判"有内容"是一个有意的不对称**:`probeHasStorage`
+   会给出 `has_storage=true`,而 `fetchAllStorage`/`fetchStorage` 会 throw+毒旗。两者不矛盾
+   (一个偏保守、一个报错),但**这个组合没有专门用例**——`VisitAccountsUnknownKeyPoisons`
+   覆盖的是"未知键长",不是"32 字节键 + 非 32 字节值"。属已知的窄覆盖缺口,不影响本批结论。
+4. **`applyDiff` 的后置回读增加了一次层内查表**(仅在槽被写零时)。未做性能测量;依据是
+   `removeOne` 刚在最上层写过该键,`existsOne` 命中最上层即返回、不下盘。若后续有热路径
+   证据表明它不可忽略,正确的下一步是**把它折进 `removeOne` 的返回值**(让存储层告知"删掉了
+   什么"),而不是把守护删掉。
