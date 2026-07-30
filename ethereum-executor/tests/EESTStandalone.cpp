@@ -193,6 +193,14 @@ void parseOptions(int argc, char* argv[])
 // =============================================================================
 //  Core test runner (reused from original but made standalone)
 // =============================================================================
+/// Fork transition info parsed from fork names like "CancunToPragueAtTime15k".
+struct ForkTransition
+{
+    evmc_revision fromRev = EVMC_CANCUN;
+    evmc_revision toRev = EVMC_CANCUN;
+    int64_t transitionTimestamp = 0;
+};
+
 class EESTRunner
 {
 public:
@@ -202,6 +210,7 @@ public:
     eth::EthereumExecutor executor;
     evmc_revision m_currentRevision = EVMC_CANCUN;
     ledger::LedgerConfig m_ledgerConfig;
+    std::optional<ForkTransition> m_forkTransition;
 
     EESTRunner()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -216,6 +225,38 @@ public:
         auto const rev = test::forkNameToRevision(forkName);
         m_currentRevision = rev;
         m_ledgerConfig.setEVMCRevision(rev);
+        m_forkTransition.reset();
+
+        // Detect fork transition names like "CancunToPragueAtTime15k"
+        auto toPos = forkName.find("To");
+        auto atPos = forkName.find("AtTime");
+        if (toPos != std::string::npos && atPos != std::string::npos && toPos < atPos)
+        {
+            auto fromFork = forkName.substr(0, toPos);
+            auto toFork = forkName.substr(toPos + 2, atPos - toPos - 2);
+            auto timeStr = forkName.substr(atPos + 6);  // "AtTime" = 6 chars
+            try
+            {
+                m_forkTransition = ForkTransition{
+                    test::forkNameToRevision(fromFork),
+                    test::forkNameToRevision(toFork),
+                    std::stoll(timeStr)
+                };
+            }
+            catch (...)
+            {
+                m_forkTransition.reset();
+            }
+        }
+    }
+
+    /// Get the EVMC revision for a block given its timestamp (handles fork transitions).
+    evmc_revision revisionForBlock(int64_t blockTimestampSec) const
+    {
+        if (!m_forkTransition.has_value())
+            return m_currentRevision;
+        return (blockTimestampSec >= m_forkTransition->transitionTimestamp) ?
+            m_forkTransition->toRev : m_forkTransition->fromRev;
     }
 
     void configureEnvironment(test::EESTEnvironment const& env)
@@ -314,7 +355,7 @@ public:
         header.setVersion(blockVer);
         header.setNumber(test::hexToInt64(env.number));
 
-        auto tsSec = test::hexToInt64(env.timestamp);
+        auto tsSec = test::hexToTimestamp(env.timestamp);
         header.setTimestamp(tsSec * 1000);
         header.setSealer(0);
 
@@ -398,7 +439,9 @@ public:
             }
         }
 
-        bool hasAuthList = tx.authorizationList.has_value() && !tx.authorizationList->empty();
+        // authorizationList field present = type 4 (set_code), even if empty.
+        // evmone's validate_transaction will reject empty lists for type 4.
+        bool hasAuthList = tx.authorizationList.has_value();
         if (hasAuthList)
             tarsTx->web3TypedTxKind = 4;
         else if (!tx.maxFeePerGas.empty() || !tx.maxPriorityFeePerGas.empty())
@@ -704,7 +747,7 @@ public:
         header.setVersion(blockVer);
 
         header.setNumber(test::hexToInt64(bh.number));
-        auto tsSec = test::hexToInt64(bh.timestamp);
+        auto tsSec = test::hexToTimestamp(bh.timestamp);
         header.setTimestamp(tsSec * 1000);
         header.setSealer(0);
         if (!bh.coinbase.empty())
@@ -728,6 +771,23 @@ public:
         else
         {
             m_ledgerConfig.setGasPrice({"0x0", 0});
+        }
+        // Set gas limit from block header (fixes GASLIMIT opcode returning
+        // the hardcoded default instead of the fixture's block gas limit)
+        if (!bh.gasLimit.empty())
+        {
+            auto gasLimit = static_cast<uint64_t>(test::hexToU256(bh.gasLimit));
+            m_ledgerConfig.setGasLimit({gasLimit, 0});
+        }
+        // Set difficulty from block header (fixes DIFFICULTY opcode)
+        if (!bh.difficulty.empty())
+        {
+            auto diff = static_cast<int64_t>(test::hexToU256(bh.difficulty));
+            m_ledgerConfig.setDifficulty(diff);
+        }
+        else
+        {
+            m_ledgerConfig.setDifficulty(0);
         }
     }
 
@@ -780,35 +840,50 @@ public:
                     blockHashes.hashes[0].bytes);
         }
 
-        // Compute block reward based on fork (matching evmone's mining_reward()).
-        // Reference: evmone test/blockchaintest/blockchaintest_runner.cpp
-        auto const rev = m_currentRevision;
-        std::optional<uint64_t> blockReward;
-        if (rev < EVMC_BYZANTIUM)
-            blockReward = 5000000000000000000ULL;  // 5 ETH (Frontier..SpuriousDragon)
-        else if (rev < EVMC_PETERSBURG)
-            blockReward = 3000000000000000000ULL;  // 3 ETH (Byzantium..Constantinople)
-        else if (rev < EVMC_PARIS)
-            blockReward = 2000000000000000000ULL;  // 2 ETH (Petersburg..London)
-        // else: Paris+ → 0 (no block reward after merge)
+        // Populate fork transition mapping in LedgerConfig for dynamic revision switching.
+        // For transition forks (e.g., CancunToPragueAtTime15k), the revision changes
+        // mid-test based on block timestamp.
+        m_ledgerConfig.clearForkTransitions();
+        if (m_forkTransition.has_value())
+        {
+            for (auto const& block : fixture.blocks)
+            {
+                auto tsSec = test::hexToTimestamp(block.blockHeader.timestamp);
+                auto blockRev = (tsSec >= m_forkTransition->transitionTimestamp) ?
+                    m_forkTransition->toRev : m_forkTransition->fromRev;
+                auto blockNum = test::hexToInt64(block.blockHeader.number);
+                m_ledgerConfig.addForkTransition(blockNum, blockRev);
+            }
+        }
 
         // Execute each block's transactions sequentially
         int txIndex = 0;
         for (auto const& block : fixture.blocks)
         {
+            // Determine per-block revision (for fork transitions)
+            auto tsSec = test::hexToTimestamp(block.blockHeader.timestamp);
+            auto blockRev = revisionForBlock(tsSec);
+            m_ledgerConfig.setEVMCRevision(blockRev);
+
+            // Compute per-block reward (changes at fork boundaries)
+            std::optional<uint64_t> blockReward;
+            if (blockRev < EVMC_BYZANTIUM)
+                blockReward = 5000000000000000000ULL;  // 5 ETH
+            else if (blockRev < EVMC_PETERSBURG)
+                blockReward = 3000000000000000000ULL;  // 3 ETH
+            else if (blockRev < EVMC_PARIS)
+                blockReward = 2000000000000000000ULL;  // 2 ETH
+            // else: Paris+ → 0
+
             configureEnvironment(block.blockHeader);
             auto blockHdr = buildBlockHeader(block.blockHeader);
 
             // EIP-4788 & EIP-2935: Execute system contracts at block start
-            // (BEFORE transactions), matching evmone's apply_block() order.
-            // system_call_block_start runs the actual contract bytecode via
-            // the EVM, producing correct storage values for BEACON_ROOTS
-            // and HISTORY_STORAGE.
-            if (rev >= EVMC_CANCUN)
+            if (blockRev >= EVMC_CANCUN)
             {
                 evmone::state::BlockInfo bi{};
                 bi.number = test::hexToInt64(block.blockHeader.number);
-                bi.timestamp = test::hexToInt64(block.blockHeader.timestamp);
+                bi.timestamp = tsSec;
                 bi.gas_limit = test::hexToInt64(block.blockHeader.gasLimit);
                 if (!block.blockHeader.coinbase.empty())
                 {
@@ -828,14 +903,14 @@ public:
                         std::copy_n(pbr.begin(), sizeof(evmc_bytes32),
                             bi.parent_beacon_block_root.bytes);
                 }
-                bi.blob_base_fee = intx::uint256{1};
+                // blob_base_fee is left as nullopt — system contracts don't need it
 
                 eth::StorageStateView<MutableStorage> stateView(storage);
                 auto sysDiff = evmone::state::system_call_block_start(
-                    stateView, bi, blockHashes, rev, executor.vm());
+                    stateView, bi, blockHashes, blockRev, executor.vm());
 
                 task::tbb::syncWait(eth::applyStateDiff(
-                    storage, sysDiff, rev, *cryptoSuite->hashImpl()));
+                    storage, sysDiff, blockRev, *cryptoSuite->hashImpl()));
             }
 
             for (auto const& tx : block.transactions)
@@ -850,7 +925,8 @@ public:
                 try
                 {
                     receipt = task::tbb::syncWait(executor.executeTransaction(
-                        storage, blockHdr, *bcosTx, txIndex, m_ledgerConfig, false));
+                        storage, blockHdr, *bcosTx, txIndex, m_ledgerConfig, false,
+                        &blockHashes));
                 }
                 catch (std::exception const& e)
                 {
@@ -901,9 +977,10 @@ public:
 
             // Apply block reward via finalize() (uses bcos-evm's built-in logic)
             task::tbb::syncWait(
-                executor.finalizeBlock(storage, blockHdr, m_ledgerConfig, rev, blockReward, evmWithdrawals));
+                executor.finalizeBlock(storage, blockHdr, m_ledgerConfig, blockRev, blockReward, evmWithdrawals));
 
-            // Accumulate block hash for HISTORY_STORAGE system call in subsequent blocks
+            // Accumulate block hash BEFORE system_call_block_end so the current
+            // block's hash is available for BLOCKHASH lookups within system contracts.
             if (!block.blockHeader.hash.empty())
             {
                 auto h = test::hexToBytes(block.blockHeader.hash);
@@ -912,6 +989,51 @@ public:
                     auto blockNum = test::hexToInt64(block.blockHeader.number);
                     std::copy_n(h.begin(), sizeof(evmc_bytes32),
                         blockHashes.hashes[blockNum].bytes);
+                }
+            }
+
+            // EIP-2935 / EIP-7002 / EIP-7251: Execute system contracts at block end.
+            // These store historical block hashes, process withdrawal requests,
+            // and process consolidation requests respectively.
+            if (blockRev >= EVMC_CANCUN)
+            {
+                evmone::state::BlockInfo biEnd{};
+                biEnd.number = test::hexToInt64(block.blockHeader.number);
+                biEnd.timestamp = tsSec;
+                biEnd.gas_limit = test::hexToInt64(block.blockHeader.gasLimit);
+                if (!block.blockHeader.coinbase.empty())
+                {
+                    auto cbBytes = test::hexToBytes(block.blockHeader.coinbase);
+                    if (cbBytes.size() == sizeof(evmc_address))
+                        std::copy_n(cbBytes.begin(), sizeof(evmc_address),
+                            biEnd.coinbase.bytes);
+                }
+                if (!block.blockHeader.baseFee.empty())
+                    biEnd.base_fee = static_cast<uint64_t>(
+                        test::hexToU256(block.blockHeader.baseFee));
+                if (!block.blockHeader.parentBeaconRoot.empty())
+                {
+                    auto pbr = test::hexToBytes(block.blockHeader.parentBeaconRoot);
+                    if (pbr.size() == sizeof(evmc_bytes32))
+                        std::copy_n(pbr.begin(), sizeof(evmc_bytes32),
+                            biEnd.parent_beacon_block_root.bytes);
+                }
+                // Set the current block's hash for EIP-2935 history storage
+                if (!block.blockHeader.hash.empty())
+                {
+                    auto h = test::hexToBytes(block.blockHeader.hash);
+                    if (h.size() == sizeof(evmc_bytes32))
+                        std::copy_n(h.begin(), sizeof(evmc_bytes32),
+                            biEnd.hash.bytes);
+                }
+
+                eth::StorageStateView<MutableStorage> stateViewEnd(storage);
+                auto endResult = evmone::state::system_call_block_end(
+                    stateViewEnd, biEnd, blockHashes, blockRev, executor.vm());
+                if (endResult.has_value())
+                {
+                    task::tbb::syncWait(eth::applyStateDiff(
+                        storage, endResult->state_diff, blockRev, *cryptoSuite->hashImpl()));
                 }
             }
         }

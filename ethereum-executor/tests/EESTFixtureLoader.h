@@ -193,6 +193,19 @@ inline int64_t hexToInt64(std::string const& hex)
     return static_cast<int64_t>(hexToU256(hex));
 }
 
+/// Convert a hex string to a timestamp-preserving int64_t.
+/// Block timestamps in EEST fixtures can exceed int64_t range (e.g.,
+/// 0xfffffffffffffffe), but the EVM uses unsigned 256-bit math for TIMESTAMP.
+/// This function preserves the low 64 bits so that the EVM sees the correct
+/// unsigned value instead of a sign-extended negative one.
+inline int64_t hexToTimestamp(std::string const& hex)
+{
+    if (hex.empty() || hex == "0x")
+        return 0;
+    // Preserve the low 64 bits exactly, avoid sign-extension issues.
+    return static_cast<int64_t>(static_cast<uint64_t>(hexToU256(hex)));
+}
+
 /// Strip 0x prefix from a hex string.
 inline std::string strip0x(std::string const& hex)
 {

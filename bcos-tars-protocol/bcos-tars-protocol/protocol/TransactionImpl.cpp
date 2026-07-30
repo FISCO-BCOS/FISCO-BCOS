@@ -467,8 +467,10 @@ bcos::protocol::AuthorizationList bcostars::protocol::TransactionImpl::authoriza
         // EIP-7702 authorization entries are consensus-critical.
         // Fail-loud on malformed data instead of silently skipping
         // (which produces wrong state root vs Ethereum reference).
-        auth.address = bcos::toAddress(entry.address);
-        auth.signer = bcos::toAddress(entry.signer);
+        // However, empty signer/address (from unrecoverable signatures in
+        // EEST fixtures) must be allowed: use zero address, evmone will skip.
+        auth.address = entry.address.empty() ? bcos::Address() : bcos::toAddress(entry.address);
+        auth.signer = entry.signer.empty() ? bcos::Address() : bcos::toAddress(entry.signer);
         auth.r = bcos::hex2u(entry.r);
         auth.s = bcos::hex2u(entry.s);
         result.emplace_back(std::move(auth));

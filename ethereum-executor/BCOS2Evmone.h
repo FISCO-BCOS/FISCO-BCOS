@@ -28,6 +28,7 @@ inline evmone::state::BlockInfo blockHeaderToBlockInfo(
     info.number = header.number();
     info.timestamp = header.timestamp() / 1000L;
     info.gas_limit = static_cast<int64_t>(std::get<0>(config.gasLimit()));
+    info.difficulty = config.difficulty();
     auto const& cb = header.coinbase();
     if (cb.size() == sizeof(evmc_address))
         std::copy_n(cb.begin(), sizeof(evmc_address), info.coinbase.bytes);

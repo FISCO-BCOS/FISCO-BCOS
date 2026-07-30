@@ -68,14 +68,15 @@ public:
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
+        evmone::state::BlockHashes const* blockHashes = nullptr)
     {
         (void)contextID;  // not used in Ethereum mode
         (void)call;       // EEST tests always use call=false (real execution)
 
         try
         {
-            auto revOpt = ledgerConfig.evmcRevision();
+            auto revOpt = ledgerConfig.evmcRevisionForBlock(blockHeader.number());
             if (!revOpt.has_value())
             {
                 BOOST_THROW_EXCEPTION(
@@ -167,9 +168,10 @@ public:
             }
 
             // Execute
-            ZeroBlockHashes blockHashes;
+            ZeroBlockHashes zeroBlockHashes;
+            auto const& bh = (blockHashes != nullptr) ? *blockHashes : zeroBlockHashes;
             auto evmReceipt = evmone::state::transition(
-                stateView, blockInfo, blockHashes, evmTx, rev, m_vm, txProps);
+                stateView, blockInfo, bh, evmTx, rev, m_vm, txProps);
 
             // Apply state diff back to storage
             co_await applyStateDiff(storage, evmReceipt.state_diff, rev, *m_hashImpl);
