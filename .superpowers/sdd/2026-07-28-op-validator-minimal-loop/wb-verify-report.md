@@ -10,11 +10,20 @@
 | `build/`(**in-tree**) | `Release`,`FULLNODE=ON TESTS=ON`,vcpkg toolchain,**本次执行前已 reconfigure** | `bcos-evm-opstack-tests`(**含 3 个 engine 测试源**)、`test-bcos-engine` | **239/239 + engine 全绿** |
 | `bcos-evm/build/`(standalone) | `Debug` | `bcos-evm-opstack-tests`(**engine 测试被 `if(TARGET bcos-framework)` 门控排除**) | 131 例 |
 
-**红绿见证归属声明**:凡涉及 `engine/bcos-engine/EngineServiceImpl.{h,cpp}` 与
-`EngineOpBranchTest / EngineNewPayloadGateTest / EngineVersionGateTest` 的实验,
-**只有 in-tree `build/` 构成见证**;standalone 对它们是"依赖图无边"的空真,本报告一律不采信。
-凡只涉及 `OpSchedulerImpl.h` / `Storage2Ledger.h` / `RLPDecode.h` 的实验,两个目录都可作证,
-本报告以 in-tree 为准并在需要时点名。
+**红绿见证归属声明(收尾时实测更正过一次,见下)**:
+**本报告全部实验的唯一红绿见证是 in-tree `build/`**,standalone 对它们**全部**是空真。
+
+起初我以为只有 engine 三个测试源受 `if(TARGET bcos-framework)` 门控、
+`OpSchedulerImplTest.cpp` / `Storage2LedgerTest.cpp` 两个目录都能作证。**这是错的**:
+收尾时发现改完 `Storage2LedgerTest.cpp` / `OpSchedulerImplTest.cpp` / `OpSchedulerImpl.h`
+之后,standalone 的 `cmake --build` 报 "Built target" 却**一个 TU 都没重编**,
+二进制 mtime 停在 `Jul 29 21:44`,而源文件是 `Jul 30 17:0x`。
+回查 `bcos-evm/test/CMakeLists.txt:15-40` 的 `add_executable` 源码清单确认:
+**`Storage2LedgerTest.cpp` 与 `OpSchedulerImplTest.cpp` 同样在 `if(TARGET bcos-framework)`
+门控内**(`:64` 起),standalone 那 131 例根本不含它们
+(standalone 只编 `OpForkScheduleTest`…`MemoryLedgerTest` 共 25 个源)。
+所以 standalone 的 131/131 绿对本次任何一条实验都**不构成证据**,只作为"未被污染"的旁证。
+**这正是派单点名的那个陷阱,本报告在此显式记账,请后来者不要重犯。**
 
 **假绿防护**:每次重建后核对二进制 `mtime` 是否刷新(脚本 `rt.sh` 每次打印
 `BUILD-OK <mtime>`),新增用例一律另用 `--gtest_list_tests` 或 `--gtest_filter` 命中数确认。
@@ -23,7 +32,31 @@
 
 ## 1. 实验结果总表
 
-(见下方逐条)
+| # | 来源 | 实验 | 结论 |
+|---|---|---|---|
+| E1 | P5 I-1(a) | `prevRandao` 头腿硬编码为零 → 239/239 绿 | **证实** |
+| E1b | 追加 | `prevRandao` 执行腿也硬编码为零 → 239/239 绿 | **证实**(两腿同时零覆盖) |
+| E1c | 追加 | `prevRandao` 换成**非**语料常量 → 11 例红 | 限定条件(见 §2.5) |
+| E2 | P5 I-1(b) | `feeRecipient` 硬编码为 `0x42…0011` → 239/239 绿 | **证实** |
+| E2b | 追加 | `feeRecipient` 换成 `0xdead…` → 11 例红 | 限定条件(见 §2.5) |
+| E3 | P5 I-2 | 8 条零覆盖静态校验**逐条**移除 → 8×239/239 绿 | **证实 8/8** |
+| E4 | P5 M-5 | 移除已知块短路 → 红,**但机制是 step 3c 抛 -32603 而非 INVALID**,第二子用例根本没跑 | **证伪 / 需降级** |
+| E5 | P5 §2.3 | `expectExhausted` 的 throw 去掉 → 239/239 绿 | **证实**(8 个 call site 零守护) |
+| E6 | P5 I-4 | `gasLimit` 硬编码 → 恰 1 例红且唯一向量是 `isthmus_big_block_130tx`;跳过它 → 全绿 | **证实**(单支点) |
+| C-1 | P2 C-1 | `0xf9 0x00 LL` 非规范长度前缀被接受,且 txRoot 分歧 | **证实** |
+| C-2 | P2 C-2 | 授权项 `yParity = 0x82 0x01 0x00`(=256)被接受 | **证实** |
+| P3-I1 | P3 I-1 | 直写零值槽 → `has_storage=1`,不毒旗 | **证实** |
+| P3-I2 | P3 I-2 | `SYS_TABLES` 插 `/apps/HelloWorld` → `poisoned=1`,`firstError` 只有 `"std::exception"` | **证实(且比原报告更糟)** |
+| P3-I3 | P3 I-3 | 性能修法的验收步骤,非可验证论断 | **不适用** |
+| P1-C2 | P1 C2 | pre-Isthmus + V3 → `Invalid` + `withdrawalsRoot is required…` | **证实(文本逐字一致)** |
+| P1-C3 | P1 C3 | `executeOpBlock` 内注入 `bad_alloc` → `Invalid` + `…rejected the payload: std::bad_alloc` | **证实** |
+| P1-I1 | P1 I1 | FCU 零 safe/finalized → `Syncing`,跟踪态不推进 | **证实** |
+| P4-3.1 | P4 §3.1 | 加成员静默通过;加结构化绑定绊线后硬错;去成员后绊线不误伤 | **三条全证实** |
+| P4-3.3 | P4 §3.3 | 嵌套 `requires` 在 `SchedulerSerialImpl` 上**软失败**(最小 TU + 真类型双证) | **证实,方案无需退化** |
+| P4-7.1 | P4 §7.1 | CMake 护栏:无违规 → configure 通过;有违规 → FATAL_ERROR;去掉护栏 → 静默链过全绿 | **三条全证实** |
+
+**唯一与原报告预期不符的是 E4**(P5 M-5),详见 §4。
+**唯一比原报告更严重的是 P3-I2 的诊断质量**,详见 §5。
 
 ---
 
@@ -427,3 +460,30 @@ payload 值离开语料常量,`encode()` 就会变,因此该敏感性用例在�
   ⇒ 注释里"会静默链过、失败形态是无人察觉的陈旧定义"这条论断**实测属实**,
   §7.1 提议的 4 行护栏是可落地的可执行断言。
 - **结论**:**三条全部证实**。
+
+---
+
+## 8. 收尾状态
+
+- **所有注入已还原**:每条实验都走了「改 → 重建 → 看现象 → 还原 → **重建** → 复绿」六步,
+  另在全部实验结束后做了一次总还原 + **完整 reconfigure** + 重建。
+- **最终验证**(还原后,in-tree `build/`,已 `cmake -B build -S . …` reconfigure):
+  - `bcos-evm-opstack-tests` **239/239 PASSED**(二进制 mtime `Jul 30 17:17:23`,已刷新)
+  - `test-bcos-engine` **\*\*\* No errors detected**
+  - standalone `bcos-evm/build` `bcos-evm-opstack-tests` **131/131 PASSED**
+    (未重编,因为它编译的 25 个源本次一个都没动 —— 见 §0 的见证归属更正)
+- `git status` **干净**。临时探针文件全部用 `git checkout --` 还原,
+  临时 configure 目录 `scratchpad/cfgA`、`cfgB` 已删除。
+- **未执行/不适用的项**:P5 E3 的 ASan 变体(§4 已说明理由)、P3 I-3(修法验收步骤,非论断)。
+
+## 9. 给协调者的三条处置建议(按性价比)
+
+1. **P4 §3.1 的结构化绑定绊线**——1 行 + 8 个名字,已实测"加成员即编译错、不加成员零副作用",
+   是本次唯一一条**已完整验证可落地**的零成本修法。
+2. **修正 `EngineNewPayloadGateTest.cpp:1216-1234` 的注释**——它现在写的机制是错的(E4),
+   而这段注释正是 §11 通则"写下契约就必须给出会翻红的断言"的反面教材:
+   断言在,但它红的原因和注释说的不是一回事。
+3. **C-1 与 E5 应合并处置**——两者是同一条隐式契约
+   (`computeOpTxRoot` ↔ `DeriveSha` 等价性依赖解码器严格性)的两个破口,
+   且 `OpEngineSeam.h:156-163` 那句「reject every non-canonical encoding Go's `rlp` rejects」
+   已被 C-1 实测证伪,注释与代码必须同时改。
