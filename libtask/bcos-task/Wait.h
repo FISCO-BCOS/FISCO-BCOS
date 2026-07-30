@@ -41,6 +41,13 @@ constexpr inline struct Wait
 
 constexpr inline struct SyncWait
 {
+
+    enum class waitStatus: uint8_t {
+        INIT,
+        WAITING,
+        AWAKED,
+        FINISHED,
+    };
     template <IsAwaitable Task>
     auto operator()(Task&& task, auto&&... args) const
         -> AwaitableReturnType<std::remove_cvref_t<Task>>
@@ -52,13 +59,9 @@ constexpr inline struct SyncWait
             std::variant<std::monostate, std::exception_ptr>,
             std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
         ReturnVariant result;
-        boost::atomic_flag finished;
-        boost::atomic_flag waitFlag;
-        boost::atomic_flag exited;
+        std::atomic<waitStatus> status = waitStatus::INIT;
 
-        auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
-                          boost::atomic_flag& waitFlag,
-                          boost::atomic_flag& exited,
+        auto handle = [](Task&& task, decltype(result)& result, std::atomic<waitStatus>& status,
                           auto&&... args) -> task::Task<void> {
             try
             {
@@ -84,28 +87,29 @@ constexpr inline struct SyncWait
                 result.template emplace<std::exception_ptr>(std::current_exception());
             }
 
-            if (finished.test_and_set())
+            auto expected = waitStatus::INIT;
+            if (!status.compare_exchange_strong(expected, waitStatus::FINISHED))
             {
                 // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
                 // If true is returned here, the external finish is set first, and the external
                 // execution needs to be notified
-                waitFlag.test_and_set();
-                waitFlag.notify_one();
-                exited.test_and_set();
+                status.store(waitStatus::AWAKED);
+                status.notify_one();
+                status.store(waitStatus::FINISHED);
             }
-        }(std::forward<Task>(task), result, finished, waitFlag,
+        }(std::forward<Task>(task), result, status,
                                               std::forward<decltype(args)>(args)...);
         handle.start();
 
-        if (!finished.test_and_set())
+        auto expected = waitStatus::INIT;
+        if (status.compare_exchange_strong(expected, waitStatus::WAITING))
         {
-            // 此处返回false说明task还在执行中，需要等待task完成
-            // If false is returned, the task is still being executed and you need to wait for the
+            // 此处返回true说明task还在执行中，需要等待task完成
+            // If true is returned, the task is still being executed and you need to wait for the
             // task to complete
-            while (!exited.load())
-            {
-                waitFlag.wait(false);
-            }
+            status.wait(waitStatus::WAITING);
+            //此时status进入AWAKED状态，开始忙等直到FINISHED
+            while (status.load() != waitStatus::FINISHED){}
         }
         if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(result)))
         {
