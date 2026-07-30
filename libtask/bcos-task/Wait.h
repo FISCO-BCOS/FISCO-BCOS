@@ -54,9 +54,11 @@ constexpr inline struct SyncWait
         ReturnVariant result;
         boost::atomic_flag finished;
         boost::atomic_flag waitFlag;
+        boost::atomic_flag exited;
 
         auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
                           boost::atomic_flag& waitFlag,
+                          boost::atomic_flag& exited,
                           auto&&... args) -> task::Task<void> {
             try
             {
@@ -89,6 +91,7 @@ constexpr inline struct SyncWait
                 // execution needs to be notified
                 waitFlag.test_and_set();
                 waitFlag.notify_one();
+                exited.test_and_set();
             }
         }(std::forward<Task>(task), result, finished, waitFlag,
                                               std::forward<decltype(args)>(args)...);
@@ -99,7 +102,10 @@ constexpr inline struct SyncWait
             // 此处返回false说明task还在执行中，需要等待task完成
             // If false is returned, the task is still being executed and you need to wait for the
             // task to complete
-            waitFlag.wait(false);
+            while (!exited.load())
+            {
+                waitFlag.wait(false);
+            }
         }
         if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(result)))
         {
