@@ -132,3 +132,13 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
   §6.4 新增 q/r/s: q = bcos-rpc/EngineEndpoint.cpp:164 把以太坊 RLP 信封喂 tars 反序列化器且 rawTransactions 在任何生产路径从未赋值 → **op-node 实连第一道墙,已置顶于 k/l 之上**;r = LedgerMethods.h:233-235 未 has_value() 即解引用;s = RocksDBStorage.cpp:228-233 成功回调在 try 内 → 双回调 → 同一协程 handle resume() 两次(UB)。r/s 均 pre-existing,记账不修。
   实施者自陈三条待复审核实: ①**standalone 腿对本条不是红绿见证**——engine 测试仅编入 in-tree(if(TARGET bcos-framework) 门控),禁用写入时 standalone 照样 131/131,它只是无回归检查;建议把"各做一次自验"与"都构成红绿见证"这层区分补进 §11(控制器倾向采纳)。②命名债 ValidPayloadRegistersAllFourTables 现写五张表,**故意不改名**保批 3 报告的按名可追溯性。③零漂移:EngineServiceImpl.h 42 增/10 删,10 行删除全是注释行,-w 过滤后非注释删除为 0。
   【控制器操作纪律】本批与批 4 各有一次 watchdog 停滞,两次都停在"改完代码正要动文档"的节点(未提交 ~818 行 / ~180 行)。**已改为:代码一到绿就先提交,再动文档。**
+终审批6 复审 **ACCEPT**(547b7308d):0 Critical / 0 Important / 7 Minor,批 6 收口。
+  实现正确性独立核实: 五张表键/值/时机全对;第 4/5 表**共用同一 txHash 局部变量** → 同键是结构性保证而非测试巧合;失败语义为全有或全无(写入落在局部 fork,pushView 在 registerOpBlock 返回后)。
+  两次注入实验(审查者自跑): ①注释掉新写入 → RawTransactionEnvelopesAreRegisteredUnderEthTxHash **唯一翻红**(238/239);②故意也往 SYS_HASH_2_TX 写 → **第 5 条反例断言精确翻红,三类型各一次,断言 1-4 保持绿**,全仓仅该用例红 → 证明这条反例断言是唯一护栏、非冗余。
+  文档核实: q/r/s 与 §6.4 (f) 的**每一个引用行号逐一打开源码核对,全部属实**。并**加强条目 q**:rawTransactions 全仓**零生产赋值点**(不止"RPC 层未赋值"),该通路生产上完全断开——审查者背书置顶,且认为实际严重度高于文档描述。
+  【方法论收获·比实施者自陈更进一步】M-3: 实施者说 standalone 腿"只是无回归检查",审查者查明**更弱**——本批改动的两个头文件**全部 includer 都在 if(TARGET bcos-framework) 门控内**,standalone 二进制三轮重建时间戳未变(依赖图无边),其 131/131 是**空真**,连"无回归检查"都算不上。
+  → **§11 待修订(控制器采纳,与 5 视角结论一并落)**:除既有"每目录各做一次"外追加三句——(a) 报告必须点名**哪个目录是红绿见证**;(b) **依赖图为空的目录属空真,不得计入证据**;(c) **每批至少一个目录构成红绿见证**。不加 (c) 会留下真实失败模式:有人只在看不到该测试的目录跑注入、报"注入后依然全绿"而被误读为无回归——本批 standalone 腿正是这个形状,靠实施者主动披露才没成事故。
+  【新发现待补记 §6.4】M-6: 两张 OP 专用表(s_eth_block_header / s_eth_hash_2_rawtx)**不在 Ledger.cpp:2001-2012 的创世表清单**,storageTool/archiveTool 对其不可见。既有缺口,批 6 扩大一格,台账未记。
+  其余 Minor: M-1 命名债(审查者判实施者"不改名"的取舍**方向反了**——一次性重定向成本 < 持续误读成本,但有注释兜底故仅 Minor,下次触碰时改名+注记);M-2 EngineServiceImpl.h:1243 注释方位词写反;M-4 断言 3 对 0x02/0x04 用同一谓词未用尽判别力;M-5 OpSchedulerImpl.h:717 表名再发布无测试锚定(替身与断言同源,沿袭 c_ethBlockHeaderTable 既有形状);M-7 spec 与 README 日期口径不一。
+  零漂移独立复核: git diff -w 42 增 10 删、非注释删除 0;OP 依赖名未进签名——**由 test-bcos-engine 用无该成员的 StubScheduler/BloomScheduler 实例化通过反证**(比读代码更强的证据)。
+  ⚠️ spec §11 修订与 M-6 补记**故意延后**:5 个全分支复审视角正在读 spec 做一致性核对,此刻改它会让 P5 读到移动的靶子、行号失效。待 5 视角回收后合并处置。
