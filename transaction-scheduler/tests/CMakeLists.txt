@@ -19,6 +19,7 @@ set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the
 # using-directives other unity-merged TUs carry; compile its users standalone.
 set_source_files_properties(
-    "FullChainFixtureSmokeTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+    "FullChainFixtureSmokeTest.cpp" "BaselineSchedulerMPTL1UpgradeTest.cpp"
+    "BaselineSchedulerMPTGenesisTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")
