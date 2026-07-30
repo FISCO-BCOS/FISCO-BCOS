@@ -707,7 +707,6 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     const bool enableOpEngineRpc = _pt.get<bool>("op_engine_rpc.enable", false);
     const std::string listenIP = _pt.get<std::string>("op_engine_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("op_engine_rpc.listen_port", 8551);
-    const int threadCount = _pt.get<int>("op_engine_rpc.thread_count", 4);
     const int requestBodySizeLimit =
         _pt.get<int>("op_engine_rpc.request_body_size_limit", 10485760);
     const int batchRequestSizeLimit = _pt.get<int>("op_engine_rpc.batch_request_size_limit", 8);
@@ -718,7 +717,6 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_enableOpEngineRpc = enableOpEngineRpc;
     m_opEngineRpcListenIP = listenIP;
     m_opEngineRpcListenPort = listenPort;
-    m_opEngineRpcThreadSize = threadCount;
     m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
     m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
     m_opEngineJwtSecretFile = jwtSecretFile;
@@ -727,7 +725,6 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
                          << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("threadCount", threadCount)
                          << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
                          << LOG_KV("jwtSecretFile", jwtSecretFile)
@@ -1992,11 +1989,6 @@ const std::string& NodeConfig::opEngineRpcListenIP() const
 uint16_t NodeConfig::opEngineRpcListenPort() const
 {
     return m_opEngineRpcListenPort;
-}
-
-uint32_t NodeConfig::opEngineRpcThreadSize() const
-{
-    return m_opEngineRpcThreadSize;
 }
 
 uint32_t NodeConfig::opEngineHttpBodySizeLimit() const

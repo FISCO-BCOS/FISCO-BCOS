@@ -192,7 +192,6 @@ public:
     bool enableOpEngineRpc() const;
     const std::string& opEngineRpcListenIP() const;
     uint16_t opEngineRpcListenPort() const;
-    uint32_t opEngineRpcThreadSize() const;
     uint32_t opEngineHttpBodySizeLimit() const;
     uint32_t opEngineBatchRequestSizeLimit() const;
     const std::string& opEngineJwtSecretFile() const;
@@ -479,7 +478,6 @@ private:
     bool m_enableOpEngineRpc = false;
     std::string m_opEngineRpcListenIP = "127.0.0.1";
     uint16_t m_opEngineRpcListenPort{};
-    uint32_t m_opEngineRpcThreadSize{};
     uint32_t m_opEngineHttpBodySizeLimit{};
     uint32_t m_opEngineBatchRequestSizeLimit{};
     std::string m_opEngineJwtSecretFile;

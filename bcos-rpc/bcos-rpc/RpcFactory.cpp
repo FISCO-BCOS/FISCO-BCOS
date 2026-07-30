@@ -324,6 +324,8 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     return wsConfig;
 }
 
+// Init HTTP RPC service configuration. When _enableOPEngine=true, reads from
+// [op_engine_rpc] section (OP-Stack Engine API); otherwise reads from [web3_rpc].
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConfig(
     const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableOPEngine)
 {
@@ -414,7 +416,9 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     FilterSystem::Ptr _filterSystem, bool _enableOPEngine)
 {
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
-        m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager),
+        _enableOPEngine ? m_nodeConfig->opEngineBatchRequestSizeLimit()
+                        : m_nodeConfig->web3BatchRequestSizeLimit(),
+        std::move(_groupManager),
         std::move(_filterSystem), m_nodeConfig->web3SyncTransaction(), _enableOPEngine);
 
     // if enable op engine, set jwt verifier and register op engine json http request handler
