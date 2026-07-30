@@ -21,7 +21,7 @@ set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "FullChainFixtureSmokeTest.cpp" "BaselineSchedulerMPTL1UpgradeTest.cpp"
     "BaselineSchedulerMPTGenesisTest.cpp" "MPTFirstTouchLatencyBench.cpp"
-    "MPTSubsequentTouchP99Gate.cpp"
+    "MPTSubsequentTouchP99Gate.cpp" "MPTSyntheticReplayTest.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")
@@ -48,4 +48,12 @@ if(MPT_ACCEPTANCE_GATES)
         COMMAND test-transaction-scheduler -t MPTSubsequentTouchP99GateSuite)
     set_tests_properties(acceptance/MPTSubsequentTouchP99Gate PROPERTIES
         LABELS "acceptance;gate" ENVIRONMENT "MPT_ACCEPTANCE=1" TIMEOUT 3600)
+endif()
+# The synthetic replay is a fast correctness test (no env scaling): label the per-case
+# registration itself so ctest -L acceptance picks it up alongside the default run.
+# (if(TEST) guard: under FASTCTEST config_test_cases registers per-suite names instead.)
+if(TEST "MPTSyntheticReplaySuite/HundredBlockReplayIncrementalMatchesFromScratchOracle")
+    set_tests_properties(
+        "MPTSyntheticReplaySuite/HundredBlockReplayIncrementalMatchesFromScratchOracle"
+        PROPERTIES LABELS "acceptance" TIMEOUT 1800)
 endif()
