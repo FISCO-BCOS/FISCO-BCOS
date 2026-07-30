@@ -106,11 +106,21 @@ struct EESTBlockHeader
     std::string hash;  // block hash (for EIP-2935 history storage)
 };
 
+/// A single withdrawal in a block (EIP-4895).
+struct EESTWithdrawal
+{
+    std::string index;
+    std::string validatorIndex;
+    std::string address;
+    std::string amount;  // in Gwei
+};
+
 /// A single block in a blockchain test.
 struct EESTBlock
 {
     EESTBlockHeader blockHeader;
     std::vector<EESTTransaction> transactions;
+    std::vector<EESTWithdrawal> withdrawals;
 };
 
 /// A complete blockchain test fixture.
@@ -573,6 +583,20 @@ inline EESTBlockchainFixture parseBlockchainFixture(
             if (blockJson.isMember("transactions") && blockJson["transactions"].isArray())
                 for (auto const& txJson : blockJson["transactions"])
                     block.transactions.push_back(parseBlockchainTransaction(txJson));
+
+            // Withdrawals (EIP-4895)
+            if (blockJson.isMember("withdrawals") && blockJson["withdrawals"].isArray())
+            {
+                for (auto const& wJson : blockJson["withdrawals"])
+                {
+                    EESTWithdrawal w;
+                    w.index = readHexField(wJson, "index");
+                    w.validatorIndex = readHexField(wJson, "validatorIndex");
+                    w.address = readRequiredHex(wJson, "address");
+                    w.amount = readRequiredHex(wJson, "amount");
+                    block.withdrawals.push_back(std::move(w));
+                }
+            }
 
             fixture.blocks.push_back(std::move(block));
         }

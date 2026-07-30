@@ -188,7 +188,8 @@ public:
     template <class Storage>
     task::Task<void> finalizeBlock(Storage& storage, protocol::BlockHeader const& blockHeader,
         ledger::LedgerConfig const& ledgerConfig, evmc_revision rev,
-        std::optional<uint64_t> blockReward)
+        std::optional<uint64_t> blockReward,
+        std::vector<evmone::state::Withdrawal> const& withdrawals = {})
     {
         StorageStateView<Storage> stateView(storage);
 
@@ -198,7 +199,7 @@ public:
             std::copy_n(cb.begin(), sizeof(evmc_address), coinbase.bytes);
 
         auto diff = evmone::state::finalize(
-            stateView, rev, coinbase, blockReward, {}, {});
+            stateView, rev, coinbase, blockReward, {}, withdrawals);
 
         co_await applyStateDiff(storage, diff, rev, *m_hashImpl);
     }

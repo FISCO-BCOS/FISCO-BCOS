@@ -884,9 +884,24 @@ public:
                 ++txIndex;
             }
 
+            // Convert withdrawals to evmone format
+            std::vector<evmone::state::Withdrawal> evmWithdrawals;
+            for (auto const& w : block.withdrawals)
+            {
+                evmone::state::Withdrawal ew;
+                ew.index = static_cast<uint64_t>(test::hexToInt64(w.index));
+                ew.validator_index = static_cast<uint64_t>(test::hexToInt64(w.validatorIndex));
+                auto addrBytes = test::hexToBytes(w.address);
+                if (addrBytes.size() == sizeof(evmc_address))
+                    std::copy_n(addrBytes.begin(), sizeof(evmc_address), ew.recipient.bytes);
+                auto amountVal = test::hexToU256(w.amount);
+                ew.amount_in_gwei = static_cast<uint64_t>(amountVal);
+                evmWithdrawals.push_back(ew);
+            }
+
             // Apply block reward via finalize() (uses bcos-evm's built-in logic)
             task::tbb::syncWait(
-                executor.finalizeBlock(storage, blockHdr, m_ledgerConfig, rev, blockReward));
+                executor.finalizeBlock(storage, blockHdr, m_ledgerConfig, rev, blockReward, evmWithdrawals));
 
             // Accumulate block hash for HISTORY_STORAGE system call in subsequent blocks
             if (!block.blockHeader.hash.empty())
