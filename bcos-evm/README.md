@@ -94,10 +94,31 @@ design:`docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md`(r
   (以 `static_assert` 钉住,载体一旦加入立刻翻红);
 - **extraData 形状校验、Holocene EIP-1559 baseFee 父子一致性校验未做**:真实 op-geth 会拒绝的
   baseFee 错块,本验证者放行;
-- **`SYS_HASH_2_TX` 从不写入**(2026-07-29 终审补披露,design §6.4 条目 f):块登记写四张表
-  (`SYS_HASH_2_NUMBER` / `SYS_NUMBER_2_HASH` / ETH 头表 / `SYS_HASH_2_RECEIPT`),而它援引的
-  生产先例 `prewriteBlockToBuffer` 同时还写 `SYS_HASH_2_TX`。**后果:OP 接受的块,回执可按 tx
-  hash 查到,原始交易本体无法按 hash 取回**。本轮只补披露、不补实现;
+- **交易本体只在 OP 专用表可查,通用 `SYS_HASH_2_TX` 刻意不写**(2026-07-30 终审批 6 实现,
+  design §6.4 条目 f):块登记写**五**张表,新增 `s_eth_hash_2_rawtx`——键 =
+  `keccak(raw envelope)`(= 以太坊交易哈希,**与 `SYS_HASH_2_RECEIPT` 同键**),值 = 原始
+  EIP-2718 envelope 逐字节。因此 OP 块的交易本体现在**可以**按 tx hash 取回,但检索面是
+  **envelope 语义**的(取回的是原字节,不是 `bcos::protocol::Transaction` 对象)。
+  **通用 `SYS_HASH_2_TX` 仍不写,这是刻意规避而非遗漏**:该表存 tars 编码的
+  `protocol::Transaction`,而其读侧把字节直接交给
+  `createTransaction(..., checkSig=false, checkHash=false)`;以太坊 envelope 放进去**不会
+  响亮失败**(`bcostars::Transaction` 每字段都是 `optional`、tars 标签扫描器的 `catch` 是空的),
+  而是解出全默认对象并被工厂盖上一个**自洽的新哈希**——消费者拿到**非空、看似合法、
+  `hash() != key` 而无人核对**的假交易,并会流到 `eth_getTransactionByHash` 响应与 txpool
+  `requestMissedTxs`(**共识提案验证**)。改为"映射成真 Transaction"同样不可行:唯一映射器
+  硬拒 `0x04`/`0x7E`,tars IDL 无处安放 `sourceHash`/`mint`/`authorizationList`,且
+  `Transaction::verify` 会对**无签名**的 deposit 做 ecrecover **伪造出一个发送者**。
+  **判据:查不到是明确的缺失,假交易是静默的错误答案且已进共识路径。**
+  **已知边界(不遮掩)**:让该行缺失本身在一条路径上也不干净——`LedgerMethods.h:233-235` 取
+  `SYS_HASH_2_TX` 行后未判 `has_value()` 即解引用,缺行是 UB 而非错误(design §6.4 条目 r)。
+  那是**与 OP 无关的既有缺陷**、今天无 OP 消费者,且写假交易只会把**可发现的崩溃换成不可发现
+  的错答案**;
+- **OP 路径在生产上没有可用的 RPC 入口**(design §6.4 条目 q,**op-node 实连前置清单最置顶**):
+  `ExecutionPayload::rawTransactions` 的非测试赋值点只有 `Types.h`/`OpDepositEncode.h`/
+  `EngineServiceImpl.{h,cpp}`,**RPC 层从未赋值**;且现有 `EngineEndpoint.cpp:164` 的 newPayload
+  解析把**以太坊 RLP envelope 喂给 tars 反序列化器**(与上一条同类的编码契约错误,只是发生在
+  **入口**)。**入口不通,后面的判决语义再对也到不了**;`bcos-rpc` 属裁定 A6 park 范围与本闭环
+  零触碰硬约束,故本期不做;
 - **四类块级拒绝共用同一条 `validationError`**(design §6.4 条目 j):`OpSchedulerImpl` 的
   `catch(...)`(RTTI 变通)取不回原始 `what()`,于是 `OpBlockExecute.cpp` 的四处块级 throw
   (空块 / 首笔非 L1 attributes deposit / deposit 乱序 / 非 deposit 校验失败)抵达 engine 后

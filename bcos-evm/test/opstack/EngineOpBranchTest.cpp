@@ -18,7 +18,8 @@
 // Tests (a)-(h) drive the REAL `OpSchedulerImpl`. Three further groups need outcomes real
 // execution cannot be steered into from hand-written literals, and are driven by `StubOpScheduler`
 // (see its comment — the seam is pure duck typing, so a stand-in is a first-class client of it):
-//   (i) end-to-end VALID + the four-table block registration asserted table by table;
+//   (i) end-to-end VALID + block registration asserted table by table (the original four; the
+//       fifth table added in batch 6 is asserted by (z) below);
 //   (j) each of the six comparison-surface fields mismatched individually;
 //   (k) OpStorageError -> -32603, never INVALID;
 //   (l) non-consecutive blockNumber -> INVALID (task-5b review I2).
@@ -452,7 +453,7 @@ void sealWithBlockHash(bcos::engine::NewPayloadRequest& request)
 // i.e. the seam is pure duck typing, with no inheritance and no bcos-evm dependency on the engine
 // side. That is exactly what lets this stub stand in for `OpSchedulerImpl` and drive the branches
 // that real execution cannot reach without op-geth golden values (task-5b review I1): the
-// end-to-end VALID path with its four-table registration, each of the six comparison-surface
+// end-to-end VALID path with its table-by-table registration, each of the six comparison-surface
 // mismatches individually, and the OpStorageError -> -32603 classification.
 //
 // `computeTxRoot` deliberately forwards to the REAL `computeOpTxRoot`: the transactionsRoot feeds
@@ -929,7 +930,14 @@ TEST(EngineOpBranch, GetPayloadIsRefusedInOpMode)
 // golden gate cannot reach two of them either (a golden vector is by construction consistent, so
 // it exercises neither an individual field mismatch nor a storage fault). Hence the stub.
 
-// (i) Step 6, design §6.1: the end-to-end VALID path and its four-table block registration.
+// (i) Step 6, design §6.1: the end-to-end VALID path and its block registration.
+//
+// Naming note (batch 6): registration now writes FIVE tables — `s_eth_hash_2_rawtx` was added by
+// decision (B). This test still covers the original four; the fifth is covered by
+// `RawTransactionEnvelopesAreRegisteredUnderEthTxHash` below, which also asserts the deliberate
+// emptiness of the generic `SYS_HASH_2_TX`. The test NAME is left as-is on purpose: batch-3's
+// report cites it by name as the red witness for the receipt-write mutation experiment, and
+// renaming it would break that traceability. The name is stale, the coverage is not.
 TEST(EngineOpBranch, ValidPayloadRegistersAllFourTables)
 {
     StubFixture fixture;
