@@ -144,3 +144,102 @@ payload 值离开语料常量,`encode()` 就会变,因此该敏感性用例在�
 - **结论**:**证实**。`decodeAuthorizationList`(`OpSchedulerImpl.h:477`)的
   `decodeU256Scalar` 接受了一个 op-geth 会以 `rlp: input string too long for uint8` 整笔拒绝的值,
   整笔交易正常解出。
+
+---
+
+## 4. P5 · E3 - E6
+
+### E3 `validateOpNewPayloadRequest` 的 8 条零覆盖拒绝
+
+- **来源**:`wb-review-p5-report.md` I-2 / §2.1 表
+- **改了什么**:**逐条**(8 次独立的 改→重建→跑→还原)把对应的
+  `return std::string("…");` 替换成 `/* E3-REMOVED */;`(保留 `if`,只去掉拒绝),
+  每次只动一条。脚本见 scratchpad `e3.py`,每轮都独立重建了两个二进制。
+- **实测现象**(全部 in-tree):
+
+  | 移除的检查 | `bcos-evm-opstack-tests` | `test-bcos-engine` |
+  |---|---|---|
+  | #1 `rawTransactions is required…` | 239/239 | 绿 |
+  | #4 `parentBeaconBlockRoot must be a 32-byte hash…` | 239/239 | 绿 |
+  | #5 `withdrawalsRoot is required…` | 239/239 | 绿 |
+  | #7 `blobGasUsed must be present…` | 239/239 | 绿 |
+  | #9 `blockNumber must not be negative` | 239/239 | 绿 |
+  | #10 `gasLimit exceeds the uint64 range…` | 239/239 | 绿 |
+  | #13 `gasUsed exceeds the uint64 range…` | 239/239 | 绿 |
+  | #14 `blobGasUsed exceeds the uint64 range…` | 239/239 | 绿 |
+
+- **结论**:**证实**,8/8 与原报告预期完全一致。
+- **未做的部分(如实说明)**:原报告建议对其中 4 条 UB 类另用 **ASan 构建**跑。
+  **本次未做**——现有测试语料的 optional 全部 engaged,常规构建里这 4 条根本不会解引用空
+  optional,ASan 也不会有额外信号;真要观察 UB 需要另造一个"缺字段"的请求,
+  那已经是原报告建议的**补测**而不是本次的验证实验。作为无法执行/无增量记录在此。
+
+### E4 已知块短路(`EngineServiceImpl.h:915-920`)—— **与原报告预期不符,M-5 需修正**
+
+- **来源**:`wb-review-p5-report.md` M-5
+- **改了什么**:删掉 step 3b 的
+  `if (auto knownBlockNumber = co_await getBlockNumber(view, payload.blockHash, fromStorage); …) co_return makeStatus(Valid, …)` 整块。
+- **原报告 / 代码注释的预期**:
+  `EngineNewPayloadGateTest.cpp:1216-1234` 明写
+  「with the short-circuit removed, **both sub-cases come back INVALID**」,
+  且给了两种**不同机制**(transfer 的 sender nonce 已推进 → `processOpBlock` 拒 → INVALID;
+  deposit-only 的 mint 二次入账 → 收据/状态比对失配 → INVALID)。
+- **实测现象**:
+
+  ```
+  [ RUN      ] EngineNewPayloadGate.GoldenVectorRedeliveryIsValidWithoutReExecution
+  unknown file: Failure
+  C++ exception with description "non-tip parent not supported: a different block is already
+  registered at this height, so the forked view's base state is not the payload's parent"
+  thrown in the test body.
+  ```
+
+  用例确实**翻红**,但:
+  1. **不是 INVALID**,而是 **step 3c 的非链尾检查抛出 `OpExecutionInternalError`**
+     (生产上映射为 **-32603**,不是判决);
+  2. 异常**逃出 `newPayload` 并中止整个 TEST**,所以第二个子用例
+     (`isthmus_deposit_only`)**根本没运行**;
+  3. 我另做了一次实验把循环临时改成只跑 `isthmus_deposit_only`,得到的是
+     **完全相同的那条 non-tip 异常** —— 两个子用例走的是**同一条**路径,
+     而不是注释所说的"两种不同机制"。
+- **结论**:**证伪 / 需降级**。
+  - 用例作为"短路存在性"的**红证人有效**(移除即红),这一点不受影响;
+  - 但注释 `:1216-1234` 与 M-5 里"两条子用例均因 INVALID 翻红""两种不同机制"的**论述为假**,
+    实际先命中的是 `:956-964` 的非链尾闸。这也反过来**印证**了 `:906-910` 那段
+    placement 注释自己写的理由("BEFORE the non-tip check below, because a re-delivered block
+    always has a child height occupied (by itself) and would otherwise trip that check")——
+    注释的 placement 论证是对的,而它下方那段"删掉会怎样"的论证是错的,两段互相矛盾。
+  - **建议**:把 `EngineNewPayloadGateTest.cpp:1222-1234` 那段改写为实测事实
+    (「移除短路后,重投块先撞上 step 3c 非链尾闸并抛 -32603;两个子用例机制相同」),
+    并把 M-5 的"名字强于断言"结论保留但换掉理由。
+
+### E5 `expectExhausted` 的 throw(`OpSchedulerImpl.h:436-438`)
+
+- **来源**:`wb-review-p5-report.md` §2.3 / E5
+- **改了什么**:把 `throw OpConsensusError("… unexpected trailing bytes in " + what)`
+  换成 `(void)body; (void)what;`(8 个 call site 一起失效)。
+- **实测现象**:in-tree **239/239 全绿**,`test-bcos-engine` 全绿。
+- **结论**:**证实**。这条"唯一阻止信封尾部追加垃圾字节"的防线在全套测试里**零守护**。
+  与 C-1 合看尤其值得注意:两者是同一条隐式契约
+  (`computeOpTxRoot` ↔ `DeriveSha` 等价性依赖解码器严格性)的两个破口,**都无守护**。
+
+### E6 `gasLimit` 的单支点
+
+- **来源**:`wb-review-p5-report.md` I-4 / E6
+- **改了什么**:`EngineServiceImpl.cpp` 的
+  `.gasLimit = narrowU256ToU64(payload.gasLimit).value(),` → `.gasLimit = 0x989680,`
+- **语料实测**:`vectors/*.json` 的 `env.currentGasLimit` 只有两个取值 ——
+  **32 份 `0x989680` + 1 份 `0x1c9c380`(`isthmus_big_block_130tx`)**。
+- **实测现象(第一半)**:**恰好 1 例翻红** ——
+  `EngineNewPayloadGate.AllThirtyThreeGoldenVectors`,失败 SCOPED_TRACE 唯一指向
+  `isthmus_big_block_130tx`,两条断言:
+  `rebuildOpEthHeader().encode() != golden.encodedHeaderHex`(`:893`)与
+  `expected VALID, validationError=blockHash does not match the reconstructed block header`(`:915`)。
+  其余 238 例全绿。
+- **实测现象(第二半)**:原报告说"删除 `isthmus_big_block_130tx` 后再跑"。
+  **删除向量文件会连带打红语料清单用例**(`SHA256SUMS` 39/39 + 文件集合双向断言),
+  所以我改用**等价且不触碰语料**的做法:在 `AllThirtyThreeGoldenVectors` 的循环里
+  临时 `continue` 掉该 id(`ASSERT_EQ(ids.size(), 33U)` 仍然成立)。
+  结果:**239/239 全绿**。
+- **结论**:**证实**。`gasLimit` 字段的全部判别力**集中在一份向量上**,
+  该向量一旦被删/改,整个 `gasLimit` 映射即刻零守护。
