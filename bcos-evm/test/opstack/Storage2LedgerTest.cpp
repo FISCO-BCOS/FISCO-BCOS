@@ -1159,3 +1159,77 @@ TEST(Storage2Ledger, MlsViewExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFa
     EXPECT_FALSE(account2->has_storage);
     EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
 }
+
+// (z9) 终审批 9 F-3:非 32 字节槽**值**这条路此前**全无测试** —— 不只是复审说的"有意的不对称
+//      没有用例",连**终审 M-1 自己修的那个 throw**(fetchStorage / fetchAllStorage 的值长度
+//      校验:长度 != 32 不再静默降级成合法零值)也从来没有过红绿见证。唯一沾边的既有用例是
+//      EngineNewPayloadGateTest 的 StorageLayoutFaultIsInternalErrorNotInvalid,但它注入的是
+//      29 字节**键**(op_gate_injected_layout_fault),走的是 `fieldKey.size() != 32` 那条
+//      **完全不同**的 throw —— 键那条一直有覆盖,值那条一条都没有。
+//
+//      本例把不对称的三条腿一次钉死。三个**独立的 bridge 实例**:毒旗是黏的(只记第一条,
+//      后续不覆盖),共用一个实例会让第 (3) 腿读到前两腿留下的旗,断言失去意义。
+//        (1) 单槽读 get_storage → fetchStorage 的 length_error → 毒旗(M-1 的红绿见证 A);
+//        (2) 全量读 visitAccounts → fetchAllStorage 的 length_error → 毒旗(见证 B;
+//            stateRootOf 走的正是这条,即"每块作废"的那条路);
+//        (3) has_storage 侧**刻意不对称**:isZeroSlotValue 只对"恰 32 字节全零"判真,长度不对
+//            的内容被保守地算作"有内容" → has_storage=true 且**不**毒旗。这是有意为之而非
+//            遗漏(EIP-7610 方向上偏保守 = 拒绝在其上 CREATE),权威的长度校验留给读路。
+//            钉住它,免得下一个人把这两侧"顺手统一掉"。
+TEST(Storage2Ledger, NonThirtyTwoByteSlotValueThrowsOnReadButCountsAsContentForHasStorage)
+{
+    // fixture:一行 32 字节合法槽**键** + 31 字节的槽**值**(既不是 32 字节,也不全零)。
+    // 只能绕过 EVMAccount::setStorage 直接 writeOne —— setStorage 的形参就是 bytes32,
+    // 造不出长度违规的值(与 (z1) 组"零值槽行只能直接落库"同一个理由)。
+    const auto slot = slotKey(3);
+    const std::string_view slotView(reinterpret_cast<const char*>(slot.bytes), sizeof(slot.bytes));
+    const auto tableName = tableNameOf(0x01_address);
+    const std::string shortValue(31, '\x7f');
+
+    const auto seed = [&](MutableStorage& storage) {
+        Account acc(storage, 0x01_address, false);
+        bcos::task::syncWait(acc.create());
+        bcos::task::syncWait(
+            bcos::storage2::writeOne(storage, bcos::executor_v1::StateKeyView{tableName, slotView},
+                bcos::storage::Entry(shortValue)));
+    };
+
+    // (1) 单槽读:fetchStorage 的值长度 throw → get_storage 的 catch → 毒旗 + 安全值(全零)。
+    {
+        MutableStorage storage;
+        seed(storage);
+        Storage2Ledger<MutableStorage> bridge(storage);
+        EXPECT_EQ(bridge.get_storage(0x01_address, slot), evmc::bytes32{});
+        EXPECT_TRUE(bridge.poisoned())
+            << "31 字节槽值被 get_storage 当成合法零值静默吞掉了(终审 M-1 修的正是这个)";
+        EXPECT_NE(bridge.firstError().find("fetchStorage: storage slot value size mismatch"),
+            std::string_view::npos)
+            << bridge.firstError();
+    }
+
+    // (2) 全量读:fetchAllStorage 的值长度 throw → visitAccounts 的 catch → 毒旗 + 提前终止。
+    //     这条就是 stateRootOf 走的路径,毒旗一置整块作废。
+    {
+        MutableStorage storage;
+        seed(storage);
+        Storage2Ledger<MutableStorage> bridge(storage);
+        EXPECT_FALSE(bridge.visitAccounts([](const auto&) { return true; }));
+        EXPECT_TRUE(bridge.poisoned());
+        EXPECT_NE(
+            bridge.firstError().find("storage slot value size mismatch"), std::string_view::npos)
+            << bridge.firstError();
+    }
+
+    // (3) has_storage 侧的有意不对称:同一行**不**触发 throw,而是被算作"有内容"。
+    {
+        MutableStorage storage;
+        seed(storage);
+        Storage2Ledger<MutableStorage> bridge(storage);
+        auto account = bridge.get_account(0x01_address);
+        ASSERT_TRUE(account.has_value());
+        EXPECT_TRUE(account->has_storage)
+            << "isZeroSlotValue 把长度违规的内容判成了'零/不存在':has_storage 少报会让 EIP-7610"
+               "方向上**放行** CREATE,与保守取向相反";
+        EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+    }
+}
