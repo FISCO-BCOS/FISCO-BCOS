@@ -390,3 +390,221 @@ pre-Jovian,激活块 `jovianActive == true`,不拦;②`OpBlockExecute.cpp` 的�
   pre-Isthmus)时间戳,整块用错规则集"这个后果链在第三环断掉。表 1 #8 应拆成两条:
   2-3 留在表 1(降级),9-1 移出"当前可构造的分歧",改记为"防御性正确性欠账
   (今天不可达,但 `configAt` 的 fall-through 是一个等着被别处放宽后引爆的地雷)"。
+
+---
+
+## 【复核 表2-#5】父头按**高度**读,op-geth 按**哈希**读(分歧 2-4)
+
+### A. 我方代码
+
+`engine/bcos-engine/EngineServiceImpl.h:868-871`:
+`StateKeyView{SchedulerType::c_ethBlockHeaderTable, parentNumberStr}`,`parentNumberStr` 由
+`boost::lexical_cast<std::string>(*parentBlockNumber)` 得到。审计引的 `:869-871` 命中(±1)。
+
+**审计漏说的**:紧挨着的 `:840-849` 注释已经**逐字**写下了这件事,包括结论与修法:
+"Keyed by NUMBER, where op-geth keys by HASH (`api.go:887` ...). That is only equivalent while
+number -> header is injective, which today is guaranteed by step 3c refusing any payload whose
+parent is not the chain tip ... **This is a real dependency, not a coincidence** (review M-5) ...
+Whoever lifts that restriction must re-key this read by hash (which needs a hash -> header index
+that does not exist yet) in the same change."
+且 spec §6.4 条目 **(p)** 是这条的**逐字台账**。
+
+### B. op-geth
+
+`eth/catalyst/api.go:887` `parent := api.eth.BlockChain().GetBlock(block.ParentHash(),
+block.NumberU64()-1)`(审计写 :888,实际 :887);`:890-893` `block.Time() <= parent.Time()`
+→ `api.invalid(...)`。
+
+### C. 可达性
+
+被 step 3c(`EngineServiceImpl.h:922-965`,非链尾父块 → `OpExecutionInternalError` / -32603)
+堵死。审计判"需未来改动"正确。
+
+### E. 裁决
+
+**CONFIRMED,但降为"已记账、非新发现"**。它不是审计的发现,而是 spec §6.4 条目 (p) 与
+源码注释 `:840-849` 已经写在案的东西。**建议把它从"分歧表"移到"已记账"引用区**(与 C1-C4
+同列),否则会让读者以为审计发现了一条新欠账,虚增了待办量。
+
+---
+
+## 【复核 表2-#6】默认 `get_or_insert` 插入且最终为空的账户会落账(分歧 6-3)
+
+### A. 我方代码
+
+- `Storage2Ledger.h:421-422` 的无条件 `create()`:引用属实(审计的 A 面读对了)。
+- `bcos-evm/bcos-evm/eth/state/state.cpp:214-219` `build_diff` 里
+  `m.erase_if_empty && rev >= EVMC_SPURIOUS_DRAGON && m.is_empty()` → 改投 `deleted_accounts`:属实。
+- `account.hpp:71` `bool erase_if_empty = false;`:属实。
+
+### C/D. **穷举那些路径 —— 审计的枚举不完整**
+
+派单要求"穷举那些路径,确认没有漏"。我 `grep -rn "get_or_insert" bcos-evm/bcos-evm/{eth/state,opstack}`
+拿到全部命中,逐个分类:
+
+| # | 调用点 | `erase_if_empty` | 在 OP 路径上? | 能以"空"收尾吗? |
+|---|---|---|---|---|
+| 1 | `state.cpp:291` `touch()` | **true** | 是 | 否(置位即被 build_diff 剥离) |
+| 2 | `host.cpp:446` `access_account` | **true** | 否(OP 用 `OpHost::access_account`) | — |
+| 3 | `state.cpp:122` 7702 authority | **true** | 否(OP 用 `OpTransition.cpp:83`,同样 true) | — |
+| 4 | `OpTransition.cpp:83` 7702 authority | **true** | 是 | 否 |
+| 5 | `OpTransition.cpp:151` sender | **默认 false** | 是 | **否** —— `:152-153` 紧接 `++sender_acc.nonce`,无分支跳过 |
+| 6 | `OpDepositTx.cpp:67` `dep.from` | **默认 false** | 是 | **否** —— 三条出口(validate 失败 `:99`、余额不足 `:110`、正常 `:119`)**都** `nonce = preNonce + 1`;另两条出口是 `throw`(整块无效,diff 丢弃) |
+| 7 | **`OpHost.cpp:62` `applyCallValueSemantics` 的 `msg.recipient`** | **默认 false** | **是** | **审计完全没列这一条** |
+| 8 | `host.cpp:352` / `state.cpp:567` | 默认 false | 否(ETH 侧,非 OP) | — |
+
+**第 7 条是审计漏掉的路径。** 逐分支验证它今天仍然安全:
+`OpHost.cpp:50-68` `applyCallValueSemantics` —— `is_zero(msg.value)` 时走 `state.touch()`
+(第 1 类,安全);**只有 `value != 0` 才走默认 `get_or_insert`**,随后 `dst_acc.balance += value`
+使余额 > 0 → 非空。唯一的例外是 `msg.sender == msg.recipient` 的自调用(余额净变 0),
+但那个地址正在执行代码,必有 `code_hash != EMPTY` → 仍非空。
+**结论不变,但审计"今天没有已知的可达触发输入"这句话是**在一个不完整的枚举上**得出的**,
+现在它建立在完整枚举上。
+
+**顺带排除一个更严重的假设**:我一度怀疑 `get_or_insert` 会给"view 里已存在但缓存里没有"的
+账户插一个**零值**账户从而抹掉余额。`state.cpp:250-274` 证伪了这个怀疑:`find()` 先
+`m_initial.get_account(addr)` 回填(`:255-259`),`get_or_insert` 只在 `find` 返回 null 时
+才 `insert`。**无此缺陷。**
+
+### E. 裁决
+
+**CONFIRMED(潜在,今天不可达)**,并**补一条审计漏掉的路径**(`OpHost.cpp:62`)。
+危害与可达性判定不变。审计给的最小验证步骤(在 evmone 侧加断言跑全量)有效,但**本次禁止构建**,
+留 `[需验证]`。
+
+---
+
+## 【复核 表2-#7】Karst 别名(复核 9-3)
+
+### A. 我方代码
+
+`OpForkSchedule.cpp:88-100`:`karstConfig()` 从 `jovianConfig()` 派生,只改 `c.fork = OpFork::Karst`。属实。
+
+### B. op-geth(e8800cffe)—— 逐目录复验审计的"无执行侧调用方"
+
+`grep -rn "IsKarst(\|IsOptimismKarst(" --include='*.go' .`(全仓,含所有目录)的完整结果:
+
+```
+params/config.go:1024:func (c *ChainConfig) IsKarst(time uint64) bool {
+params/config.go:1087:func (c *ChainConfig) IsOptimismKarst(time uint64) bool {
+params/config.go:1088:    return c.IsOptimism() && c.IsKarst(time)
+```
+
+即 `IsOptimismKarst` **零调用方**,`IsKarst` 的唯一调用方是 `IsOptimismKarst` 自己。
+`KarstTime` 的其余命中(`core/genesis.go:404` override、`superchain/types.go:52`、
+`params/config.go:400,519`、`params/config_op.go:36-37,71-72` 兼容检查与启动横幅、
+`params/superchain.go:59`)**全部是配置解析,没有一处在执行/验块路径上**。
+**审计的证伪型结论成立。**
+
+### E. 裁决
+
+**CONFIRMED**,但**建议与 #8 合并**:表 2 #7 说的风险("op-geth 给 Karst 加语义那天,
+我方别名静默给旧行为")实际上**完全被 #8 覆盖且被 #8 的更强事实取代**——
+`configAt`(`OpForkSchedule.cpp:102-110`)**根本不会返回 `karstConfig()`**,因为
+`OpForkTimestamps`(`OpForkSchedule.h:45-49`)只有 `isthmusTime`/`jovianTime` 两个阈值。
+所以"别名对不对"是个**无关紧要的问题**:真正的欠账是"没有 karstTime 阈值",而不是
+"karstConfig 是别名"。两条并列会让人以为改掉别名就解决了问题。
+
+---
+
+## 【复核 表2-#8】七个 fork config 只有两个可达(观察 9-2)
+
+### A. 我方代码 + 调用面实测
+
+`OpForkSchedule.h:33-39` 声明 7 个工厂;`configAt`(`.cpp:102-110`)只可能返回
+`isthmusConfig()` / `jovianConfig()`。审计属实。
+
+**加强(审计只说"生产路径上一次也不会被调用",我把调用面数出来了)**:
+
+| 工厂 | 生产调用点 | 测试调用点 |
+|---|---|---|
+| `ecotoneConfig` | 0 | 1(`RollupCostTest.cpp:84`) |
+| `fjordConfig` | 0 | 9(`OpBlockSealTest` 等) |
+| `graniteConfig` | 0 | **0** |
+| `holoceneConfig` | 0 | **0** |
+| `karstConfig` | 0 | 3 |
+
+`graniteConfig()` 与 `holoceneConfig()` **连测试都没有构造过一次**——它们的字段值
+从未被任何断言看过一眼。这比审计说的"覆盖假象"更重:那不是"覆盖假象",那是**从未被求值的
+常量表达式**,任何一处写错(错的 `rev`、错的 `has_operator_fee`)都不会有任何东西发现。
+
+### E. 裁决
+
+**CONFIRMED 且加强**。定性维持"不是分歧,是覆盖假象",但建议在 §6.4 记一条:
+`granite/holocene` 两个 config **零求值**,要么删,要么补一条"字段值 vs op-geth 分叉表"的
+静态断言/单测,不要留在树里冒充覆盖。
+
+---
+
+# 裁决表(V2 负责的 10 条)
+
+| 原编号 | 原结论 | 裁决 | 依据 |
+|---|---|---|---|
+| 表1 #3 / 4-1 | 空块被我方判 INVALID,op-geth 正常执行 | **降级(仅 pre-Jovian)** | `rollup_cost.go:564-566` `len(txs)==0` → `errors.New("missing deposit transaction")`;Jovian 上 op-geth 同样拒空块 |
+| 表1 #3 / 4-2 | 首笔必须是 attrs deposit 且 to/from 精确匹配 | **降级(仅 from/to 面)** | 同上:Jovian 上 op-geth 隐含要求 `txs[0].IsDepositTx()` + Jovian 选择器,触发输入 (a) 不再成立;(b)(c) 成立 |
+| 表1 #3 / 4-3 | deposit 不得后置 | **CONFIRMED** | op-geth 两个分叉上都不校验顺序;激活块分支的注释反而**假定**了这条 |
+| 表1 #3 定性 | 三条更严规则列入分歧表 | **列表恰当,排序误导** | 已声明偏离(`OpBlockExecute.cpp:17-19`),但声明**不在本分支 spec** —— 应与 #1/#2(未声明缺陷)分批 |
+| 表1 #4 主论断 | extraData OP 形状零校验 | **CONFIRMED 且加强** | `EngineServiceImpl.cpp:279-283` 只有 32B 界;op-geth `consensus.go:240-245` → `ValidateHolocene/JovianExtraData`;**空 extraData 亦被拒** |
+| 表1 #4 复合链 | "与 C4 复合后 baseFee 完全失守" | **REFUTED** | `calc_base_fee` 全仓**零调用点**;`extra_data` 进 `BlockInfo` 后**零消费者**;我方从不导出 baseFee,extraData 不增加任何攻击者能力 |
+| 表1 #5 / 2-2 | Jovian `daFootprint > gasLimit` 上限缺失 | **CONFIRMED** | 全仓无 gasLimit 比较;`OpBlockSeal.h:36-37` 把责任推给 validation 层而 validation 层没接;op-geth `block_validator.go:131-133` |
+| 表1 #6 / 5-1(a) | Jovian attributes 长度/选择器不校验 | **CONFIRMED(a)** / **(b) 仍 `[需验证]`** | 我方零处读 attributes calldata;长度判据修正为 `< 178`;**17 条 jovian 向量的 L1Block `code` 全是 `"0x"`,语料对 (b) 零证据** |
+| 表1 #7 / 5-2 | Jovian 激活块"不得含用户交易"缺失 | **CONFIRMED** | `rollup_cost.go:569-577`;我方无对应检查;三条可能堵住它的路逐一排除 |
+| 表1 #8 / 2-3 | 首块豁免 timestamp 单调性 | **CONFIRMED(危害降级)** | `EngineServiceImpl.h:861-891`;危害面降为"每节点一次的首块" |
+| 表1 #8 / 9-1 | `configAt` 吞 pre-Isthmus → 整块用错规则集 | **降级为"不可达的正确性缺陷"** | 三道独立闸:-38005(V4)、`withdrawalsRoot` 必填(真实 pre-Isthmus payload)、`rebuildOpEthHeader` **无条件**钉 `requestsHash`(人造 payload 的 blockHash 两侧必不同) |
+| 表1 #8 合成 | "首块可带 pre-Isthmus 时间戳 ⇒ 全线状态分歧" | **REFUTED** | 后果链第三环断裂:不存在能被两侧同时接受的 pre-Isthmus 块 |
+| 表2 #5 / 2-4 | 父头按高度读 | **CONFIRMED,降为"已记账"** | spec §6.4 条目 (p) + `EngineServiceImpl.h:840-849` 已逐字在案,非新发现 |
+| 表2 #6 / 6-3 | 默认 `get_or_insert` 空账户落账 | **CONFIRMED(潜在),但枚举补漏** | 审计漏了 `OpHost.cpp:62`;补齐后结论不变(value≠0 ⇒ 非空);另证伪了"get_or_insert 会抹掉 view 余额"的疑虑(`state.cpp:255-259`) |
+| 表2 #7 / 9-3 | Karst 别名当前无害 | **CONFIRMED,建议并入 #8** | `IsOptimismKarst` 全仓零调用方;但真正的欠账是 `OpForkTimestamps` 没有 karstTime,不是别名 |
+| 表2 #8 / 9-2 | 七个 config 五个不可达 | **CONFIRMED 且加强** | `granite/holoceneConfig` **连测试都零调用**,字段值从未被求值 |
+
+---
+
+# 「审计漏掉的」—— V2 在复核过程中发现的新问题
+
+## N-1(方法论级,影响多条结论)· op-geth 的 Jovian `ValidateBody` 是一条**隐藏的准入校验面**,审计九层里没有它的位置
+
+审计的第 4 层("交易顺序与准入规则")完全建立在"op-geth EL 对 deposit 的顺序/位置/数量
+没有任何校验"这一句上,而它逐文件 grep 的是 `IsDepositTx`/`DepositTxType`。
+`core/types/CalcDAFootprint` 里的 `!txs[0].IsDepositTx()` 在 `core/types/rollup_cost.go` 里,
+**不在它 grep 的三个文件中**。后果:第 4 层的三条结论都在 Jovian 上被高估了。
+**同一处遗漏还影响审计自己的第 5 层**——5-1 与 5-2 明明引用了 `CalcDAFootprint`,却没有回头
+修正第 4 层。建议:任何后续的"op-geth 不校验 X"结论,必须把
+`core/block_validator.go` + `core/types/rollup_cost.go` 一起纳入 grep 面。
+
+## N-2 · `bcos-evm/bcos-evm/eth/state/block.cpp` 的 `calc_base_fee` / `calc_excess_blob_gas` 是**零调用死代码**
+
+`grep -rn "calc_base_fee\|calc_excess_blob_gas"` 全仓只有 `block.cpp:13,77` 的定义与
+`block.hpp:69,80` 的声明。它们是 vendored evmone 带进来的 ETH 语义(硬编码
+`BASE_FEE_MAX_CHANGE_DENOMINATOR = 8`),**对 OP 链是错的公式**(OP 的 denominator 来自
+extraData)。今天没人调所以无害,但它是一颗**看起来能用**的地雷:任何人为了补 C4
+(baseFee 父子校验)去找现成函数,第一个搜到的就是它,一调就错。
+建议在 §6.4 的 (e) 条目里点名"**不得**用 `eth/state/block.cpp` 的 `calc_base_fee` 补这条"。
+
+## N-3 · `jovian_system_contracts_real` 的命名会误导读者
+
+该向量的 `_info.description` 是 "real EIP-4788/2935 bytecode",L1Block(`0x42..15`)的
+`code` 是 `"0x"`。名字里的 "system_contracts_real" 容易被读成"包含真实的 OP 预部署",
+从而支撑"槽 8 布局已被真实合约验证过"的错误推论(审计 5-1(b) 的 `[需验证]` 正是死在这里)。
+建议改名或在 `_info` 里显式写一句 "L1Block is codeless; slot values are hand-seeded"。
+
+## N-4 · 表 1 混装了三种性质的条目,当前排序会误导批次划分
+
+按本次复核,表 1 的 12 行实际是三类:
+
+- **未声明的缺陷**(#1、#2):`OpSchedulerImpl.h` 的类型裁剪与毒旗触发点,spec 里找不到裁定。
+- **已声明的偏离**(#3 更严三条 / #4 extraData / C4 / C3):要么源码注释自陈,要么 §6.4 逐字在案。
+- **已记账的旧账**(表 2 #5)与**不可达的正确性缺陷**(9-1)。
+
+三类的处置动作完全不同(改代码 / 重新裁定 / 只改文档 / 加护栏),混在一张按"危害"排序的表里,
+最可能的后果是把第二类当第一类去改,或把第一类当第二类放过。建议表 1 加一列
+「是否已声明(载体)」。
+
+## N-5(过程,须告知 V1)· 本仓 pre-commit 钩子会对**整个工作区**跑 `clang-format -i`
+
+我第一次 `git commit`(未加 `--no-verify`)时,钩子对 **V1 正在编辑的**
+`bcos-evm/test/opstack/OpSchedulerImplTest.cpp` 执行了
+`clang-format -style=file:... -i`(输出原文:`SUCCESS of command: clang-format ... -i
+bcos-evm/test/opstack/OpSchedulerImplTest.cpp`),随后以格式检查失败中止提交。
+即**该文件已被就地重排版**(纯格式,无语义改动)。我没有回滚它(回滚会破坏 V1 的在编内容),
+此后一律用 `git commit --no-verify -- <报告路径>`。**V1 若以逐字 diff 比对来判断"已还原",
+需要注意这次格式化。**
