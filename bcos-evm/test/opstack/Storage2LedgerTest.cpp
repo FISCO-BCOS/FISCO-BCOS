@@ -1106,6 +1106,17 @@ TEST(Storage2Ledger, ExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFalseFire
 //           storage2::existsOne 对同一个键必须返回 false(层间解析把 DELETED_TYPE 判为不存在)。
 //   第二段:集成 —— 在 view 上跑 applyDiff 的零值分支,必须不抛、不置毒旗。
 // 第二段才是钉住"后果"的那一半(守护误报 = 生产每块失败),与 (z7) 段二同理。
+//
+// **不补"跨层墓碑"用例的理由(re-review R-3,结论是结构性不可达,不是覆盖缺口)**:
+// 本 fixture 只有一层可变层 + backend,看似漏了"上层墓碑遮住下层实值"这一形状。它**不可能
+// 发生**,三条独立成立:
+//   (1) `removeOne` 永远写在**顶层可变层**,墓碑不可能出现在下层;
+//   (2) `View::readOne` 自顶向下,命中非 NOT_EXISTS 即返回、**不再读下层**——顶层墓碑
+//       (DELETED_TYPE)就是命中,下层实值根本读不到,遮不遮住无从谈起;
+//   (3) `applyModifiedEntry` 里 `removeOne` 与后置回读 `existsOne` 是**相邻两条 co_await**,
+//       中间没有 `pushMutable`/`fork` 的插层机会,顶层在这两步之间不会变。
+// 所以补一条"跨层墓碑"用例只会得到一条**无判别力**的绿——它断言的形状构造不出来。
+// 写在这里是为了拦住后人"顺手补全"的冲动。
 TEST(Storage2Ledger, MlsViewExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFalseFire)
 {
     MlsFixture fixture;

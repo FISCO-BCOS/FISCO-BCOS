@@ -367,10 +367,15 @@ t① 原文写 `addressFromTableName` 抛 `std::length_error`,与它自己举的
    但严格说:**(z6)/ghost/`/sys/` 三条 tripwire 各自在分类层仍无端到端见证**,它们的分类正确性
    是"共用同一段 catch"的推论,不是实测。要补需要能凑出特定 `StateDiff` 形状的块级注入,
    超出本轮范围。
-2. **(z8) 只覆盖 MLS View 的单可变层形态**。fixture 是 `fork() + newMutable()` 的一层可变层
-   + backend,没有 immutable 层叠加、没有 checkpoint 历史。`View::readOne` 的多层解析
-   (mutable → immutable → cache → backend)只有第一段被走到。跨层墓碑(上层墓碑遮住下层
-   实值)这一情形**未覆盖**——它是 `getValue` 的另一条分支。
+2. **(z8) 只覆盖 MLS View 的单可变层形态 —— 而"跨层墓碑"是结构性不可达,故刻意不补**
+   (本条已按 re-review R-3 改述;上一轮写成"未覆盖"是**误判**,照那个写法后人会补一条
+   无判别力的用例)。fixture 是 `fork() + newMutable()` 的一层可变层 + backend,
+   `View::readOne` 的多层解析只有第一段被走到。但"上层墓碑遮住下层实值"这个形状**构造不
+   出来**,三条独立成立:(1) `removeOne` 永远写在顶层可变层,墓碑不可能出现在下层;
+   (2) `View::readOne` 自顶向下,命中非 `NOT_EXISTS` 即返回、不再读下层——顶层墓碑就是
+   命中,下层实值根本读不到;(3) `applyModifiedEntry` 里 `removeOne` 与后置回读 `existsOne`
+   是相邻两条 `co_await`,中间没有 `pushMutable`/`fork` 的插层机会。理由已同步写进 (z8)
+   的用例注释,拦住"顺手补全"。
 3. **INJ-E 的重放我改了注入位置**:复审在主仓改,本轮在 **worktree 内**的
    `bcos-framework/.../MultiLayerStorage.h` 改(第一次误改到主仓,已 `cp` 还原并确认该文件
    `git status` 干净)。两处是同一份代码的两个 checkout,结论可比。

@@ -292,16 +292,26 @@ public:
         //   * 实验二:整条 `catch (const std::runtime_error&)` 删掉,并给余下各级的 poison 打上
         //     可区分前缀 → 同样四条见证的 firstError() 全部是 **`[VIA-ELLIPSIS]`**,一条
         //     `[VIA-EXCEPTION]` 都没有。
-        // 即:从 `applyDeletedEntry` 抛出的 `std::runtime_error` **不匹配** `catch (const
-        // std::exception&)`,但**匹配** `catch (const std::runtime_error&)`。与 OpSchedulerImpl.h
-        // 那段注释所述机制一致——非唯一的那份 typeinfo 是 **`std::exception`** 的(来自
-        // `-fno-rtti` 的 libevmone.a 里那份隐藏副本),具体派生类的 typeinfo 仍唯一。
+        //   * 实验三(re-review INJ-R2,**推翻了本注释此前的机制归因**):三处 catch 全剥回
+        //     两级、同一 TU 同一二进制、四探针对照 ⇒ `runtime_error` 在 `applyDiff` **和**
+        //     `visitAccounts` 上都逃逸到 `catch (...)`;`length_error` 在 `get_storage`
+        //     **和** `visitAccounts` 上都正常命中 `catch (const std::exception&)`。
+        //
+        // **判别式是异常的类型族,不是协程边界**:`std::runtime_error` 子树的 typed catch
+        // 不生效,`std::logic_error` 子树正常生效。(此前这里写过"直抛 vs 穿协程"的对照,
+        // 已被实验三证伪 —— `visitAccounts:327` 同样是 `syncWait(协程)`,穿的是同一种边界。)
+        //
+        // **机制未定,以实测为准。** 本注释一度归因为"非唯一的那份 typeinfo 是 `std::exception`
+        // 的(来自 `-fno-rtti` 的 libevmone.a 隐藏副本)",该归因与实验三矛盾:若成立,
+        // `length_error` 也该逃逸,而实际没有。真正的成因尚未定位,不要基于任何一种猜测去
+        // 重排或删级 —— 只依据上面的类型族判别式。
+        //
         // 因此先按具体基类捕获(runtime_error / logic_error 覆盖本文件全部 throw:
-        // runtime_error 系含 overflow_error,logic_error 系含 length_error),`std::exception`
-        // 这一层按实验二**在本构建下形同虚设**,保留是为了别的工具链(RTTI 正常时它是正确的
-        // 那一级),`catch (...)` 兜住 boost 那类不派生自它们的
-        // (例如 `boost::algorithm::non_hex_input`)。**四条都置毒旗**——分类的正确性只依赖毒旗
-        // 置位,不依赖消息;消息只影响 -32603 的可诊断性。
+        // runtime_error 系含 overflow_error,logic_error 系含 length_error);`std::exception`
+        // 这一级**必须保留**——按实验三它正是 `logic_error` 族**唯一正确命中**的那一级,
+        // 也是将来新增的、不属于上面两族的标准异常的落点;`catch (...)` 兜底保证毒旗一定置位。
+        // **四级都置毒旗**——分类的正确性只依赖毒旗置位,不依赖消息;消息只影响 -32603 的
+        // 可诊断性(读路的消息保真见 get_account 的四级阶梯注释与 (z10))。
         catch (const std::runtime_error& e)
         {
             poison(e.what());
