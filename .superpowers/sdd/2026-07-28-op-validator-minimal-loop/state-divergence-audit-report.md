@@ -127,3 +127,143 @@ op-geth: beacon/engine/types.go:347 `TxHash: types.DeriveSha(types.Transactions(
 - legacy 的 EIP-155 / pre-155 双形态:因为我方**根本不解 legacy**,本层无从比对(见分歧 1-1)。
 
 <!-- LAYER-1-END -->
+
+---
+
+## 第 2 层:块级前置校验
+
+### 我方校验点分布
+
+- `engine/bcos-engine/EngineServiceImpl.cpp:184-301` `validateOpNewPayloadRequest()` —— 静态(无父块)校验。
+- `engine/bcos-engine/EngineServiceImpl.cpp:304-342` `rebuildOpEthHeader()` —— 21 字段重建 ETH 头,
+  其中 `ommersHash`/`difficulty`/`nonce`/`requestsHash`/`excessBlobGas` 是**钉死的常量**,
+  随后 `EngineServiceImpl.h:774` `ethHeader.hash() != payload.blockHash` 一票否决。
+  这条等价于 op-geth `consensus/beacon/consensus.go:246-258` 的 nonce/uncleHash/difficulty 三项检查。
+- `EngineServiceImpl.h:817-821` blockNumber == parent+1;`:886-890` timestamp > parent。
+- `EngineServiceImpl.h:1044-1093` 执行后八项比对(六项比对面 + blobGasUsed + requestsHash)。
+
+op-geth 对照面:`beacon/engine/types.go:286-372`(ExecutableDataToBlockNoHash)、
+`consensus/beacon/consensus.go:235-311`(verifyHeader)、
+`consensus/misc/eip1559/eip1559.go:33-58`(VerifyEIP1559Header)、
+`consensus/misc/eip4844/eip4844.go` VerifyEIP4844Header、
+`core/block_validator.go` ValidateBody、`eth/catalyst/api.go:855-905`。
+
+### 【分歧 2-1】`extraData` 的 OP 形状完全不校验 —— 我方接受 op-geth 拒绝的块 ★
+
+```
+我方:    engine/bcos-engine/EngineServiceImpl.cpp:279-283 —— 只有一条 `extraData.size() > 32`
+         的 ETH 通用长度界。:308-311 的注释自陈 extraData "原样,never re-derived or
+         shape-checked",OP 形状检查挂在 spec §6.4 欠账。
+op-geth: consensus/beacon/consensus.go:241-245 —— 对每个 OP 块(非创世)调
+         `eip1559.ValidateOptimismExtraData`。
+         consensus/misc/eip1559/eip1559_optimism.go:22-31 分叉派发;
+         :195-204 ValidateJovianExtraData —— **必须恰好 17 字节**、
+         **extra[0] 必须 == 0x01**(JovianExtraDataVersionByte)、
+         :133-141 denominator 与 elasticity 都**必须非零**;
+         :147-155 ValidateHoloceneExtraData —— 恰好 9 字节、版本字节 0x00、同样两个非零。
+触发输入:一个 Jovian 时间戳的 payload,`extraData` = 17 字节但版本字节写 0x00(或 denominator
+         写 0x00000000,或长度写成 9/16/18 字节)。payload 自己的 blockHash 按这份 extraData
+         算好即可通过我方的 blockHash 检查。
+分歧结果:VALID(我方)vs INVALID(op-geth `invalid optimism extraData`)。
+         二阶后果更重:extraData 是**下一块 baseFee 的参数来源**
+         (eip1559.go:76-79 `DecodeOptimismExtraData(config, parent.Time, parent.Extra)`),
+         denominator==0 在 op-geth 里会走 `num.Div(num, denom.SetUint64(0))` —— 该分支被
+         ValidateOptimismExtraData 挡在门外,而我方既不挡形状也不算 baseFee(C4),等于把
+         一个能污染后续所有块 baseFee 的字段完全放行。
+可达性:  当前可构造。
+置信度:  已读两侧源码确认。
+```
+
+### 【分歧 2-2】Jovian:`daFootprint > gasLimit` 的块级上限未校验 ★
+
+```
+我方:    bcos-evm/bcos-evm/opstack/OpBlockSeal.cpp:74-81 —— `has_da_footprint` 时把各回执的
+         `meta.da_footprint` 求和填进 `seal.blobGasUsed`,**只求和,不设上限**。
+         engine/bcos-engine/EngineServiceImpl.h:1078-1085 —— 只把它和 `payload.blobGasUsed`
+         比相等,没有任何与 gasLimit 的比较。
+op-geth: core/block_validator.go(ValidateBody,Jovian 段)——
+         `daFootprint, err := types.CalcDAFootprint(block.Transactions())`;
+         `if blobGasUsed != daFootprint { ... }` **并且**
+         `if daFootprint > block.GasLimit() { return fmt.Errorf("DA footprint %d exceeds block
+         gas limit %d", ...) }`。
+触发输入:Jovian 时间戳、gasLimit 取一个小值(例如 30_000_000)、块内塞入足够多 calldata
+         使 DA footprint 之和超过 gasLimit 的一批交易(DA footprint 由 calldata 字节数驱动,
+         与执行 gas 解耦,所以可以在不超 gas 池的前提下超 DA 上限)。payload 的
+         `blobGasUsed` 填成同一个和即可通过我方比对。
+分歧结果:VALID(我方)vs INVALID(op-geth "DA footprint exceeds block gas limit")。
+可达性:  当前可构造(需要 Jovian 分叉配置 + 一个 calldata 密集的块)。
+置信度:  已读两侧源码确认。`CalcDAFootprint` 与我方 `meta.da_footprint` 求和的**逐笔公式**
+         是否一致属第 5 层,本条只针对**块级上限缺失**。
+```
+
+### 【分歧 2-3】首块(父头缺失)豁免 timestamp 单调性 —— 同时豁免了分叉选择器
+
+```
+我方:    EngineServiceImpl.h:868-895 —— timestamp 单调性检查包在
+         `if (auto parentHeaderEntry = ...; parentHeaderEntry.has_value())` 里。
+         :862-867 的注释明说:引导时只 seed `SYS_HASH_2_NUMBER`,不写父头,所以**本循环接受的
+         第一个块没有父头可比,检查整段跳过**。
+op-geth: eth/catalyst/api.go:888-891 —— `parent := GetBlock(block.ParentHash(), ...)`,
+         `parent == nil` 走 `delayPayloadImport`(SYNCING),**绝不会在"有父块记录但无父头"
+         的状态下放行**;consensus/beacon/consensus.go:253-256 `header.Time <= parent.Time`
+         也是无条件的。
+触发输入:一个刚 seed 过起点(只有 SYS_HASH_2_NUMBER)的节点,投喂第一个块,timestamp 取
+         任意值 —— 包括**小于起点块的时间戳**,甚至小于 isthmusTime。
+分歧结果:我方接受(且 `configAt(timestamp)` 会据此选一个更早的分叉配置,把整块的执行语义
+         回滚到 Isthmus);op-geth 场景上不存在(它的起点必带头)。
+         同时会与第 1 层的 -38005 版本闸交互(C3 已记账)。
+可达性:  当前可构造(测试夹具与任何未来生产引导都走这条 seed 路径);属"生产接入才可达"的
+         边界情形——引导协议若改为同时 seed 父头则消失。
+置信度:  已读两侧源码确认。
+```
+
+### 【分歧 2-4】父头按**高度**读,op-geth 按**哈希**读
+
+```
+我方:    EngineServiceImpl.h:869-871 —— `StateKeyView{c_ethBlockHeaderTable, parentNumberStr}`。
+op-geth: eth/catalyst/api.go:888 —— `GetBlock(block.ParentHash(), block.NumberU64()-1)`。
+触发输入:同一高度存在两个块(重组窗口)。
+分歧结果:我方会拿**错的父头**做 timestamp 比较。
+可达性:  需未来改动 —— 今天被 step 3c(:951-965 非链尾父块直接 -32603)堵死,代码注释
+         (:846-852)已自陈这是真依赖而非巧合。列此以标记其为"解除限制时必须同步修的项"。
+置信度:  已读两侧源码确认。
+```
+
+### 本层已核对、判定为**一致**的项
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| `extraData` ≤ 32 字节 | EngineServiceImpl.cpp:279-283 | beacon/engine/types.go:292-294;consensus.go:237-239 | 一致 |
+| `gasLimit` ≤ 2^63-1 | EngineServiceImpl.cpp:269-273 | consensus.go:261-263 `params.MaxGasLimit` | 一致 |
+| **OP 链 gasLimit 对父块可瞬时调整**(不设变化界) | 两侧都不做 | eip1559.go:39-43 `if !config.IsOptimism()` 才 `VerifyGaslimit` | **一致**(我方"漏"的这一条 op-geth 对 OP 本就不做) |
+| `gasUsed ≤ gasLimit` | 无显式静态检查,但 `gasUsed` 由执行产出并与 payload 逐值比对(EngineServiceImpl.h:1069-1072),而执行侧 `blockGasLeft` 起始即 `block.gas_limit`(OpBlockExecute.cpp:44)且 `validate_transaction` 有 `tx.gas_limit > block_gas_left → GAS_LIMIT_REACHED`(state.cpp:483-484) | consensus.go:265-267 | 等价(deposit 路径的 gas 语义另见第 5 层) |
+| `blockNumber == parent+1` | EngineServiceImpl.h:817-821 | consensus.go:269-271 | 一致 |
+| `timestamp > parent`(有父头时,严格 `>`) | EngineServiceImpl.h:886-890 `<=` 即拒 | consensus.go:253-256 `header.Time <= parent.Time`;api.go:889 同 | 一致(边界方向逐字相同) |
+| `excessBlobGas` 必须存在且为 0 | EngineServiceImpl.cpp:226-229 | eip4844.go `CalcExcessBlobGas` 对 `config.IsOptimism()` 短路 `return 0`,`VerifyEIP4844Header` 再要求相等 | 一致 |
+| `blobGasUsed` 不受"blob 数倍数/上限"约束 | 我方无此检查 | `VerifyEIP4844Header` 的两条 blob 检查被 `if !config.IsOptimism()` 跳过 | 一致 |
+| 块体不得含 blob | 我方在解码层就拒 0x03(分歧 1-1) | block_validator.go `if blobs > 0 { return errors.New("data blobs present in block body") }`(OP 走 else 分支) | 一致(路径不同,结论相同) |
+| `withdrawals` 必须在场且为空(Isthmus+) | EngineServiceImpl.cpp:207-210 | beacon/engine/types.go:317-324;block_validator.go `IsOptimismIsthmus` 段 | 一致 |
+| `withdrawalsRoot` 必须在场(Isthmus+) | EngineServiceImpl.cpp:216-221 | beacon/engine/types.go:318-320 | 一致 |
+| `expectedBlobVersionedHashes` 必须为空 | EngineServiceImpl.cpp:211-214 | beacon/engine/types.go:302-312 | 一致 |
+| `parentBeaconBlockRoot` 必须在场 | EngineServiceImpl.cpp:215-218 + `:589-601` 的版本闸 | consensus.go:296-298 | 一致 |
+| `requestsHash` = OP 空请求常量 | 钉死在 rebuildOpEthHeader:340,由 blockHash 检查兜底 + :1086-1092 二次比对 | beacon/engine/types.go:333-341 | 一致 |
+| 已知块短路 VALID | EngineServiceImpl.h:918-919 | api.go:871-876 | 一致 |
+| 父块未知 → SYNCING | EngineServiceImpl.h:797-800 | api.go:888-890 `delayPayloadImport` | 一致 |
+| `blockNumber` 不得为负 | EngineServiceImpl.cpp:252-255 | Go 侧 `uint64`,不可能为负 | 我方更严但无接受面差 |
+
+### 本层的已知/已记账分歧(引用,不重证)
+
+- **C4 `baseFeePerGas` 双向缺陷** —— 对应 op-geth `consensus/misc/eip1559/eip1559.go:52-57`
+  `header.BaseFee.Cmp(expectedBaseFee) != 0`。我方 `validateOpNewPayloadRequest` 完全不算父子公式,
+  `baseFeePerGas` 只是原样进 header 与 BlockEnv。**与分歧 2-1 复合**:extraData 形状不校验 +
+  baseFee 公式不校验 = 攻击者对 baseFee 有完全自由度。
+- **C3 pre-Isthmus V3 闸** —— `EngineServiceImpl.h:682-702`。
+
+### 本层**未覆盖**的面(划定边界)
+
+- EIP-7934 块 RLP 大小上限(`ErrBlockOversized`,Osaka 才生效)—— 与 Isthmus/Jovian 无关,未查。
+- `checkInvalidAncestor`(op-geth api.go:877-879 的"坏块后代恒拒")—— 我方无对应机制,
+  但它属于缓存/优化语义,不影响单块的 VALID/INVALID 判定,未展开 `[需验证]`。
+- op-geth `verifyHeader` 的 `SlotNumber`(Amsterdam)—— 分叉未及,未查。
+
+<!-- LAYER-2-END -->
