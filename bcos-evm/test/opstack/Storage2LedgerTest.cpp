@@ -462,6 +462,11 @@ TEST(Storage2Ledger, ApplyDiffDeletedGhostThrows)
     diff.deleted_accounts.push_back(0x01_address);
 
     EXPECT_THROW(bridge.applyDiff(diff), std::runtime_error);
+    // 终审批 9 F-1:写回 tripwire 必须**同时置毒旗**,否则 OpSchedulerImpl 的分类
+    // (poisoned() → OpStorageError/-32603,否则 OpConsensusError/INVALID)会把这条
+    // "本节点账本与 diff 不一致"的本地故障答成 INVALID,即投票反对一个合法块。
+    EXPECT_TRUE(bridge.poisoned());
+    EXPECT_NE(bridge.firstError().find("ghost "), std::string_view::npos) << bridge.firstError();
 }
 
 // (o) 审查修复:modified entry 含系统地址(c_systemTxsAddress 成员,如
@@ -480,6 +485,11 @@ TEST(Storage2Ledger, ApplyDiffModifiedSystemAddressThrows)
         {.addr = sysAddr, .nonce = 0, .balance = {}, .code = std::nullopt, .modified_storage = {}});
 
     EXPECT_THROW(bridge.applyDiff(diff), std::runtime_error);
+    // 终审批 9 F-1:同上——桥"不猜 /sys/ 路由"是本桥的能力边界(本地故障),不是对 payload 的
+    // 判决。读路的同一守卫(get_account 的 accountTableName 分支)本来就置毒旗,写路现在对称。
+    EXPECT_TRUE(bridge.poisoned());
+    EXPECT_NE(bridge.firstError().find("routes to /sys/"), std::string_view::npos)
+        << bridge.firstError();
 }
 
 // ── 真账本桥 Task 5:visitAccounts 遍历(design §6)──────────────────────────────
@@ -970,6 +980,12 @@ TEST(Storage2Ledger, ApplyDiffZeroSlotWriteBackLeakThrows)
     zeroDiff.modified_accounts.push_back(
         {0x01_address, 1, 10, std::nullopt, {{evmc::bytes32(slotKey(1)), evmc::bytes32{}}}});
     EXPECT_THROW(bridge.applyDiff(zeroDiff), std::runtime_error);
+    // 终审批 9 F-1:本守护抛的是"桥自己写回有 bug"= 本地故障 → 必须置毒旗,才能在
+    // OpSchedulerImpl 里被分类成 OpStorageError(-32603)而不是 OpConsensusError(INVALID)。
+    // 正例标识:消息含本层的判据文字;反例标识见 OpSchedulerImplTest 的分类用例。
+    EXPECT_TRUE(bridge.poisoned());
+    EXPECT_NE(bridge.firstError().find("write-back leak"), std::string_view::npos)
+        << bridge.firstError();
 
     // 对照:同样的两枚 diff 打在正常存储上,不得抛(守护不能对合法写回误报)。
     MutableStorage healthy;

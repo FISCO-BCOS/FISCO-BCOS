@@ -41,7 +41,10 @@
 // 唯一写入路径是本桥自身的 applyDiff(Task 4 落地);越过桥直接写底层存储,会使三张
 // 读缓存(账户/槽/code)静默失真而不自知,属使用错误,桥不做检测(design §4.2)。
 //
-// 毒旗错误通道:三个读方法均 noexcept,内部 catch 全部异常,首次触发时置位
+// 毒旗错误通道(rev. 终审批 9 F-1:**读写两路都走这条通道**,只是形态不同——读方法 noexcept
+// 吞异常+置旗;applyDiff 置旗后**照样上抛**,strict tripwire 语义不变。理由见 applyDiff 的注释:
+// 毒旗在 OpSchedulerImpl 里是 -32603/INVALID 的分类判据,而写回路径的失败**全是本地故障**):
+// 三个读方法均 noexcept,内部 catch 全部异常,首次触发时置位
 // poisoned() 并记录 firstError()(只记第一条,后续错误不覆盖),同时返回“安全值”
 // (nullopt / 空字节 / 全零 bytes32)。消费方契约:块执行结束后必须检查
 // poisoned(),一旦置位就让整块失败——绝不能把底层存储错误静默降级为“账户不存在”
@@ -220,12 +223,64 @@ public:
     /// ensure-exists,不因空 entry 跳过(EIP-161 touch-only / 完全空账户播种前置)。写穿:每步
     /// 同步更新三张读缓存;删除账户 ⇒ 三表按地址全量失效/置负(含全部已缓存槽与 code,design
     /// §4.2——CREATE2 同址重生场景,漏清即静默脏读)。不是 noexcept:strict tripwire 允许上抛。
+    ///
+    /// **写回失败也走毒旗通道(终审批 9 F-1)**:本方法保留上抛(strict tripwire 语义不变),但
+    /// 在上抛之前**先置毒旗**。理由是错误分类,不是错误处理风格——
+    /// `OpSchedulerImpl::executeOpBlock` 的分类逻辑是"`poisoned()` 为真 → `OpStorageError`
+    /// (-32603),否则 → `OpConsensusError`(INVALID)"。写回路径的每一种失败(deleted 项
+    /// ghost-delete、系统地址路由、契约②零值槽写回泄漏、写穿重读时的 nonce 越界/字段长度违规、
+    /// 以及底层存储自身的失败)守护的都是"**本节点自己写回或自己的存储有问题**",即**本地故障**;
+    /// 而 `applyDiff` 的输入来自 evmone 自己算出的 StateDiff,不是来自 payload——畸形 payload 早在
+    /// 解码/processOpBlock 阶段就被拒了,走不到这里。因此这里没有任何一种失败该被答成 INVALID:
+    /// 用 INVALID 回答一个合法 payload,等于本节点投票反对规范链并永久分叉(既有用例
+    /// `StorageLayoutFaultIsInternalErrorNotInvalid` 防的正是这类错误)。
+    /// 形态刻意是**整体 try/catch 包裹**而非逐个 throw 点改写:它把"写回路径的任何失败都是本地
+    /// 故障"表达成一条不变量,新增的 throw 点自动继承,不会再漏一个;`catch (...)` 兜底不是冗余
+    /// ——本仓已知 `-fno-rtti` 的 typed-catch 旁路(见 `OpSchedulerImpl.h` 同名注释),跨库抛出的
+    /// `std::exception` 可能不匹配 typed catch,兜底保证**毒旗一定置位**(代价仅是丢掉消息文本)。
     void applyDiff(const evmone::state::StateDiff& diff)
     {
-        for (const auto& entry : diff.modified_accounts)
-            task::syncWait(applyModifiedEntry(entry));
-        for (const auto& addr : diff.deleted_accounts)
-            task::syncWait(applyDeletedEntry(addr));
+        try
+        {
+            for (const auto& entry : diff.modified_accounts)
+                task::syncWait(applyModifiedEntry(entry));
+            for (const auto& addr : diff.deleted_accounts)
+                task::syncWait(applyDeletedEntry(addr));
+        }
+        // catch 阶梯的顺序不是风格问题,是本仓 `-fno-rtti` typed-catch 旁路的**实测**结果
+        // (终审批 9 F-1 实测,方法:给三条 catch 各打不同前缀再看 firstError() 落在哪条):
+        // 从 `applyDeletedEntry` 抛出的 `std::runtime_error` **不匹配** `catch (const
+        // std::exception&)`,但**匹配** `catch (const std::runtime_error&)`。与 OpSchedulerImpl.h
+        // 那段注释所述机制一致——非唯一的那份 typeinfo 是 **`std::exception`** 的(来自
+        // `-fno-rtti` 的 libevmone.a 里那份隐藏副本),具体派生类的 typeinfo 仍唯一。
+        // 因此先按具体基类捕获(runtime_error / logic_error 覆盖本文件全部 throw:
+        // runtime_error 系含 overflow_error,logic_error 系含 length_error),`std::exception`
+        // 这一层留着兜住其余标准异常,`catch (...)` 兜住 boost 那类不派生自它们的
+        // (例如 `boost::algorithm::non_hex_input`)。**四条都置毒旗**——分类的正确性只依赖毒旗
+        // 置位,不依赖消息;消息只影响 -32603 的可诊断性。
+        catch (const std::runtime_error& e)
+        {
+            poison(e.what());
+            throw;
+        }
+        catch (const std::logic_error& e)
+        {
+            poison(e.what());
+            throw;
+        }
+        catch (const std::exception& e)
+        {
+            poison(e.what());
+            throw;
+        }
+        catch (...)
+        {
+            poison(
+                "Storage2Ledger::applyDiff: unknown exception on the write-back path (not derived "
+                "from std::runtime_error/std::logic_error, or typed catch bypassed by the known "
+                "-fno-rtti RTTI issue; message unavailable)");
+            throw;
+        }
     }
 
     /// AccountVisitor payload (design §6): nonce/balance/codeHash + a lazily-evaluated code
