@@ -689,3 +689,124 @@ op-geth: `Finalise(true)` 之后,一个被 touch 但仍为空的账户**不会**
 - 同笔内"既存余额账户被 CREATE 进去再 SELFDESTRUCT"的余额归属,两边未逐行比对。
 
 <!-- LAYER-6-END -->
+
+---
+
+## 第 7 层:回执与根
+
+我方:`OpReceiptEncode.cpp`(叶编码)、`OpBlockSeal.cpp`(receiptsRoot / logsBloom)、
+`OpEngineSeam.h::computeOpTxRoot`(txRoot)。
+op-geth:`core/types/receipt.go` `Receipts.EncodeIndex` / `depositReceiptRLP`、
+`core/block_validator.go` `ValidateState`。
+
+### 本层已核对、判定为**一致**的项
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| 普通交易回执叶 = `typeByte \|\| rlp([status, cumGas, bloom, logs])` | OpReceiptEncode.cpp:20-23 → `evmone::state::rlp_encode(receipt)` | receipt.go `EncodeIndex` 的 `AccessListTxType/DynamicFeeTxType/BlobTxType/SetCodeTxType` 分支 | 一致 |
+| deposit 回执叶 = `0x7E \|\| rlp([status, cumGas, bloom, logs, depositNonce, depositReceiptVersion])` | OpReceiptEncode.cpp:14-17 | receipt.go `EncodeIndex` 的 `DepositTxType` + `DepositReceiptVersion != nil` 分支;`depositReceiptRLP` 结构体字段序逐一对应 | 一致 |
+| `status` 编码:成功 `0x01`、失败空串 | `encode_tuple(bool)` | `r.statusEncoding()` 返回 `[]byte{0x01}` / `[]byte{}` | 一致 |
+| `depositReceiptVersion` 恒为 1(Canyon 起) | OpDepositTx.cpp:131 `OpDepositReceipt{…, preNonce, 1}` | receipt.go / state_processor.go:217-224 `IsOptimismCanyon` → `CanyonDepositReceiptVersion` | 一致(Isthmus/Jovian 必然 post-Canyon) |
+| `depositNonce` = **执行前**的 from nonce | OpDepositTx.cpp:68 `preNonce`(mint 之前读) | state_processor.go:173-176 —— `nonce = statedb.GetNonce(msg.From)`,位置在 `ApplyMessage` **之前** | 一致 |
+| `cumulativeGasUsed` | OpBlockExecute.cpp:60/:87 | `gp.CumulativeUsed()` | 一致 |
+| receiptsRoot:键 = `rlp(index)`,值 = 上述叶字节 | OpBlockSeal.cpp:39-42 | `types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))` | 一致 |
+| 块级 `logsBloom` = 各回执 bloom 的按位或 | OpBlockSeal.cpp:44-56 | `types.MergeBloom(res.Receipts)`(block_validator.go `ValidateState`) | 一致 |
+| 空块 receiptsRoot | 空 MPT → `EMPTY_MPT_HASH` | `DeriveSha` 空列表 → 同值 | 一致(但空块在我方被第 4 层拒绝,见分歧 4-1) |
+| txRoot:键 = `rlp(index)` | `computeOpTxRoot` | `DeriveSha(types.Transactions(txs))` | 键一致;**值不同**,见第 1 层的"关键事实" |
+
+### 本层**未覆盖**的面
+
+- `contractAddress` / `logs[].address` 等**不进 receiptsRoot** 的回执字段(它们只影响 RPC),
+  未与 `mapOpReceipt`(`bcos-evm/bcos-evm/engine/OpReceiptMap.h`)逐字段比对。
+- `evmone::state::compute_bloom_filter` 与 geth `types.CreateBloom` 的逐位等价性,
+  只由 33 条金值向量间接见证,未做独立差分。
+
+---
+
+## 第 8 层:块后 finalize
+
+### 本层已核对、判定为**一致**的项
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| 块尾 finalize 是**空操作**(无出块奖励、无叔块、提现列表为空) | OpBlockFinalize.cpp:12-13 → `evmone::state::finalize(view, rev, coinbase, std::nullopt, {}, {})`,state.cpp:534-559 在三者皆空时只返回一个空 diff | `p.chain.Engine().Finalize(...)`(beacon 引擎,合并后无奖励);OP Isthmus 的 withdrawals 恒空 | 一致 |
+| 块尾 requests 系统调用不执行 | `disable_prague_requests = true`,`finalizeOpBlock` 对 false 直接 throw | `state_processor.go:141` `IsPrague && !IsIsthmus` | 一致 |
+| Isthmus `withdrawalsRoot` = MessagePasser 的**存储根** | OpSchedulerImpl.h:879-891 取快照 → OpBlockSeal.cpp:60-64 `opStorageRoot` | block_validator.go:190-197 `statedb.GetStorageRoot(params.OptimismL2ToL1MessagePasser)` | 一致 |
+| MessagePasser 地址 | OpPredeploys.h:31-32 `0x42..16` | `params.OptimismL2ToL1MessagePasser` 同值 | 一致 |
+| 快照时机 = finalize **之后**、seal 之前 | OpSchedulerImpl.h:877-891(注释"桥销毁前算毕") | `ValidateState` 在 `Process` 全部完成后 | 一致 |
+
+### 【分歧 8-1】MessagePasser 账户**不存在**时,两边给出不同的 withdrawalsRoot
+
+```
+我方:    OpSchedulerImpl.h:879-887 —— `messagePasserStorage` 初始为空 map,只有 visitAccounts
+         命中 `OP_L2_TO_L1_MESSAGE_PASSER` 时才被填。账户不存在 ⇒ 保持空 ⇒
+         OpBlockSeal.cpp:62 `opStorageRoot({})` = 空 MPT 根
+         `0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421`。
+op-geth: `statedb.GetStorageRoot(addr)` 对不存在的账户返回 **`common.Hash{}`(全零)**,
+         不是 EmptyRootHash;随后 `*header.WithdrawalsHash != root` 判块无效。
+触发输入:一条创世里没有部署 L2ToL1MessagePasser 的 OP 链(或该账户被 SELFDESTRUCT 清除)。
+分歧结果:同一状态下,op-geth 期望 `0x00…00`,我方算出空 MPT 根 ⇒ 我方判 INVALID
+         而 op-geth 判 VALID(如果 payload 给的是全零),或反之。
+可达性:  需生产账本 / 需未来改动(规范 OP 链的创世必含该预部署)。
+置信度:  已读两侧源码确认。
+```
+
+---
+
+## 第 9 层:分叉门控
+
+### 【分歧 9-1】`configAt` 把**所有** pre-Isthmus 时间戳解析成 Isthmus 配置
+
+```
+我方:    OpForkSchedule.cpp:102-110 —— `if (timestamp >= jovianTime) return jovianConfig();
+         return isthmusConfig();`。低于 `isthmusTime` 的时间戳**也**落到 Isthmus。
+         头文件注释(OpForkSchedule.h:51-59)自陈这是 decision A5 的刻意选择。
+op-geth: 每个分叉独立判定(`IsEcotone`/`IsFjord`/`IsGranite`/`IsHolocene`/`IsIsthmus`/`IsJovian`),
+         pre-Isthmus 的块用 Ecotone/Fjord/… 的规则执行(EVM revision、L1 费公式、
+         operator fee 有无、回执版本全都不同)。
+触发输入:任何 `timestamp < isthmusTime` 的块。
+分歧结果:整块用错规则集 ⇒ stateRoot/receiptsRoot/gasUsed 全线分歧。
+可达性:  当前可构造,但**被 C3(pre-Isthmus V3 闸)部分挡住** —— 引擎的
+         `-38005` 闸(EngineServiceImpl.h:692-702)在 V4 上会拒绝 pre-Isthmus 时间戳。
+         残余缺口是**第 2 层分歧 2-3 的首块豁免**:引导后的第一个块无父头可比,
+         timestamp 可任意取,若走 V3 通道即可携带一个 pre-Isthmus 时间戳进来。
+置信度:  已读两侧源码确认。
+```
+
+### 【观察 9-2】七个 `OpForkConfig` 里只有两个可达;`karstConfig()` 是**完全的死代码**
+
+```
+我方:    OpForkSchedule.h:8-17 定义了 7 个 OpFork 枚举值,:33-39 声明 7 个 config 工厂;
+         但 `OpForkTimestamps`(:45-49)只有 `isthmusTime`/`jovianTime` 两个阈值,
+         `configAt` 只可能返回 `isthmusConfig()` 或 `jovianConfig()`。
+         `ecotoneConfig/fjordConfig/graniteConfig/holoceneConfig/karstConfig` 在生产路径上
+         **一次也不会被调用**。
+影响:    不是分歧,是**覆盖假象**:代码结构看上去支持 Ecotone→Karst 七个分叉,实际只有两个。
+         对应地,第 5 层"未覆盖"里列出的 Ecotone/Bedrock L1 费公式也就永远不会被验证。
+```
+
+### 【复核 9-3】Karst 别名在**当前 pin 上**无害,但依赖一条会失效的前提
+
+```
+我方:    OpForkSchedule.cpp:92-100 —— `karstConfig()` 由 `jovianConfig()` 派生,只改 fork tag。
+op-geth: 本 pin(e8800cffe)上 `IsKarst`(params/config.go:1024-1026)与
+         `IsOptimismKarst`(:1087-1089)**没有任何执行侧调用方** —— 逐目录 grep
+         (params/core/consensus/eth/miner/beacon)只命中声明、配置解析与启动横幅。
+结论:    在本 pin 上"Karst ≡ Jovian"是**正确的**,不只是占位。
+         但这条正确性完全依赖"op-geth 尚未给 Karst 任何行为"这一外部事实;
+         op-geth 一旦给 Karst 加语义,我方的别名会**静默**给出旧行为(且 `configAt` 根本不返回它)。
+         MEMORY 里"Karst 未适配(占位别名)"的记账保持有效,此处只是补上"当前无害"的证据。
+```
+
+### 本层已核对、判定为**一致**的项
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| 分叉激活比较是 `>=`(边界时间戳归**新**分叉) | `configAt`:107 `timestamp >= jovianTime`;`isIsthmusActiveAt`/`isJovianActiveAt`(OpSchedulerImpl.h:745-758)同 | `isTimestampForked(s, head) { return *s <= head }`(params/config.go:1516-1521) | 一致(逐字方向相同) |
+| Isthmus ↔ EVM revision Prague | OpForkSchedule.cpp:62 `EVMC_PRAGUE` | `IsPrague` 对 OP 由 Isthmus 驱动 | 一致 |
+| Jovian ↔ EVM revision Prague(不升级 revision) | OpForkSchedule.cpp:77 | Jovian 不改 EVM revision | 一致 |
+| Jovian 起启用 DA footprint + operator-fee-fix 公式 | `has_da_footprint`/`has_jovian_operator_formula`(:81-82) | `CalcDAFootprint` 由 `IsJovian` 门控;`newOperatorCostFuncOperatorFeeFix` 由 `config.IsJovian(blockTime)` 选中(rollup_cost.go:236-239) | 一致 |
+| Isthmus 起启用 operator fee | `has_operator_fee = true`(:65) | `NewOperatorCostFunc` 的 `!config.IsOptimismIsthmus(blockTime)` → 恒 0(rollup_cost.go:224-227) | 一致 |
+| Isthmus 起 requests 全禁 | `disable_prague_requests` | `state_processor.go:141` `&& !config.IsIsthmus(...)` | 一致 |
+
+<!-- LAYER-9-END -->
