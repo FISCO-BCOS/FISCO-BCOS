@@ -154,11 +154,11 @@ jobs:
           ./eest-runner --fixture-dir ../../../fixtures/ --no-log 2>&1 | tee eest_output.txt
           PASS_RATE=$(sed -nE 's/.*Pass rate:[[:space:]]+([0-9]+)%.*/\1/p' eest_output.txt)
           echo "EEST pass rate: ${PASS_RATE}%"
-          if [ -z "${PASS_RATE}" ] || [ "${PASS_RATE}" -lt 90 ]; then
-            echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 90% threshold"
+          if [ -z "${PASS_RATE}" ] || [ "${PASS_RATE}" -lt 100 ]; then
+            echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 100% threshold"
             exit 1
           fi
-          echo "::notice::EEST pass rate ${PASS_RATE}% meets the 90% threshold"
+          echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v4
