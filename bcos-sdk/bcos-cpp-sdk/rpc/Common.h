@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <json/json.h>
 #include <json/value.h>

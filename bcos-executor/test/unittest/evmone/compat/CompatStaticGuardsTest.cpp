@@ -130,12 +130,20 @@ BOOST_AUTO_TEST_SUITE(CompatStaticGuards)
 
 BOOST_AUTO_TEST_CASE(FC_G_no_system_call_block_start)
 {
+    // Prefer the absolute repo root the build injects: __FILE__ can be a path relative to the
+    // compiler's working directory, which does not resolve from the directory ctest runs the
+    // binary in. Fall back to the __FILE__ derivation when the definition is absent.
     // __FILE__ = .../bcos-executor/test/unittest/evmone/compat/CompatStaticGuardsTest.cpp
-    auto p = std::filesystem::path(__FILE__);
+    std::filesystem::path p;
+#ifdef FISCO_REPO_ROOT
+    p = std::filesystem::path(FISCO_REPO_ROOT) / "bcos-executor";
+#else
+    p = std::filesystem::path(__FILE__);
     for (int i = 0; i < 5; ++i)
     {
         p = p.parent_path();
     }
+#endif
     const auto hostPath = p / "src" / "vm" / "EVMHostInterface.cpp";
     if (!std::filesystem::exists(hostPath))
     {
@@ -193,7 +201,7 @@ BOOST_AUTO_TEST_CASE(FC_G_no_authorization_list_in_protocol)
     std::error_code iterEc;
     const auto dirOpts = std::filesystem::directory_options::skip_permission_denied;
     for (std::filesystem::recursive_directory_iterator it(protoDir, dirOpts, iterEc);
-         !iterEc && it != std::filesystem::recursive_directory_iterator(); it.increment(iterEc))
+        !iterEc && it != std::filesystem::recursive_directory_iterator(); it.increment(iterEc))
     {
         std::error_code statEc;
         const auto& entry = *it;

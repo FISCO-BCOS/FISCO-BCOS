@@ -31,7 +31,11 @@ public:
     {
         m_preparedProposalList = std::make_shared<PBFTMessageList>();
         m_rawViewChange = std::make_shared<RawViewChangeMessage>();
-        m_rawViewChange->set_allocated_message(PBFTBaseMessage::baseMessage().get());
+        // FIB-121: alias the base header onto the protobuf's `message` field instead of
+        // set_allocated_message + destructor release. Base setters then write through to
+        // m_rawViewChange, so encode() is self-contained with no ownership juggling.
+        setBaseMessage(
+            std::shared_ptr<BaseMessage>(m_rawViewChange, m_rawViewChange->mutable_message()));
         m_packetType = PacketType::ViewChangePacket;
     }
 
@@ -43,27 +47,9 @@ public:
         decode(_data);
     }
 
-    ~PBFTViewChangeMsg() override
-    {
-        // Release the arena's ownership of the BaseMessage back to
-        // m_baseMessage.  In the default-constructor path m_baseMessage is a
-        // regular shared_ptr and needs to be the sole owner for a clean
-        // delete.  In the decode path m_baseMessage is an aliasing shared_ptr
-        // (tied to m_rawViewChange) and is unaffected by the release — the
-        // arena will clean up when m_rawViewChange is destroyed.
-        m_rawViewChange->unsafe_arena_release_message();
-        // return back the ownership to m_committedProposal
-        if (m_rawViewChange->has_committedproposal())
-        {
-            m_rawViewChange->unsafe_arena_release_committedproposal();
-        }
-        // return back the ownership to m_preparedProposalList
-        auto preparedProposalSize = m_rawViewChange->preparedproposals_size();
-        for (auto i = 0; i < preparedProposalSize; i++)
-        {
-            m_rawViewChange->mutable_preparedproposals()->UnsafeArenaReleaseLast();
-        }
-    }
+    // FIB-121: base header / committedProposal / preparedProposals wrappers hold aliasing
+    // shared_ptrs that share this object's control block; nothing to release here.
+    ~PBFTViewChangeMsg() override = default;
 
     std::shared_ptr<RawViewChangeMessage> rawViewChange() { return m_rawViewChange; }
 

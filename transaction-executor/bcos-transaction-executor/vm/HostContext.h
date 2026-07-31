@@ -237,7 +237,7 @@ private:
         m_web3TypedTxKindForAccessList(web3TypedTxKind)
     {
         // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
-        // prepare() handles prepareCall/Create only; see TransactionExecutorImpl executeStep<0>.
+        // prepare() handles prepareCall/Create only; see TransactionExecutorImpl prepare().
         warmEip2929AtTransactionEntry();
         assert(!executor::eip2929Enabled(m_revision, m_ledgerConfig.get()) || m_eip2929Access);
     }

@@ -28,6 +28,13 @@ file(GLOB_RECURSE SRC_LIST bcos-tars-protocol/*.cpp)
 file(GLOB_RECURSE CLIENT_SRC bcos-tars-protocol/client/*.cpp)
 if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
     list(REMOVE_ITEM SRC_LIST ${CLIENT_SRC})
+    # GroupInfoCodecImpl.cpp implements group-info codec on top of the
+    # toBcosGroupInfo/toTarsGroupInfo helpers that Common.h compiles out under
+    # ONLY_CPP_SDK (#if !ONLY_CPP_SDK). All of its users (bcos-rpc,
+    # bcos-gateway, libinitializer) are full-node components, so drop it from
+    # SDK-only builds like the service clients above.
+    list(REMOVE_ITEM SRC_LIST
+        ${CMAKE_CURRENT_SOURCE_DIR}/bcos-tars-protocol/protocol/GroupInfoCodecImpl.cpp)
 endif ()
 find_package(tarscpp REQUIRED)
 find_package(TBB REQUIRED)
@@ -39,7 +46,10 @@ target_include_directories(protocol-tars PUBLIC
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-target_link_libraries(protocol-tars PUBLIC bcos-concepts bcos-framework bcos-crypto tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
+# `codec` carries the RLP headers TransactionImpl.cpp needs for the FIB-New1 canonical Web3
+# txHash recompute. release-3.17.0 spelled it ${CODEC_TARGET}; that variable went away with
+# TargetSettings.cmake (#5174), so it is named directly here.
+target_link_libraries(protocol-tars PUBLIC bcos-concepts bcos-framework bcos-crypto codec tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
 set_target_properties(protocol-tars PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)

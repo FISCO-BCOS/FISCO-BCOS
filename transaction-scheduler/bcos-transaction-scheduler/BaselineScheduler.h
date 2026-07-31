@@ -1,5 +1,7 @@
 #pragma once
 
+#include "BaselineSchedulerMPTHelpers.h"
+#include "MPTNodeStorage.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-executor/src/Common.h"
@@ -23,6 +25,8 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/CommitObserver.h"
+#include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Bloom.h"
@@ -158,7 +162,7 @@ h256 calculateReceiptRoot(
 task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
     ::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl,
-    ledger::Features const& features)
+    ledger::Features const& features, std::optional<h256> mptStateRoot = {})
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -169,6 +173,14 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
 
     tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
         [&]() {
+            // When the block was built with an Ethereum MPT root (shouldBuildMPT), the header
+            // commits to it verbatim and the legacy XOR fold is skipped; with no MPT root the
+            // XOR arm below is byte-identical to the pre-MPT behavior.
+            if (mptStateRoot)
+            {
+                stateRoot = *mptStateRoot;
+                return;
+            }
             stateRoot = task::tbb::syncWait(
                 calculateStateRoot(storage, block.blockHeader()->version(), hashImpl, features));
         },
@@ -218,6 +230,33 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         executor_v1::StateKey{
             ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         hash2NumberEntry);
+
+    // The executed header itself, under the same key commit's prewrite uses — written at
+    // execute time for the same reason as the two hash mappings above: the NEXT block's
+    // execution reads its parent's header (stateRoot for the MPT parent root) through the
+    // view while the parent is still pending. Commit overwrites this row with the
+    // consensus-SIGNED encoding in the same WriteBatch — mergeBackStorage merges the
+    // block's layer before prewriteStorage, so the signed version wins in the backend.
+    //
+    // Both conditions are load-bearing:
+    //  - MPT blocks only. buildMPTStateRoot reads a parent header exactly when the parent
+    //    itself built an MPT root, so publishing headers for XOR blocks would buy nothing
+    //    and leave every legacy chain's execute path carrying an extra row;
+    //  - never block 0. Unlike the two hash mappings above, the genesis header row has an
+    //    owner: Ledger::buildGenesisBlock writes it at chain init, and coCommitBlock skips
+    //    prewriteBlockToBuffer for block 0 (isSysContractDeploy), so nothing would overwrite
+    //    an execute-time row — the sys-contract-deploy header (its own gasUsed, hash, empty
+    //    sealer/parentInfo) would replace the chain's genesis header on disk.
+    if (mptStateRoot && newBlockHeader.number() != 0)
+    {
+        bytes headerBuffer;
+        newBlockHeader.encode(headerBuffer);
+        storage::Entry headerEntry;
+        headerEntry.set(std::move(headerBuffer));
+        co_await storage2::writeOne(storage,
+            executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
+            std::move(headerEntry));
+    }
 }
 
 template <class MultiLayerStorage,
@@ -260,9 +299,74 @@ private:
         protocol::BlockHeader::Ptr m_executedBlockHeader;
         protocol::Block::Ptr m_block;
         bool m_sysBlock{};
+        /// Engaged when the block was executed with an MPT state root (shouldBuildMPT).
+        /// CommitObserver payload ONLY: coCommitBlock hands the whole delta to the observer
+        /// after the merge lands. Nothing else reads it — node PERSISTENCE goes through the
+        /// block's mutable layer into mergeBackStorage as ordinary state rows
+        /// (MPTNodeStorage.h), and the NEXT block reads its parent root from the published
+        /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
+        /// consensus-path data flows through.
+        std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
     };
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
+
+    /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
+    /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
+    /// Written only before block flow starts (wiring time), read on the commit path.
+    std::shared_ptr<ledger::mpt::CommitObserver> m_mptCommitObserver =
+        std::make_shared<ledger::mpt::NoopCommitObserver>();
+
+    /**
+     * Build the block's Ethereum MPT state root over the execute view — the view whose top
+     * mutable layer is exactly this block's delta and whose immutable layers are the pending
+     * blocks' not-yet-committed deltas, node rows included — and return the trie-node delta.
+     *
+     * The parent state root comes from the parent block's HEADER, read through the view.
+     * finishExecute publishes every non-genesis MPT block's executed header into its own
+     * mutable layer, so ONE getBlockData arm covers every case: a pending parent resolves
+     * from the view's immutable chain (pipeline), a committed parent — the genesis block
+     * included — from the backend's signed header (restart / sequential; genesis is the
+     * ledger's own genesis header, which is why finishExecute must not publish one). A
+     * missing header under an MPT parent throws NotFoundBlockHeader (getBlockData,
+     * LedgerMethods.h) — never a silent empty-trie rebuild.
+     *
+     * An XOR parent (the scenario-A activation boundary) starts from the EMPTY trie, and
+     * never has its header read here. That is the scenario-A semantics, not an oversight:
+     * activating feature_mpt_state_root mid-chain commits only to state written AFTER
+     * activation — accounts dormant since the flip stay outside the trie and answer
+     * AccountNotInMPT, and the root is deliberately NOT a full-state Ethereum commitment
+     * (spec design3 §1.1.2 / §1.1.4 / §1.1.6; the 2026-07-09 revision removed first-touch
+     * bootstrap and the preheat tooling on purpose — no stop-the-world scan, no migration).
+     * Sync completeness on such a chain comes from replaying the block sequence, as it did
+     * before MPT. Scenario B (L2 from genesis) is the full-state case: every account enters
+     * the trie when it is created.
+     *
+     * Scenario-B genesis nodes: Ledger::buildGenesisBlock persists every genesis trie node
+     * (account trie + storage sub-tries, computeGenesisStateTrie) as "/mpt/" state rows on
+     * first init of an L2 chain, so block 1's incremental build reads its parents here.
+     */
+    task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRoot(
+        typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
+        ledger::LedgerConfig const& ledgerConfig)
+    {
+        auto const blockNumber = blockHeader.number();
+        h256 parentStateRoot = ledger::mpt::emptyRootHash();
+        if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
+        {
+            auto parentBlock = co_await ledger::getBlockData(
+                view, blockNumber - 1, ledger::HEADER, m_blockFactory.get());
+            parentStateRoot = parentBlock->blockHeader()->stateRoot();
+        }
+        // else: scenario-A activation boundary (parent committed an XOR root) — empty trie.
+
+        // Node reads resolve through the full view (parent nodes live in the pending layers /
+        // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).
+        ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
+        bool const l2Mode =
+            ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
+        co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
+    }
 
     /**
      * Executes a block and returns a tuple containing an error (if any), the block header, and
@@ -370,12 +474,59 @@ private:
             auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
                 *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
+            // MPT state root (spec §5.6): built at EXECUTE time, not commit time — the block
+            // header's stateRoot is set and hashed in finishExecute below and that hash is what
+            // PBFT signs, so a commit-time build could never reach the header. The trie-node
+            // rows land in this view's mutable layer (persisted by commit's mergeBackStorage
+            // like any state row); the delta rides in ExecuteResult for the CommitObserver and
+            // the next block's parent root.
+            std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
+            std::optional<h256> mptStateRoot;
+            if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
+            {
+                // Reaching here means an MPT IS being built, so the flag-matrix rule the
+                // build depends on has to hold. Re-checked per block rather than at startup
+                // only: a mid-chain activation of either flag is invisible to the boot-time
+                // guard (LedgerInitializer). Inside the branch, so shouldBuildMPT stays a
+                // pure predicate AND is evaluated once.
+                rejectRawAddressWithMPT(ledgerConfig->features(), blockHeader->number());
+                try
+                {
+                    mptDelta.emplace(co_await buildMPTStateRoot(view, *blockHeader, *ledgerConfig));
+                    mptStateRoot = mptDelta->stateRoot;
+                }
+                catch (std::exception& e)
+                {
+                    // No fallback to the XOR root: a silent state-root scheme switch is a
+                    // fork — a halted chain is diagnosable, a forked one is not. The
+                    // rethrow surfaces through coExecuteBlock's catch as an execute error.
+                    BASELINE_SCHEDULER_LOG(ERROR)
+                        << "MPT state root build failed, refusing XOR fallback, block="
+                        << blockHeader->number() << " | " << boost::diagnostic_information(e);
+                    if (blockHeader->number() == 1)
+                    {
+                        // The known scenario-B gap has exactly this shape, and a bare
+                        // missing-node error from the trie core cannot say so: an L2 genesis
+                        // built from a NON-EMPTY alloc writes the genesis stateRoot but not
+                        // the trie nodes behind it, so block 1's incremental build cannot
+                        // resolve the parent trie. Name it instead of leaving operators to
+                        // guess.
+                        BASELINE_SCHEDULER_LOG(ERROR)
+                            << "Block 1 build failure on an L2 chain: if genesis was created "
+                               "with a non-empty alloc, its trie nodes were never persisted "
+                               "(known limitation) — only empty-alloc genesis chains block 1 "
+                               "today";
+                    }
+                    throw;
+                }
+            }
+
             auto executedBlockHeader =
                 m_blockFactory.get().blockHeaderFactory()->populateBlockHeader(blockHeader);
             bool sysBlock = false;
             co_await finishExecute(mutableStorage(view), ::ranges::views::all(receipts),
                 *executedBlockHeader, *block, ::ranges::views::all(transactions), sysBlock,
-                m_hashImpl.get(), ledgerConfig->features());
+                m_hashImpl.get(), ledgerConfig->features(), mptStateRoot);
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {
@@ -409,7 +560,8 @@ private:
                     .m_receipts = std::move(receipts),
                     .m_executedBlockHeader = executedBlockHeader,
                     .m_block = std::move(block),
-                    .m_sysBlock = sysBlock});
+                    .m_sysBlock = sysBlock,
+                    .m_mptDelta = std::move(mptDelta)});
 
             // FIB-103 / FIB-104: Commit the execution result in a strict order:
             // push the view first (so we have a rollback target), then push the
@@ -602,10 +754,27 @@ private:
             // own mutex, (b) backpressure is only over-conservative by one, and
             // (c) m_results.back() cannot change here — m_commitMutex guarantees
             // a single committer.
+            // MPT node persistence needs no code here: the block's trie-node rows were written
+            // into its mutable layer at execute time as ordinary "/mpt/" state rows
+            // (MPTNodeStorage.h), so the single mergeBackStorage below lands flat state and
+            // trie nodes in one backend merge — one WriteBatch, one Write
+            // (RocksDBStorage2::merge). delta.obsoletedNodes / intraBlockObsoleted are NOT
+            // consumed here: they are candidates for the future pathdb pruning spec only, no
+            // deletes are issued (MPTDeltaLayer.h contract).
             {
                 ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().MERGE_STATE);
                 co_await m_multiLayerStorage.get().mergeBackStorage(prewriteStorage);
+            }
+
+            // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
+            // has landed and BEFORE m_lastCommittedBlockNumber advances, so the delta the
+            // observer sees is exactly the persisted state. Only MPT blocks fire it. The
+            // contract requires implementations not to throw and not to block; deliberately
+            // no try/catch here — swallowing an observer bug would hide it forever.
+            if (result->m_mptDelta)
+            {
+                m_mptCommitObserver->onCommit(header->number(), *result->m_mptDelta);
             }
 
             {
@@ -833,6 +1002,17 @@ public:
         std::function<void(bcos::protocol::BlockNumber)> blockNumberNotifier)
     {
         m_blockNumberNotifier = std::move(blockNumberNotifier);
+    }
+
+    /// Replace the MPT commit observer (CommitObserver.h). Call at wiring time, before block
+    /// flow starts. A null pointer keeps the current observer — the commit path relies on the
+    /// member never being empty.
+    void setMPTCommitObserver(std::shared_ptr<ledger::mpt::CommitObserver> observer)
+    {
+        if (observer)
+        {
+            m_mptCommitObserver = std::move(observer);
+        }
     }
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override {}

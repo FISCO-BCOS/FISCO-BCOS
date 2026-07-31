@@ -19,6 +19,7 @@
  */
 
 #include "EthEndpoint.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -931,8 +932,17 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
 
+    // The exclusion-vs-cold-slot distinction is mode-driven (spec §5.9): only under
+    // feature_l2_ethereum_compat (scenario B) are the storage tries complete, making an
+    // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
+    // written after MPT activation, and generateProof marks such slots inMPT=false instead
+    // of emitting a lying value-0 exclusion proof. getFeatures degrades to an empty set on
+    // fetch failure, i.e. to the honest scenario-A behavior.
+    auto const features = co_await ledger::getFeatures(*ledger);
+    bool const fullTrie = features.get(ledger::Features::Flag::feature_l2_ethereum_compat);
+
     auto result = co_await ledger::mpt::generateProof(
-        *mptReader, stateRoot, address, std::span<h256 const>(slots));
+        *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
     if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
     {
         auto const* message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?
@@ -955,10 +965,34 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     }
     output["accountProof"] = std::move(accountProof);
     Json::Value storageProof = Json::arrayValue;
+    auto const addressHex = address.hex();  // ledger::getStorageAt's shape: lowercase, unprefixed
     for (auto& entry : proof.storageProof)
     {
         Json::Value entryJson = Json::objectValue;
         entryJson["key"] = entry.key.hexPrefixed();
+        if (!entry.inMPT)
+        {
+            // SlotNotInMPT (spec §5.9): the slot is absent from the scenario-A storage trie, so
+            // no Merkle proof exists — "value" is the authoritative flat-KV truth, "proof" the
+            // empty array. Forward the resolved blockNumber (not a hardcoded 0 like the other
+            // Web3 flat reads): unlike them, this endpoint's Merkle half DOES honor blockTag —
+            // it proves against the requested block's stateRoot — so the flat half must target
+            // the same block. Ledger::getStorageAt ignores the argument today and serves
+            // latest-committed state; passing it keeps this call site correct once historical
+            // flat reads land, instead of silently staying latest-only. Unset slot reads as zero.
+            std::string quantity = "0x0";
+            if (auto const flat = co_await ledger::getStorageAt(
+                    *ledger, addressHex, entry.key.toRawString(), blockNumber);
+                flat.has_value())
+            {
+                quantity = toQuantity(flat.value().get());
+            }
+            entryJson["value"] = std::move(quantity);
+            entryJson["proof"] = Json::arrayValue;
+            entryJson["inMPT"] = false;
+            storageProof.append(std::move(entryJson));
+            continue;
+        }
         // The trie leaf stores RLP(big-endian-trimmed slot value); EIP-1186 "value" is the
         // slot's QUANTITY. Strip the RLP string header to recover the payload bytes and render
         // them as a quantity — 0x0 when the slot is absent (empty leaf value).
@@ -979,6 +1013,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
             proofJson.append(toHexStringWithPrefix(node));
         }
         entryJson["proof"] = std::move(proofJson);
+        entryJson["inMPT"] = true;
         storageProof.append(std::move(entryJson));
     }
     output["storageProof"] = std::move(storageProof);

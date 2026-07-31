@@ -87,7 +87,7 @@ public:
                                 for (auto i : range)
                                 {
                                     auto& context = contexts[i];
-                                    co_await context.template executeStep<0>();
+                                    co_await context.prepare();
                                 }
                                 co_return range;
                             }());
@@ -101,7 +101,7 @@ public:
                                 for (auto i : range)
                                 {
                                     auto& context = contexts[i];
-                                    co_await context.template executeStep<1>();
+                                    co_await context.execute();
                                 }
                                 co_return range;
                             }());
@@ -116,7 +116,7 @@ public:
                                 {
                                     auto& context = contexts[i];
                                     receipts.emplace_back(
-                                        co_await context.template executeStep<2>());
+                                        co_await context.finish());
                                 }
                             }());
                         }));

@@ -23,6 +23,8 @@
 #include "bcos-utilities/BoostLog.h"
 #include <algorithm>
 #include <cstddef>
+#include <set>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::election;
@@ -75,12 +77,42 @@ void WatcherConfig::fetchLeadersInfo()
         return;
     }
     auto const& values = response.values();
+    // FIB-182: this is a full snapshot of m_watchDir. A delete event that
+    // arrives while the watcher is disconnected is never delivered, so the old
+    // logic (add/update only) leaves a stale leader entry in m_keyToLeader
+    // forever. Track every key present in the snapshot and prune any tracked
+    // key that is absent from it.
+    std::set<std::string> snapshotKeys;
     for (auto const& value : values)
     {
+        snapshotKeys.insert(value.key());
         updateLeaderInfo(value);
     }
+    std::vector<std::pair<std::string, bcos::protocol::MemberInterface::Ptr>> prunedMembers;
+    {
+        WriteGuard l(x_keyToLeader);
+        for (auto it = m_keyToLeader.begin(); it != m_keyToLeader.end();)
+        {
+            if (snapshotKeys.count(it->first) != 0)
+            {
+                ++it;
+                continue;
+            }
+            prunedMembers.emplace_back(it->first, it->second);
+            m_keyToLeaderSeq.erase(it->first);
+            it = m_keyToLeader.erase(it);
+        }
+    }
+    // invoke delete callbacks outside the lock to prevent self-deadlock
+    for (auto const& pruned : prunedMembers)
+    {
+        ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo: prune missed-delete leader key")
+                           << LOG_KV("watchDir", m_watchDir) << LOG_KV("leaderKey", pruned.first);
+        onMemberDeleted(pruned.first, pruned.second);
+    }
     ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir)
-                       << LOG_KV("nodesSize", values.size());
+                       << LOG_KV("nodesSize", values.size())
+                       << LOG_KV("prunedSize", prunedMembers.size());
 }
 
 void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
@@ -215,10 +247,10 @@ void WatcherConfig::onMemberDeleted(
 
 bcos::election::WatcherConfig::WatcherConfig(std::string const& _etcdEndPoint,
     std::string const& _watchDir, bcos::protocol::MemberFactoryInterface::Ptr _memberFactory,
-    std::string const& _purpose, boost::asio::io_context& _ioContext,
-    const std::string& _caPath, const std::string& _certPath, const std::string& _keyPath)
-  : ElectionConfig(_etcdEndPoint, _memberFactory, _purpose, _ioContext, _caPath, _certPath,
-        _keyPath)
+    std::string const& _purpose, boost::asio::io_context& _ioContext, const std::string& _caPath,
+    const std::string& _certPath, const std::string& _keyPath)
+  : ElectionConfig(
+        _etcdEndPoint, _memberFactory, _purpose, _ioContext, _caPath, _certPath, _keyPath)
 {
     m_watchDir = _watchDir;
     ELECTION_LOG(INFO) << LOG_DESC("WatcherConfig") << LOG_KV("watchDir", _watchDir);

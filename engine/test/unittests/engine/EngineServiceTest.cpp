@@ -149,6 +149,9 @@ struct StubExecutor
     template <class Storage>
     struct ExecuteContext
     {
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return nullptr; }
     };
 
     template <class Storage>

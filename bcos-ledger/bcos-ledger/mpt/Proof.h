@@ -44,8 +44,9 @@
 namespace bcos::ledger::mpt
 {
 
-/// Proof for one storage slot (spec §5.9). For an absent slot, EIP-1186 semantics apply: value is
-/// empty (JSON 0x0) and proof holds the nodes visited until the walk dead-ended (exclusion proof).
+/// Proof for one storage slot (spec §5.9). For an absent slot under a COMPLETE storage trie
+/// (fullTrie mode), EIP-1186 semantics apply: value is empty (JSON 0x0) and proof holds the nodes
+/// visited until the walk dead-ended (exclusion proof).
 struct StorageProof
 {
     bcos::h256 key;  ///< the raw 32-byte slot key as requested (NOT keccak-transformed)
@@ -53,6 +54,12 @@ struct StorageProof
     /// slot value, matching go-ethereum. Empty when the slot is absent.
     bcos::bytes value;
     std::vector<bcos::bytes> proof;  ///< raw RLP node encodings, storage root first
+    /// False = SlotNotInMPT (spec §5.9, scenario A): the account has a leaf, but this slot was
+    /// never written after MPT activation, so the (incomplete) storage trie excludes it. The
+    /// exclusion walk proves nothing about the slot's flat-KV value — generateProof leaves value
+    /// and proof EMPTY here, and the RPC layer fills value with the authoritative flat-KV truth.
+    /// Only generateProof(fullTrie=false) produces false.
+    bool inMPT = true;
 };
 
 /// EIP-1186 result: the account fields plus the Merkle paths proving them (spec §5.9).
@@ -210,8 +217,20 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 ///   - stateRoot absent from storage        → ProofErrorCode::BlockNotCommitted
 ///   - stateRoot == emptyRootHash(), or the account walk dead-ends
 ///                                           → ProofErrorCode::AccountNotInMPT
-///   - a requested slot is absent            → StorageProof with empty value and the dead-end
+///   - a requested slot is absent, fullTrie  → StorageProof with empty value and the dead-end
 ///                                             prefix as exclusion proof (EIP-1186 value 0x0)
+///   - a requested slot is absent, !fullTrie → StorageProof with inMPT=false, empty value, empty
+///                                             proof (SlotNotInMPT, see @p fullTrie below)
+///
+/// @param fullTrie asserts the storage tries are COMPLETE (scenario B, feature_l2_ethereum_compat:
+/// every live slot has a trie leaf), so an exclusion walk IS a provable zero. Under scenario A
+/// (slot-level weakening, spec §4.4) the trie only commits slots written after MPT activation; an
+/// exclusion walk there looks IDENTICAL to scenario B's but proves nothing about the slot's
+/// flat-KV value, which may be non-zero — the entry is marked inMPT=false with value and proof
+/// left empty instead of lying with a value-0 exclusion proof. The distinction is mode-driven and
+/// cannot be inferred from the trie shape, hence this explicit parameter; the default keeps the
+/// complete-trie semantics of existing callers. This layer stays storage-pure: reading the
+/// Features flag and filling the flat-KV value are the RPC layer's job.
 ///
 /// Proof generation is a read-only cold path: instantiate over a Storage without an extra cache
 /// layer (e.g. the RocksDB-backed store directly) to avoid polluting the commit path's cache.
@@ -227,7 +246,8 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 template <bcos::storage2::ReadableStorage<bcos::h256> Storage,
     bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Storage& storage,
-    bcos::h256 stateRoot, bcos::Address address, std::span<bcos::h256 const> slots)
+    bcos::h256 stateRoot, bcos::Address address, std::span<bcos::h256 const> slots,
+    bool fullTrie = true)
 {
     if (stateRoot == emptyRootHash())
     {
@@ -274,17 +294,42 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
                     MPTInvariantViolation{} << bcos::errinfo_comment(
                         "generateProof: account references a storage root absent from storage"));
             }
-            entry.proof = std::move(slotWalk.nodes);
             if (slotWalk.value)
             {
+                entry.proof = std::move(slotWalk.nodes);
                 entry.value = std::move(*slotWalk.value);
             }
+            else if (fullTrie)
+            {
+                entry.proof = std::move(slotWalk.nodes);  // exclusion proof: a provable zero
+            }
+            else
+            {
+                // Scenario A cold slot: the exclusion walk proves nothing about the flat-KV
+                // value — discard it and mark the entry SlotNotInMPT (spec §5.9).
+                entry.inMPT = false;
+            }
         }
-        // else: empty storage trie — every slot is absent; empty value, empty proof.
+        else if (!fullTrie)
+        {
+            entry.inMPT = false;  // scenario A, empty storage trie: every slot is cold
+        }
+        // else: fullTrie, empty storage trie — every slot provably zero; empty value+proof.
         out.storageProof.push_back(std::move(entry));
     }
     co_return out;
 }
+
+/// Per-slot verification outcome (spec §5.9). Verified/Invalid mirror the storageValid bool; the
+/// third state exists because a SlotNotInMPT entry (inMPT=false) is neither: its value is a
+/// flat-KV assertion with no Merkle backing, so the verifier must not accept it as proven — and
+/// must not fail the response over it either, the honest generator emits exactly this shape.
+enum class SlotProofStatus : uint8_t
+{
+    Verified,      ///< hash chain verified and the recovered value equals the claimed value
+    Invalid,       ///< broken/padded chain, value mismatch, or inMPT=false smuggling proof bytes
+    Unverifiable,  ///< inMPT=false with an empty proof: cryptographically unproven, not disproven
+};
 
 /// Result of independently verifying an EIP1186Proof against a claimed state root (spec §7.1).
 /// The recovered* fields are what the proof bytes actually commit to; they are only filled when
@@ -296,7 +341,10 @@ struct VerifyResult
     bcos::u256 recoveredNonce{};
     bcos::h256 recoveredCodeHash{};
     bcos::h256 recoveredStorageRoot{};
-    std::vector<bool> storageValid;  ///< parallel to proof.storageProof
+    /// Parallel to proof.storageProof; true iff storageStatus[i] == Verified.
+    std::vector<bool> storageValid;
+    /// Parallel to proof.storageProof; the tri-state behind storageValid (spec §5.9).
+    std::vector<SlotProofStatus> storageStatus;
     /// Raw leaf value bytes recovered from each slot's chain (empty = proven absent). Filled only
     /// for slots whose hash chain verified.
     std::vector<bcos::bytes> recoveredStorageValues;
@@ -428,19 +476,24 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
 /// account leaf, the leaf decodes, and the decoded fields EQUAL the proof's claimed
 /// nonce/balance/codeHash/storageHash. Malformed leaf bytes yield accountValid=false, never an
 /// exception. On any account-side failure the function returns immediately with every
-/// storageValid false — slot chains hang off proof.storageHash, which an invalid account side
-/// has not established.
+/// storageValid false and every storageStatus Invalid (including inMPT=false entries: an
+/// unestablished account leaf makes even "unverifiable" too generous) — slot chains hang off
+/// proof.storageHash, which an invalid account side has not established.
 ///
-/// Per slot i: against an empty storage root, valid iff value and proof are both empty (matching
-/// generateProof's empty-trie output); otherwise the slot chain must verify against
-/// proof.storageHash and its recovered value must equal storageProof[i].value (empty = proven
-/// absence).
+/// Per slot i, an inMPT=false entry (SlotNotInMPT, spec §5.9) is judged first: it is Unverifiable
+/// when its proof is empty — the value is flat-KV-asserted, deliberately NOT counted as verified
+/// and NOT treated as a response-level failure — and Invalid when it carries proof bytes (a
+/// malformed mix: an unverifiable claim must not dress up as a proof). Otherwise (inMPT=true):
+/// against an empty storage root, valid iff value and proof are both empty (matching
+/// generateProof's empty-trie output); else the slot chain must verify against proof.storageHash
+/// and its recovered value must equal storageProof[i].value (empty = proven absence).
 template <
     bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
 {
     VerifyResult out;
     out.storageValid.assign(proof.storageProof.size(), false);
+    out.storageStatus.assign(proof.storageProof.size(), SlotProofStatus::Invalid);
     out.recoveredStorageValues.assign(proof.storageProof.size(), bcos::bytes{});
 
     HasherT hasher;  // one hash context, reused for the account chain and every slot
@@ -477,10 +530,21 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
     for (size_t i = 0; i < proof.storageProof.size(); ++i)
     {
         auto const& entry = proof.storageProof[i];
+        if (!entry.inMPT)
+        {
+            // SlotNotInMPT (spec §5.9): the value is a flat-KV assertion — Unverifiable, never
+            // Verified. An inMPT=false entry carrying proof bytes is malformed: whatever those
+            // bytes prove, the generator's contract says no proof exists for this slot.
+            out.storageStatus[i] =
+                entry.proof.empty() ? SlotProofStatus::Unverifiable : SlotProofStatus::Invalid;
+            continue;  // storageValid[i] stays false either way
+        }
         if (proof.storageHash == emptyRootHash<HasherT>())
         {
             // Empty storage trie: generateProof emits empty value + empty proof for every slot.
             out.storageValid[i] = entry.value.empty() && entry.proof.empty();
+            out.storageStatus[i] =
+                out.storageValid[i] ? SlotProofStatus::Verified : SlotProofStatus::Invalid;
             continue;
         }
         auto const slotPath = bytesToNibbles(slotKeyHash(entry.key, hasher).ref());
@@ -488,10 +552,12 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
             proof.storageHash, std::span<bcos::bytes const>(entry.proof), slotPath, hasher);
         if (!recovered)
         {
-            continue;  // invalid slot chain: storageValid[i] stays false
+            continue;  // invalid slot chain: storageValid[i] false, storageStatus[i] Invalid
         }
         out.recoveredStorageValues[i] = std::move(*recovered);
         out.storageValid[i] = (out.recoveredStorageValues[i] == entry.value);
+        out.storageStatus[i] =
+            out.storageValid[i] ? SlotProofStatus::Verified : SlotProofStatus::Invalid;
     }
     return out;
 }

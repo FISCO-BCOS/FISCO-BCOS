@@ -1,6 +1,7 @@
 #pragma once
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/Trait.h"
+#include <range/v3/range/concepts.hpp>
 
 namespace bcos::scheduler_v1
 {

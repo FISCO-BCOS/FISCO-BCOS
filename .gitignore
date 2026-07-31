@@ -74,6 +74,7 @@ test/*
 
 # Claude Code
 CLAUDE.local.md
+.worktrees/
 .claude/worktrees
 .claude/agents
 

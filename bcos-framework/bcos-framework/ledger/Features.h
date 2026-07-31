@@ -118,6 +118,10 @@ public:
         feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
                                           // Ethereum MPT root from this flag's activation
                                           // block on (spec 2026-04-24 design3 4.3)
+        // Takes the next unused number per the rule above, rather than the slot next to
+        // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
+        // renumber every feature_ flag after it and silently move their on-chain bits.
+        bugfix_nonce_ordering = 59,  // web3 EOA nonce must be independent of intra-block tx order
     };
 
     // feature_flags bit = enum value; magic_enum's default reflection range is

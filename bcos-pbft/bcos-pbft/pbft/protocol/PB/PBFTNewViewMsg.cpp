@@ -35,10 +35,12 @@ bytesPointer PBFTNewViewMsg::encode(CryptoSuite::Ptr, KeyPairInterface::Ptr) con
 
 void PBFTNewViewMsg::decode(bytesConstRef _data)
 {
-    // Release the arena's ownership of the old BaseMessage (set via
-    // set_allocated_message in the default ctor) before parsing new data.
-    m_rawNewView->unsafe_arena_release_message();
-
+    // FIB-121: no unsafe_arena_release_message() here. That call belonged to the old ownership
+    // protocol, where the default ctor handed the BaseMessage to the arena via
+    // set_allocated_message and decode had to take it back first. The ctor now installs an
+    // aliasing shared_ptr instead (see below), so the message sub-object is owned by
+    // m_rawNewView throughout and releasing it would hand out a pointer nobody frees.
+    // Matches PBFTViewChangeMsg::decode / PBFTRequest::decode.
     decodePBObject(m_rawNewView, _data);
 
     // Use an aliasing shared_ptr: points to the arena-allocated sub-message
@@ -52,16 +54,20 @@ void PBFTNewViewMsg::deserializeToObject()
 {
     PBFTBaseMessage::deserializeToObject();
     // decode into m_viewChangeList
-    // Use aliasing shared_ptrs: sub-messages live in m_rawNewView's arena,
-    // so we share ownership with m_rawNewView rather than taking ownership
-    // from the arena (which would lead to a double-free).
+    // FIB-121: clear before repopulating so a re-decode does not accumulate duplicate
+    // aliasing wrappers (matches PBFTMessage / PBFTViewChangeMsg::deserializeToObject).
+    m_viewChangeList->clear();
+    m_prePrepareList->clear();
+    // Use aliasing shared_ptrs: sub-messages live in m_rawNewView's arena, so we share
+    // ownership with m_rawNewView rather than taking ownership from the arena (which would
+    // lead to a double-free). Every nested viewChange / prePrepare wrapper keeps the NewView
+    // protobuf alive and owns nothing.
     for (int i = 0; i < m_rawNewView->viewchangemsglist_size(); i++)
     {
         auto* rawPtr = m_rawNewView->mutable_viewchangemsglist(i);
         std::shared_ptr<RawViewChangeMessage> pbRawViewChange(m_rawNewView, rawPtr);
-        m_viewChangeList->push_back(std::make_shared<PBFTViewChangeMsg>(pbRawViewChange)); 
+        m_viewChangeList->push_back(std::make_shared<PBFTViewChangeMsg>(pbRawViewChange));
     }
-    // decode into m_prePrepareList
     for (int i = 0; i < m_rawNewView->prepreparelist_size(); i++)
     {
         auto* rawPtr = m_rawNewView->mutable_prepreparelist(i);
@@ -72,22 +78,32 @@ void PBFTNewViewMsg::deserializeToObject()
 
 void PBFTNewViewMsg::setViewChangeMsgList(ViewChangeMsgList const& _viewChangeMsgList)
 {
+    // FIB-121: keep the caller's viewChange wrappers in the member list (identity +
+    // in-memory fields preserved, as before) and deep-copy each into our protobuf for encode
+    // (was AddAllocated borrow + destructor release). The in-memory FIB-124 cross-check reads
+    // the originals, so their nested preparedProposals stay intact without a hashfieldsdata
+    // round-trip.
     *m_viewChangeList = _viewChangeMsgList;
-    for (auto viewChangeMsg : _viewChangeMsgList)
+    m_rawNewView->clear_viewchangemsglist();
+    for (auto const& viewChangeMsg : _viewChangeMsgList)
     {
         auto pbViewChangeMsg = std::dynamic_pointer_cast<PBFTViewChangeMsg>(viewChangeMsg);
-        m_rawNewView->mutable_viewchangemsglist()->AddAllocated(
-            pbViewChangeMsg->rawViewChange().get());
+        m_rawNewView->add_viewchangemsglist()->CopyFrom(*pbViewChangeMsg->rawViewChange());
     }
 }
 
 void PBFTNewViewMsg::setPrePrepareList(PBFTMessageList const& _prePrepareList)
 {
+    // FIB-121: keep the caller's prePrepare wrappers in the member list and deep-copy each
+    // into our protobuf for encode (was AddAllocated borrow + destructor release).
     *m_prePrepareList = _prePrepareList;
-    for (auto prePrepare : _prePrepareList)
+    m_rawNewView->clear_prepreparelist();
+    for (auto const& prePrepare : _prePrepareList)
     {
         auto pbPrePrepare = std::dynamic_pointer_cast<PBFTMessage>(prePrepare);
+        // flush the inner base header into hashfieldsdata before copying (the prePrepare's
+        // base message is serialized into bytes, not embedded as a nested message field).
         pbPrePrepare->encodeHashFields();
-        m_rawNewView->mutable_prepreparelist()->AddAllocated(pbPrePrepare->pbftRawMessage().get());
+        m_rawNewView->add_prepreparelist()->CopyFrom(*pbPrePrepare->pbftRawMessage());
     }
 }

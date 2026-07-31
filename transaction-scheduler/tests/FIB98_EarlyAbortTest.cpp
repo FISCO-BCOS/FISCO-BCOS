@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file FIB98_EarlyAbortTest.cpp
- * @brief Verify that executeStep1 aborts early when m_hasRAW is set (FIB-98)
+ * @brief Verify that createContexts aborts early when m_hasRAW is set (FIB-98)
  */
 
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -49,11 +49,9 @@ struct CountingExecutor
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
@@ -103,10 +101,10 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(FIB98_EarlyAbortTest, FIB98Fixture)
 
-BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
+BOOST_AUTO_TEST_CASE(createContextsAbortsWhenHasRAWIsSet)
 {
     // This test constructs a ChunkStatus directly and verifies that
-    // executeStep1 stops creating ExecuteContext objects once the
+    // createContexts stops creating ExecuteContext objects once the
     // hasRAW flag has been set prior to the call.
 
     task::syncWait([&, this]() -> task::Task<void> {
@@ -138,7 +136,7 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
         using ChunkType =
             ChunkStatus<MutableStorage, BackendStorageType, CountingExecutor, ContextRange>;
 
-        // Case 1: hasRAW already set before calling executeStep1 -- expect zero contexts created.
+        // Case 1: hasRAW already set before calling createContexts -- expect zero contexts created.
         {
             boost::atomic_flag hasRAW;
             hasRAW.test_and_set();  // Set the flag BEFORE creating the chunk
@@ -150,7 +148,7 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
             bcostars::protocol::BlockHeaderImpl blockHeader(
                 [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
             ledger::LedgerConfig ledgerConfig;
-            co_await chunk.executeStep1(blockHeader, ledgerConfig);
+            co_await chunk.createContexts(blockHeader, ledgerConfig);
 
             BOOST_CHECK_EQUAL(executor.createCount.load(), 0);
         }
@@ -166,7 +164,7 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
             bcostars::protocol::BlockHeaderImpl blockHeader(
                 [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
             ledger::LedgerConfig ledgerConfig;
-            co_await chunk.executeStep1(blockHeader, ledgerConfig);
+            co_await chunk.createContexts(blockHeader, ledgerConfig);
 
             BOOST_CHECK_EQUAL(executor.createCount.load(), TX_COUNT);
         }

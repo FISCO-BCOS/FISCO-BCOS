@@ -29,6 +29,8 @@
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <magic_enum/magic_enum.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 
 namespace bcos::ledger
 {
