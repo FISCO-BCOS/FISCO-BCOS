@@ -1233,3 +1233,42 @@ TEST(Storage2Ledger, NonThirtyTwoByteSlotValueThrowsOnReadButCountsAsContentForH
         EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
     }
 }
+
+// (z10) 终审批 9 fix2 F2-1:读路的**消息保真**断言 —— 与 (d2) 的
+//       expectOpStorageErrorWithMessage 对称的那一半。
+//
+//       背景(re-review 的 INJ-R2 实测,已推翻上一轮的"直抛 vs 穿协程"归因):本仓 typed-catch
+//       的判别式是**异常类型族**,与协程边界无关 —— `std::runtime_error` 子树的 typed catch
+//       **不生效**(逃逸到 catch(...)),`std::logic_error` 子树正常生效。读路四个方法此前只有
+//       两级(std::exception + ...),于是**每一个 runtime_error 今天就在丢消息**:
+//       firstError() 退化成 "unknown exception",运维看到的 -32603 理由为空内容。而读路是
+//       毒旗的**主要**来源(get_account/get_account_code/get_storage/visitAccounts)。
+//
+//       本例钉的不是"毒旗置没置位"(那个两级四级都会置),而是**置位时消息还在不在**。
+//       触发用的是 fetchAllStorage 的 "unknown key in account table" —— 一条 runtime_error,
+//       也正是 re-review 实测到丢消息的那一条。既有的 VisitAccountsUnknownKeyPoisons 只断言
+//       poisoned()==true,对消息一字未提,所以它在两级阶梯下也是绿的、拦不住这个退化。
+TEST(Storage2Ledger, ReadPathRuntimeErrorKeepsOriginalMessage)
+{
+    MutableStorage storage;
+    Account acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+
+    const auto tableName = tableNameOf(0x01_address);
+    const std::string unknownKey(17, 'x');  // 既非已知字段名,也非 32 字节槽键
+    bcos::task::syncWait(
+        bcos::storage2::writeOne(storage, bcos::executor_v1::StateKeyView{tableName, unknownKey},
+            bcos::storage::Entry(std::string("v"))));
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+    EXPECT_FALSE(bridge.visitAccounts([](const auto&) { return true; }));
+    ASSERT_TRUE(bridge.poisoned());
+
+    // 正例标识:必须是 fetchAllStorage 自己 throw 里的原文(含出事的表名,运维据此定位)。
+    EXPECT_NE(bridge.firstError().find("unknown key in account table"), std::string_view::npos)
+        << "读路 runtime_error 的消息被吞了,firstError()=" << bridge.firstError();
+    EXPECT_NE(bridge.firstError().find(tableName), std::string_view::npos) << bridge.firstError();
+    // 反例标识:不得退化成 catch(...) 那句无内容的兜底串。
+    EXPECT_EQ(bridge.firstError().find("unknown exception"), std::string_view::npos)
+        << "firstError() 退化成 catch(...) 的兜底串,-32603 的理由为空内容:" << bridge.firstError();
+}

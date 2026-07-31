@@ -136,6 +136,25 @@ public:
             m_accountCache.emplace(addr, fetched);
             return fetched;
         }
+        // ── 四级 catch 阶梯(终审批 9 fix2 F2-1)──────────────────────────────────────
+        // 读路四个方法(get_account / get_account_code / get_storage / visitAccounts)与
+        // applyDiff 共用同一条阶梯,理由与形态见本文件 applyDiff 的注释。此处只记**为什么读路
+        // 也必须四级**:本仓 typed-catch 的判别式是**异常类型族**——`std::runtime_error` 子树
+        // 的 typed catch 不生效(逃逸到 `catch (...)`),`std::logic_error` 子树正常生效。
+        // 读路的 throw 两族都有(`fetchAllStorage` 的 "unknown key in account table" 是
+        // runtime_error;`fetchStorage`/`fetchAllStorage` 的值长度校验是 length_error),
+        // 两级阶梯下**前者今天就在丢消息**:`firstError()` 退化成 "unknown exception",
+        // 运维拿到的 -32603 理由为空内容。而读路是毒旗的**主要**来源。
+        // 消息保真由 `Storage2LedgerTest` 的 `ReadPathRuntimeErrorKeepsOriginalMessage`
+        // 见证(与 (d2) 的 expectOpStorageErrorWithMessage 对称的读路那一半)。
+        catch (const std::runtime_error& e)
+        {
+            poison(e.what());
+        }
+        catch (const std::logic_error& e)
+        {
+            poison(e.what());
+        }
         catch (const std::exception& e)
         {
             poison(e.what());
@@ -166,6 +185,15 @@ public:
             auto code = task::syncWait(fetchCode(tableName));
             m_codeCache.emplace(addr, code);
             return code;
+        }
+        // 四级阶梯,理由见 get_account 同名注释(F2-1)。
+        catch (const std::runtime_error& e)
+        {
+            poison(e.what());
+        }
+        catch (const std::logic_error& e)
+        {
+            poison(e.what());
         }
         catch (const std::exception& e)
         {
@@ -199,6 +227,15 @@ public:
             auto value = task::syncWait(fetchStorage(tableName, key));
             m_storageCache.emplace(cacheKey, value);
             return value;
+        }
+        // 四级阶梯,理由见 get_account 同名注释(F2-1)。
+        catch (const std::runtime_error& e)
+        {
+            poison(e.what());
+        }
+        catch (const std::logic_error& e)
+        {
+            poison(e.what());
         }
         catch (const std::exception& e)
         {
@@ -325,6 +362,19 @@ public:
         try
         {
             return task::syncWait(visitAccountsImpl(visitor));
+        }
+        // 四级阶梯,理由见 get_account 同名注释(F2-1)。这一条是四个读方法里**最要紧**的:
+        // re-review 实测的丢消息实例正是它——`fetchAllStorage` 的 "unknown key in account
+        // table '/apps/…'"(runtime_error)在两级阶梯下逃逸到 catch(...),firstError() 退化
+        // 成 "unknown exception";而 visitAccounts 是 stateRootOf 的必经路径,它的毒旗消息
+        // 就是运维排查 -32603 时唯一的线索。
+        catch (const std::runtime_error& e)
+        {
+            poison(e.what());
+        }
+        catch (const std::logic_error& e)
+        {
+            poison(e.what());
         }
         catch (const std::exception& e)
         {
