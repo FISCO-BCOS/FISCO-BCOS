@@ -382,3 +382,88 @@ t① 原文写 `addressFromTableName` 抛 `std::length_error`,与它自己举的
 4. **(z9) 第 (3) 腿断言的是当下的有意取向,不是不可动摇的规范**。若将来裁定"长度违规应当在
    `has_storage` 侧也报错",这条断言就该改——注释里写明了它是"有意的不对称"而非遗漏,改它
    需要连注释一起改,这是它的全部防呆价值。
+
+---
+
+# fix2 轮(re-review 跟进 F2-1 / F2-2)
+
+接续者报告。BASE = fix 轮收口的 `7a5aa73`。re-review **通过**,但推翻了 fix 轮的一条机制
+归因,并带出一条 Important。
+
+## 0. 认知更正(这决定了 fix2 怎么写注释)
+
+fix 轮我把 typed-catch 旁路归因为"`-fno-rtti` 的 libevmone.a 里那份 `std::exception` 隐藏
+副本导致其 typeinfo 非唯一",并据此以为"`std::exception` 那一级形同虚设"。
+
+**re-review 的 INJ-R2 证伪了这两条**(三处 catch 全剥回两级、同一 TU 同一二进制、四探针对照):
+
+| 异常 | `applyDiff`(写路) | `visitAccounts`(读路) | `get_storage`(读路) |
+|---|---|---|---|
+| `runtime_error` | 逃逸到 `catch (...)` | **同样**逃逸到 `catch (...)` | — |
+| `length_error` | — | **正常命中** `catch (const std::exception&)` | **正常命中** |
+
+推论两条:
+
+1. **"直抛 vs 穿协程"的对照不存在** —— `visitAccounts:327` 也是 `syncWait(协程)`,穿的是
+   同一种边界,现象却与 `applyDiff` 一致。我上一轮拿协程边界解释它是错的。
+2. **判别式是异常的类型族**:`runtime_error` 子树的 typed catch 不生效,`logic_error` 子树
+   正常生效,与协程无关。
+3. 我那条 typeinfo 归因**与实测矛盾**:若 `std::exception` 的 typeinfo 非唯一,`length_error`
+   也该逃逸——实际没有。已在注释里**降格为"机制未定,以实测为准,判别式是类型族"**。
+
+这条更正不是文字游戏:正因为判别式是类型族而非"写路 vs 读路",**读路今天就在丢消息**,
+才有了 F2-1。
+
+## F2-1(Important)—— 读路补四级阶梯 + 消息保真断言
+
+`get_account` / `get_account_code` / `get_storage` / `visitAccounts` 此前都只有两级
+(`std::exception` + `...`)。按更正后的判别式,读路每一个 `runtime_error` 都落到
+`catch (...)` → `firstError()` 退化成 `"unknown exception"`。re-review 已实测一例:
+`fetchAllStorage` 的 `"unknown key in account table '/apps/…'"`。**而读路是毒旗的主要来源**
+——运维拿到 -32603 时,`firstError()` 是唯一线索,退化后理由为空内容。
+
+- 四个读方法各补成与 `applyDiff` 同款的四级阶梯。**纯机械改动、零语义风险**:四级全部
+  `poison`,毒旗置位与否两级四级完全一致,变的只有消息。
+- 新增 **(z10)** `ReadPathRuntimeErrorKeepsOriginalMessage` —— 与 (d2) 的
+  `expectOpStorageErrorWithMessage` 对称的读路那一半。钉的**不是**"毒旗置没置位"(那个
+  两级也过),而是**置位时消息还在不在**:正例 = `firstError()` 含 throw 原文与出事的表名;
+  反例 = 不得退化成 `"unknown exception"`。
+
+  为什么既有用例拦不住:`VisitAccountsUnknownKeyPoisons` 走的是**同一条** throw,但它只断言
+  `poisoned() == true`、对消息一字未提,所以它在两级阶梯下也是绿的。这正是"断言写在哪一层"
+  决定判别力的又一例。
+
+自验 **INJ-I**(删掉 `visitAccounts` 的 `runtime_error` 级)→ **1 红且只有 (z10)** → 还原 →
+重建 → 复绿。提交 `d0b8186`。
+
+## F2-2(Minor)—— 三处措辞修正
+
+| # | 位置 | 改动 |
+|---|---|---|
+| 1 | `Storage2Ledger.h` catch 阶梯注释 | 补记实验三;**删**"直抛 vs 穿协程"对照(证伪);**删**"`std::exception` 级形同虚设"(按实验三它正是 `logic_error` 族**唯一正确命中**的那一级,必须保留);机制归因**降格**为"未定,以实测为准",判别式改述为类型族 |
+| 2 | spec §6.4 t① | "`non_hex_input` 不派生自 `runtime_error`/`logic_error` 所以 `catch (...)` 非冗余"这个理由**推不出结论** —— 它 `virtual` 继承 `std::exception`(`hex.hpp:51-53`),`catch (const std::exception&)` 本就能匹配。换成真实依据:`catch (...)` 非冗余是因为**它是 `runtime_error` 族实际的落点** |
+| 3 | (z8) 用例注释 + 报告诚实边界 #2 | "跨层墓碑未覆盖"改述为**结构性不可达,故刻意不补**(re-review R-3 三条论证)。上一轮写成"未覆盖"是**误判** —— 照那个写法,后人会补一条断言形状根本构造不出来的、无判别力的绿用例 |
+
+提交 `69614a5`。
+
+## 回归
+
+| 腿 | 结果 |
+|---|---|
+| in-tree `bcos-evm-opstack-tests` | `--gtest_list_tests` **250** / **250 PASSED**(fix 轮 249 + (z10)) |
+| standalone `bcos-evm/build` | 未重建,对本轮**空真**((z10) 在 `if(TARGET bcos-framework)` 门控内),口径与前几轮一致 |
+
+注入 INJ-I 已还原 + 重建 + 复绿,`git status` 干净,**未触碰主仓任何文件**。
+
+## 诚实边界(本轮)
+
+1. **F2-1 的四级阶梯只在 `visitAccounts` 一处做了删级自验**(INJ-I)。另外三个读方法
+   (`get_account` / `get_account_code` / `get_storage`)的 `runtime_error` 级**没有各自的
+   红绿见证** —— 它们是同一段代码的机械复制,但严格说"机械复制正确"是我的判断,不是实测。
+   要补需要给每个读方法各造一条 `runtime_error` 触发路径。
+2. **`logic_error` 族的读路消息保真没有专门断言**。(z9) 覆盖了 `length_error` 会置毒旗 +
+   消息含 `"size mismatch"`,但那条在两级阶梯下**本来就是绿的**(实验三:`logic_error` 族
+   typed catch 正常生效),所以它不是四级阶梯的见证,只是顺带成立。
+3. **机制仍未定位**。本轮只做到"判别式是类型族"这一层实测归纳,没有查明 `runtime_error`
+   子树为何 typed catch 失效(需要看 `__cxa_throw` 实际拿到的 typeinfo 指针、以及各 `.a`
+   里的弱符号解析结果)。注释已明确标注"机制未定",不要在这个基础上做任何推断式改动。
