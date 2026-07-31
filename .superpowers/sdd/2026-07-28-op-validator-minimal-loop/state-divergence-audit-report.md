@@ -267,3 +267,77 @@ op-geth: eth/catalyst/api.go:888 —— `GetBlock(block.ParentHash(), block.Numb
 - op-geth `verifyHeader` 的 `SlotNumber`(Amsterdam)—— 分叉未及,未查。
 
 <!-- LAYER-2-END -->
+
+---
+
+## 第 3 层:块前系统调用(EIP-4788 / EIP-2935)
+
+我方入口:`bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:31-32` ——
+`applyDiff(sanitizeStateDiff(view, system_call_block_start(view, block, hashes, cfg.rev, vm)))`,
+实现在 `bcos-evm/bcos-evm/eth/state/system_contracts.cpp:85-107`。
+op-geth 对照:`core/state_processor.go:90-95`(`ProcessBeaconBlockRoot` / `ProcessParentBlockHash`),
+实现在 `:262-282` / `:286-308`。
+
+### 【分歧 3-1】系统调用 REVERT / OOG 时,我方**不回滚**,op-geth 回滚
+
+```
+我方:    bcos-evm/bcos-evm/eth/state/system_contracts.cpp:66-82 execute_system_call ——
+         直接 `vm.execute(host, rev, msg, code.data(), code.size())`,**绕过了
+         `Host::call`**。回滚只发生在 `Host::call` 里
+         (bcos-evm/bcos-evm/eth/state/host.cpp:383-397:`state_checkpoint = m_state.checkpoint()`
+         → 非 SUCCESS 时 `m_state.rollback(state_checkpoint)`)。顶层帧没有任何人做 checkpoint,
+         因此系统合约在中途 SSTORE 后 REVERT/OOG,**已写入的槽会留在 `state` 里**,随后被
+         :106 `state.build_diff(rev)` 收集并 applyDiff 落账。
+         :103 只有一句 `assert(res.status_code == EVMC_SUCCESS)` —— NDEBUG 下被编译掉。
+op-geth: core/state_processor.go:262-282 —— `evm.Call(msg.From, *msg.To, msg.Data, 30_000_000,
+         common.U2560)`。geth 的 `EVM.Call` 内部 `snapshot := evm.StateDB.Snapshot()`,
+         出错即 `RevertToSnapshot(snapshot)` —— 顶层 REVERT 被完整回滚。
+         2935 侧另有 `:301-303 if err != nil { panic(err) }`(节点崩溃,不是判块无效)。
+触发输入:`0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02`(BEACON_ROOTS)或
+         `0x0000F90827F1C53a10cb7A02335B175320002935`(HISTORY_STORAGE)上的代码在
+         SSTORE 之后 REVERT(或耗尽 30M gas)。规范预部署代码不会,但这是**账本状态**决定的,
+         不是协议常量 —— 任何把这两个地址写成别的代码的创世/升级都能触发。
+分歧结果:stateRoot 直接分歧(我方多出被 revert 掉的槽写入)。
+可达性:  需生产账本(取决于预部署代码);当前 t8n 语料用规范预部署,恒不触发。
+置信度:  已读两侧源码确认回滚位置的存在与缺失;"规范预部署不会 revert"未逐字节验证 `[需验证]`。
+最小验证步骤:在 `OpBlockExecuteTest.cpp` 里给 BEACON_ROOTS 装一段 `PUSH1 1 PUSH1 0 SSTORE
+         PUSH1 0 PUSH1 0 REVERT` 的代码,断言执行后该槽在 diff 里 —— 若在,分歧成立。
+```
+
+### 【分歧 3-2】`assert` 承担了唯一的失败处理,Release 构建下失败被静默吞掉
+
+```
+我方:    system_contracts.cpp:103 `assert(res.status_code == EVMC_SUCCESS);` —— 生产构建
+         (NDEBUG)下该行不存在,失败的系统调用与成功的系统调用**在控制流上无法区分**。
+op-geth: 4788 侧同样忽略错误(`_, _, _ = evm.Call`,state_processor.go:281),
+         **但**由上面 3-1 的 snapshot 保证"失败 ⇒ 无状态变化";2935 侧 `panic(err)`。
+分歧结果:与 3-1 同源。单列是因为它决定了 3-1 在 Debug 构建下表现为**进程 abort**、
+         在 Release 构建下表现为**静默状态分歧** —— 两种都不是"判块 INVALID"。
+可达性:  同 3-1。
+置信度:  已读两侧源码确认。
+```
+
+### 本层已核对、判定为**一致**的项
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| EIP-4788 激活条件 | `system_contracts.cpp:35` `EVMC_CANCUN`;Isthmus/Jovian 的 `rev = EVMC_PRAGUE`(OpForkSchedule.cpp:62/77)≥ CANCUN | `state_processor.go:90` `block.BeaconRoot() != nil`,而头校验保证 Cancun 起必在场 | 一致 |
+| EIP-2935 激活条件 | `system_contracts.cpp:39` `EVMC_PRAGUE` | `state_processor.go:93` `IsPrague \|\| IsVerkle`(OP 的 Isthmus ≡ Prague) | 一致 |
+| 4788 输入 | `block.parent_beacon_block_root`(:36-38) | `*block.BeaconRoot()`(:91) | 一致 |
+| 2935 输入 | `block_hashes.get_block_hash(block.number - 1)`(:40-42),由 `OpSchedulerImpl.h:221-230` `ParentOnlyBlockHashes` 应答 `env.parentHash` | `block.ParentHash()`(:94) | 一致 |
+| 调用者 / gas | `SYSTEM_ADDRESS`,`gas = 30'000'000`(:71-76) | `params.SystemAddress`,`GasLimit: 30_000_000`(:268-275) | 一致 |
+| 合约代码缺失时静默跳过 | `:96-98` `if (code.empty()) continue;` | `evm.Call` 对不存在账户 + value==0 直接早返回,不落任何状态 | 一致(净效果) |
+| 两个系统调用的**先后顺序**(4788 先、2935 后) | `STORAGE_SYSTEM_CONTRACTS` 数组序 + `static_assert(is_sorted by_rev)`(:59-63) | `:90-95` 先 4788 后 2935 | 一致 |
+| 块后 requests 系统调用(EIP-7002/7251/6110)**不执行** | `processOpBlock` 从不调 `system_call_block_end`;`OpForkConfig::disable_prague_requests = true`(OpForkSchedule.cpp:64/79) | `state_processor.go:141` `IsPrague(...) && !IsIsthmus(block.Time())` —— Isthmus 起整段跳过 | 一致 |
+| 系统调用产生的 diff 也过 `sanitizeStateDiff` | OpBlockExecute.cpp:31 | —— | 见第 6 层 |
+
+### 本层**未覆盖**的面
+
+- `misc.EnsureCreate2Deployer`(op-geth `state_processor.go:81`)—— OP 在 **Canyon 激活块**注入
+  Create2Deployer 代码的一次性块前状态写入。本循环的 `configAt` 只解析 Isthmus/Jovian
+  (OpForkSchedule.cpp:102-110),Canyon 激活块不可能出现,故不适用;但如果未来支持从更早的
+  分叉重放历史块,**这是一条我方完全没有的块前状态写入** `[需验证]`。
+- `evm.StateDB.Finalise(true)`(op-geth 在两个系统调用后各调一次)与我方 `build_diff` 的
+  空账户清除时机差异 —— 归到第 6 层一并处理。
+
+<!-- LAYER-3-END -->
