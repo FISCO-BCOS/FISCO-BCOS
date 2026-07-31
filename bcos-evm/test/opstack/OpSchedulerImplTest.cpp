@@ -27,6 +27,7 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-evm/engine/OpReceiptMap.h>
 #include <bcos-evm/engine/OpSchedulerImpl.h>
 #include <bcos-evm/ledger/LedgerSeed.h>
@@ -62,6 +63,7 @@
 
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <bcos-evm/eth/utils/rlp.hpp>
+#include <bcos-evm/eth/utils/rlp_encode.hpp>
 #include <bcos-evm/eth/utils/statetest.hpp>
 #include <bcos-evm/eth/utils/test_state.hpp>
 
@@ -1130,6 +1132,210 @@ TEST(OpSchedulerImpl, AuthorizationYParityOverWideIsBlockInvalid)
     expectOpConsensusErrorWithMessage(
         [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
         "too wide for authorization yParity");
+}
+
+// ══════════════ final review batch B, 1-1: legacy & EIP-2930 (0x01) decode support ══════════════
+//
+// decodeOneRawTx previously accepted only {0x7e, 0x02, 0x04}; the execution variant
+// (OpBlockExecute.h -> state.cpp:460-475) has always handled legacy/access_list too, so the gap was
+// purely in the decoder (the old "only these three shapes are understood" comment was false — it
+// mirrored the t8n corpus, not a capability boundary). These tests sign REAL transactions with
+// secp256k1 and assert the decoder recovers the correct sender — the decisive correctness check,
+// since a wrong signing-preimage or field parse yields a wrong recovered address. §6.4 item n:
+// legacy's EIP-155/pre-155 forms and v-canonicality are exercised, plus the chain-id cross-check.
+namespace
+{
+struct RealSigner
+{
+    std::shared_ptr<bcos::crypto::Keccak256> hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    std::shared_ptr<bcos::crypto::Secp256k1Crypto> sig =
+        std::make_shared<bcos::crypto::Secp256k1Crypto>();
+    std::unique_ptr<bcos::crypto::KeyPairInterface> keyPair = sig->generateKeyPair();
+
+    /// The signer's address, derived independently of ecrecover (keccak(pubkey)[12:]), so matching
+    /// it against the decoder's recovered sender is a real check rather than a tautology.
+    [[nodiscard]] evmc::address expectedSender() const
+    {
+        auto addr = keyPair->address(hashImpl);
+        evmc::address out{};
+        std::memcpy(out.bytes, addr.data(), sizeof(out.bytes));
+        return out;
+    }
+
+    /// Sign `preimage` (the exact bytes the decoder will keccak+ecrecover over) and return
+    /// (r, s, recid). secp256k1Sign yields a low-s canonical signature, which recoverTxSender's
+    /// EIP-2 guard requires.
+    [[nodiscard]] std::tuple<intx::uint256, intx::uint256, uint8_t> sign(
+        const bcos::bytes& preimage) const
+    {
+        auto hash = bcos::crypto::keccak256Hash(bcos::ref(preimage));
+        auto sigBytes = sig->sign(*keyPair, hash, true);  // 65 bytes: r(32) || s(32) || recid(1)
+        evmc::bytes32 rb{};
+        evmc::bytes32 sb{};
+        std::memcpy(rb.bytes, sigBytes->data(), 32);
+        std::memcpy(sb.bytes, sigBytes->data() + 32, 32);
+        return {
+            intx::be::load<intx::uint256>(rb), intx::be::load<intx::uint256>(sb), sigBytes->at(64)};
+    }
+};
+
+bcos::bytes toBcos(const evmc::bytes& in)
+{
+    return {in.begin(), in.end()};
+}
+}  // namespace
+
+// 1-1 (legacy, pre-EIP-155): v ∈ {27,28}, 6-item signing preimage, no chain id. The decoder must
+// recover the signer and classify it as legacy.
+TEST(OpSchedulerImpl, LegacyPre155DecodesAndRecoversSender)
+{
+    RealSigner signer;
+    const evmc::address to = kPlaceholderTransferTo;
+    const uint64_t nonce = 7;
+    const intx::uint256 gasPrice = 1'000'000'000;
+    const uint64_t gasLimit = 21000;
+    const intx::uint256 value = 12345;
+
+    auto preimage = evmone::rlp::encode_tuple(
+        nonce, gasPrice, gasLimit, evmc::bytes_view(to), value, evmc::bytes{});
+    auto [r, s, recid] = signer.sign(toBcos(preimage));
+    const intx::uint256 v = intx::uint256{27} + recid;  // pre-155
+    auto env = evmone::rlp::encode_tuple(
+        nonce, gasPrice, gasLimit, evmc::bytes_view(to), value, evmc::bytes{}, v, r, s);
+
+    auto decoded = bcos::evm::engine::detail::decodeOneRawTx(toBcos(env), kChainId);
+    const auto& tx = std::get<evmone::state::Transaction>(decoded.tx);
+    EXPECT_EQ(tx.type, evmone::state::Transaction::Type::legacy);
+    EXPECT_EQ(tx.sender, signer.expectedSender());
+    EXPECT_EQ(tx.nonce, nonce);
+    EXPECT_EQ(tx.chain_id, 0u);  // pre-155 carries no chain id
+    ASSERT_TRUE(tx.to.has_value());
+    EXPECT_EQ(*tx.to, to);
+}
+
+// 1-1 (legacy, EIP-155): v = chainId*2 + 35 + parity, 9-item signing preimage (…chainId, 0, 0).
+// With kChainId = 0x2105 the full v (16941+) overflows a uint8, which is exactly why the decoder
+// reads v as a wide scalar and derives parity/chainId rather than round-tripping it through tx.v.
+TEST(OpSchedulerImpl, LegacyEip155DecodesAndRecoversSender)
+{
+    RealSigner signer;
+    const evmc::address to = kPlaceholderTransferTo;
+    const uint64_t nonce = 3;
+    const intx::uint256 gasPrice = 2'000'000'000;
+    const uint64_t gasLimit = 21000;
+    const intx::uint256 value = 99;
+
+    auto preimage = evmone::rlp::encode_tuple(nonce, gasPrice, gasLimit, evmc::bytes_view(to),
+        value, evmc::bytes{}, kChainId, uint64_t{0}, uint64_t{0});
+    auto [r, s, recid] = signer.sign(toBcos(preimage));
+    const intx::uint256 v = intx::uint256{kChainId} * 2 + 35 + recid;  // EIP-155
+    auto env = evmone::rlp::encode_tuple(
+        nonce, gasPrice, gasLimit, evmc::bytes_view(to), value, evmc::bytes{}, v, r, s);
+
+    auto decoded = bcos::evm::engine::detail::decodeOneRawTx(toBcos(env), kChainId);
+    const auto& tx = std::get<evmone::state::Transaction>(decoded.tx);
+    EXPECT_EQ(tx.type, evmone::state::Transaction::Type::legacy);
+    EXPECT_EQ(tx.sender, signer.expectedSender());
+    EXPECT_EQ(tx.chain_id, kChainId);
+    EXPECT_EQ(tx.nonce, nonce);
+}
+
+// 1-1 (EIP-2930 / 0x01): [chainId, nonce, gasPrice, gasLimit, to, value, data, accessList, yParity,
+// r, s]; signing preimage = 0x01 || rlp([…first 8 fields]).
+TEST(OpSchedulerImpl, AccessListTxDecodesAndRecoversSender)
+{
+    RealSigner signer;
+    const evmc::address to = kPlaceholderTransferTo;
+    const uint64_t nonce = 5;
+    const intx::uint256 gasPrice = 3'000'000'000;
+    const uint64_t gasLimit = 30000;
+    const intx::uint256 value = 42;
+    const evmone::state::AccessList accessList{};
+
+    auto preimage =
+        evmc::bytes{0x01} + evmone::rlp::encode_tuple(kChainId, nonce, gasPrice, gasLimit,
+                                evmc::bytes_view(to), value, evmc::bytes{}, accessList);
+    auto [r, s, recid] = signer.sign(toBcos(preimage));
+    auto env = evmc::bytes{0x01} + evmone::rlp::encode_tuple(kChainId, nonce, gasPrice, gasLimit,
+                                       evmc::bytes_view(to), value, evmc::bytes{}, accessList,
+                                       intx::uint256{recid}, r, s);
+
+    auto decoded = bcos::evm::engine::detail::decodeOneRawTx(toBcos(env), kChainId);
+    const auto& tx = std::get<evmone::state::Transaction>(decoded.tx);
+    EXPECT_EQ(tx.type, evmone::state::Transaction::Type::access_list);
+    EXPECT_EQ(tx.sender, signer.expectedSender());
+    EXPECT_EQ(tx.chain_id, kChainId);
+    EXPECT_EQ(tx.nonce, nonce);
+    // legacy/2930 single gasPrice is mirrored into both fee fields (validate_transaction needs
+    // priority<=cap; state.cpp:466).
+    EXPECT_EQ(tx.max_gas_price, gasPrice);
+    EXPECT_EQ(tx.max_priority_gas_price, gasPrice);
+}
+
+// 1-1 (chain-id cross-check): an EIP-155 legacy tx signed for a DIFFERENT chain is rejected at
+// decode — same scope as the typed decoders' chain-id check (a tx for another chain must not
+// replay here as VALID). Signed for chainId 1, decoded against kChainId.
+TEST(OpSchedulerImpl, LegacyEip155WrongChainIdRejected)
+{
+    RealSigner signer;
+    const evmc::address to = kPlaceholderTransferTo;
+    const uint64_t wrongChainId = 1;
+    auto preimage = evmone::rlp::encode_tuple(uint64_t{0}, intx::uint256{1}, uint64_t{21000},
+        evmc::bytes_view(to), intx::uint256{0}, evmc::bytes{}, wrongChainId, uint64_t{0},
+        uint64_t{0});
+    auto [r, s, recid] = signer.sign(toBcos(preimage));
+    const intx::uint256 v = intx::uint256{wrongChainId} * 2 + 35 + recid;
+    auto env = evmone::rlp::encode_tuple(uint64_t{0}, intx::uint256{1}, uint64_t{21000},
+        evmc::bytes_view(to), intx::uint256{0}, evmc::bytes{}, v, r, s);
+
+    bool threw = false;
+    try
+    {
+        (void)bcos::evm::engine::detail::decodeOneRawTx(toBcos(env), kChainId);
+    }
+    catch (const bcos::evm::engine::OpConsensusError& e)
+    {
+        threw = true;
+        EXPECT_NE(std::string(e.what()).find("chain id mismatch (legacy)"), std::string::npos)
+            << "e.what()=\"" << e.what() << "\"";
+    }
+    EXPECT_TRUE(threw);
+}
+
+// 1-1 / §6.4 item n: legacy v-canonicality is enforced with the same strictness as every other
+// scalar (decodeU256Scalar rejects a leading zero). A hand-built legacy list with v encoded
+// non-minimally (0x82 0x00 0x1b == 27 with a padding zero) must be rejected — otherwise two
+// encodings of one tx would silently derive one txRoot here but fail op-geth's canonical decode.
+TEST(OpSchedulerImpl, LegacyNonCanonicalVRejected)
+{
+    // [nonce, gasPrice, gasLimit, to, value, data, v(non-canonical), r, s]
+    bcos::bytes fields;
+    auto append = [&fields](bcos::bytes const& item) {
+        fields.insert(fields.end(), item.begin(), item.end());
+    };
+    append(rlpString({}));                     // nonce = 0
+    append(rlpString({0x01}));                 // gasPrice = 1
+    append(rlpString({0x52, 0x08}));           // gasLimit = 21000
+    append(rlpString(bcos::bytes(20, 0x11)));  // to (20 bytes)
+    append(rlpString({}));                     // value = 0
+    append(rlpString({}));                     // data = empty
+    append(rlpString({0x00, 0x1b}));           // v = 27, NON-canonical (leading zero)
+    append(rlpString(bcos::bytes(32, 0x22)));  // r
+    append(rlpString(bcos::bytes(32, 0x33)));  // s
+    auto env = rlpList(fields);
+
+    bool threw = false;
+    try
+    {
+        (void)bcos::evm::engine::detail::decodeOneRawTx(env, kChainId);
+    }
+    catch (const bcos::evm::engine::OpConsensusError& e)
+    {
+        threw = true;
+        EXPECT_NE(std::string(e.what()).find("non-canonical leading zero"), std::string::npos)
+            << "e.what()=\"" << e.what() << "\"";
+    }
+    EXPECT_TRUE(threw);
 }
 
 // ══════════════ final review batch 4: B4-2 non-canonical RLP is rejected ══════════════

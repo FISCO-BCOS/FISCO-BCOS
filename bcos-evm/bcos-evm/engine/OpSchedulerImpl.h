@@ -672,9 +672,122 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint6
     return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
 }
 
-/// Dispatches on the EIP-2718 type byte (design §4.3 step 1 "分拣"). Deliberately narrow: only
-/// the three shapes processOpBlock's OpBlockTx variant understands (matching the t8n corpus's
-/// own three `_op_type` values, T8nReplayHarness.h:465-596 — no legacy/access_list/blob).
+/// EIP-2930 access-list tx (type 0x01): [chainId, nonce, gasPrice, gasLimit, to, value, data,
+/// accessList, yParity, r, s] — field order per rlp_encode.cpp:29-37. Legacy/access-list carry a
+/// single `gasPrice`, which evmone's Transaction models as `max_gas_price` with
+/// `max_priority_gas_price` set equal (validate_transaction asserts priority<=cap; state.cpp:466).
+/// `chainId` cross-check: same rationale/scope as decodeEip1559Tx (C2).
+inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, uint64_t chainId)
+{
+    const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
+    // envelope shape: 0x01 || rlp([...]) — same list-header handling as decodeEip1559Tx (C1).
+    bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
+    auto listBody = enterList(body);
+    evmone::state::Transaction tx;
+    tx.type = evmone::state::Transaction::Type::access_list;
+    tx.chain_id = decodeU64Scalar(listBody);
+    if (tx.chain_id != chainId)
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: chain id mismatch (access_list)");
+    tx.nonce = decodeU64Scalar(listBody);
+    const auto gasPrice = decodeU256Scalar(listBody);
+    tx.max_gas_price = gasPrice;
+    tx.max_priority_gas_price = gasPrice;  // legacy/2930: single gasPrice, priority == cap
+    tx.gas_limit = narrowGasLimit(decodeU64Scalar(listBody), "access_list.gasLimit");
+    tx.to = decodeOptionalAddressField(listBody);
+    tx.value = decodeU256Scalar(listBody);
+    tx.data = decodeBytesField(listBody);
+    tx.access_list = decodeAccessList(listBody);
+    const auto yParity = decodeU256Scalar(listBody);
+    if (yParity > 1)  // I1: same op-geth "invalid y parity" rejection as the typed decoders.
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid y parity (access_list)");
+    tx.r = decodeU256Scalar(listBody);
+    tx.s = decodeU256Scalar(listBody);
+    expectExhausted(listBody, "access_list envelope fields");
+    expectExhausted(body, "access_list envelope (trailing bytes after the field list)");
+    tx.v = static_cast<uint8_t>(yParity);
+
+    const auto signingPreimage =
+        evmc::bytes{0x01} + evmone::rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_gas_price,
+                                static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value,
+                                tx.data, tx.access_list);
+    tx.sender = recoverTxSender(signingPreimage, yParity, tx.r, tx.s);
+
+    return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
+}
+
+/// Legacy tx (no EIP-2718 type byte; the envelope IS the RLP list): [nonce, gasPrice, gasLimit, to,
+/// value, data, v, r, s] — field order per rlp_encode.cpp:23-26. Handles BOTH forms (§6.4 item n):
+///   * pre-EIP-155: v ∈ {27,28}, parity = v-27, signing preimage = rlp([nonce,gasPrice,gasLimit,to,
+///     value,data]) (6 items).
+///   * EIP-155: v = chainId*2 + 35 + parity, signing preimage = rlp([...6 fields, chainId, 0, 0])
+///     (9 items). The derived chainId must equal the scheduler's chainId (same cross-check/scope as
+///     the typed decoders, C2).
+/// `v` is read as a canonical scalar (decodeU256Scalar → no leading zero, width-bounded), so the
+/// v-canonicality demanded by §6.4 item n is enforced identically to the other types — a
+/// non-minimal v cannot silently produce a divergent txRoot. txRoot itself is taken over the raw
+/// wire bytes (computeOpTxRoot, OpEngineSeam.h), so `tx.v`'s uint8 width does not bound the legacy
+/// v space; the full v lives in `signedEnvelope` and only parity/chainId are extracted here.
+inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64_t chainId)
+{
+    const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
+    bcos::bytesRef body(rawEntry.data(), rawEntry.size());  // no type byte to strip
+    auto listBody = enterList(body);
+    evmone::state::Transaction tx;
+    tx.type = evmone::state::Transaction::Type::legacy;
+    tx.nonce = decodeU64Scalar(listBody);
+    const auto gasPrice = decodeU256Scalar(listBody);
+    tx.max_gas_price = gasPrice;
+    tx.max_priority_gas_price = gasPrice;  // legacy: single gasPrice, priority == cap
+    tx.gas_limit = narrowGasLimit(decodeU64Scalar(listBody), "legacy.gasLimit");
+    tx.to = decodeOptionalAddressField(listBody);
+    tx.value = decodeU256Scalar(listBody);
+    tx.data = decodeBytesField(listBody);
+    const auto v = decodeU256Scalar(listBody);
+    tx.r = decodeU256Scalar(listBody);
+    tx.s = decodeU256Scalar(listBody);
+    expectExhausted(listBody, "legacy envelope fields");
+    expectExhausted(body, "legacy envelope (trailing bytes after the field list)");
+
+    // Derive parity + chainId from v (EIP-155 vs pre-155), rejecting any other v as op-geth does.
+    intx::uint256 parity;
+    evmc::bytes signingPreimage;
+    if (v == 27 || v == 28)
+    {
+        parity = v - 27;
+        tx.chain_id = 0;
+        signingPreimage = evmone::rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+            static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value, tx.data);
+    }
+    else if (v >= 35)
+    {
+        const auto rem = v - 35;
+        parity = rem % 2;
+        const auto derivedChainId = rem / 2;
+        if (derivedChainId != intx::uint256{chainId})
+            throw OpConsensusError("OpSchedulerImpl: raw tx decode: chain id mismatch (legacy)");
+        tx.chain_id = chainId;
+        signingPreimage = evmone::rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+            static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value, tx.data,
+            tx.chain_id, uint64_t{0}, uint64_t{0});
+    }
+    else
+    {
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid legacy v");
+    }
+    tx.v = static_cast<uint8_t>(parity);
+    tx.sender = recoverTxSender(signingPreimage, parity, tx.r, tx.s);
+
+    return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
+}
+
+/// Dispatches on the EIP-2718 type byte (design §4.3 step 1 "分拣"). The OP validator accepts every
+/// transaction type op-geth's own `DecodeTransactions` does: deposit (0x7e), the three typed
+/// signed shapes (0x01 access-list, 0x02 eip1559, 0x04 set-code), and the untyped legacy form
+/// (first byte ≥ 0xc0, an RLP list header). Blob (0x03) stays out on purpose — L2 blocks carry no
+/// blob txs. Earlier this list was only {0x7e, 0x02, 0x04}, on the mistaken premise that "these
+/// are the only shapes the variant understands"; the execution variant (OpBlockExecute.h) has in
+/// fact always carried legacy/access_list too (state.cpp:460-475) — the old set merely mirrored the
+/// t8n corpus's three `_op_type` values, i.e. test coverage, not a capability boundary (1-1).
 ///
 /// `chainId` is threaded straight through to the two typed-tx decoders (C2, coordinator review)
 /// — deposit has no chain_id field and does not take the parameter. This function stays a free
@@ -688,12 +801,18 @@ inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64
 {
     if (rawEntry.empty())
         throw OpConsensusError("OpSchedulerImpl: raw tx decode: empty envelope");
-    constexpr uint8_t kDepositTypeByte = 0x7e;  // OpDepositFields::kDepositTxType (Task 3)
-    constexpr uint8_t kEip1559TypeByte = 0x02;  // evmone::state::Transaction::Type::eip1559
-    constexpr uint8_t kSetCodeTypeByte = 0x04;  // evmone::state::Transaction::Type::set_code
+    constexpr uint8_t kDepositTypeByte = 0x7e;     // OpDepositFields::kDepositTxType (Task 3)
+    constexpr uint8_t kAccessListTypeByte = 0x01;  // evmone::state::Transaction::Type::access_list
+    constexpr uint8_t kEip1559TypeByte = 0x02;     // evmone::state::Transaction::Type::eip1559
+    constexpr uint8_t kSetCodeTypeByte = 0x04;     // evmone::state::Transaction::Type::set_code
+    constexpr uint8_t kRlpListBase = 0xc0;  // EIP-2718: first byte >= 0xc0 is an untyped RLP list
     const auto typeByte = rawEntry[0];
+    if (typeByte >= kRlpListBase)  // legacy tx: no type byte, the envelope is the RLP list itself
+        return decodeLegacyTx(std::move(rawEntry), chainId);
     if (typeByte == kDepositTypeByte)
         return decodeDepositTx(std::move(rawEntry));
+    if (typeByte == kAccessListTypeByte)
+        return decodeAccessListTx(std::move(rawEntry), chainId);
     if (typeByte == kEip1559TypeByte)
         return decodeEip1559Tx(std::move(rawEntry), chainId);
     if (typeByte == kSetCodeTypeByte)
