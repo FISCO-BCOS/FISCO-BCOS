@@ -271,15 +271,61 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
     }
-    // extraData: at most 32 bytes (final review B2-4), op-geth
-    // beacon/engine/types.go:294-296. This is NOT the OP-shape check parked in §6.4 (Isthmus 9
-    // bytes / Jovian 17 bytes, version byte, decodability) -- that one is about the *contents* of
-    // a well-sized field, whereas this is the plain ETH-level length bound that applies to every
-    // chain, and it is the one that keeps an unbounded caller-supplied blob out of the header RLP.
-    constexpr std::size_t c_maxExtraDataSize = 32;
-    if (payload.extraData.size() > c_maxExtraDataSize)
+    // extraData: OP Holocene+ header shape (batch C, spec §6.4 — the check that final review B2-4
+    // deliberately parked while it only enforced the plain 32-byte ETH bound). op-geth validates
+    // it in `consensus/misc/eip1559/eip1559_optimism.go`'s `ValidateHoloceneExtraData` (Isthmus) /
+    // `ValidateJovianExtraData` (Jovian), reached from BOTH the block-verify path
+    // (`consensus/beacon/consensus.go:240`) and the newPayload path
+    // (`eth/catalyst/api_optimism.go:22`):
+    //   - Isthmus: exactly 9 bytes = 0x00 version ‖ uint32 denominator ‖ uint32 elasticity (big
+    //     endian), with denominator and elasticity both non-zero;
+    //   - Jovian: exactly 17 bytes = 0x01 version ‖ the same 8 eip-1559 bytes ‖ uint64 minBaseFee
+    //     (minBaseFee arbitrary, not validated).
+    // The OP path is always Isthmus+ (`withdrawalsRoot` is required above), so an empty extraData
+    // is never valid here. This shape check subsumes the old 32-byte ETH length bound (9 and 17
+    // are both < 32): a caller-supplied blob longer than 32 bytes now fails the length branch
+    // below with a shape message instead of the generic bound.
     {
-        return std::string("extraData exceeds the 32-byte maximum");
+        const auto& extra = payload.extraData;
+        if (jovianActive)
+        {
+            if (extra.size() != 17)
+            {
+                return std::string("extraData must be exactly 17 bytes on the OP path (Jovian)");
+            }
+            if (extra[0] != 0x01)
+            {
+                return std::string("extraData version byte must be 0x01 on the OP path (Jovian)");
+            }
+        }
+        else
+        {
+            if (extra.size() != 9)
+            {
+                return std::string("extraData must be exactly 9 bytes on the OP path (Isthmus)");
+            }
+            if (extra[0] != 0x00)
+            {
+                return std::string("extraData version byte must be 0x00 on the OP path (Isthmus)");
+            }
+        }
+        // denominator = extra[1:5], elasticity = extra[5:9], both big-endian uint32 and both
+        // required non-zero (op-geth `validateHoloceneExtraDataPart`). The offsets are identical
+        // for Isthmus and Jovian; only the total length and version byte differ.
+        const auto readU32BE = [&extra](std::size_t off) {
+            return (static_cast<std::uint32_t>(extra[off]) << 24) |
+                   (static_cast<std::uint32_t>(extra[off + 1]) << 16) |
+                   (static_cast<std::uint32_t>(extra[off + 2]) << 8) |
+                   static_cast<std::uint32_t>(extra[off + 3]);
+        };
+        if (readU32BE(1) == 0)
+        {
+            return std::string("extraData must encode a non-zero eip-1559 denominator");
+        }
+        if (readU32BE(5) == 0)
+        {
+            return std::string("extraData must encode a non-zero eip-1559 elasticity");
+        }
     }
     if (!narrowU256ToU64(payload.gasUsed).has_value())
     {
@@ -288,6 +334,20 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     if (!narrowU256ToU64(*payload.blobGasUsed).has_value())
     {
         return std::string("blobGasUsed exceeds the uint64 range of the ETH header field");
+    }
+
+    // C-2 (batch C, spec §6.4): Jovian DA-footprint block limit. From Jovian on, the header
+    // `blobGasUsed` slot carries the block's DA footprint (design §5.1 / OpBlockSeal.h:31-38); a
+    // block whose DA footprint exceeds its own gasLimit is rejected. op-geth checks the recomputed
+    // footprint against `block.GasLimit()` in `core/block_validator.go:131` (Jovian branch, DA
+    // footprint from `core/types/rollup_cost.go`'s `CalcDAFootprint`). Checking the payload's
+    // claimed `blobGasUsed` here is equivalent given the step-5 seal comparison already pins
+    // `blobGasUsed` to the computed footprint; it only ever widens rejection (single direction),
+    // never accepts a block op-geth would reject. Isthmus keeps `blobGasUsed == 0` (checked
+    // above), so this is Jovian-gated. Both operands are u256, compared directly.
+    if (jovianActive && *payload.blobGasUsed > payload.gasLimit)
+    {
+        return std::string("DA footprint (blobGasUsed) exceeds the block gas limit");
     }
 
     // NOT checked here -- `executionRequests` (design §6.1 step 2 "executionRequests 在场且空"):

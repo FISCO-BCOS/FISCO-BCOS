@@ -1457,6 +1457,81 @@ TEST(EngineNewPayloadMutation, NonZeroBlobGasUsedIsInvalidUnderIsthmus)
     expectValidationError(status, "blobGasUsed must be zero before Jovian (OP Isthmus)");
 }
 
+// ══════ batch C (spec §6.4): block-level pre-validation added this cycle ══════
+//
+// C-1 (extraData OP shape) and C-2 (Jovian DA-footprint > gasLimit) are static checks in
+// `validateOpNewPayloadRequest`, so they reject with latestValidHash = null BEFORE the blockHash
+// comparison — the same ordering the #6 blobGasUsed case relies on, hence no reseal is needed.
+// C-4 (Jovian activation block must be deposits-only) is enforced during execution in
+// `processOpBlock` (`validateJovianBlockShape`), so it lands in the consensus-error bucket
+// (latestValidHash = parent). C-3 (attributes selector/length) is unit-tested against
+// `validateJovianBlockShape` directly in OpBlockExecuteTest; end-to-end it is exercised by all 17
+// jovian golden vectors staying VALID in the gate above (each carries the Jovian selector).
+
+// C-1 (Jovian half): a jovian vector with extraData mutated off the 17-byte 0x01-version shape is
+// rejected by the static shape check. op-geth `ValidateJovianExtraData`
+// (`consensus/misc/eip1559/eip1559_optimism.go:195-204`).
+TEST(EngineNewPayloadMutation, ExtraDataShapeIsValidatedJovian)
+{
+    const auto expectRejected = [](bcos::bytes const& extra, std::string_view message) {
+        auto scenario = prepareScenario("jovian_transfer_basic");
+        ASSERT_TRUE(scenario.sample.jovian);
+        scenario.request.executionPayload.extraData = extra;
+        auto status =
+            bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
+        EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid) << message;
+        EXPECT_FALSE(status.latestValidHash.has_value()) << message;  // static-validation bucket
+        expectValidationError(status, message);
+    };
+    // 16 / 18 bytes (Jovian wants exactly 17).
+    expectRejected(
+        bcos::bytes(16, 0x00), "extraData must be exactly 17 bytes on the OP path (Jovian)");
+    expectRejected(
+        bcos::bytes(18, 0x00), "extraData must be exactly 17 bytes on the OP path (Jovian)");
+    // 17 bytes but Isthmus version byte 0x00 (Jovian wants 0x01).
+    {
+        bcos::bytes b(17, 0x00);
+        b[4] = 0x08;  // non-zero denominator so the version branch is what rejects
+        b[8] = 0x02;  // non-zero elasticity
+        expectRejected(b, "extraData version byte must be 0x01 on the OP path (Jovian)");
+    }
+    // 17 bytes, correct version, zero denominator.
+    {
+        bcos::bytes b(17, 0x00);
+        b[0] = 0x01;
+        b[8] = 0x02;  // elasticity non-zero; denominator (bytes[1:5]) stays zero
+        expectRejected(b, "extraData must encode a non-zero eip-1559 denominator");
+    }
+}
+
+// C-2: a Jovian block whose DA footprint (header blobGasUsed slot) exceeds its own gasLimit is
+// rejected by the static check. `jovian_da_mix` is the one vector with a real non-zero footprint;
+// here it is pushed one past its own gasLimit. op-geth `core/block_validator.go:131`.
+TEST(EngineNewPayloadMutation, JovianDaFootprintOverGasLimitIsInvalid)
+{
+    auto scenario = prepareScenario("jovian_da_mix");
+    ASSERT_TRUE(scenario.sample.jovian);
+    auto& payload = scenario.request.executionPayload;
+    payload.blobGasUsed = payload.gasLimit + bcos::u256(1);  // one past the block's own gasLimit
+
+    auto status = bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    EXPECT_FALSE(status.latestValidHash.has_value());
+    expectValidationError(status, "DA footprint (blobGasUsed) exceeds the block gas limit");
+}
+
+// C-4 is NOT given a gate-level test here, deliberately and honestly. A gate test would append a
+// user tx to `jovian_first_block` (a 176-byte-attributes activation block) and assert INVALID —
+// but that block would answer INVALID even with `validateJovianBlockShape` removed, because the
+// appended user tx is unfunded in that vector's pre-state and fails `opValidate` on its own (a
+// vacuous pass). And §6.4 item (j) collapses all block-level throws onto one reclassified message,
+// so the two rejection reasons are indistinguishable at the engine boundary. The precise,
+// red-green-proven C-4 witness therefore lives at the `processOpBlock`/`validateJovianBlockShape`
+// level (OpBlockExecuteTest's `JovianShapeRejectsUserTxInActivationBlock`, exact message), and the
+// engine→processOpBlock consensus-error wiring is already covered by
+// `ConsensusErrorViaCatchAllReclassificationIsInvalid` above.
+
 // ── #7 executionRequests non-empty -> INVALID + null (the blockHash bucket) ───────────────────
 //
 // `NewPayloadRequest` has no `executionRequests` carrier (the static_assert at the top of this

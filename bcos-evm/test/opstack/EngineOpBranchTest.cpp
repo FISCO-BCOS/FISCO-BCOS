@@ -30,7 +30,8 @@
 //       (B2-2(a), op-geth eth/catalyst/api.go:872-876);
 //   (o) a non-tip parent is refused explicitly instead of executed against the wrong base state
 //       (B2-2(b));
-//   (p)/(q) gasLimit > 2^63-1 and extraData > 32 bytes are rejected (B2-3/B2-4).
+//   (p) gasLimit > 2^63-1 is rejected (B2-3); (q) extraData is shape-validated (batch C / C-1,
+//       spec §6.4 — supersedes the old bare 32-byte bound B2-4).
 //
 // What still cannot be tested here at all: whether `rebuildOpEthHeader`'s payload-field ->
 // header-field mapping is the RIGHT one. Every blockHash in this file is computed by that same
@@ -404,9 +405,10 @@ bcos::engine::NewPayloadRequest makeOpRequest(
     payload.gasLimit = bcos::u256(30000000);
     payload.gasUsed = bcos::u256(0);
     payload.timestamp = timestamp;
-    // Holocene+ Isthmus shape: 0x00 version byte ‖ uint32 denominator ‖ uint32 elasticity
-    // (design §5.1). The engine does not shape-check extraData this cycle (§6.4 欠账) — this is
-    // realistic filler, emitted into the header verbatim.
+    // Holocene+ Isthmus shape: 0x00 version byte ‖ uint32 denominator (=8) ‖ uint32 elasticity
+    // (=2), big-endian (design §5.1). As of batch C the engine shape-checks this (C-1, spec §6.4),
+    // so a valid 9-byte value is required for `prepareValidScenario` to be accepted; the rejection
+    // cases live in `ExtraDataShapeIsValidatedIsthmus`.
     payload.extraData = bcos::bytes{0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02};
     payload.baseFeePerGas = bcos::u256(1000);
     payload.blockHash = bcos::h256{};  // filled in by sealWithBlockHash
@@ -1219,34 +1221,46 @@ TEST(EngineOpBranch, GasLimitAboveInt64MaxIsInvalid)
     EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
 }
 
-// (q) B2-4: `extraData` longer than 32 bytes is rejected — op-geth
-// `beacon/engine/types.go:294-296`. Distinct from the OP *shape* check parked in §6.4 (Isthmus 9
-// bytes / Jovian 17 bytes): this is the chain-agnostic length bound that keeps an unbounded
-// caller-supplied blob out of the header RLP.
-TEST(EngineOpBranch, ExtraDataAboveThirtyTwoBytesIsInvalid)
+// (q) C-1 (batch C, spec §6.4): the OP extraData *shape* check, which supersedes the earlier bare
+// 32-byte length bound (B2-4). This scenario is Isthmus (kIsthmusTimestamp), so the expected shape
+// is 9 bytes = 0x00 version ‖ uint32 denominator ‖ uint32 elasticity, both non-zero — op-geth
+// `consensus/misc/eip1559/eip1559_optimism.go`'s `ValidateHoloceneExtraData`. Every case is a
+// static-validation rejection (latestValidHash = null, executeOpBlock never called). The Jovian
+// 17-byte shape and golden-anchored acceptance live in EngineNewPayloadGateTest.
+TEST(EngineOpBranch, ExtraDataShapeIsValidatedIsthmus)
 {
-    StubFixture fixture;
     const auto parentHash = hashOf("parent");
-    auto scenario = prepareValidScenario(fixture, parentHash);
+    const auto expectRejected = [&](bcos::bytes const& extra, std::string_view message) {
+        StubFixture fixture;
+        auto scenario = prepareValidScenario(fixture, parentHash);
+        scenario.request.executionPayload.extraData = extra;
+        sealWithBlockHash(scenario.request);  // self-consistent hash: only the shape can reject it
+        auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+        EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid) << message;
+        EXPECT_FALSE(status.latestValidHash.has_value()) << message;  // static-validation bucket
+        expectValidationError(status, message);
+        EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U) << message;
+    };
 
-    scenario.request.executionPayload.extraData = bcos::bytes(33, 0xab);  // one byte too many
-    sealWithBlockHash(scenario.request);
-
-    auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
-
-    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
-    EXPECT_FALSE(status.latestValidHash.has_value());
-    expectValidationError(status, "extraData exceeds the 32-byte maximum");
-    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
-    // 32 bytes exactly is still accepted (the bound is inclusive, as in op-geth).
-    StubFixture atBound;
-    auto boundary = prepareValidScenario(atBound, parentHash);
-    boundary.request.executionPayload.extraData = bcos::bytes(32, 0xab);
-    sealWithBlockHash(boundary.request);
-    atBound.scheduler.result.commitments =
-        matchingCommitments(boundary.request, rebuiltHeader(boundary.request));
-    EXPECT_EQ(bcos::task::syncWait(atBound.service.newPayload(boundary.request, 4)).status,
-        bcos::engine::PayloadValidationStatus::Valid);
+    // Wrong length: 8 / 10 bytes, an empty field, and a >32-byte blob (the old B2-4 case, now
+    // caught by the shape length branch rather than a separate bound).
+    expectRejected(bcos::bytes{0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00},  // 8 bytes
+        "extraData must be exactly 9 bytes on the OP path (Isthmus)");
+    expectRejected(
+        bcos::bytes{0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02, 0x00},  // 10 bytes
+        "extraData must be exactly 9 bytes on the OP path (Isthmus)");
+    expectRejected(bcos::bytes{},  // empty
+        "extraData must be exactly 9 bytes on the OP path (Isthmus)");
+    expectRejected(bcos::bytes(33, 0xab),  // >32 bytes (former B2-4)
+        "extraData must be exactly 9 bytes on the OP path (Isthmus)");
+    // Wrong version byte (non-zero under Isthmus).
+    expectRejected(bcos::bytes{0x01, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02},
+        "extraData version byte must be 0x00 on the OP path (Isthmus)");
+    // Zero denominator (bytes[1:5]) and zero elasticity (bytes[5:9]).
+    expectRejected(bcos::bytes{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02},
+        "extraData must encode a non-zero eip-1559 denominator");
+    expectRejected(bcos::bytes{0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00},
+        "extraData must encode a non-zero eip-1559 elasticity");
 }
 
 // ══════ final review batch 2, second pass: the classification barrier (I-1) ══════
