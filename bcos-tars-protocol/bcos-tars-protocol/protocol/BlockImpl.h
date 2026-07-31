@@ -103,6 +103,11 @@ public:
     bcos::bytesConstRef logsBloom() const override;
     void setLogsBloom(bcos::bytesConstRef logsBloom) override;
 
+    // ---- Eth-specific overrides (empty implementations) ----
+    void appendWithdrawal(const bcos::protocol::EthWithdrawal&) override {}
+    gsl::span<const bcos::protocol::EthWithdrawal> withdrawals() const override { return {}; }
+    size_t withdrawalsSize() const override { return 0; }
+
 private:
     mutable bcostars::Block m_inner;
 };

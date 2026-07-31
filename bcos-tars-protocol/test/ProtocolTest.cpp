@@ -464,10 +464,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     parentInfo.blockHash = bcos::crypto::HashType(10000);
     parentInfo.blockNumber = 2000;
 
-    std::vector<bcos::protocol::ParentInfo> parentInfoList;
-    parentInfoList.emplace_back(parentInfo);
-
-    header->setParentInfo(parentInfoList);
+    header->setParentInfo(parentInfo);
 
     auto headerImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
 
@@ -486,16 +483,12 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
 
     BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
+    BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
-    BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
-    for (auto [originParentInfo, decodeParentInfo] :
-        ::ranges::views::zip(header->parentInfo(), decodedHeader->parentInfo()))
-    {
-        BOOST_CHECK_EQUAL(
-            bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));
-        BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodeParentInfo.blockNumber);
-    }
+    BOOST_CHECK_EQUAL(
+        bcos::toString(header->parentInfo().blockHash), bcos::toString(decodedHeader->parentInfo().blockHash));
+    BOOST_CHECK_EQUAL(header->parentInfo().blockNumber, decodedHeader->parentInfo().blockNumber);
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));
 }

@@ -73,11 +73,9 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
         current.hash(), current.timestamp(), current.version(), _isAuthCheck,
         std::move(backendStorage))
 {
-    if (current.number() > 0 && !current.parentInfo().empty())
+    if (current.number() > 0)
     {
-        auto view = current.parentInfo();
-        auto it = view.begin();
-        m_parentHash = (*it).blockHash;
+        m_parentHash = current.parentInfo().blockHash;
     }
 
     m_keyPageIgnoreTables = std::move(_keyPageIgnoreTables);

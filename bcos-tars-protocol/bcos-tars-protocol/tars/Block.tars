@@ -13,9 +13,17 @@ module bcostars {
         2 optional vector<byte> signature;
     };
 
+    struct Withdrawal {
+        1 optional long index;
+        2 optional long validatorIndex;
+        3 optional vector<byte> address;  // 20-byte address
+        4 optional long amount;
+    };
+
     struct BlockHeaderData {
-        2 optional int version;
-        3 optional vector<ParentInfo> parentInfo;
+        // ---- Original FISCO-BCOS fields ----
+        2 optional int version; 
+        3 optional ParentInfo parentInfo;
         4 optional vector<byte> txsRoot;
         5 optional vector<byte> receiptRoot;
         6 optional vector<byte> stateRoot;
@@ -24,9 +32,22 @@ module bcostars {
         9 optional long timestamp;
         10 optional long sealer;
         11 optional vector<vector<byte>> sealerList;
-        12 optional vector<byte> extraData; 
+        12 optional vector<byte> extraData;
         13 optional vector<long> consensusWeights;
-        14 optional vector<byte> coinbase;
+
+        // ---- Ethereum-compatible header fields (added) ----
+        14 optional vector<byte> logsBloom;            // 256-byte bloom filter
+        15 optional string gasLimit;                   // u256 as string
+        16 optional vector<byte> coinbase;             // 20-byte address
+        18 optional vector<byte> prevRandao;           // 32-byte hash
+        21 optional string baseFee;                    // optional u256 as string
+        22 optional vector<byte> withdrawalsHash;      // optional 32-byte hash
+        23 optional string blobGasUsed;                // optional u256 as string
+        24 optional string excessBlobGas;              // optional u256 as string
+        25 optional vector<byte> parentBeaconRoot;     // optional 32-byte hash
+        26 optional vector<byte> requestsHash;         // optional 32-byte hash
+        27 optional vector<byte> blockAccessListHash;  // optional 32-byte hash
+        28 optional long slotNumber;                   // optional
     };
 
     struct BlockHeader {
@@ -36,6 +57,7 @@ module bcostars {
     };
 
     struct Block {
+        // ---- Original FISCO-BCOS fields ----
         1 optional int version;
         2 optional int type;
         3 optional BlockHeader blockHeader;
@@ -44,9 +66,12 @@ module bcostars {
         6 optional vector<TransactionMetaData> transactionsMetaData;
         7 optional vector<vector<byte>> receiptsHash;
         8 optional vector<string> nonceList;
-        
+
         9 optional vector<vector<byte>> transactionsMerkle;
         10 optional vector<vector<byte>> receiptsMerkle;
         11 optional vector<byte> logsBloom;
+
+        // ---- Ethereum-compatible block fields (added) ----
+        12 optional vector<Withdrawal> withdrawals;
     };
 };

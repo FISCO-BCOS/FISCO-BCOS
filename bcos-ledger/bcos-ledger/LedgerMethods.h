@@ -19,7 +19,9 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
+#include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-task/AwaitableValue.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
 #include <boost/lexical_cast.hpp>

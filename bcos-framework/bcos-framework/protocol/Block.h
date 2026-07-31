@@ -41,6 +41,9 @@ enum BlockType : int32_t
 template <class T>
 using ViewResult = ::ranges::any_view<T, ::ranges::category::mask | ::ranges::category::sized>;
 
+// Forward declaration
+struct EthWithdrawal;
+
 class Block
 {
 public:
@@ -107,6 +110,12 @@ public:
 
     virtual bcos::bytesConstRef logsBloom() const = 0;
     virtual void setLogsBloom(bcos::bytesConstRef logsBloom) = 0;
+
+    // ---- Ethereum-specific block accessors ----
+    // Withdrawals (EIP-4895)
+    virtual void appendWithdrawal(const EthWithdrawal& _wd) = 0;
+    virtual gsl::span<const EthWithdrawal> withdrawals() const = 0;
+    virtual size_t withdrawalsSize() const = 0;
 };
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;

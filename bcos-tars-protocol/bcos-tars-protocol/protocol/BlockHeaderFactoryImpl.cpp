@@ -9,8 +9,7 @@ bcostars::protocol::BlockHeaderFactoryImpl::BlockHeaderFactoryImpl(
 
 bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::createBlockHeader()
 {
-    return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
+    return std::make_shared<bcostars::protocol::BlockHeaderImpl>();
 }
 
 bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::createBlockHeader(
@@ -22,11 +21,11 @@ bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::cre
 bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::createBlockHeader(
     bcos::bytesConstRef _data)
 {
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
+    auto blockHeader = createBlockHeader();
     blockHeader->decode(_data);
 
-    auto& inner = blockHeader->inner();
+    auto impl = std::static_pointer_cast<bcostars::protocol::BlockHeaderImpl>(blockHeader);
+    auto& inner = impl->inner();
     if (inner.dataHash.empty())
     {
         // Update the hash field

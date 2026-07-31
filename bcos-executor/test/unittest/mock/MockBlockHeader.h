@@ -20,10 +20,9 @@ public:
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
-    ::ranges::any_view<bcos::protocol::ParentInfo, ::ranges::category::input | ::ranges::category::sized>
-    parentInfo() const override
+    bcos::protocol::ParentInfo parentInfo() const override
     {
-        return {};
+        return bcos::protocol::ParentInfo{};
     }
     crypto::HashType txsRoot() const override { return {}; }
     crypto::HashType receiptsRoot() const override { return {}; }
@@ -39,7 +38,7 @@ public:
     bytes coinbase() const override { return {}; }
 
     void setVersion(uint32_t _version) override {}
-    void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
+    void setParentInfo(bcos::protocol::ParentInfo parentInfo) override {}
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override {}
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override {}
     void setStateRoot(bcos::crypto::HashType _stateRoot) override {}
