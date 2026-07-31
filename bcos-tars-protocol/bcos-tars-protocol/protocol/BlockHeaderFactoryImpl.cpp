@@ -21,11 +21,10 @@ bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::cre
 bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::createBlockHeader(
     bcos::bytesConstRef _data)
 {
-    auto blockHeader = createBlockHeader();
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();;
     blockHeader->decode(_data);
 
-    auto impl = std::static_pointer_cast<bcostars::protocol::BlockHeaderImpl>(blockHeader);
-    auto& inner = impl->inner();
+    auto& inner = blockHeader->inner();
     if (inner.dataHash.empty())
     {
         // Update the hash field
