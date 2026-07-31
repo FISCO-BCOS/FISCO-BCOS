@@ -66,6 +66,7 @@
 #include <bcos-evm/eth/utils/test_state.hpp>
 
 #include "support/ThrowingStorage.h"
+#include "support/WriteFailingStorage.h"
 
 using Json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -536,6 +537,50 @@ void expectOpConsensusErrorWithMessage(Invoke&& invoke, std::string_view expecte
     EXPECT_TRUE(threw) << "expected OpConsensusError, none thrown";
 }
 
+/// `expectOpConsensusErrorWithMessage` 的对称另一半(终审批 9 F-1)。断言 `invoke()` 抛
+/// `OpStorageError`,并按 §11 通则同时配正反两个标识:
+///   * **正例标识** —— `what()` 必须含 `expectedSubstring`,即**桥那一层自己**的判据文字。
+///     它只可能来自 `Storage2Ledger::poison()` 记下的 `firstError()`;`executeOpBlock` 的
+///     两条兜底路径都构造不出这段文字(`catch(...)` 分支自带的是一句固定诊断串)。
+///   * **反例标识** —— `what()` **不得**含比对桶 `OpConsensusError` 兜底串的特征前缀
+///     ("typed catch bypassed"),且 `OpConsensusError` 这一支被**单独 catch 并当场判失败**、
+///     连同它的 `what()` 一起报出,而不是让 `EXPECT_THROW` 只回一句 "wrong exception type"。
+/// 反例标识就是本用例存在的全部理由:F-1 之前,`applyDiff` 的 tripwire 抛出时毒旗是 false,
+/// 同一注入抛的正是 `OpConsensusError` → 调用侧 INVALID → 本节点对一个**合法** payload 投
+/// 反对票并永久分叉(spec §4.3;既有用例 `StorageLayoutFaultIsInternalErrorNotInvalid` 防的
+/// 是读路的同一类错误分类,写路此前无人守)。
+template <class Invoke>
+void expectOpStorageErrorWithMessage(Invoke&& invoke, std::string_view expectedSubstring)
+{
+    bool threw = false;
+    try
+    {
+        invoke();
+    }
+    catch (const bcos::evm::engine::OpStorageError& e)
+    {
+        threw = true;
+        const std::string what(e.what());
+        EXPECT_NE(what.find(expectedSubstring), std::string::npos)
+            << "e.what()=\"" << what << "\" does not contain \"" << expectedSubstring << "\"";
+        EXPECT_EQ(what.find("typed catch bypassed"), std::string::npos)
+            << "poison message was lost and replaced by the catch(...) fallback diagnostic: "
+            << what;
+    }
+    catch (const bcos::evm::engine::OpConsensusError& e)
+    {
+        ADD_FAILURE() << "classified as OpConsensusError (caller maps it to INVALID — the node "
+                         "votes against a legitimate payload) instead of OpStorageError "
+                         "(-32603): "
+                      << e.what();
+    }
+    catch (const std::exception& e)
+    {
+        ADD_FAILURE() << "escaped executeOpBlock unclassified: " << e.what();
+    }
+    EXPECT_TRUE(threw) << "expected OpStorageError, none thrown";
+}
+
 }  // namespace
 
 // (a) dummy executeBlock: throws immediately, message contains "OP mode".
@@ -670,6 +715,51 @@ TEST(OpSchedulerImpl, ThrowingStorageIsStorageError)
 
     EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(throwing, env, rawTxBytes)),
         bcos::evm::engine::OpStorageError);
+}
+
+// (d2) 终审批 9 F-1 的分类层见证:`applyDiff` **写回路径**的 tripwire 触发时,
+// `executeOpBlock` 必须把它分类成 `OpStorageError`(-32603),而**不是** `OpConsensusError`
+// (INVALID)。(d) 覆盖的是**读**路径(ThrowingStorage → 读方法 noexcept 吞异常 + 置毒旗),
+// 写路径此前在本层零覆盖:F-1 之前 `applyDiff` 抛出时毒旗是 false,`executeOpBlock` 的
+// `poisoned()` 判据落到 else 分支 → `OpConsensusError` → INVALID。
+//
+// 注入用 support/WriteFailingStorage.h(写路抛、读路直通)。**为什么不是** 桥层同一守护用的
+// support/LeakyDeleteStorage.h:实测过,不可达——把 leaky 装饰器包在本用例的向量执行上,
+// `removeOne` 一次都没被调到(kVectorId 这个块既无零值槽写入、也无账户删除),用例报
+// "none thrown"。applyDiff 的三条形状相关 tripwire(/sys/ 路由、ghost-delete、契约②泄漏)
+// 在本层都要靠真实块执行凑出特定的 StateDiff 形状,而"底层存储写入失败"对**任何**块都成立
+// (applyDiff 必写 nonce/balance),所以它是分类层唯一稳的写路径见证。见 WriteFailingStorage.h
+// 的头注释。读路刻意直通,保证毒旗的**唯一来源**是 applyDiff 的 catch,见证归属不糊。
+//
+// 与 (d) 的分工:(d) 钉读路毒旗通道(读方法 noexcept 吞异常 + 置旗),(d2) 钉写路毒旗通道
+// (applyDiff 置旗后重抛)。注入点、throw 点、置旗点全不同,不是同一条链上的两次断言。
+TEST(OpSchedulerImpl, ApplyDiffWriteFailureIsStorageErrorNotInvalid)
+{
+    auto loaded = LoadedVector::load();
+    Json const& vec = vectorBody(loaded.vectors, kVectorId);
+    Json const& golden = loaded.golden;
+
+    StorageFixture fixture;
+    // 种子经**未包装**的 view 落库(注入只在块执行期生效),与 (b)/(c) 完全相同的 seeding
+    // 路径,免得把"种子是否落全"这一变量也搅进来。
+    seedFromVectorPre(fixture.view, vec.at("pre"));
+
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    bcos::evm::test::WriteFailingStorage<ViewType> writeFailing(fixture.view);
+
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<decltype(writeFailing)> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    // 正例标识 "injected write failure" 是注入自己的原文:它只能经 applyDiff 的 catch →
+    // poison() → firstError() → OpStorageError 这一条通道传到这里(executeOpBlock 的
+    // catch(...) 兜底拿不到 what(),会换成自己那句固定诊断串)。反例标识见 helper 注释。
+    expectOpStorageErrorWithMessage(
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(writeFailing, env, rawTxBytes)); },
+        "injected write failure");
 }
 
 // (e) OpForkSchedule::configAt threshold judgement (decision A5): [isthmusTime, jovianTime) ->

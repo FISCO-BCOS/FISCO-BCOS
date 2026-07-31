@@ -248,14 +248,21 @@ public:
                 task::syncWait(applyDeletedEntry(addr));
         }
         // catch 阶梯的顺序不是风格问题,是本仓 `-fno-rtti` typed-catch 旁路的**实测**结果
-        // (终审批 9 F-1 实测,方法:给三条 catch 各打不同前缀再看 firstError() 落在哪条):
-        // 从 `applyDeletedEntry` 抛出的 `std::runtime_error` **不匹配** `catch (const
+        // (终审批 9 F-1 实测两轮,fix 轮复核者独立重做过,勿凭直觉重排或删级):
+        //   * 实验一:只把 `catch (const std::runtime_error&)` 里的 poison 抑制掉 → 本文件全部
+        //     四条写路见证(桥层三条 + OpSchedulerImplTest 的分类层一条)**同时翻红** ⇒ 这些
+        //     throw 全部落在**第一级**。
+        //   * 实验二:整条 `catch (const std::runtime_error&)` 删掉,并给余下各级的 poison 打上
+        //     可区分前缀 → 同样四条见证的 firstError() 全部是 **`[VIA-ELLIPSIS]`**,一条
+        //     `[VIA-EXCEPTION]` 都没有。
+        // 即:从 `applyDeletedEntry` 抛出的 `std::runtime_error` **不匹配** `catch (const
         // std::exception&)`,但**匹配** `catch (const std::runtime_error&)`。与 OpSchedulerImpl.h
         // 那段注释所述机制一致——非唯一的那份 typeinfo 是 **`std::exception`** 的(来自
         // `-fno-rtti` 的 libevmone.a 里那份隐藏副本),具体派生类的 typeinfo 仍唯一。
         // 因此先按具体基类捕获(runtime_error / logic_error 覆盖本文件全部 throw:
         // runtime_error 系含 overflow_error,logic_error 系含 length_error),`std::exception`
-        // 这一层留着兜住其余标准异常,`catch (...)` 兜住 boost 那类不派生自它们的
+        // 这一层按实验二**在本构建下形同虚设**,保留是为了别的工具链(RTTI 正常时它是正确的
+        // 那一级),`catch (...)` 兜住 boost 那类不派生自它们的
         // (例如 `boost::algorithm::non_hex_input`)。**四条都置毒旗**——分类的正确性只依赖毒旗
         // 置位,不依赖消息;消息只影响 -32603 的可诊断性。
         catch (const std::runtime_error& e)

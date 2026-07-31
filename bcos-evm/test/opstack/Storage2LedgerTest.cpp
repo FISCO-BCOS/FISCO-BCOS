@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "support/CountingStorage.h"
+#include "support/LeakyDeleteStorage.h"
 #include "support/ThrowingStorage.h"
 
 using namespace bcos::evm::ledger;
@@ -761,49 +762,11 @@ TEST(Storage2Ledger, VisitAccountsMissDoesNotPoisonAccountCache)
 // applyDiff 自己永远走不到这个形状(契约②:零值 = removeOne),那条不变量现在由
 // applyModifiedEntry 的删槽后置回读守护,见 (z6)。
 
-namespace
-{
-// (z6) 专用装饰器(仅测试用):removeOne 是**空操作**,其余算子直通底层。用于模拟"写回路径
-// 漏了删槽"——契约② 的零值分支调了 removeOne 却没生效,行仍然存活。这是 applyDiff 写路径
-// 后置回读守护唯一可达的触发方式(仿 support/ThrowingStorage.h 的装饰器写法)。
-template <class Storage>
-class LeakyDeleteStorage
-{
-public:
-    explicit LeakyDeleteStorage(Storage& storage) noexcept : m_storage(storage) {}
-
-    bcos::task::Task<std::optional<bcos::storage::Entry>> readOne(auto key, auto&&... args)
-    {
-        co_return co_await bcos::storage2::readOne(
-            m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
-    }
-
-    bcos::task::Task<bool> existsOne(auto key, auto&&... args)
-    {
-        co_return co_await bcos::storage2::existsOne(
-            m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
-    }
-
-    bcos::task::Task<typename Storage::Iterator> range(auto&&... args)
-    {
-        co_return co_await bcos::storage2::range(
-            m_storage.get(), std::forward<decltype(args)>(args)...);
-    }
-
-    bcos::task::Task<void> writeOne(auto key, auto value, auto&&... args)
-    {
-        co_await bcos::storage2::writeOne(m_storage.get(), std::move(key), std::move(value),
-            std::forward<decltype(args)>(args)...);
-    }
-
-    /// 刻意什么都不做:注入"删槽没生效"的写回泄漏。
-    bcos::task::Task<void> removeOne(auto /*key*/, auto&&... /*args*/) { co_return; }
-
-private:
-    std::reference_wrapper<Storage> m_storage;
-};
-
-}  // namespace
+// (z6) 用的装饰器是 support/LeakyDeleteStorage.h(removeOne 空操作、其余算子直通)。它此前是
+// 本文件内的一个匿名命名空间局部类,终审批 9 F-1 抽成共享头——因为**同一注入现在要在两个层级
+// 各出一次场**:本文件断言桥层 throw + 置毒旗,OpSchedulerImplTest 断言同一注入在
+// executeOpBlock 里被分类成 OpStorageError(-32603)而不是 OpConsensusError(INVALID)。
+using bcos::evm::test::LeakyDeleteStorage;
 
 // (z1) 本批最核心的一条:stateRootOf 在含零值槽的账户表上不再毒旗,且算出的根与"该槽根本
 //      不存在"时逐字节相等 —— 同时钉死"不 throw"(旧行为在此翻红)和"不进 trie"。
