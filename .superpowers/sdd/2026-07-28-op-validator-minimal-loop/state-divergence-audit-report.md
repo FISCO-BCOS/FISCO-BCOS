@@ -341,3 +341,86 @@ op-geth: 4788 侧同样忽略错误(`_, _, _ = evm.Call`,state_processor.go:281)
   空账户清除时机差异 —— 归到第 6 层一并处理。
 
 <!-- LAYER-3-END -->
+
+---
+
+## 第 4 层:交易顺序与准入规则
+
+三条准入规则全部集中在 `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:36-55`。
+它们**都是"更严"方向**,即拒绝 op-geth 会接受的块。源码注释(:17-19)自陈这一点:
+"op-geth EL does not perform this validation (responsibility pushed down to the CL layer)"。
+本报告仍然逐条列出——审计判据要求两个方向同等对待,而对验证者节点而言"拒绝一个合法块
+等于投错票"。
+
+对照面确认:op-geth 的 EL 侧对 deposit 的**顺序/位置/数量**没有任何校验。
+`core/block_validator.go` 的 `ValidateBody`、`consensus/beacon/consensus.go` 的 `verifyHeader`
+里没有出现 `IsDepositTx`/`DepositTxType`(逐文件 grep 确认);
+`core/state_processor.go` 中仅有的两处 `IsDepositTx`(:174、:217)都是 Regolith 回执字段逻辑,
+与顺序无关;`core/state_processor.go:97-116` 的交易循环对每笔一视同仁地
+`TransactionToMessage` → `ApplyTransactionWithEVM`。
+
+### 【分歧 4-1】空块被我方判 INVALID,op-geth 正常执行
+
+```
+我方:    OpBlockExecute.cpp:36-37 —— `if (txs.empty()) throw std::runtime_error(
+         "op block: missing L1 attributes deposit (empty block)")`;
+         经 OpSchedulerImpl.h:839-844 归类为 OpConsensusError → 引擎 :996-999 判 INVALID。
+op-geth: core/state_processor.go:97 的 `for i, tx := range block.Transactions()` 对空切片直接
+         跳过;`ValidateBody` 无最小交易数要求。空块产出空 txRoot/receiptsRoot,VALID。
+触发输入:`executionPayload.transactions = []`。
+分歧结果:VALID vs INVALID。
+可达性:  当前可构造。
+置信度:  已读两侧源码确认。
+```
+
+### 【分歧 4-2】首笔必须是 L1 attributes deposit,且 `to`/`from` 必须精确匹配
+
+```
+我方:    OpBlockExecute.cpp:15-21 `isL1AttributesTx` —— 要求
+         `dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR`;
+         :38-40 首笔不满足即 throw。
+op-geth: 无对应检查(见上)。
+触发输入:(a) 首笔是普通 0x02 交易的块;(b) 首笔是 deposit 但 `from` 不是
+         `0xDeaDDEaDDeAdDeAdDEAdDEaddeAddEAdDEAd0001`;(c) 首笔 deposit 的 `to` 不是
+         `0x4200000000000000000000000000000000000015`(L1Block)。
+         三者在 op-geth 上都会被正常执行。
+分歧结果:VALID vs INVALID。
+可达性:  当前可构造。
+置信度:  已读两侧源码确认(且我方源码注释自陈"stricter-than-spec")。
+风险评估:这条是**刻意的更严**,防御价值真实(CL 被攻陷时能挡住伪造 L1 属性);但作为
+         验证者它会在 CL 侧任何合法的 attributes 变体上误判 INVALID。若 OP 未来允许
+         attributes deposit 的 `to` 变更(例如新的 L1Block 预部署地址),我方会在分叉当天
+         拒绝整条链。
+```
+
+### 【分歧 4-3】deposit 不得出现在任何非 deposit 之后
+
+```
+我方:    OpBlockExecute.cpp:54-55 —— `if (seenNonDeposit) throw std::runtime_error(
+         "op block: deposit after non-deposit tx")`。
+op-geth: 无对应检查。一笔位于块中部的 deposit 会被**正常执行并铸币**。
+触发输入:交易序列 `[attrs-deposit, 0x02 转账, 0x7E deposit]`。
+分歧结果:VALID(op-geth,且第三笔的 mint 真实入账)vs INVALID(我方)。
+可达性:  当前可构造。
+置信度:  已读两侧源码确认。
+```
+
+### 本层已核对、判定为**一致**的项
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| 普通(非 deposit)交易校验失败 ⇒ **整块无效**,不产生失败回执 | OpBlockExecute.cpp:76-81 —— `opValidate` 返回 `error_code` 即 `throw` | `state_processor.go:108-111` —— `ApplyTransactionWithEVM` 返错即 `return nil, fmt.Errorf("could not apply tx %d ...")`,整个 `Process` 失败 | 一致 |
+| deposit 校验失败 ⇒ **产生失败回执并继续**(Regolith 语义) | OpDepositTx.cpp:93-113 | `state_transition.go:483-508` `execute()` 的 failed-deposit 分支 | 一致(细节见第 5 层) |
+| `is_system_tx` 的 deposit ⇒ **整块无效**(非失败回执) | OpDepositTx.cpp:63-64 throw | `state_transition.go:353-357` 返回 `ErrSystemTxNotSupported`,且 `:486` 的 failed-deposit 分支用 `!errors.Is(err, ErrSystemTxNotSupported)` **显式排除**它 | 一致 |
+| deposit 撞块 gas 池 ⇒ **整块无效**(非失败回执) | OpDepositTx.cpp:95-96 —— `GAS_LIMIT_REACHED` 单独 throw | `state_transition.go:360` `st.gp.SubGas(GasLimit)` 返回 `ErrGasLimitReached`,`:486` 同样**显式排除** | 一致(两边都把它划到"块级"而非"交易级") |
+| 交易执行顺序 = payload 给出的顺序 | OpBlockExecute.cpp:50 顺序 for | `state_processor.go:97` 顺序 for | 一致 |
+| `cumulative_gas_used` 逐笔累加 | OpBlockExecute.cpp:59-60 / :86-87 | `ApplyTransactionWithEVM` 内 `receipt.CumulativeGasUsed = usedGas` | 一致 |
+
+### 本层**未覆盖**的面
+
+- op-geth 是否在 `miner`/`op-node` 侧另有 deposit 顺序约束 —— 与 EL 的块**验证**语义无关,未查。
+- 一个块里出现**两笔** L1 attributes deposit:我方 :54-55 只挡"deposit 在非 deposit 之后",
+  连续两笔 attributes deposit 会被放行并**执行两次**;op-geth 同样放行。**两边一致**,
+  但两边都依赖 CL 不产生这种块。
+
+<!-- LAYER-4-END -->
