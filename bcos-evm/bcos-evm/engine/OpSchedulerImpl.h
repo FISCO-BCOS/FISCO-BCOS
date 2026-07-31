@@ -268,8 +268,13 @@ inline evmone::state::BlockInfo toBlockInfo(const OpBlockEnv& env)
 inline void throwOnDecodeError(bcos::Error::UniquePtr&& err)
 {
     if (err != nullptr)
+        // Surface errorMessage(), not what(): bcos::Error inherits what() from boost::exception,
+        // which returns an empty/opaque string here, whereas errorMessage() carries the RLP
+        // decoder's own diagnostic ("Non-canonical length prefix: leading zero byte", etc.). This
+        // makes an OP raw-tx decode failure attributable to the specific canonical-encoding rule
+        // that fired (C1, final review batch B) rather than a bare "decode failed".
         throw OpConsensusError(
-            std::string("OpSchedulerImpl: raw tx decode failed: ") + err->what());
+            std::string("OpSchedulerImpl: raw tx decode failed: ") + err->errorMessage());
 }
 
 // ---- canonical-encoding strictness (final review B4-2) ----

@@ -1110,3 +1110,69 @@ TEST(OpSchedulerImpl, ZeroByteBoolFieldIsConsensusError)
     fields.isSystemTx = rlpString({0x00});
     expectDepositFieldRejected(fields, "non-canonical leading zero");
 }
+
+// ══════════════ final review batch B, C1: non-canonical OUTER FRAMING is rejected at DECODE ══════
+//
+// C1 is a different failure surface from the B4-2 field-strictness cases above: those mangle a
+// *field payload*; this mangles the transaction envelope's own outer RLP list header, writing the
+// payload length with a leading-zero-padded multi-byte prefix (0xf9 0x00 <len> instead of the
+// canonical 0xf8 <len>). op-geth's rlp readUint() rejects that with ErrCanonSize.
+//
+// Why this test earns its place (per this file's own B4-2 note, verbatim in spirit):
+//   * WITHOUT the C1 fix in bcos-codec/rlp/RLPDecode.h, the shared decodeHeader() ACCEPTS the
+//     leading-zero length prefix; the deposit then decodes into the very same Transaction as its
+//     canonical twin, and the ONLY thing that would flag the divergence is computeOpTxRoot hashing
+//     the raw wire bytes -> a different txRoot from op-geth (a *late*, block-hash-level catch that
+//     this test deliberately does not rely on). This asserts the rejection happens at DECODE time.
+//   * the mangled tx is at index 1 behind a well-formed L1-attributes deposit filler, so the
+//     failure cannot be the unrelated "first tx must be the L1 attributes deposit" gate.
+//   * the assertion is on the message substring "leading zero", which only the C1 throw site in
+//     RLPDecode.h produces — executeOpBlock's catch(...) fallback cannot synthesise it.
+namespace
+{
+/// Rebuilds a default (valid) L1-attributes-shaped deposit envelope but reframes its OUTER list
+/// header non-canonically: the payload length is emitted as a 2-byte big-endian prefix whose high
+/// byte is a padding zero (0xf9 0x00 <len>) rather than the minimal single-byte form (0xf8 <len>).
+/// The field payloads themselves are the canonical bytes a well-formed deposit carries, so the
+/// only non-canonicality is the framing under test.
+bcos::bytes nonCanonicalOuterFramedDeposit()
+{
+    DepositFieldEncodings fields;
+    bcos::bytes payload;
+    for (auto const* field : {&fields.sourceHash, &fields.from, &fields.to, &fields.mint,
+             &fields.value, &fields.gas, &fields.isSystemTx, &fields.data})
+    {
+        payload.insert(payload.end(), field->begin(), field->end());
+    }
+    // A default deposit payload is 56..255 bytes, so the canonical header is the single-byte-length
+    // long-list form 0xf8 <len>. Emit the non-canonical 2-byte-length form with a leading zero.
+    EXPECT_LT(payload.size(), 256u);
+    EXPECT_GE(payload.size(), 56u);
+    bcos::bytes out{0x7e};
+    out.push_back(0xf9);  // LONG_LIST_HEAD_BASE (0xf7) + 2 length bytes
+    out.push_back(0x00);  // leading zero -> non-canonical
+    out.push_back(static_cast<bcos::byte>(payload.size()));
+    out.insert(out.end(), payload.begin(), payload.end());
+    return out;
+}
+}  // namespace
+
+TEST(OpSchedulerImpl, NonCanonicalOuterFramingIsRejectedAtDecode)
+{
+    MutableStorage storage;
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+
+    std::vector<bcos::bytes> rawTxBytes{
+        leadingL1AttributesDeposit(), nonCanonicalOuterFramedDeposit()};
+
+    expectOpConsensusErrorWithMessage(
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+        "leading zero");
+}
