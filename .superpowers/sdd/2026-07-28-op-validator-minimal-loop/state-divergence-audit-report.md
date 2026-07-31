@@ -424,3 +424,126 @@ op-geth: 无对应检查。一笔位于块中部的 deposit 会被**正常执行
   但两边都依赖 CL 不产生这种块。
 
 <!-- LAYER-4-END -->
+
+---
+
+## 第 5 层:单笔执行
+
+我方:`OpValidate.cpp`(准入+费用预算)、`OpTransition.cpp`(普通交易)、`OpDepositTx.cpp`(deposit)、
+`OpExecCommon.cpp`(共用消息执行/退款/floor)、`RollupCost.cpp` + `OpFeeParams.cpp`(费用公式与参数)。
+op-geth:`core/state_transition.go`、`core/types/rollup_cost.go`、`core/state_processor.go`。
+
+### 【分歧 5-1】Jovian DA footprint 的 `daFootprintGasScalar` **取自不同的源** ★★
+
+```
+我方:    OpFeeParams.cpp:33 —— `.da_footprint_gas_scalar = readBE(slot8, 18, 2)`,
+         即 L1Block 合约(0x42..15)**存储槽 8 的第 18-19 字节**;
+         :43-45 `loadOpFeeParams` 在本块第一笔非 deposit 交易时读一次(OpBlockExecute.cpp:66-73);
+         OpReceiptMeta.cpp:27-32 用它算 `da_footprint = estimatedDaSizeFromFlz(flzLen) * scalar`。
+op-geth: core/types/rollup_cost.go:563-590 `CalcDAFootprint(txs)` ——
+         `daFootprintGasScalar, err := ExtractDAFootprintGasScalar(txs[0].Data())`,
+         即**第一笔(L1 attributes deposit)交易的 calldata**,:547-558:
+           - `len(data) < JovianL1AttributesLen(178)` → **报错,整块无效**;
+           - `data[0:4] != JovianL1AttributesSelector(0x3db6be2b)` → **报错,整块无效**;
+           - 取 `binary.BigEndian.Uint16(data[176:178])`。
+触发输入:(a) 一个 Jovian 块,其 L1 attributes 交易 calldata 长度 178 但**选择器不是
+         0x3db6be2b**(例如仍用 Isthmus 的 0x098999be 再补 2 字节):op-geth 判整块 INVALID;
+         我方照读槽 8、算出 footprint、与 payload 比对通过 → VALID。
+         (b) 任何"槽 8 的 [18:20] 与 attributes calldata[176:178] 不一致"的状态 —— 二者是否
+         恒等取决于 **L1Block 预部署合约的存储布局**,不是协议常量。
+分歧结果:(a) VALID vs INVALID;(b) `blobGasUsed`(Jovian 头字段)不同 → 我方判 INVALID
+         而 op-geth 判 VALID(反向)。
+可达性:  当前可构造(a);(b) 需生产账本。
+置信度:  已读两侧源码确认取值位置不同;"槽 8 [18:20] 恒等于 calldata[176:178]"**未验证** `[需验证]`。
+最小验证步骤:反编译/查阅 Jovian 版 L1Block.sol 的 `setL1BlockValuesJovian`,确认它把
+         `_daFootprintGasScalar` 写进 `operatorFeeParams` 槽的哪两个字节;或在
+         `OpFeeParamsTest.cpp` 里用一条真实 Jovian attributes calldata 跑一遍预部署字节码,
+         比对槽 8 与 calldata[176:178]。
+```
+
+### 【分歧 5-2】Jovian 激活块的"不得含用户交易"约束缺失
+
+```
+我方:    无对应检查。`loadOpFeeParams` 会读到一个(激活块尚未写入的)槽 8,scalar 多半为 0,
+         于是 `da_footprint` 恒为 0,seal.blobGasUsed = 0 —— 与 op-geth 的 `return 0, nil`
+         结果相同,**但前提条件的校验没有做**。
+op-geth: rollup_cost.go:569-577 —— 若 `len(txs[0].Data()) == IsthmusL1AttributesLen(176)`
+         (即激活块仍带 Isthmus 版 attributes),则**要求最后一笔也是 deposit**
+         (`if !txs[len(txs)-1].IsDepositTx() { return 0, errors.New("unexpected non-deposit
+         transactions in Jovian activation block") }`),否则整块无效。
+触发输入:Jovian 激活块,attributes 为 176 字节 Isthmus 格式,块内再放一笔 0x02 用户交易。
+分歧结果:VALID(我方,footprint=0 与 payload 的 0 相符)vs INVALID(op-geth)。
+可达性:  当前可构造(需构造一个跨 Jovian 激活边界的块)。
+置信度:  已读两侧源码确认。
+```
+
+### 【分歧 5-3】`opValidate` 的"块 gas 池"检查发生在 `loadOpFeeParams` 之后,但费用参数只加载一次;
+op-geth 的 `L1CostFunc`/`OperatorCostFunc` 闭包按 **blockTime** 缓存 —— 同一块内两者行为一致,
+**跨块复用同一 scheduler 实例时**我方每块新建 `OpFeeParams`(局部变量),无跨块污染。**判定一致**,
+但记录于此,因为它是"每块缓存一次 vs 每笔读"这一问题的直接答案:
+
+```
+我方:    OpBlockExecute.cpp:47-48 `bool feeLoaded=false; OpFeeParams fee{};` 是 processOpBlock 的
+         局部变量,:66-73 惰性加载一次,块结束即销毁。
+op-geth: rollup_cost.go:243-251 —— `func(gas, blockTime) { if forBlock != blockTime {
+         forBlock = blockTime; cachedFunc = selectFunc(blockTime) } ... }`,闭包随
+         `NewEVMBlockContext` 每块新建(state_processor.go:87-88)。
+结论:    一致(都是"本块第一笔非 deposit 交易时读一次 L1Block 槽")。
+```
+
+### 本层已核对、判定为**一致**的项(逐条对齐源码)
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| Fjord+ L1 费公式 `estimatedSize*(l1BaseFee*16*baseScalar + blobBaseFee*blobScalar)/1e12` | RollupCost.cpp:159-172 | rollup_cost.go:608-630 `NewL1CostFuncFjord` | 一致(常量 `-42585600`/`836500`/`1e12`/`16` 逐值相同,RollupCost.cpp:12-16 ↔ rollup_cost.go:92-93、:66-71) |
+| `estimatedSize = max(100e6, intercept + coef*fastlz)` | RollupCost.cpp:127-132 | rollup_cost.go:632-641 `estimatedDASizeScaled` | 一致 |
+| FastLZ 压缩长度算法 | RollupCost.cpp:26-119(逐行移植) | `FlzCompressLen` | 一致(结构对应;**未逐字节 differential fuzz** `[需验证]`) |
+| L1 费的输入字节 = 完整签名信封 | `signedTxEnvelope`(OpBlockExecute.cpp:75,来自 `OpBlockTx::signedEnvelope` = 原始线上字节) | `tx.MarshalBinary()`(`RollupCostData()`) | 一致(前提:解码器拒绝非规范编码,见第 1 层) |
+| Operator fee(Isthmus)`gas*scalar/1e6 + constant` | RollupCost.cpp:205-207 | rollup_cost.go:254-268 `newOperatorCostFuncIsthmus` | 一致(含运算顺序:先乘后整除再加) |
+| Operator fee(Jovian)`gas*scalar*100 + constant` | RollupCost.cpp:199-204 | rollup_cost.go:272-286 `newOperatorCostFuncOperatorFeeFix`(由 `IsJovian` 选中,:236-239) | 一致 |
+| operator fee 参数槽 = L1Block 槽 8,scalar=[20:24],constant=[24:32] | OpFeeParams.cpp:31-32 | rollup_cost.go:82-84 `OperatorFeeParamsSlot=8`;:656-659 `ExtractOperatorFeeParams` 取 `[20:24]`/`[24:32]` | 一致 |
+| l1BaseFee=槽1、feeScalars=槽3([16:20]/[20:24])、blobBaseFee=槽7 | OpFeeParams.cpp:27-30、:43-45 | rollup_cost.go:70-80 | 一致 |
+| operator fee 按 **gasLimit** 预扣、按 **gasUsed** 退差 | OpTransition.cpp:171-172(扣)/ :189-193(退+入库) | state_transition.go `buyGas` 的 `OperatorCostFunc(st.msg.GasLimit,...)`;`refundIsthmusOperatorCost()` 用 `OperatorCostFunc(st.gasUsed(),...)` 退差 | 一致 |
+| 四个金库地址 | OpPredeploys.h:19-25 —— BaseFee `0x42..19`、L1Fee `0x42..1a`、Operator `0x42..1b`、MessagePasser `0x42..16` | params/protocol_params.go:25-34 —— 逐字相同 | 一致 |
+| coinbase 小费 = `gasUsed * min(tip, feeCap-baseFee)` | OpTransition.cpp:161-163、:181 | state_transition.go `effectiveTip = GasPrice - BaseFee`,`GasPrice = min(tip+baseFee, feeCap)`;`AddBalance(Coinbase, gasUsed*effectiveTip)` | 一致 |
+| baseFee 不销毁,入 BaseFeeVault | OpTransition.cpp:186-187 | state_transition.go:713-719 `AddBalance(OptimismBaseFeeRecipient, gasUsed*BaseFee)` | 一致 |
+| deposit **不**付 coinbase / 不入任何金库 / 不计 L1 费 | OpDepositTx.cpp 全文无金库写入 | state_transition.go:681-688 Regolith deposit 提前 return;:713 `&& !st.msg.IsDepositTx` | 一致 |
+| deposit 的 gas 语义:失败时 `gasUsed = gasLimit` 全额计入 | OpDepositTx.cpp:101、:112 | state_transition.go:495-505 `gasUsed := st.msg.GasLimit`;`st.gp.ReturnGas(0, gasUsed)` | 一致 |
+| deposit 失败时**保留 mint、强制 nonce+1、回滚其余** | OpDepositTx.cpp:69-70(先 mint)、:99/:110(nonce=preNonce+1)、失败分支根本没执行 | state_transition.go:474-481(先 mint)、`snap` 在 mint **之后**、`RevertToSnapshot(snap)`、`SetNonce(from, GetNonce(from)+1)` | 一致 |
+| deposit 余额不足以支付 `value` ⇒ 失败回执(非块级) | OpDepositTx.cpp:106-113 | `innerExecute` clause 6 → `execute()` 的 failed-deposit 分支 | 一致 |
+| 块 gas 池净消耗 = 逐笔 `gasUsed` 之和 | OpBlockExecute.cpp:58/:85 `blockGasLeft -= gas_used`;:97 `result.gasUsed = cumulative` | `gp.SubGas(GasLimit)` + `gp.ReturnGas(gasRemaining, gasUsed)`;`gp.Used() = initial - remaining` = Σ gasUsed(core/gaspool.go:40-68、:82-88) | 一致 |
+| `cumulativeGasUsed` 来源 | OpBlockExecute.cpp:59-60/:86-87 累加 | `gp.CumulativeUsed()`(state_processor.go:195) | 一致 |
+| 退款上限 `gasUsed/5`(London+) | OpExecCommon.cpp:65-68 | `calcRefund` 用 `RefundQuotientEIP3529` | 一致 |
+| EIP-7702 每条授权的退款 12500 | OpTransition.cpp:30-32、:104-109(25000-12500) | `params.CallNewAccountGas=25000`、`params.TxAuthTupleGas=12500` | 一致 |
+| EIP-7623 floor:退款后再取 `max(gasUsed, floor)` | OpExecCommon.cpp:71 | state_transition.go:648-660(先 `gasRemaining += calcRefund()`,再 Prague floor) | 一致 |
+| 7702 顺序:先 sender nonce+1,再处理授权列表 | OpTransition.cpp:151-156 | `innerExecute` 中 `SetNonce(msg.From, +1)` 后 `applyAuthorization` 循环 | 一致 |
+| 7702 单条授权失败 ⇒ **跳过该条**,不废整笔 | OpTransition.cpp:57/61/67/71/79/91/96 全是 `continue` | geth 注释 "errors are ignored, we simply skip invalid authorizations here" | 一致 |
+| 7702 授权的 `chain_id ∈ {0, chainId}`、`s ≤ n/2`、`v ≤ 1`、`nonce != NonceMax` | OpTransition.cpp:57-72 | 同 EIP-7702 规范,geth `applyAuthorization` | 一致(**除 C2 已记账的 yParity 位宽**) |
+| `to == 0x00..0` 的授权 ⇒ 清空委托代码 | OpTransition.cpp:113-121 | EIP-7702 特例 | 一致 |
+| 委托代码 `0xef0100 \|\| addr`、执行前解析委托目标并 warm | OpTransition.cpp:126;OpExecCommon.cpp:51-59 | state_transition.go:615-620 `ParseDelegation` + `AddAddressToAccessList` | 一致 |
+| access list 预热 + Shanghai 起 coinbase 预热 | OpExecCommon.cpp:38-48 | `st.state.Prepare(rules, from, coinbase, to, precompiles, accessList)` | 一致 |
+| EIP-3607(sender 必须是 EOA 或已委托) | state.cpp:494-496 | `preCheck` 的 `ErrSenderNoEOA` | 一致 |
+| nonce too high / too low / EIP-2681 上限 | state.cpp:498-505 | `preCheck` 的三个分支 | 一致 |
+| 余额充足性:`gasLimit*maxFeePerGas + value + l1Cost + operatorCost` | OpValidate.cpp:36-41(叠加在 evmone 的 `gasLimit*maxFee+value` 之上) | `buyGas` 的 `balanceCheck`(用 `GasFeeCap`) | 一致 |
+| 实际扣款:`gasLimit*effectiveGasPrice + l1Cost + operatorCost(gasLimit)` | OpTransition.cpp:166-172 | `buyGas` 的 `mgval`(用 `GasPrice`) | 一致 |
+| blob 交易在 OP 上不可执行 | OpValidate.cpp:12-13 返回 `not_supported`(**死代码**:解码层已先拒,见分歧 1-1) | —— | 一致(结论相同) |
+
+### 本层的已知/已记账分歧(引用)
+
+- **C2 7702 授权 `yParity` 位宽** —— `OpSchedulerImpl.h:477` `auth.v = decodeU256Scalar` vs
+  op-geth `SetCodeAuthorization.V uint8`。
+- **C4** 的一个下游后果:`block.base_fee` 由 payload 直接给定(`OpSchedulerImpl.h:238`),
+  而 `OpTransition.cpp:158-163` 的 `effective_gas_price` 完全建立在它之上 —— baseFee 不校验
+  意味着**每一笔交易的实际 gas 价格、coinbase 小费、BaseFeeVault 入账都可被 payload 任意设定**。
+
+### 本层**未覆盖**的面
+
+- Ecotone L1 费公式(`RollupCost.cpp:180-189`)—— `has_ecotone_l1_formula` 在 Isthmus/Jovian
+  下恒为 false(OpForkSchedule.cpp:68/83),本循环不可达,未与 `newL1CostFuncEcotone` 逐值比对。
+- Bedrock L1 费(`bedrockCalldataGasUsed`)—— 同上,只被 Ecotone 分支调用,不可达。
+- `compute_tx_intrinsic_cost`(evmone)与 geth `IntrinsicGas` 的**逐项** gas 常量比对
+  (calldata 零/非零字节、创建、access list 条目、授权元组)未做 `[需验证]`;
+  这是 evmone upstream 面,风险低但不为零。
+- 预编译差异(`OpPrecompiles.cpp` 的 Fjord/Granite/Isthmus/Jovian override)未比对。
+
+<!-- LAYER-5-END -->
