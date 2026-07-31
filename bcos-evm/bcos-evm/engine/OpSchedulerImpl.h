@@ -357,6 +357,28 @@ inline uint64_t decodeU64Scalar(bcos::bytesRef& in)
     return value;
 }
 
+/// EIP-7702 authorization-tuple yParity (C2, final review batch B). op-geth's
+/// `SetCodeAuthorization.V` is a **uint8** (core/types/tx_setcode.go:76), so its RLP scalar must
+/// fit in a single byte: a wider encoding (e.g. `0x82 0x01 0x00` == 256) overflows that uint8 and
+/// makes op-geth's RLP DecodeRLP fail, which invalidates the WHOLE transaction and therefore the
+/// block. Reading this field as a full uint256 (decodeU256Scalar) instead silently accepts 256,
+/// after which OpTransition.cpp:67's `auth.v > 1` guard merely *skips* that one authorization and
+/// leaves the block VALID — a consensus split from op-geth (measured: `auth.v = 256` was accepted).
+///
+/// This is strictly the encoding-WIDTH check. The value-RANGE handling (yParity in [2,255]) is a
+/// DIFFERENT concern and is deliberately NOT rejected here: EIP-7702 requires such an authorization
+/// to be *skipped*, not fatal — which OpTransition.cpp:67 already does, matching op-geth's
+/// `applyAuthorization` `continue`. So a 1-byte value like 0x02 decodes fine here and is skipped at
+/// execution; only a >1-byte encoding is a decode-time rejection.
+inline intx::uint256 decodeAuthYParityScalar(bcos::bytesRef& in)
+{
+    auto payload = readCanonicalScalar(in, 1, "authorization yParity");
+    intx::uint256 value = 0;
+    if (!payload.empty())
+        value = payload[0];
+    return value;
+}
+
 /// isSystemTransaction (op-geth's DepositTx.IsSystemTransaction, encoded as a plain RLP scalar
 /// 0/1 — Go's rlp package's *native* bool encoding, which false=empty-string(payloadLength=0)/
 /// true=0x01, matching Task 3's own encode side: OpDepositEncode.cpp encodes this field via the
@@ -479,7 +501,7 @@ inline evmone::state::AuthorizationList decodeAuthorizationList(bcos::bytesRef& 
         auth.chain_id = decodeU256Scalar(entryBody);
         auth.addr = decodeAddressField(entryBody);
         auth.nonce = decodeU64Scalar(entryBody);
-        auth.v = decodeU256Scalar(entryBody);
+        auth.v = decodeAuthYParityScalar(entryBody);  // C2: uint8-width, see helper
         auth.r = decodeU256Scalar(entryBody);
         auth.s = decodeU256Scalar(entryBody);
         expectExhausted(entryBody, "authorization tuple");

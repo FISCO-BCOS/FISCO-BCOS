@@ -1017,6 +1017,121 @@ TEST(OpSchedulerImpl, YParityEquals256IsConsensusError)
     }
 }
 
+// ══════════════ final review batch B, C2: EIP-7702 authorization yParity is uint8-width ═════════
+//
+// The YParity{2,256} tests above cover the OUTER tx's yParity value-range check (batch 1: v>1 is a
+// consensus error). C2 is a DIFFERENT field and a DIFFERENT check: the authorization TUPLE's
+// yParity. op-geth's SetCodeAuthorization.V is a uint8 (core/types/tx_setcode.go:76), so a >1-byte
+// encoding (256 -> 0x82 0x01 0x00) overflows and fails op-geth's RLP decode, making the whole tx —
+// and the block — INVALID. This decoder previously read that field as a full uint256
+// (decodeU256Scalar), which silently accepted 256; OpTransition.cpp:67's `auth.v > 1` guard then
+// merely SKIPPED that one authorization (correct EIP-7702 value-range semantics) and the block was
+// VALID — a consensus split from op-geth (measured). The fix is the encoding-WIDTH check in
+// decodeAuthYParityScalar; the value-range side stays a skip, not a reject, matching op-geth.
+namespace
+{
+/// A setcode (0x04) tx carrying exactly one EIP-7702 authorization tuple whose yParity is `authV`.
+/// evmone's rlp_encode(Authorization) emits `authV` as a minimal big-endian scalar, so authV=256
+/// becomes the 2-byte 0x82 0x01 0x00 — the over-wide encoding C2 must reject at decode.
+bcos::bytes buildSetCodeRawTxWithAuth(uint64_t chainId, uint64_t gasLimit,
+    const intx::uint256& authV, const intx::uint256& outerYParity, const intx::uint256& r,
+    const intx::uint256& s)
+{
+    evmone::state::Authorization auth;
+    auth.chain_id = intx::uint256{chainId};
+    auth.addr = kPlaceholderTransferTo;
+    auth.nonce = 0;
+    auth.v = authV;
+    auth.r = intx::uint256{1};
+    auth.s = intx::uint256{1};
+    evmone::state::AuthorizationList authList{auth};
+    auto body = evmone::rlp::encode_tuple(chainId, uint64_t{0}, intx::uint256{0}, intx::uint256{0},
+        gasLimit, kPlaceholderTransferTo, intx::uint256{0}, evmc::bytes{},
+        evmone::state::AccessList{}, authList, outerYParity, r, s);
+    bcos::bytes out{0x04};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+/// The RLP bytes of a one-tuple authorization LIST (the argument decodeAuthorizationList consumes),
+/// with the tuple's yParity encoded from `authV`. Isolated from tx signing/execution so the width
+/// check can be exercised without the outer-tx ecrecover (which a placeholder r/s would fail).
+bcos::bytes authorizationListRlp(const intx::uint256& authV)
+{
+    evmone::state::Authorization auth;
+    auth.chain_id = intx::uint256{1};
+    auth.addr = kPlaceholderTransferTo;
+    auth.nonce = 0;
+    auth.v = authV;
+    auth.r = intx::uint256{1};
+    auth.s = intx::uint256{1};
+    evmone::state::AuthorizationList authList{auth};
+    auto encoded = evmone::rlp::encode(authList);  // wraps the tuples in a list header
+    return bcos::bytes(encoded.begin(), encoded.end());
+}
+}  // namespace
+
+// C2 (unit, width REJECT): a 2-byte authorization yParity (256) is rejected at decode by the
+// width check — op-geth's uint8 cannot hold it. Exercised directly on decodeAuthorizationList so
+// the failure is unambiguously the width check and nothing downstream.
+TEST(OpSchedulerImpl, AuthorizationYParityOverWideRejectedAtDecode)
+{
+    auto buf = authorizationListRlp(intx::uint256{256});
+    bool threw = false;
+    try
+    {
+        bcos::bytesRef in(buf.data(), buf.size());
+        (void)bcos::evm::engine::detail::decodeAuthorizationList(in);
+    }
+    catch (const bcos::evm::engine::OpConsensusError& e)
+    {
+        threw = true;
+        EXPECT_NE(
+            std::string(e.what()).find("too wide for authorization yParity"), std::string::npos)
+            << "e.what()=\"" << e.what() << "\"";
+    }
+    EXPECT_TRUE(threw) << "expected width rejection for a 2-byte authorization yParity";
+}
+
+// C2 (unit, width ACCEPT / boundary): a 1-byte authorization yParity (here 2) is a valid ENCODING
+// and must pass the width check — its value-range handling (v>1 -> skip the authorization) is
+// EIP-7702 execution semantics (OpTransition.cpp:67), NOT a decode-time rejection. Proves the
+// width check does not over-reject; guards against a future "reject v>1 at decode too" edit that
+// would diverge from op-geth (which decodes v in [2,255] fine and skips at execution).
+TEST(OpSchedulerImpl, AuthorizationYParityOneByteAcceptedAtDecode)
+{
+    auto buf = authorizationListRlp(intx::uint256{2});
+    bcos::bytesRef in(buf.data(), buf.size());
+    auto decoded = bcos::evm::engine::detail::decodeAuthorizationList(in);
+    ASSERT_EQ(decoded.size(), 1u);
+    EXPECT_EQ(decoded[0].v, intx::uint256{2});
+}
+
+// C2 (end-to-end, block INVALID): the same over-wide authorization yParity, driven through the
+// full scheduler, makes the block INVALID — the consensus outcome op-geth reaches and this
+// implementation previously did NOT (it accepted 256 and skipped the authorization, block VALID).
+// Index-1 filler pattern (as the B4-2 tests) so the failure is not the L1-attributes-deposit gate.
+TEST(OpSchedulerImpl, AuthorizationYParityOverWideIsBlockInvalid)
+{
+    MutableStorage storage;
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(1);
+    header.setTimestamp(1000);
+    auto env = minimalEnv(header);
+
+    std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
+        buildSetCodeRawTxWithAuth(kChainId, 200000, intx::uint256{256}, intx::uint256{0},
+            intx::uint256{1}, intx::uint256{1})};
+
+    expectOpConsensusErrorWithMessage(
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+        "too wide for authorization yParity");
+}
+
 // ══════════════ final review batch 4: B4-2 non-canonical RLP is rejected ══════════════
 //
 // Go's `rlp` — which produced every byte this decoder will legitimately see — rejects each of
