@@ -235,3 +235,71 @@ docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md
 1. **(Important)** 新守护的 throw 走 `OpConsensusError` → **INVALID**,而它守护的是节点本地 bug,按 §4.3 原则应是 **-32603**。既有的两处 `applyDiff` tripwire 同病,本批把爆炸半径扩大了一个触发点。
 2. **(Important)** "`existsOne` 把墓碑判为不存在"这条判据,只在 `MemoryStorage` 一侧被 z7 钉住(INJ-D → z7 三条断言全响);**生产实际走的 `MultiLayerStorage::View::readOne → getValue` 一侧零钉住**(INJ-E → 0 红,INJ-E′ 12 红证明实验有效)。一旦漂移,写路守护会在每一次合法零值写入上抛,而 246 例全绿。
 3. **(Minor)** 非 32 字节槽**值**这条路全无测试(不只是不对称无用例,M-1 自己修的 throw 也无覆盖);t① 的 `/apps/HelloWorld` 例子实际抛 `non_hex_input` 而非文档写的 `std::length_error`。
+
+---
+---
+
+# re-review(fix 轮验收,2026-07-31)
+
+BASE `4f13c37b5` → `bc3208f4c`(fix 轮六提交 + 台账)。基线接手:in-tree `--gtest_list_tests` **249** / **249 PASSED**,二进制 10:27:27,`git status` clean。
+
+实施者已自验的四条(INJ-E 重放 → 1 红且只有 z8 / INJ-H → 1 红且只有 z9 / INJ-F1 → 4 红 / INJ-G 阶梯前缀)**采信不重跑**。以下只做协调者点名的三处最长推理链 + 例行项。
+
+## R-1(派单第 1 点):(d2) 替身有效性与"共用同段 catch"推论
+
+### 推论成立,而且是**结构性**成立,不是巧合
+
+`ecbfb8f68` 的形态是把 `applyDiff` 的**整个方法体**(两个 for 循环)包进一段 try,四级 catch 全部 `poison(...); throw;`。因此推论的成立条件是"所有写路 throw 点都在这段 try 之内",这一条由**可见性**保证:
+
+- `applyModifiedEntry`(`:341`)与 `applyDeletedEntry`(`:433`)都是 **private**,全仓唯二调用点是 `applyDiff` 的 `:246` / `:248`,**都在 try 内**(`grep` 全仓核对,除注释外无第三处引用);
+- `Storage2Ledger` 的 public 面只有 ctor / `get_account` / `get_account_code` / `get_storage` / `poisoned` / `firstError` / `applyDiff` / `visitAccounts` —— **唯一的写入口就是 `applyDiff`**,没有"不经 applyDiff 的写入口"可绕。
+
+所以三条形状相关 tripwire(契约②零值泄漏 z6、ghost-delete、`/sys/` 路由)与 (d2) 注入的"底层写失败"**共用的不是一段碰巧相同的代码,而是同一个方法体的唯一出口**。新增 throw 点自动继承,这正是实施者选"整体包裹而非逐点改写"的收益。**推论成立,记录即可,不是残留缺口。**
+
+补充:分类层那一侧也不依赖"哪一级 catch 命中"——`executeOpBlock` 的两条 catch(`OpSchedulerImpl.h:839` / `:845`)与其后的 `:874` **都是 `poisoned()`-first**,只要毒旗置位就走 `OpStorageError`。而四级 catch 里 `catch (...)` 兜底保证毒旗**一定**置位。故"置旗"与"分类"之间没有第二个可断的环。
+
+### 一处如实记账(不是缺口):第二个 `applyDiff` 调用点在分类之外
+
+`LedgerSeed.h:47` `seedFromTestState` 是全仓第二个 `applyDiff` 调用点,**不在** `executeOpBlock` 的分类 try 内。核实其调用方全部是测试(`EbT8nReplayTest / OpSchedulerImplTest / LedgerRootTest / Storage2LedgerTest / EngineNewPayloadGateTest / T8nReplayHarness.h`,零生产调用),且其入参类型是 `evmone::test::TestState`(向量类型),Engine API 路径根本到不了。**所以不存在"播种失败被答成 INVALID"的可能**——那里压根没有分类层。如实记一笔即可。
+
+## R-2(派单第 2 点):RTTI 新推论的表述强度 —— **实施者的调和不成立,但结论方向对**
+
+### 我先纠正自己:上一轮复审报告里"`visitAccounts` 同 TU **直抛**"的说法是错的
+
+`visitAccounts:327` 是 `task::syncWait(visitAccountsImpl(visitor))`,而 `visitAccountsImpl` / `fetchAllStorage` 都是 `task::Task<>` 协程。**它和 `applyDiff` 一样穿 syncWait/协程边界**。所以"直抛 vs 穿协程"这个对照**从一开始就不成立**——两边是同一种路径。
+
+### 实测(INJ-R / INJ-R2):真正的判别式是**异常类型族**,与协程边界无关
+
+不需要新的猜测,现成的绿用例已经先给出一半反证:z9 第 (2) 腿(fix 轮前后都绿)断言 `visitAccounts` 的 `firstError()` **含原文** "storage slot value size mismatch",而 `catch(...)` 兜底写的是一句不含该子串的固定文案 ⇒ 当时只有两级的 `catch (const std::exception&)` **确实接住了** 一个穿协程抛出的 `std::length_error`。这与"穿协程即失效"直接矛盾。
+
+为把条件测准,做了两轮注入(**同一个 TU、同一个二进制**,消除 TU 差异变量):
+
+**INJ-R**(给 `applyDiff` / `visitAccounts` / `get_storage` 三处 catch 阶梯打 `[A-]/[V-]/[G-]` 前缀,并用 `ADD_FAILURE()` 把 `firstError()` 打出来),重建 10:40:04 —— 四个探针各自落在**最派生**的匹配级,符合预期,但派生级遮蔽了 `std::exception` 级,不构成判据。
+
+**INJ-R2**(把三处都**剥回"只有 `catch (const std::exception&)` + `catch (...)`"**,即 fix 轮之前 `visitAccounts` 与 `applyDiff` 的原形态),重建 10:41:01,四个探针实测:
+
+| 探针 | 抛出类型 | 抛出路径 | 落点 |
+|---|---|---|---|
+| `applyDiff` ← `applyDeletedEntry` ghost tripwire | `std::runtime_error` | 协程 + syncWait | **`[A-ELLIPSIS]`**(逃过 `std::exception` 级) |
+| `visitAccounts` ← `fetchAllStorage` unknown key | `std::runtime_error` | 协程 + syncWait | **`[V-ELLIPSIS]`**(同样逃逸) |
+| `get_storage` ← `fetchStorage` 值长度 | `std::length_error` | 协程 + syncWait | **`[G-EXCEPTION]`**(正常命中) |
+| `visitAccounts` ← `fetchAllStorage` 值长度 | `std::length_error` | 协程 + syncWait | **`[V-EXCEPTION]`**(正常命中) |
+
+还原(`git checkout` 两文件)+ 重建(10:42:02)+ 复绿 **249/249**,clean。
+
+**同一个 `visitAccounts` 的同一级 catch 上,`runtime_error` 逃逸而 `length_error` 命中** —— 协程边界这个变量被彻底排除。
+
+### 应当写进 §11/RTTI 补遗的精确表述(建议原文)
+
+> **适用条件(实测,勿弱化也勿放大)**:在本构建(链入 `-fno-rtti` 的 `libevmone.a`)下,`catch (const std::exception&)` 对 **`std::runtime_error` 子树不生效**——异常会越过该级落到 `catch (...)`;对 **`std::logic_error` 子树(含 `std::length_error`)正常生效**。判别式是**异常类型族**,**与是否穿越 `task::syncWait`/协程边界无关**(同一处 catch 上两族行为相反,已实测)。
+> **推论**:任何需要"保证捕获"的 catch 阶梯,必须**显式写出 `catch (const std::runtime_error&)` 一级**,或以 `catch (...)` 兜底;只写 `catch (const std::exception&)` 会漏掉本仓最常用的异常族。
+> **不要写成**"`catch (const std::exception&)` 形同虚设":它对 `logic_error` 族是有效且唯一正确的那一级,删掉会让 `length_error` 失去消息。
+
+据此,`Storage2Ledger.h` 现有注释里的两句需要调整:①"`std::exception` 这一层按实验二**在本构建下形同虚设**" —— **过强**,应改为"对本文件 `runtime_error` 系的 throw 点形同虚设,对 `logic_error` 系(`length_error`)是实际生效的那一级";②"非唯一的那份 typeinfo 是 `std::exception` 的" —— 与实测不符(若 `std::exception` 的 typeinfo 非唯一,`length_error` 也该逃逸;实际没有),该机制归因**未被证实**,建议降格为"机制未定,判别式是类型族,以实测为准"。
+
+### 由此暴露的新缺口(Important):读路的 `runtime_error` **今天就在丢消息**
+
+fix 轮把四级阶梯只加在了 `applyDiff`。`get_account` / `get_account_code` / `get_storage` / `visitAccounts` 仍是两级形态,于是按上表:**读路每一个 `runtime_error` 都落进 `catch (...)`,`firstError()` 被替换成固定文案,原始诊断丢失**。INJ-R2 已实测到具体一例:`visitAccounts` 接 `fetchAllStorage` 的 "unknown key in account table '/apps/…'" → `firstError()` 变成 "unknown exception"。
+
+后果不是分类错误(毒旗照置,仍是 -32603),而是 **-32603 的可诊断性**:`executeOpBlock` 把 `firstError()` 原样塞进 `OpStorageError`,运维看到的是 "unknown exception"。讽刺的是 (d2) 的 helper `expectOpStorageErrorWithMessage` **专门断言** `what()` 不得退化成兜底串——写路有这条守护,读路没有,而读路是毒旗的主要来源。**建议把同一四级阶梯复制到三个读方法 + `visitAccounts`**(纯机械改动,无语义风险),并给读路补一条与 (d2) 对称的消息保真断言。
+
