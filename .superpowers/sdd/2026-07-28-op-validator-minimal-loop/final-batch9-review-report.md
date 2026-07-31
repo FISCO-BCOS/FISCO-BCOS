@@ -303,3 +303,95 @@ fix 轮把四级阶梯只加在了 `applyDiff`。`get_account` / `get_account_co
 
 后果不是分类错误(毒旗照置,仍是 -32603),而是 **-32603 的可诊断性**:`executeOpBlock` 把 `firstError()` 原样塞进 `OpStorageError`,运维看到的是 "unknown exception"。讽刺的是 (d2) 的 helper `expectOpStorageErrorWithMessage` **专门断言** `what()` 不得退化成兜底串——写路有这条守护,读路没有,而读路是毒旗的主要来源。**建议把同一四级阶梯复制到三个读方法 + `visitAccounts`**(纯机械改动,无语义风险),并给读路补一条与 (d2) 对称的消息保真断言。
 
+## R-3(派单第 3 点):z8 的覆盖边界 —— 未覆盖分支在**本场景**结构性不可达
+
+实施者自陈"只覆盖 MLS View 单可变层,跨层墓碑(上层墓碑遮下层实值)的 `getValue` 分支未覆盖"。逐行核 `MultiLayerStorage.h` 后判定:**在 `removeOne` 后置校验这个特定场景里,跨层遮蔽不可达**,z8 的覆盖对该场景是**完整**的,不是部分的。
+
+三条依据(全部 `file:line` 原文核对):
+
+1. **写在哪一层是确定的**:`View::removeOne`(`MultiLayerStorage.h:347-351`)把删除转交 `storage2::removeOne(mutableStorage(*this), ...)`,而 `mutableStorage(View&)`(`:151-158`)只返回 `*m_mutableStorage`(为空则 `BOOST_THROW_EXCEPTION(NotExistsMutableStorageError)`)。**墓碑一定落在最顶的可变层**,不可能落到 immutable/cache/backend。
+2. **读在哪一层停也是确定的**:`View::readOne`(`:300-330`)第一段就是
+   ```cpp
+   if (m_mutableStorage) {
+       if (auto value = co_await m_mutableStorage->readOneRaw(key);
+           !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+           co_return getValue<Value>(value);   // ← 就地返回,不再往下看
+   }
+   ```
+   墓碑不是 `NOT_EXISTS_TYPE`,所以命中即 `co_return`,**immutable 层循环 / cache / backend 一行都不会被读到**。下层是否还压着实值,对结果没有任何影响。
+3. **两者之间没有插层的机会**:`applyModifiedEntry` 的零值分支里 `removeOne` 与 `existsOne` 是同一个协程体内相邻的两条 `co_await`,作用在**同一个** `m_storage.get()` 上,中间没有 `pushView`/`newMutable`/`merge`。要构造"墓碑在上层、实值在下层且读会看到实值",必须在这两条语句之间发生一次层推入 —— 直线代码里做不到。
+
+因此 z8 命中的 `getValue<Value>` 那一行(`:308`)与"跨层"情形命中的**是同一行**;所谓未覆盖的差异仅在于"下层是否另有实值",而该变量在 `:305-309` 提前返回后不可观测。**结论:如实记账即可,不需要补用例。** 建议把上面三条依据写进 z8 的注释,把"未覆盖"改述为"该分支在本场景结构性不可达,故不补",否则下一个人会照着"未覆盖"去补一条无判别力的用例。
+
+顺带记一条**真正**的残留边界(与 z8 无关):`m_mutableStorage` 为空时 `removeOne` 抛 `NotExistsMutableStorageError`(boost 异常,不派生自 `std::runtime_error`/`std::logic_error`)——被 `applyDiff` 的 `catch (...)` 兜住并置旗,分类仍是 -32603,但**消息丢失**。与 R-2 末节是同一类问题。
+
+## R-4:例行项
+
+### 边界遵守 ✅
+
+fix 轮六提交(`4f13c37b5` → `bc3208f4c`)全量 8 个文件:
+
+```
+.superpowers/sdd/.../final-batch9-report.md        docs
+.superpowers/sdd/.../progress.md                   docs
+bcos-evm/bcos-evm/ledger/Storage2Ledger.h          ← 生产代码,唯一一个
+bcos-evm/test/opstack/OpSchedulerImplTest.cpp      test
+bcos-evm/test/opstack/Storage2LedgerTest.cpp       test
+bcos-evm/test/opstack/support/LeakyDeleteStorage.h test(从 Storage2LedgerTest.cpp 提出的装饰器)
+bcos-evm/test/opstack/support/WriteFailingStorage.h test(新增)
+docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md  docs
+```
+
+`ports/` / `vectors/` / `golden/` / `transaction-scheduler/` / `bcos-rpc/` **零触碰**(grep 过滤后空)。`bcos-framework/` 也零触碰 —— 这点值得单独确认:F-2 的缺口是我上一轮用**修改 `MultiLayerStorage.h`** 的方式暴露的,fix 轮**没有**顺手去改框架,而是补了钉住行为的用例,方向正确。
+
+### `git diff -w` 零漂移 ✅
+
+生产代码侧 `git diff -w -U0` 过滤注释后,非注释增删**全部**是 `applyDiff` 的 try/catch 包裹本身(`try {` + 四级 catch + 收尾 `}`),两个 for 循环体一行未改(只是缩进,`-w` 下不显示)。通用组合根、调度、框架零改动。
+
+### 新增用例数对账 ✅
+
+246 → **249**,恰好三条,与 F-1/F-2/F-3 一一对应,`--gtest_list_tests` 实测到名:
+`ApplyDiffWriteFailureIsStorageErrorNotInvalid`(d2/F-1)、`MlsViewExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFalseFire`(z8/F-2)、`NonThirtyTwoByteSlotValueThrowsOnReadButCountsAsContentForHasStorage`(z9/F-3①)。
+
+### spec 勘误(F-3②)准确性 ✅
+
+`a695f19c0` 把 t① 的异常类型改成"分两种、取决于表名形态",并引了 boost 的继承链。到 `boost/algorithm/hex.hpp` 原文核对:
+
+```cpp
+struct hex_decode_error : virtual boost::exception, virtual std::exception {};
+struct non_hex_input    : virtual hex_decode_error {};
+```
+
+`:76` `BOOST_THROW_EXCEPTION(non_hex_input() << bad_char(c))` —— 与勘误所述**逐字相符**。`/apps/HelloWorld` 走 `non_hex_input`、全 hex 但长度不对才走 `std::length_error`,两条都被 `visitAccounts` 的 catch 接住,结论不变。**勘误准确,采纳。**
+
+一处**措辞 Minor**:勘误说"它**不**派生自 `std::runtime_error`/`std::logic_error`,所以 `applyDiff` 的 `catch (...)` 兜底不是冗余"。按标准,`non_hex_input` 虚继承自 `std::exception`,handler `catch (const std::exception&)` 对它是**可匹配**的(public 无歧义基类),所以严格说"不派生自 runtime_error/logic_error"并**不能**推出需要 `catch (...)`。`catch (...)` 之所以必要,依据是 R-2 实测的 RTTI 异常(以及"消息可丢但旗不可不置"的保守取向),不是继承关系。建议把理由换成实测那一条。
+
+### 三探针"互不重叠"勘误 ✅
+
+`7a5aa739e` 已按上一轮复审改为"红集互不相同、各自非空",并写明 {z1,z4,z5} / {z2,z5} / {z6} 及 z5 是联合锚。表述准确。
+
+## re-review 回归
+
+| 腿 | 二进制时间戳 | 结果 |
+|---|---|---|
+| in-tree `bcos-evm-opstack-tests` | 10:42:02(注入还原后重建) | `--gtest_list_tests` **249** / **249 PASSED** |
+| `test-bcos-engine` | 10:45:20(本次重建) | `*** No errors detected` |
+| `bcos-evm-eth-tests` | 源未变(重建 no-op) | 4 cases,`*** No errors detected` |
+| E-b 桥三腿 | 同 in-tree | 3/3 PASSED |
+| standalone | 未重建 | 对本批仍是**空真**(`Storage2LedgerTest`/`OpSchedulerImplTest` 均在 `if(TARGET bcos-framework)` 门控内),不作证据 |
+
+注入 INJ-R / INJ-R2 已 `git checkout` 还原 + 重建 + 复绿,`git status` 干净。
+
+## re-review 判定
+
+**F-1 / F-2 / F-3 三条跟进全部落地并验收通过。** 三处最长推理链的独立核验结果:
+
+- **R-1 成立**,而且比实施者自陈的更强 —— 不是"共用同段 catch"的推论,是"private helper + 唯一 public 写入口"给出的**结构性**保证,新增 throw 点自动继承。
+- **R-2 的调和不成立**:"直抛 vs 穿协程"这个对照本身是错的(`visitAccounts` 同样穿协程),我上一轮报告里的"直抛"说法一并纠正。实测判别式是**异常类型族**:`runtime_error` 子树逃过 `catch (const std::exception&)`,`logic_error` 子树正常命中,与协程边界无关。结论方向(必须显式写 `runtime_error` 级 / `catch (...)` 兜底)对,**但表述必须按 R-2 给出的原文收紧**,否则会误导后人删掉 `std::exception` 级。
+- **R-3 不是缺口**:跨层遮蔽在 `removeOne` 后置校验场景里结构性不可达,z8 对该场景是完整覆盖。
+
+**遗留(不阻塞,建议下一轮或独立小 PR)**:
+
+1. **(Important)** 读路(`get_account` / `get_account_code` / `get_storage` / `visitAccounts`)仍是两级 catch,按 R-2 实测,**每一个 `runtime_error` 今天都在丢消息**(已实测到 `fetchAllStorage` 的 "unknown key in account table" → `firstError()` 退化为 "unknown exception")。写路有 (d2) 的消息保真断言,读路没有 —— 而读路是毒旗的主要来源。修法是把同一四级阶梯复制过去 + 补一条对称断言,纯机械。
+2. **(Minor)** `Storage2Ledger.h` 注释里"`std::exception` 这一层形同虚设"过强、"非唯一的是 `std::exception` 的 typeinfo"未被实测支持(若成立,`length_error` 也该逃逸);spec t① 勘误里 `catch (...)` 的理由应从"继承关系"换成"R-2 实测"。
+3. **(Minor)** z8 注释里"跨层墓碑未覆盖"应改述为"结构性不可达,故不补",并附 R-3 的三条依据,免得后人补一条无判别力的用例。
