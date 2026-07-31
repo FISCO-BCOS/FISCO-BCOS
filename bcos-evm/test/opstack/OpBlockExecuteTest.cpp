@@ -520,6 +520,137 @@ TEST(OpBlockExecute, InvalidNormalTxIsBlockError)
     }
 }
 
+// ── 批 C（spec §6.4）：Jovian L1-attributes 块形状校验 validateJovianBlockShape ──
+// 对照 op-geth core/types/rollup_cost.go CalcDAFootprint（:563-591）的**校验**半部：
+//   C-3 选择器/长度（ExtractDAFootprintGasScalar :547-556）；
+//   C-4 激活块只含 deposit（:568-576）。
+// 直接测被导出的自由函数，无需 VM/state（拒收在执行前发生）。常量 176/178/0x3db6be2b。
+namespace
+{
+/// 造一笔 attributes deposit，calldata 长度=len、前 4 字节=selector（其余 0）。
+DepositTx attrWithData(size_t len, std::array<uint8_t, 4> selector)
+{
+    auto d = attributesTx();
+    evmc::bytes data(len, 0x00);
+    for (size_t i = 0; i < selector.size() && i < len; ++i)
+        data[i] = selector[i];
+    d.data = std::move(data);
+    return d;
+}
+OpBlockTx userTx()  // 非 deposit（variant 另一臂），用于激活块红队与普通块正例
+{
+    return wrap(normalTx(0), {});
+}
+}  // namespace
+
+// C-3 正例：普通 Jovian 块，attributes=178B + Jovian selector，含用户交易 → 放行
+TEST(OpBlockExecute, JovianShapeAcceptsNormalBlock)
+{
+    std::vector<OpBlockTx> txs{
+        wrap(attrWithData(JovianL1AttributesLen, JovianL1AttributesSelector)), userTx()};
+    EXPECT_NO_THROW(validateJovianBlockShape(txs, jovianConfig()));
+}
+
+// C-3 红队①：错选择器（178B 但首 4 字节非 Jovian）→ 块级错误
+TEST(OpBlockExecute, JovianShapeRejectsWrongSelector)
+{
+    std::vector<OpBlockTx> txs{
+        wrap(attrWithData(JovianL1AttributesLen, {0x44, 0x0a, 0x5e, 0x20}))};  // Ecotone selector
+    try
+    {
+        validateJovianBlockShape(txs, jovianConfig());
+        FAIL() << "expected block-level error";
+    }
+    catch (const std::runtime_error& e)
+    {
+        EXPECT_NE(std::string(e.what()).find("does not have Jovian selector"), std::string::npos);
+    }
+}
+
+// C-3 红队②：长度不足（177B < 178，且 ≠176 激活长度）→ 块级错误（太短）
+TEST(OpBlockExecute, JovianShapeRejectsTooShort)
+{
+    std::vector<OpBlockTx> txs{
+        wrap(attrWithData(JovianL1AttributesLen - 1, JovianL1AttributesSelector))};
+    try
+    {
+        validateJovianBlockShape(txs, jovianConfig());
+        FAIL() << "expected block-level error";
+    }
+    catch (const std::runtime_error& e)
+    {
+        EXPECT_NE(
+            std::string(e.what()).find("too short for DA footprint gas scalar"), std::string::npos);
+    }
+}
+
+// C-4 正例：激活块（attributes=176B），只含 deposit → 放行
+TEST(OpBlockExecute, JovianShapeAcceptsDepositOnlyActivationBlock)
+{
+    std::vector<OpBlockTx> txs{
+        wrap(attrWithData(IsthmusL1AttributesLen, {0x09, 0x89, 0x99, 0xbe}))};  // Isthmus selector
+    EXPECT_NO_THROW(validateJovianBlockShape(txs, jovianConfig()));
+}
+
+// C-4 红队：激活块（176B）尾随一笔用户交易 → 块级错误
+TEST(OpBlockExecute, JovianShapeRejectsUserTxInActivationBlock)
+{
+    std::vector<OpBlockTx> txs{
+        wrap(attrWithData(IsthmusL1AttributesLen, {0x09, 0x89, 0x99, 0xbe})), userTx()};
+    try
+    {
+        validateJovianBlockShape(txs, jovianConfig());
+        FAIL() << "expected block-level error";
+    }
+    catch (const std::runtime_error& e)
+    {
+        EXPECT_NE(std::string(e.what()).find("non-deposit transactions in Jovian activation block"),
+            std::string::npos);
+    }
+}
+
+// fork 门控负向断言：pre-Jovian（isthmusConfig，has_da_footprint=false）→ 全放行，
+// 连"激活块含用户交易"这种 Jovian 下会拒的形状也不校验（CalcDAFootprint 不得 pre-Jovian 调用）。
+TEST(OpBlockExecute, JovianShapeIsNoOpBeforeJovian)
+{
+    std::vector<OpBlockTx> bad{
+        wrap(attrWithData(IsthmusL1AttributesLen, {0x09, 0x89, 0x99, 0xbe})), userTx()};
+    EXPECT_NO_THROW(validateJovianBlockShape(bad, isthmusConfig()));
+    std::vector<OpBlockTx> wrongSel{
+        wrap(attrWithData(JovianL1AttributesLen, {0x44, 0x0a, 0x5e, 0x20}))};
+    EXPECT_NO_THROW(validateJovianBlockShape(wrongSel, isthmusConfig()));
+}
+
+// 退化用例交回 processOpBlock：空块 / 首笔非 deposit → 本函数放行（不越权判决）。
+TEST(OpBlockExecute, JovianShapeDefersEmptyAndNonDepositFirst)
+{
+    std::vector<OpBlockTx> empty{};
+    EXPECT_NO_THROW(validateJovianBlockShape(empty, jovianConfig()));
+    std::vector<OpBlockTx> nonDepFirst{userTx()};
+    EXPECT_NO_THROW(validateJovianBlockShape(nonDepFirst, jovianConfig()));
+}
+
+// 集成：经 processOpBlock 走通——错选择器的普通 Jovian 块在**执行前**被拒（块级错误）。
+// 用 seedL1BlockStub（attributes 空跑 STOP）即可，拒收发生在 per-tx 循环之前。
+TEST(OpBlockExecute, ProcessOpBlockRejectsJovianWrongSelector)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    seedL1BlockStub(ts);
+    test::TestBlockHashes hashes;
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
+    std::vector<OpBlockTx> txs{wrap(attrWithData(JovianL1AttributesLen, {0x44, 0x0a, 0x5e, 0x20}))};
+    try
+    {
+        processOpBlock(ts, blk(), hashes, txs, jovianConfig(), vm, 1234, apply);
+        FAIL() << "expected block-level error";
+    }
+    catch (const std::runtime_error& e)
+    {
+        EXPECT_NE(std::string(e.what()).find("does not have Jovian selector"), std::string::npos);
+    }
+}
+
 // 写回时序（计数器探针）：kSeq 合约 code = SLOAD(0)+1 → SSTORE(0)
 // （hex 60005460010160005500）；tx1/tx2（同 sender，nonce 0/1）先后调它。
 // 每笔 diff 及时写回 → tx2 读到 1 再 +1 → post-state slot0==2；

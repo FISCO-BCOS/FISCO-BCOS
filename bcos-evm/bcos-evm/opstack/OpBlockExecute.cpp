@@ -5,6 +5,7 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/OpValidate.h>
+#include <algorithm>
 #include <bcos-evm/eth/state/system_contracts.hpp>
 #include <stdexcept>
 
@@ -20,6 +21,48 @@ namespace
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
 }
 }  // namespace
+
+void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg)
+{
+    // C-3/C-4 are Jovian-only: op-geth calls CalcDAFootprint only under `IsJovian`
+    // (block_validator.go:120) and CalcDAFootprint is documented "must not be called for pre-Jovian
+    // blocks" (rollup_cost.go:562). `has_da_footprint` is true iff the active config is Jovian
+    // (OpForkSchedule.cpp).
+    if (!cfg.has_da_footprint)
+        return;
+    // The empty-block and non-deposit-first-tx cases are rejected by processOpBlock's own checks
+    // (and by op-geth's `len(txs) == 0 || !txs[0].IsDepositTx()` guard). Return here rather than
+    // duplicate that verdict, so this function's contract is exactly "the Jovian attributes shape".
+    if (txs.empty())
+        return;
+    const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
+    if (firstDep == nullptr)
+        return;
+
+    const auto& data = firstDep->data;
+    if (data.size() == IsthmusL1AttributesLen)
+    {
+        // C-4: Jovian *activation* block. The first Jovian block still carries Isthmus-length L1
+        // attributes (no DA-footprint gas scalar yet) and op-geth requires it to be deposits-only
+        // (rollup_cost.go:568-576). Checking the LAST tx is sufficient because deposits always
+        // precede non-deposits (enforced by processOpBlock's "deposit after non-deposit" guard),
+        // exactly op-geth's own justification.
+        if (!std::holds_alternative<DepositTx>(txs.back().tx))
+            throw std::runtime_error(
+                "op block: unexpected non-deposit transactions in Jovian activation block");
+        return;
+    }
+
+    // C-3: a normal Jovian block's L1 attributes calldata must carry the Jovian selector and be at
+    // least the Jovian length (op-geth `ExtractDAFootprintGasScalar`, rollup_cost.go:547-556).
+    if (data.size() < JovianL1AttributesLen)
+        throw std::runtime_error(
+            "op block: L1 attributes transaction data too short for DA footprint gas scalar");
+    if (!std::equal(
+            JovianL1AttributesSelector.begin(), JovianL1AttributesSelector.end(), data.begin()))
+        throw std::runtime_error(
+            "op block: L1 attributes transaction data does not have Jovian selector");
+}
 
 OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
@@ -38,6 +81,12 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
     if (firstDep == nullptr || !isL1AttributesTx(*firstDep))
         throw std::runtime_error("op block: first tx is not the L1 attributes deposit");
+
+    // §4.1 step 2 precondition (batch C, spec §6.4): Jovian L1-attributes block shape — attributes
+    // selector/length (C-3) and the activation block's deposits-only rule (C-4). No-op pre-Jovian.
+    // Placed before the per-tx loop so an activation block carrying a user tx is refused before any
+    // of it executes, mirroring op-geth's `CalcDAFootprint` in block validation.
+    validateJovianBlockShape(txs, cfg);
 
     OpBlockResult result;
     result.receipts.reserve(txs.size());
