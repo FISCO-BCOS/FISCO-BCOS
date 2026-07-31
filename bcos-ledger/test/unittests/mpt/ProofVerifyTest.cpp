@@ -48,18 +48,6 @@ using VerifyMemStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h25
 namespace
 {
 
-/// Build a state trie holding @p accounts into @p storage; returns the state root.
-bcos::h256 buildVerifyStateTrie(
-    VerifyMemStorage& storage, std::vector<std::pair<bcos::Address, Account>> const& accounts)
-{
-    std::map<bcos::h256, bcos::bytes> entries;
-    for (auto const& [addr, account] : accounts)
-    {
-        entries[accountKeyHash(addr)] = account.encode();
-    }
-    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
-}
-
 /// A generated proof plus the state root it was generated against.
 struct ProofSetup
 {
@@ -86,7 +74,7 @@ ProofSetup makeAccountWithSlots(std::vector<std::pair<bcos::h256, bcos::bytes>> 
         }
         account.storageRoot = seedTrieFlushed(storage, emptyRootHash(), slotEntries).root;
     }
-    auto const stateRoot = buildVerifyStateTrie(storage, {{addr, account}});
+    auto const stateRoot = seedStateTrieFlushed(storage, {{addr, account}});
 
     auto result = bcos::task::syncWait(
         generateProof(storage, stateRoot, addr, std::span<bcos::h256 const>(requestSlots)));
@@ -222,7 +210,7 @@ BOOST_AUTO_TEST_CASE(ExclusionAtGenerateLevel)
     VerifyMemStorage storage;
     Account account;
     account.nonce = 1;
-    auto const stateRoot = buildVerifyStateTrie(storage, {{makeAddress(0xab), account}});
+    auto const stateRoot = seedStateTrieFlushed(storage, {{makeAddress(0xab), account}});
 
     auto missing = bcos::task::syncWait(
         generateProof(storage, stateRoot, makeAddress(0xcd), std::span<bcos::h256 const>{}));
