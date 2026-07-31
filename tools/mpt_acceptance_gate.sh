@@ -91,8 +91,12 @@ run_ctest "§11 #4a" "eth_getProof(dormant) -32004 — integration (real ledger 
 run_ctest "§11 #4b" "eth_getProof(dormant) -32004 — RPC endpoint unit" \
     "EthGetProofRpcTest/DormantAccountReturns32004"
 
-# #5 cold slot of a touched account -> SlotNotInMPT with flat-KV value.
-mark "§11 #5" "PENDING" "eth_getProof(touched account, cold slot) -> SlotNotInMPT (in-flight branch feat/mpt-proof-slot-not-in-mpt; current code returns a 0x0 exclusion-style value)"
+# #5 cold slot of a touched account -> SlotNotInMPT with flat-KV value (#5332, merged).
+# Two independent rows on purpose, same rationale as #4a/#4b.
+run_ctest "§11 #5a" "eth_getProof(touched account, cold slot) SlotNotInMPT — generator/verifier" \
+    "ProofSlotNotInMPTSuite"
+run_ctest "§11 #5b" "eth_getProof(touched account, cold slot) SlotNotInMPT — RPC endpoint" \
+    "EthGetProofSlotNotInMPTTest"
 
 # #6 first-touch storageRoot commits only the touched slots.
 run_ctest "§11 #6" "first-touch storageRoot covers ONLY slots written this block" \
