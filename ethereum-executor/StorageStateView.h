@@ -92,8 +92,51 @@ private:
                 acc.code_hash = evmone::state::Account::EMPTY_CODE_HASH;
         }
 
-        acc.has_storage = true;
+        // Determine whether the account has any non-field storage slots.
+        // evmone uses has_storage for EIP-7610 CREATE collision detection and
+        // account emptiness. Reporting "true" unconditionally would make every
+        // balance-only pre-funded account look like a CREATE collision, which
+        // breaks contracts created at pre-funded addresses (EIP-6780 etc.).
+        acc.has_storage = co_await hasStorageImpl(evmAccount);
         co_return acc;
+    }
+
+    /// Check whether the account table contains any storage slot (a key that
+    /// is not one of the fixed account field names).
+    task::Task<bool> hasStorageImpl(bcos::ledger::account::EVMAccount<Storage>& evmAccount) const
+    {
+        using namespace bcos::ledger;
+        using namespace bcos::ledger::account;
+        auto& storage = const_cast<Storage&>(m_storage);
+        auto tableName = co_await evmAccount.path();
+
+        bool hasStorage = false;
+        // Seek to the first key of this account's table (empty key sorts first).
+        auto it = co_await storage2::range(storage, storage2::RANGE_SEEK,
+            executor_v1::StateKey{tableName, std::string_view{}});
+
+        while (auto kv = co_await it.next())
+        {
+            auto const& [k, v] = *kv;
+            executor_v1::StateKeyView view(k);
+            if (view.m_table != tableName)
+                break;  // Left this account's table.
+
+            auto key = view.m_key;
+            if (key != ACCOUNT_TABLE_FIELDS::NONCE &&
+                key != ACCOUNT_TABLE_FIELDS::BALANCE &&
+                key != ACCOUNT_TABLE_FIELDS::CODE_HASH &&
+                key != ACCOUNT_TABLE_FIELDS::CODE &&
+                key != ACCOUNT_TABLE_FIELDS::ABI &&
+                key != ACCOUNT_TABLE_FIELDS::ALIVE &&
+                key != ACCOUNT_TABLE_FIELDS::FROZEN &&
+                key != ACCOUNT_TABLE_FIELDS::SHARD)
+            {
+                hasStorage = true;
+                break;
+            }
+        }
+        co_return hasStorage;
     }
 
     task::Task<evmc::bytes> getCodeImpl(evmc_address addr) const

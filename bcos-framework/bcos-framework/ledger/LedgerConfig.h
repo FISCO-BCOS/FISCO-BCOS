@@ -126,6 +126,19 @@ public:
     int64_t difficulty() const { return m_difficulty; }
     void setDifficulty(int64_t d) { m_difficulty = d; }
 
+    // EIP-4399 prev_randao (block mixHash). Used by the PREVRANDAO/DIFFICULTY
+    // opcode for Paris+ revisions. Kept in the ledger config because the BCOS
+    // block header has no dedicated mixHash/random field.
+    evmc::bytes32 prevRandao() const { return m_prevRandao; }
+    void setPrevRandao(evmc::bytes32 v) { m_prevRandao = v; }
+
+    // EIP-4844 blob gas parameters (Cancun+). The BCOS block header has no
+    // dedicated fields, so EEST runner stores them here.
+    std::optional<uint64_t> excessBlobGas() const { return m_excessBlobGas; }
+    void setExcessBlobGas(std::optional<uint64_t> v) { m_excessBlobGas = v; }
+    std::optional<uint64_t> blobGasUsed() const { return m_blobGasUsed; }
+    void setBlobGasUsed(std::optional<uint64_t> v) { m_blobGasUsed = v; }
+
     // Not enforce to set this field, in memory data
     void setSealerId(int64_t _sealerId) { m_sealerId = _sealerId; }
     int64_t sealerId() const { return m_sealerId; }
@@ -214,6 +227,9 @@ private:
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {DEFAULT_GAS_LIMIT, 0};
     std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {"0x0", 0};
     int64_t m_difficulty = 0;
+    evmc::bytes32 m_prevRandao{};
+    std::optional<uint64_t> m_excessBlobGas;
+    std::optional<uint64_t> m_blobGasUsed;
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {DEFAULT_EPOCH_BLOCK_NUM, 0};
     uint64_t m_notifyRotateFlagInfo{0};

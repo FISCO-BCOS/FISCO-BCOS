@@ -46,6 +46,7 @@ struct EESTEnvironment
 struct EESTTransaction
 {
     std::string nonce;
+    std::string chainId;  // EIP-155 chain id (used by EIP-7702 authorization matching)
     std::string gasPrice;
     std::string maxPriorityFeePerGas;
     std::string maxFeePerGas;
@@ -290,6 +291,7 @@ inline EESTTransaction parseTransaction(Json::Value const& txJson)
 {
     EESTTransaction tx;
     tx.nonce = readHexField(txJson, "nonce");
+    tx.chainId = readHexField(txJson, "chainId");
     tx.gasPrice = readHexField(txJson, "gasPrice");
     tx.maxPriorityFeePerGas = readHexField(txJson, "maxPriorityFeePerGas");
     tx.maxFeePerGas = readHexField(txJson, "maxFeePerGas");
@@ -507,6 +509,7 @@ inline EESTTransaction parseBlockchainTransaction(Json::Value const& txJson)
 {
     EESTTransaction tx;
     tx.nonce = readHexField(txJson, "nonce");
+    tx.chainId = readHexField(txJson, "chainId");
     tx.gasPrice = readHexField(txJson, "gasPrice");
     tx.maxPriorityFeePerGas = readHexField(txJson, "maxPriorityFeePerGas");
     tx.maxFeePerGas = readHexField(txJson, "maxFeePerGas");

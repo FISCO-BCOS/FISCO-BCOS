@@ -83,7 +83,7 @@ public:
                     std::runtime_error("evmcRevision not configured"));
             }
             auto rev = *revOpt;
-            auto blockInfo = blockHeaderToBlockInfo(blockHeader, ledgerConfig);
+            auto blockInfo = blockHeaderToBlockInfo(blockHeader, ledgerConfig, rev);
             auto evmTx = bcosTransactionToEvmone(transaction);
 
             // Build state view adapter
@@ -92,13 +92,28 @@ public:
             // Validate transaction using evmone's built-in logic.
             // This ensures the intrinsic gas, min_gas_cost, and all validation
             // checks match evmone exactly.
-            // We handle SENDER_NOT_EOA specially because EEST fixtures may set
-            // code on sender accounts for testing purposes.
+            // blob_gas_left is the block's remaining blob gas (max_blob_gas_per_block
+            // minus already-included blobs). It must NOT be the tx's own blob gas,
+            // otherwise a tx with too many blobs would pass validation. Matches
+            // evmone's t8n/blockchaintest runners which start blob_gas_left at
+            // max_blob_gas_per_block(blob_params).
             evmone::state::TransactionProperties txProps;
+            evmone::state::BlobParams blobParams{};
+            if (rev >= EVMC_PRAGUE)
+            {
+                // EIP-7840 blob schedule: Prague/Osaka (target=6, max=9).
+                blobParams = {6, 9, 5007716};
+            }
+            else if (rev == EVMC_CANCUN)
+            {
+                // EIP-7840 blob schedule: Cancun (target=3, max=6).
+                blobParams = {3, 6, 3338477};
+            }
+            const auto blobGasLeft =
+                static_cast<int64_t>(evmone::state::max_blob_gas_per_block(blobParams));
             auto validationResult = evmone::state::validate_transaction(
                 stateView, blockInfo, evmTx, rev,
-                evmTx.gas_limit /*block_gas_left - whole block available*/,
-                evmTx.blob_gas_used() /*blob_gas_left*/);
+                blockInfo.gas_limit /*block_gas_left*/, blobGasLeft /*blob_gas_left*/);
 
             if (auto* props = std::get_if<evmone::state::TransactionProperties>(&validationResult))
             {
@@ -108,63 +123,16 @@ public:
             else
             {
                 auto& error = std::get<std::error_code>(validationResult);
-                // EIP-3607 SENDER_NOT_EOA: EEST fixtures may set code on senders.
-                // Fall back to manual intrinsic gas computation for this case.
-                if (error == make_error_code(evmone::state::SENDER_NOT_EOA))
-                {
-                    static constexpr int64_t TX_BASE_COST = 21000;
-                    static constexpr int64_t TX_CREATE_COST = 32000;
-                    static constexpr int64_t DATA_TOKEN_COST = 4;
-                    static constexpr int64_t INITCODE_WORD_COST = 2;
-                    static constexpr int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;
-                    static constexpr int64_t ACCESS_LIST_ADDRESS_COST = 2400;
-                    static constexpr int64_t ACCESS_LIST_STORAGE_KEY_COST = 1900;
-
-                    auto const& input = evmTx.data;
-                    size_t numZero = std::count(input.begin(), input.end(), uint8_t(0));
-                    size_t numNonzero = input.size() - numZero;
-                    size_t nonzeroMult = (rev >= EVMC_ISTANBUL) ? 4 : 17;
-                    int64_t numTokens = static_cast<int64_t>(nonzeroMult * numNonzero + numZero);
-
-                    bool isCreate = !evmTx.to.has_value();
-                    int64_t createCost = (isCreate && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
-                    int64_t dataCost = numTokens * DATA_TOKEN_COST;
-
-                    int64_t accessListCost = 0;
-                    for (auto const& [_, keys] : evmTx.access_list)
-                        accessListCost += ACCESS_LIST_ADDRESS_COST +
-                            static_cast<int64_t>(keys.size()) * ACCESS_LIST_STORAGE_KEY_COST;
-
-                    int64_t authListCost =
-                        static_cast<int64_t>(evmTx.authorization_list.size()) * 25000;
-
-                    int64_t initcodeCost = (isCreate && rev >= EVMC_SHANGHAI) ?
-                        INITCODE_WORD_COST *
-                            static_cast<int64_t>((input.size() + 31) / 32) :
-                        0;
-
-                    int64_t intrinsicCost =
-                        TX_BASE_COST + createCost + dataCost + accessListCost +
-                        authListCost + initcodeCost;
-
-                    int64_t minCost = (rev >= EVMC_PRAGUE) ?
-                        TX_BASE_COST + numTokens * TOTAL_COST_FLOOR_PER_TOKEN :
-                        0;
-
-                    txProps.execution_gas_limit = evmTx.gas_limit - intrinsicCost;
-                    txProps.min_gas_cost = minCost;
-
-                    // Pre-check: intrinsic gas must be affordable
-                    if (evmTx.gas_limit < std::max(intrinsicCost, minCost))
-                        BOOST_THROW_EXCEPTION(
-                            IntrinsicGasTooLow{} << bcos::errinfo_comment("intrinsic gas too low"));
-                }
-                else
-                {
-                    // Transaction is genuinely invalid - throw an exception
-                    BOOST_THROW_EXCEPTION(std::runtime_error(
-                        "Transaction validation failed: " + error.message()));
-                }
+                // Transaction is invalid - throw an exception.
+                // NOTE: we no longer special-case SENDER_NOT_EOA here. EIP-3607
+                // requires rejecting transactions whose sender has non-delegating
+                // code, and EEST tests check this (e.g.
+                // test_set_code_from_account_with_non_delegating_code). Only
+                // accounts with empty code or a 0xef0100 delegation designator
+                // may be senders, which evmone's validate_transaction already
+                // accepts.
+                BOOST_THROW_EXCEPTION(std::runtime_error(
+                    "Transaction validation failed: " + error.message()));
             }
 
             // Execute

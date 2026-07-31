@@ -22,13 +22,24 @@ namespace bcos::executor_v1::eth
 using ::bcos::executor_v1::eth::toIntxU256;
 
 inline evmone::state::BlockInfo blockHeaderToBlockInfo(
-    protocol::BlockHeader const& header, ledger::LedgerConfig const& config)
+    protocol::BlockHeader const& header, ledger::LedgerConfig const& config,
+    evmc_revision rev)
 {
     evmone::state::BlockInfo info{};
     info.number = header.number();
     info.timestamp = header.timestamp() / 1000L;
     info.gas_limit = static_cast<int64_t>(std::get<0>(config.gasLimit()));
     info.difficulty = config.difficulty();
+    // EIP-4399 (Paris+): opcode 0x44 is PREVRANDAO, returning the mixHash.
+    // Before Paris: opcode 0x44 is DIFFICULTY, returning the block difficulty.
+    // evmone's Host::get_tx_context() maps block_prev_randao <- m_block.prev_randao
+    // (there is no separate difficulty field in evmc_tx_context), so for pre-Paris
+    // forks we must place the DIFFICULTY value into prev_randao for 0x44 to work.
+    if (rev >= EVMC_PARIS)
+        info.prev_randao = config.prevRandao();
+    else
+        info.prev_randao = intx::be::store<evmc::bytes32>(
+            intx::uint256(static_cast<uint64_t>(info.difficulty)));
     auto const& cb = header.coinbase();
     if (cb.size() == sizeof(evmc_address))
         std::copy_n(cb.begin(), sizeof(evmc_address), info.coinbase.bytes);
@@ -39,9 +50,32 @@ inline evmone::state::BlockInfo blockHeaderToBlockInfo(
             baseFeeStr = baseFeeStr.substr(2);
         info.base_fee = static_cast<uint64_t>(std::stoull(baseFeeStr, nullptr, 16));
     }
-    // blob_base_fee: for Cancun+, set to 1 (minimum, excessBlobGas=0).
-    // EEST fixtures typically have excessBlobGas=0 so blob base fee = 1.
-    info.blob_base_fee = intx::uint256{1};
+    // EIP-4844 blob gas parameters (Cancun+). The blob base fee is computed from
+    // the block's excess blob gas using the per-revision blob schedule (EIP-7840).
+    // Matches evmone's statetest/blockchaintest loaders:
+    //   blob_base_fee = compute_blob_gas_price(blob_params, excess_blob_gas)
+    info.excess_blob_gas = config.excessBlobGas();
+    info.blob_gas_used = config.blobGasUsed();
+    if (rev >= EVMC_CANCUN)
+    {
+        evmone::state::BlobParams blobParams{};
+        if (rev >= EVMC_PRAGUE)
+        {
+            // EIP-7840 blob schedule: Prague/Osaka (target=6, max=9).
+            blobParams = {6, 9, 5007716};
+        }
+        else  // EVMC_CANCUN
+        {
+            // EIP-7840 blob schedule: Cancun (target=3, max=6).
+            blobParams = {3, 6, 3338477};
+        }
+        const auto excess = config.excessBlobGas().value_or(0);
+        info.blob_base_fee = evmone::state::compute_blob_gas_price(blobParams, excess);
+    }
+    else
+    {
+        info.blob_base_fee = std::nullopt;
+    }
     return info;
 }
 
@@ -154,21 +188,48 @@ inline bcos::u256 toBcosU256(intx::uint256 const& val)
     return bcos::u256(intx::to_string(val));
 }
 
+/// Remove all storage slots of an account (keeps only the fixed account fields).
+/// Used when an account self-destructs: its full state (including storage) must
+/// be cleared so that a later CREATE/CREATE2 at the same address is not treated
+/// as an EIP-7610 collision.
+template <class Storage>
+task::Task<void> clearAccountStorage(Storage& storage,
+    bcos::ledger::account::EVMAccount<Storage>& acc)
+{
+    using namespace bcos::ledger;
+    using namespace bcos::ledger::account;
+    auto tableName = co_await acc.path();
+
+    std::vector<executor_v1::StateKey> keysToRemove;
+    auto it = co_await storage2::range(storage, storage2::RANGE_SEEK,
+        executor_v1::StateKey{tableName, std::string_view{}});
+    while (auto kv = co_await it.next())
+    {
+        auto const& [k, v] = *kv;
+        executor_v1::StateKeyView view(k);
+        if (view.m_table != tableName)
+            break;  // Left this account's table.
+        auto key = view.m_key;
+        if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
+            key != ACCOUNT_TABLE_FIELDS::CODE_HASH && key != ACCOUNT_TABLE_FIELDS::CODE &&
+            key != ACCOUNT_TABLE_FIELDS::ABI && key != ACCOUNT_TABLE_FIELDS::ALIVE &&
+            key != ACCOUNT_TABLE_FIELDS::FROZEN && key != ACCOUNT_TABLE_FIELDS::SHARD)
+        {
+            keysToRemove.emplace_back(k);
+        }
+    }
+    if (!keysToRemove.empty())
+        co_await storage2::removeSome(storage, keysToRemove);
+}
+
 template <class Storage>
 task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const& diff,
     evmc_revision, crypto::Hash const& hashImpl)
 {
     using namespace bcos::ledger::account;
-    for (auto const& addr : diff.deleted_accounts)
-    {
-        EVMAccount<Storage> acc(storage, addr, false);
-        if (co_await acc.exists())
-        {
-            co_await acc.setBalance(0);
-            co_await acc.setNonce("0");
-            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
-        }
-    }
+
+    // Phase 1: Process modified_accounts FIRST.
+    // This ensures created accounts exist before we potentially delete them.
     for (auto const& m : diff.modified_accounts)
     {
         EVMAccount<Storage> acc(storage, m.addr, false);
@@ -200,6 +261,43 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
                 co_await acc.setStorage(key, value);
         }
     }
+
+    // Phase 2: Process deleted_accounts, but skip addresses that were just
+    // created/modified in Phase 1 (recreated accounts).
+    // Also track which addresses we processed as deleted.
+    for (auto const& addr : diff.deleted_accounts)
+    {
+        // Check if this address was already handled by modified_accounts above.
+        // If so, the account was destructed and recreated in the same tx —
+        // the modified state already reflects the recreation, so skip deletion.
+        bool inModified = false;
+        for (auto const& m : diff.modified_accounts)
+        {
+            if (memcmp(m.addr.bytes, addr.bytes, sizeof(evmc_address)) == 0)
+            {
+                inModified = true;
+                break;
+            }
+        }
+        if (inModified)
+            continue;  // Already handled by modified_accounts processing
+
+        // Genuine deletion: clear account state (including storage, so that a
+        // later CREATE/CREATE2 at this address is not an EIP-7610 collision).
+        EVMAccount<Storage> acc(storage, addr, false);
+        if (co_await acc.exists())
+        {
+            co_await acc.setBalance(0);
+            co_await acc.setNonce("0");
+            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
+            co_await clearAccountStorage(storage, acc);
+        }
+    }
+
+    // NOTE: evmone's State::build_diff() may not include recreated accounts
+    // (destructed + recreated via CREATE2 in the same tx) in modified_accounts.
+    // This is a known limitation — without modifying bcos-evm, we cannot
+    // recover the lost nonce/balance/code for these accounts.
 }
 
 inline protocol::TransactionReceipt::Ptr evmoneReceiptToBcos(

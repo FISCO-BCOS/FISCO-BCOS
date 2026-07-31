@@ -211,6 +211,7 @@ public:
     evmc_revision m_currentRevision = EVMC_CANCUN;
     ledger::LedgerConfig m_ledgerConfig;
     std::optional<ForkTransition> m_forkTransition;
+    int64_t m_chainId = 1;  // EIP-155 chain id from the fixture config
 
     EESTRunner()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -281,6 +282,40 @@ public:
         {
             m_ledgerConfig.setGasPrice({"0x0", 0});
         }
+        // Set gas limit from env (fixes GASLIMIT opcode returning the BCOS
+        // default instead of the fixture's currentGasLimit).
+        if (!env.gasLimit.empty())
+        {
+            auto gasLimit = static_cast<uint64_t>(test::hexToU256(env.gasLimit));
+            m_ledgerConfig.setGasLimit({gasLimit, 0});
+        }
+        // EIP-4399: PREVRANDAO (Paris+). State-test fixtures carry it in
+        // "currentRandom" (the block mixHash).
+        if (!env.random.empty())
+        {
+            auto mh = test::hexToBytes(env.random);
+            evmc::bytes32 prevRandao{};
+            if (mh.size() == sizeof(evmc_bytes32))
+                std::copy_n(mh.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
+            else if (mh.size() < sizeof(evmc_bytes32))
+                std::copy_n(mh.begin(), mh.size(),
+                    prevRandao.bytes + sizeof(evmc_bytes32) - mh.size());
+            m_ledgerConfig.setPrevRandao(prevRandao);
+        }
+        else
+        {
+            m_ledgerConfig.setPrevRandao({});
+        }
+        // EIP-4844 blob gas parameters (Cancun+).
+        if (!env.excessBlobGas.empty())
+            m_ledgerConfig.setExcessBlobGas(
+                static_cast<uint64_t>(test::hexToU256(env.excessBlobGas)));
+        else
+            m_ledgerConfig.setExcessBlobGas(std::nullopt);
+        if (!env.blobGasUsed.empty())
+            m_ledgerConfig.setBlobGasUsed(static_cast<uint64_t>(test::hexToU256(env.blobGasUsed)));
+        else
+            m_ledgerConfig.setBlobGasUsed(std::nullopt);
     }
 
     void setupPreState(MutableStorage& storage, std::map<std::string, test::EESTAccount> const& pre)
@@ -423,8 +458,7 @@ public:
             auto senderBytes = test::hexToBytes(tx.sender);
             tarsTx->sender.assign(senderBytes.begin(), senderBytes.end());
         }
-
-        data.chainID = "0";
+        data.chainID = tx.chainId.empty() ? std::to_string(m_chainId) : test::strip0x(tx.chainId);
         tarsTx->type = 1;
         tarsTx->extraTransactionHash.assign(32, 0);
 
@@ -463,11 +497,19 @@ public:
 
         if (hasAuthList)
         {
+            // Helper: convert a hex string to a signed 64-bit by taking the low
+            // 64 bits of the unsigned value (preserves bit patterns for values
+            // >= 2^63, e.g. nonce=2**64-1 or 2**64-2 in EIP-7702 tests, which
+            // hexToInt64 would otherwise saturate to INT64_MAX).
+            auto hexToTarsLong = [](std::string const& hex) {
+                return static_cast<int64_t>(
+                    static_cast<uint64_t>(test::hexToU256(hex)));
+            };
             for (auto const& auth : *tx.authorizationList)
             {
                 bcostars::AuthorizationEntry entry;
-                entry.chainID = test::hexToInt64(test::readHexField(auth, "chainId"));
-                entry.nonce = test::hexToInt64(test::readHexField(auth, "nonce"));
+                entry.chainID = hexToTarsLong(test::readHexField(auth, "chainId"));
+                entry.nonce = hexToTarsLong(test::readHexField(auth, "nonce"));
                 entry.v = static_cast<uint8_t>(test::hexToInt64(test::readHexField(auth, "v")));
                 entry.address = test::strip0x(test::readHexField(auth, "address"));
                 entry.signer = test::strip0x(test::readHexField(auth, "signer"));
@@ -612,6 +654,7 @@ public:
         ::test::EESTForkPost const& post)
     {
         configureFork(forkName);
+        m_chainId = fixture.chainId;
         configureEnvironment(fixture.env);
 
         MutableStorage storage;
@@ -799,6 +842,32 @@ public:
         {
             m_ledgerConfig.setDifficulty(0);
         }
+        // Set prev_randao from mixHash (EIP-4399: PREVRANDAO opcode on Paris+)
+        if (!bh.random.empty())
+        {
+            auto mh = test::hexToBytes(bh.random);
+            evmc::bytes32 prevRandao{};
+            if (mh.size() == sizeof(evmc_bytes32))
+                std::copy_n(mh.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
+            else if (mh.size() < sizeof(evmc_bytes32))
+                std::copy_n(mh.begin(), mh.size(),
+                    prevRandao.bytes + sizeof(evmc_bytes32) - mh.size());
+            m_ledgerConfig.setPrevRandao(prevRandao);
+        }
+        else
+        {
+            m_ledgerConfig.setPrevRandao({});
+        }
+        // EIP-4844 blob gas parameters (Cancun+).
+        if (!bh.excessBlobGas.empty())
+            m_ledgerConfig.setExcessBlobGas(
+                static_cast<uint64_t>(test::hexToU256(bh.excessBlobGas)));
+        else
+            m_ledgerConfig.setExcessBlobGas(std::nullopt);
+        if (!bh.blobGasUsed.empty())
+            m_ledgerConfig.setBlobGasUsed(static_cast<uint64_t>(test::hexToU256(bh.blobGasUsed)));
+        else
+            m_ledgerConfig.setBlobGasUsed(std::nullopt);
     }
 
     /// Run a blockchain test fixture: execute blocks sequentially,
@@ -810,6 +879,7 @@ public:
         if (forkName.empty())
             forkName = "Cancun";  // default
         configureFork(forkName);
+        m_chainId = fixture.chainId;
 
         // Set up pre-state once
         MutableStorage storage;
