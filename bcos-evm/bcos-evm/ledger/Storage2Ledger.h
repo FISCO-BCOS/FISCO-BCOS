@@ -73,6 +73,7 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Classify.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Overloaded.h>
 #include <boost/algorithm/hex.hpp>
@@ -588,21 +589,34 @@ private:
                std::all_of(content.begin(), content.end(), [](char byte) { return byte == '\0'; });
     }
 
-    /// Decodes the address embedded in a "/apps/<hex(addr)>" SYS_TABLES key (the inverse of
-    /// accountTableName's hex_lower encoding).
-    static evmc::address addressFromTableName(std::string_view tableKey)
+    /// Decodes the address embedded in a "/apps/<hex(addr)>" SYS_TABLES key, or nullopt when the
+    /// table is **not** an account table at all (终审批 A · A-1).
+    ///
+    /// **判据不自造,直接复用主线 MPT 的分类器** `bcos::ledger::mpt::parseAccountTable`
+    /// (`bcos-ledger/bcos-ledger/mpt/Classify.h:95-117`:前缀 `/apps/` + 后缀恰 40 字符 +
+    /// 可解析为 hex,三条全过才算账户表,自带 no-throw 契约)。为什么必须是复用而不是照抄:
+    ///   * `/apps/` 名字空间下**必然**存在非账户表——`/apps/<name>_accessAuth` 授权表
+    ///     (`ContractAuthMgrPrecompiled.h:99-108` + `bcos-executor/src/Common.h:87`
+    ///     `CONTRACT_SUFFIX = "_accessAuth"`)、BFS 链接表 `/apps/<contractName>/<version>`
+    ///     (`BFSPrecompiled.cpp:663`)。本函数**曾经**对这些表逐行 unhex 并 throw,被
+    ///     `visitAccounts` 接住置毒旗 ⇒ 生产账本上每个 OP 块 -32603 ⇒ op-node 反复重投 ⇒
+    ///     节点在该块上永久卡死(活性故障,不自愈)。
+    ///   * 主线 MPT 建根与本桥建根必须对"哪些 `/apps/` 表算账户"给出同一答案,否则同一本账本上
+    ///     MPT root 与 OP stateRoot 结构性分歧。两处独立实现同一规则正是本仓 yParity 事故的成因;
+    ///     共用同一个函数令这一类分歧不可能发生。
+    ///
+    /// 依赖形态:`Classify.h` 是 header-only(全 inline,只依赖 bcos-utilities),不需要链接
+    /// `ledger` 目标,只需 `bcos-ledger/` 在 include path 上——`bcos-evm/test/CMakeLists.txt`
+    /// 的 in-tree 门控内早已两者兼备(:128-131 include dir,:136 link)。
+    static std::optional<evmc::address> addressFromTableName(std::string_view tableKey)
     {
-        auto hexView = tableKey.substr(bcos::ledger::SYS_DIRECTORY::USER_APPS.size());
-        std::string decoded;
-        decoded.reserve(hexView.size() / 2);
-        boost::algorithm::unhex(hexView.begin(), hexView.end(), std::back_inserter(decoded));
+        auto parsed = bcos::ledger::mpt::parseAccountTable(tableKey);
+        if (!parsed.has_value())
+            return std::nullopt;
         evmc::address addr{};
-        if (decoded.size() != sizeof(addr.bytes))
-            throw std::length_error(
-                "Storage2Ledger::visitAccounts: /apps/ table name is not a 20-byte hex-encoded "
-                "address: " +
-                std::string(tableKey));
-        std::memcpy(addr.bytes, decoded.data(), decoded.size());
+        static_assert(sizeof(addr.bytes) == bcos::Address::SIZE,
+            "evmc::address and bcos::Address must both be 20 bytes for this memcpy");
+        std::memcpy(addr.bytes, parsed->data(), sizeof(addr.bytes));
         return addr;
     }
 
@@ -698,8 +712,17 @@ private:
             if (!liveContent(rawValue).has_value())
                 continue;
 
+            // 非账户表跳过(终审批 A · A-1):`/apps/` 名字空间里混着授权表 `_accessAuth` 与 BFS
+            // 链接表 `<name>/<version>`,它们不是账户,不进 stateRoot。判据见
+            // addressFromTableName 的注释(复用主线 `mpt::parseAccountTable`)。
+            // **continue 而非 break**:这些表名与账户表名在 `/apps/` 前缀区间内交错排序,遇到一张
+            // 就停会把它后面的真账户整片丢出 stateRoot。区间结束的判据只有上面那条前缀检查。
+            const auto parsedAddr = addressFromTableName(tableKey);
+            if (!parsedAddr.has_value())
+                continue;
+
             const std::string tableName{tableKey};
-            const auto addr = addressFromTableName(tableKey);
+            const auto addr = *parsedAddr;
 
             auto account = co_await fetchAccountForVisit(addr, tableName);
             if (!account.has_value())

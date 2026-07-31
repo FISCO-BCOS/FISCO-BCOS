@@ -1283,3 +1283,114 @@ TEST(Storage2Ledger, ReadPathRuntimeErrorKeepsOriginalMessage)
     EXPECT_EQ(bridge.firstError().find("unknown exception"), std::string_view::npos)
         << "firstError() 退化成 catch(...) 的兜底串,-32603 的理由为空内容:" << bridge.firstError();
 }
+
+// ══════════ 终审批 A · A-1:`/apps/` 下的非 hex 表名 ══════════
+//
+// 生产账本的 `/apps/` 名字空间**必然**混着非账户表:
+//   * `/apps/<name>_accessAuth` 授权表(ContractAuthMgrPrecompiled.h:99-108 +
+//     bcos-executor/src/Common.h:87 `CONTRACT_SUFFIX = "_accessAuth"`,version ≥ 3.3.0 恒建);
+//   * BFS 链接表 `/apps/<contractName>/<version>`(BFSPrecompiled.cpp:663)。
+// `visitAccountsImpl` 此前对该区间**逐行**调 `addressFromTableName`,里面 unhex + 长度检查
+// 直接 throw(std::length_error / boost 的 non_hex_input),被 visitAccounts 的四级阶梯接住 →
+// 毒旗 → OpSchedulerImpl 判 OpStorageError(-32603)→ op-node 反复重投 → 节点在该块上永久
+// 卡死。这是活性故障,不自愈,比状态分歧更坏。
+//
+// 修复形态是**复用主线 MPT 的分类器** `bcos::ledger::mpt::parseAccountTable`
+// (bcos-ledger/bcos-ledger/mpt/Classify.h:95-117),而不是另造一套跳过规则:主线 MPT 建根与
+// 本桥建根必须对"哪些 `/apps/` 表算账户"给出同一答案。
+//
+// (A1-1) 三种非账户表名混在真账户之间 → 不毒旗、不漏账户、不把它们当账户。
+TEST(Storage2Ledger, VisitAccountsSkipsNonAddressAppsTables)
+{
+    MutableStorage storage;
+    // 两个真账户,地址刻意选在非账户表名的**两侧**:hex 表名以 '0'..'9'/'a'..'f' 开头,而
+    // "_accessAuth"/"<name>/<version>" 里的 name 可以是任意字符,排序上与账户表交错。
+    Account accA(storage, 0x01_address, false);
+    bcos::task::syncWait(accA.create());
+    bcos::task::syncWait(accA.setStorage(slotKey(1), slotKey(2)));
+    Account accB(storage, 0xff_address, false);
+    bcos::task::syncWait(accB.create());
+
+    // 三张非账户表:授权表 / BFS 链接表 / 短名合约表。它们在 SYS_TABLES 里同样有标记行,
+    // 且各自的表内还有普通字段行 —— 后者若被 fetchAllStorage 扫到会再抛一次 unknown key。
+    for (const auto& bogus : {std::string("/apps/MyContract_accessAuth"),
+             std::string("/apps/MyContract/v1"), std::string("/apps/shortname")})
+    {
+        bcos::task::syncWait(bcos::storage2::writeOne(storage,
+            bcos::executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, bogus},
+            bcos::storage::Entry(std::string_view{"value"})));
+        bcos::task::syncWait(bcos::storage2::writeOne(storage,
+            bcos::executor_v1::StateKeyView{bogus, std::string_view{"some_field"}},
+            bcos::storage::Entry(std::string_view{"x"})));
+    }
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+    std::vector<evmc::address> seen;
+    const bool ok = bridge.visitAccounts([&](const auto& av) {
+        seen.push_back(av.addr);
+        return true;
+    });
+
+    EXPECT_TRUE(ok);
+    EXPECT_FALSE(bridge.poisoned())
+        << "非 hex 表名毒了旗,生产账本上每个 OP 块都会 -32603:" << bridge.firstError();
+    // 恰好两个账户,一个不多(非账户表没被当账户)一个不少(continue 而非 break,
+    // 排在非账户表之后的真账户没被整片丢掉)。
+    ASSERT_EQ(seen.size(), 2U);
+    EXPECT_EQ(seen[0], 0x01_address);
+    EXPECT_EQ(seen[1], 0xff_address);
+}
+
+// (A1-2) stateRoot 层的同一条:非账户表在场时,建根结果必须与它们**根本不存在**时逐字节相同
+//        —— 既不毒旗,也不把它们混进承诺。
+TEST(Storage2Ledger, StateRootUnaffectedByNonAddressAppsTables)
+{
+    const auto rootOf = [](bool withBogusTables) {
+        MutableStorage storage;
+        Account acc(storage, 0x01_address, false);
+        bcos::task::syncWait(acc.create());
+        bcos::task::syncWait(acc.setBalance(bcos::u256(1234)));
+        bcos::task::syncWait(acc.setStorage(slotKey(1), slotKey(2)));
+        if (withBogusTables)
+        {
+            for (const auto& bogus : {std::string("/apps/Alpha_accessAuth"),
+                     std::string("/apps/Alpha/v1"), std::string("/apps/zz")})
+            {
+                bcos::task::syncWait(bcos::storage2::writeOne(storage,
+                    bcos::executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, bogus},
+                    bcos::storage::Entry(std::string_view{"value"})));
+            }
+        }
+        Storage2Ledger<MutableStorage> bridge(storage);
+        const auto root = bcos::evm::stateRootOf(bridge);
+        EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+        return root;
+    };
+    EXPECT_EQ(rootOf(true), rootOf(false));
+}
+
+// (A1-3) 防改过头:跳过的判据必须**只**放过非 40-hex 的表名。40 字节但含非 hex 字符的表名
+//        同样不是账户表(parseAccountTable 第 3 条判据,Classify.h:109-116),必须一样静默跳过
+//        而不是 throw;而合法的 40-hex 账户表必须照常被访问到。
+TEST(Storage2Ledger, VisitAccountsSkipsFortyCharNonHexTable)
+{
+    MutableStorage storage;
+    Account acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+
+    const std::string fortyNonHex =
+        std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + std::string(40, 'z');
+    bcos::task::syncWait(bcos::storage2::writeOne(storage,
+        bcos::executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, fortyNonHex},
+        bcos::storage::Entry(std::string_view{"value"})));
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+    std::vector<evmc::address> seen;
+    EXPECT_TRUE(bridge.visitAccounts([&](const auto& av) {
+        seen.push_back(av.addr);
+        return true;
+    }));
+    EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+    ASSERT_EQ(seen.size(), 1U);
+    EXPECT_EQ(seen[0], 0x01_address);
+}
