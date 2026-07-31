@@ -924,8 +924,9 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     }
     auto const stateRoot = block->blockHeader()->stateRoot();
 
-    // The MPT node reader is wired by the initializer (PR-18); unset means the node does not
-    // maintain an MPT state root — a configuration matter, hence -32603 rather than -32004.
+    // The MPT node reader is wired by the AIR initializer (AirNodeInitializer); unset means
+    // this node has no local path to MPT node rows (e.g. a tars-built NodeService) — a
+    // deployment matter, hence -32603 rather than -32004.
     auto const mptReader = m_nodeService->mptNodeReader();
     if (!mptReader) [[unlikely]]
     {

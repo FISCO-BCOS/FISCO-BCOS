@@ -274,7 +274,7 @@ BOOST_AUTO_TEST_CASE(UnknownStateRootReturns32004)
         resp["error"]["message"].asString().find("not in MPT node storage") != std::string::npos);
 }
 
-// No MPT node reader wired (production state until PR-18) -> -32603 "MPT not enabled".
+// No MPT node reader wired (production: a tars-built NodeService) -> -32603 "MPT not enabled".
 BOOST_AUTO_TEST_CASE(ReaderUnsetReturns32603)
 {
     buildTrie();  // trie + stateRoot exist, but the reader stays unset
