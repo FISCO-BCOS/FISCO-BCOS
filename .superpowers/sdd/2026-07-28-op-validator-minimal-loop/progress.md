@@ -213,3 +213,9 @@ Task 7: complete (commit 382bd00, 五探针判别力 3/7/2/8/3 翻红、N0 三�
   复审附带发现:因建根侧本就 is_zero→continue,z1 的"根逐字节相等"断言是**恒真的那一半**,判别力实际来自 poisoned() 与 size()==1 —— 冗余而非缺陷。文档 t/u 行号全部核对属实无灌水。见证归属诚实,并追加核实"空真不掩盖编译风险":Storage2Ledger.h **无任何生产 .cpp 包含**,standalone 根本不编译它。
   【控制器操作错误】我**先派了复审 agent、才写派单文件**,导致它启动时 final-batch9-review-brief.md 不存在(全仓 find 无命中),只能按 dispatch 里的转述执行。它如实记了这条缺口并建议"后续派单一律先 git add -f 再派"。**采纳为硬规程**:派单落盘并提交 → 再 dispatch,顺序不可颠倒。
   【断流事故处置记录】前一任复审者在 INJ-4 完成、INJ-5 刚起时断连,**留下未还原注入**(守护被删+泄漏被注入)。控制器 git checkout 还原 → 重建(时间戳 19:35→19:37,确认非假绿)→ 246/246 复绿。其断流前最后一句输出恰含最有价值结论(INJ-4:真实泄漏+无守护时 239 个既有测试**全部通过**、唯一红是新增 z6 → 从反方向证明缺口过去真实存在),纯属运气——**"每完成一个注入就提交"已从建议改为硬要求**。
+终审批9 fix 轮完成(接续者,前任停滞半成品验收通过后直接落地;ecbfb8f/add588a/6bf3478/ba34b0a/a695f19/7a5aa73,**246→249**):
+  F-1 闭合:applyDiff 写回失败置毒旗后重抛 → 分类归位 -32603;分类层新用例 (d2) 在 executeOpBlock 上钉住"写路失败 ≠ INVALID"。
+  F-2 闭合:(z8) 把"墓碑 ≡ 不存在"钉到生产实际走的 MLS View 半边。**INJ-E 重放是本轮金标准见证:复审当时 0 红 → 现在 1 红且只有 (z8),四条断言全响** —— 用复审者自己设计的实验直接闭合其发现。
+  F-3 闭合:(z9) 非 32 字节槽值用例(INJ-H:还原 M-1 两条 throw → 1 红且只有 z9,**终审 M-1 的 throw 首次获得红绿见证**);spec t① 异常类型勘误;"互不重叠"表述勘误。
+  **【RTTI 新数据·全仓适用】** INJ-G(删 runtime_error 级 + 各级打前缀)证实前任"实测阶梯"注释:firstError() 全部 [VIA-ELLIPSIS]、零条 [VIA-EXCEPTION] → **`catch (const std::exception&)` 在本构建的 applyDiff 路径上形同虚设**(异常经 syncWait/协程 rethrow 后 std::exception 的非唯一 typeinfo 不匹配,具体派生类 typeinfo 仍唯一可匹配)。与 visitAccounts:256 的同 TU 直抛可匹配**不矛盾**(两处各有实测见证);但这意味着**凡异常穿过协程/exception_ptr 边界,typed catch 只能按具体派生类写**——应记入 §11/RTTI 排查报告的补遗。
+  三条诚实边界:①(d2) 实测发现 LeakyDeleteStorage 在 OpSchedulerImpl 层**不可达**(该块执行 removeOne 零次调用),改用新增 WriteFailingStorage 触发同段 catch——钉的是分类逻辑本身,(z6)/ghost//sys/ 三条 tripwire 在分类层仍是"共用同段 catch"的推论;②(z8) 只覆盖单可变层,跨层墓碑(上层墓碑遮下层实值)的 getValue 分支未覆盖;③INJ-E 重放时**一次误改主仓 MultiLayerStorage.h**(worktree 纪律违规),已 cp 还原并确认主仓 git status 不出现——记录在案。
