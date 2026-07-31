@@ -810,3 +810,158 @@ op-geth: 本 pin(e8800cffe)上 `IsKarst`(params/config.go:1024-1026)与
 | Isthmus 起 requests 全禁 | `disable_prague_requests` | `state_processor.go:141` `&& !config.IsIsthmus(...)` | 一致 |
 
 <!-- LAYER-9-END -->
+
+---
+
+# 汇总表
+
+## 表 1:当前可构造的分歧(按危害排序)
+
+| # | 分歧 | 方向 | 后果 | 触发成本 |
+|---|---|---|---|---|
+| 1 | **1-1** 只认 0x7E/0x02/0x04;legacy 与 0x01 一律拒块 | 我方拒绝 op-geth 接受的 | 任何含一笔普通 legacy/access-list 交易的块 → INVALID。**这是日常流量**,不是攻击 | 零(等一笔 legacy 交易上链) |
+| 2 | **6-2** 命中 `c_systemTxsAddress` 的地址 → 毒旗 → -32603 | 我方既不 VALID 也不 INVALID | 向 `0x…1000` 转 1 wei 即可让节点在该块上**永久卡死**(op-node 会反复重投) | 一笔 1 wei 转账 |
+| 3 | **4-1 / 4-2 / 4-3** 空块拒绝、首笔必须是 attrs deposit、deposit 不得后置 | 我方拒绝 op-geth 接受的 | 三条 EL 侧不存在的额外准入规则;其中 4-2 会在 OP 变更 attributes 形状的分叉当天让节点拒绝整条链 | 零(CL 行为变化即触发) |
+| 4 | **2-1** `extraData` 的 OP 形状(Jovian 17B / 版本字节 / 非零 denominator·elasticity)零校验 | 我方接受 op-geth 拒绝的 | 放行畸形 extraData;且它是**下一块 baseFee 的参数源**,与 C4 复合后 baseFee 完全失守 | 构造一个 payload |
+| 5 | **2-2** Jovian `daFootprint > gasLimit` 块级上限缺失 | 我方接受 op-geth 拒绝的 | 可以造出 DA 超限但被我方判 VALID 的块 | 一个 calldata 密集的 Jovian 块 |
+| 6 | **5-1(a)** Jovian attributes 的长度/选择器不校验(我方读槽 8,op-geth 读 calldata 并校验) | 我方接受 op-geth 拒绝的 | 同上 | 构造 attributes calldata |
+| 7 | **5-2** Jovian 激活块"不得含用户交易"约束缺失 | 我方接受 op-geth 拒绝的 | 仅在激活块可达 | 跨激活边界的块 |
+| 8 | **2-3 + 9-1** 首块豁免 timestamp 单调性,而 `configAt` 把 pre-Isthmus 时间戳解析成 Isthmus | 我方接受 op-geth 拒绝的 | 引导后的第一个块可携带任意(含 pre-Isthmus)时间戳,整块用错规则集 | 引导期的一个 payload |
+| 9 | **C1**(已记账)RLP 长度前缀前导零 | 我方接受 op-geth 拒绝的 | 已实测 txRoot 分歧 | — |
+| 10 | **C2**(已记账)7702 授权 yParity 位宽 | 我方接受 op-geth 拒绝的 | — | — |
+| 11 | **C4**(已记账)`baseFeePerGas` 父子公式不校验 | 双向 | 每笔交易的实际 gas 价格、coinbase 小费、BaseFeeVault 入账全部可由 payload 设定 | — |
+| 12 | **C3**(已记账)pre-Isthmus V3 闸 | — | 部分挡住了 #8 | — |
+
+## 表 2:生产接入才可达的分歧
+
+| # | 分歧 | 为什么测试世界碰不到 | 后果 |
+|---|---|---|---|
+| 1 | **6-1** stateRoot 收录每一个存活账户,不做 EIP-161 空账户过滤 | 测试里桥是唯一写者,从不留下空账户;通用执行器没有 EIP-158 清除语义,生产账本**必然**含空账户 | **每一个块的 stateRoot 都对不上 → 节点对每个块判 INVALID**。这是本表里唯一"接生产账本当天就全线崩"的一条 |
+| 2 | **5-1(b)** DA scalar 取自槽 8 [18:20] 而非 attributes calldata[176:178] | 语料里两者取值恒定且一致 | `blobGasUsed` 不同 → 判 INVALID(反向) |
+| 3 | **3-1 / 3-2** `execute_system_call` 绕过 `Host::call`,系统调用 REVERT/OOG 不回滚;`assert` 在 Release 下被编译掉 | 语料用规范预部署,永不 revert | stateRoot 多出被 revert 掉的写入 |
+| 4 | **8-1** MessagePasser 账户不存在时,我方给空 MPT 根、op-geth 给全零哈希 | 语料的创世必含该预部署 | `withdrawalsRoot` 不同 |
+| 5 | **2-4** 父头按**高度**读(op-geth 按**哈希**) | 今天被 step 3c 的非链尾拒绝堵死 | 开重组窗口的当天会拿错父头做 timestamp 比较 |
+| 6 | **6-3** 以默认 `get_or_insert` 插入且最终为空的账户会落账 | 今天所有此类路径都 bump nonce | 新增一条不 bump nonce 的路径即变成 stateRoot 分歧 |
+| 7 | **9-3** Karst 是 Jovian 的别名 | 本 pin 上 op-geth 的 Karst 本身也无行为 | op-geth 给 Karst 加语义的当天静默分歧 |
+| 8 | **9-2** 七个 fork config 只有两个可达,`karstConfig()` 完全死代码;Ecotone/Bedrock L1 费公式永不被执行 | — | 覆盖假象,非分歧 |
+
+## 表 3:两边一致、已核对无分歧的项(本次审计的覆盖边界)
+
+按层归并(逐条源码位置见各层的"一致项"表):
+
+- **第 1 层(15 项)**:整数前导零、单字节非规范前缀、短串长形式、越界长度、uint64/uint256 超宽、
+  address/hash 定长、bool 双形态、三处尾随字节、外层签名 r/s 界与低 s、外层 yParity、chainId 匹配、
+  set_code 的 `to` 与非空授权列表、tip > feeCap。
+- **第 2 层(16 项)**:extraData 32 字节界、gasLimit 2^63-1、**OP 链 gasLimit 无父子变化界**、
+  gasUsed ≤ gasLimit(等价)、blockNumber 连续、timestamp 严格递增(有父头时)、excessBlobGas=0、
+  blobGasUsed 不受 blob 倍数约束、块体不得含 blob、withdrawals 在场且空、withdrawalsRoot 在场、
+  expectedBlobVersionedHashes 空、parentBeaconBlockRoot 在场、requestsHash 常量、已知块短路、
+  父块未知 → SYNCING。
+- **第 3 层(8 项)**:4788/2935 的激活条件、输入、调用者与 gas、代码缺失静默跳过、两者先后顺序、
+  块后 requests 系统调用不执行。
+- **第 4 层(6 项)**:普通交易校验失败 ⇒ 整块无效、deposit 校验失败 ⇒ 失败回执、
+  `is_system_tx` ⇒ 块级、撞 gas 池 ⇒ 块级、执行顺序、cumulativeGasUsed 累加。
+- **第 5 层(28 项)**:Fjord L1 费公式与全部常量、estimatedSize 下限钳位、L1 费输入字节、
+  Isthmus/Jovian 两套 operator fee 公式与运算顺序、四个费用参数槽与位偏移、四个金库地址、
+  operator fee 按 gasLimit 预扣按 gasUsed 退差、coinbase 小费、baseFee 入库不销毁、
+  deposit 不付费不入库、deposit 失败的 gas/mint/nonce 三条语义、块 gas 池净消耗、
+  退款上限、7702 授权退款常量、EIP-7623 floor 顺序、7702 处理顺序与跳过语义、
+  委托代码格式与预热、access list 预热、EIP-3607、nonce 三检查、余额充足性、实际扣款。
+- **第 6 层(13 项)**:零值槽五处判据(批 9 修复复核通过)、EIP-7610 三条件、EIP-6780 两分支、
+  EIP-161 touch-delete、账户叶与槽叶编码、KEEP 契约、code 读取路径、墓碑不还魂、
+  CREATE2 重生缓存失效、四处 diff 全过 sanitize。
+- **第 7 层(9 项)**:普通/deposit 两种回执叶编码、status 编码、depositReceiptVersion、
+  depositNonce 取值时机、cumulativeGasUsed、receiptsRoot 键值、块级 logsBloom、空块根。
+- **第 8 层(5 项)**:finalize 空操作、requests 不执行、withdrawalsRoot = MessagePasser 存储根、
+  地址常量、快照时机。
+- **第 9 层(6 项)**:`>=` 边界方向、Isthmus/Jovian ↔ Prague、DA footprint 与 operator-fee-fix 的
+  Jovian 门控、operator fee 的 Isthmus 门控、requests 全禁。
+
+**明确未看的面**(不在上表,也不在分歧表):
+0x03 blob 与 0x7D PostExecTxType 的双向性;`checkInvalidAncestor` 语义;
+`EnsureCreate2Deployer`;EIP-7934 块大小上限;`compute_tx_intrinsic_cost` 与 geth `IntrinsicGas`
+的逐项常量;`OpPrecompiles` 的四代 override;`FlzCompressLen` 的逐字节差分;
+evmone `MPT` 与 geth `StackTrie` 的极端形状等价性;`compute_bloom_filter` 与 `CreateBloom`
+的逐位等价性;回执中不进根的字段(contractAddress 等);`/sys/` 命名空间不进 stateRoot 的前提。
+
+---
+
+# 文档/注释与代码不符之处(过度宣称)
+
+> 判据:这些不是分歧本身,而是**会让读者误判覆盖范围**的断言。过度宣称的覆盖比缺失的覆盖更危险。
+
+### 【失实 1】"非规范编码永远无法通过解码" —— 与 C1 直接矛盾 ★
+
+`bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:275-296` 的 "canonical-encoding strictness (final
+review B4-2)" 注释块结尾写道:
+
+> "With it, non-canonical input never survives decoding, and the equivalence holds for
+> everything that does."
+
+同一段还把这条断言作为 **txRoot 建在原始线上字节而非重编码之上**(:291-296、:896-908、
+`OpEngineSeam.h::computeOpTxRoot`)的**唯一正当性论据**。
+
+而 `bcos-codec/bcos-codec/rlp/RLPDecode.h:74-83` 与 `:103-112` 的长形式长度前缀
+**不检查前导零**(`fromBigEndian` 直接吃 `lenOfLen` 个字节),这正是已记账的 C1 —— 并且 C1
+已经实测出 txRoot 分歧。因此该断言在写下时就是假的,而它支撑的正是最容易出根分歧的那个设计选择。
+
+**建议**:把这句改成"覆盖了 X 类非规范编码,长度前缀前导零(C1)仍是已知缺口",
+否则下一个读者会据此认为 txRoot 的建法已被证明安全。
+
+### 【失实 2】`StateDiffSanitize.h` 的 EIP-6780 论断:"the view is necessarily absent"
+
+`bcos-evm/bcos-evm/adapter/StateDiffSanitize.h:15-17`:
+
+> "EIP-6780 same-tx create+selfdestruct (the destructed branch emits it, **the view is
+> necessarily absent** — intentionally stripped, ...)"
+
+`bcos-evm/bcos-evm/eth/state/host.cpp:262-277` 显示 `Host::create` 在 `new_acc_exists == true`
+(即目标地址上**已有一个只带余额的账户**)时**同样**设置 `just_created = true`。
+这类账户在 view 里是**存在**的,所以同笔 create+selfdestruct 时该删除项**不会**被 sanitize 剥离,
+而是被保留并真正删掉账户行。
+
+行为本身与 op-geth 一致(geth 的 `SelfDestruct6780` 对 `newContract` 的账户同样整体销毁),
+所以**这不是分歧**;但注释给出的理由是错的,而 sanitize 的两类剥离对象("ghost"与"6780")
+是这份文件全部安全论证的骨架。
+
+### 【失实 3】陈旧的 op-geth 版本锚
+
+`bcos-evm/bcos-evm/adapter/StateDiffSanitize.h:22-23`:
+
+> "op-geth semantic anchor: statedb.go:1485-1512 (access list is pure in-memory bookkeeping),
+> checked out at /Users/octopus/octo/code/blockchain-impl/op-geth @ **v1.101702.2**."
+
+本次审计的基准是 `e8800cffe`。带行号的锚点在换 pin 后已不保证指向同一段代码,
+而这条注释是"访问列表不落状态"这一结论的唯一出处。**建议**改为按符号名锚定,或标注需随 pin 复核。
+
+### 【失实 4】命名空间已改,文档未跟
+
+`bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md:100` 仍写作
+`bcos::evmref::sanitizeStateDiff`,实际符号是 `bcos::evm::sanitizeStateDiff`
+(`StateDiffSanitize.h:7/31`)。轻微,但该文件是"已知分歧"的对外说明书。
+
+### 【失实 5】`OpForkSchedule.h` 暗示的七分叉支持
+
+`OpForkSchedule.h:8-17/33-39` 声明 Ecotone→Karst 七个 fork 与七个 config 工厂,
+:41-49 的注释虽然说明了 `OpForkTimestamps` "intentionally does not grow the full `OpFork` enum's
+historical fork set",但没有点明其直接后果:**五个 config 工厂在生产路径上不可达**
+(见观察 9-2)。任何据此认为"Ecotone L1 费公式已实现并在用"的读者都会误判。
+
+### 【非失实,但值得记】`OpBlockExecute.cpp:17-19` 的自陈是**正面例子**
+
+> "stricter-than-spec (spec §6 decision point 2, user ruling): ... op-geth EL does not perform
+> this validation (responsibility pushed down to the CL layer)."
+
+这条注释准确地标明了自己是"更严"方向,并指出了 op-geth 的实际行为。第 4 层的三条分歧
+因此是**已声明的偏离**而非隐藏缺陷 —— 本报告仍然列出它们,是因为审计判据要求两个方向同等对待。
+
+---
+
+# 审计元信息
+
+- 覆盖:九层全部走过,每层给出"分歧"+"一致"+"未覆盖"三段。
+- 新发现(不含已记账的 C1-C4 与批 9):**14 条分歧 + 5 条文档失实**。
+- 批 9 零值槽修复:**复核通过**,并补上了此前缺失的关键佐证
+  (`EVMAccount::setStorage` 恒写 32 字节 ⇒ 生产账本的零值槽行必然满足 `isZeroSlotValue` 判据)。
+- 本次审计**只读**:未修改任何源码、未构建、未运行测试。所有 `[需验证]` 项都附了最小验证步骤。
+
