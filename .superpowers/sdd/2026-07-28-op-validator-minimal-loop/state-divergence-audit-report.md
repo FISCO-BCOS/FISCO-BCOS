@@ -547,3 +547,145 @@ op-geth: rollup_cost.go:243-251 —— `func(gas, blockTime) { if forBlock != bl
 - 预编译差异(`OpPrecompiles.cpp` 的 Fjord/Granite/Isthmus/Jovian override)未比对。
 
 <!-- LAYER-5-END -->
+
+---
+
+## 第 6 层:状态写入语义(含批 9 修复后的复核)
+
+我方:`bcos-evm/bcos-evm/ledger/Storage2Ledger.h`(读桥 + 写回)、
+`bcos-evm/bcos-evm/adapter/StateRootCompute.h/.cpp`(建根)、
+`bcos-evm/bcos-evm/adapter/StateDiffSanitize.h`、`bcos-evm/bcos-evm/eth/state/state.cpp`(`build_diff`)。
+
+### 批 9「零值槽」修复的复核 —— **结论:修复到位,且与生产写路径兼容**
+
+逐条核对提示词点名的四个判据:
+
+| 判据 | 位置 | 行为 | 判定 |
+|---|---|---|---|
+| `fetchStorage` / `get_storage` | Storage2Ledger.h:893-913 | 行不存在 → 全零;行存在且值为 32 字节全零 → 原样返回全零。两者不可区分 | ✅ 与以太坊语义一致 |
+| `probeHasStorage`(→ `has_storage`) | :850-873 | 只有"存活(非墓碑)且 `!isZeroSlotValue`"的 32 字节键才判 true | ✅ |
+| `fetchAllStorage`(→ 建根 map) | :618-671 | 墓碑跳过(:636-637)+ 零值跳过(:665-666),两层**叠加** | ✅ |
+| `accountStorageRoot` / `opStorageRoot` | StateRootCompute.cpp:22-30 / OpBlockSeal.cpp:19-25 | `is_zero → continue` | ✅(此时已是防御性冗余) |
+| 写回不留零值行 | :441-478 | 零值 → `storage2::removeOne`,并在删后 `existsOne` 回读守护 | ✅ |
+
+**与生产写路径的兼容性(批 9 论证的关键前提)已独立验证成立**:
+`bcos-framework/bcos-framework/ledger/EVMAccount.h:213-220` 的 `setStorage` 写的是
+`concepts::bytebuffer::toView(value.bytes)` —— **恒为 32 字节**,零值也写满 32 个 0。
+因此生产账本里的零值槽行必然满足 `isZeroSlotValue` 的
+"`size() == 32 && 全零`"判据(:585-589),会被三处读判据一致地跳过,不会毒旗。
+**这条是批 9 方案 A 成立与否的支点,此前的记账里没有见到它被独立核实过。**
+
+对应的 EIP-7610 语义也随之对齐:
+
+```
+我方:    Storage2Ledger.h:850-873 has_storage → state.cpp:259 `.has_initial_storage`
+         → host.cpp:81-92 `is_create_collision`(nonce!=0 / codeHash!=EMPTY / has_initial_storage)。
+op-geth: core/vm/evm.go 的 `create()` —— `GetNonce(address) != 0`
+         || `contractHash != {} && != EmptyCodeHash`
+         || `storageRoot != {} && != EmptyRootHash`。
+         注意 op-geth 用的是**已提交的 storage root**,而 trie 天然不含零值槽 ——
+         这正是批 9 把零值槽排除出 has_storage 之后两边等价的原因。
+判定:    ✅ 一致(批 9 之前是分歧,现已消除)。
+```
+
+### 【分歧 6-1】stateRoot 收录**每一个**存活账户,不做 EIP-161 空账户过滤 ★★(生产接入才可达)
+
+```
+我方:    StateRootCompute.h:82-93 `stateRootOf<Ledger>` —— `visitAccounts` 回调里对**每个**
+         账户无条件 `trie.insert(keccak256(addr), rlp(nonce, balance, storageRoot, codeHash))`,
+         没有任何 "nonce==0 && balance==0 && codeHash==EMPTY 则跳过" 的判据;
+         Storage2Ledger.h:680-720 `visitAccountsImpl` 的唯一过滤是"墓碑行"与"/apps/ 前缀"。
+op-geth: 空账户不在 trie 里 —— `ApplyTransactionWithEVM` 每笔之后
+         `evm.StateDB.Finalise(true)`(core/state_processor.go:184-186,
+         `deleteEmptyObjects=true`),EIP-158/161 语义下被 touch 过的空账户当场删除;
+         从未被 touch 的空账户在规范链上根本不可能存在于 trie 中。
+触发输入:账本里存在一个 `nonce=0, balance=0, 无 code, 无非零槽` 的 `/apps/<addr>` 表标记行,
+         而这一块的执行**没有 touch 它**(因此 evmone 的 `build_diff` 不会为它产出
+         `deleted_accounts` 项,`sanitizeStateDiff` 也无从介入)。
+分歧结果:stateRoot 直接不同 → 我方对每一个块都判 INVALID(payload 的 stateRoot 永远对不上)。
+可达性:  **需生产账本**。在本仓的测试世界里,桥是唯一写者且从不留下空账户,所以 33 条金值
+         向量结构上碰不到这条。接生产账本后必然可达:通用执行器
+         (`transaction-executor` / `bcos-ledger` 创世 alloc)没有 EIP-158 空账户清除语义,
+         `EVMAccount::create()` 建的标记行不会因"字段全默认"而被回收。
+置信度:  已读两侧源码确认;"生产账本必然含空账户"依赖对通用执行器的推断,
+         **未实测** `[需验证]`。
+最小验证步骤:用 `MemoryLedger`/`Storage2Ledger` 手工塞一个只有 SYS_TABLES 标记行、
+         无 BALANCE/NONCE/CODE_HASH 行的账户,调 `stateRootOf`,与不含该账户时的根比较 ——
+         若不同,分歧成立。
+```
+
+### 【分歧 6-2】命中 `c_systemTxsAddress` 的地址会让节点**永久无法处理该块**(-32603)★★
+
+```
+我方:    Storage2Ledger.h:740-754 `accountTableName` —— 地址的 40 字符小写 hex 若命中
+         `bcos::precompiled::c_systemTxsAddress` 集合,返回 false;
+         读路四个方法据此 `poison(...)`(:127-131 等),写路
+         `applyModifiedEntry`:409-413 / `applyDeletedEntry`:496-500 直接 `throw`。
+         毒旗 → `OpSchedulerImpl.h:874-875` → `OpStorageError` → 引擎 `:1000-1007` 答 **-32603**。
+         该集合(bcos-framework/bcos-framework/executor/PrecompiledTypeDef.h:143-149)含 8 个
+         真实 20 字节地址:`0x…1000`(SYS_CONFIG)、`0x…1003`(CONSENSUS)、
+         `0x…1005`(AUTH_MANAGER)、AUTH_COMMITTEE、WORKING_SEALER_MGR、SHARDING、
+         `0x…10003`(ACCOUNT_MGR)、`0x…10004`(ACCOUNT)。
+op-geth: 这 8 个地址在以太坊/OP 语义下是**完全普通的账户地址**(不是预编译,evmone 的预编译
+         表也不含它们),可以收款、可以部署合约。
+触发输入:一笔向 `0x0000000000000000000000000000000000001000` 转 1 wei 的普通 0x02 交易。
+         `Host::call` 会 `get_or_insert` 该地址 → `build_diff` 产出 modified 项 →
+         `applyModifiedEntry` 抛错 → 毒旗 → -32603。
+分歧结果:op-geth VALID;我方既不是 VALID 也不是 INVALID,而是**内部错误**,且由于该块会被
+         op-node 反复重投,节点在这条链上**永久卡死**。这是"拒绝合法块"的更坏形式 ——
+         活性故障而非投票故障。
+可达性:  当前可构造(只要放行普通交易类型;今天 0x02 就够)。
+置信度:  已读两侧源码确认;"evmone 预编译表不含 0x1000" 未逐表核对 `[需验证]`
+         (但即便含,行为也只会更奇怪而不会更一致)。
+```
+
+### 【分歧 6-3】`applyModifiedEntry` 对**每个** modified 项无条件 `create()` 账户表标记行
+
+```
+我方:    Storage2Ledger.h:421-422 —— `if (!co_await account.exists()) co_await account.create();`
+         注释(:418-420)明说这是刻意的、"不得优化为'无字段可写则跳过'"。
+op-geth: `Finalise(true)` 之后,一个被 touch 但仍为空的账户**不会**留在 trie 里。
+分析:    两者并不直接冲突 —— evmone 的 `build_diff`(state.cpp:214-219)已经把
+         `erase_if_empty && is_empty()` 的账户改投 `deleted_accounts`,所以正常路径上不会有
+         "空的 modified 项"送进来。**但 `erase_if_empty` 不是所有插入路径都会置位**
+         (account.hpp:71 默认 false;只有 `touch()`(state.cpp:291-294)、
+         `access_account`(host.cpp:446)、7702 authority(state.cpp:122)会置)。
+         任何以默认 `get_or_insert` 插入、最终仍为空的账户,会作为 modified 项落账,
+         在我方账本里留下一行,并因分歧 6-1 进入 stateRoot。
+触发输入:需要找到一条"以默认 `get_or_insert` 插入且最终为空"的路径。`opTransition.cpp:151`
+         的 sender 与 `OpDepositTx.cpp:67` 的 `dep.from` 都属此类,但两者的 nonce 在所有分支
+         上都会 +1,因而非空 —— **今天没有已知的可达触发输入**。
+分歧结果:潜在的 stateRoot 分歧。
+可达性:  需未来改动(新增一条默认 `get_or_insert` 且不 bump nonce 的路径即可达)。
+置信度:  推理未验证。最小验证步骤:在 evmone 侧加断言"进入 applyModifiedEntry 的 entry
+         不得是 EIP-161 空账户",跑全量 33 向量 + 250 用例看是否翻红。
+```
+
+### 本层已核对、判定为**一致**的项
+
+| 项 | 我方 | op-geth | 结论 |
+|---|---|---|---|
+| 零值槽 ≡ 槽不存在(读侧三判据 + 建根 + 写回) | 见上表 | trie 删零值槽 | 一致(批 9 已修) |
+| EIP-7610 CREATE 碰撞判据(nonce / codeHash / 初始 storage 三选一) | host.cpp:81-92 + `has_initial_storage` | core/vm/evm.go `create()` 三条件 | 一致 |
+| EIP-6780:非同笔创建的 SELFDESTRUCT 只转余额、不销毁账户 | host.cpp:137-148 | geth `SelfDestruct6780` | 一致 |
+| EIP-6780:同笔 create+selfdestruct 不留痕 | host.cpp:150-158 `destructed` → build_diff → `deleted_accounts` → `sanitizeStateDiff` 剥离(view 中不存在) | geth 同 | 一致(但见"文档失实"一节对 sanitize 注释的更正) |
+| EIP-161 touch-delete(既存空账户被 touch 后删除) | state.cpp:214-219 + `sanitizeStateDiff` **保留** view 中存在者的删除项(StateDiffSanitize.h:10-14) | `Finalise(true)` | 一致 |
+| 账户叶编码 `rlp(nonce, balance, storageRoot, codeHash)`,键 `keccak256(addr)` | StateRootCompute.h:87-89 | geth 的 `types.StateAccount` 同序 | 一致 |
+| 槽叶编码 `rlp(trim(value))`,键 `keccak256(slot)` | StateRootCompute.cpp:27-28 | geth secure trie 同 | 一致 |
+| "账户存在但字段全默认" ≠ `nullopt`(KEEP 契约) | Storage2Ledger.h:765-772(`existsOne` 判存在,再逐字段填默认) | geth `Exist()` vs `Empty()` 两分 | 一致 |
+| code 读取:`CODE_HASH` → `SYS_CODE_BINARY`,无 code 时 `codeHash = keccak(空)` | :877-891 / :772 | geth `types.EmptyCodeHash` | 一致 |
+| 块内逻辑删除的账户/槽不得"还魂"进 stateRoot | `liveContent` 墓碑判别,三处同源(:551-562、:636-637、:698-699、:864) | geth 无对应问题(内存 statedb) | 一致 |
+| CREATE2 同址重生:删除账户后三张读缓存全量失效 | :538-541 | —— | 一致(桥内部正确性) |
+| 系统调用 / 每笔 / finalize 的 diff **都**过 `sanitizeStateDiff` | OpBlockExecute.cpp:31、OpTransition.cpp:196、OpDepositTx.cpp:130、OpBlockFinalize.cpp:12 | —— | 一致(无遗漏) |
+
+### 本层**未覆盖**的面
+
+- `visitAccountsImpl` 只扫 `/apps/`(Storage2Ledger.h:682-694)。生产账本里 `/sys/` 下的
+  FISCO 系统表**完全不进 stateRoot**。这在"OP 状态与 FISCO 系统状态分属两个命名空间"的
+  前提下是自洽的,但该前提本身没有被任何检查守护 `[需验证]`。
+- `evmone` 的 `MPT` 实现与 geth `StackTrie`/`SecureTrie` 的**逐字节等价性**未验证
+  (33 条金值向量提供了间接证据,但语料里没有极端 trie 形状,例如超长公共前缀、
+  17 分支满叉、单叶根)。
+- 同笔内"既存余额账户被 CREATE 进去再 SELFDESTRUCT"的余额归属,两边未逐行比对。
+
+<!-- LAYER-6-END -->
