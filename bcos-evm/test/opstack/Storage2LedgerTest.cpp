@@ -532,27 +532,153 @@ TEST(Storage2Ledger, ApplyDiffDeletedGhostThrows)
     EXPECT_NE(bridge.firstError().find("ghost "), std::string_view::npos) << bridge.firstError();
 }
 
-// (o) 审查修复:modified entry 含系统地址(c_systemTxsAddress 成员,如
-//     SYS_CONFIG_ADDRESS = 0x...001000)→ EVMAccount 会静默路由进 /sys/,与读桥
-//     accountTableName 判定不一致;写路径同样不得猜测路由 → applyDiff 必须 throw(与
-//     applyDeletedEntry 的 ghost-delete tripwire 同一 strict 纪律,design §4.4)。
-TEST(Storage2Ledger, ApplyDiffModifiedSystemAddressThrows)
+// (o) 【终审批 A · A-2 语义反转】此处**曾经**是 ApplyDiffModifiedSystemAddressThrows:
+//     modified entry 含 c_systemTxsAddress 成员 → applyDiff throw + 毒旗。该语义已被推翻。
+//
+//     推翻的理由:那 8 个地址(0x1000/0x1003/0x1005/0x100b/0x1010/0x10001/0x10003/0x10004,
+//     PrecompiledTypeDef.h:143-149)在以太坊侧就是**普通地址**。毒旗的触发条件是"被 EVM
+//     触及"而非"被写入状态"——evmone 的 build_diff 把只读 touched 账户也放进
+//     modified_accounts,所以哪怕只是在 access list 里提一句 0x…1000,一笔完全合法的交易也会
+//     -32603 → op-node 反复重投 → 节点在该块上永久卡死(活性故障,不自愈)。
+//
+//     现语义:系统地址就是 /apps/ 名字空间里的普通账户,读 / 写 / 建根三处答案一致,并与
+//     op-geth 和主线 MPT(Classify.h 正反两向都没有系统地址分支,/sys/ 从不进 MPT)对齐。
+//     判据与 rationale 见 Storage2Ledger.h accountTableName 的注释。
+//
+// (o1) 读路:系统地址不再毒旗;未落账时是普通"不存在",落账后读回真实内容。
+TEST(Storage2Ledger, SystemAddressReadsAsOrdinaryAppsAccount)
 {
+    constexpr auto sysAddr =
+        0x0000000000000000000000000000000000001000_address;  // SYS_CONFIG_ADDRESS
+
+    MutableStorage storage;
+    {
+        Storage2Ledger<MutableStorage> bridge(storage);
+        // 三个读方法逐个过一遍——A-2 之前它们各有一处 accountTableName 毒旗分支。
+        EXPECT_FALSE(bridge.get_account(sysAddr).has_value());
+        EXPECT_TRUE(bridge.get_account_code(sysAddr).empty());
+        EXPECT_EQ(bridge.get_storage(sysAddr, slotKey(1)), evmc::bytes32{});
+        EXPECT_FALSE(bridge.poisoned())
+            << "系统地址被 EVM 触及即毒旗,合法交易会让节点每块 -32603:" << bridge.firstError();
+    }
+
+    // 经 /apps/ 路径落账(注意:不能用 EVMAccount(storage, addr, false) 播种——它会把系统地址
+    // 路由进 /sys/,那正是本条要证明桥**不**再跟随的分支)。
+    const auto tableName = tableNameOf(sysAddr);
+    bcos::task::syncWait(bcos::storage2::writeOne(storage,
+        bcos::executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, tableName},
+        bcos::storage::Entry(std::string_view{"value"})));
+    bcos::task::syncWait(bcos::storage2::writeOne(storage,
+        bcos::executor_v1::StateKeyView{tableName, bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE},
+        bcos::storage::Entry(std::string("7"))));
+    {
+        Storage2Ledger<MutableStorage> bridge(storage);
+        const auto account = bridge.get_account(sysAddr);
+        ASSERT_TRUE(account.has_value());
+        EXPECT_EQ(account->balance, intx::uint256{7});
+        EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+    }
+}
+
+// (o2) 写路:applyDiff 对系统地址不再 throw,且**落在 /apps/ 而不是 /sys/**。后半句是关键
+//      —— EVMAccount 的地址构造函数会把这 8 个地址路由进 /sys/(EVMAccount.h:239-245),
+//      桥若继续用它就会变成"读 /apps/、写 /sys/"的脑裂,比原先那条毒旗更坏。桥改用
+//      FromTableName 直构,读写共用同一个表名字符串。
+TEST(Storage2Ledger, ApplyDiffWritesSystemAddressIntoAppsNotSys)
+{
+    constexpr auto sysAddr =
+        0x0000000000000000000000000000000000001000_address;  // SYS_CONFIG_ADDRESS
+
     MutableStorage storage;
     Storage2Ledger<MutableStorage> bridge(storage);
 
-    constexpr auto sysAddr =
-        0x0000000000000000000000000000000000001000_address;  // SYS_CONFIG_ADDRESS
     evmone::state::StateDiff diff;
-    diff.modified_accounts.push_back(
-        {.addr = sysAddr, .nonce = 0, .balance = {}, .code = std::nullopt, .modified_storage = {}});
+    diff.modified_accounts.push_back({.addr = sysAddr,
+        .nonce = 3,
+        .balance = intx::uint256{42},
+        .code = std::nullopt,
+        .modified_storage = {{slotKey(1), slotKey(2)}}});
 
-    EXPECT_THROW(bridge.applyDiff(diff), std::runtime_error);
-    // 终审批 9 F-1:同上——桥"不猜 /sys/ 路由"是本桥的能力边界(本地故障),不是对 payload 的
-    // 判决。读路的同一守卫(get_account 的 accountTableName 分支)本来就置毒旗,写路现在对称。
-    EXPECT_TRUE(bridge.poisoned());
-    EXPECT_NE(bridge.firstError().find("routes to /sys/"), std::string_view::npos)
-        << bridge.firstError();
+    EXPECT_NO_THROW(bridge.applyDiff(diff));
+    EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+
+    // 写在 /apps/ 里:直接查底层键,不经任何会再次路由的抽象。
+    const auto appsTable = tableNameOf(sysAddr);
+    EXPECT_TRUE(bcos::task::syncWait(bcos::storage2::existsOne(
+        storage, bcos::executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, appsTable})));
+    // 而 /sys/ 那张表一行都没有——脑裂的反例标识。
+    const std::string sysTable =
+        std::string(bcos::ledger::SYS_DIRECTORY::SYS_APPS) +
+        std::string(appsTable.substr(bcos::ledger::SYS_DIRECTORY::USER_APPS.size()));
+    EXPECT_FALSE(bcos::task::syncWait(bcos::storage2::existsOne(
+        storage, bcos::executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, sysTable})))
+        << "系统地址被写进了 " << sysTable << ",而读路在 " << appsTable << " —— 读写脑裂";
+
+    // 写穿的读缓存与底层一致,且回读走的是同一张 /apps/ 表。
+    const auto account = bridge.get_account(sysAddr);
+    ASSERT_TRUE(account.has_value());
+    EXPECT_EQ(account->nonce, 3U);
+    EXPECT_EQ(account->balance, intx::uint256{42});
+    EXPECT_EQ(bridge.get_storage(sysAddr, slotKey(1)), slotKey(2));
+}
+
+// (o3) 建根:系统地址进 stateRoot,且与"同样内容的普通地址"给出同一形状的承诺——即
+//      visitAccounts 对它没有、也不该有任何特例。派单担心的"静默把系统地址收进 stateRoot"
+//      在本语义下不是陷阱而是正确行为:读 / 写 / 建根三个答案必须一致,而一致的那个答案
+//      就是"它是普通账户"(否则有人向 0x…1000 转账时余额会凭空消失 = 不可发现的根分歧)。
+TEST(Storage2Ledger, StateRootIncludesSystemAddressLikeAnyOtherAccount)
+{
+    constexpr auto sysAddr = 0x0000000000000000000000000000000000001000_address;
+
+    const auto rootWith = [](const evmc::address& addr) {
+        MutableStorage storage;
+        Storage2Ledger<MutableStorage> bridge(storage);
+        evmone::state::StateDiff diff;
+        diff.modified_accounts.push_back({.addr = addr,
+            .nonce = 1,
+            .balance = intx::uint256{5},
+            .code = std::nullopt,
+            .modified_storage = {}});
+        bridge.applyDiff(diff);
+        const auto root = bcos::evm::stateRootOf(bridge);
+        EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+        return root;
+    };
+
+    // 系统地址算得出根、不毒旗;而且它确实**在**根里(与空账本的根不同)。
+    MutableStorage empty;
+    Storage2Ledger<MutableStorage> emptyBridge(empty);
+    const auto emptyRoot = bcos::evm::stateRootOf(emptyBridge);
+    EXPECT_NE(rootWith(sysAddr), emptyRoot);
+    // 与另一个普通地址同内容时根不同(地址进了 trie key),即它没有被特殊化成别的东西。
+    EXPECT_NE(rootWith(sysAddr), rootWith(0x02_address));
+}
+
+// (o4) 删除路径同样不再有系统地址守卫,ghost-delete tripwire 这条**另一个**不变量仍在。
+TEST(Storage2Ledger, ApplyDiffDeletesSystemAddressAndStillTripsOnGhost)
+{
+    constexpr auto sysAddr = 0x0000000000000000000000000000000000001000_address;
+
+    MutableStorage storage;
+    Storage2Ledger<MutableStorage> bridge(storage);
+    evmone::state::StateDiff create;
+    create.modified_accounts.push_back({.addr = sysAddr,
+        .nonce = 1,
+        .balance = intx::uint256{9},
+        .code = std::nullopt,
+        .modified_storage = {}});
+    bridge.applyDiff(create);
+
+    evmone::state::StateDiff del;
+    del.deleted_accounts.push_back(sysAddr);
+    EXPECT_NO_THROW(bridge.applyDiff(del));
+    EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
+    EXPECT_FALSE(bridge.get_account(sysAddr).has_value());
+
+    // 再删一次 → ghost delete,strict tripwire 照常响(该守卫与系统地址无关,不得被一并删掉)。
+    Storage2Ledger<MutableStorage> bridge2(storage);
+    EXPECT_THROW(bridge2.applyDiff(del), std::runtime_error);
+    EXPECT_TRUE(bridge2.poisoned());
 }
 
 // ── 真账本桥 Task 5:visitAccounts 遍历(design §6)──────────────────────────────

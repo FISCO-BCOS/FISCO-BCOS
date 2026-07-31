@@ -15,6 +15,13 @@ namespace bcos::ledger::account
 
 DERIVE_BCOS_EXCEPTION(NonceNotInitialized);
 
+/// Tag for the table-name constructor below. A distinct type (not a bool) so it can never be
+/// confused with the `binaryAddress` flag the address-taking constructors carry.
+struct FromTableName
+{
+    explicit FromTableName() = default;
+};
+
 template <class Storage>
 class EVMAccount
 {
@@ -199,8 +206,7 @@ public:
     task::Task<evmc_bytes32> storage(const evmc_bytes32& key, auto... tags)
     {
         auto rawValue = co_await m_storage.get().readOneRaw(
-            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)},
-            tags...);
+            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, tags...);
         evmc_bytes32 value{};
         if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
         {
@@ -231,6 +237,22 @@ public:
     EVMAccount(EVMAccount&&) noexcept = default;
     EVMAccount& operator=(const EVMAccount&) = delete;
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
+    /// Construct directly from the account's table name, bypassing address→table-name routing
+    /// entirely. Every method of this class reads nothing but `m_tableName`, so this is the
+    /// primitive the two address-taking constructors below are sugar for; it adds no new
+    /// semantics and changes nothing for existing callers.
+    ///
+    /// It exists for callers that must derive the table name themselves and need the *write*
+    /// side pinned to the exact same string as their own reads. The address-taking constructors
+    /// route the `c_systemTxsAddress` members to `/sys/` (see below); a caller that reads those
+    /// addresses out of `/apps/` — as the Ethereum-compatible state view must, since in Ethereum
+    /// they are ordinary accounts — would otherwise read one table and write another, a silent
+    /// read/write split-brain. Handing over one already-computed table name removes the second,
+    /// independent derivation rather than trying to keep two of them in agreement.
+    EVMAccount(Storage& storage, FromTableName /*tag*/, std::string tableName)
+      : m_storage(storage), m_tableName(std::move(tableName))
+    {}
+
     EVMAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
       : m_storage(storage)
     {

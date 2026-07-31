@@ -52,9 +52,27 @@
 // 处理,不依赖 convert_to 对越界的隐式截断行为(本仓 costOfPrecompiled 一支
 // convert_to<int64_t>() 越界静默截断的前科,MEMORY costofprecompiled-int64-overflow)。
 //
-// 存在性判据:SYS_TABLES 中以账户表路径("/apps/<hex(addr)>",feature_raw_address=off
-// 前提)为键的标记行,判据锚定 EVMAccount 的同一路径构造逻辑,但不复制其到 /sys/ 的
-// 路由分支——遇到 c_systemTxsAddress 集合地址,桥直接毒旗,不猜测路由(design §4.4)。
+// 存在性判据:SYS_TABLES 中以账户表路径("/apps/<hex(addr)>")为键的标记行。表名推导与主线
+// MPT 的 `bcos::ledger::mpt::accountTableName`/`parseAccountTable`(`Classify.h:83-117`)同源,
+// **对所有地址一视同仁**——包括 c_systemTxsAddress 的 8 个地址,它们在以太坊侧就是普通地址
+// (终审批 A · A-2,详见本文件 accountTableName 的注释;此前它们命中即毒旗,导致一笔合法交易
+// 就让节点在该块上永久卡死)。FISCO 自己的 `/sys/<hex>` 控制面对 OP 执行世界不可见。
+//
+// ── 外部依赖:feature_raw_address 必须为 off(终审批 A · A-3)────────────────────────────
+// 本桥的表名是硬编码 hex 路径。`feature_raw_address=on` 时账户表改用 20 字节**二进制**名,
+// 桥的所有读会静默返回"账户不存在"——即在一个空世界上执行整个块,静默分叉。
+// 这条前提的守护**不在本桥内**,而是上游 `scheduler_v1::validateMPTFlagMatrix`
+// (`transaction-scheduler/bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h:107-138`):
+// 它在 `libinitializer/LedgerInitializer.cpp:48-49` 于**启动时**拒绝
+// `feature_raw_address && (feature_mpt_state_root || feature_l2_ethereum_compat)`,而 OP 模式
+// 恒带 `feature_l2_ethereum_compat`(`Features.h:116`;`NodeConfig.cpp:299-316` 令它与
+// `[alloc.*]` 互为充要条件),故启动路径被完整覆盖。
+// **未覆盖的那一半**:上游的运行时守卫 `rejectRawAddressWithMPT` 唯一调用点在
+// `BaselineScheduler::coExecuteBlock`,而 OP 路径走 `OpSchedulerImpl::executeOpBlock`,不经过
+// 它;因此**中途**由系统配置交易打开 `feature_raw_address`,在下次重启前不会被任何守卫拦住。
+// 今天该缺口不可达(`OpSchedulerImpl` 尚无生产组合根),但 **OP 组合根接线时必须补上
+// `rejectRawAddressWithMPT` 的等价物**。启动这一半由 `Storage2LedgerTest` 的
+// `RawAddressWithL2CompatIsRejectedAtStartup` 钉住:上游哪天放宽那个组合,红的是我们这条。
 //
 // has_storage 判据:账户表 range seek 探测是否存在至少一个 32 字节原始键(区别于
 // ACCOUNT_TABLE_FIELDS 中的已知短字段名),冷读时探测一次并入账户缓存(design §4.4)。
@@ -122,18 +140,9 @@ public:
         if (auto it = m_accountCache.find(addr); it != m_accountCache.end())
             return it->second;
 
-        std::string tableName;
-        if (!accountTableName(addr, tableName))
-        {
-            poison(
-                "Storage2Ledger::get_account: address routes to /sys/ (c_systemTxsAddress "
-                "member); bridge refuses to guess the routing, see design §4.4");
-            return std::nullopt;
-        }
-
         try
         {
-            auto fetched = task::syncWait(fetchAccount(tableName));
+            auto fetched = task::syncWait(fetchAccount(accountTableName(addr)));
             m_accountCache.emplace(addr, fetched);
             return fetched;
         }
@@ -172,18 +181,9 @@ public:
         if (auto it = m_codeCache.find(addr); it != m_codeCache.end())
             return it->second;
 
-        std::string tableName;
-        if (!accountTableName(addr, tableName))
-        {
-            poison(
-                "Storage2Ledger::get_account_code: address routes to /sys/ (c_systemTxsAddress "
-                "member); bridge refuses to guess the routing, see design §4.4");
-            return {};
-        }
-
         try
         {
-            auto code = task::syncWait(fetchCode(tableName));
+            auto code = task::syncWait(fetchCode(accountTableName(addr)));
             m_codeCache.emplace(addr, code);
             return code;
         }
@@ -214,18 +214,9 @@ public:
         if (auto it = m_storageCache.find(cacheKey); it != m_storageCache.end())
             return it->second;
 
-        std::string tableName;
-        if (!accountTableName(addr, tableName))
-        {
-            poison(
-                "Storage2Ledger::get_storage: address routes to /sys/ (c_systemTxsAddress "
-                "member); bridge refuses to guess the routing, see design §4.4");
-            return {};
-        }
-
         try
         {
-            auto value = task::syncWait(fetchStorage(tableName, key));
+            auto value = task::syncWait(fetchStorage(accountTableName(addr), key));
             m_storageCache.emplace(cacheKey, value);
             return value;
         }
@@ -401,20 +392,20 @@ public:
 private:
     task::Task<void> applyModifiedEntry(const evmone::state::StateDiff::Entry& entry)
     {
-        // 路由守卫(design §4.4,与 applyDeletedEntry 的 ghost-delete tripwire 同一 strict 写路径
-        // 纪律):系统地址(c_systemTxsAddress 集合)EVMAccount 会静默路由进 /sys/,与读桥
-        // accountTableName 的判定不一致——写路径同样不得猜测路由,直接 throw。审查发现:此前
-        // 仅 applyDeletedEntry 有该守卫,applyModifiedEntry 会把系统地址悄悄写进 /sys/,构成读写
-        // 两路径行为不对称的缺口,现补齐。
-        std::string tableName;
-        if (!accountTableName(entry.addr, tableName))
-            throw std::runtime_error(
-                "Storage2Ledger::applyDiff: modified address routes to /sys/ "
-                "(c_systemTxsAddress member); bridge refuses to guess the routing, see design "
-                "§4.4");
+        const std::string tableName = accountTableName(entry.addr);
 
+        // **表名只推导一次,读写共用同一个字符串**(终审批 A · A-2)。此处刻意用 EVMAccount 的
+        // `FromTableName` 直构而不是 `EVMAccount(storage, addr, false)`:后者的构造函数自己会把
+        // c_systemTxsAddress 的 8 个地址路由进 `/sys/`(EVMAccount.h:239-245),而本桥的读路
+        // (以及 removeOne / existsOne / range / 写穿重读)一律走 `/apps/`——两者一旦分歧就是
+        // **读 /apps/、写 /sys/ 的脑裂**,比原先那条毒旗更坏。
+        //
+        // 这不只是"避开系统地址"这一个 case:写路此前存在**两套独立的表名推导**(桥的
+        // accountTableName 与 EVMAccount 构造函数内部那套),它们的一致性完全靠桥**拒绝**处理
+        // 二者会分歧的那 8 个地址来维持。删掉拒绝就必须删掉第二套推导,而不是让两套继续并存
+        // ——两处独立实现同一规则正是本仓 yParity 事故的成因。
         bcos::ledger::account::EVMAccount<Storage> account(
-            m_storage.get(), entry.addr, /*binaryAddress=*/false);
+            m_storage.get(), bcos::ledger::account::FromTableName{}, tableName);
 
         // 账户 ensure-exists(design §5,rev.2 补):无条件确保 SYS_TABLES 标记行存在,不得优化为
         // "无字段可写则跳过"——pre 中完全空账户(EIP-161 touch-delete 向量前置)正依赖此落账;
@@ -493,12 +484,7 @@ private:
 
     task::Task<void> applyDeletedEntry(const evmc::address& addr)
     {
-        std::string tableName;
-        if (!accountTableName(addr, tableName))
-            throw std::runtime_error(
-                "Storage2Ledger::applyDiff: deleted address routes to /sys/ "
-                "(c_systemTxsAddress member); bridge refuses to guess the routing, see design "
-                "§4.4");
+        const std::string tableName = accountTableName(addr);
 
         // strict 单形态(design §5):tripwire 内置——底层不存在即使用错误,不提供 raw 版
         // (与 EVMAccount::exists() 同一判据,直接复用 accountTableName 已解出的 tableName)。
@@ -685,8 +671,11 @@ private:
     }
 
     /// visitAccounts implementation (design §6): range-scans SYS_TABLES for the /apps/ prefix
-    /// (system addresses route to /sys/ and never appear here — an E-b precondition, not a
-    /// runtime check, see accountTableName), skips tombstoned marker rows (Critical, same
+    /// (`/sys/` is a different prefix and is never scanned; a `c_systemTxsAddress` member that
+    /// has an `/apps/<40hex>` table is an ordinary account here and is collected unconditionally
+    /// — 终审批 A · A-2, see accountTableName for why that is the *required* behaviour and not a
+    /// missing guard), skips non-account tables under /apps/ (A-1), skips tombstoned marker rows
+    /// (Critical, same
     /// discrimination as fetchAllStorage), and for each surviving candidate delegates to
     /// fetchAccount/fetchAllStorage (which independently re-verify liveness through
     /// existsOne/readOne) before invoking the visitor.
@@ -757,23 +746,48 @@ private:
         }
     }
 
-    /// 计算账户表路径("/apps/<hex(addr)>",feature_raw_address=off 前提),判据锚定
-    /// EVMAccount 的同一构造逻辑。命中 c_systemTxsAddress 集合(会被 EVMAccount 路由到
-    /// /sys/)时返回 false——桥不复制该路由分支,调用方须毒旗。
-    static bool accountTableName(const evmc::address& addr, std::string& tableName)
+    /// 账户表路径:**无条件** "/apps/" + hex_lower(addr)(feature_raw_address=off 前提,见文件头
+    /// 的外部依赖小节)。判据与主线 MPT 的 `bcos::ledger::mpt::accountTableName`
+    /// (`Classify.h:83-90`)逐字同形,与 A-1 复用的 `parseAccountTable` 严格互逆。
+    ///
+    /// **本函数曾经对 `c_systemTxsAddress` 集合返回 false,由调用方毒旗(终审批 A · A-2 已删)。**
+    /// 那 8 个地址(0x1000 SYS_CONFIG / 0x1003 CONSENSUS / 0x1005 AUTH_MANAGER / 0x100b
+    /// WORKING_SEALER_MGR / 0x1010 SHARDING / 0x10001 AUTH_COMMITTEE / 0x10003 ACCOUNT_MGR /
+    /// 0x10004 ACCOUNT,`PrecompiledTypeDef.h:143-149`)在以太坊侧就是**普通地址**,而毒旗的
+    /// 触发条件是"被 EVM 触及"而非"被写入状态"——BALANCE / EXTCODESIZE / CALL、乃至仅在
+    /// access list 里提到,都会走到读路;evmone 的 `build_diff` 还把只读 touched 账户一并放进
+    /// `modified_accounts`,写路守卫同样会被触发。于是一笔完全合法的交易就让节点 -32603,
+    /// op-node 反复重投,节点在该块上永久卡死。
+    ///
+    /// 现语义(三个答案必须一致,且已一致):
+    ///   * **读到什么** —— `/apps/<40hex>` 里的真实内容;表不存在即 `nullopt` = 以太坊语义的
+    ///     空账户。与 op-geth 对同一地址的行为逐字一致。
+    ///   * **写到哪** —— 同一张 `/apps/<40hex>`(见 applyModifiedEntry 用 `FromTableName` 直构
+    ///     EVMAccount 的注释:必须绕开 EVMAccount 自己的 `/sys/` 路由,否则读写脑裂)。
+    ///   * **进不进 stateRoot** —— 进,当且仅当 `/apps/<40hex>` 表存在,与任何其它账户同一条
+    ///     规则。`visitAccounts` 因此**不需要**补守卫:它无条件收录,正是本语义所要求的。
+    ///
+    /// 为什么不能改成"系统地址恒为空账户":有人向 0x…1000 转账时余额会凭空消失,把一个响亮的
+    /// -32603 换成不可发现的根分歧。而"进不进 stateRoot"的答案还必须与主线 MPT 一致——主线的
+    /// `Classify.h` 正向/反向**都没有系统地址分支**,`/sys/` 因不带 `/apps/` 前缀而从不进 MPT。
+    /// 也就是说主线 MPT 在同一本账本上已经把 `/apps/…1000` 当普通账户提交了;桥取任何别的语义,
+    /// OP stateRoot 就会与主线 MPT root 分歧。
+    ///
+    /// FISCO 自己的系统合约控制面仍在 `/sys/<40hex>`,对 OP 执行世界完全不可见——两个键空间
+    /// 互不重叠,不存在覆写风险(精编译地址也无法被部署占用)。
+    static std::string accountTableName(const evmc::address& addr)
     {
         std::array<char, sizeof(addr.bytes) * 2> hex{};  // NOLINT
         boost::algorithm::hex_lower(
             std::string_view(reinterpret_cast<const char*>(addr.bytes), sizeof(addr.bytes)),
             hex.data());
         std::string_view hexView(hex.data(), hex.size());
-        if (bcos::precompiled::contains(bcos::precompiled::c_systemTxsAddress, hexView))
-            return false;
 
+        std::string tableName;
         tableName.reserve(bcos::ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
         tableName.append(bcos::ledger::SYS_DIRECTORY::USER_APPS);
         tableName.append(hexView);
-        return true;
+        return tableName;
     }
 
     /// `computeHasStorage=false` skips the `probeHasStorage` range scan (final review B4-4). The
