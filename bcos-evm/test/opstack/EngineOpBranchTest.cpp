@@ -272,6 +272,11 @@ struct StubExecutor
     template <class Storage>
     struct ExecuteContext
     {
+        // release-3.18.0 (#5368) split `executeStep<N>()` into prepare/execute/finish; the
+        // `TransactionExecutor` concept (TransactionExecutor.h:32-36) now requires all three.
+        bcos::task::Task<void> prepare() { co_return; }
+        bcos::task::Task<void> execute() { co_return; }
+        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     template <class Storage>
@@ -292,18 +297,16 @@ struct StubExecutor
 };
 
 /// Generic composition root's executor (transaction-scheduler/tests/testSchedulerSerial.cpp:20-46
-/// shape — SchedulerSerialImpl's pipeline calls `ExecuteContext::executeStep<N>()`, which
-/// StubExecutor above does not have).
+/// shape — SchedulerSerialImpl's pipeline drives `ExecuteContext`'s prepare/execute/finish
+/// lifecycle, which release-3.18.0 (#5368) introduced in place of `executeStep<N>()`).
 struct MockExecutorSerial
 {
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        bcos::task::Task<void> prepare() { co_return; }
+        bcos::task::Task<void> execute() { co_return; }
+        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, bcos::protocol::BlockHeader const& blockHeader,

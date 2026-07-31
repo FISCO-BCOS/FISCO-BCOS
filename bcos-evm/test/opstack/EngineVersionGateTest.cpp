@@ -163,11 +163,10 @@ struct MockExecutorSerial
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        // release-3.18.0 (#5368) split `executeStep<N>()` into prepare/execute/finish.
+        bcos::task::Task<void> prepare() { co_return; }
+        bcos::task::Task<void> execute() { co_return; }
+        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, bcos::protocol::BlockHeader const& blockHeader,
@@ -205,6 +204,10 @@ struct StubExecutor
     template <class Storage>
     struct ExecuteContext
     {
+        // release-3.18.0 (#5368): concept now requires prepare/execute/finish.
+        bcos::task::Task<void> prepare() { co_return; }
+        bcos::task::Task<void> execute() { co_return; }
+        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     template <class Storage>

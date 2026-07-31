@@ -276,6 +276,11 @@ struct StubExecutor
     template <class Storage>
     struct ExecuteContext
     {
+        // release-3.18.0 (#5368) split `executeStep<N>()` into prepare/execute/finish; the
+        // `TransactionExecutor` concept (TransactionExecutor.h:32-36) now requires all three.
+        bcos::task::Task<void> prepare() { co_return; }
+        bcos::task::Task<void> execute() { co_return; }
+        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     template <class Storage>
