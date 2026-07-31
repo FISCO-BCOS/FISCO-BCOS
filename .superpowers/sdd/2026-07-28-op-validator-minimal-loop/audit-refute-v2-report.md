@@ -214,3 +214,179 @@ block gas limit 30000000`。
 **补充一条审计没说的**:这条与 §6.4 的其他"我方更松"欠账**不同**,它有一条**已写下但没兑现**
 的责任转移注释(`OpBlockSeal.h:36-37` 把责任推给 "validation" 层,而 validation 层没接),
 属于比"未声明缺口"更容易被误读为"已处理"的类型 —— 建议单独在 §6.4 记一条。
+
+---
+
+## 【复核 表1-#6】Jovian attributes 的长度/选择器不校验(分歧 5-1(a))
+
+### A. 我方代码
+
+- `bcos-evm/bcos-evm/opstack/OpFeeParams.cpp:33` `.da_footprint_gas_scalar =
+  static_cast<uint16_t>(readBE(slot8, 18, 2))` —— **行号精确命中**。`OpFeeParams.h:19-26` 的
+  布局注释:slot 8 bytes[18,20) = daFootprintGasScalar、[20,24) = operatorFeeScalar、
+  [24,32) = operatorFeeConstant。
+- `loadOpFeeParams`(`:36-46`)读 L1Block 的槽 1/3/7/8;`OpBlockExecute.cpp:66-73` 在第一笔
+  非 deposit 交易时惰性调一次。审计引的 `:43-45` 与 `:66-73` 命中。
+- **证伪尝试**:`grep -rn "3db6be2b|0x3d, 0xb6|selector" bcos-evm/bcos-evm engine/bcos-engine`
+  → **零命中**。我方从头到尾**没有任何一处读过 attributes 交易的 calldata**,遑论校验长度/选择器。
+  没有上游检查堵住这条。
+
+### B. op-geth(e8800cffe)
+
+`core/types/rollup_cost.go`:
+- `:46-47` `IsthmusL1AttributesLen = 176`、`JovianL1AttributesLen = 178`;`:64-65`
+  `JovianL1AttributesSelector = []byte{0x3d, 0xb6, 0xbe, 0x2b}`。
+- `:547-558` `ExtractDAFootprintGasScalar`:`len(data) < 178` → 报错;
+  `!bytes.Equal(data[0:4], JovianL1AttributesSelector)` → 报错;取 `data[176:178]`。
+- `:563-590` `CalcDAFootprint` 由 `core/block_validator.go:125` 调用,**返错即整块无效**。
+
+审计引对了。注意一处细节修正:长度判据是 `<`(不是 `!=`),**大于 178 字节的 attributes
+calldata op-geth 是接受的**,只要选择器对。
+
+### C. 可达性 / D. 触发构造
+
+审计的触发输入 (a) 属实:一个 Jovian 块,attributes calldata 长 178、选择器写
+Isthmus 的 `0x098999be`。op-geth `ValidateBody` → `failed to calculate DA footprint:
+L1 attributes transaction data does not have Jovian selector` → **整块 INVALID**。
+我方对 calldata 一字节都不看,照读槽 8 算 footprint,payload 的 `blobGasUsed`
+填成同一个和即通过 `EngineServiceImpl.h:1080-1086` 的比对 → **VALID**。
+
+一个审计没说、但**加强**该结论的事实:选择器写错时,真实 L1Block 预部署会因无匹配函数而
+revert,即 attributes deposit 变成失败回执(Regolith 语义,不是块错误),**槽 8 保持上一块的
+值**——所以我方不但不拒,还会拿一个陈旧的 scalar 继续算。
+
+### E. 裁决
+
+**CONFIRMED**(触发面 (a))。补两条:
+1. **长度判据修正**:op-geth 是 `len < 178` 而非 `!= 178`,审计写的"长度 178"过窄。
+2. **(b) 分支(槽 8 [18:20] ↔ calldata[176:178] 是否恒等)仍是 `[需验证]`,且我给出了
+   为什么现有语料给不出证据**:17 条 `jovian_*` 向量里,L1Block(`0x42..15`)的 `code`
+   **全部是 `"0x"`(无字节码)**——包括名字叫 `jovian_system_contracts_real` 的那条(它的
+   "real" 指 EIP-4788 的 `0x000f3df6...` 与 EIP-2935 的 `0x0000f908...`,与 L1Block 无关)。
+   **语料里从来没有一条向量真正执行过 L1Block 的 setter**;`jovian_da_mix` 是把
+   `slot8 = 0x…0190…`(bytes[18:20] = 400)与 attributes calldata `[176:178] = 0x0190`
+   **由夹具作者手工写成一致的**。所以"两者恒等"在本仓**零证据**,只有"夹具作者相信它们相等"。
+   最小验证步骤(仍是只读做不了的):取 Jovian 版 `L1Block.sol` 的真实 runtime 字节码,
+   放进一条向量的 `pre`,用一条真 178B attributes calldata 跑一遍,断言执行后
+   `slot8[18:20] == calldata[176:178]`。
+
+---
+
+## 【复核 表1-#7】Jovian 激活块"不得含用户交易"约束缺失(分歧 5-2)
+
+### A. 我方代码
+
+无对应检查(`grep` 全仓无激活块特判)。`OpBlockSeal.cpp:73-81` 无条件求和。
+
+审计的推理"激活块槽 8 尚未写入 → scalar = 0 → footprint 恒 0"**需要一个它没给的前提**,
+我补上:激活块的 attributes 用的是 176B Isthmus setter,而 slot 8 的 bytes[18,20) 这两个
+字节在 Isthmus 版 L1Block 的存储布局里**不存在任何写者**(Isthmus 只打包
+operatorFeeConstant[24,32) + operatorFeeScalar[20,24)),所以在规范链上激活块的
+`slot8[18:20]` **必然是 0**,不是"多半为 0"。结论方向不变,但推理链是闭合的。
+
+### B. op-geth
+
+`core/types/rollup_cost.go:569-577`:
+
+```go
+data := txs[0].Data()
+if len(data) == IsthmusL1AttributesLen {
+    if !txs[len(txs)-1].IsDepositTx() {
+        return 0, errors.New("unexpected non-deposit transactions in Jovian activation block")
+    }
+    return 0, nil
+}
+```
+
+审计引对了(`:570-576`)。
+
+### C. 可达性 / D. 触发构造
+
+Jovian 激活块 = 时间戳恰好跨过 `jovianTime` 的第一个块,attributes 仍是 176B。
+往块尾加一笔 0x02 用户交易:op-geth INVALID;我方 footprint = 0(scalar = 0)= payload 的 0
+→ VALID。可构造,但只在跨激活边界的**那一个块**上可达,一条链上一生一次。
+
+**证伪尝试(失败)**:我检查了三条可能堵住它的路——①`validateOpNewPayloadRequest` 的
+`!jovianActive && *payload.blobGasUsed != 0`(`EngineServiceImpl.cpp:234-241`)只管
+pre-Jovian,激活块 `jovianActive == true`,不拦;②`OpBlockExecute.cpp` 的三条准入规则不涉及
+激活块;③seal 比对面只比相等。都不堵。
+
+### E. 裁决
+
+**CONFIRMED**,危害等级维持"仅激活块可达"。补一条**审计漏掉的反向观察**:op-geth 这段的
+注释 "sufficient to check last transaction because deposits precede non-deposit txs" 说明
+**op-geth 自己假定了"deposit 必须前置"**——这正是我方分歧 4-3 强制执行、而 op-geth EL
+不强制的那条规则。即在激活块这一个点上,op-geth 的正确性依赖一条它不校验的假设,
+而我方校验了它却在别处更松。这对"批次划分"有意义:4-3 与 5-2 是同一处协议假设的两面,
+应放在同一批一起裁定,而不是一个进表 1 #3、一个进表 1 #7。
+
+---
+
+## 【复核 表1-#8】首块豁免 timestamp 单调性 + `configAt` 吞 pre-Isthmus(分歧 2-3 + 9-1)
+
+### A. 我方代码(逐环节)
+
+1. `engine/bcos-engine/EngineServiceImpl.h:861-867` 注释:"Missing parent header => SKIP,
+   deliberately (this is the genesis/first-block case, and the behaviour is part of the contract,
+   not an oversight)";`:868-891` timestamp 比较整段包在
+   `if (auto parentHeaderEntry = ...; parentHeaderEntry.has_value())` 里。**审计读对了**。
+2. `bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp:102-110` `configAt`:
+   `if (timestamp >= thresholds.jovianTime) return jovianConfig(); return isthmusConfig();`
+   —— 低于 `isthmusTime` 也落 Isthmus。**审计读对了**(行号精确)。
+3. `-38005` 闸(`EngineServiceImpl.h:692-701`):`isthmusActive != (version == 4)` 即抛。
+   注意这是**双条件**:pre-Isthmus 时间戳走 V4 被拒,Isthmus+ 时间戳走非 V4 也被拒。
+   所以 pre-Isthmus 时间戳的**唯一**入口是 V1/V2/V3。
+
+### B. op-geth
+
+- `eth/catalyst/api.go:888-891` 父块缺失 → `delayPayloadImport`(SYNCING);
+  `consensus/beacon/consensus.go:253-256` `header.Time <= parent.Time` 无条件。审计引对了。
+- `beacon/engine/types.go:319-347`:pre-Isthmus 时间戳 + V3(`requests == nil`)→
+  `requestsHash = nil`;Isthmus 时间戳 → 强制要求 `WithdrawalsRoot != nil`、
+  `requests` 必须是空数组。
+
+### C. 可达性 —— **这里推翻审计的一半**
+
+审计称残余缺口是"引导后的第一个块无父头 → timestamp 任取 → 走 V3 通道带一个 pre-Isthmus
+时间戳进来 → 整块用错规则集 ⇒ stateRoot/receiptsRoot/gasUsed 全线分歧"。逐环节验证后,
+**前半段(能进来)成立,后半段(状态分歧)不成立**:
+
+1. **第二道闸**:`validateOpNewPayloadRequest`(`EngineServiceImpl.cpp:200-241`)**无条件**
+   要求 `withdrawalsRoot` 在场(`:219-225`)、`withdrawals` 在场且空、`excessBlobGas == 0`、
+   `blobGasUsed` 在场、`parentBeaconBlockRoot` 在场。一个**真实的** pre-Isthmus payload
+   没有 `withdrawalsRoot`(那是 Isthmus 才加的 payload 扩展字段)→ 直接 INVALID。
+   能进来的只有"Isthmus 形状 + pre-Isthmus 时间戳"的**人造** payload。
+2. **第三道闸(审计完全没看)**:`rebuildOpEthHeader`(`EngineServiceImpl.cpp:304-341`)
+   把 `.requestsHash = c_opEmptyRequestsHash` **无条件**钉死,`.withdrawalsRoot =
+   payload.withdrawalsRoot.value()` 也无条件填;而 `bcos-codec/bcos-codec/rlp/
+   EthBlockHeader.h:62,71` 的这两个字段是**非 optional 的 `h256`,永远参与 RLP 编码**。
+   于是我方重建出的永远是 21 字段的 Isthmus/Prague 形状头。
+   **op-geth 对同一份 pre-Isthmus payload 建出的头 `RequestsHash` 是 nil** → 两侧
+   `blockHash` **必然不同**。攻击者只能二选一:让 payload.blockHash 匹配我方(op-geth 立刻
+   `INVALID_BLOCK_HASH`),或匹配 op-geth(我方 `EngineServiceImpl.h:774` 的
+   `ethHeader.hash() != payload.blockHash` 一票否决)。
+   **⇒ 不存在任何一个 pre-Isthmus 时间戳的块能被两侧同时接受并产出不同状态。**
+3. 2-3 的**另一半**(同一分叉内的首块 timestamp 任取)不受上面影响,仍然成立:引导后的第一个
+   块可以带任意 timestamp(哪怕小于起点块),我方接受、op-geth 拒绝。但它**一个节点一生只有
+   一次**(此后每个块都存了头),且是引导协议的可修项。
+
+### D. 触发构造
+
+- 可构造的:一条 Isthmus 形状、时间戳任取的首块 payload(现有任一 `isthmus_*` 向量改
+  `timestamp` 再 reseal blockHash 即可),我方接受。**这是 2-3 的真实触发**。
+- 不可构造的:一个能让两侧都产出结果、且结果不同的 pre-Isthmus 块(见 C.2/C.3)。
+
+### E. 裁决
+
+**降级**:
+- **2-3(首块 timestamp 豁免)**:**CONFIRMED**,但危害面从"整块用错规则集"降到
+  "引导后的第一个块可携带非单调 timestamp,我方接受 op-geth 拒绝",**且每个节点仅一次**。
+- **9-1(`configAt` 吞 pre-Isthmus)**:**降级为"死路径上的正确性缺陷"**。它在代码上成立
+  (`OpForkSchedule.cpp:107-109` 确实把 `timestamp < isthmusTime` 解析成 Isthmus),
+  但**没有任何输入能让它产生与 op-geth 的状态分歧**——被 `-38005` 闸(V4)、
+  `withdrawalsRoot` 必填(真实 pre-Isthmus payload)、`requestsHash` 无条件钉死
+  (人造 payload 的 blockHash)三道独立地堵死。
+- **两者的"合成"(表 1 #8 的写法)**:**REFUTED**。"引导后的第一个块可携带任意(含
+  pre-Isthmus)时间戳,整块用错规则集"这个后果链在第三环断掉。表 1 #8 应拆成两条:
+  2-3 留在表 1(降级),9-1 移出"当前可构造的分歧",改记为"防御性正确性欠账
+  (今天不可达,但 `configAt` 的 fall-through 是一个等着被别处放宽后引爆的地雷)"。
