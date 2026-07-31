@@ -170,3 +170,188 @@ op-geth 对同一条 alloc:见 B,**同样进 trie,同样的叶**。
 预期相同。**V3 只读,未执行。**
 
 ---
+
+## 复核 2-2(表 2 #2 / 分歧 5-1):Jovian `daFootprintGasScalar` 取自不同的源
+
+### A. 我方代码 —— 属实
+
+`bcos-evm/bcos-evm/opstack/OpFeeParams.cpp:33`:
+`.da_footprint_gas_scalar = static_cast<uint16_t>(readBE(slot8, 18, 2))`,
+`:43-45 loadOpFeeParams` 读 `OP_L1_BLOCK` 的槽 1/3/7/8。
+`OpFeeParams.h:25` 的注释就是 `// slot 8 bytes[18,20)`,**没有任何来源锚**(既没有 op-geth 位置,
+也没有 L1Block.sol 的存储布局出处)——全仓 grep `da_footprint_gas_scalar` 只有这 5 处,无一条溯源。
+
+`OpBlockExecute.cpp:66-73`:惰性在**第一笔非 deposit 交易**处加载(即所有 deposit 执行完之后)。
+`OpReceiptMeta.cpp:27-32` 用它算 `da_footprint`;`OpBlockSeal.cpp:74-80` 只累加
+`std::get_if<OpTxReceipt>` 的收据(即排除 deposit)→ `seal.blobGasUsed`。
+
+### B. op-geth —— 属实,且比审计说的更强
+
+`core/types/rollup_cost.go:547-557 ExtractDAFootprintGasScalar` 与 `:563-591 CalcDAFootprint`
+在 `e8800cffe` 上与审计引文逐字一致。补充两点审计没写的:
+
+1. **op-geth 的 DA 校验在 `ValidateBody` 里,是执行前的块体校验**
+   (`core/block_validator.go:119-134`),不是执行后比对:
+   ```go
+   if v.config.IsJovian(header.Time) {
+       if header.BlobGasUsed == nil { return errors.New("nil blob gas used …") }
+       daFootprint, err := types.CalcDAFootprint(block.Transactions())
+       if err != nil { return fmt.Errorf("failed to calculate DA footprint: %w", err) }
+       else if blobGasUsed != daFootprint { … }
+       if daFootprint > block.GasLimit() { … }
+   }
+   ```
+   所以选择器/长度不合法时 op-geth **根本不执行这个块**。我方是执行完再算。
+2. **op-geth 确实从槽 8 读东西 —— 但只读 operator fee**
+   (`rollup_cost.go:84 OperatorFeeParamsSlot = 8`,`:228 statedb.GetState(L1BlockAddr, OperatorFeeParamsSlot)`,
+   字节 [20:24) scalar / [24:32) constant)。**全仓没有任何 DA-footprint 的 slot 偏移常量**
+   (grep `DAFootprint` 只命中 `ExtractDAFootprintGasScalar`/`CalcDAFootprint` 与 `miner/worker.go:422`、
+   `core/types/receipt_opstack.go:26`,三个消费方**全部**走 attributes calldata)。
+   → 我方的 `readBE(slot8, 18, 2)` 在 op-geth 侧**没有对应物**,这是一个纯粹自造的取值点。
+
+### C. 可达性 + D. 触发构造 —— 审计只给了一条,实际有三条,其中一条**与存储布局完全无关**
+
+审计只列了 (a) 选择器/长度不校验 与 (b) "槽 8 [18:20] 是否恒等于 calldata[176:178](取决于 L1Block 存储布局)"。
+补两条 (b) 之外的、**不依赖布局假设**的触发路径:
+
+**(b1) L1 attributes deposit 执行失败。** deposit 失败在两边都是"回执 status=0、块仍有效"
+(我方 `OpDepositTx.cpp` 失败回执语义、op-geth Regolith 语义,审计第 7 层已确认一致)。
+此时 L1Block 的槽 8 **没有被本块的 attributes 更新**,我方 `loadOpFeeParams` 读到的是
+**上一块的** scalar;op-geth 读的是**本块 calldata** 里的。两值不同 ⇒ `blobGasUsed` 不同 ⇒
+我方判 INVALID 而 op-geth 判 VALID。触发只需要一笔 gas 不足 / 会 revert 的 attributes deposit。
+**这条不需要任何关于 L1Block.sol 布局的假设,`[需验证]` 只剩"deposit 失败后槽确实不更新",
+而那是 EVM 回滚语义的直接推论。**
+
+**(b2) 本块有第二笔 deposit 覆写槽 8。** attributes 之后的任一 deposit(depositor 权限)
+再调一次 setter,我方读到的是**最后一次写入**的值,op-geth 读的仍是 `txs[0].Data()`。
+需要特权 deposit,可达性低,但机制上成立。
+
+**(b3) 纯 deposit 块 / 无非 deposit 交易的 Jovian 块。** 我方 `feeLoaded` 永不置位 ⇒
+`fee` 保持默认 ⇒ scalar=0 ⇒ blobGasUsed=0;op-geth 的 `CalcDAFootprint` 循环里 deposit 全部
+`continue` ⇒ 也是 0。**数值上一致**,但 op-geth **仍然会先跑一遍 `ExtractDAFootprintGasScalar`
+的长度/选择器校验**并因不合法而拒块(`:577` 的注释 "ExtractDAFootprintGasScalar catches all
+invalid lengths")。所以 (a) 在纯 deposit 块上同样成立 —— 审计把 (a) 归到"表 1 #6 构造 attributes
+calldata",成本描述是准确的。
+
+### E. 裁决:**CONFIRMED**(并**上调**)
+
+- (a) 长度/选择器零校验:**CONFIRMED**,当前可构造,方向"我方接受 op-geth 拒绝的"。
+- (b) 取值源不同:**CONFIRMED**,且比审计写的更硬 —— 不是"取决于 L1Block 布局",
+  而是 **op-geth 侧根本不存在这个槽读取点**,我方的槽偏移是无出处的自造常量;
+  另有 (b1) 一条**与布局无关**的可达路径。
+- 建议的修法方向也随之变化:审计的"最小验证步骤"(去查 L1Block.sol 布局)只能验证 (b) 的一半;
+  **正解是改为与 op-geth 同源 —— 从 `txs[0]` 的 calldata[176:178] 取值,并同时补上
+  178 长度 + `0x3db6be2b` 选择器校验**,一次修掉 (a)(b)(b1)(b2) 四条。
+- 保留 `[需验证]`:"槽 8 [18:20] 在规范 Jovian L1Block 预部署里到底是不是 daFootprintGasScalar"
+  仍未证实(本仓无出处、op-geth 无对应常量)。若它其实**不是**,那今天连正常块的
+  `blobGasUsed` 都是错的 —— 这会把本条从"生产接入才可达"直接变成"表 1 级别"。
+  最小步骤:取一条真实 Jovian 版 L1Block 预部署字节码,跑一次 `setL1BlockValuesJovian`,
+  dump 槽 8,与 calldata[176:178] 比对。**V3 只读,未执行。**
+
+---
+
+## 复核 2-3(表 2 #3 / 分歧 3-1 + 3-2):`execute_system_call` 绕过 `Host::call`;Release 下 assert 被编译掉
+
+派单点名要分别裁决,并特别核实 evmone 的 `system_call_block_start` 是否已经处理了 REVERT。
+
+### 3-1(不回滚)
+
+**A.** `bcos-evm/bcos-evm/eth/state/system_contracts.cpp:65-81`:
+```cpp
+const Transaction empty_tx{};
+Host host{rev, vm, state, block, block_hashes, empty_tx};
+return vm.execute(host, rev, msg, code.data(), code.size());
+```
+构造了 `Host`,但**直接 `vm.execute`,不经 `Host::call`**。`:83-103 system_call_block_start`
+外层持有 `State state{state_view}`,按引用传给每次调用,末尾 `:106 state.build_diff(rev)`。
+
+**派单点名的核实:evmone 侧没有任何 REVERT 处理。** `system_call_block_start` 的循环体
+(`:96-103`)只有三步:取 code、空则 continue、`execute_system_call` + `assert`。
+`:103` 之后没有任何按 `status_code` 分支的代码,没有 checkpoint/rollback。
+回滚只存在于 `host.cpp:383-397` 的 `Host::call`(`m_state.checkpoint()` / 非 SUCCESS 时
+`m_state.rollback(...)`),而这条路径**不经过它**。**审计没有漏看 evmone 侧的处理 —— 那处理不存在。**
+
+**B.** op-geth `core/state_processor.go:262-282 ProcessBeaconBlockRoot` / `:286-308
+ProcessParentBlockHash` 在 `e8800cffe` 上与审计引文一致:两者都走 `evm.Call(...)`
+(内部 snapshot/revert),2935 侧另有 `:305-307 if err != nil { panic(err) }`,
+两者结尾都补一次 `evm.StateDB.Finalise(true)`。方向确认:**op-geth 回滚,我方不回滚**。
+
+**C/D.** 可达性:需要 `0x000F3df6…Beac02` / `0x0000F908…002935` 上的代码在 SSTORE 之后
+REVERT 或耗尽 30M gas。规范 4788/2935 预部署的 set 分支只在 `calldatasize != 32` 时 revert,
+而我方输入恒为 32 字节 —— **规范链上不可达**,只有非规范创世/升级能触发。审计的定性("需生产账本")准确。
+
+**E. 裁决:CONFIRMED,但可达性维持在"需非规范预部署"。**
+两点补充:
+- 这是**上游 evmone 的行为**(vendored 文件,`scripts/upstream-diff/manifest.tsv` 里没有
+  `system_contract*` 条目 = 本仓未改过它)。修它等于对上游打补丁,应记为 upstream 分歧而不是本仓缺陷,
+  但**对 OP 验证者而言仍然是我方的责任面**。
+- 修法只需一行量级:在 `execute_system_call` 外包一层
+  `const auto cp = state.checkpoint(); … if (res.status_code != EVMC_SUCCESS) state.rollback(cp);`
+  —— 与 `Host::call` 同一对原语。
+
+### 3-2(assert 被编译掉)
+
+**A.** `system_contracts.cpp:103 assert(res.status_code == EVMC_SUCCESS);` 属实,
+且**比审计说的更严重**:`cmake/Options.cmake:41-43` 的默认构建类型是 **`RelWithDebInfo`**,
+`cmake/CompilerSettings.cmake:84` 的 `CMAKE_CXX_FLAGS_RELWITHDEBINFO = "-O2 -g -DNDEBUG"` ——
+**不显式指定 `-DCMAKE_BUILD_TYPE=Debug` 的构建(含开发者的默认构建)全部带 NDEBUG**,
+这条 assert 在绝大多数构建里根本不存在。审计写的"生产构建(NDEBUG)下"低估了覆盖面。
+
+**B.** op-geth:4788 侧同样忽略返回(`_, _, _ = evm.Call`),但 snapshot 保证"失败 ⇒ 无状态变化";
+2935 侧 `panic(err)`。审计引文准确。
+
+**E. 裁决:CONFIRMED(且事实加强)。** 它本身不是独立分歧,是 3-1 的失败模式选择器:
+Debug 下 abort(可用性事故),NDEBUG 下静默状态分歧(共识事故)。两者都不是"判块 INVALID"。
+与 3-1 同一处修复即可消除(rollback 之后 assert 就不再承担唯一失败处理)。
+
+---
+
+## 复核 2-4(表 2 #4 / 分歧 8-1):MessagePasser 账户不存在时 withdrawalsRoot 不同
+
+**A.** `bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:877-887`:
+```cpp
+std::map<evmc::bytes32, evmc::bytes32> messagePasserStorage;
+bridge.visitAccounts([&](const auto& accountView) {
+    if (accountView.addr == bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER)
+    { messagePasserStorage = accountView.storage; return false; }
+    return true;
+});
+```
+账户不存在 ⇒ map 保持空 ⇒ `OpBlockSeal.cpp:62 opStorageRoot({})` = `EMPTY_MPT_HASH`。
+**代码无法区分"账户不存在"与"账户存在但无非零槽"** —— 两者都给空 map。属实。
+
+**B.** `core/state/statedb.go:347-353`:
+```go
+func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
+    stateObject := s.getStateObject(addr)
+    if stateObject != nil { return stateObject.Root() }
+    return common.Hash{}
+}
+```
+**不存在 ⇒ 全零哈希**;存在但存储为空 ⇒ `stateObject.Root()` = `types.EmptyRootHash`。
+`core/block_validator.go:190-197` 拿它与 `*header.WithdrawalsHash` 比。审计引文与行号在 `e8800cffe` 上属实。
+
+所以分歧只在"账户完全不存在"这一格:op-geth 期望 `0x00…00`,我方给 `0x56e8…b421`。
+"存在但空存储"那一格两边一致。审计的表述准确。
+
+**C. 可达性 —— 尝试证伪,失败,但可达性比审计写的更低**
+- 规范 OP 链创世必含 `0x4200…0016` 预部署(带 code),不可能不存在。
+- 能否被删掉?SELFDESTRUCT 在 Cancun+ 只对**同笔创建**的账户真正销毁
+  (`host.cpp:137-148` 的 `m_rev >= EVMC_CANCUN && !acc.just_created` 分支只转余额),
+  MessagePasser 是创世部署的,永远 `just_created == false` ⇒ **销毁路径不可达**。
+- 因此实际触发只剩"创世里就没部署它"这一条,即**非规范创世配置**。
+
+**D.** 触发输入确实存在(一份不含 `0x4200…0016` 的 genesis alloc),但它同时意味着这条链不是
+规范 OP 链 —— 而在这种链上 op-node 也不会正常工作。
+
+**E. 裁决:CONFIRMED(事实),但**降级**为「防御性欠账 / 鲁棒性缺口」,不是"生产接入才可达的分歧"。**
+理由:唯一触发面是非规范创世,而非规范创世本身就不在被支持的输入集里。
+建议(低成本、值得做):在 `visitAccounts` 回调里同时记一个 `bool found`,
+未找到时**毒旗或抛块级错误**,而不是静默地给出空 MPT 根 —— 因为"MessagePasser 不存在"永远是
+一个配置事故,静默地给一个看起来合理的根是最坏的处理方式。
+
+**顺带(不是分歧,记一笔)**:这一步为了找 1 个账户做了一次**全账本 `visitAccounts`**
+(每个账户还要 `fetchAllStorage` 全量扫),紧接着 `stateRootOf(bridge)` 又扫**第二遍**。
+两遍全表扫描,且中间没有任何缓存复用。正确性无碍,但接生产账本后这是每块两次 O(全状态) 的开销。
+
+---
