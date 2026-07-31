@@ -154,13 +154,17 @@ inline OpBlockCommitments commitmentsOf(const bcos::evm::opstack::OpBlockSeal& s
 /// **disagree for non-canonical input** — the same payload would then yield two different
 /// transactionsRoots and therefore two different block hashes.
 ///
-/// What makes the two equivalent in practice is not this function but the decoder: since B4-2,
-/// `OpSchedulerImpl`'s raw-tx decoders reject every non-canonical encoding Go's `rlp` rejects
-/// (leading-zero scalars, over-wide integers, wrong-width address/hash fields, non-`0x01`
-/// booleans), so no block containing a non-canonically encoded transaction survives step 1. Every
-/// input that reaches this function is canonical, and on canonical input "hash the wire bytes"
-/// and "re-encode then hash" are the same computation. If that decoder strictness is ever
-/// relaxed, this equivalence lapses with it.
+/// What makes the two equivalent in practice is not this function but the decoder:
+/// `OpSchedulerImpl`'s raw-tx decoders reject every non-canonical encoding Go's `rlp` rejects —
+/// leading-zero scalars, over-wide integers, wrong-width address/hash fields, non-`0x01` booleans
+/// (B4-2), a leading-zero long-form LENGTH PREFIX (C1, final review batch B, fixed in the shared
+/// bcos-codec/rlp decoder), and — as a whole-envelope backstop — any residual non-canonicality
+/// caught by `assertCanonicalRoundTrip` (decode → re-encode → byte-compare, run per transaction).
+/// So no block containing a non-canonically encoded transaction survives step 1. Every input that
+/// reaches this function is canonical, and on canonical input "hash the wire bytes" and "re-encode
+/// then hash" are the same computation. If that decoder strictness is ever relaxed, this
+/// equivalence lapses with it — which is exactly why the round-trip invariant exists: to fail
+/// closed if a future change does.
 ///
 /// Factored out of `OpSchedulerImpl::executeOpBlock`'s step 6 (which now calls this) because the
 /// engine needs the *same* value **before** execution: `ExecutionPayload` carries no

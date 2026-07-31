@@ -297,8 +297,25 @@ inline void throwOnDecodeError(bcos::Error::UniquePtr&& err)
 // wire bytes, whereas op-geth's `DeriveSha` re-encodes each transaction canonically from the
 // parsed struct. For canonical input the two agree; for non-canonical input they do not, so
 // without this check the two implementations could compute different block hashes for the same
-// payload. With it, non-canonical input never survives decoding, and the equivalence holds for
-// everything that does.
+// payload.
+//
+// Scope of what "canonical" is enforced by, and where (final review batch B — the earlier claim
+// that "non-canonical input never survives decoding" was too strong; C1 disproved it by finding a
+// leading-zero length prefix that DID survive, producing a divergent txRoot):
+//   (1) per-field strictness — the readCanonicalScalar/readFixedWidth/decodeBoolField primitives
+//       below reject leading-zero scalars, over-wide integers, wrong-width fixed fields, and
+//       non-canonical bools (the B4-2 cases enumerated above);
+//   (2) length-prefix strictness — C1 fixed the SHARED decoder (bcos-codec/rlp/RLPDecode.h) to
+//       reject a non-minimal (leading-zero) long-form length prefix, the exact class C1 found;
+//   (3) a whole-envelope re-encode invariant — `assertCanonicalRoundTrip` (below) decodes, then
+//       re-encodes the parsed struct canonically and requires it to be byte-identical to the raw
+//       envelope. This is defense-in-depth INDEPENDENT of (1)/(2): it catches any residual
+//       non-canonicality a field decoder might normalise away and re-encode differently — the
+//       "decode dropped/rewrote bytes yet stayed self-consistent" class that (1)/(2) do not
+//       target — and turns "non-canonical input does not survive decoding" from a prose claim
+//       into a runtime invariant checked on every transaction.
+// With all three, non-canonical input does not survive decoding, and the raw-bytes txRoot equals
+// op-geth's re-encoded DeriveSha for everything that does.
 
 /// Reads one RLP string payload, requiring it to be a canonical unsigned scalar: no leading zero
 /// byte, no wider than `maxBytes`. Returns a view of the payload and advances `in` past it.
@@ -797,6 +814,62 @@ inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64
 /// seam surface" block on the class below, and engine's `EngineServiceImpl.h` c_opMode comment,
 /// task-5b, for the "OP dependent name must not leak into a signature the generic composition
 /// root also instantiates" failure mode this avoids).
+/// Re-encodes a decoded OpBlockTx canonically from its parsed fields, so the caller can compare it
+/// byte-for-byte with the raw envelope. Uses evmone's canonical RLP for every type (no bcos-codec
+/// type conversions): deposits are rebuilt as `0x7e || rlp([...8 fields])` (the isSystemTransaction
+/// bool re-emits via the `uint64 0/1` shape, whose RLP — empty string / 0x01 — matches the wire
+/// bool exactly); legacy reconstructs the full v (pre-155 27+parity, EIP-155 chainId*2+35+parity)
+/// that `tx.v`'s uint8 cannot hold; the three signed typed forms round-trip through
+/// `evmone::state::rlp_encode`.
+inline bcos::bytes canonicalEnvelopeBytes(const bcos::evm::opstack::OpBlockTx& btx)
+{
+    if (std::holds_alternative<bcos::evm::opstack::DepositTx>(btx.tx))
+    {
+        const auto& d = std::get<bcos::evm::opstack::DepositTx>(btx.tx);
+        auto body =
+            evmone::rlp::encode_tuple(evmc::bytes_view(d.source_hash), evmc::bytes_view(d.from),
+                d.to.has_value() ? evmc::bytes_view(*d.to) : evmc::bytes_view{}, d.mint.value_or(0),
+                d.value, static_cast<uint64_t>(d.gas_limit),
+                static_cast<uint64_t>(d.is_system_tx ? 1 : 0), d.data);
+        bcos::bytes out;
+        out.reserve(body.size() + 1);
+        out.push_back(0x7e);
+        out.insert(out.end(), body.begin(), body.end());
+        return out;
+    }
+    const auto& tx = std::get<evmone::state::Transaction>(btx.tx);
+    if (tx.type == evmone::state::Transaction::Type::legacy)
+    {
+        const auto fullV = (tx.chain_id == 0) ? intx::uint256{27} + tx.v :
+                                                intx::uint256{tx.chain_id} * 2 + 35 + tx.v;
+        auto e = evmone::rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+            static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value, tx.data, fullV,
+            tx.r, tx.s);
+        return {e.begin(), e.end()};
+    }
+    auto e = evmone::state::rlp_encode(tx);  // 0x01/0x02/0x04 with their EIP-2718 type prefix
+    return {e.begin(), e.end()};
+}
+
+/// Whole-envelope canonical-encoding invariant (失实1 / final review batch B): decode → re-encode →
+/// byte-compare against the original wire bytes, rejecting any mismatch. Defense-in-depth
+/// INDEPENDENT of the per-field (B4-2) and length-prefix (C1) checks — it fails closed if a future
+/// decoder change ever lets a non-canonical byte through, keeping `computeOpTxRoot`'s "hash the raw
+/// bytes == op-geth DeriveSha" equivalence a runtime-checked invariant rather than a prose promise.
+/// Cost is one re-encode per tx, negligible beside the ecrecover each decoder already runs, so it
+/// stays enabled in all builds (a debug-only guard would compile out of this Release consensus path
+/// — exactly where it must hold). Proven free of false-rejects by the 33-vector golden corpus and
+/// the t8n legs, whose real op-geth bytes all round-trip.
+inline void assertCanonicalRoundTrip(
+    const bcos::bytes& rawEntry, const bcos::evm::opstack::OpBlockTx& decoded)
+{
+    auto reencoded = canonicalEnvelopeBytes(decoded);
+    if (reencoded.size() != rawEntry.size() ||
+        !std::equal(reencoded.begin(), reencoded.end(), rawEntry.begin()))
+        throw OpConsensusError(
+            "OpSchedulerImpl: raw tx decode: non-canonical envelope (re-encode mismatch)");
+}
+
 inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     if (rawEntry.empty())
@@ -806,19 +879,26 @@ inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64
     constexpr uint8_t kEip1559TypeByte = 0x02;     // evmone::state::Transaction::Type::eip1559
     constexpr uint8_t kSetCodeTypeByte = 0x04;     // evmone::state::Transaction::Type::set_code
     constexpr uint8_t kRlpListBase = 0xc0;  // EIP-2718: first byte >= 0xc0 is an untyped RLP list
+    // Keep a copy of the wire bytes for the whole-envelope round-trip invariant below; the
+    // sub-decoders consume (move from / crop) rawEntry as they parse.
+    const bcos::bytes original = rawEntry;
     const auto typeByte = rawEntry[0];
-    if (typeByte >= kRlpListBase)  // legacy tx: no type byte, the envelope is the RLP list itself
-        return decodeLegacyTx(std::move(rawEntry), chainId);
-    if (typeByte == kDepositTypeByte)
-        return decodeDepositTx(std::move(rawEntry));
-    if (typeByte == kAccessListTypeByte)
-        return decodeAccessListTx(std::move(rawEntry), chainId);
-    if (typeByte == kEip1559TypeByte)
-        return decodeEip1559Tx(std::move(rawEntry), chainId);
-    if (typeByte == kSetCodeTypeByte)
-        return decodeSetCodeTx(std::move(rawEntry), chainId);
-    throw OpConsensusError("OpSchedulerImpl: raw tx decode: unsupported tx type byte 0x" +
-                           std::to_string(static_cast<unsigned>(typeByte)));
+    auto decoded = [&]() -> bcos::evm::opstack::OpBlockTx {
+        if (typeByte >= kRlpListBase)  // legacy: no type byte, the envelope is the RLP list itself
+            return decodeLegacyTx(std::move(rawEntry), chainId);
+        if (typeByte == kDepositTypeByte)
+            return decodeDepositTx(std::move(rawEntry));
+        if (typeByte == kAccessListTypeByte)
+            return decodeAccessListTx(std::move(rawEntry), chainId);
+        if (typeByte == kEip1559TypeByte)
+            return decodeEip1559Tx(std::move(rawEntry), chainId);
+        if (typeByte == kSetCodeTypeByte)
+            return decodeSetCodeTx(std::move(rawEntry), chainId);
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: unsupported tx type byte 0x" +
+                               std::to_string(static_cast<unsigned>(typeByte)));
+    }();
+    assertCanonicalRoundTrip(original, decoded);
+    return decoded;
 }
 
 }  // namespace detail
@@ -1045,9 +1125,11 @@ public:
         // encode_tuple) + gasUsed. NOTE (B4-2 review M-3): this used to be described as "the
         // op-geth DeriveSha convention", which is not accurate — `DeriveSha` re-encodes each
         // transaction canonically from the parsed struct, while this hashes the wire bytes. The
-        // two coincide only because the decoders above reject every non-canonical encoding; see
-        // `computeOpTxRoot`'s comment in OpEngineSeam.h for the full statement of that
-        // dependency (this is the second copy of the same claim — keep them in step). The trie
+        // two coincide only because the decoders above reject every non-canonical encoding —
+        // per-field strictness (B4-2), the shared length-prefix fix (C1), AND the whole-envelope
+        // `assertCanonicalRoundTrip` invariant (final review batch B); see `computeOpTxRoot`'s
+        // comment in OpEngineSeam.h for the full statement of that dependency (this is the second
+        // copy of the same claim — keep them in step). The trie
         // construction itself moved to `OpEngineSeam.h`'s `computeOpTxRoot` (task-5b) because the
         // engine's newPayload OP branch must derive the same value *before* execution, for the
         // header reconstruction the blockHash check depends on — same function, two call sites, no

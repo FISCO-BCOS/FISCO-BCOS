@@ -1338,6 +1338,44 @@ TEST(OpSchedulerImpl, LegacyNonCanonicalVRejected)
     EXPECT_TRUE(threw);
 }
 
+// ══════════════ final review batch B, 失实1: whole-envelope canonical round-trip invariant ══════
+//
+// assertCanonicalRoundTrip (decode → re-encode → byte-compare) is defense-in-depth on top of the
+// per-field (B4-2) and length-prefix (C1) checks: it turns "non-canonical input never survives
+// decoding" from prose into a runtime invariant. Its two obligations: (a) NEVER false-reject a
+// canonical tx — proven at scale by the 33-vector golden corpus + t8n legs (all pass with it live)
+// and here by exact byte-reproduction of a deposit; (b) actually FIRE when the raw bytes differ
+// from the canonical re-encoding.
+TEST(OpSchedulerImpl, RoundTripInvariantReproducesDepositBytesExactly)
+{
+    // The deposit re-encoder is the trickiest (evmc→wire rebuild, isSystemTransaction bool shape),
+    // so pin it: canonicalEnvelopeBytes must reproduce a valid deposit envelope byte-for-byte.
+    auto raw = buildDepositRawTx(1'000'000);
+    auto decoded = bcos::evm::engine::detail::decodeOneRawTx(raw, kChainId);
+    EXPECT_EQ(bcos::evm::engine::detail::canonicalEnvelopeBytes(decoded), raw);
+}
+
+TEST(OpSchedulerImpl, RoundTripInvariantFiresOnMismatch)
+{
+    auto raw = buildDepositRawTx(1'000'000);
+    auto decoded = bcos::evm::engine::detail::decodeOneRawTx(raw, kChainId);
+    // A raw envelope that no longer equals the canonical re-encoding of `decoded` must be rejected.
+    auto tampered = raw;
+    tampered.back() ^= 0xFFU;
+    bool threw = false;
+    try
+    {
+        bcos::evm::engine::detail::assertCanonicalRoundTrip(tampered, decoded);
+    }
+    catch (const bcos::evm::engine::OpConsensusError& e)
+    {
+        threw = true;
+        EXPECT_NE(std::string(e.what()).find("re-encode mismatch"), std::string::npos)
+            << "e.what()=\"" << e.what() << "\"";
+    }
+    EXPECT_TRUE(threw) << "round-trip invariant did not fire on a mismatched envelope";
+}
+
 // ══════════════ final review batch 4: B4-2 non-canonical RLP is rejected ══════════════
 //
 // Go's `rlp` — which produced every byte this decoder will legitimately see — rejects each of
