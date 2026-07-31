@@ -12,11 +12,13 @@
 #include <bcos-evm/ledger/MemoryLedger.h>
 #include <bcos-evm/ledger/Storage2Ledger.h>
 #include <bcos-framework/ledger/EVMAccount.h>
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
+#include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gtest/gtest.h>
 #include <boost/algorithm/hex.hpp>
@@ -1519,4 +1521,62 @@ TEST(Storage2Ledger, VisitAccountsSkipsFortyCharNonHexTable)
     EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
     ASSERT_EQ(seen.size(), 1U);
     EXPECT_EQ(seen[0], 0x01_address);
+}
+
+// ══════════ 终审批 A · A-3:feature_raw_address 这条外部依赖的固定断言 ══════════
+//
+// 本桥的表名是**硬编码 hex 路径**("/apps/" + hex_lower(addr))。`feature_raw_address=on`
+// 时账户表改用 20 字节**二进制**名(EVMAccount.h:248-255 的 binaryAddress 分支),于是桥的
+// 所有读会**静默**返回"账户不存在"—— 即在一个空世界上执行整个块。这不会毒旗、不会 -32603,
+// 就是安安静静地把状态算错,是本批三条里唯一一条**没有响声**的。
+//
+// 调研结论(报告 §3):这条前提的守护**不在本桥内**,而在上游
+// `scheduler_v1::validateMPTFlagMatrix`(合入本分支的 00e5cf9a0 引入,
+// transaction-scheduler/bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h:107-138),
+// 由 libinitializer/LedgerInitializer.cpp:48-49 在**启动时**调用。OP 模式恒带
+// feature_l2_ethereum_compat(Features.h:116;NodeConfig.cpp:299-316 令它与 [alloc.*] 互为
+// 充要条件),所以 raw_address + OP 的组合在启动这一刻就被拒。**A-3 因此不需要我们自己再
+// 造一套拒绝逻辑**(另造 = 两处独立实现同一规则,与 A-1 拒绝的是同一个反模式)。
+//
+// 但"不用改"不等于"不用钉"。本用例把这条跨模块依赖变成一条会响的断言:上游哪天放宽了那个
+// flag 组合、或者把 raw_address 的判据挪走,红的是这里,而不是生产上一个空世界。
+//
+// **未被覆盖的那一半,已记账**:上游的运行时守卫 rejectRawAddressWithMPT 唯一调用点在
+// BaselineScheduler::coExecuteBlock,而 OP 路径走 OpSchedulerImpl::executeOpBlock,不经过它;
+// 故**中途**由系统配置交易打开 feature_raw_address,在下次重启前无人拦截。今天该缺口不可达
+// (OpSchedulerImpl 尚无生产组合根,全仓只有本目录的测试引用它),但 OP 组合根接线时必须补上
+// rejectRawAddressWithMPT 的等价物 —— 见 Storage2Ledger.h 文件头"外部依赖"小节。
+TEST(Storage2Ledger, RawAddressWithL2CompatIsRejectedAtStartup)
+{
+    using Flag = bcos::ledger::Features::Flag;
+
+    // (A3-1) OP 模式的那个组合:必须在启动时被拒。桥的 hex 路径前提由此成立。
+    bcos::ledger::Features opWithRawAddress;
+    opWithRawAddress.set(Flag::feature_raw_address);
+    opWithRawAddress.set(Flag::feature_l2_ethereum_compat);
+    opWithRawAddress.setActivationBlock(Flag::feature_l2_ethereum_compat, 0);
+    EXPECT_THROW(bcos::scheduler_v1::validateMPTFlagMatrix(opWithRawAddress),
+        bcos::scheduler_v1::InvalidMPTFlagMatrix)
+        << "上游不再拒绝 raw_address + l2_ethereum_compat —— Storage2Ledger 的硬编码 hex 路径"
+           "前提失去守护,OP 节点会在一个空世界上执行整个块(静默分叉,无 -32603)";
+
+    // (A3-2) 同一守卫的另一半:mid-chain 打开 MPT 的场景(scenario A)同样被拒。桥虽然不走
+    //        这条路,但它与 (A3-1) 共用同一个判据,一并钉住可防"只改了 l2 那一支"。
+    bcos::ledger::Features mptWithRawAddress;
+    mptWithRawAddress.set(Flag::feature_raw_address);
+    mptWithRawAddress.set(Flag::feature_mpt_state_root);
+    mptWithRawAddress.setActivationBlock(Flag::feature_mpt_state_root, 100);
+    EXPECT_THROW(bcos::scheduler_v1::validateMPTFlagMatrix(mptWithRawAddress),
+        bcos::scheduler_v1::InvalidMPTFlagMatrix);
+
+    // (A3-3) 反例标识:守卫必须是**针对这个组合**的,不是"见 raw_address 就抛"或"见什么都抛"。
+    //        否则 (A3-1) 会因为一个无关的原因而恒绿,断言失去鉴别力。
+    bcos::ledger::Features rawAddressAlone;
+    rawAddressAlone.set(Flag::feature_raw_address);
+    EXPECT_NO_THROW(bcos::scheduler_v1::validateMPTFlagMatrix(rawAddressAlone));
+
+    bcos::ledger::Features opWithoutRawAddress;  // 正常的 OP 链配置,必须能启动
+    opWithoutRawAddress.set(Flag::feature_l2_ethereum_compat);
+    opWithoutRawAddress.setActivationBlock(Flag::feature_l2_ethereum_compat, 0);
+    EXPECT_NO_THROW(bcos::scheduler_v1::validateMPTFlagMatrix(opWithoutRawAddress));
 }
