@@ -14,6 +14,7 @@
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -50,6 +51,67 @@ using LogicalDeleteStorage = bcos::storage2::memory_storage::MemoryStorage<
                                               bcos::storage2::memory_storage::LOGICAL_DELETION)>;
 using Account = bcos::ledger::account::EVMAccount<MutableStorage>;
 using LogicalDeleteAccount = bcos::ledger::account::EVMAccount<LogicalDeleteStorage>;
+
+// ── (z8) 用的 MultiLayerStorage fixture(终审批 9 F-2)─────────────────────────────
+// 为什么单层的 LogicalDeleteStorage 不够,见 (z8) 的用例注释:生产 Storage2Ledger 的 Storage
+// 是 MultiLayerStorage::ViewType,它**没有** existsOne 成员,`storage2::existsOne` 走的是
+// readOne 回退 → View::readOne → getValue<Value> → DELETED_TYPE → nullopt;而 (z7) 钉的是
+// MemoryStorage::existsOne → toOptional 那一条,**完全不同的一段代码**。
+// CheckpointStorage stub 是本文件局部副本,理由同 EbT8nReplayTest.cpp:45-49 /
+// OpSchedulerImplTest.cpp (不跨模块 include 别人的 test-private 头)。
+template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
+struct TrivialCheckpointStorage
+{
+    using CheckpointName = bcos::h256;
+
+    Storage& m_storage;
+    explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
+    Storage& open() & { return m_storage; }
+    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) &
+    {
+        std::abort();  // 本 fixture 不需要历史 checkpoint。
+    }
+    void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
+    void deleteCheckpoint(CheckpointName const& /*unused*/) {}
+    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
+    {
+        return std::nullopt;
+    }
+    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
+    {
+        return std::nullopt;
+    }
+};
+
+using BackendMemStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+    bcos::executor_v1::StateValue,
+    bcos::storage2::memory_storage::Attribute(
+        bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::CONCURRENT),
+    std::hash<bcos::executor_v1::StateKey>>;
+using CheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
+    bcos::executor_v1::StateValue, BackendMemStorage>;
+// 可变层刻意用 LogicalDeleteStorage(ORDERED | LOGICAL_DELETION)——与 OpSchedulerImplTest.cpp /
+// EbT8nReplayTest.cpp 的生产同构 fixture 一致。
+using MLS = bcos::storage2::MultiLayerStorage<LogicalDeleteStorage, void, CheckpointBackend>;
+using MlsViewType = typename MLS::ViewType;
+using MlsAccount = bcos::ledger::account::EVMAccount<MlsViewType>;
+
+/// 持有整条存储栈(backend + MLS + 已 fork 的可变 view),地址稳定,供 (z8) 直接拿 view 用。
+struct MlsFixture
+{
+    BackendMemStorage backendStorage;
+    CheckpointBackend checkpointBackend;
+    MLS multiLayerStorage;
+    MlsViewType view;
+
+    MlsFixture()
+      : checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend),
+        view(multiLayerStorage.fork())
+    {
+        view.newMutable();
+    }
+};
 
 evmc_bytes32 slotKey(uint8_t last)
 {
@@ -1022,4 +1084,78 @@ TEST(Storage2Ledger, ExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFalseFire
     ASSERT_TRUE(account.has_value());
     EXPECT_FALSE(account->has_storage);
     EXPECT_FALSE(bridge.poisoned());
+}
+
+// (z8) (z7) 的孪生用例,跑在 **MultiLayerStorage::View** 之上(终审批 9 F-2,复审跟进第 2 条)。
+//
+// 为什么必须有这一条:(z7) 钉的是 `MemoryStorage::existsOne → toOptional` 那半边,而**生产**
+// 的 `Storage2Ledger<Storage>` 里 Storage 是 `MultiLayerStorage::ViewType`
+// (`OpSchedulerImpl.h:818`)。`View` **没有** `existsOne` 成员,所以 `storage2::existsOne`
+// 走的是回退路径 `View::readOne → getValue<Value> → DELETED_TYPE → nullopt → false` ——
+// 与 (z7) 钉的**完全是另一段代码**。复审的注入实验(INJ-E)证明了这条缺口是真的:给 `View`
+// 加一个"省掉 Value 构造"的 `existsOne` 成员
+//     auto existsOne(const auto& key) -> task::Task<bool>
+//     { co_return !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(co_await readOneRaw(key)); }
+// (一个非常可能真实发生的性能优化)——全套用例**零红**,而生产行为已经坏成"每一次合法的
+// 零值写入都抛" = 每块 -32603。对照实验 INJ-E′(同一个成员改成无条件 `co_return true`)是
+// 12 红,证明该成员确实被 `storage2::existsOne` 选中、确实走到桥上,INJ-E 的零红不是空实验。
+// 本用例就是补上那个零:它在 INJ-E 下必须翻红。
+//
+// 判据与 (z7) 同构、两段:
+//   第一段:原语 —— view 上 removeOne 后,range() 仍能扫到该行(墓碑物理存在于可变层),而
+//           storage2::existsOne 对同一个键必须返回 false(层间解析把 DELETED_TYPE 判为不存在)。
+//   第二段:集成 —— 在 view 上跑 applyDiff 的零值分支,必须不抛、不置毒旗。
+// 第二段才是钉住"后果"的那一半(守护误报 = 生产每块失败),与 (z7) 段二同理。
+TEST(Storage2Ledger, MlsViewExistsOneTreatsTombstoneAsAbsentSoZeroWriteDoesNotFalseFire)
+{
+    MlsFixture fixture;
+    MlsAccount acc(fixture.view, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    const auto slot = slotKey(1);
+    bcos::task::syncWait(acc.setStorage(slot, slotKey(9)));
+
+    const auto tableName = tableNameOf(0x01_address);
+    std::string_view slotView(reinterpret_cast<const char*>(slot.bytes), sizeof(slot.bytes));
+    const bcos::executor_v1::StateKeyView slotStateKey{tableName, slotView};
+
+    ASSERT_TRUE(bcos::task::syncWait(bcos::storage2::existsOne(fixture.view, slotStateKey)));
+    bcos::task::syncWait(bcos::storage2::removeOne(fixture.view, slotStateKey));
+
+    // ── 第一段:原语实测(View 这一层)────────────────────────────────────────────
+    bool rangeStillSeesTheRow = false;
+    bcos::task::syncWait([&]() -> bcos::task::Task<void> {
+        auto iterator = co_await bcos::storage2::range(fixture.view, bcos::storage2::RANGE_SEEK,
+            bcos::executor_v1::StateKeyView{tableName, std::string_view{}});
+        while (auto item = co_await iterator.next())
+        {
+            bcos::executor_v1::StateKeyView view(std::get<0>(*item));
+            auto [table, fieldKey] = view.get();
+            if (table != tableName)
+                break;
+            if (fieldKey == slotView)
+                rangeStillSeesTheRow = true;
+        }
+    }());
+    EXPECT_TRUE(rangeStillSeesTheRow)
+        << "MLS 可变层(LOGICAL_DELETION)上 removeOne 应保留墓碑行,本例的前提不成立";
+    EXPECT_FALSE(bcos::task::syncWait(bcos::storage2::existsOne(fixture.view, slotStateKey)))
+        << "View 上的 storage2::existsOne 把 DELETED_TYPE 墓碑当成存在:applyModifiedEntry 的"
+           "删槽后置回读会在**生产**路径上每一次合法零值写入时误报(= 每块 -32603)";
+
+    // ── 第二段:集成实测 —— 生产存储形态下零值分支不得误报 ─────────────────────────
+    Storage2Ledger<MlsViewType> bridge(fixture.view);
+    evmone::state::StateDiff nonZeroDiff;
+    nonZeroDiff.modified_accounts.push_back(
+        {0x01_address, 1, 10, std::nullopt, {{evmc::bytes32(slot), evmc::bytes32(slotKey(9))}}});
+    ASSERT_NO_THROW(bridge.applyDiff(nonZeroDiff));
+
+    evmone::state::StateDiff zeroDiff;
+    zeroDiff.modified_accounts.push_back(
+        {0x01_address, 1, 10, std::nullopt, {{evmc::bytes32(slot), evmc::bytes32{}}}});
+    EXPECT_NO_THROW(bridge.applyDiff(zeroDiff));
+
+    auto account2 = bridge.get_account(0x01_address);
+    ASSERT_TRUE(account2.has_value());
+    EXPECT_FALSE(account2->has_storage);
+    EXPECT_FALSE(bridge.poisoned()) << bridge.firstError();
 }
