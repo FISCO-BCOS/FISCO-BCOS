@@ -42,12 +42,14 @@ DERIVE_BCOS_EXCEPTION(BlobTxMissingTo);
 DERIVE_BCOS_EXCEPTION(EmptyBlobVersionedHashes);
 DERIVE_BCOS_EXCEPTION(BlobFeeCapBelowBaseFee);
 DERIVE_BCOS_EXCEPTION(InsufficientBalance);
+DERIVE_BCOS_EXCEPTION(EvmcRevisionNotConfigured);
+DERIVE_BCOS_EXCEPTION(TransactionValidationFailed);
 
 class EthereumExecutor
 {
 public:
-    EthereumExecutor(protocol::TransactionReceiptFactory const& receiptFactory,
-        crypto::Hash::Ptr hashImpl)
+    EthereumExecutor(
+        protocol::TransactionReceiptFactory const& receiptFactory, crypto::Hash::Ptr hashImpl)
       : m_receiptFactory(receiptFactory),
         m_hashImpl(std::move(hashImpl)),
         m_vm(evmc_create_evmone())
@@ -80,7 +82,7 @@ public:
             if (!revOpt.has_value())
             {
                 BOOST_THROW_EXCEPTION(
-                    std::runtime_error("evmcRevision not configured"));
+                    EvmcRevisionNotConfigured() << errinfo_comment("evmcRevision not configured"));
             }
             auto rev = *revOpt;
             auto blockInfo = blockHeaderToBlockInfo(blockHeader, ledgerConfig, rev);
@@ -102,18 +104,17 @@ public:
             if (rev >= EVMC_PRAGUE)
             {
                 // EIP-7840 blob schedule: Prague/Osaka (target=6, max=9).
-                blobParams = {6, 9, 5007716};
+                blobParams = {.target = 6, .max = 9, .base_fee_update_fraction = 5007716};
             }
             else if (rev == EVMC_CANCUN)
             {
                 // EIP-7840 blob schedule: Cancun (target=3, max=6).
-                blobParams = {3, 6, 3338477};
+                blobParams = {.target = 3, .max = 6, .base_fee_update_fraction = 3338477};
             }
             const auto blobGasLeft =
                 static_cast<int64_t>(evmone::state::max_blob_gas_per_block(blobParams));
-            auto validationResult = evmone::state::validate_transaction(
-                stateView, blockInfo, evmTx, rev,
-                blockInfo.gas_limit /*block_gas_left*/, blobGasLeft /*blob_gas_left*/);
+            auto validationResult = evmone::state::validate_transaction(stateView, blockInfo, evmTx,
+                rev, blockInfo.gas_limit /*block_gas_left*/, blobGasLeft /*blob_gas_left*/);
 
             if (auto* props = std::get_if<evmone::state::TransactionProperties>(&validationResult))
             {
@@ -131,15 +132,15 @@ public:
                 // accounts with empty code or a 0xef0100 delegation designator
                 // may be senders, which evmone's validate_transaction already
                 // accepts.
-                BOOST_THROW_EXCEPTION(std::runtime_error(
-                    "Transaction validation failed: " + error.message()));
+                BOOST_THROW_EXCEPTION(TransactionValidationFailed() << errinfo_comment(
+                                          "Transaction validation failed: " + error.message()));
             }
 
             // Execute
             ZeroBlockHashes zeroBlockHashes;
             auto const& bh = (blockHashes != nullptr) ? *blockHashes : zeroBlockHashes;
-            auto evmReceipt = evmone::state::transition(
-                stateView, blockInfo, bh, evmTx, rev, m_vm, txProps);
+            auto evmReceipt =
+                evmone::state::transition(stateView, blockInfo, bh, evmTx, rev, m_vm, txProps);
 
             // Apply state diff back to storage
             co_await applyStateDiff(storage, evmReceipt.state_diff, rev, *m_hashImpl);
@@ -168,8 +169,7 @@ public:
         if (cb.size() == sizeof(evmc_address))
             std::copy_n(cb.begin(), sizeof(evmc_address), coinbase.bytes);
 
-        auto diff = evmone::state::finalize(
-            stateView, rev, coinbase, blockReward, {}, withdrawals);
+        auto diff = evmone::state::finalize(stateView, rev, coinbase, blockReward, {}, withdrawals);
 
         co_await applyStateDiff(storage, diff, rev, *m_hashImpl);
     }
@@ -186,11 +186,15 @@ public:
         ledger::LedgerConfig const& ledgerConfig;
         bool call;
 
-        ExecuteContext(EthereumExecutor& exec, Storage& st,
-            protocol::BlockHeader const& bh, protocol::Transaction const& tx,
-            int cid, ledger::LedgerConfig const& cfg, bool c)
-          : executor(exec), storage(st), blockHeader(bh), transaction(tx),
-            contextID(cid), ledgerConfig(cfg), call(c)
+        ExecuteContext(EthereumExecutor& exec, Storage& st, protocol::BlockHeader const& bh,
+            protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c)
+          : executor(exec),
+            storage(st),
+            blockHeader(bh),
+            transaction(tx),
+            contextID(cid),
+            ledgerConfig(cfg),
+            call(c)
         {}
     };
 
