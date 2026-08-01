@@ -43,6 +43,16 @@ inline JwtVerifyResult makeError(JwtError _error)
     };
 }
 
+JwtVerifier::JwtVerifier(JwtConfig::Ptr _config) : m_config(std::move(_config))
+{
+    m_secret = readSecret();
+    if (!m_secret.has_value())
+    {
+        RPC_LOG(WARNING) << "JwtVerifier: JWT secret is not available at construction time; "
+                         << "all verifications will fail with SecretReadFailed";
+    }
+}
+
 JwtVerifyResult JwtVerifier::verify(std::string_view _authorizationHeader) const
 {
     if (_authorizationHeader.empty())
@@ -185,7 +195,6 @@ std::optional<std::string> JwtVerifier::readSecret() const
     }
     if (!secretContent || secretContent->empty())
     {
-        // File not ready yet; retry next time
         return std::nullopt;
     }
 
@@ -217,7 +226,6 @@ std::optional<std::string> JwtVerifier::readSecret() const
         return std::nullopt;
     }
 
-    m_secret = decoded;
     return decoded;
 }
 }  // namespace bcos::rpc

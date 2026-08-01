@@ -139,9 +139,11 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     engine::PayloadID payloadId = request[0u].asString();
     auto engineResult = co_await engineService->getPayload(
         payloadId, static_cast<uint32_t>(version));
-    // TODO: engineService->getPayload() MUST throw JsonRpcException in these cases:
-    //   -38001 UnknownPayload: build process identified by payloadId does not exist
-    //   -38005 UnsupportedFork: timestamp of built payload out of fork window (V2/V3)
+    if (!engineResult)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
+            "Unknown payload: no build process identified by the given payloadId"));
+    }
 
     Json::Value result;
     combineGetPayloadResponse(result, engineResult, version);

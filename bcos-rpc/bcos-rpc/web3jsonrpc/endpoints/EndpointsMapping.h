@@ -39,7 +39,7 @@ public:
     [[nodiscard]] std::optional<Handler> findHandler(const std::string& _method) const;
 
 private:
-    void addHandlers(bool enableOPEngine);
+    void addHandlers(bool enableOPEngine = false);
     void addEngineHandlers();
     void addEthHandlers();
     void addNetHandlers();

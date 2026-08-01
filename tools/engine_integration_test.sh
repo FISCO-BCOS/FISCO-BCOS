@@ -37,8 +37,19 @@ NC='\033[0m'
 PASSED=0
 FAILED=0
 
-# Kill any stale fisco-bcos processes from previous runs
-pkill -f "fisco-bcos" 2>/dev/null || true
+# PID file for the node started by this script, used for precise cleanup
+# without pkill'ing unrelated fisco-bcos processes on shared runners.
+PID_FILE="${WORK_DIR}/node.pid"
+
+# Kill any stale fisco-bcos processes from previous runs of this script only
+if [ -f "${PID_FILE}" ]; then
+    OLD_PID=$(cat "${PID_FILE}" 2>/dev/null || true)
+    if [ -n "${OLD_PID}" ]; then
+        kill "${OLD_PID}" 2>/dev/null || true
+        pkill -P "${OLD_PID}" 2>/dev/null || true
+    fi
+    rm -f "${PID_FILE}"
+fi
 sleep 1
 
 # ---- Cleanup handler ----
@@ -49,8 +60,13 @@ cleanup() {
         kill "${LODESTAR_PID}" 2>/dev/null || true
         wait "${LODESTAR_PID}" 2>/dev/null || true
     fi
-    # Kill fisco-bcos processes (daemonized children have different PIDs)
-    pkill -f "fisco-bcos" 2>/dev/null || true
+    # Kill only the node started by this script (via PID file), not every
+    # fisco-bcos process on the machine.
+    if [ -n "${NODE_PID:-}" ]; then
+        kill "${NODE_PID}" 2>/dev/null || true
+        pkill -P "${NODE_PID}" 2>/dev/null || true
+    fi
+    rm -f "${PID_FILE}"
     sleep 1
     shopt -s nullglob 2>/dev/null || true
     for f in "${WORK_DIR}"/log_*.log; do
@@ -343,6 +359,7 @@ if [ -n "${CHILD_PID}" ]; then
     NODE_PID="${CHILD_PID}"
 fi
 log_info "Node PID: ${NODE_PID}"
+echo "${NODE_PID}" > "${PID_FILE}"
 
 # Wait for the log file to appear and the RPC HTTP server to be up
 STARTUP_LOG=""

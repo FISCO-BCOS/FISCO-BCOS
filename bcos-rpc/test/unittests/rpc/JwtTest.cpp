@@ -32,6 +32,9 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <vector>
+#include <atomic>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -286,6 +289,66 @@ BOOST_AUTO_TEST_CASE(testJwtVerifierSecretNonHex)
     auto result = verifier.verify("Bearer " + jwt);
     BOOST_CHECK(!result);
     BOOST_CHECK_EQUAL(result.error, JwtError::SecretReadFailed);
+}
+
+// The secret is loaded once in the constructor and is read-only afterwards.
+// Verify that concurrent verify() calls from multiple threads are safe.
+BOOST_AUTO_TEST_CASE(testJwtVerifierConcurrent)
+{
+    auto secretHex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    auto secretFile = writeSecretFile(secretHex);
+
+    auto config = std::make_shared<JwtConfig>();
+    config->setSecretFile(secretFile);
+    config->setClockSkewSecs(600);
+    config->setAllowedAlgorithms("HS256");
+
+    JwtVerifier verifier(config);
+    auto validJwt = buildJwt("HS256", "JWT", static_cast<int64_t>(utcTime() / 1000), "client1",
+        "1.0", secretHex);
+    auto invalidJwt = buildJwt("HS256", "JWT", static_cast<int64_t>(utcTime() / 1000), std::nullopt,
+        std::nullopt, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+    // Sanity check the invalid token alone first.
+    {
+        auto sanity = verifier.verify("Bearer " + invalidJwt);
+        BOOST_TEST_MESSAGE("sanity invalidJwt ok=" << sanity.ok
+                                                  << " error=" << static_cast<int>(sanity.error));
+        BOOST_CHECK(!sanity.ok);
+        BOOST_CHECK_EQUAL(sanity.error, JwtError::InvalidSignature);
+    }
+
+    constexpr int kThreads = 8;
+    constexpr int kIterations = 200;
+    std::atomic<int> successCount{0};
+    std::atomic<int> badCount{0};
+    std::vector<std::thread> threads;
+    for (int t = 0; t < kThreads; ++t)
+    {
+        threads.emplace_back([&]() {
+            for (int i = 0; i < kIterations; ++i)
+            {
+                auto ok = verifier.verify("Bearer " + validJwt);
+                if (ok.ok && ok.error == JwtError::Ok)
+                {
+                    ++successCount;
+                }
+                auto bad = verifier.verify("Bearer " + invalidJwt);
+                if (!bad.ok && bad.error == JwtError::InvalidSignature)
+                {
+                    ++successCount;
+                    ++badCount;
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    BOOST_TEST_MESSAGE("badCount=" << badCount << " successCount=" << successCount);
+    // All verify() calls must have returned the expected result.
+    BOOST_CHECK_EQUAL(successCount, kThreads * kIterations * 2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

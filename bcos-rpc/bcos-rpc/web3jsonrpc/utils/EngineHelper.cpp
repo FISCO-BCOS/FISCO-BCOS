@@ -155,12 +155,6 @@ Json::Value bcos::rpc::serializePayloadStatus(
     return result;
 }
 
-void bcos::rpc::combineNewPayloadResponse(
-    Json::Value& _result, bcos::engine::PayloadStatus const& _response, engine::ApiVersion version)
-{
-    _result = serializePayloadStatus(_response, version);
-}
-
 std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes(
     Json::Value const& params, engine::ApiVersion version)
 {

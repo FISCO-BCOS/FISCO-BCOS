@@ -37,7 +37,7 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
     return it->second;
 }
 
-void EndpointsMapping::addHandlers(bool enableOPEngine = false)
+void EndpointsMapping::addHandlers(bool enableOPEngine)
 {
     if (enableOPEngine) 
     {

@@ -72,9 +72,6 @@ bcos::engine::NewPayloadRequest parseNewPayloadRequest(
 Json::Value serializePayloadStatus(
     bcos::engine::PayloadStatus const& status, engine::ApiVersion version);
 
-void combineNewPayloadResponse(Json::Value& _result,
-    bcos::engine::PayloadStatus const& _response, engine::ApiVersion version);
-
 std::optional<bcos::engine::PayloadAttributes> parsePayloadAttributes(
     Json::Value const& params, engine::ApiVersion version);
 

@@ -31,6 +31,8 @@
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-rpc/filter/LogMatcher.h>
+#include <bcos-rpc/jwtAuth/JwtConfig.h>
+#include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-rpc/validator/CallValidator.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
@@ -878,6 +880,104 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
             BOOST_TEST(!matcher.matches(params, log));
         }
     }
+}
+BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
+{
+    // Build a JwtVerifier with a real secret file, then drive the JWT-protected
+    // onRPCRequest(HttpRequest&, Sender) overload: no header / bad token -> 401,
+    // valid token -> dispatched to the handler.
+    auto secretHex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    auto tempDir = std::filesystem::temp_directory_path();
+    auto secretFile = tempDir / ("fisco-bcos-jwt-rpc-test-" + std::to_string(utcTime()) + ".hex");
+    {
+        std::ofstream ofs(secretFile);
+        ofs << secretHex;
+    }
+
+    auto config = std::make_shared<JwtConfig>();
+    config->setSecretFile(secretFile.string());
+    config->setClockSkewSecs(60);
+    config->setAllowedAlgorithms("HS256");
+
+    auto engineRpc = std::make_shared<Web3JsonRpcImpl>(
+        groupId, 8, rpc->groupManager(), nullptr, false, true);
+    engineRpc->setJwtVerifier(std::make_shared<JwtVerifier>(config));
+
+    auto secretBytes = fromHex(secretHex);
+    std::string secret(reinterpret_cast<const char*>(secretBytes.data()), secretBytes.size());
+    auto validJwt = ::jwt::create()
+                        .set_algorithm("HS256")
+                        .set_type("JWT")
+                        .set_issued_at(std::chrono::system_clock::time_point{
+                            std::chrono::seconds{static_cast<int64_t>(utcTime() / 1000)}})
+                        .sign(::jwt::algorithm::hs256{std::move(secret)});
+
+    // 1) No Authorization header -> HTTP 401 + JSON-RPC error body
+    {
+        std::promise<std::pair<bcos::bytes, boost::beast::http::status>> promise;
+        bcos::boostssl::http::HttpRequest request;
+        request.version(11);
+        request.method(boost::beast::http::verb::post);
+        request.target("/");
+        request.body() = R"({"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]})";
+        request.prepare_payload();
+
+        engineRpc->onRPCRequest(request,
+            [&promise](bcos::bytes resp, boost::beast::http::status status) {
+                promise.set_value({std::move(resp), status});
+            });
+        auto [resp, status] = promise.get_future().get();
+        BOOST_CHECK_EQUAL(status, boost::beast::http::status::unauthorized);
+        Json::Value val;
+        Json::Reader reader;
+        reader.parse(std::string(resp.begin(), resp.end()), val);
+        BOOST_CHECK(val.isMember("error"));
+        BOOST_CHECK_EQUAL(val["error"]["code"].asInt(), bcos::rpc::JwtUnauthorized);
+    }
+
+    // 2) Invalid Bearer token -> HTTP 401
+    {
+        std::promise<std::pair<bcos::bytes, boost::beast::http::status>> promise;
+        bcos::boostssl::http::HttpRequest request;
+        request.version(11);
+        request.method(boost::beast::http::verb::post);
+        request.target("/");
+        request.set(boost::beast::http::field::authorization, "Bearer invalid.token.here");
+        request.body() = R"({"jsonrpc":"2.0","id":2,"method":"eth_chainId","params":[]})";
+        request.prepare_payload();
+
+        engineRpc->onRPCRequest(request,
+            [&promise](bcos::bytes resp, boost::beast::http::status status) {
+                promise.set_value({std::move(resp), status});
+            });
+        auto [resp, status] = promise.get_future().get();
+        BOOST_CHECK_EQUAL(status, boost::beast::http::status::unauthorized);
+    }
+
+    // 3) Valid Bearer token -> dispatched, HTTP 200 + JSON-RPC result
+    {
+        std::promise<std::pair<bcos::bytes, boost::beast::http::status>> promise;
+        bcos::boostssl::http::HttpRequest request;
+        request.version(11);
+        request.method(boost::beast::http::verb::post);
+        request.target("/");
+        request.set(boost::beast::http::field::authorization, "Bearer " + validJwt);
+        request.body() = R"({"jsonrpc":"2.0","id":3,"method":"eth_chainId","params":[]})";
+        request.prepare_payload();
+
+        engineRpc->onRPCRequest(request,
+            [&promise](bcos::bytes resp, boost::beast::http::status status) {
+                promise.set_value({std::move(resp), status});
+            });
+        auto [resp, status] = promise.get_future().get();
+        BOOST_CHECK_EQUAL(status, boost::beast::http::status::ok);
+        Json::Value val;
+        Json::Reader reader;
+        reader.parse(std::string(resp.begin(), resp.end()), val);
+        BOOST_CHECK(val.isMember("result"));
+    }
+
+    std::filesystem::remove(secretFile);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
