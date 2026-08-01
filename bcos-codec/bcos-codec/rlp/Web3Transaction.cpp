@@ -221,27 +221,20 @@ Header headerTxBase(const Web3Transaction& tx) noexcept
 }
 Header header(Web3Transaction const& tx) noexcept
 {
-    auto header = headerTxBase(tx);
-    header.payloadLength += (tx.type == TransactionType::Legacy) ? length(tx.getSignatureV()) : 1;
-    header.payloadLength += length(getSignatureRef(ref(tx.signatureR)));
-    header.payloadLength += length(getSignatureRef(ref(tx.signatureS)));
-    return header;
+    auto h = headerTxBase(tx);
+    h.payloadLength += (tx.type == TransactionType::Legacy) ? length(tx.getSignatureV()) : 1;
+    h.payloadLength += length(getSignatureRef(ref(tx.signatureR)));
+    h.payloadLength += length(getSignatureRef(ref(tx.signatureS)));
+    return h;
 }
 Header headerForSign(Web3Transaction const& tx) noexcept
 {
-    auto header = headerTxBase(tx);
+    auto h = headerTxBase(tx);
     if (tx.type == TransactionType::Legacy && tx.chainId)
     {
-        header.payloadLength += length(tx.chainId.value()) + 2;
+        h.payloadLength += length(tx.chainId.value()) + 2;
     }
-    return header;
-}
-size_t length(Web3Transaction const& tx) noexcept
-{
-    auto head = header(tx);
-    auto len = lengthOfLength(head.payloadLength) + head.payloadLength;
-    len = (tx.type == TransactionType::Legacy) ? len : lengthOfLength(len + 1) + len + 1;
-    return len;
+    return h;
 }
 void encode(bcos::bytes& out, const AccessListEntry& entry) noexcept
 {
@@ -464,7 +457,10 @@ bcos::Error::UniquePtr decodeTransaction(
             out.to.emplace(addr);
         }
 
-        decodeError = decodeItems(in, out.value, out.data);
+        if (decodeError = decodeItems(in, out.value, out.data); decodeError != nullptr)
+        {
+            return decodeError;
+        }
         if (withSignature)
         {
             if (decodeError = decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
