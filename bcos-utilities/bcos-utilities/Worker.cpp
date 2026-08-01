@@ -25,10 +25,6 @@
 #include <exception>
 #include <future>
 
-#ifdef ERROR
-#undef ERROR
-#endif
-
 using namespace bcos;
 
 Worker::~Worker()

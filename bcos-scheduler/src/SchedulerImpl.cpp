@@ -18,7 +18,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
-#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -112,18 +111,6 @@ void SchedulerImpl::stop()
     for (auto& blockExecutive : *m_blocks)
     {
         blockExecutive->stop();
-    }
-}
-
-SchedulerImpl::~SchedulerImpl()
-{
-    stop();
-    if (m_exeStrand && m_ioServicePool)
-    {
-        auto drainPromise = std::make_shared<std::promise<void>>();
-        auto drainFuture = drainPromise->get_future();
-        m_exeStrand->post([drainPromise]() { drainPromise->set_value(); });
-        drainFuture.wait_for(std::chrono::seconds(5));
     }
 }
 
@@ -278,16 +265,16 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> _callback)
 {
-    m_exeStrand->post(
-        [this, block = std::move(block), verify, callback = std::move(_callback)]() mutable {
-            __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
-            executeBlockInternal(std::move(block), verify,
-                [callback = std::move(callback)](bcos::Error::Ptr&& err,
-                    bcos::protocol::BlockHeader::Ptr&& header, bool isSysBlock) {
-                    __itt_frame_end_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
-                    callback(std::move(err), std::move(header), isSysBlock);
-                });
-        });
+    m_exeStrand->post([self = shared_from_this(), block = std::move(block), verify,
+                          callback = std::move(_callback)]() mutable {
+        __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
+        self->executeBlockInternal(std::move(block), verify,
+            [callback = std::move(callback)](bcos::Error::Ptr&& err,
+                bcos::protocol::BlockHeader::Ptr&& header, bool isSysBlock) {
+                __itt_frame_end_v3(ITT_DOMAIN_SCHEDULER_EXECUTE, nullptr);
+                callback(std::move(err), std::move(header), isSysBlock);
+            });
+    });
 }
 void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
@@ -1185,12 +1172,12 @@ void SchedulerImpl::tryExecuteBlock(
 {
     return;  // TODO: Fix blockHash bug here
 
-    m_exeStrand->post([this, number, &parentHash]() {
-        if (!m_isRunning)
+    m_exeStrand->post([self = shared_from_this(), number, parentHash]() {
+        if (!self->m_isRunning)
         {
             return;
         }
-        auto blockExecutive = getLatestPreparedBlock(number);
+        auto blockExecutive = self->getLatestPreparedBlock(number);
         if (!blockExecutive)
         {
             return;
@@ -1201,17 +1188,17 @@ void SchedulerImpl::tryExecuteBlock(
             return;
         }
         bcos::protocol::ParentInfoList parentInfoList;
-        bcos::protocol::ParentInfo parentInfo{number, std::move(parentHash)};
+        bcos::protocol::ParentInfo parentInfo{number, parentHash};
         parentInfoList.push_back(parentInfo);
         block->blockHeader()->setParentInfo(parentInfoList);
-        block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        block->blockHeader()->calculateHash(*self->m_blockFactory->cryptoSuite()->hashImpl());
 
         auto timestamp = block->blockHeader()->timestamp();
         SCHEDULER_LOG(INFO) << "tryExecuteBlock request" << LOG_KV("number", number)
                             << LOG_KV("timestamp", timestamp);
-        executeBlock(block, false,
-            [number, timestamp](bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&& blockHeader,
-                bool _sysBlock) {
+        self->executeBlock(block, false,
+            [number, timestamp](bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&,
+                bool) {
                 SCHEDULER_LOG(INFO) << "tryExecuteBlock success" << LOG_KV("number", number)
                                     << LOG_KV("timestamp", timestamp);
             });
