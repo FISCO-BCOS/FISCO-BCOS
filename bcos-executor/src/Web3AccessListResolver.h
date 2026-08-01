@@ -17,8 +17,8 @@ struct Web3AccessListResolved
     std::shared_ptr<const Eip2930AccessList> accessList;
 };
 
-/// Resolve Web3 access list from protocol fields (Tars fast path); fall back to
-/// extraTransactionBytes RLP for legacy or stripped txs.
+/// Resolve Web3 access list from protocol (Tars) fields. Admission already
+/// rejects Tars vs signed-RLP disagreement, so no RLP fallback is needed here.
 Web3AccessListResolved resolveWeb3AccessList(protocol::Transaction const& tx);
 
 }  // namespace bcos::executor

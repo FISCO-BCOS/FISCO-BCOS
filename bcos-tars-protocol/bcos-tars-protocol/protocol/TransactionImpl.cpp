@@ -213,21 +213,13 @@ void bcostars::protocol::TransactionImpl::clearSenderAndHash()
 {
     m_inner()->sender.clear();
     m_inner()->dataHash.clear();
-    // data.accessList / web3TypedTxKind are a Tars-side cache of values already
-    // committed inside extraTransactionBytes. Clear them so verify/import cannot
-    // retain a peer-forged cache that shares the canonical Web3 txHash.
-    m_inner()->data.accessList.clear();
-    m_inner()->web3TypedTxKind = 0;
-    {
-        std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
-        m_web3AccessListCache.clear();
-        m_web3AccessListCacheBuilt = false;
-    }
     // FIB-New1: also drop the wire-supplied canonical Web3 txHash (extraTransactionHash) so
     // verify() recomputes it from the signed payload. Both re-verification call sites are
     // untrusted enough to warrant this: the P2P import path (TransactionSync) receives it from an
     // untrusted peer, and the RPC submit path (TxValidator::verify) only pre-wrote a value it can
     // cheaply recompute anyway. Harmless for BCOS transactions (the field is never populated).
+    // data.accessList / web3TypedTxKind are NOT cleared: admission
+    // (web3TarsFieldsMatchSignedExtra) already rejected forged copies, and execution reads them.
     m_inner()->extraTransactionHash.clear();
     setTainted(true);
 }
