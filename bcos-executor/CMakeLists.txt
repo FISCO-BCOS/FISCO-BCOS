@@ -17,9 +17,7 @@ target_include_directories(executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
         Boost::context evmone::evmone GroupSig Paillier blst)
-# Web3AccessListResolver decodes extraTransactionBytes via rpc::Web3Transaction RLP.
-# TODO: move typed-tx RLP decode to bcos-codec to drop executor -> rpc dependency.
-target_link_libraries(executor PRIVATE rpc)
+# Typed-tx RLP decode lives in bcos-codec (Web3AccessListResolver / admission checks).
 
 set_source_files_properties(
     "src/vm/VMFactory.cpp"
