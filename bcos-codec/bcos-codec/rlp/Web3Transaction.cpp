@@ -496,9 +496,37 @@ bcos::Error::UniquePtr decodeTransaction(
         }
         else
         {
-            uint64_t chainId = 0;
-            decodeError = decode(in, chainId);
-            out.chainId.emplace(chainId);
+            // Signing preimage (encodeForSign):
+            //   pre-EIP-155: rlp([nonce,gasPrice,gasLimit,to,value,data])
+            //   EIP-155:     rlp([nonce,gasPrice,gasLimit,to,value,data,chainId,0,0])
+            if (in.empty())
+            {
+                out.chainId = std::nullopt;
+            }
+            else
+            {
+                uint64_t chainId = 0;
+                if (decodeError = decode(in, chainId); decodeError != nullptr)
+                {
+                    return decodeError;
+                }
+                for (int i = 0; i < 2; ++i)
+                {
+                    uint64_t zero = 0;
+                    if (auto zeroError = decode(in, zero); zeroError != nullptr || zero != 0)
+                    {
+                        return zeroError ? std::move(zeroError) :
+                                           BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
+                                               "Invalid legacy EIP-155 signing trailer");
+                    }
+                }
+                if (!in.empty())
+                {
+                    return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
+                        "Legacy signing preimage has trailing garbage");
+                }
+                out.chainId.emplace(chainId);
+            }
         }
     }
     if (withSignature)

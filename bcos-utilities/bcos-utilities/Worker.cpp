@@ -17,13 +17,14 @@
  */
 #include "Worker.h"
 
-#include "BoostLog.h"
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <chrono>
 #include <exception>
 #include <future>
+// Boost.Asio may pull windows.h (ERROR macro). Include BoostLog last so BCOS_LOG(ERROR) works.
+#include "BoostLog.h"
 
 using namespace bcos;
 
