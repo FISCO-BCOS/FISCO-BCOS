@@ -23,8 +23,13 @@
 #include <chrono>
 #include <exception>
 #include <future>
-// Boost.Asio may pull windows.h (ERROR macro). Include BoostLog last so BCOS_LOG(ERROR) works.
 #include "BoostLog.h"
+
+// Unity builds may have already include-guarded BoostLog.h before windows.h landed in
+// another TU of the same amalgamation; re-clear here so BCOS_LOG(ERROR) is safe.
+#ifdef ERROR
+#undef ERROR
+#endif
 
 using namespace bcos;
 
