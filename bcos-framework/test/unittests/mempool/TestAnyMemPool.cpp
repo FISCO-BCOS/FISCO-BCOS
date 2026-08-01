@@ -9,7 +9,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
-#include <proxy/proxy.h>
+#include <proxy/v3/proxy.h>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <mutex>

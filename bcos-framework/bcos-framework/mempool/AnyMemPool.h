@@ -21,7 +21,7 @@
 #pragma once
 
 #include "bcos-framework/mempool/MemPool.h"
-#include <proxy/proxy.h>
+#include <proxy/v3/proxy.h>
 #include <vector>
 
 namespace bcos::mempool
