@@ -42,6 +42,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <memory>
 #include <ostream>
+#include <filesystem>
 #include <string_view>
 
 using namespace bcos;

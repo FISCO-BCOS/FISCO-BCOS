@@ -77,7 +77,11 @@ cleanup() {
         echo "--- nohup.out (last 30 lines) ---"
         tail -30 "${WORK_DIR}/nohup.out" 2>/dev/null || true
     fi
-    rm -rf "${WORK_DIR}"
+    if [ "${KEEP_WORK_DIR:-0}" != "1" ]; then
+        rm -rf "${WORK_DIR}"
+    else
+        echo "KEEP_WORK_DIR=1: 保留 ${WORK_DIR} 便于诊断"
+    fi
     echo "Cleanup done."
 }
 trap cleanup EXIT
@@ -185,7 +189,7 @@ leader_period=1
 node.0=__NODE_ID_PLACEHOLDER__:1
 [rpc]
 listen_ip=0.0.0.0
-listen_port=20201
+listen_port=20210
 disable_ssl=true
 sm_ssl=false
 
