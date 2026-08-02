@@ -127,9 +127,12 @@ void tag_invoke(bcos::concepts::hash::tag_t<bcos::concepts::hash::calculate> /*u
 
     int32_t version = boost::endian::native_to_big((int32_t)hashFields.version);
     hasher.update(version);
-    int64_t blockNumber = boost::endian::native_to_big((int64_t)hashFields.parentInfo.blockNumber);
-    hasher.update(blockNumber);
-    hasher.update(hashFields.parentInfo.blockHash);
+    for (auto const& parent : hashFields.parentInfo)
+    {
+        int64_t blockNumber = boost::endian::native_to_big((int64_t)parent.blockNumber);
+        hasher.update(blockNumber);
+        hasher.update(parent.blockHash);
+    }
     hasher.update(hashFields.txsRoot);
     hasher.update(hashFields.receiptRoot);
     hasher.update(hashFields.stateRoot);

@@ -129,8 +129,7 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
         PrecompiledManager precompiledManager(cryptoSuite->hashImpl());
         bcos::executor_v1::TransactionExecutorImpl executor(
             receiptFactory, cryptoSuite->hashImpl(), precompiledManager);
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 

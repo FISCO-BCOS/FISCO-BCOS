@@ -23,7 +23,7 @@ module bcostars {
     struct BlockHeaderData {
         // ---- Original FISCO-BCOS fields ----
         2 optional int version; 
-        3 optional ParentInfo parentInfo;
+        3 optional vector<ParentInfo> parentInfo;
         4 optional vector<byte> txsRoot;
         5 optional vector<byte> receiptRoot;
         6 optional vector<byte> stateRoot;

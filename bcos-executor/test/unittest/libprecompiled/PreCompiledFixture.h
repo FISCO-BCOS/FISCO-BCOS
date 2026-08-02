@@ -290,8 +290,7 @@ public:
             // for parallel test
             return;
         }
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(blockNumber);
         Features features;
         features.setUpgradeFeatures(BlockVersion::V3_0_VERSION, version);

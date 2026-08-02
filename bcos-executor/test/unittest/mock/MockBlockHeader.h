@@ -51,10 +51,35 @@ public:
     void setConsensusWeights(const gsl::span<const uint64_t>& _weightList) override {}
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override {}
     void setExtraData(bytes _extraData) override {}
-    void setCoinbase(bytes _coinbase) override {}
     void setSignatureList(const gsl::span<const protocol::Signature>& _signatureList) override {}
     void setSignatureList(protocol::SignatureList&& _signatureList) override {}
     size_t size() const override { return 0; }
+
+    // ---- Ethereum-specific field accessors ----
+    bcos::Address coinbase() const override { return {}; }
+    void setCoinbase(bcos::Address _addr) override {}
+    bcos::bytesConstRef logsBloom() const override { return {}; }
+    void setLogsBloom(bcos::bytesConstRef _bloom) override {}
+    u256 gasLimit() const override { return {}; }
+    void setGasLimit(u256 _limit) override {}
+    bcos::h256 prevRandao() const override { return {}; }
+    void setPrevRandao(bcos::h256 _digest) override {}
+    std::optional<u256> baseFee() const override { return std::nullopt; }
+    void setBaseFee(u256 _fee) override {}
+    std::optional<bcos::h256> withdrawalsRoot() const override { return std::nullopt; }
+    void setWithdrawalsRoot(bcos::h256 _hash) override {}
+    std::optional<u256> blobGasUsed() const override { return std::nullopt; }
+    void setBlobGasUsed(u256 _val) override {}
+    std::optional<u256> excessBlobGas() const override { return std::nullopt; }
+    void setExcessBlobGas(u256 _val) override {}
+    std::optional<bcos::h256> parentBeaconBlockRoot() const override { return std::nullopt; }
+    void setParentBeaconBlockRoot(bcos::h256 _root) override {}
+    std::optional<bcos::h256> requestsHash() const override { return std::nullopt; }
+    void setRequestsHash(bcos::h256 _hash) override {}
+    std::optional<bcos::h256> blockAccessListHash() const override { return std::nullopt; }
+    void setBlockAccessListHash(bcos::h256 _hash) override {}
+    std::optional<uint64_t> slotNumber() const override { return std::nullopt; }
+    void setSlotNumber(uint64_t _val) override {}
 
 private:
     protocol::BlockNumber m_blockNumber;

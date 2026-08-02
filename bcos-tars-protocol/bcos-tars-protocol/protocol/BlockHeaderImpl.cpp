@@ -76,11 +76,16 @@ void bcostars::protocol::BlockHeaderImpl::clear()
 
 bcos::protocol::ParentInfo bcostars::protocol::BlockHeaderImpl::parentInfo() const
 {
+    const auto& parentInfos = m_inner->data.parentInfo;
+    if (parentInfos.empty())
+    {
+        return {};
+    }
+    const auto& first = parentInfos.front();
     return bcos::protocol::ParentInfo{
-        .blockNumber = m_inner->data.parentInfo.blockNumber,
+        .blockNumber = first.blockNumber,
         .blockHash = bcos::crypto::HashType(
-            (bcos::byte*)m_inner->data.parentInfo.blockHash.data(),
-            m_inner->data.parentInfo.blockHash.size())};
+            (bcos::byte*)first.blockHash.data(), first.blockHash.size())};
 }
 
 bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::txsRoot() const
@@ -123,7 +128,12 @@ bcos::u256 bcostars::protocol::BlockHeaderImpl::gasUsed() const
 void bcostars::protocol::BlockHeaderImpl::setParentInfo(
     bcos::protocol::ParentInfo parentInfo)
 {
-    auto& _parentInfo = m_inner->data.parentInfo;
+    auto& parentInfos = m_inner->data.parentInfo;
+    if (parentInfos.empty())
+    {
+        parentInfos.emplace_back();
+    }
+    auto& _parentInfo = parentInfos.front();
     _parentInfo.blockNumber = parentInfo.blockNumber;
     _parentInfo.blockHash.assign(parentInfo.blockHash.begin(), parentInfo.blockHash.end());
     clearDataHash();

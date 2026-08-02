@@ -40,7 +40,7 @@ struct Fixture
         m_precompiledManager(std::make_shared<bcos::crypto::Keccak256>()),
         m_executor(
             m_receiptFactory, std::make_shared<bcos::crypto::Keccak256>(), m_precompiledManager),
-        blockHeader([inner = std::addressof(tarsBlockHeader)]() mutable { return inner; })
+        blockHeader()
     {
         boost::log::core::get()->set_logging_enabled(false);
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();

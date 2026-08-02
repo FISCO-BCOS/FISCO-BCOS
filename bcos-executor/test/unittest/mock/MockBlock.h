@@ -64,6 +64,11 @@ public:
     bcos::bytesConstRef logsBloom() const override { return {}; }
     void setLogsBloom(bcos::bytesConstRef logsBloom) override {}
 
+    // ---- Ethereum-specific block accessors ----
+    void appendWithdrawal(const bcos::protocol::EthWithdrawal& _wd) override {}
+    gsl::span<const bcos::protocol::EthWithdrawal> withdrawals() const override { return {}; }
+    size_t withdrawalsSize() const override { return 0; }
+
 private:
     protocol::BlockHeader::Ptr m_blockHeader = std::make_shared<MockBlockHeader>(1);
     protocol::NonceList m_nodelist;

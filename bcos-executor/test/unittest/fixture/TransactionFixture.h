@@ -144,8 +144,7 @@ protected:
             // for parallel test
             return;
         }
-        auto const blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto const blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(blockNumber);
         Features features;
         for (auto [flag, _, value] : enableFeatures.flags())

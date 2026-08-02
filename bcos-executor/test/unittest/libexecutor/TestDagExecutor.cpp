@@ -273,8 +273,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
@@ -517,8 +516,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
