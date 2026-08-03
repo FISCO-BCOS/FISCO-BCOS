@@ -680,7 +680,9 @@ private:
         auto const& payload = request.executionPayload;
 
         // ---- Step 1: timestamp x version gate (-38005) ----
-        // Isthmus+ payloads may arrive only on V4; a pre-Isthmus timestamp may not use V4.
+        // The OP engine branch is scoped to Isthmus/Jovian only (design §1 目标版本 row; batch D-5
+        // ruling): a pre-Isthmus timestamp is answered -38005 *unconditionally*, on any version.
+        // Isthmus+ payloads must then arrive on V4 (Isthmus+ 禁 V3).
         // `isIsthmusActiveAt` lives on the scheduler so the threshold comparison stays on the OP
         // side next to `configAt` (design §4.2 "不重复实现阈值比较"). It is deliberately not
         // `configAt` itself: that function resolves sub-`isthmusTime` timestamps to the Isthmus
@@ -691,14 +693,18 @@ private:
         // classified outcome and must reach the caller unchanged, not be re-labelled.
         const bool isthmusActive = m_scheduler.get().isIsthmusActiveAt(payload.timestamp);
         constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;
-        if (isthmusActive != (version == c_opIsthmusPayloadVersion))
+        if (!isthmusActive)
         {
             BOOST_THROW_EXCEPTION(
                 UnsupportedFork{} << bcos::errinfo_comment{
-                    isthmusActive ?
-                        "Isthmus+ payloads require engine_newPayloadV4 (JSON-RPC -38005)" :
-                        "engine_newPayloadV4 requires an Isthmus+ payload timestamp (JSON-RPC "
-                        "-38005)"});
+                    "pre-Isthmus payloads are not supported by the OP engine branch (JSON-RPC "
+                    "-38005)"});
+        }
+        if (version != c_opIsthmusPayloadVersion)
+        {
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFork{} << bcos::errinfo_comment{
+                    "Isthmus+ payloads require engine_newPayloadV4 (JSON-RPC -38005)"});
         }
 
         // ---- Classification barrier (final review batch-2 second pass, I-1) ----

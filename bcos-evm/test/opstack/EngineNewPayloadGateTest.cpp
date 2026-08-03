@@ -1373,6 +1373,12 @@ TEST(EngineNewPayloadMutation, TimestampVersionGateRejectsMismatch)
         .isthmusTime = kVectorTimestamp + 1, .jovianTime = std::numeric_limits<uint64_t>::max()});
     EXPECT_THROW(bcos::task::syncWait(preIsthmus.service.newPayload(scenario.request, 4)),
         bcos::engine::UnsupportedFork);
+
+    // Batch D-5 ruling: pre-Isthmus is out of scope, so the gate answers -38005 *unconditionally*
+    // for any pre-Isthmus timestamp — even a V3 submission, which the old two-way gate used to let
+    // through. (Design §1 目标版本 row limits the OP engine branch to Isthmus/Jovian.)
+    EXPECT_THROW(bcos::task::syncWait(preIsthmus.service.newPayload(scenario.request, 3)),
+        bcos::engine::UnsupportedFork);
 }
 
 // ── #2 blockHash reconstruction: one tampered byte -> INVALID + latestValidHash = null ────────

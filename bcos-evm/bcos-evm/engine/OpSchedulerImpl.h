@@ -965,8 +965,9 @@ public:
     /// `configAt` cannot answer this question — it resolves sub-`isthmusTime` timestamps to the
     /// Isthmus config as well (documented in OpForkSchedule.h: "Timestamps below isthmusTime also
     /// resolve to Isthmus"), because the minimal loop has no pre-Isthmus config to fall back to.
-    /// The version gate, by contrast, must reject V4 for a pre-Isthmus timestamp, so it needs the
-    /// raw threshold. Both read the same injected `m_forkTimestamps.isthmusTime`, so there is
+    /// The version gate, by contrast, must reject pre-Isthmus timestamps outright (-38005 on any
+    /// version, batch D-5 ruling), so it needs the raw threshold. Both read the same injected
+    /// `m_forkTimestamps.isthmusTime`, so there is
     /// still exactly one source of truth for the value.
     [[nodiscard]] bool isIsthmusActiveAt(uint64_t timestamp) const noexcept
     {
