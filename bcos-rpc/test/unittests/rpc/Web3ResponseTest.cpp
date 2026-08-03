@@ -9,6 +9,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
@@ -143,6 +144,88 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result.isMember("gasUsed"));
     BOOST_CHECK(result.isMember("logs"));
     BOOST_CHECK(result["logs"].isArray());
+}
+
+// An OP receipt's serialized meta (written by the OP execution layer) must surface as op-geth's
+// OP extension fields in the receipt JSON. combineReceiptResponse appends them regardless of which
+// transaction shape produced the receipt — the legacy overload here stands in for the OP path.
+BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    std::vector<bcos::protocol::LogEntry> logs;
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+    receipt->setTransactionIndex(0);
+
+    // Meta mirroring what deriveOpReceiptMeta records on Isthmus+Jovian: L1 passthrough +
+    // operator scalars (Isthmus) + DA footprint (Jovian).
+    bcos::codec::rlp::OpReceiptMetaFields meta;
+    meta.l1_gas_price = bcos::bytes{0x03, 0xe8};  // 1000
+    meta.l1_fee = bcos::bytes{0x01, 0xe2, 0x40};  // 123456
+    meta.l1_base_fee_scalar = 7;
+    meta.operator_fee_scalar = 11;
+    meta.operator_fee_constant = 13;
+    meta.da_footprint_gas_scalar = 2;
+    meta.da_footprint = 100;
+    auto encoded = bcos::codec::rlp::encodeOpReceiptMeta(meta);
+    receipt->setOpReceiptMeta(std::string(encoded.begin(), encoded.end()));
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x88;
+
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, blockHash);
+
+    BOOST_CHECK_EQUAL(result["l1GasPrice"].asString(), "0x3e8");
+    BOOST_CHECK_EQUAL(result["l1Fee"].asString(), "0x1e240");
+    BOOST_CHECK_EQUAL(result["l1BaseFeeScalar"].asString(), "0x7");
+    BOOST_CHECK_EQUAL(result["operatorFeeScalar"].asString(), "0xb");
+    BOOST_CHECK_EQUAL(result["operatorFeeConstant"].asString(), "0xd");
+    BOOST_CHECK_EQUAL(result["daFootprintGasScalar"].asString(), "0x2");
+    BOOST_CHECK_EQUAL(result["blobGasUsed"].asString(), "0x64");  // Jovian reuses blobGasUsed
+    // deposit-only fields are absent for a normal tx.
+    BOOST_CHECK(!result.isMember("depositNonce"));
+    BOOST_CHECK(!result.isMember("depositReceiptVersion"));
+}
+
+// A deposit receipt's meta (depositNonce/depositReceiptVersion) must surface too.
+BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsDepositFieldsFromMeta)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    std::vector<bcos::protocol::LogEntry> logs;
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+    receipt->setTransactionIndex(0);
+
+    bcos::codec::rlp::OpReceiptMetaFields meta;
+    meta.deposit_nonce = 5;
+    meta.deposit_receipt_version = 1;
+    auto encoded = bcos::codec::rlp::encodeOpReceiptMeta(meta);
+    receipt->setOpReceiptMeta(std::string(encoded.begin(), encoded.end()));
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x99;
+
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, blockHash);
+
+    BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x5");
+    BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x1");
+    BOOST_CHECK(!result.isMember("l1GasPrice"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

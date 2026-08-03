@@ -542,6 +542,13 @@ bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> bcos::ledger::tag_invo
     co_return co_await awaitable;
 }
 
+bcos::task::Task<std::optional<bcos::bytes>> bcos::ledger::tag_invoke(
+    ledger::tag_t<getRawTransaction> /*unused*/, LedgerInterface& ledger,
+    crypto::HashType const& txHash)
+{
+    co_return co_await ledger.asyncGetRawTransactionByHash(txHash);
+}
+
 bcos::task::Task<bcos::protocol::TransactionsConstPtr> bcos::ledger::tag_invoke(
     ledger::tag_t<getTransactions> /*unused*/, LedgerInterface& ledger, crypto::HashListPtr hashes)
 {

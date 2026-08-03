@@ -100,6 +100,12 @@ constexpr static std::string_view SYS_NUMBER_2_BLOCK_HEADER{"s_number_2_header"}
 constexpr static std::string_view SYS_NUMBER_2_TXS{"s_number_2_txs"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
+// OP Stack blocks: raw EIP-2718 transaction envelopes, keyed by keccak(envelope) — same key as
+// SYS_HASH_2_RECEIPT. The generic SYS_HASH_2_TX is deliberately not written for OP blocks (spec
+// §6.4 f); this table is the transaction lookup for OP-mode receipts. The name lives here (not in
+// bcos-evm's OpEngineSeam.h, which also declares it) so the ledger/RPC layers can reference it
+// without depending on bcos-evm.
+constexpr static std::string_view SYS_ETH_HASH_2_RAWTX{"s_eth_hash_2_rawtx"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};

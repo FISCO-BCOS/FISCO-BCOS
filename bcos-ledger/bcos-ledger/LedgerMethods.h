@@ -393,6 +393,9 @@ task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
 task::Task<protocol::TransactionsConstPtr> tag_invoke(
     ledger::tag_t<getTransactions>, LedgerInterface& ledger, crypto::HashListPtr hashes);
 
+task::Task<std::optional<bcos::bytes>> tag_invoke(ledger::tag_t<getRawTransaction> /*unused*/,
+    LedgerInterface& ledger, crypto::HashType const& txHash);
+
 task::Task<std::optional<bcos::storage::Entry>> tag_invoke(ledger::tag_t<getStorageAt>,
     LedgerInterface& ledger, std::string_view address, std::string_view key,
     bcos::protocol::BlockNumber number);
@@ -452,8 +455,7 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
         bcos::protocol::BlockNumber blockNumber = -1;
         try
         {
-            blockNumber =
-                boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
+            blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {

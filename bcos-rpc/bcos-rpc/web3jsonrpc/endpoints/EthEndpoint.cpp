@@ -24,6 +24,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
@@ -49,6 +50,118 @@
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+namespace
+{
+/// Decode an OP-block raw EIP-2718 envelope into a Web3Transaction. Returns false when the bytes
+/// are not a transaction shape the RLP decoder understands (e.g. a 0x7E deposit envelope, whose
+/// type is not in rpc::TransactionType).
+bool decodeOpEnvelope(bcos::bytesConstRef envelope, Web3Transaction& out)
+{
+    bcos::bytesRef ref{const_cast<bcos::byte*>(envelope.data()), envelope.size()};
+    return codec::rlp::decode(ref, out) == nullptr;
+}
+
+/// Try to resolve an OP-block transaction+receipt into the JSON response. Returns true when the
+/// hash is an OP transaction (raw envelope found in SYS_ETH_HASH_2_RAWTX); on decode failure
+/// (deposit) still emits a minimal object so the tx hash is answerable. Blocks the caller from
+/// treating a present-but-odd OP tx as "not found".
+/// Decode an OP-block raw envelope with signatures (the tx-response path needs v/r/s).
+bool decodeOpEnvelopeWithSig(bcos::bytesConstRef envelope, Web3Transaction& out)
+{
+    bcos::bytesRef ref{const_cast<bcos::byte*>(envelope.data()), envelope.size()};
+    return codec::rlp::decodeTransaction(ref, out, /*withSignature=*/true) == nullptr;
+}
+
+task::Task<bool> tryResolveOpTransaction(bcos::ledger::LedgerInterface& ledger,
+    crypto::HashType const& hash, bcos::protocol::TransactionReceipt::Ptr& receipt,
+    Json::Value& result)
+{
+    auto rawTx = co_await ledger::getRawTransaction(ledger, hash);
+    if (!rawTx)
+    {
+        co_return false;
+    }
+    auto blockHash = co_await ledger::getBlockHash(ledger, receipt->blockNumber());
+    Web3Transaction web3Tx;
+    if (decodeOpEnvelopeWithSig(bcos::bytesConstRef{rawTx->data(), rawTx->size()}, web3Tx))
+    {
+        combineTxResponseFromWeb3(
+            result, web3Tx, receipt->transactionIndex(), receipt->blockNumber(), blockHash);
+    }
+    else
+    {
+        // 0x7E deposit: not decodable by rpc::Web3Transaction; answer with the fields the
+        // envelope's hash + receipt carry so the tx hash still resolves.
+        result["blockHash"] = blockHash.hexPrefixed();
+        result["blockNumber"] = toQuantity(receipt->blockNumber());
+        result["transactionIndex"] = toQuantity(receipt->transactionIndex());
+        result["hash"] = hash.hexPrefixed();
+        result["type"] = "0x7e";
+        result["to"] = Json::nullValue;
+        result["from"] = Json::nullValue;
+        result["gas"] = "0x0";
+        result["gasPrice"] = "0x0";
+        result["nonce"] = "0x0";
+        result["value"] = "0x0";
+        result["input"] = "0x";
+        result["r"] = "0x0";
+        result["s"] = "0x0";
+        result["v"] = "0x0";
+    }
+    co_return true;
+}
+
+task::Task<bool> tryResolveOpReceipt(bcos::ledger::LedgerInterface& ledger,
+    crypto::HashType const& hash, bcos::protocol::TransactionReceipt::Ptr& receipt,
+    Json::Value& result)
+{
+    auto rawTx = co_await ledger::getRawTransaction(ledger, hash);
+    if (!rawTx)
+    {
+        co_return false;
+    }
+    auto blockHash = co_await ledger::getBlockHash(ledger, receipt->blockNumber());
+    Web3Transaction web3Tx;
+    if (decodeOpEnvelope(bcos::bytesConstRef{rawTx->data(), rawTx->size()}, web3Tx))
+    {
+        combineReceiptResponseFromWeb3(result, web3Tx, *receipt, blockHash);
+    }
+    else
+    {
+        // 0x7E deposit envelope: not decodable by rpc::Web3Transaction. Emit the fields the
+        // receipt itself carries so the tx hash still answers (op-geth answers deposits too).
+        result["status"] = toQuantity(receipt->status() == 0 ? 1 : 0);
+        result["transactionHash"] = hash.hexPrefixed();
+        result["blockHash"] = blockHash.hexPrefixed();
+        result["blockNumber"] = toQuantity(receipt->blockNumber());
+        result["transactionIndex"] = toQuantity(receipt->transactionIndex());
+        result["gasUsed"] = toQuantity(receipt->gasUsed());
+        result["cumulativeGasUsed"] = toQuantity(safeCastToU256(receipt->cumulativeGasUsed()));
+        result["contractAddress"] = Json::nullValue;
+        result["logs"] = Json::arrayValue;
+        result["logsBloom"] = toHexStringWithPrefix(receipt->logsBloom());
+        result["type"] = "0x7e";
+        result["to"] = Json::nullValue;
+        result["from"] = Json::nullValue;
+        auto metaView = receipt->opReceiptMeta();
+        if (!metaView.empty())
+        {
+            bcos::codec::rlp::OpReceiptMetaFields fields;
+            if (!bcos::codec::rlp::decodeOpReceiptMeta(
+                    bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()},
+                    fields))
+            {
+                if (fields.deposit_nonce)
+                    result["depositNonce"] = toQuantity(*fields.deposit_nonce);
+                if (fields.deposit_receipt_version)
+                    result["depositReceiptVersion"] = toQuantity(*fields.deposit_receipt_version);
+            }
+        }
+    }
+    co_return true;
+}
+}  // namespace
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
@@ -663,10 +776,23 @@ task::Task<void> EthEndpoint::getTransactionByHash(
     Json::Value result = Json::objectValue;
     try
     {
-        auto const txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
         auto receipt = co_await ledger::getReceipt(*ledger, hash);
-        if (!receipt || !txs || txs->empty())
+        if (!receipt)
         {
+            result = Json::nullValue;
+            buildJsonContent(result, response);
+            co_return;
+        }
+        auto const txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
+        if (!txs || txs->empty())
+        {
+            // OP blocks do not write the generic SYS_HASH_2_TX table (spec §6.4 f) — fall back
+            // to the OP raw-envelope lookup.
+            if (co_await tryResolveOpTransaction(*ledger, hash, receipt, result))
+            {
+                buildJsonContent(result, response);
+                co_return;
+            }
             result = Json::nullValue;
             buildJsonContent(result, response);
             co_return;
@@ -766,11 +892,24 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
     try
     {
         auto receipt = co_await ledger::getReceipt(*ledger, hash);
+        if (!receipt)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
+        }
         auto hashList = std::make_shared<crypto::HashList>();
         hashList->push_back(hash);
         auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
-        if (!receipt || !txs || txs->empty())
+        if (!txs || txs->empty())
         {
+            // OP blocks do not write the generic SYS_HASH_2_TX table (spec §6.4 f) — their raw
+            // envelopes live in SYS_ETH_HASH_2_RAWTX. Fall back to the OP lookup so an OP block's
+            // receipt answers instead of returning null.
+            if (co_await tryResolveOpReceipt(*ledger, hash, receipt, result))
+            {
+                buildJsonContent(result, response);
+                co_return;
+            }
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
         }

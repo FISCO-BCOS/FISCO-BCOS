@@ -218,6 +218,17 @@ public:
     {
         return nullptr;  // Default implementation, can be overridden
     }
+
+    /// Fetch the raw EIP-2718 transaction envelope for an OP block, from the OP-specific
+    /// `s_eth_hash_2_rawtx` table (see OpEngineSeam.h). The generic SYS_HASH_2_TX table is
+    /// deliberately not written for OP blocks (spec §6.4 f), so the RPC layer's transaction
+    /// lookup falls back to this table. Default implementation returns an empty optional —
+    /// only the ledger implementation that stores OP blocks overrides it.
+    virtual task::Task<std::optional<bcos::bytes>> asyncGetRawTransactionByHash(
+        crypto::HashType const& _txHash)
+    {
+        co_return std::nullopt;
+    }
 };
 
 }  // namespace bcos::ledger
