@@ -37,6 +37,30 @@ public:
             m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_tableName));
     }
 
+    /// Ethereum-style existence (EIP-161 Spurious Dragon+):
+    /// empty accounts (nonce=0, balance=0, code_hash=EMPTY) are treated as non-existent.
+    task::Task<bool> existsEthereum()
+    {
+        if (!co_await exists())
+            co_return false;
+
+        // Check if account is non-empty (EIP-161: empty accounts don't exist)
+        auto nonceVal = co_await nonce();
+        if (nonceVal.has_value() && u256(nonceVal.value()) != 0)
+            co_return true;
+
+        auto bal = co_await balance();
+        if (bal != 0)
+            co_return true;
+
+        auto ch = co_await codeHash();
+        static const h256 EMPTY_CODE_HASH{};
+        if (ch != EMPTY_CODE_HASH)
+            co_return true;
+
+        co_return false;  // empty account → not exist in Ethereum sense
+    }
+
     task::Task<void> create()
     {
         co_await storage2::writeOne(m_storage.get(), executor_v1::StateKey(SYS_TABLES, m_tableName),

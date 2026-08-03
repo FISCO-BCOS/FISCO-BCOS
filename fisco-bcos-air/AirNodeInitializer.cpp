@@ -61,8 +61,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
-    auto ioServicePool =
-        std::make_shared<bcos::IOServicePool>(nodeConfig->ioThreadCount(), "io");
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(nodeConfig->ioThreadCount(), "io");
     m_nodeInitializer->setIOServicePool(ioServicePool);
 
     // create gateway
@@ -86,6 +85,14 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory(),
             m_nodeInitializer->engineService());
+    // eth_getProof node reader (M8.3): committed MPT node rows straight from the state
+    // backend. Set unconditionally — feature_mpt_state_root can activate at runtime, and a
+    // pre-MPT header's stateRoot simply misses in the node rows (-32004); -32603 stays
+    // reserved for nodes that structurally cannot serve proofs (tars-built NodeService).
+    // Lifetime: the handle owns its adapter; the borrowed backend lives in m_nodeInitializer,
+    // declared before m_rpc / m_tarsApplication (the NodeService holders), so it is
+    // destroyed after them.
+    nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,

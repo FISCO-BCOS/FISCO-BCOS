@@ -34,9 +34,9 @@
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <oneapi/tbb/global_control.h>
 #include <memory>
 #include <optional>
-#include <oneapi/tbb/global_control.h>
 #ifdef WITH_LIGHTNODE
 #include "LightNodeInitializer.h"
 #endif
@@ -59,6 +59,11 @@ class SchedulerInterface;
 namespace engine
 {
 class AnyEngineService;
+}
+namespace storage2
+{
+template <class Key, class ValueT>
+class AnyStorage;
 }
 namespace initializer
 {
@@ -117,6 +122,14 @@ public:
     /// NOTE: this should be last called
     void initSysContract();
     bcos::storage::TransactionalStorageInterface::Ptr storage() { return m_storage; }
+
+    /// Type-erased read handle over the committed MPT node rows for eth_getProof (M8.3
+    /// wiring): each call builds a fresh AnyStorage view over GlobalStateStorage's backend
+    /// (the committed plane node rows merge into at block commit) — the handle owns its
+    /// key-translating adapter, but the backend stays owned by this Initializer's
+    /// GlobalStateStorageInitializer, so the handle must not outlive this Initializer.
+    /// nullptr before initNode() built the global state storage (e.g. config-only usage).
+    std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
     bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts,
         const tool::NodeConfig::Ptr& nodeConfig);
     bcos::Error::Ptr importSnapshot(

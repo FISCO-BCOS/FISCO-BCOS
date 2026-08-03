@@ -11,15 +11,24 @@
 
 namespace bcos::protocol
 {
-Web3AccessList const& Transaction::emptyWeb3AccessList()
+Web3AccessList Transaction::web3AccessList() const
 {
-    static Web3AccessList const empty;
-    return empty;
+    return {};
 }
 
-Web3AccessList const& Transaction::web3AccessList() const
+AuthorizationList Transaction::authorizationList() const
 {
-    return emptyWeb3AccessList();
+    return {};
+}
+
+VersionedHashes Transaction::blobVersionedHashes() const
+{
+    return {};
+}
+
+std::optional<u256> Transaction::maxFeePerBlobGas() const
+{
+    return std::nullopt;
 }
 
 Transaction::Transaction(const Transaction& other)

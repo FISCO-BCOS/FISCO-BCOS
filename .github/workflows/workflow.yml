@@ -137,6 +137,32 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
+      - name: Download EEST fixtures
+        if: matrix.os != 'windows-2025'
+        run: |
+          cd ${{ github.workspace }}
+          # --fail: a 404 would otherwise write the error page into the tarball
+          # and surface as a confusing tar error; --retry handles release hiccups.
+          curl --fail --retry 3 -L -o fixtures_stable.tar.gz https://github.com/ethereum/execution-spec-tests/releases/download/v5.4.0/fixtures_stable.tar.gz
+          tar -xzf fixtures_stable.tar.gz
+          # The tarball may extract to fixtures_stable/; ensure we have fixtures/
+          if [ -d fixtures_stable ] && [ ! -d fixtures ]; then
+            mv fixtures_stable fixtures
+          fi
+      - name: Run EEST fixture tests
+        if: matrix.os != 'windows-2025'
+        run: |
+          # pipefail so a runner crash (not just a low pass rate) fails the job.
+          set -o pipefail
+          cd build/ethereum-executor/tests
+          ./eest-runner --fixture-dir ../../../fixtures/ --no-log 2>&1 | tee eest_output.txt
+          PASS_RATE=$(sed -nE 's/.*Pass rate:[[:space:]]+([0-9]+)%.*/\1/p' eest_output.txt)
+          echo "EEST pass rate: ${PASS_RATE}%"
+          if [ -z "${PASS_RATE}" ] || [ "${PASS_RATE}" -lt 100 ]; then
+            echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 100% threshold"
+            exit 1
+          fi
+          echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v4
