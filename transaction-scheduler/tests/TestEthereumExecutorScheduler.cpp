@@ -138,6 +138,16 @@ task::Task<void> EEWriteBlockHash(
         StateKey{ledger::SYS_NUMBER_2_HASH, std::to_string(number)}, std::move(entry));
 }
 
+/// Persist the committed current block height into SYS_CURRENT_STATE/current_number —
+/// the row ledger::getCurrentBlockNumber reads. StorageBlockHashes uses it to bound
+/// BLOCKHASH lookups to the last 256 ancestors.
+task::Task<void> EEWriteCurrentNumber(EEBackendStorage& storage, int64_t number)
+{
+    storage::Entry entry(std::to_string(number));
+    co_await storage2::writeOne(storage,
+        StateKey{ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER}, std::move(entry));
+}
+
 class TestEthereumExecutorSchedulerFixture
 {
 public:
@@ -178,6 +188,10 @@ task::Task<void> EERunTransfers(Scheduler& scheduler, EthereumExecutor& executor
         backendStorage, 0, cryptoSuite->hashImpl()->hash(std::string("genesis")));
     co_await EEWriteBlockHash(
         backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
+    // Committed height = 0 (the parent of the block being executed, number 1),
+    // so the StorageBlockHashes 256-ancestor bound is exercised and block 0
+    // (the parent) stays resolvable.
+    co_await EEWriteCurrentNumber(backendStorage, 0);
 
     bcostars::protocol::BlockHeaderImpl blockHeader(
         [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
@@ -442,6 +456,38 @@ BOOST_AUTO_TEST_CASE(serialInvalidTxDoesNotAbortBlock)
         BOOST_CHECK_EQUAL(receipts[1]->status(), 0);  // good tx still succeeds
         auto goodBalance = co_await EEReadBalance(view, goodSender);
         BOOST_CHECK(goodBalance == EEFunding - 50);
+    }());
+}
+
+// StorageBlockHashes only resolves the last 256 ancestor block hashes (Ethereum
+// BLOCKHASH semantics). With a committed height of 300, block 50 is reachable
+// (300-50=250) but block 5 is not (300-5=295 > 255) — even though its hash IS
+// present in SYS_NUMBER_2_HASH, the provider must report it as unknown.
+BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        co_await EEWriteCurrentNumber(backendStorage, 300);
+        co_await EEWriteBlockHash(
+            backendStorage, 50, cryptoSuite->hashImpl()->hash(std::string("block-50")));
+        co_await EEWriteBlockHash(
+            backendStorage, 5, cryptoSuite->hashImpl()->hash(std::string("block-5")));
+
+        // Within the last 256 ancestors — resolved straight from storage.
+        auto h50 =
+            task::tbb::syncWait(ledger::getBlockHash(backendStorage, 50, ledger::fromStorage));
+        BOOST_CHECK(h50.has_value());
+        auto resolved50 = blockHashes->get_block_hash(50);
+        BOOST_CHECK_EQUAL(
+            std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
+
+        // Older than 256 ancestors — unknown (zero hash), despite the hash being stored.
+        evmc::bytes32 zero{};
+        auto resolved5 = blockHashes->get_block_hash(5);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved5.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
+
+        // A future height (> current) is never an ancestor — unknown.
+        auto resolved301 = blockHashes->get_block_hash(301);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved301.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
     }());
 }
 
