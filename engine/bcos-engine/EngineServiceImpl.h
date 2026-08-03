@@ -134,6 +134,14 @@ bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 std::optional<std::string> validateOpNewPayloadRequest(
     const NewPayloadRequest& request, bool jovianActive);
 
+/// Compute expected baseFeePerGas from the parent header (design §6.4 D-3).
+/// Mirrors op-geth consensus/misc/eip1559/eip1559.go:CalcBaseFee, including Holocene extraData
+/// elasticity/denominator, Jovian blobGasUsed substitution, and Jovian minBaseFee floor.
+/// `parentIsJovian`/`parentIsIsthmus` derive from the parent's own timestamp — matching op-geth's
+/// `config.IsJovian(parent.Time)` / `config.IsOptimismHolocene(parent.Time)`.
+bcos::u256 calcOpBaseFee(
+    const bcos::codec::rlp::EthBlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus);
+
 /// Reconstructs the 21-field ETH/OP header from the payload (design §6.1 step 2 / §5.1); its
 /// `hash()` is what the payload's `blockHash` is checked against, and its `encode()` is what the
 /// block registration stores. Precondition: `validateOpNewPayloadRequest` accepted the request.
@@ -893,6 +901,25 @@ private:
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                     std::string("timestamp must be strictly greater than the parent's"));
+            }
+
+            // Step 3a-2: baseFee consistency (Holocene+ EIP-1559 with Optimism
+            // extensions). op-geth checks this in consensus/misc/eip1559/eip1559.go's
+            // VerifyEIP1559Header → CalcBaseFee. The parent header is already in hand
+            // from the timestamp check above, and fork membership is determined from
+            // the parent's own timestamp — matching op-geth's
+            // config.IsJovian(parent.Time) / config.IsOptimismHolocene(parent.Time).
+            // See §6.4 D-3.
+            {
+                auto expectedBaseFee = detail::calcOpBaseFee(parentHeader,
+                    m_scheduler.get().isJovianActiveAt(parentHeader.timestamp),
+                    m_scheduler.get().isIsthmusActiveAt(parentHeader.timestamp));
+                if (payload.baseFeePerGas != expectedBaseFee)
+                {
+                    co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                        std::string("baseFeePerGas does not match the value computed "
+                                    "from the parent"));
+                }
             }
         }
 

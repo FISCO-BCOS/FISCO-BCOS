@@ -682,6 +682,13 @@ ValidScenario prepareValidScenario(StubFixture& fixture, bcos::h256 const& paren
     ValidScenario scenario;
     scenario.rawTransaction = bcos::bytes{0x7e, 0x01, 0x02, 0x03};
     scenario.request = makeOpRequest({scenario.rawTransaction}, kIsthmusTimestamp, parentHash);
+    // 终审批 D-3:引擎层新增 baseFee 一致性校验(calcOpBaseFee 由父头计算子块 baseFee)。本块是
+    // 链式测试(EqualParentTimestamp/EarlierThanTimestamp/IncreasingTimestamp)的父块,须满足
+    // gasUsed == gasTarget(gasLimit/elasticity)令 baseFee 跨块恒定(= 1000),子块(makeOpRequest
+    // 同取 1000)才能通过校验。本块自身的 baseFee 校验被跳过(父为 trusted seed,无父头,见
+    // MissingParentHeaderSkipsTimestampCheck)。对单块测试无影响:它们要么无父头(校验跳过),
+    // 要么在更早的检查(版本闸/形状/timestamp)处即被拒。
+    scenario.request.executionPayload.gasUsed = scenario.request.executionPayload.gasLimit / 2;
     sealWithBlockHash(scenario.request);
     scenario.header = rebuiltHeader(scenario.request);
     scenario.receipt = makeReceipt(fixture.receiptFactory, 21000);

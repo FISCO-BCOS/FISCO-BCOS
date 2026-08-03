@@ -182,6 +182,92 @@ bcos::h2048 bcos::engine::detail::toEthLogsBloom(const Bloom& logsBloom)
     return bcos::h2048(logsBloom.data(), logsBloom.size());
 }
 
+bcos::u256 bcos::engine::detail::calcOpBaseFee(
+    const bcos::codec::rlp::EthBlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus)
+{
+    // Default EIP-1559 parameters (pre-Holocene / pre-London).
+    uint64_t elasticity = 2;
+    uint64_t denominator = 8;
+    std::optional<uint64_t> minBaseFee;
+
+    if (parentIsIsthmus)
+    {
+        // Holocene+ extraData: version byte + denominator (uint32 BE) + elasticity (uint32 BE).
+        // Zero-value rejection is guaranteed by the parent's own validateOpNewPayloadRequest.
+        const auto& extra = parent.extraData;
+        auto readU32BE = [&extra](std::size_t off) -> uint64_t {
+            return (static_cast<uint64_t>(extra[off]) << 24) |
+                   (static_cast<uint64_t>(extra[off + 1]) << 16) |
+                   (static_cast<uint64_t>(extra[off + 2]) << 8) |
+                   static_cast<uint64_t>(extra[off + 3]);
+        };
+        denominator = readU32BE(1);
+        elasticity = readU32BE(5);
+
+        if (parentIsJovian)
+        {
+            // Jovian extraData extends Holocene with 8-byte minBaseFee (uint64 BE).
+            auto readU64BE = [&extra](std::size_t off) -> uint64_t {
+                return (static_cast<uint64_t>(extra[off]) << 56) |
+                       (static_cast<uint64_t>(extra[off + 1]) << 48) |
+                       (static_cast<uint64_t>(extra[off + 2]) << 40) |
+                       (static_cast<uint64_t>(extra[off + 3]) << 32) |
+                       (static_cast<uint64_t>(extra[off + 4]) << 24) |
+                       (static_cast<uint64_t>(extra[off + 5]) << 16) |
+                       (static_cast<uint64_t>(extra[off + 6]) << 8) |
+                       static_cast<uint64_t>(extra[off + 7]);
+            };
+            minBaseFee = readU64BE(9);
+        }
+    }
+
+    const uint64_t parentGasTarget = parent.gasLimit / elasticity;
+
+    // Jovian: baseFee is based on max(total gas used, DA footprint) rather than plain gasUsed
+    // (op-geth consensus/misc/eip1559/eip1559.go:99-107).
+    uint64_t parentGasMetered = parent.gasUsed;
+    if (parentIsJovian && parent.blobGasUsed > parent.gasUsed)
+    {
+        parentGasMetered = parent.blobGasUsed;
+    }
+
+    // EIP-1559 base fee computation (mirrors op-geth eip1559.go:calcBaseFeeInner).
+    if (parentGasMetered == parentGasTarget)
+    {
+        return parent.baseFeePerGas;
+    }
+
+    const bcos::u256 parentBaseFee = parent.baseFeePerGas;
+    bcos::u256 result;
+
+    if (parentGasMetered > parentGasTarget)
+    {
+        // baseFee increases: max(1, parentBaseFee * delta / parentGasTarget / denominator)
+        const uint64_t delta = parentGasMetered - parentGasTarget;
+        bcos::u256 deltaFee = parentBaseFee * delta;
+        deltaFee /= parentGasTarget;
+        deltaFee /= denominator;
+        result = parentBaseFee + (deltaFee > 0 ? deltaFee : bcos::u256{1});
+    }
+    else
+    {
+        // baseFee decreases: parentBaseFee * delta / parentGasTarget / denominator
+        const uint64_t delta = parentGasTarget - parentGasMetered;
+        bcos::u256 deltaFee = parentBaseFee * delta;
+        deltaFee /= parentGasTarget;
+        deltaFee /= denominator;
+        result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256{0};
+    }
+
+    // Jovian minBaseFee floor (op-geth eip1559.go:86-91).
+    if (minBaseFee.has_value() && result < *minBaseFee)
+    {
+        result = bcos::u256{*minBaseFee};
+    }
+
+    return result;
+}
+
 std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     const NewPayloadRequest& request, bool jovianActive)
 {
