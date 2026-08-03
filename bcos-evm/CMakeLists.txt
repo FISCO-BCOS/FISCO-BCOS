@@ -75,6 +75,14 @@ add_library(bcos-evm-opstack STATIC
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
+# OpReceiptMeta.{h,cpp} serialize the OP receipt meta via bcos-codec's RLP codec
+# (OpReceiptMetaCodec.h). `codec` exists only in an in-tree build (top-level
+# add_subdirectory(bcos-codec) precedes add_subdirectory(bcos-evm)) — the same condition the
+# opstack test target gates its `codec` link on (test/CMakeLists.txt:146-151). Standalone
+# (BCOS_EVM_STANDALONE) builds never compile the OP stack's receipt-meta path.
+if(TARGET codec)
+    target_link_libraries(bcos-evm-opstack PUBLIC codec)
+endif()
 
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；
 # 否则整树 TESTS=ON 构建/CI 也不会编译 bcos-evm-eth-tests，回归无从暴露。

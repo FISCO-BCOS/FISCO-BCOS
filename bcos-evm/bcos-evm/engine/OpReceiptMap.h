@@ -68,16 +68,24 @@ inline bcos::protocol::LogEntries mapOpLogs(const std::vector<evmone::state::Log
 /// Maps one OP-executed transaction's receipt (the evmone::state::TransactionReceipt common to
 /// both OpDepositReceipt and OpTxReceipt, see OpBlockExecute.h's OpBlockResult) into a
 /// bcos::protocol::TransactionReceipt via the injected factory. Only status/gasUsed/logs are
-/// populated (see file header).
+/// populated from the evmone receipt; blockNumber and the OP receipt meta (opReceiptMeta) are
+/// carried explicitly — the meta is what lets the RPC layer emit op-geth's OP extension fields
+/// (see OpReceiptMetaCodec.h and EthEndpoint's OP fallback path).
 inline bcos::protocol::TransactionReceipt::Ptr mapOpReceipt(
     const evmone::state::TransactionReceipt& receipt,
-    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
+    protocol::BlockNumber blockNumber, bcos::bytes opReceiptMeta)
 {
     const bcos::u256 gasUsed(static_cast<uint64_t>(receipt.gas_used));
     const int32_t status =
         receipt.status == EVMC_SUCCESS ? kOpReceiptStatusSuccess : kOpReceiptStatusFailure;
-    return receiptFactory->createReceipt(gasUsed, std::string{}, mapOpLogs(receipt.logs), status,
-        bcos::bytesConstRef{}, /*blockNumber=*/0);
+    auto out = receiptFactory->createReceipt(gasUsed, std::string{}, mapOpLogs(receipt.logs),
+        status, bcos::bytesConstRef{}, blockNumber);
+    if (!opReceiptMeta.empty())
+    {
+        out->setOpReceiptMeta(std::string(opReceiptMeta.begin(), opReceiptMeta.end()));
+    }
+    return out;
 }
 
 }  // namespace bcos::evm::engine

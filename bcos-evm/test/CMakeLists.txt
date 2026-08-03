@@ -27,6 +27,7 @@ add_executable(bcos-evm-opstack-tests
     opstack/OpBlockHarnessTest.cpp
     opstack/OpZeroDiffTest.cpp
     opstack/OpReceiptMetaTest.cpp
+    opstack/OpReceiptMapTest.cpp
     opstack/Op7702Test.cpp
     opstack/OpFloorGasTest.cpp
     opstack/OpBlockFinalizeTest.cpp

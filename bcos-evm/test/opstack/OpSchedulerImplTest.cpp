@@ -25,6 +25,7 @@
 // protocol; see task-4-report.md for the static walkthrough / API-precedent cross-check that
 // substitutes for it.
 
+#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -668,6 +669,77 @@ TEST(OpSchedulerImpl, ExecuteOpBlockSixWayComparisonSurface)
     EXPECT_EQ(result.receipts.size(), rawTxBytes.size());
     for (auto const& receipt : result.receipts)
         EXPECT_NE(receipt, nullptr);
+}
+
+// The receipt's opReceiptMeta must reach the RPC layer. kVectorId is an Isthmus vector, so the
+// execution layer's deriveOpReceiptMeta records operator fees (Isthmus+) but no DA footprint
+// (Jovian-only). This pins the full path: OpTransition computes the meta → OpSchedulerImpl's
+// mapOpReceipt serializes it into the bcos receipt → the RPC layer can decode it back into the
+// op-geth field names.
+TEST(OpSchedulerImpl, ExecuteOpBlockCarriesReceiptMetaToRpcLayer)
+{
+    auto loaded = LoadedVector::load();
+    Json const& vec = vectorBody(loaded.vectors, kVectorId);
+    Json const& golden = loaded.golden;
+
+    StorageFixture fixture;
+    seedFromVectorPre(fixture.view, vec.at("pre"));
+
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+
+    ASSERT_EQ(result.receipts.size(), rawTxBytes.size());
+    ASSERT_EQ(rawTxBytes.size(), 2u) << "vector: attributes deposit + one EIP-1559 transfer";
+    // blockNumber is stamped by the execution layer (not the factory default 0).
+    for (auto const& receipt : result.receipts)
+    {
+        ASSERT_NE(receipt, nullptr);
+        EXPECT_EQ(receipt->blockNumber(), env.fiscoHeader.number());
+    }
+
+    // Tx 0 is the L1 attributes deposit: its meta carries depositNonce/depositReceiptVersion, no
+    // L1/operator fees (deposits have no L1 cost — runDeposit, OpBlockExecute.cpp:113).
+    {
+        auto metaView = result.receipts[0]->opReceiptMeta();
+        ASSERT_FALSE(metaView.empty());
+        bcos::codec::rlp::OpReceiptMetaFields fields;
+        ASSERT_EQ(
+            bcos::codec::rlp::decodeOpReceiptMeta(
+                bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
+            nullptr);
+        EXPECT_FALSE(fields.l1_gas_price.has_value());
+        ASSERT_TRUE(fields.deposit_nonce.has_value());
+        EXPECT_EQ(*fields.deposit_nonce, 0u);
+        ASSERT_TRUE(fields.deposit_receipt_version.has_value());
+        EXPECT_EQ(*fields.deposit_receipt_version, 1u);  // Canyon+
+    }
+
+    // Tx 1 is the user EIP-1559 transfer: full L1 passthrough + operator scalars (Isthmus), no
+    // DA footprint (Jovian-only). This is the data the RPC layer turns into op-geth's
+    // l1GasPrice/l1Fee/operatorFeeScalar/... fields.
+    {
+        auto metaView = result.receipts[1]->opReceiptMeta();
+        ASSERT_FALSE(metaView.empty());
+        bcos::codec::rlp::OpReceiptMetaFields fields;
+        ASSERT_EQ(
+            bcos::codec::rlp::decodeOpReceiptMeta(
+                bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
+            nullptr);
+        // This vector seeds L1 fee params (slot1/3/7) but not slot8 (operator fee), so the user
+        // tx carries L1 passthrough but no operator scalars — assert exactly that shape.
+        ASSERT_TRUE(fields.l1_gas_price.has_value());
+        ASSERT_TRUE(fields.l1_fee.has_value());
+        EXPECT_FALSE(fields.operator_fee_scalar.has_value());
+        EXPECT_FALSE(fields.deposit_nonce.has_value()) << "normal txs are not deposits";
+        EXPECT_FALSE(fields.da_footprint.has_value()) << "DA footprint is Jovian-only";
+    }
 }
 
 // (c) first tx is not the L1 attributes deposit -> OpConsensusError.
