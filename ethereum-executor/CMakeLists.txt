@@ -5,6 +5,7 @@ find_package(intx REQUIRED)
 find_package(TBB CONFIG REQUIRED)
 
 add_library(ethereum-executor
+    BCOS2Evmone.cpp
     EthereumExecutor.cpp
     StorageStateView.cpp
 )
