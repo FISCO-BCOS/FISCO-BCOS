@@ -52,6 +52,12 @@ public:
     virtual std::string_view effectiveGasPrice() const = 0;
     virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
+    // OP Stack (Isthmus/Jovian) receipt metadata, serialized by the OP execution layer
+    // (OpReceiptMeta rlp encoding). Empty string means "not an OP receipt" -- legacy receipts
+    // never set this, and old serialized receipts decode to an empty value (tars optional field).
+    virtual std::string_view opReceiptMeta() const = 0;
+    virtual void setOpReceiptMeta(std::string opReceiptMeta) = 0;
+
     // additional information on transaction execution, no need to be involved in the hash
     // calculation
     virtual std::string const& message() const = 0;
@@ -70,12 +76,13 @@ public:
 
     friend std::ostream& operator<<(std::ostream& output, const TransactionReceipt& receipt)
     {
-        output << "TransactionReceipt{" << "hash=" << receipt.hash() << ", "
+        output << "TransactionReceipt{"
+               << "hash=" << receipt.hash() << ", "
                << "version=" << receipt.version() << ", "
                << "gasUsed=" << receipt.gasUsed() << ", "
                << "contractAddress=" << receipt.contractAddress() << ", "
-               << "status=" << receipt.status() << ", " << "output=" << toHex(receipt.output())
-               << ", "
+               << "status=" << receipt.status() << ", "
+               << "output=" << toHex(receipt.output()) << ", "
                << "logEntries=" << receipt.logEntries().size() << ", "
                << "blockNumber=" << receipt.blockNumber() << ", "
                << "effectiveGasPrice=" << receipt.effectiveGasPrice() << ", "

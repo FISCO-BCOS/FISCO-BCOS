@@ -125,6 +125,14 @@ void bcostars::protocol::TransactionReceiptImpl::setEffectiveGasPrice(std::strin
 {
     m_inner()->data.effectiveGasPrice = std::move(effectiveGasPrice);
 }
+std::string_view bcostars::protocol::TransactionReceiptImpl::opReceiptMeta() const
+{
+    return m_inner()->opReceiptMeta;
+}
+void bcostars::protocol::TransactionReceiptImpl::setOpReceiptMeta(std::string opReceiptMeta)
+{
+    m_inner()->opReceiptMeta = std::move(opReceiptMeta);
+}
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {
     return *m_inner();
@@ -181,6 +189,7 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
         }
     }
     size += m_inner()->message.size();
+    size += m_inner()->opReceiptMeta.size();
     return size;
 }
 
