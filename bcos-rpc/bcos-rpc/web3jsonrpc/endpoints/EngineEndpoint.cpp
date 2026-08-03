@@ -35,6 +35,11 @@ EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std
 task::Task<void> EngineEndpoint::exchangeCapabilities(
     const Json::Value& request, Json::Value& response)
 {
+    // engineService is guaranteed to be wired in when the OP-Engine RPC port is
+    // enabled (AirNodeInitializer unconditionally builds it; the MAX/tars path has
+    // no op_engine_rpc entry point yet). The assert documents that invariant —
+    // it compiles out under NDEBUG, and reaching here without the service is a
+    // wiring bug, not a runtime state.
     auto& engineService = m_nodeService->engineService();
     assert(engineService && "engineService is not available");
 
@@ -85,6 +90,8 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(
 task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     engine::ApiVersion version, const Json::Value& request, Json::Value& response)
 {
+    // engineService is always wired when this endpoint is reachable (see
+    // exchangeCapabilities for the invariant rationale).
     auto& engineService = m_nodeService->engineService();
     assert(engineService && "engineService is not available");
 

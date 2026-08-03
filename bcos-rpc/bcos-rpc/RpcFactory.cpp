@@ -338,6 +338,11 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
         wsConfig->setListenIP(_nodeConfig->opEngineRpcListenIP());
         wsConfig->setListenPort(_nodeConfig->opEngineRpcListenPort());
         wsConfig->setMaxMsgSize(_nodeConfig->opEngineHttpBodySizeLimit());
+        // The engine API port is machine-to-machine (op-node / consensus clients),
+        // not browser-facing, so CORS provides no functionality and would only
+        // expose the port to cross-origin pages. Disable it explicitly.
+        wsConfig->setCorsConfig(
+            bcos::boostssl::http::CorsConfig{.enableCORS = false});
     }
     else
     {

@@ -173,6 +173,10 @@ bool JwtVerifier::validateSecret(std::string_view _secret) const
 
 std::optional<std::string> JwtVerifier::readSecret() const
 {
+    // The secret is read once at construction and cached in m_secret.
+    // NOTE: key rotation / hot-reload is intentionally deferred — a future design
+    // should revisit secret refresh without blocking RPC IO threads on file I/O.
+    // See PR #5330 review (JwtVerifier.cpp m_secret note).
     if (m_secret.has_value())
     {
         return m_secret;

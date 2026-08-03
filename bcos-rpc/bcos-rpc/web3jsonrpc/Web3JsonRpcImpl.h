@@ -59,8 +59,8 @@ public:
 private:
     task::Task<Json::Value> handleRequest(Json::Value _request,
         std::shared_ptr<boostssl::ws::WsSession> _session = nullptr);
-    task::Task<Json::Value> handleBatchRequest(Json::Value _request,
-        std::shared_ptr<boostssl::ws::WsSession> _session);
+    void handleBatchRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
+        const Sender& _sender);
     Json::Value handleSubscribeRequest(Json::Value _request, std::string _method,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 

@@ -105,34 +105,48 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
     co_return response;
 }
 
-task::Task<Json::Value> Web3JsonRpcImpl::handleBatchRequest(
-    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session)
+void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request,
+    std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
 {
-    auto responses = Json::Value(Json::arrayValue);
-    auto requestSize = _request.size();
+    auto respJsonValuePtr = std::make_shared<Json::Value>(Json::arrayValue);
+    auto leftRequestSize = std::make_shared<std::atomic<size_t>>(_request.size());
 
     auto startT = utcTime();
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
         WEB3_LOG(TRACE) << LOG_BADGE("handleBatchRequest") << LOG_DESC("begin")
-                        << LOG_KV("reqSize", requestSize);
+                        << LOG_KV("reqSize", _request.size());
     }
 
+    Json::ArrayIndex requestIndex{0};
     for (auto& reqItem : _request)
     {
-        auto result = co_await handleRequest(std::move(reqItem), _session);
-        responses.append(std::move(result));
-    }
+        respJsonValuePtr->append(Json::Value(Json::nullValue));
+        task::wait([](Web3JsonRpcImpl* self, Json::Value req, auto session,
+                        auto respJsonValuePtr, auto leftRequestSize, auto requestIndex,
+                        decltype(startT) startT, Sender send) mutable -> task::Task<void> {
+            auto result = co_await self->handleRequest(std::move(req), std::move(session));
+            (*respJsonValuePtr)[requestIndex] = std::move(result);
+            if (leftRequestSize->fetch_sub(1) > 1)
+            {
+                // Not the last sub-request yet; wait for others to complete.
+                co_return;
+            }
 
-    if (c_fileLogLevel == TRACE) [[unlikely]]
-    {
-        auto endT = utcTime();
-        WEB3_LOG(TRACE) << LOG_BADGE("handleBatchRequest") << LOG_DESC("end")
-                        << LOG_KV("costMs", endT - startT)
-                        << LOG_KV("response", printJson(responses));
-    }
+            auto respBytes = toBytesResponse(*respJsonValuePtr);
+            send(std::move(respBytes), boost::beast::http::status::ok);
 
-    co_return responses;
+            auto endT = utcTime();
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                WEB3_LOG(TRACE) << LOG_BADGE("handleBatchRequest") << LOG_DESC("end")
+                                << LOG_KV("costMs", endT - startT)
+                                << LOG_KV("response", printJson(*respJsonValuePtr));
+            }
+        }(this, std::move(reqItem), _session, respJsonValuePtr, leftRequestSize, requestIndex,
+            startT, _sender));
+        ++requestIndex;
+    }
 }
 
 Json::Value Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request, std::string _method,
@@ -175,6 +189,10 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& 
 
 void Web3JsonRpcImpl::onRPCRequest(const bcos::boostssl::http::HttpRequest& _request, const Sender& _sender)
 {
+    // JWT verification is mandatory for the OP-Engine RPC path: the handler below is only
+    // registered together with setJwtVerifier() in RpcFactory::buildWeb3JsonRpc(_enableOPEngine=true),
+    // so m_jwtVerifier is always set when this overload is reachable. The assert is a
+    // zero-cost documentation of that invariant (it compiles out under NDEBUG).
     assert(m_jwtVerifier && "m_jwtVerifier is not set");
 
     std::string authorization;
@@ -242,11 +260,7 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
 
             if (request.size() > 1)
             {
-                task::wait([this, request = std::move(request), session = std::move(_session),
-                               sender = _sender]() mutable -> task::Task<void> {
-                    auto result = co_await this->handleBatchRequest(std::move(request), session);
-                    sender(toBytesResponse(result), boost::beast::http::status::ok);
-                }());
+                handleBatchRequest(std::move(request), std::move(_session), _sender);
                 return;
             }
 
@@ -254,11 +268,11 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
             request = std::move(request[0]);
         }
 
-        task::wait([this, request = std::move(request), session = std::move(_session),
-                       sender = _sender]() mutable -> task::Task<void> {
-            auto result = co_await this->handleRequest(std::move(request), session);
-            sender(toBytesResponse(result), boost::beast::http::status::ok);
-        }());
+        task::wait([](Web3JsonRpcImpl* self, Json::Value req, auto session,
+                        Sender send) mutable -> task::Task<void> {
+            auto result = co_await self->handleRequest(std::move(req), std::move(session));
+            send(toBytesResponse(result), boost::beast::http::status::ok);
+        }(this, std::move(request), std::move(_session), _sender));
         return;
     }
     catch (const JsonRpcException& e)
