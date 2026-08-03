@@ -280,5 +280,170 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
     }());
 }
 
+// Discriminating cases: these must FAIL with the pre-fix executor (where
+// applyStateDiff ran in finish() and prepare() threw on any validation
+// failure) and PASS after state is applied in execute() with re-validation.
+//   * Same sender, sequential nonces — the second transaction's nonce must be
+//     validated against the first transaction's applied nonce bump.
+//   * Two senders, one shared recipient — the second transaction must read the
+//     first transaction's credit (absolute-value diffs would overwrite it).
+
+BOOST_AUTO_TEST_CASE(serialSameSenderSequentialNonces)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialSameSenderGC");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEMakeAddress(21);
+        auto recipient0 = EEMakeAddress(31);
+        auto recipient1 = EEMakeAddress(32);
+
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient0, 0);
+        co_await EEFundAccount(backendStorage, recipient1, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient0, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 200, "1"));
+
+        co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
+            cryptoSuite, txs,
+            {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(parallelSameSenderSequentialNonces)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthParallelSameSenderGC");
+        SchedulerParallelImpl<EEMutableStorage> scheduler(ioServicePool);
+
+        auto sender = EEMakeAddress(23);
+        auto recipient0 = EEMakeAddress(33);
+        auto recipient1 = EEMakeAddress(34);
+
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient0, 0);
+        co_await EEFundAccount(backendStorage, recipient1, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient0, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 200, "1"));
+
+        co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
+            cryptoSuite, txs,
+            {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(serialSharedRecipient)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialSharedRecipGC");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender0 = EEMakeAddress(41);
+        auto sender1 = EEMakeAddress(42);
+        auto recipient = EEMakeAddress(51);
+
+        co_await EEFundAccount(backendStorage, sender0, EEFunding);
+        co_await EEFundAccount(backendStorage, sender1, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender0, recipient, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender1, recipient, 200, "0"));
+
+        co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
+            cryptoSuite, txs,
+            {{sender0, EEFunding - 100}, {sender1, EEFunding - 200}, {recipient, 300}});
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(parallelSharedRecipient)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthParallelSharedRecipGC");
+        SchedulerParallelImpl<EEMutableStorage> scheduler(ioServicePool);
+
+        auto sender0 = EEMakeAddress(43);
+        auto sender1 = EEMakeAddress(44);
+        auto recipient = EEMakeAddress(52);
+
+        co_await EEFundAccount(backendStorage, sender0, EEFunding);
+        co_await EEFundAccount(backendStorage, sender1, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender0, recipient, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender1, recipient, 200, "0"));
+
+        co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
+            cryptoSuite, txs,
+            {{sender0, EEFunding - 100}, {sender1, EEFunding - 200}, {recipient, 300}});
+    }());
+}
+
+// A transaction that fails validation for real (insufficient funds) must yield
+// a failure receipt and must NOT abort the whole block, matching
+// TransactionExecutorImpl's "bad transaction does not block the block"
+// semantics (R1 in the review). The transaction after it must still succeed.
+BOOST_AUTO_TEST_CASE(serialInvalidTxDoesNotAbortBlock)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialInvalidGC");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto badSender = EEMakeAddress(61);
+        auto goodSender = EEMakeAddress(62);
+        auto recipient = EEMakeAddress(71);
+
+        // badSender is deliberately never funded → INSUFFICIENT_FUNDS at validation.
+        co_await EEFundAccount(backendStorage, goodSender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, badSender, recipient, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, goodSender, recipient, 50, "0"));
+
+        co_await EEWriteBlockHash(
+            backendStorage, 0, cryptoSuite->hashImpl()->hash(std::string("genesis")));
+        co_await EEWriteBlockHash(
+            backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
+
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setNumber(1);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        ledger::LedgerConfig ledgerConfig;
+        ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+
+        auto transactions =
+            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, blockHeader, transactions, ledgerConfig);
+
+        BOOST_CHECK_EQUAL(receipts.size(), 2u);
+        BOOST_CHECK(receipts[0]->status() != 0);  // invalid tx → failure receipt
+        BOOST_CHECK_EQUAL(receipts[1]->status(), 0);  // good tx still succeeds
+        auto goodBalance = co_await EEReadBalance(view, goodSender);
+        BOOST_CHECK(goodBalance == EEFunding - 50);
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace

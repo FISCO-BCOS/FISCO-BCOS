@@ -15,17 +15,42 @@
 #include "bcos-task/TBBWait.h"
 #include <evmone/evmone.h>
 #include <string>
+#include <system_error>
 
 namespace bcos::executor_v1::eth
 {
 
 using ::bcos::executor_v1::eth::toIntxU256;
 
+// EIP-7840 blob schedule constants (target, max, base_fee_update_fraction).
+// Shared by EthereumExecutor (blob_gas_left for validation) and
+// blockHeaderToBlockInfo (blob_base_fee computation) so the two cannot drift.
+inline constexpr evmone::state::BlobParams PRAGUE_BLOB_PARAMS{
+    .target = 6, .max = 9, .base_fee_update_fraction = 5007716};
+inline constexpr evmone::state::BlobParams CANCUN_BLOB_PARAMS{
+    .target = 3, .max = 6, .base_fee_update_fraction = 3338477};
+
+/// The EIP-7840 blob schedule in effect for @p rev (empty for pre-Cancun).
+inline evmone::state::BlobParams blobParamsForRevision(evmc_revision rev) noexcept
+{
+    if (rev >= EVMC_PRAGUE)
+        return PRAGUE_BLOB_PARAMS;  // Prague/Osaka.
+    if (rev == EVMC_CANCUN)
+        return CANCUN_BLOB_PARAMS;  // Cancun.
+    return {};
+}
+
 // Non-template converters — defined in BCOS2Evmone.cpp.
 evmone::state::BlockInfo blockHeaderToBlockInfo(
     protocol::BlockHeader const& header, ledger::LedgerConfig const& config, evmc_revision rev);
 
 evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& tx);
+
+// Builds a failed BCOS receipt for a transaction that failed evmone's
+// validate_transaction (see evmone::state::ErrorCode in bcos-evm errors.hpp).
+// Defined in BCOS2Evmone.cpp.
+protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& error,
+    protocol::TransactionReceiptFactory const& rf, int64_t blockNumber);
 
 // Defined in BCOS2Evmone.cpp; declared here because the template applyStateDiff
 // below (in this header) calls it.

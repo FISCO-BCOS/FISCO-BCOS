@@ -11,9 +11,11 @@
 #include "bcos-evm/eth/state/state.hpp"
 #include "bcos-evm/eth/state/transaction.hpp"
 #include "bcos-framework/protocol/LogEntry.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <system_error>
 
 namespace bcos::executor_v1::eth
 {
@@ -39,34 +41,31 @@ evmone::state::BlockInfo blockHeaderToBlockInfo(
     auto const& cb = header.coinbase();
     if (cb.size() == sizeof(evmc_address))
         std::copy_n(cb.begin(), sizeof(evmc_address), info.coinbase.bytes);
+    // base_fee is a hex string that may or may not carry the 0x prefix; parse
+    // it the same robust way as chainId/nonce (bcos::u256), then truncate to
+    // uint64 as before. std::stoull(base, 16) would mis-read a decimal value
+    // that happens to lack the 0x prefix and throw for values > uint64.
     auto baseFeeStr = std::get<0>(config.gasPrice());
     if (!baseFeeStr.empty() && baseFeeStr != "0x" && baseFeeStr != "0x0")
     {
-        if (baseFeeStr.size() > 2 && baseFeeStr[0] == '0' && baseFeeStr[1] == 'x')
-            baseFeeStr = baseFeeStr.substr(2);
-        info.base_fee = static_cast<uint64_t>(std::stoull(baseFeeStr, nullptr, 16));
+        auto baseFeeHex = (baseFeeStr.size() >= 2 && baseFeeStr[0] == '0' && baseFeeStr[1] == 'x') ?
+                              baseFeeStr :
+                              "0x" + baseFeeStr;
+        info.base_fee = static_cast<uint64_t>(bcos::u256(baseFeeHex));
     }
     // EIP-4844 blob gas parameters (Cancun+). The blob base fee is computed from
     // the block's excess blob gas using the per-revision blob schedule (EIP-7840).
     // Matches evmone's statetest/blockchaintest loaders:
     //   blob_base_fee = compute_blob_gas_price(blob_params, excess_blob_gas)
+    // The per-revision schedule constants are shared with EthereumExecutor via
+    // blobParamsForRevision() in BCOS2Evmone.h.
     info.excess_blob_gas = config.excessBlobGas();
     info.blob_gas_used = config.blobGasUsed();
     if (rev >= EVMC_CANCUN)
     {
-        evmone::state::BlobParams blobParams{};
-        if (rev >= EVMC_PRAGUE)
-        {
-            // EIP-7840 blob schedule: Prague/Osaka (target=6, max=9).
-            blobParams = {6, 9, 5007716};
-        }
-        else  // EVMC_CANCUN
-        {
-            // EIP-7840 blob schedule: Cancun (target=3, max=6).
-            blobParams = {3, 6, 3338477};
-        }
         const auto excess = config.excessBlobGas().value_or(0);
-        info.blob_base_fee = evmone::state::compute_blob_gas_price(blobParams, excess);
+        info.blob_base_fee = evmone::state::compute_blob_gas_price(
+            blobParamsForRevision(rev), excess);
     }
     else
     {
@@ -213,16 +212,32 @@ protocol::TransactionReceipt::Ptr evmoneReceiptToBcos(evmone::state::Transaction
         switch (er.status)
         {
         case EVMC_SUCCESS:
-            return 0;
+            return static_cast<int32_t>(protocol::TransactionStatus::None);
         case EVMC_REVERT:
-            return 16;  // TransactionStatus::RevertInstruction
+            return static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction);
         case EVMC_OUT_OF_GAS:
-            return 12;  // TransactionStatus::OutOfGas
+            return static_cast<int32_t>(protocol::TransactionStatus::OutOfGas);
         case EVMC_UNDEFINED_INSTRUCTION:
         case EVMC_INVALID_INSTRUCTION:
-            return 11;  // TransactionStatus::BadJumpDestination
+            return static_cast<int32_t>(protocol::TransactionStatus::BadInstruction);
+        case EVMC_BAD_JUMP_DESTINATION:
+            return static_cast<int32_t>(protocol::TransactionStatus::BadJumpDestination);
+        case EVMC_STACK_OVERFLOW:
+            return static_cast<int32_t>(protocol::TransactionStatus::OutOfStack);
+        case EVMC_STACK_UNDERFLOW:
+            return static_cast<int32_t>(protocol::TransactionStatus::StackUnderflow);
+        case EVMC_INSUFFICIENT_BALANCE:
+            return static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash);
+        case EVMC_INVALID_MEMORY_ACCESS:
+        case EVMC_CALL_DEPTH_EXCEEDED:
+        case EVMC_STATIC_MODE_VIOLATION:
+        case EVMC_PRECOMPILE_FAILURE:
+        case EVMC_CONTRACT_VALIDATION_FAILURE:
+        case EVMC_INTERNAL_ERROR:
+        case EVMC_REJECTED:
+        case EVMC_OUT_OF_MEMORY:
         default:
-            return 2;  // non-zero failure
+            return static_cast<int32_t>(protocol::TransactionStatus::Unknown);
         }
     }();
     // evmone state::TransactionReceipt does not carry output data;
@@ -230,6 +245,39 @@ protocol::TransactionReceipt::Ptr evmoneReceiptToBcos(evmone::state::Transaction
     bcos::bytes output;
     return rf.createReceipt(bcos::u256(static_cast<uint64_t>(er.gas_used)), std::string{}, logs,
         status, bcos::ref(output), blockNumber);
+}
+
+protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& error,
+    protocol::TransactionReceiptFactory const& rf, int64_t blockNumber)
+{
+    // A transaction rejected by evmone's validate_transaction never executed,
+    // so it consumed no gas and produced no logs. Map the evmone::state::ErrorCode
+    // to the closest BCOS TransactionStatus.
+    int32_t status = [&]() -> int32_t {
+        using protocol::TransactionStatus;
+        switch (static_cast<evmone::state::ErrorCode>(error.value()))
+        {
+        case evmone::state::INTRINSIC_GAS_TOO_LOW:
+            return static_cast<int32_t>(TransactionStatus::OutOfGasLimit);
+        case evmone::state::INSUFFICIENT_FUNDS:
+            return static_cast<int32_t>(TransactionStatus::NotEnoughCash);
+        case evmone::state::NONCE_HAS_MAX_VALUE:
+        case evmone::state::NONCE_TOO_HIGH:
+        case evmone::state::NONCE_TOO_LOW:
+            return static_cast<int32_t>(TransactionStatus::NonceCheckFail);
+        case evmone::state::SENDER_NOT_EOA:
+            return static_cast<int32_t>(TransactionStatus::SenderNoEOA);
+        case evmone::state::INIT_CODE_SIZE_LIMIT_EXCEEDED:
+            return static_cast<int32_t>(TransactionStatus::MaxInitCodeSizeExceeded);
+        case evmone::state::GAS_LIMIT_REACHED:
+            return static_cast<int32_t>(TransactionStatus::BlockLimitCheckFail);
+        default:
+            return static_cast<int32_t>(TransactionStatus::Unknown);
+        }
+    }();
+    bcos::bytes output;
+    return rf.createReceipt(bcos::u256(0), std::string{}, {}, status, bcos::ref(output),
+        blockNumber);
 }
 
 }  // namespace bcos::executor_v1::eth
