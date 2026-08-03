@@ -24,6 +24,7 @@
 #include "Features.h"
 #include "SystemConfigs.h"
 #include <evmc/evmc.hpp>
+#include <map>
 #include <utility>
 
 namespace bcos::ledger
@@ -122,6 +123,22 @@ public:
         m_gasPrice = std::move(mGasPrice);
     }
 
+    int64_t difficulty() const { return m_difficulty; }
+    void setDifficulty(int64_t d) { m_difficulty = d; }
+
+    // EIP-4399 prev_randao (block mixHash). Used by the PREVRANDAO/DIFFICULTY
+    // opcode for Paris+ revisions. Kept in the ledger config because the BCOS
+    // block header has no dedicated mixHash/random field.
+    evmc::bytes32 prevRandao() const { return m_prevRandao; }
+    void setPrevRandao(evmc::bytes32 v) { m_prevRandao = v; }
+
+    // EIP-4844 blob gas parameters (Cancun+). The BCOS block header has no
+    // dedicated fields, so EEST runner stores them here.
+    std::optional<uint64_t> excessBlobGas() const { return m_excessBlobGas; }
+    void setExcessBlobGas(std::optional<uint64_t> v) { m_excessBlobGas = v; }
+    std::optional<uint64_t> blobGasUsed() const { return m_blobGasUsed; }
+    void setBlobGasUsed(std::optional<uint64_t> v) { m_blobGasUsed = v; }
+
     // Not enforce to set this field, in memory data
     void setSealerId(int64_t _sealerId) { m_sealerId = _sealerId; }
     int64_t sealerId() const { return m_sealerId; }
@@ -171,6 +188,32 @@ public:
     int executorVersion() const { return m_executorVersion; }
     void setExecutorVersion(int _executorVersion) { m_executorVersion = _executorVersion; }
 
+    /// Ethereum mode: explicit EVMC revision override (bypasses toRevision feature mapping).
+    /// When set, HostContext and TransactionExecutor use this revision directly.
+    std::optional<evmc_revision> evmcRevision() const { return m_explicitRevision; }
+    void setEVMCRevision(evmc_revision rev) { m_explicitRevision = rev; }
+
+    /// Fork transition map: block number → EVMC revision.
+    /// At or after the given block number, the corresponding revision is used.
+    /// Example: {0: EVMC_CANCUN, 3: EVMC_PRAGUE} means blocks 0-2 use Cancun,
+    /// blocks 3+ use Prague.
+    void addForkTransition(bcos::protocol::BlockNumber blockNum, evmc_revision rev)
+    {
+        m_forkTransitions[blockNum] = rev;
+    }
+    void clearForkTransitions() { m_forkTransitions.clear(); }
+    std::optional<evmc_revision> evmcRevisionForBlock(bcos::protocol::BlockNumber blockNum) const
+    {
+        if (m_forkTransitions.empty())
+            return m_explicitRevision;
+        // Find the latest transition point ≤ blockNum
+        auto it = m_forkTransitions.upper_bound(blockNum);
+        if (it == m_forkTransitions.begin())
+            return m_explicitRevision;  // No transition before this block
+        --it;
+        return it->second;
+    }
+
 private:
     bcos::consensus::ConsensusNodeList m_consensusNodeList;
     bcos::consensus::ConsensusNodeList m_observerNodeList;
@@ -183,6 +226,10 @@ private:
     uint64_t m_leaderSwitchPeriod = 1;
     std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {DEFAULT_GAS_LIMIT, 0};
     std::tuple<std::string, protocol::BlockNumber> m_gasPrice = {"0x0", 0};
+    int64_t m_difficulty = 0;
+    evmc::bytes32 m_prevRandao{};
+    std::optional<uint64_t> m_excessBlobGas;
+    std::optional<uint64_t> m_blobGasUsed;
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {DEFAULT_EPOCH_BLOCK_NUM, 0};
     uint64_t m_notifyRotateFlagInfo{0};
@@ -197,5 +244,7 @@ private:
     std::optional<evmc_uint256be> m_chainId;
     bool m_balanceTransfer = false;
     int m_executorVersion = 0;
+    std::optional<evmc_revision> m_explicitRevision;
+    std::map<bcos::protocol::BlockNumber, evmc_revision> m_forkTransitions;
 };
 }  // namespace bcos::ledger

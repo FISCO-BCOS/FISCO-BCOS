@@ -26,6 +26,9 @@ class Rollbackable
 public:
     using Key = typename Storage::Key;
     using Value = typename Storage::Value;
+    /// The wrapped storage type, so type-level traits can see through the wrapper
+    /// (hostcontext::isHistoricalStorage walks it).
+    using StorageType = Storage;
     using Savepoint = int64_t;
 
     Rollbackable(Storage& storage) : m_storage(storage) {}

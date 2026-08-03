@@ -19,12 +19,6 @@ list(APPEND SOURCES "TestRocksDBStorage.cpp" "TestRocksDBStorage2.cpp" "TestKeyP
 # cmake settings
 set(TEST_BINARY_NAME test-storage)
 
-if(WITH_TIKV)
-    list(APPEND SOURCES "TestTiKVStorage.cpp")
-else()
-    set(EXCLUDE_SUITES "TestTiKVStorage")
-endif()
-
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 

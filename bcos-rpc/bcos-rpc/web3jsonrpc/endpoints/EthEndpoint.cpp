@@ -508,7 +508,7 @@ task::Task<void> EthEndpoint::call(
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
     }
     auto const blockTag = toView(request[1U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
@@ -520,6 +520,9 @@ task::Task<void> EthEndpoint::call(
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
         bcos::protocol::Transaction::Ptr& m_tx;
+        // Engaged for a non-latest tag: route through callAtBlock (M13.2) so the scheduler
+        // executes against that block's state; disengaged keeps the latest-state call().
+        std::optional<protocol::BlockNumber> m_historicalBlock;
         Error::Ptr m_error;
         Json::Value& m_response;
         u256* m_gasUsed;
@@ -527,7 +530,7 @@ task::Task<void> EthEndpoint::call(
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
-            m_scheduler.call(m_tx, [this, handle](Error::Ptr&& error, auto&& result) {
+            auto callback = [this, handle](Error::Ptr&& error, auto&& result) {
                 if (error)
                 {
                     m_error = std::move(error);
@@ -558,7 +561,15 @@ task::Task<void> EthEndpoint::call(
                 }
 
                 handle.resume();
-            });
+            };
+            if (m_historicalBlock)
+            {
+                m_scheduler.callAtBlock(m_tx, *m_historicalBlock, std::move(callback));
+            }
+            else
+            {
+                m_scheduler.call(m_tx, std::move(callback));
+            }
         }
         void await_resume()
         {
@@ -569,6 +580,7 @@ task::Task<void> EthEndpoint::call(
         }
     } awaitable{.m_scheduler = *scheduler,
         .m_tx = tx,
+        .m_historicalBlock = isLatest ? std::nullopt : std::make_optional(blockNumber),
         .m_error = {},
         .m_response = response,
         .m_gasUsed = gasUsed};

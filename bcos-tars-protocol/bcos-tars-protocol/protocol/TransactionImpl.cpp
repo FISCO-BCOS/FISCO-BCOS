@@ -35,7 +35,7 @@
 #include <cstring>
 #include <exception>
 #include <range/v3/view/any_view.hpp>
-#include <stdexcept>
+#include <set>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
@@ -84,145 +84,7 @@ bcos::crypto::HashType bcostars::protocol::TransactionImpl::hash() const
     return hashResult;
 }
 
-void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
-{
-    // Web3: the hash is the canonical txHash = keccak256(rlp(signed tx)), stored in
-    // extraTransactionHash (which hash() returns). Recompute it from the signed payload
-    // unconditionally -- a wire-supplied value is never believed, even when a caller reaches
-    // verify() without clearing it first (e.g. TransactionFactoryImpl::createTransaction skips
-    // the hash-match check for non-BCOS types), so no caller discipline is required (FIB-New1).
-    // The recompute is a byte splice plus one keccak, cheap enough to always run.
-    if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-    {
-        auto const canonicalTxHash =
-            recomputeWeb3CanonicalHash(extraTransactionBytes(), signatureData());
-        m_inner()->extraTransactionHash.assign(canonicalTxHash.begin(), canonicalTxHash.end());
-        return;
-    }
-    bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
-}
-
-std::string_view bcostars::protocol::TransactionImpl::nonce() const
-{
-    return m_inner()->data.nonce;
-}
-
-bcos::bytesConstRef bcostars::protocol::TransactionImpl::input() const
-{
-    return {reinterpret_cast<const bcos::byte*>(m_inner()->data.input.data()),
-        m_inner()->data.input.size()};
-}
-int32_t bcostars::protocol::TransactionImpl::version() const
-{
-    return m_inner()->data.version;
-}
-std::string_view bcostars::protocol::TransactionImpl::chainId() const
-{
-    return m_inner()->data.chainID;
-}
-std::string_view bcostars::protocol::TransactionImpl::groupId() const
-{
-    return m_inner()->data.groupID;
-}
-int64_t bcostars::protocol::TransactionImpl::blockLimit() const
-{
-    return m_inner()->data.blockLimit;
-}
-void bcostars::protocol::TransactionImpl::setNonce(std::string nonce)
-{
-    m_inner()->data.nonce = std::move(nonce);
-}
-std::string_view bcostars::protocol::TransactionImpl::to() const
-{
-    return m_inner()->data.to;
-}
-std::string_view bcostars::protocol::TransactionImpl::abi() const
-{
-    return m_inner()->data.abi;
-}
-
-bcos::u256 bcostars::protocol::TransactionImpl::value() const
-{
-    return bcos::hex2u(m_inner()->data.value);
-}
-
-std::optional<bcos::u256> bcostars::protocol::TransactionImpl::gasPrice() const
-{
-    if (m_inner()->data.gasPrice.empty())
-    {
-        return std::nullopt;
-    }
-    return bcos::hex2u(m_inner()->data.gasPrice);
-}
-
-int64_t bcostars::protocol::TransactionImpl::gasLimit() const
-{
-    return m_inner()->data.gasLimit;
-}
-
-std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerGas() const
-{
-    if (m_inner()->data.maxFeePerGas.empty())
-    {
-        return std::nullopt;
-    }
-    return bcos::hex2u(m_inner()->data.maxFeePerGas);
-}
-
-std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
-{
-    if (m_inner()->data.maxPriorityFeePerGas.empty())
-    {
-        return std::nullopt;
-    }
-    return bcos::hex2u(m_inner()->data.maxPriorityFeePerGas);
-}
-
-bcos::bytesConstRef bcostars::protocol::TransactionImpl::extension() const
-{
-    return {reinterpret_cast<const bcos::byte*>(m_inner()->data.extension.data()),
-        m_inner()->data.extension.size()};
-}
-
-int64_t bcostars::protocol::TransactionImpl::importTime() const
-{
-    return m_inner()->importTime;
-}
-void bcostars::protocol::TransactionImpl::setImportTime(int64_t _importTime)
-{
-    m_inner()->importTime = _importTime;
-}
-bcos::bytesConstRef bcostars::protocol::TransactionImpl::signatureData() const
-{
-    return {reinterpret_cast<const bcos::byte*>(m_inner()->signature.data()),
-        m_inner()->signature.size()};
-}
-std::string_view bcostars::protocol::TransactionImpl::sender() const
-{
-    return {m_inner()->sender.data(), m_inner()->sender.size()};
-}
-void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender)
-{
-    if (!tainted())
-    {
-        BOOST_THROW_EXCEPTION(std::invalid_argument("sender of clean transaction is immutable"));
-    }
-    m_inner()->sender.assign(_sender.begin(), _sender.end());
-}
-void bcostars::protocol::TransactionImpl::clearSenderAndHash()
-{
-    m_inner()->sender.clear();
-    m_inner()->dataHash.clear();
-    // FIB-New1: also drop the wire-supplied canonical Web3 txHash (extraTransactionHash) so
-    // verify() recomputes it from the signed payload. Both re-verification call sites are
-    // untrusted enough to warrant this: the P2P import path (TransactionSync) receives it from an
-    // untrusted peer, and the RPC submit path (TxValidator::verify) only pre-wrote a value it can
-    // cheaply recompute anyway. Harmless for BCOS transactions (the field is never populated).
-    m_inner()->extraTransactionHash.clear();
-    setTainted(true);
-}
-
-bcos::crypto::HashType bcostars::protocol::TransactionImpl::recomputeWeb3CanonicalHash(
+static bcos::crypto::HashType recomputeWeb3CanonicalHash(
     bcos::bytesConstRef payload, bcos::bytesConstRef signature)
 {
     // The byte-splice logic mirrors Web3Transaction::encode() / txHash() in
@@ -375,6 +237,144 @@ bcos::crypto::HashType bcostars::protocol::TransactionImpl::recomputeWeb3Canonic
     return bcos::crypto::keccak256Hash(bcos::ref(full));
 }
 
+void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
+{
+    // Web3: the hash is the canonical txHash = keccak256(rlp(signed tx)), stored in
+    // extraTransactionHash (which hash() returns). Recompute it from the signed payload
+    // unconditionally -- a wire-supplied value is never believed, even when a caller reaches
+    // verify() without clearing it first (e.g. TransactionFactoryImpl::createTransaction skips
+    // the hash-match check for non-BCOS types), so no caller discipline is required (FIB-New1).
+    // The recompute is a byte splice plus one keccak, cheap enough to always run.
+    if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        auto const canonicalTxHash =
+            recomputeWeb3CanonicalHash(extraTransactionBytes(), signatureData());
+        m_inner()->extraTransactionHash.assign(canonicalTxHash.begin(), canonicalTxHash.end());
+        return;
+    }
+    bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
+}
+
+std::string_view bcostars::protocol::TransactionImpl::nonce() const
+{
+    return m_inner()->data.nonce;
+}
+
+bcos::bytesConstRef bcostars::protocol::TransactionImpl::input() const
+{
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->data.input.data()),
+        m_inner()->data.input.size()};
+}
+int32_t bcostars::protocol::TransactionImpl::version() const
+{
+    return m_inner()->data.version;
+}
+std::string_view bcostars::protocol::TransactionImpl::chainId() const
+{
+    return m_inner()->data.chainID;
+}
+std::string_view bcostars::protocol::TransactionImpl::groupId() const
+{
+    return m_inner()->data.groupID;
+}
+int64_t bcostars::protocol::TransactionImpl::blockLimit() const
+{
+    return m_inner()->data.blockLimit;
+}
+void bcostars::protocol::TransactionImpl::setNonce(std::string nonce)
+{
+    m_inner()->data.nonce = std::move(nonce);
+}
+std::string_view bcostars::protocol::TransactionImpl::to() const
+{
+    return m_inner()->data.to;
+}
+std::string_view bcostars::protocol::TransactionImpl::abi() const
+{
+    return m_inner()->data.abi;
+}
+
+bcos::u256 bcostars::protocol::TransactionImpl::value() const
+{
+    return bcos::hex2u(m_inner()->data.value);
+}
+
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::gasPrice() const
+{
+    if (m_inner()->data.gasPrice.empty())
+    {
+        return std::nullopt;
+    }
+    return bcos::hex2u(m_inner()->data.gasPrice);
+}
+
+int64_t bcostars::protocol::TransactionImpl::gasLimit() const
+{
+    return m_inner()->data.gasLimit;
+}
+
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerGas() const
+{
+    if (m_inner()->data.maxFeePerGas.empty())
+    {
+        return std::nullopt;
+    }
+    return bcos::hex2u(m_inner()->data.maxFeePerGas);
+}
+
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
+{
+    if (m_inner()->data.maxPriorityFeePerGas.empty())
+    {
+        return std::nullopt;
+    }
+    return bcos::hex2u(m_inner()->data.maxPriorityFeePerGas);
+}
+
+bcos::bytesConstRef bcostars::protocol::TransactionImpl::extension() const
+{
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->data.extension.data()),
+        m_inner()->data.extension.size()};
+}
+
+int64_t bcostars::protocol::TransactionImpl::importTime() const
+{
+    return m_inner()->importTime;
+}
+void bcostars::protocol::TransactionImpl::setImportTime(int64_t _importTime)
+{
+    m_inner()->importTime = _importTime;
+}
+bcos::bytesConstRef bcostars::protocol::TransactionImpl::signatureData() const
+{
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->signature.data()),
+        m_inner()->signature.size()};
+}
+std::string_view bcostars::protocol::TransactionImpl::sender() const
+{
+    return {m_inner()->sender.data(), m_inner()->sender.size()};
+}
+void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender)
+{
+    if (!tainted())
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument("sender of clean transaction is immutable"));
+    }
+    m_inner()->sender.assign(_sender.begin(), _sender.end());
+}
+void bcostars::protocol::TransactionImpl::clearSenderAndHash()
+{
+    m_inner()->sender.clear();
+    m_inner()->dataHash.clear();
+    // FIB-New1: also drop the wire-supplied canonical Web3 txHash (extraTransactionHash) so
+    // verify() recomputes it from the signed payload. Both re-verification call sites are
+    // untrusted enough to warrant this: the P2P import path (TransactionSync) receives it from an
+    // untrusted peer, and the RPC submit path (TxValidator::verify) only pre-wrote a value it can
+    // cheaply recompute anyway. Harmless for BCOS transactions (the field is never populated).
+    m_inner()->extraTransactionHash.clear();
+    setTainted(true);
+}
+
 void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)
 {
     m_inner()->signature.assign(signature.begin(), signature.end());
@@ -410,21 +410,13 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
 }
 
-void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
+bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
-    std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
-    if (m_web3AccessListCacheBuilt)
-    {
-        return;
-    }
-    m_web3AccessListCache.clear();
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-    {
-        m_web3AccessListCacheBuilt = true;
-        return;
-    }
+        return {};
     auto const& entries = m_inner()->data.accessList;
-    m_web3AccessListCache.reserve(entries.size());
+    bcos::protocol::Web3AccessList result;
+    result.reserve(entries.size());
     for (auto const& entry : entries)
     {
         bcos::protocol::Web3AccessListEntry out;
@@ -454,15 +446,75 @@ void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
             std::memcpy(key.data(), keyBytes.data(), bcos::h256::SIZE);
             out.storageKeys.emplace_back(key);
         }
-        m_web3AccessListCache.emplace_back(std::move(out));
+        result.emplace_back(std::move(out));
     }
-    m_web3AccessListCacheBuilt = true;
+    return result;
 }
 
-bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3AccessList() const
+bcos::protocol::AuthorizationList bcostars::protocol::TransactionImpl::authorizationList() const
 {
-    ensureWeb3AccessListCache();
-    return m_web3AccessListCache;
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        return {};
+    auto const& entries = m_inner()->data.authorizationList;
+    bcos::protocol::AuthorizationList result;
+    result.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        bcos::protocol::Authorization auth;
+        auth.chainId = entry.chainID;
+        auth.nonce = entry.nonce;
+        auth.v = entry.v;
+        // EIP-7702 authorization entries are consensus-critical.
+        // Fail-loud on malformed data instead of silently skipping
+        // (which produces wrong state root vs Ethereum reference).
+        // However, empty signer/address (from unrecoverable signatures in
+        // EEST fixtures) must be allowed: use zero address, evmone will skip.
+        auth.address = entry.address.empty() ? bcos::Address() : bcos::toAddress(entry.address);
+        auth.signer = entry.signer.empty() ? bcos::Address() : bcos::toAddress(entry.signer);
+        auth.r = bcos::hex2u(entry.r);
+        auth.s = bcos::hex2u(entry.s);
+        result.emplace_back(std::move(auth));
+    }
+    return result;
+}
+
+bcos::protocol::VersionedHashes bcostars::protocol::TransactionImpl::blobVersionedHashes() const
+{
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        return {};
+    auto const& entries = m_inner()->data.blobVersionedHashes;
+    bcos::protocol::VersionedHashes result;
+    result.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        if (entry.size() != 32)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "blobVersionedHash must be exactly 32 bytes, got " + std::to_string(entry.size())));
+        }
+        bcos::h256 h{};
+        std::copy_n(entry.begin(), 32, h.begin());
+        result.emplace_back(std::move(h));
+    }
+    return result;
+}
+
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerBlobGas() const
+{
+    if (m_inner()->data.maxFeePerBlobGas.empty())
+        return std::nullopt;
+    auto val = bcos::hex2u(m_inner()->data.maxFeePerBlobGas);
+    // Defend against hex2u silently returning 0 for malformed input
+    if (val == 0)
+    {
+        auto const& s = m_inner()->data.maxFeePerBlobGas;
+        static const std::set<std::string_view> validZeros = {"0", "0x0", "0x00", "0x", "00"};
+        if (!validZeros.count(s))
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("Invalid maxFeePerBlobGas: " + s));
+        }
+    }
+    return val;
 }
 
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const
