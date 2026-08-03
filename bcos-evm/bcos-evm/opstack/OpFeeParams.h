@@ -16,12 +16,16 @@ namespace bcos::evm::opstack
 /// Layout mirrors op-geth L1Block.sol (slot 3/8 are packed, non-standard ABI).
 struct OpFeeParams
 {
-    intx::uint256 l1_base_fee;             // slot 1 (whole slot)
-    uint32_t base_fee_scalar;              // slot 3 bytes[16,20)
-    uint32_t blob_base_fee_scalar;         // slot 3 bytes[20,24)
-    intx::uint256 blob_base_fee;           // slot 7 (whole slot)
-    uint32_t operator_fee_scalar;          // slot 8 bytes[20,24)
-    uint64_t operator_fee_constant;        // slot 8 bytes[24,32)
+    intx::uint256 l1_base_fee;       // slot 1 (whole slot)
+    uint32_t base_fee_scalar;        // slot 3 bytes[16,20)
+    uint32_t blob_base_fee_scalar;   // slot 3 bytes[20,24)
+    intx::uint256 blob_base_fee;     // slot 7 (whole slot)
+    uint32_t operator_fee_scalar;    // slot 8 bytes[20,24)
+    uint64_t operator_fee_constant;  // slot 8 bytes[24,32)
+    /// slot 8 bytes[18,20)。注意: Jovian 块中该字段的生产数据源是首笔 L1 attributes
+    /// deposit 的 calldata[176:178] (processOpBlock 加载后覆盖, 对齐 op-geth
+    /// ExtractDAFootprintGasScalar)——此处 slot 值仅在 pre-Jovian 或激活块语义下
+    /// 使用 (激活块强制 0)。
     uint16_t da_footprint_gas_scalar = 0;  // slot 8 bytes[18,20)
 };
 
