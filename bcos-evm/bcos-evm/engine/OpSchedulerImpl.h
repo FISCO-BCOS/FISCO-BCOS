@@ -25,6 +25,7 @@
 #include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/engine/OpEngineSeam.h>
 #include <bcos-evm/engine/OpReceiptMap.h>
+#include <bcos-evm/ledger/RecentBlockHashes.h>
 #include <bcos-evm/ledger/Storage2Ledger.h>
 #include <bcos-evm/opstack/OpBlockExecute.h>
 #include <bcos-evm/opstack/OpBlockSeal.h>
@@ -213,21 +214,6 @@ inline void requireLowSSignature(const intx::uint256& r, const intx::uint256& s)
             "OpSchedulerImpl: raw tx decode: invalid signature (r/s out of [1,n-1], or s exceeds "
             "secp256k1n/2 — EIP-2 malleable signature)");
 }
-
-/// BlockHashes answering exactly one query (block number - 1 -> the injected parent hash),
-/// mirroring bcos-evm/test/opstack/T8nReplayHarness.h's ParentOnlyBlockHashes: EIP-2935's
-/// system call at block 1 only ever queries the immediate parent within this loop's scope; any
-/// other query returning the zero hash (rather than a fabricated value) is intentional.
-struct ParentOnlyBlockHashes final : evmone::state::BlockHashes
-{
-    int64_t blockNumber = 0;
-    evmone::hash256 parentHash{};
-
-    evmc::bytes32 get_block_hash(int64_t queriedNumber) const noexcept override
-    {
-        return queriedNumber == blockNumber - 1 ? parentHash : evmc::bytes32{};
-    }
-};
 
 inline evmone::state::BlockInfo toBlockInfo(const OpBlockEnv& env)
 {
@@ -1045,9 +1031,11 @@ public:
         bcos::evm::ledger::Storage2Ledger<Storage> bridge(storage);
 
         const auto blk = detail::toBlockInfo(env);
-        detail::ParentOnlyBlockHashes hashes;
-        hashes.blockNumber = blk.number;
-        hashes.parentHash = detail::toEvmcBytes32(env.parentHash);
+        // D1: RecentBlockHashes 懒加载祖先 hash, 种子 {N-1: parentHash} 在构造函数内。
+        // hashErr 是本块毒旗通道 (storage 故障 -> OpStorageError, 非 INVALID, G2)。
+        std::optional<std::string> hashErr;
+        detail::RecentBlockHashes<Storage> hashes(
+            storage, blk.number, detail::toEvmcBytes32(env.parentHash), &hashErr);
 
         const auto& cfg = bcos::evm::opstack::configAt(
             static_cast<uint64_t>(env.fiscoHeader.timestamp()), m_forkTimestamps);
@@ -1074,8 +1062,9 @@ public:
             // OpConsensusError → INVALID. So whatever binds here is by construction a LOCAL fault
             // (allocation failure / internal invariant), which §4.3 says must never vote against
             // the block → OpStorageError (-32603), not OpConsensusError.
-            if (bridge.poisoned())
-                throw OpStorageError(std::string(bridge.firstError()));
+            if (bridge.poisoned() || hashErr.has_value())
+                throw OpStorageError(
+                    hashErr.has_value() ? *hashErr : std::string(bridge.firstError()));
             throw OpStorageError(e.what());
         }
         catch (...)
@@ -1100,15 +1089,16 @@ public:
             // T5b/T6 build on top of this classification (design §4.3). Re-applies the *same*
             // poisoned()-first classification without relying on typeid matching; the original
             // message is unrecoverable here (no typed handle on the caught object).
-            if (bridge.poisoned())
-                throw OpStorageError(std::string(bridge.firstError()));
+            if (bridge.poisoned() || hashErr.has_value())
+                throw OpStorageError(
+                    hashErr.has_value() ? *hashErr : std::string(bridge.firstError()));
             throw OpConsensusError(
                 "OpSchedulerImpl: processOpBlock threw a block-level error (typed catch bypassed "
                 "by a known RTTI issue across the -fno-rtti evmone library boundary; original "
                 "exception message unavailable, see this catch(...) clause's comment)");
         }
-        if (bridge.poisoned())
-            throw OpStorageError(std::string(bridge.firstError()));
+        if (bridge.poisoned() || hashErr.has_value())
+            throw OpStorageError(hashErr.has_value() ? *hashErr : std::string(bridge.firstError()));
 
         // Step 5: MessagePasser post-finalize storage snapshot (OpBlockSeal.h contract) + seal +
         // stateRoot, bridge still alive throughout.

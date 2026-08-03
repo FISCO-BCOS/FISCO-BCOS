@@ -1696,3 +1696,26 @@ TEST(OpSchedulerImpl, NonCanonicalOuterFramingIsRejectedAtDecode)
         [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
         "leading zero");
 }
+
+// D1: executeOpBlock 接入 RecentBlockHashes 后, isthmus_transfer_basic 向量仍正常执行
+// (接线回归; 该向量含 EIP-2935 系统调用, 其 get_block_hash(N-1) 走 cache 种子)。
+TEST(OpSchedulerImpl, RecentBlockHashesWiringKeepsVectorGreen)
+{
+    auto loaded = LoadedVector::load();
+    Json const& vec = vectorBody(loaded.vectors, kVectorId);
+    Json const& golden = loaded.golden;
+
+    StorageFixture fixture;
+    seedFromVectorPre(fixture.view, vec.at("pre"));
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    // 接线正确: 执行完成、无毒旗、六项承诺齐备。
+    EXPECT_EQ(result.receipts.size(), 2u);
+}
