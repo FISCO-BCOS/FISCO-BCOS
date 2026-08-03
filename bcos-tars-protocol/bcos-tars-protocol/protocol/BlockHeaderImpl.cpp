@@ -306,6 +306,9 @@ bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl()
 bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(const bcostars::BlockHeader& blockHeader)
   : m_inner(std::make_shared<bcostars::BlockHeader>(blockHeader))
 {}
+bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
+  : m_inner(std::shared_ptr<bcostars::BlockHeader>(std::shared_ptr<void>{}, &blockHeader))
+{}
 uint32_t bcostars::protocol::BlockHeaderImpl::version() const
 {
     return m_inner->data.version;

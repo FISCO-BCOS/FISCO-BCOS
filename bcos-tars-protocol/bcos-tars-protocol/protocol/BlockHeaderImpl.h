@@ -45,6 +45,7 @@ public:
     BlockHeaderImpl& operator=(const BlockHeaderImpl&) = default;
     BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = default;
     explicit BlockHeaderImpl(const bcostars::BlockHeader& blockHeader);
+    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader);
     ~BlockHeaderImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data) override;
