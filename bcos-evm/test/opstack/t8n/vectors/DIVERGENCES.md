@@ -192,3 +192,19 @@ DA footprint → `blobGasUsed` 失配 → 块判 INVALID。
 **为什么不入语料**：t8n generator 的 `assertL1BlockConsistency`（generator/main.go:1045-1047）
 用同一 `fp.daScalar` 写 slot8 与 calldata[176:178]，结构性无法生成失配向量。若未来
 generator 支持 pre-slot 注入，再补向量并移除本条备注。
+
+---
+
+## FINDING-D1-blockhashes t8n harness 桩与 engine 的 BLOCKHASH 差异（不立案：当前语料不覆盖）
+
+> **只做文档备注，不登记 ALLOWLIST。** 回放器对「本轮从未命中的豁免条目」判 FAILURE
+> （T8nReplayHarness.h:199-200）；本备注无对应向量，登记即翻红。
+
+**现象**：t8n 回放 harness 的 `ParentOnlyBlockHashes` 桩（T8nReplayHarness.h:246-255）对非
+parent 高度返回零；engine 执行器自 D1 起用 `RecentBlockHashes`（懒加载 SYS_NUMBER_2_HASH）返回
+真实祖先 hash。**当前 33 向量无任何窗口内祖先查询**（BLOCKHASH 只查 N-1 或不出现在合约里），
+故两者在现语料上一致，回放 gate 不受影响。
+
+**未来耦合**：若新增含 `blockhash(N-2)`（N-2 ≥ 0）的向量，harness 桩会返回零而 engine 返回
+真实 hash → golden 与 engine 分歧。届时须同步更新 harness 桩（或给桩注入 RecentBlockHashes 的
+TestState 变体），否则回放 gate 翻红。本备注即该耦合的预警。
