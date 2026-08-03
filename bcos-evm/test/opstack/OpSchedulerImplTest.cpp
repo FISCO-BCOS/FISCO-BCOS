@@ -69,6 +69,7 @@
 #include <bcos-evm/eth/utils/statetest.hpp>
 #include <bcos-evm/eth/utils/test_state.hpp>
 
+#include "support/ThrowOnNumber2Hash.h"
 #include "support/ThrowingStorage.h"
 #include "support/WriteFailingStorage.h"
 
@@ -1718,4 +1719,159 @@ TEST(OpSchedulerImpl, RecentBlockHashesWiringKeepsVectorGreen)
     auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
     // 接线正确: 执行完成、无毒旗、六项承诺齐备。
     EXPECT_EQ(result.receipts.size(), 2u);
+}
+
+// ══════════════ D1 (G2/G3 分类阶梯 + 旗舰正向, 审查补充 #9/#10): executeOpBlock 层 ══════════════
+//
+// 向量选择说明 (对 brief 的**唯一**技术修正, 详见下方三测试的共用注释):
+// brief 原钉 `isthmus_transfer_basic` + `0xb0b0...0001` 的机制在运行时不可行 —— 该向量 tx1 是
+// gasLimit=0x5208(21000) 的纯转账, intrinsic gas 恰为 21000 (state.cpp:526-530,
+// compute_tx_intrinsic_cost), execution_gas_limit=0 → evmone Host::call 的 m_vm.execute
+// (host.cpp:374) 首条 PUSH1 即 OUT_OF_GAS, BLOCKHASH 永远执行不到, hashErr 不会置位,
+// 存储写回也不会发生 —— 三个测试全按 brief 原样写必红。改用 `jovian_da_mix`: 它是语料里
+// 唯一**真实签名**地把 `to` 落在 brief 同一地址 `0xb0b0...0001`、且 gas 充足的向量
+// (tx[2] gas=0x30d40=200000, tx[3] gas=0x61a80=400000, 均为 eip1559 值转账/调用);
+// 现有 21000-gas 的 tx[1] 对 0xb0b0...0001 也会执行但立即 OOG (无害回滚, receipt 正常落账)。
+// 该向量 `_info.hardfork=jovian`(与 harness jovianConfig 同档), 故本组调度器用
+// {isthmusTime=0, jovianTime=0} 把整个块推到 Jovian 档执行 —— 与语料回放 (OpT8nReplay.Vectors)
+// 的原始生成/金标准档位一致, 不引入"Jovian 向量在 Isthmus 档跑"的未验证路径。
+// 其余契约不变: 只改内存副本 vec["env"]["currentNumber"]="0x7", 不动任何向量/golden 文件。
+namespace
+{
+// jovian_da_mix 向量 + 其 golden 装载 (golden 只取 rawTransactions/extraData —— 本组不比对
+// _op_expected/postState, 只验证异常分类与存储写回)。
+std::pair<Json, Json> loadD1Vector()
+{
+    return {loadJsonOrFail(fs::path(OP_T8N_VECTORS_DIR) / "jovian_da_mix.json"),
+        loadJsonOrFail(fs::path(OP_T8N_GOLDEN_ENGINE_DIR) / "jovian_da_mix.golden.json")};
+}
+
+constexpr const char* kD1VectorId = "jovian_da_mix";
+// 与 brief 相同的目标地址: 向量 tx[2]/tx[3] 的真实 `to` (把 code 种到既有 to 上, 让现成签名
+// 交易执行它)。600540600055 = PUSH1 5; BLOCKHASH(0x40); PUSH1 0; SSTORE —— 存 blockhash(5)。
+constexpr const char* kD1TransferTo = "0xb0b0000000000000000000000000000000000001";
+
+// 三测试共用的合约播种: 在 kD1TransferTo 上放 BLOCKHASH 合约。jovian_da_mix 的 pre 原本没有
+// 该账户, 补全四字段 (balance/nonce/code/storage, 与 (d3)/(d4) 的 pre 覆写同一形状)。
+void seedD1TransferToContract(ViewType& view, Json& pre)
+{
+    pre[kD1TransferTo] = Json{
+        {"balance", "0x0"},
+        {"nonce", "0x1"},
+        {"code", "0x600540600055"},
+        {"storage", Json::object()},
+    };
+    seedFromVectorPre(view, pre);
+}
+}  // namespace
+
+// D1 (G2, 审查补充 #9): hashErr 毒旗(仅 SYS_NUMBER_2_HASH 读抛) → 正常返回路径查 hashErr
+// → OpStorageError (-32603), 非 INVALID。bridge 未 poison (其他表直通), 证明 hashErr
+// 通道独立置位。
+TEST(OpSchedulerImpl, HashErrPoisonClassifiedAsStorageErrorNotInvalid)
+{
+    auto [vecs, golden] = loadD1Vector();
+    Json vec = vectorBody(vecs, kD1VectorId);
+
+    // 所有 33 个向量的 env.currentNumber 都是 0x1 (N=1 时窗口仅 [0,0], BLOCKHASH 无法触发
+    // 表读)。内存覆盖为 7 → N-2=5 落窗口内且 < N-1, RecentBlockHashes 才真实读表。
+    // 只改内存副本, 不动向量文件 (避免破坏 OpT8nReplay.Vectors 的 golden 比对)。
+    vec["env"]["currentNumber"] = "0x7";
+
+    StorageFixture fixture;
+    auto pre = vec.at("pre");
+    seedD1TransferToContract(fixture.view, pre);
+
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    // 只对 SYS_NUMBER_2_HASH 的 readOne 抛错, 其余直通 —— 不能用 ThrowingStorage (全表抛会让
+    // bridge 的账户读先 poison, 测不到独立的 hashErr 通道)。Jovian 档: 向量 native 档位。
+    bcos::evm::test::ThrowOnNumber2Hash<ViewType> throwing(fixture.view);
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<decltype(throwing)> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 0});
+
+    // BLOCKHASH(N-2=5) → RecentBlockHashes::get_block_hash(5) → SYS_NUMBER_2_HASH 读抛 →
+    // hashErr 置位 → executeOpBlock 正常返回后查 (bridge.poisoned() || hashErr) → OpStorageError。
+    expectOpStorageErrorWithMessage(
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(throwing, env, rawTxBytes)); },
+        "RecentBlockHashes");
+}
+
+// D1 (G3, 审查补充 #10): SYS_NUMBER_2_HASH 条目非 32 字节 → G3 守卫记毒旗 → OpStorageError。
+TEST(OpSchedulerImpl, BadLengthNumberToHashEntryPoisons)
+{
+    auto [vecs, golden] = loadD1Vector();
+    Json vec = vectorBody(vecs, kD1VectorId);
+
+    vec["env"]["currentNumber"] = "0x7";  // 同 HashErrPoison 的原因 (N=1 无法触发表读)。
+
+    StorageFixture fixture;
+    auto pre = vec.at("pre");
+    seedD1TransferToContract(fixture.view, pre);
+
+    // N-2=5 的表条目写 16 字节坏值 (非 32)。
+    bcos::storage::Entry bad;
+    bad.set(std::string(16, 0xcc));
+    bcos::task::syncWait(bcos::storage2::writeOne(fixture.view,
+        bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_HASH, "5"}, std::move(bad)));
+
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 0});
+
+    // BLOCKHASH(5) 读到 16 字节坏值 → G3 守卫记毒旗 ("length != 32") → OpStorageError。
+    expectOpStorageErrorWithMessage(
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes)); },
+        "length != 32");
+}
+
+// D1 (spec 测试 #1 旗舰正向): 非抛错 storage 下, 合约执行 BLOCKHASH(N-2) 真实写入种子 hash
+// (非零) —— 这是 ParentOnly(返回零) 与 RecentBlockHashes(返回真实 hash) 的分叉判据。
+TEST(OpSchedulerImpl, BlockHashAncestorWritesRealHashToState)
+{
+    auto [vecs, golden] = loadD1Vector();
+    Json vec = vectorBody(vecs, kD1VectorId);
+
+    vec["env"]["currentNumber"] = "0x7";
+
+    StorageFixture fixture;
+    auto pre = vec.at("pre");
+    seedD1TransferToContract(fixture.view, pre);
+
+    // N-2=5 的表条目写已知 32 字节 (0xdd...dd) → 合约 BLOCKHASH(5) 应原样拿到它。
+    bcos::storage::Entry e;
+    std::string v(32, 0xdd);
+    e.set(std::move(v));
+    bcos::task::syncWait(bcos::storage2::writeOne(fixture.view,
+        bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_HASH, "5"}, std::move(e)));
+
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 0});
+
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    EXPECT_EQ(result.receipts.size(), rawTxBytes.size());
+
+    // 执行后从视图读回 kTransferTo 的 storage slot 0, 断言 == 0xdd..dd (32 字节种子 hash)。
+    // evmc::address 由 detail::toEvmcAddress(asAddress(...)) 构造 (OpSchedulerImpl.h:133)。
+    bcos::evm::ledger::Storage2Ledger<ViewType> reader(fixture.view);
+    const auto addr = bcos::evm::engine::detail::toEvmcAddress(asAddress(kD1TransferTo));
+    const auto slot0 = reader.get_storage(addr, evmc::bytes32{});
+    ASSERT_FALSE(reader.poisoned()) << "storage read-back poisoned: " << reader.firstError();
+    evmc::bytes32 expected{};
+    std::fill_n(expected.bytes, sizeof(expected.bytes), 0xdd);
+    EXPECT_EQ(std::memcmp(slot0.bytes, expected.bytes, sizeof(expected.bytes)), 0)
+        << "contract must have SSTORE'd blockhash(5) = 0xdd..dd into slot 0 (ParentOnly would "
+           "have stored all-zero)";
 }
