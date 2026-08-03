@@ -19,7 +19,9 @@
 #pragma once
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-task/Task.h>
+#include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <unordered_map>
 
 namespace bcos::ledger
 {
@@ -46,4 +48,19 @@ namespace bcos::ledger
 // go-ethereum vectors), so given correct per-account encoding the returned root
 // is op-geth-compatible by construction.
 bcos::task::Task<bcos::h256> computeGenesisStateRoot(GenesisConfig const& genesis);
+
+/// The genesis state trie in full: the op-geth-compatible root plus EVERY node the build
+/// produced — account trie and each account's storage sub-trie — as hash-keyed raw RLP.
+/// Identical encodings across sub-tries hash identically and dedupe in the map.
+struct GenesisStateTrie
+{
+    bcos::h256 root;
+    std::unordered_map<bcos::h256, bcos::bytes> nodes;
+};
+
+// computeGenesisStateRoot plus the produced nodes. Scenario B (L2, Ethereum-compatible)
+// chains need the nodes persisted as "/mpt/" state rows at genesis: block 1's incremental
+// MPT build (buildAndCollect with the genesis root as parent) reads parent-version nodes
+// through storage, and a missing node aborts execution loudly (MPTInvariantViolation).
+bcos::task::Task<GenesisStateTrie> computeGenesisStateTrie(GenesisConfig const& genesis);
 }  // namespace bcos::ledger

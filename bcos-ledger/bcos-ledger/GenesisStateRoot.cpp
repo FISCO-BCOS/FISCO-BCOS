@@ -42,7 +42,7 @@ bcos::h256 keccak(bcos::bytesConstRef data)
 // Zero-valued slots are skipped (no-op in Ethereum state). Empty -> emptyRoot.
 // The slot keccak stays over the raw configured bytes (not mpt::slotKeyHash, which
 // right-aligns into a fixed 32 bytes) to keep genesis hashing byte-identical.
-bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& storage)
+bcos::task::Task<mpt::TrieBuildResult> storageTrieOf(std::vector<Alloc::State> const& storage)
 {
     std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [slotHex, valueHex] : storage)
@@ -59,21 +59,30 @@ bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& stor
     }
     if (entries.empty())
     {
-        co_return mpt::emptyRootHash();
+        co_return mpt::TrieBuildResult{.root = mpt::emptyRootHash(), .newNodes = {}};
     }
-    // From-empty build through the stateless core; the produced nodes are not persisted — only
-    // the root goes into the genesis header.
-    co_return mpt::computeTrieRoot(entries).root;
+    // From-empty build through the stateless core: root + every produced node.
+    co_return mpt::computeTrieRoot(entries);
 }
 }  // namespace
 
 bcos::task::Task<bcos::h256> bcos::ledger::computeGenesisStateRoot(GenesisConfig const& genesis)
 {
+    auto trie = co_await computeGenesisStateTrie(genesis);
+    co_return trie.root;
+}
+
+bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisStateTrie(
+    GenesisConfig const& genesis)
+{
     std::map<bcos::h256, bcos::bytes> stateEntries;
+    std::unordered_map<bcos::h256, bcos::bytes> nodes;
 
     for (auto const& alloc : genesis.m_allocs)
     {
-        auto storageRoot = co_await storageRootOf(alloc.storage);
+        auto storageTrie = co_await storageTrieOf(alloc.storage);
+        auto storageRoot = storageTrie.root;
+        nodes.merge(storageTrie.newNodes);
 
         auto codeBytes = bcos::fromHex(alloc.code);
         bcos::h256 codeHash = codeBytes.empty() ?
@@ -94,5 +103,7 @@ bcos::task::Task<bcos::h256> bcos::ledger::computeGenesisStateRoot(GenesisConfig
         stateEntries[addrKeyHash] = std::move(accountRlp);
     }
 
-    co_return mpt::computeTrieRoot(stateEntries).root;
+    auto accountTrie = mpt::computeTrieRoot(stateEntries);
+    nodes.merge(accountTrie.newNodes);
+    co_return GenesisStateTrie{.root = accountTrie.root, .nodes = std::move(nodes)};
 }
