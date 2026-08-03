@@ -81,6 +81,12 @@ std::atomic<int> g_codeMismatch{0};
 std::atomic<int> g_expectedException{0};
 std::atomic<int> g_unexpectedFailure{0};
 
+// Files that were intentionally skipped (engine-format duplicates /
+// transaction_tests) or failed to load/parse — kept so the summary's 100%
+// carries its domain and a loader regression can't silently raise the pass rate.
+std::atomic<int> g_skippedFiles{0};
+std::atomic<int> g_loadFailures{0};
+
 // Failure details for summary
 struct FailureDetail
 {
@@ -622,7 +628,9 @@ public:
                         std::copy(keyBytes.begin(), keyBytes.end(),
                             storageKey.bytes + 32 - keyBytes.size());
                     else
-                        std::copy(keyBytes.begin(), keyBytes.end(), storageKey.bytes);
+                        // Defensive: never copy more than 32 bytes into the
+                        // 32-byte evmc_bytes32 (would overflow the stack).
+                        std::copy_n(keyBytes.end() - 32, 32, storageKey.bytes);
 
                     auto storedVal = co_await evmAccount.storage(storageKey);
                     auto expValBytes = test::hexToBytes(val);
@@ -630,6 +638,8 @@ public:
                     if (expValBytes.size() <= 32)
                         std::copy(expValBytes.begin(), expValBytes.end(),
                             expVal.bytes + 32 - expValBytes.size());
+                    else
+                        std::copy_n(expValBytes.end() - 32, 32, expVal.bytes);
 
                     if (!::ranges::equal(storedVal.bytes, expVal.bytes))
                     {
@@ -748,9 +758,27 @@ public:
             return false;
         }
 
-        // Both expect and got failure → pass
+        // Both expect and got failure → pass only if the post-state matches.
+        // The expected-failure path must still verify the resulting state so
+        // that a wrong-reason failure (e.g. a pre-check exception instead of
+        // the intended revert) with a divergent state is caught rather than
+        // silently scored as "failed as expected".
         if (!expectsSuccess && !gotSuccess)
+        {
+            auto errStr = verifyPostState(storage, post.state);
+            if (!errStr.empty())
+            {
+                std::ostringstream oss;
+                oss << "FAIL: " << fixture.name << " [" << forkName
+                    << "] expected failure, got failure but state mismatch\n" << errStr;
+                printLine(oss.str());
+                g_failureDetails.push_back(
+                    {fixture.name, forkName, "state mismatch (expected failure)"});
+                ++g_unexpectedFailure;
+                return false;
+            }
             return true;
+        }
 
         // Success: verify post-state
         auto errStr = verifyPostState(storage, post.state);
@@ -774,10 +802,14 @@ public:
     /// Returns "Cancun" or empty string if not found.
     static std::string extractForkFromName(std::string const& name)
     {
-        auto pos = name.find("fork_");
+        // The fork marker is always "[fork_..." in EEST names. Anchoring on the
+        // bracket avoids matching a "fork_" in the test-method path
+        // ("test_fork_transition...") or in the parameter list
+        // ("blocks_after_fork_257").
+        auto pos = name.find("[fork_");
         if (pos == std::string::npos)
             return {};
-        auto start = pos + 5;  // skip "fork_"
+        auto start = pos + 6;  // skip "[fork_"
         auto end = name.find('-', start);
         if (end == std::string::npos)
             end = name.find(']', start);
@@ -1186,7 +1218,20 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
     // --- blockchain_test ---
     if (format == "blockchain_test")
     {
-        auto bcFixtures = test::loadEESTBlockchainFixtures(filePath.string());
+        std::vector<test::EESTBlockchainFixture> bcFixtures;
+        try
+        {
+            bcFixtures = test::loadEESTBlockchainFixtures(filePath.string());
+        }
+        catch (std::exception const& e)
+        {
+            // One unreadable/malformed file must not abort the whole run.
+            std::cerr << "Warning: failed to load fixture file " << filePath.string() << ": "
+                      << e.what() << "\n";
+            ++g_loadFailures;
+            ++g_skippedFiles;
+            return result;
+        }
         for (auto const& fixture : bcFixtures)
         {
             ++g_totalTests;
@@ -1207,10 +1252,25 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
 
     // --- transaction_test / unsupported (skip) ---
     if (format == "transaction_test" || format == "unsupported")
+    {
+        ++g_skippedFiles;
         return result;
+    }
 
     // --- state_test (default) ---
-    auto fixtures = test::loadEESTFixtures(filePath.string());
+    std::vector<test::EESTFixture> fixtures;
+    try
+    {
+        fixtures = test::loadEESTFixtures(filePath.string());
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "Warning: failed to load fixture file " << filePath.string() << ": "
+                  << e.what() << "\n";
+        ++g_loadFailures;
+        ++g_skippedFiles;
+        return result;
+    }
     for (auto const& fixture : fixtures)
     {
         for (auto const& [forkName, posts] : fixture.post)
@@ -1401,6 +1461,8 @@ int main(int argc, char* argv[])
                                      "N/A")
               << "\n";
     std::cout << "  Files:         " << totalFiles << "\n";
+    std::cout << "  Skipped files: " << g_skippedFiles.load() << "\n";
+    std::cout << "  Load failures: " << g_loadFailures.load() << "\n";
     std::cout << "  Elapsed:       " << elapsed << "s\n";
 
     std::cout << "\n  Error breakdown:\n";

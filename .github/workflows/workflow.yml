@@ -141,7 +141,9 @@ jobs:
         if: matrix.os != 'windows-2025'
         run: |
           cd ${{ github.workspace }}
-          curl -L -o fixtures_stable.tar.gz https://github.com/ethereum/execution-spec-tests/releases/download/v5.4.0/fixtures_stable.tar.gz
+          # --fail: a 404 would otherwise write the error page into the tarball
+          # and surface as a confusing tar error; --retry handles release hiccups.
+          curl --fail --retry 3 -L -o fixtures_stable.tar.gz https://github.com/ethereum/execution-spec-tests/releases/download/v5.4.0/fixtures_stable.tar.gz
           tar -xzf fixtures_stable.tar.gz
           # The tarball may extract to fixtures_stable/; ensure we have fixtures/
           if [ -d fixtures_stable ] && [ ! -d fixtures ]; then
@@ -150,6 +152,8 @@ jobs:
       - name: Run EEST fixture tests
         if: matrix.os != 'windows-2025'
         run: |
+          # pipefail so a runner crash (not just a low pass rate) fails the job.
+          set -o pipefail
           cd build/ethereum-executor/tests
           ./eest-runner --fixture-dir ../../../fixtures/ --no-log 2>&1 | tee eest_output.txt
           PASS_RATE=$(sed -nE 's/.*Pass rate:[[:space:]]+([0-9]+)%.*/\1/p' eest_output.txt)

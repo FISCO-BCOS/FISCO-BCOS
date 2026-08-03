@@ -253,12 +253,13 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
         }
         for (auto const& [key, value] : m.modified_storage)
         {
-            bool isZero = true;
-            for (auto b : value.bytes) { if (b != 0) { isZero = false; break; } }
-            if (isZero)
-                co_await acc.setStorage(key, evmc_bytes32{});
-            else
-                co_await acc.setStorage(key, value);
+            // NOTE: EVMAccount::setStorage always writes the entry (a zero
+            // value leaves a zero-valued row; there is no delete-storage API).
+            // Known limitation: such zero rows are only cleaned on self-destruct
+            // via clearAccountStorage(). This matches evmone's state semantics
+            // (a zero slot reads back as zero) and the sibling zero check in
+            // evmoneReceiptToBcos is not required here.
+            co_await acc.setStorage(key, value);
         }
     }
 

@@ -680,7 +680,7 @@ inline std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(
 }
 
 /// Map an EEST fork name to an EVMC revision.
-/// Returns EVMC_CANCUN as a reasonable default.
+/// Returns EVMC_OSAKA (latest handled) as a default for unknown forks.
 inline evmc_revision forkNameToRevision(std::string const& forkName)
 {
     // Normalize: lowercase
@@ -703,8 +703,11 @@ inline evmc_revision forkNameToRevision(std::string const& forkName)
         return EVMC_PETERSBURG;
     if (lower == "istanbul")
         return EVMC_ISTANBUL;
+    // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
+    // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
+    // EIP-2929 access-list gas for MuirGlacier fixtures.
     if (lower == "muir glacier" || lower == "muirglacier")
-        return EVMC_BERLIN;
+        return EVMC_ISTANBUL;
     if (lower == "berlin")
         return EVMC_BERLIN;
     if (lower == "london")
@@ -720,8 +723,10 @@ inline evmc_revision forkNameToRevision(std::string const& forkName)
     if (lower == "osaka")
         return EVMC_OSAKA;
 
-    // Unknown fork → default to latest
-    return EVMC_CANCUN;
+    // Unknown fork → default to the latest handled revision so a future fork
+    // is not silently mis-executed as Cancun (which would produce false
+    // pass/fail outcomes in the compliance suite).
+    return EVMC_OSAKA;
 }
 
 }  // namespace bcos::test

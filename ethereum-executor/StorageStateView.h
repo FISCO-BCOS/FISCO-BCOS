@@ -30,8 +30,9 @@ inline intx::uint256 toIntxU256(bcos::u256 const& val)
 ///
 /// All three virtual methods are synchronous (required by evmone::state::StateView),
 /// so they internally use task::tbb::syncWait to bridge from the async BCOS
-/// storage layer.  This is acceptable in the EEST test context where the
-/// caller already runs on TBB worker threads.
+/// storage layer. Each override guards the syncWait call in try/catch: the
+/// interface is noexcept and syncWait rethrows, so an unguarded exception would
+/// terminate the process. A failed read is reported as "absent / empty".
 template <class Storage>
 class StorageStateView : public evmone::state::StateView
 {
@@ -45,18 +46,44 @@ public:
     std::optional<evmone::state::StateView::Account> get_account(
         const evmc::address& addr) const noexcept override
     {
-        return task::tbb::syncWait(getAccountImpl(addr));
+        // evmone's interface requires noexcept, but the underlying storage
+        // reads (via TBB syncWait) can throw (e.g. a malformed nonce/balance
+        // entry or a storage backend IO error). syncWait rethrows, so without
+        // this guard an exception would cross the noexcept boundary and call
+        // std::terminate. Present a failed read as "absent" instead.
+        try
+        {
+            return task::tbb::syncWait(getAccountImpl(addr));
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
     }
 
     evmc::bytes get_account_code(const evmc::address& addr) const noexcept override
     {
-        return task::tbb::syncWait(getCodeImpl(addr));
+        try
+        {
+            return task::tbb::syncWait(getCodeImpl(addr));
+        }
+        catch (...)
+        {
+            return {};
+        }
     }
 
     evmc::bytes32 get_storage(
         const evmc::address& addr, const evmc::bytes32& key) const noexcept override
     {
-        return task::tbb::syncWait(getStorageImpl(addr, key));
+        try
+        {
+            return task::tbb::syncWait(getStorageImpl(addr, key));
+        }
+        catch (...)
+        {
+            return {};
+        }
     }
 
 private:
