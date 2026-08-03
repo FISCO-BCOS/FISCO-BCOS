@@ -129,6 +129,9 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                     const auto& attrData = std::get<DepositTx>(txs[0].tx).data;
                     if (attrData.size() == IsthmusL1AttributesLen)
                     {
+                        // C-4 下激活块无用户 tx, 本分支结构不可达; 若未来放宽 C-4, op-geth
+                        // 在此会拒块 (CalcDAFootprint 对 Isthmus 长度要求 deposits-only,
+                        // rollup_cost.go:572-575), 非置 0。
                         fee.da_footprint_gas_scalar = 0;
                     }
                     else if (attrData.size() >= JovianL1AttributesLen)
