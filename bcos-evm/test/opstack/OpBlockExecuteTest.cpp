@@ -1,6 +1,7 @@
 #include "OpL1AttributesTestHelpers.h"
 #include <bcos-evm/adapter/StateDiffWriteback.h>
 #include <bcos-evm/opstack/OpBlockExecute.h>
+#include <bcos-evm/opstack/OpBlockSeal.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
@@ -714,6 +715,45 @@ TEST(OpBlockExecute, D1CalldataScalarOverridesSlot)
     EXPECT_NE(meta->meta.da_footprint.value(), 0u)
         << "DA footprint must use calldata scalar (400), not slot value (9)";
     EXPECT_EQ(meta->meta.da_footprint_gas_scalar, 400);
+}
+
+// D-1 激活块语义回归：176B attributes + 一笔普通 deposit（无用户 tx，fee 不加载）。
+// slot8 预置旧值 9 —— 断言块正常执行、seal.blobGasUsed（DA footprint）恒为 0。
+// （C-4 保证激活块无用户 tx，故 scalar 分支不可达；本测试锁定"slot 旧值绝不泄漏"。）
+TEST(OpBlockExecute, D1ActivationBlockSlotStaleValueDoesNotLeak)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    seedL1BlockStub(ts);
+    presetL1BlockSlots(ts, /*slotScalar=*/9);
+
+    auto attr = attributesTx();
+    evmc::bytes data(IsthmusL1AttributesLen, 0x00);
+    for (size_t i = 0; i < 4 && i < data.size(); ++i)
+        data[i] = static_cast<uint8_t>(0x09 + i);  // Isthmus selector 占位
+    attr.data = std::move(data);
+
+    // 一笔普通 deposit（非用户 tx，指向无 code 账户 → 成功回执）。
+    DepositTx dep{.source_hash = 0x02_bytes32,
+        .from = OP_DEPOSITOR,
+        .to = 0x00000000000000000000000000000000000000dd_address,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+
+    std::vector<OpBlockTx> txs{wrap(std::move(attr)), wrap(std::move(dep))};
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
+    const auto r =
+        processOpBlock(ts, blk(), test::TestBlockHashes{}, txs, jovianConfig(), vm, 1234, apply);
+
+    ASSERT_EQ(r.receipts.size(), 2u);
+    const auto seal = sealOpBlock(r, jovianConfig(), {});
+    ASSERT_TRUE(seal.blobGasUsed.has_value());
+    EXPECT_EQ(seal.blobGasUsed.value(), 0u)
+        << "activation-block DA footprint must be 0 (no user txs, scalar branch unreachable); "
+           "slot stale value (9) must not leak";
 }
 
 // 写回时序（计数器探针）：kSeq 合约 code = SLOAD(0)+1 → SSTORE(0)
