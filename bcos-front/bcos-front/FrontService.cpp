@@ -334,8 +334,9 @@ void FrontService::stop()
                 std::future_status::ready)
             {
                 FRONT_LOG(ERROR) << LOG_BADGE("stop")
-                                 << LOG_DESC("timed out flushing the send strand; "
-                                             "pending sends may be dropped");
+                                 << LOG_DESC(
+                                        "timed out flushing the send strand; "
+                                        "pending sends may be dropped");
             }
         }
     }
