@@ -242,16 +242,9 @@ void bcostars::protocol::BlockHeaderImpl::setConsensusWeights(std::vector<uint64
     setConsensusWeights(gsl::span(_weightList.data(), _weightList.size()));
     clearDataHash();
 }
-void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes const& _extraData)
+void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes _extraData)
 {
-    m_inner->data.extraData.assign(_extraData.data(), _extraData.data() + _extraData.size());
-    clearDataHash();
-}
-void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes&& _extraData)
-{
-    m_inner->data.extraData.assign(
-        reinterpret_cast<char*>(_extraData.data()),
-        reinterpret_cast<char*>(_extraData.data()) + _extraData.size());
+    m_inner->data.extraData.assign(_extraData.begin(), _extraData.end());
     clearDataHash();
 }
 
@@ -302,9 +295,6 @@ bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(std::shared_ptr<bcostars::B
 {}
 bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl()
   : m_inner(std::make_shared<bcostars::BlockHeader>())
-{}
-bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(const bcostars::BlockHeader& blockHeader)
-  : m_inner(std::make_shared<bcostars::BlockHeader>(blockHeader))
 {}
 bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
   : m_inner(std::shared_ptr<bcostars::BlockHeader>(std::shared_ptr<void>{}, &blockHeader))

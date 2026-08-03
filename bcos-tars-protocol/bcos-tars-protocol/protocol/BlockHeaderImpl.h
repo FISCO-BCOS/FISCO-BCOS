@@ -44,7 +44,7 @@ public:
     BlockHeaderImpl(BlockHeaderImpl&&) noexcept = default;
     BlockHeaderImpl& operator=(const BlockHeaderImpl&) = default;
     BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = default;
-    explicit BlockHeaderImpl(const bcostars::BlockHeader& blockHeader);
+    
     explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader);
     ~BlockHeaderImpl() noexcept override = default;
 
