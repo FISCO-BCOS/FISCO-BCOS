@@ -165,6 +165,15 @@ void registerVerifiedBlock(StorageFixture& fixture, bcos::h256 const& blockHash,
     bcos::task::syncWait(bcos::storage2::writeOne(view,
         StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(entry)));
+
+    // D1 (G6): 每个注册高度双表齐写 —— SYS_NUMBER_2_HASH (number -> hash) 供 RecentBlockHashes
+    // 懒加载祖先查询, 镜像生产 registerOpBlock (EngineServiceImpl.h:1177-1183)。
+    bcos::storage::Entry numberToHashEntry;
+    numberToHashEntry.set(blockHash.asBytes());
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(number)},
+        std::move(numberToHashEntry)));
+
     fixture.multiLayerStorage.pushView(std::move(view));
 }
 
@@ -1719,4 +1728,23 @@ TEST(EngineOpBranch, RawTransactionEnvelopesAreRegisteredUnderEthTxHash)
             << "SYS_HASH_2_TX must stay empty for OP blocks: an Ethereum envelope there decodes "
                "into a plausible-looking transaction whose hash does not match its key";
     }
+}
+
+// D1 (G6): registerVerifiedBlock 必须双表种子 —— SYS_NUMBER_2_HASH 与 SYS_HASH_2_NUMBER
+// 都对每个注册高度写入 (镜像生产 registerOpBlock), 否则窗口内 blockhash(0) 返回零。
+TEST(EngineOpBranch, RegisterVerifiedBlockDoubleSeedsBothTables)
+{
+    StorageFixture fixture;
+    auto h = hashOf("genesis");
+    registerVerifiedBlock(fixture, h, 0);
+
+    // SYS_HASH_2_NUMBER: hash -> number (既有行为)。
+    auto num = registeredBlockNumber(fixture, h);
+    ASSERT_TRUE(num.has_value());
+    EXPECT_EQ(*num, 0);
+
+    // SYS_NUMBER_2_HASH: number -> hash (新增行为)。
+    auto entry = readEntry(fixture, bcos::ledger::SYS_NUMBER_2_HASH, "0");
+    ASSERT_TRUE(entry.has_value());
+    EXPECT_EQ(entry->get(), asStringView(h.asBytes()));
 }
