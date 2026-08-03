@@ -56,6 +56,21 @@ public:
     virtual void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)>) = 0;
 
+    // by rpc: eth_call pinned at a block height (M13.2). The default implementation ignores
+    // the height and serves the latest state — byte-for-byte the pre-existing behaviour of
+    // every implementation with no historical state to offer (tars SchedulerService, fakes),
+    // which is why this is a defaulted method and not a pure one (same pattern as
+    // FrontInterface::asyncBroadcastMessageByOwnedPayload). BaselineScheduler overrides it
+    // with a real execution against the MPT state committed at that block. A distinct name
+    // rather than a call() overload: -Woverloaded-virtual (in -Wall, promoted by -Werror)
+    // would otherwise fire in every subclass that overrides only the latest-state call().
+    virtual void callAtBlock(protocol::Transaction::Ptr tx,
+        bcos::protocol::BlockNumber /*blockNumber*/,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+    {
+        call(std::move(tx), std::move(callback));
+    }
+
     // clear all status
     virtual void reset(std::function<void(Error::Ptr)> callback) = 0;
     virtual void getCode(
