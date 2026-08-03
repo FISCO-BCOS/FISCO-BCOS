@@ -118,6 +118,26 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 // attributes tx executes; deferred lazily to the first normal tx, equivalent to
                 // op-geth's per-block cache (rollup_cost.go:162-164/:199-207).
                 fee = loadOpFeeParams(view);
+                // D-1 (spec §6.4): Jovian DA footprint gas scalar 的权威来源是首笔 L1 attributes
+                // deposit 的 calldata[176:178]（op-geth ExtractDAFootprintGasScalar,
+                // rollup_cost.go:555），不是 L1Block slot8 —— attributes deposit 失败时
+                // EVM 回滚存储写入, slot8 保持上一块旧值而 calldata 始终携带本块正确值。
+                // 激活块 (data.size()==176) 强制 0 (op-geth CalcDAFootprint:571-577)；
+                // 正常块 (data.size()>=178) 取固定偏移 [176:178] (非 len-2)。
+                if (cfg.has_da_footprint)
+                {
+                    const auto& attrData = std::get<DepositTx>(txs[0].tx).data;
+                    if (attrData.size() == IsthmusL1AttributesLen)
+                    {
+                        fee.da_footprint_gas_scalar = 0;
+                    }
+                    else if (attrData.size() >= JovianL1AttributesLen)
+                    {
+                        fee.da_footprint_gas_scalar = static_cast<uint16_t>(
+                            (static_cast<uint16_t>(attrData[JovianL1AttributesLen - 2]) << 8) |
+                            static_cast<uint16_t>(attrData[JovianL1AttributesLen - 1]));
+                    }
+                }
                 feeLoaded = true;
             }
             const auto& tx = std::get<evmone::state::Transaction>(btx.tx);

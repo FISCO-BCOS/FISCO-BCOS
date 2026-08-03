@@ -653,6 +653,69 @@ TEST(OpBlockExecute, ProcessOpBlockRejectsJovianWrongSelector)
     }
 }
 
+// D-1（spec §6.4）：Jovian DA scalar 必须取首笔 attributes calldata[176:178]，
+// 覆盖 L1Block slot8 读出值 —— 对齐 op-geth ExtractDAFootprintGasScalar。
+// 分叉场景：pre 里 slot8 预置"旧值"（≠ calldata），断言 footprint 用 calldata 值。
+namespace
+{
+/// 构造 178 字节 Jovian attributes calldata：前 4 字节 selector，bytes[176:178]=scalar（BE）。
+DepositTx jovianAttrWithScalar(uint16_t scalar)
+{
+    auto d = attributesTx();
+    evmc::bytes data(JovianL1AttributesLen, 0x00);
+    for (size_t i = 0; i < JovianL1AttributesSelector.size(); ++i)
+        data[i] = JovianL1AttributesSelector[i];
+    data[JovianL1AttributesLen - 2] = static_cast<uint8_t>(scalar >> 8);
+    data[JovianL1AttributesLen - 1] = static_cast<uint8_t>(scalar & 0xff);
+    d.data = std::move(data);
+    return d;
+}
+
+/// 给 L1Block 预置 slot8（含 da_scalar 位 bytes[18:20]=slotScalar）与三个 fee 槽。
+/// 返回 slot8 的旧值字节。
+void presetL1BlockSlots(test::TestState& ts, uint16_t slotScalar)
+{
+    using namespace bcos::evm::opstack::testhelpers;
+    auto& acc = ts[OP_L1_BLOCK];
+    acc.storage[slotKey(1)] = packUint256Low8(1000000000);
+    acc.storage[slotKey(3)] = packSlot3(2, 3);
+    acc.storage[slotKey(7)] = packUint256Low8(10000000);
+    // slot8 = da_scalar@[18:20) | op_scalar@[20:24) | op_const@[24:32)
+    auto s8 = packSlot8(1000000, 0);
+    s8.bytes[18] = static_cast<uint8_t>(slotScalar >> 8);
+    s8.bytes[19] = static_cast<uint8_t>(slotScalar & 0xff);
+    acc.storage[slotKey(8)] = s8;
+}
+}  // namespace
+
+// 分叉正例：slot 旧值=9，calldata=400 → footprint 必须按 400 算（op-geth 语义）。
+TEST(OpBlockExecute, D1CalldataScalarOverridesSlot)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    seedL1BlockStub(ts);
+    presetL1BlockSlots(ts, /*slotScalar=*/9);
+    seedNormalSender(ts);
+
+    // 普通 tx 必须带非空 signed envelope，否则 opValidate 以 invalid_argument 拒绝
+    // （OpValidate.cpp:15-16），processOpBlock 直接抛块级错误——测试走不到回执断言。
+    std::vector<uint8_t> env(50, 0x11);
+    std::vector<OpBlockTx> txs{
+        wrap(jovianAttrWithScalar(/*scalar=*/400)), wrap(normalTx(0), {env.data(), env.size()})};
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
+    const auto r =
+        processOpBlock(ts, blk(), test::TestBlockHashes{}, txs, jovianConfig(), vm, 1234, apply);
+
+    ASSERT_EQ(r.receipts.size(), 2u);
+    // 普通 tx 的 DA footprint 按 calldata scalar=400 计算 → 非零。
+    const auto* meta = std::get_if<OpTxReceipt>(&r.receipts[1]);
+    ASSERT_NE(meta, nullptr);
+    ASSERT_TRUE(meta->meta.da_footprint.has_value());
+    EXPECT_NE(meta->meta.da_footprint.value(), 0u)
+        << "DA footprint must use calldata scalar (400), not slot value (9)";
+    EXPECT_EQ(meta->meta.da_footprint_gas_scalar, 400);
+}
+
 // 写回时序（计数器探针）：kSeq 合约 code = SLOAD(0)+1 → SSTORE(0)
 // （hex 60005460010160005500）；tx1/tx2（同 sender，nonce 0/1）先后调它。
 // 每笔 diff 及时写回 → tx2 读到 1 再 +1 → post-state slot0==2；
