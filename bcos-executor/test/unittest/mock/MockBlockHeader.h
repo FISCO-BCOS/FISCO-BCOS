@@ -36,6 +36,7 @@ public:
     bytesConstRef extraData() const override { return {}; }
     gsl::span<const protocol::Signature> signatureList() const override { return {}; }
     gsl::span<const uint64_t> consensusWeights() const override { return {}; }
+    bytes coinbase() const override { return {}; }
 
     void setVersion(uint32_t _version) override {}
     void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
@@ -51,6 +52,7 @@ public:
     void setConsensusWeights(const gsl::span<const uint64_t>& _weightList) override {}
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override {}
     void setExtraData(bytes _extraData) override {}
+    void setCoinbase(bytes _coinbase) override {}
     void setSignatureList(const gsl::span<const protocol::Signature>& _signatureList) override {}
     void setSignatureList(protocol::SignatureList&& _signatureList) override {}
     size_t size() const override { return 0; }
