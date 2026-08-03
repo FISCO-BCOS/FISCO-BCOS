@@ -267,12 +267,17 @@ public:
     /// 故障"表达成一条不变量,新增的 throw 点自动继承,不会再漏一个;`catch (...)` 兜底不是冗余
     /// ——本仓已知 `-fno-rtti` 的 typed-catch 旁路(见 `OpSchedulerImpl.h` 同名注释),跨库抛出的
     /// `std::exception` 可能不匹配 typed catch,兜底保证**毒旗一定置位**(代价仅是丢掉消息文本)。
-    void applyDiff(const evmone::state::StateDiff& diff)
+    /// `seeding`(终审批 D-6):true 时豁免"新建 EIP-161 空账户"守卫。seedFromTestState 经
+    /// 同一条 applyDiff 落账 pre 中的完全空账户(EIP-161 touch-delete 向量前置,KEEP 契约——
+    /// 三后端同根要求 pre 空账户也落表),那是创世快照而非块执行,不在此判;executeOpBlock 的
+    /// 执行路径与所有直接调用方恒走默认 false(守卫开)。参数按单次调用作用域生效,不落桥实例
+    /// 状态——同一块内先播种、后执行,执行段的 applyDiff 仍带守卫。
+    void applyDiff(const evmone::state::StateDiff& diff, bool seeding = false)
     {
         try
         {
             for (const auto& entry : diff.modified_accounts)
-                task::syncWait(applyModifiedEntry(entry));
+                task::syncWait(applyModifiedEntry(entry, seeding));
             for (const auto& addr : diff.deleted_accounts)
                 task::syncWait(applyDeletedEntry(addr));
         }
@@ -390,7 +395,7 @@ public:
     }
 
 private:
-    task::Task<void> applyModifiedEntry(const evmone::state::StateDiff::Entry& entry)
+    task::Task<void> applyModifiedEntry(const evmone::state::StateDiff::Entry& entry, bool seeding)
     {
         const std::string tableName = accountTableName(entry.addr);
 
@@ -410,7 +415,36 @@ private:
         // 账户 ensure-exists(design §5,rev.2 补):无条件确保 SYS_TABLES 标记行存在,不得优化为
         // "无字段可写则跳过"——pre 中完全空账户(EIP-161 touch-delete 向量前置)正依赖此落账;
         // evmone build_diff 把只读 touched 账户也放进 modified,对其重写同值 nonce/balance 无害。
-        if (!co_await account.exists())
+        const bool createdNew = !co_await account.exists();
+
+        // D-6 守卫(终审批 D):在账本上**新建**一个 EIP-161 空账户(nonce=0 ∧ balance=0 ∧ 无码)
+        // 是协议违规路径——EIP-161 空账户按"不存在"处理,不应落表。今天靠"所有创建路径都 bump
+        // nonce / 写 balance / 写 code"侥幸不触发(V2 补 `OpHost.cpp:62` 后穷举完整);此守卫把
+        // "未来新增一条不 bump nonce 的创建路径"固定为立刻翻红(-32603 via 毒旗),而不是与既有
+        // 路径的一致性再次靠运气维持。只查 createdNew:已存在的账户被改成空值是 delete 语义
+        // (deleted_accounts)的本职,不在此判;build_diff 对 touch-only 已存在账户重写同值
+        // nonce/balance 也走这里,但那些账户 createdNew=false。判据与 evmone `Account::is_empty()`
+        // (EIP-161)同义,不含 storage——storage 不算非空。
+        //
+        // 为什么执行路径不会误伤(build_diff 已兜底):evmone `State::build_diff` 把带
+        // `erase_if_empty` 的触摸空账户路由去 deleted_accounts / 跳过(`state.cpp:214-219`),即
+        // 零值 CALL 的 `touch()`、authorization list 的
+        // `get_or_insert(addr, {.erase_if_empty = true})` 都不会作为"新建空账户"走进 modified
+        // ——能走到这里的一定是默认 `get_or_insert`(erase_if_empty=false)且最终为空的创建,
+        // 正是本守卫要钉的路径。
+        //
+        // `seeding` 豁免:seedFromTestState 经同一条 applyDiff 落账 pre 中的完全空账户(EIP-161
+        // touch-delete 向量前置,KEEP 契约——三后端同根要求 pre 空账户也落表),那是创世快照
+        // 而非块执行,守卫放行;executeOpBlock 的执行路径恒走默认 false(守卫开)。
+        if (!seeding && createdNew && entry.nonce == 0 && entry.balance == 0 &&
+            (!entry.code.has_value() || entry.code->empty()))
+        {
+            throw std::runtime_error(
+                "Storage2Ledger::applyDiff: EIP-161-empty account would be created in the ledger "
+                "by a diff entry that never bumped nonce (address table '" +
+                tableName + "', §6.4 D-6)");
+        }
+        if (createdNew)
             co_await account.create();
 
         co_await account.setBalance(bcos::u256(intx::to_string(entry.balance)));

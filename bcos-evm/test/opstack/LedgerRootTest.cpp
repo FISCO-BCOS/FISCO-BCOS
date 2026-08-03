@@ -142,6 +142,53 @@ TEST(LedgerRoot, LargeAccountThousandSlotsAndLargeCode)
     EXPECT_EQ(remaining, 0U);
 }
 
+// (s2) 终审批 D-6:默认 get_or_insert 且最终为空的账户不得落账。构造一条"新建且 EIP-161 空"
+// 的 diff 条目(nonce=0 ∧ balance=0 ∧ 无码),applyDiff 必须守卫翻红(毒旗 → -32603),而不是把
+// 空账户表行写进账本——该守卫把"未来新增不 bump nonce 的创建路径"固定为失败(§6.4 D-6)。
+TEST(LedgerRoot, ApplyDiffRejectsNewlyCreatedEmptyAccount)
+{
+    MutableStorage storage;
+    Storage2Ledger<MutableStorage> bridge(storage);
+
+    evmone::state::StateDiff diff;
+    evmone::state::StateDiff::Entry entry;
+    entry.addr = 0x04_address;  // 全新地址,账本无该表
+    entry.nonce = 0;
+    entry.balance = 0;
+    // 无 code、无 storage。
+    diff.modified_accounts.push_back(std::move(entry));
+
+    EXPECT_THROW(bridge.applyDiff(diff), std::runtime_error);
+    EXPECT_TRUE(bridge.poisoned());
+    EXPECT_NE(std::string(bridge.firstError()).find("EIP-161-empty"), std::string::npos);
+
+    // 对照 1:同地址给一笔 balance(非空)→ 合法落账,守卫不误伤。
+    MutableStorage storage2;
+    Storage2Ledger<MutableStorage> bridge2(storage2);
+    evmone::state::StateDiff okDiff;
+    evmone::state::StateDiff::Entry okEntry;
+    okEntry.addr = 0x04_address;
+    okEntry.nonce = 0;
+    okEntry.balance = 1;
+    okDiff.modified_accounts.push_back(std::move(okEntry));
+    bridge2.applyDiff(okDiff);
+    ASSERT_FALSE(bridge2.poisoned());
+
+    // 对照 2:同一条"新建空账户"diff 走播种模式(seeding=true)不触发——seedFromTestState
+    // 经同一条 applyDiff 落账 pre 中的完全空账户(EIP-161 touch-delete 向量前置,KEEP 契约),
+    // 那是创世快照而非块执行,守卫放行(D-6)。
+    MutableStorage storage3;
+    Storage2Ledger<MutableStorage> bridge3(storage3);
+    evmone::state::StateDiff seedDiff;
+    evmone::state::StateDiff::Entry seedEntry;
+    seedEntry.addr = 0x04_address;
+    seedEntry.nonce = 0;
+    seedEntry.balance = 0;
+    seedDiff.modified_accounts.push_back(std::move(seedEntry));
+    bridge3.applyDiff(seedDiff, /*seeding=*/true);
+    ASSERT_FALSE(bridge3.poisoned());
+}
+
 // (t) 建根逐字段矩阵(design §7 探针 4,常驻 gtest):基线根 vs 分别篡改
 //     nonce/balance/code(→codeHash)/单槽后的根,四例均不等于基线。
 TEST(LedgerRoot, FieldMatrixEachMutationChangesRoot)

@@ -283,9 +283,12 @@ TEST(Storage2Ledger, WriteThroughNegativeCacheThenCreate)
     EXPECT_FALSE(bridge.get_account(0x01_address).has_value());
     EXPECT_FALSE(bridge.poisoned());
 
+    // 终审批 D-6:桥拒绝在账本上**新建** EIP-161 空账户(nonce=0 ∧ balance=0 ∧ 无码)。本测试的
+    // 意图是写穿缓存(负缓存 → create → 再读得账户),不是创建空账户,故给 nonce=1(非空账户)
+    // 以同时满足守卫——这正是 D-6 钉住的"创建路径必须 bump nonce"。
     evmone::state::StateDiff diff;
     diff.modified_accounts.push_back({.addr = 0x01_address,
-        .nonce = 0,
+        .nonce = 1,
         .balance = {},
         .code = std::nullopt,
         .modified_storage = {}});

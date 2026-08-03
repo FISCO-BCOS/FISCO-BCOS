@@ -19,6 +19,11 @@
 // 完全空账户(EIP-161 touch-delete 向量前置)：nonce=0/balance=0/code=nullopt/
 // modified_storage=空 的 Entry 依然进入 modified_accounts,applyDiff 的 ensure-exists
 // 契约(design §5 rev.2 补)保证其被无条件落账,而不是被"无字段可写"的错误优化跳过。
+//
+// 终审批 D-6:`ledger.applyDiff(diff, /*seeding=*/true)` 显式走播种模式。Storage2Ledger 的
+// D-6 守卫把"在账本上**新建**一个 EIP-161 空账户"判为协议违规(块执行路径翻红 → -32603),
+// 但 pre 中的完全空账户是创世快照的合法组成部分(三后端同根 KEEP 契约),必须豁免——本文件
+// 以 seeding=true 宣告"这次 applyDiff 是播种,不是块执行"。MemoryLedger 无该守卫,参数忽略。
 
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/utils/test_state.hpp>
@@ -44,7 +49,7 @@ void seedFromTestState(Ledger& ledger, const evmone::test::TestState& pre)
             entry.modified_storage.emplace_back(key, value);
         diff.modified_accounts.push_back(std::move(entry));
     }
-    ledger.applyDiff(diff);
+    ledger.applyDiff(diff, /*seeding=*/true);
 }
 
 }  // namespace bcos::evm::ledger

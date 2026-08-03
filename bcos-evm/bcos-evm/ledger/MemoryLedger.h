@@ -59,7 +59,7 @@ public:
     /// deleted_accounts entry absent from the ledger is a tripwire (std::runtime_error), and every
     /// modified_accounts entry unconditionally ensures the account exists (ensure-exists,
     /// including entries with no field actually changed — e.g. EIP-161 touch-only accounts).
-    void applyDiff(const evmone::state::StateDiff& diff);
+    void applyDiff(const evmone::state::StateDiff& diff, bool seeding = false);
 
     /// Uniform query surface across ledger backends (design §6): MemoryLedger never poisons, so
     /// this is always false; Storage2Ledger provides the real poison-flag semantics.
