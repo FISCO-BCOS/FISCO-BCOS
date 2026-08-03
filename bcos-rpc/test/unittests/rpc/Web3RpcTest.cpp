@@ -42,6 +42,8 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <memory>
 #include <ostream>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <string_view>
 
@@ -889,7 +891,13 @@ BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
     // valid token -> dispatched to the handler.
     auto secretHex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
     auto tempDir = std::filesystem::temp_directory_path();
-    auto secretFile = tempDir / ("fisco-bcos-jwt-rpc-test-" + std::to_string(utcTime()) + ".hex");
+    static std::atomic<uint64_t> counter{0};
+    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+                  .count();
+    auto secretFile = tempDir /
+                      ("fisco-bcos-jwt-rpc-test-" + std::to_string(ns) + "-" +
+                          std::to_string(counter.fetch_add(1)) + ".hex");
     {
         std::ofstream ofs(secretFile);
         ofs << secretHex;

@@ -89,7 +89,16 @@ std::string buildJwtNone()
 std::string writeSecretFile(std::string const& _hexSecret)
 {
     auto tempDir = std::filesystem::temp_directory_path();
-    auto path = tempDir / ("fisco-bcos-jwt-secret-" + std::to_string(utcTime()) + ".hex");
+    // Use nanosecond timestamp + atomic counter to guarantee uniqueness: JwtTest
+    // creates multiple secret files in quick succession and utcTime() (ms) can
+    // collide, causing one test to read another's secret file.
+    static std::atomic<uint64_t> counter{0};
+    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+                  .count();
+    auto path = tempDir /
+                ("fisco-bcos-jwt-secret-" + std::to_string(ns) + "-" +
+                    std::to_string(counter.fetch_add(1)) + ".hex");
     std::ofstream ofs(path);
     ofs << _hexSecret;
     ofs.close();
