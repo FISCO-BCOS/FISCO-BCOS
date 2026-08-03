@@ -74,10 +74,10 @@ public:
 
     /// OP-specific blockInfo: timestamp verbatim (OP headers store seconds; the EEST-calibrated
     /// blockHeaderToBlockInfo would /1000 it to ~1970), gasLimit and baseFee injected by the
-    /// orchestrator (from payload.gasLimit / payload.baseFeePerGas, not LedgerConfig). Mirrors the
-    /// field set of OpSchedulerImpl::detail::toBlockInfo (OpSchedulerImpl.h:218-231). prev_randao
-    /// / blob_gas_used default to zero (the OP validator's current scenario; extend with params
-    /// when the orchestrator supplies non-default values). BlockInfo has no chain_id member
+    /// orchestrator (from payload.gasLimit / payload.baseFeePerGas, not LedgerConfig). Sets
+    /// number/timestamp/gas_limit/base_fee/coinbase; prev_randao and blob_gas_used default to zero
+    /// (the OP validator's current scenario; extend with params when the orchestrator supplies
+    /// non-default values). BlockInfo has no chain_id member
     /// (block.hpp:34-41) — chainId is a separate opValidate/opTransition parameter.
     static evmone::state::BlockInfo buildOpBlockInfo(
         protocol::BlockHeader const& header, uint64_t gasLimit, uint64_t baseFeePerGas)
@@ -88,7 +88,7 @@ public:
         blk.gas_limit = static_cast<int64_t>(gasLimit);
         blk.base_fee = baseFeePerGas;
         auto const& cb = header.coinbase();
-        if (cb.size() >= sizeof(evmc_address))
+        if (cb.size() == sizeof(evmc_address))
             std::copy_n(cb.begin(), sizeof(evmc_address), blk.coinbase.bytes);
         return blk;
     }
