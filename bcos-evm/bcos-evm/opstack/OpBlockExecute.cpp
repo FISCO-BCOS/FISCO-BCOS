@@ -18,6 +18,14 @@ namespace
     // stricter-than-spec (spec §6 decision point 2, user ruling): validate by content. Spec
     // constants for cross-checking against op-node derive/l1_block_info.go:40 (DEPOSITOR); op-geth
     // EL does not perform this validation (responsibility pushed down to the CL layer).
+    //
+    // Impact assessment (2026-08-03 audit D3): this check is unreachable on a real chain —
+    // op-node's attributes.go:188-190 unconditionally prepends the L1-info deposit
+    // (`From=0xdead...0001`, `To=L1BlockAddr`, l1_block_info.go:572-573), which exactly satisfies
+    // both conditions, with all upgrade txs (incl. Jovian L1Block deployment) following it. The
+    // only way to trigger a DIVERGENT verdict (FISCO INVALID where op-geth would execute) is a
+    // hand-crafted payload fed directly to engine_newPayload, bypassing op-node. Keep this stricter
+    // check: it rejects malformed blocks op-geth accepts, at zero cost on legitimate payloads.
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
 }
 }  // namespace

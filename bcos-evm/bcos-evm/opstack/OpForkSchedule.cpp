@@ -89,6 +89,13 @@ const OpForkConfig& jovianConfig() noexcept
 // jovianConfig, changing only the fork tag, the same pattern as granite/holocene deriving from
 // fjord -- future Jovian changes are automatically carried into Karst, avoiding parallel-literal
 // drift.
+//
+// Not wired into configAt on purpose (audit D4, 2026-08-03): op-geth's `IsOptimismKarst`
+// (params/config.go:1087-1088) has zero execution-layer call sites -- KarstTime is only used for
+// config compat checks, the startup banner, and LatestFork ordering. Karst currently carries no
+// behavior distinct from Jovian on either side, so leaving this config unreachable matches
+// op-geth. Revisit configAt (`timestamp >= karstTime -> karstConfig()`) only if op-geth later
+// defines Karst-specific semantics.
 const OpForkConfig& karstConfig() noexcept
 {
     static const OpForkConfig cfg = [] {
