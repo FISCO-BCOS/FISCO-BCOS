@@ -22,5 +22,8 @@ TEST(OpBlockFinalize, PragueRequestsEnabledIsRejected)
     evmone::test::TestState ts;
     OpForkConfig cfg = isthmusConfig();
     cfg.disable_prague_requests = false;
-    EXPECT_THROW(finalizeOpBlock(ts, cfg, evmc::address{}), std::invalid_argument);
+    // std::runtime_error since batch D-4: the scheduler's catch ladder maps the logic_error family
+    // to -32603 (local fault) but runtime_error to INVALID (block-level rejection), and a
+    // Prague-request block on an OP chain is the latter.
+    EXPECT_THROW(finalizeOpBlock(ts, cfg, evmc::address{}), std::runtime_error);
 }

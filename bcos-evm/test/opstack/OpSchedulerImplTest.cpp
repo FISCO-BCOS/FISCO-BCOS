@@ -48,6 +48,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gtest/gtest.h>
+#include <bcos-evm/eth/state/system_contracts.hpp>
 #include <cstdint>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <filesystem>
@@ -767,6 +768,94 @@ TEST(OpSchedulerImpl, ApplyDiffWriteFailureIsStorageErrorNotInvalid)
     expectOpStorageErrorWithMessage(
         [&] { bcos::task::syncWait(scheduler.executeOpBlock(writeFailing, env, rawTxBytes)); },
         "injected write failure");
+}
+
+// ---- Batch D-2 / D-4: system-call failure classification + rollback ----
+// Both tests seed a write-then-revert contract at an EIP system-address (`0x600160005560006000fd`
+// = PUSH1 1; PUSH1 0; SSTORE slot0=1; PUSH1 0; PUSH1 0; REVERT) so the pre-D-2 code would have
+// leaked the SSTORE (top-level vm.execute has no journal boundary — the previous assert() was
+// compiled away under -DNDEBUG) AND misclassified the failure. op-geth anchors in
+// core/state_processor.go: ProcessBeaconBlockRoot *ignores* the call error (`_, _, _ = evm.Call`),
+// ProcessParentBlockHash *panics* (`if err != nil { panic(err) }`).
+
+// (d3) EIP-2935 history-storage failure is a LOCAL fault → -32603 (OpStorageError), not INVALID.
+TEST(OpSchedulerImpl, SystemCallHistoryStorageRevertIsStorageError)
+{
+    auto loaded = LoadedVector::load();
+    Json const& vec = vectorBody(loaded.vectors, kVectorId);
+    Json const& golden = loaded.golden;
+
+    StorageFixture fixture;
+    auto pre = vec.at("pre");
+    pre["0x0000F90827F1C53A10CB7A02335B175320002935"] = Json{
+        {"balance", "0x0"},
+        {"nonce", "0x1"},
+        {"code", "0x600160005560006000fd"},
+        {"storage", Json::object()},
+    };
+    seedFromVectorPre(fixture.view, pre);
+
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    // The reverted call was rolled back then surfaced as a local fault. The message can only come
+    // from system_contracts.cpp's std::logic_error → executeOpBlock's typed-catch local-fault
+    // branch (OpStorageError); the catch(...) fallback's fixed diagnostic string never contains
+    // it, and the OpConsensusError branch is asserted-failed by the helper if misclassified.
+    expectOpStorageErrorWithMessage(
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes)); },
+        "system contract call failed");
+}
+
+// (d4) EIP-4788 beacon-roots failure is IGNORED (op-geth parity) and its writes rolled back.
+TEST(OpSchedulerImpl, SystemCallBeaconRootsRevertIsIgnored)
+{
+    auto loaded = LoadedVector::load();
+    Json const& vec = vectorBody(loaded.vectors, kVectorId);
+    Json const& golden = loaded.golden;
+
+    StorageFixture fixture;
+    auto pre = vec.at("pre");
+    pre["0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02"] = Json{
+        {"balance", "0x0"},
+        {"nonce", "0x1"},
+        {"code", "0x600160005560006000fd"},
+        {"storage", Json::object()},
+    };
+    seedFromVectorPre(fixture.view, pre);
+
+    auto header = buildHeaderForVector(vec);
+    auto env = buildEnv(vec, golden, *header);
+    auto rawTxBytes = rawTxBytesOf(golden);
+
+    auto receiptFactory = makeReceiptFactory();
+    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
+        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+
+    // No throw — the block executes exactly as if the beacon-roots call had succeeded.
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    EXPECT_EQ(result.receipts.size(), rawTxBytes.size());
+
+    // And the rollback worked: the write-then-revert contract left NO storage behind (the old
+    // assert()-only code compiled away would have leaked slot0=1 into the diff).
+    bcos::evm::ledger::Storage2Ledger<ViewType> readBridge(fixture.view);
+    bool beaconRootsSeen = false;
+    readBridge.visitAccounts([&](const auto& accountView) {
+        if (accountView.addr == evmone::state::BEACON_ROOTS_ADDRESS)
+        {
+            beaconRootsSeen = true;
+            EXPECT_TRUE(accountView.storage.empty())
+                << "beacon-roots REVERT leaked writes into the state";
+            return false;
+        }
+        return true;
+    });
+    EXPECT_TRUE(beaconRootsSeen) << "beacon-roots account not present after execution";
 }
 
 // (e) OpForkSchedule::configAt threshold judgement (decision A5): [isthmusTime, jovianTime) ->

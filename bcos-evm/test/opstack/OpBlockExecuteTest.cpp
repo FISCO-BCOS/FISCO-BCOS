@@ -195,9 +195,12 @@ TEST(OpBlockExecute, SystemCallRunsBeforeAttributesTx)
 }
 
 // 红队 F3：finalize **被调**的证明——借 finalizeOpBlock 的护栏异常
-// （disable_prague_requests=false → std::invalid_argument，OpBlockFinalize.cpp）。
-// "不调 finalize"的作弊实现无从抛出 → 翻红。异常型 invalid_argument（logic_error 系）
-// 与结构校验的 runtime_error 异族，不会误绿。
+// （disable_prague_requests=false → std::runtime_error，OpBlockFinalize.cpp）。
+// "不调 finalize"的作弊实现无从抛出 → 翻红。类型从 invalid_argument 改为 runtime_error
+// （batch D-4）：调度器分类层把 logic_error 系映射到 -32603（本地故障）、runtime_error 映射到
+// INVALID（块级拒绝），而"OP 链出现 Prague requests 块"属于后者；本测试喂的是一笔合法
+// attributes 块，结构校验全过，唯一能抛 runtime_error 的只有 finalize 的护栏，故"被调"
+// 的证明不受类型族改变的影响。
 // 局限（D-10 回填措辞按此降级）：证明"被调且 tx 全跑完后可达"，不证明其 diff 被
 // applyDiff、也不证明发生在末笔之后——OP 下 finalize diff 恒空，原理上不可观测。
 TEST(OpBlockExecute, FinalizeIsActuallyWired)
@@ -210,8 +213,7 @@ TEST(OpBlockExecute, FinalizeIsActuallyWired)
     OpForkConfig cfg = isthmusConfig();
     cfg.disable_prague_requests = false;
     std::vector<OpBlockTx> txs{wrap(attributesTx())};
-    EXPECT_THROW(
-        processOpBlock(ts, blk(), hashes, txs, cfg, vm, 1234, apply), std::invalid_argument);
+    EXPECT_THROW(processOpBlock(ts, blk(), hashes, txs, cfg, vm, 1234, apply), std::runtime_error);
 }
 
 // deposit-only 块（sequencer 空块）：attributes 一笔即完整块；receipts=1、gasUsed=其 gasUsed、

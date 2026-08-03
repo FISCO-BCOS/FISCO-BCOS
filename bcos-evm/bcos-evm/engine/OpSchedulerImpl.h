@@ -1065,9 +1065,18 @@ public:
         }
         catch (const std::exception& e)
         {
+            // Batch D-4 + D-2 classification: this typed catch binds only the NON-runtime_error
+            // families — std::bad_alloc (direct std::exception child, D-4) and the
+            // std::logic_error family (which system_contracts.cpp now throws for a fatal
+            // system-call failure, D-2). Every std::runtime_error and its subclasses — including
+            // all of processOpBlock's block-level consensus rejections — escape this catch via
+            // the RTTI bypass explained in the catch(...) clause below and are handled THERE as
+            // OpConsensusError → INVALID. So whatever binds here is by construction a LOCAL fault
+            // (allocation failure / internal invariant), which §4.3 says must never vote against
+            // the block → OpStorageError (-32603), not OpConsensusError.
             if (bridge.poisoned())
                 throw OpStorageError(std::string(bridge.firstError()));
-            throw OpConsensusError(e.what());
+            throw OpStorageError(e.what());
         }
         catch (...)
         {
