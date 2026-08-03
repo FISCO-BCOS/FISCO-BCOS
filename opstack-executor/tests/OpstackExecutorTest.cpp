@@ -8,8 +8,10 @@
 // shape (fee/blockGasLeft/chainId passed explicitly, not via defaults).
 
 #include "opstack-executor/OpstackExecutor.h"
+#include "bcos-evm/opstack/OpDepositTx.h"
 #include "bcos-evm/opstack/OpForkSchedule.h"
 #include "bcos-evm/opstack/OpPredeploys.h"
+#include "bcos-evm/opstack/OpReceiptMeta.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -24,6 +26,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <evmc/evmc.h>
 #include <gtest/gtest.h>
 #include <evmc/evmc.hpp>
 #include <memory>
@@ -303,4 +306,103 @@ TEST_F(Fixture, ReceiptMetaSurvives)
     ASSERT_TRUE(fields.l1_gas_price.has_value());
     // l1_gas_price = 1000 -> trimmed big-endian 0x03e8.
     EXPECT_EQ(*fields.l1_gas_price, (bcos::bytes{0x03, 0xe8}));
+}
+
+// ---- executeDeposit + finalizeBlock(reuses bcos-evm/opstack runDeposit / finalizeOpBlock)----
+
+TEST_F(Fixture, ExecutesDepositMint)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    constexpr auto kFrom = 0x000000000000000000000000000000000000dead_address;
+    bcos::evm::opstack::DepositTx dep{
+        .source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = std::nullopt,  // contract creation
+        .mint = intx::uint256{5},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {},
+    };
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, kFrom, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256(0));
+        co_await acc.setNonce("0");
+        co_return;
+    }());
+
+    auto receipt = task::syncWait(executor.executeDeposit(
+        storage, blockHeader, dep, /*chainId=*/10, /*blockGasLeft=*/30000000, ledgerConfig));
+    ASSERT_NE(receipt, nullptr);
+    // BCOS internal status convention (evmoneReceiptToBcos): EVMC_SUCCESS -> 0; the Ethereum RPC
+    // 0↔1 flip happens at a later layer. Semantics: 0 = success (mint applied + nonce bumped).
+    EXPECT_EQ(receipt->status(), 0);
+    // mint(5) is added unconditionally to the from balance — it is also retained on the failure
+    // paths, so "balance == 5" alone would not prove success: status()==0 is the discriminator.
+    ledger::account::EVMAccount<MutableStorage> acc(storage, kFrom, false);
+    auto bal = task::syncWait(acc.balance());
+    EXPECT_EQ(bal, 5u);
+    // STRONG meta assertion: deposit_nonce == 0, version == 1 (Canyon+) — not just has_value.
+    auto metaView = receipt->opReceiptMeta();
+    ASSERT_FALSE(metaView.empty());
+    bcos::codec::rlp::OpReceiptMetaFields fields;
+    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
+                  bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
+        nullptr);
+    ASSERT_TRUE(fields.deposit_nonce.has_value());
+    EXPECT_EQ(*fields.deposit_nonce, 0u);
+    ASSERT_TRUE(fields.deposit_receipt_version.has_value());
+    EXPECT_EQ(*fields.deposit_receipt_version, 1u);  // Canyon+
+}
+
+TEST_F(Fixture, DepositGasLimitReachedIsBlockError)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    bcos::evm::opstack::DepositTx dep{
+        .source_hash = 0x02_bytes32,
+        .from = 0x000000000000000000000000000000000000dead_address,
+        .to = 0x0000000000000000000000000000000000000001_address,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {},
+    };
+    // gas_limit(100000) > blockGasLeft(100) → runDeposit throws std::runtime_error (op-geth
+    // ErrGasLimitReached) — a block-level error, thrown before any state is written back.
+    EXPECT_THROW(task::syncWait(executor.executeDeposit(storage, blockHeader, dep, /*chainId=*/10,
+                     /*blockGasLeft=*/100, ledgerConfig)),
+        std::runtime_error);
+}
+
+TEST_F(Fixture, FinalizeOpBlockNoReward)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.setCoinbase(bcos::bytes(20, 0x11));
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    constexpr auto kCoinbase = 0x1111111111111111111111111111111111111111_address;
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, kCoinbase, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256(100));
+        co_return;
+    }());
+
+    task::syncWait(executor.finalizeBlock(storage, blockHeader, ledgerConfig));
+
+    // OP has no block reward (finalizeOpBlock produces an empty state diff): coinbase balance
+    // unchanged.
+    ledger::account::EVMAccount<MutableStorage> acc(storage, kCoinbase, false);
+    auto bal = task::syncWait(acc.balance());
+    EXPECT_EQ(bal, 100u);
 }
