@@ -11,6 +11,7 @@
 #include "bcos-evm/opstack/OpForkSchedule.h"
 #include "bcos-evm/opstack/OpPredeploys.h"
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/ledger/EVMAccount.h>
@@ -194,4 +195,112 @@ TEST_F(Fixture, ConstructsWithForkAndExposesConcept)
     EXPECT_EQ(&ctx.ledgerConfig, &ledgerConfig);
     EXPECT_FALSE(ctx.call);
     // concept lifecycle reachable (compile-time: prepare/execute/finish exist)
+}
+
+TEST_F(Fixture, ChargesL1AndOperatorFees)
+{
+    // The injected fee (L1 base fee + scalars, Jovian operator fee) must be routed through
+    // opValidate (pre-charge) -> opTransition (deriveOpReceiptMeta) and surface in the receipt's
+    // opReceiptMeta byte string, decodable back into the L1/operator fields.
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    auto tx = buildWeb3Tx();
+    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+    tx.clearSenderAndHash();
+    tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256("100000000000000000000"));
+        co_await acc.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        std::string nonceStr(tx.nonce());
+        if (nonceStr.empty())
+            nonceStr = "0";
+        co_await acc.setNonce(nonceStr);
+        co_return;
+    }());
+
+    // Non-zero L1 + operator fee params. executeTransaction takes the fee as a parameter
+    // (injection-style opValidate/opTransition), so no OP_L1_BLOCK storage pre-seeding is needed —
+    // construct the fee directly.
+    bcos::evm::opstack::OpFeeParams fee{};
+    fee.l1_base_fee = 1000;  // wei
+    fee.base_fee_scalar = 7;
+    fee.blob_base_fee = 2000;
+    fee.blob_base_fee_scalar = 9;
+    fee.operator_fee_scalar = 11;
+    fee.operator_fee_constant = 13;
+
+    auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
+        /*chainId=*/10));
+    ASSERT_NE(receipt, nullptr);
+    // status uses the FISCO internal convention — evmoneReceiptToBcos maps EVMC_SUCCESS to 0 (see
+    // ExecutesNormalTransferEndToEnd); the Ethereum RPC 0↔1 flip happens at a later layer.
+    EXPECT_EQ(receipt->status(), 0);
+
+    // Decode the meta and assert the L1/operator fields are present.
+    auto metaView = receipt->opReceiptMeta();
+    ASSERT_FALSE(metaView.empty());
+    bcos::codec::rlp::OpReceiptMetaFields fields;
+    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
+                  bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
+        nullptr);
+    // Jovian derives these unconditionally: l1_gas_price = fee.l1_base_fee, l1_fee = l1_cost.
+    EXPECT_TRUE(fields.l1_fee.has_value());
+    EXPECT_TRUE(fields.l1_gas_price.has_value());
+    // operator_fee_scalar is filled when has_operator_fee && (scalar != 0 || constant != 0) — both
+    // non-zero here, so the Jovian operator scalar routes through end-to-end.
+    EXPECT_TRUE(fields.operator_fee_scalar.has_value());
+    EXPECT_EQ(*fields.operator_fee_scalar, 11u);
+}
+
+TEST_F(Fixture, ReceiptMetaSurvives)
+{
+    // Verify opReceiptMeta round-trips: derive + encode + setOpReceiptMeta (in the executor's
+    // finish stage) -> decode here restores the field values.
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+
+    auto tx = buildWeb3Tx();
+    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+    tx.clearSenderAndHash();
+    tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256("100000000000000000000"));
+        co_await acc.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        std::string nonceStr(tx.nonce());
+        if (nonceStr.empty())
+            nonceStr = "0";
+        co_await acc.setNonce(nonceStr);
+        co_return;
+    }());
+
+    bcos::evm::opstack::OpFeeParams fee{};
+    fee.l1_base_fee = 1000;
+    fee.base_fee_scalar = 7;
+
+    auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
+        /*chainId=*/10));
+    ASSERT_NE(receipt, nullptr);
+    auto metaView = receipt->opReceiptMeta();
+    ASSERT_FALSE(metaView.empty());
+    bcos::codec::rlp::OpReceiptMetaFields fields;
+    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
+                  bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
+        nullptr);
+    ASSERT_TRUE(fields.l1_gas_price.has_value());
+    // l1_gas_price = 1000 -> trimmed big-endian 0x03e8.
+    EXPECT_EQ(*fields.l1_gas_price, (bcos::bytes{0x03, 0xe8}));
 }
