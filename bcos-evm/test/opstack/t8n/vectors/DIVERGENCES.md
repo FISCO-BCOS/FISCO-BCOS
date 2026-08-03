@@ -168,3 +168,27 @@ regex 将模板自身解析成真条目并因 `entry=<ENTRY-ID>` 悬空而 FAILU
 （gasUsed/balance/storage/bloom/receipt status/`_op_l1_fee` 缺席/receipts
 计数/hardfork/manifest 缺多文件共 11 项变异全部翻红；四元组豁免、值漂移拒绝、
 c 未签核拒绝、悬空 entry、过期豁免共 6 项台账机制自测全部符合预期）。
+
+---
+
+## FINDING-D1 slot/calldata DA scalar 失配（不立案：单测覆盖 + generator 结构性不可生成）
+
+> **只做文档备注，不登记 ALLOWLIST。** 回放器对「本轮从未命中的豁免条目」判 FAILURE
+> （T8nReplayHarness.h:199-200，防僵尸 ALLOWLIST）；失配向量不存在于语料
+> （manifest 33 条无此项），登记即翻红。
+
+**现象（生产分叉，不在语料内）**：Jovian 块的 DA footprint gas scalar 权威来源是首笔
+L1 attributes deposit 的 calldata[176:178]（op-geth `ExtractDAFootprintGasScalar`,
+rollup_cost.go:555）。若 attributes deposit 在 EVM 中失败（REVERT/OOG），L1Block
+`setL1BlockValuesJovian` 的 sstore 被回滚 → slot8[18:20) 保持上一块旧值，而 calldata
+始终携带本块正确值。FISCO 执行器此前读 slot8，会产出与 op-geth（读 calldata）不同的
+DA footprint → `blobGasUsed` 失配 → 块判 INVALID。
+
+**修复与覆盖**：`OpBlockExecute.cpp` feeLoaded 分支（D-1）从首笔 attributes calldata
+覆盖 slot 读出值（激活块 176B 强制 0，正常块 ≥178B 取固定偏移 [176:178]）。场景由
+`OpBlockExecute.D1CalldataScalarOverridesSlot`（slot=9 vs calldata=400）与
+`OpBlockExecute.D1ActivationBlockSlotStaleValueDoesNotLeak` 单测覆盖。
+
+**为什么不入语料**：t8n generator 的 `assertL1BlockConsistency`（generator/main.go:1045-1047）
+用同一 `fp.daScalar` 写 slot8 与 calldata[176:178]，结构性无法生成失配向量。若未来
+generator 支持 pre-slot 注入，再补向量并移除本条备注。
