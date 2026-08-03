@@ -28,10 +28,10 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
+#include <future>
 #include <random>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
-#include <thread>
 #include <utility>
 
 namespace
@@ -55,11 +55,16 @@ namespace
 constexpr std::size_t c_maxPendingSendQueueWarnSize = 100000;
 // FIB-185 (review): hard ceiling as a last-resort OOM guard. If the gateway send stays convoyed on
 // the session lock under extreme churn the queue could otherwise grow without bound and exhaust
-// memory (each entry pins an encoded consensus message). Above this cap the OLDEST pending send is
-// shed (the most stale consensus message, least useful to retransmit) and an error is logged.
-// Dropping a message is strictly better than OOM-killing the node, and PBFT re-broadcast / the
-// view-change path recover from a dropped message. Set well above the warn size so shedding only
-// happens in a genuine runaway, after the warning has fired.
+// memory (each entry pins an encoded consensus message). Above this cap a send is shed and an error
+// is logged.
+//
+// NOTE — intentional behavior change from the pre-Strand code: the old tbb queue shed the OLDEST
+// queued send (try_pop on the head). The bcos::Strand queue is opaque and cannot be reached into,
+// so here the INCOMING (newest) send is shed instead. The memory bound is identical, but under
+// sustained overload the node keeps draining older (staler) messages while dropping fresh ones;
+// PBFT re-broadcast / the view-change path recover from any dropped message, so dropping is
+// strictly better than OOM-killing the node. Set well above the warn size so shedding only happens
+// in a genuine runaway, after the warning has fired.
 constexpr std::size_t c_maxPendingSendQueueHardCap = 10 * c_maxPendingSendQueueWarnSize;
 }  // namespace
 
@@ -126,6 +131,10 @@ void FrontService::setIoService(std::shared_ptr<boost::asio::io_context> _ioServ
 void FrontService::setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
 {
     m_ioServicePool = std::move(_ioServicePool);
+    // FIB-185: (re)create the serial send strand over the pool the factory injects. This always
+    // runs before start() (FrontServiceFactory calls it in buildFrontService), and enqueueSend()
+    // only fires once m_run is true, so m_sendStrand is set before the first send.
+    m_sendStrand = std::make_unique<bcos::Strand>(m_ioServicePool);
 }
 
 void FrontService::registerModuleMessageDispatcher(int _moduleID,
@@ -298,24 +307,38 @@ void FrontService::stop()
             m_callback.clear();
         }
 
-        // FIB-185 (review): flush the serial send queue before returning. m_run is already false
-        // (set above), so enqueueSend accepts no new tasks and kicks no new drainer.
+        // FIB-185 (review): flush the serial send strand before returning. m_run is already false
+        // (set above), so enqueueSend accepts no new sends. Post a FIFO barrier onto the strand and
+        // wait for it: a bcos::Strand executes tasks in submission order, so once the barrier runs
+        // every send posted before stop() has completed — the same guarantee the old
+        // drainSendQueue()/drainer-slot wait provided (which itself replaced task_group.wait()).
         //
-        // drainSendQueue() assumes its caller owns the drainer slot -- enqueueSend wins the CAS
-        // and only then posts it. So take the slot here too rather than calling it outright:
-        // otherwise this inline drain would run CONCURRENTLY with a pool drainer, breaking the
-        // single-drainer/FIFO invariant this whole mechanism exists to provide, and its trailing
-        // m_sendDraining.store(false) would release a slot the pool drainer still holds.
+        // This must NOT run from a strand task (posting a barrier and waiting on it would
+        // self-deadlock), and it requires the shared IOServicePool to still be running. Both hold
+        // on the normal shutdown path: stop() is driven by the owning thread, never from a send
+        // task, and the pool is owned outside the FrontService and outlives it (services are
+        // stopped before the pool is torn down).
         //
-        // Waiting for the slot is also what makes this faithful to the task_group.wait() it
-        // replaces: that call blocked until the drainers finished. The wait terminates because
-        // m_run is already false, so the in-flight drainer empties the queue and releases.
-        for (bool expected = false; !m_sendDraining.compare_exchange_strong(expected, true);
-            expected = false)
+        // Bound the wait rather than blocking forever: ~FrontService() -> stop() can be driven
+        // from a pool worker thread (the IOServicePool dtor comments on exactly this — FrontService
+        // destroyed by a temporary shared_ptr held in a completion handler). In that case the
+        // round-robin dispatch may hand the barrier to this very thread's io_context, which is
+        // blocked in wait() and can never run it — an unbounded wait would self-deadlock. So wait
+        // at most 5s and log on timeout (same pattern as Worker::stop / SchedulerImpl shutdown):
+        // pending sends may be dropped, but a bounded ERROR is strictly better than a hang.
+        if (m_sendStrand)
         {
-            std::this_thread::yield();
+            auto flushed = std::make_shared<std::promise<void>>();
+            m_sendStrand->post([flushed]() { flushed->set_value(); });
+            if (flushed->get_future().wait_for(std::chrono::seconds(5)) !=
+                std::future_status::ready)
+            {
+                FRONT_LOG(ERROR) << LOG_BADGE("stop")
+                                 << LOG_DESC(
+                                        "timed out flushing the send strand; "
+                                        "pending sends may be dropped");
+            }
         }
-        drainSendQueue();
     }
     catch (const std::exception& e)
     {
@@ -506,105 +529,70 @@ void FrontService::asyncSendMessageByNodeIDByOwnedPayload(
 
 void FrontService::enqueueSend(std::function<void()> _sendTask)
 {
-    // FIB-185 (review): once stopped, do not enqueue new sends nor kick a drainer. stop() drains
-    // the queue; a task enqueued after that would either be lost or, worse, run a drainer that
-    // outlives this FrontService. New sends after stop are dropped on purpose (the node is
-    // shutting down).
-    if (!m_run)
+    // FIB-185 (review): once stopped, do not enqueue new sends. stop() flushes the strand; a task
+    // enqueued after that would run behind the flush barrier and could outlive this FrontService.
+    // New sends after stop are dropped on purpose (the node is shutting down). m_sendStrand is set
+    // by setIOServicePool() before start(), so the guard below also covers a never-started service.
+    if (!m_run || !m_sendStrand)
     {
         return;
     }
-    m_sendQueue.push(std::move(_sendTask));
-    // backpressure: warn while still unbounded, then shed the oldest above the hard cap (OOM guard)
-    auto pending = m_sendQueue.unsafe_size();
-    if (pending > c_maxPendingSendQueueWarnSize)
+
+    // Backpressure / OOM guard: the bcos::Strand queue is opaque (no depth), so track the pending
+    // count here. A gateway send convoyed on the session lock can otherwise grow the queue without
+    // bound (each entry pins an encoded consensus message) and exhaust memory. Warn while still
+    // unbounded; above the hard cap the INCOMING send is shed and an error is logged — an
+    // intentional behavior change vs. the pre-Strand "shed the oldest" (the strand queue cannot be
+    // reached into to shed the oldest, so the shed choice is "newest" rather than "oldest"). The
+    // memory bound is identical and PBFT re-broadcast / the view-change path recover from any
+    // dropped message. Dropping a message is strictly better than OOM-killing the node. Set well
+    // above the warn size so shedding only happens in a genuine runaway.
+    auto depth = m_pendingSendCount.fetch_add(1, std::memory_order_acq_rel) + 1;
+    if (depth > c_maxPendingSendQueueHardCap)
+    {
+        // undo the accounting for the dropped send; the strand never sees it
+        m_pendingSendCount.fetch_sub(1, std::memory_order_acq_rel);
+        FRONT_LOG(ERROR) << LOG_BADGE("enqueueSend")
+                         << LOG_DESC(
+                                "send queue hard cap exceeded; dropped incoming send to "
+                                "avoid OOM")
+                         << LOG_KV("pending", depth - 1)
+                         << LOG_KV("hardCap", c_maxPendingSendQueueHardCap);
+        return;
+    }
+    if (depth > c_maxPendingSendQueueWarnSize)
     {
         FRONT_LOG(WARNING) << LOG_BADGE("enqueueSend")
                            << LOG_DESC(
                                   "pending send queue unusually large; gateway send may be "
                                   "convoyed on the session lock")
-                           << LOG_KV("pending", pending);
+                           << LOG_KV("pending", depth);
     }
-    if (pending > c_maxPendingSendQueueHardCap)
-    {
-        std::function<void()> dropped;
-        if (m_sendQueue.try_pop(dropped))
-        {
-            FRONT_LOG(ERROR) << LOG_BADGE("enqueueSend")
-                             << LOG_DESC(
-                                    "send queue hard cap exceeded; dropped oldest pending send to "
-                                    "avoid OOM")
-                             << LOG_KV("pending", pending)
-                             << LOG_KV("hardCap", c_maxPendingSendQueueHardCap);
-        }
-    }
-    // kick a single drainer if none is running (CAS false -> true wins the right to drain)
-    bool expected = false;
-    if (m_sendDraining.compare_exchange_strong(expected, true))
-    {
-        // PRECONDITION: FrontService must be owned by a shared_ptr (FrontServiceFactory is the
-        // only construction site and uses make_shared). Stack-allocating one would make
-        // weak_from_this() empty, so the drainer would never run and never release the slot --
-        // which would then hang stop()'s wait for it.
-        //
-        // Hold the FrontService via weak_from_this, NOT a raw `this`. The drainer used to run on
-        // this object's own tbb task_group, which stop() could join; the shared IOServicePool is
-        // owned outside and cannot be joined here, so a posted task can outlive ~FrontService and
-        // would touch destroyed members (m_sendQueue / m_sendDraining). Locking the weak_ptr keeps
-        // the object alive for the drain, and simply no-ops once it is gone.
-        m_ioServicePool->post([weak = weak_from_this()]() {
-            if (auto self = weak.lock())
-            {
-                self->drainSendQueue();
-            }
-        });
-    }
-}
 
-void FrontService::drainSendQueue()
-{
-    // single drainer: run tasks one at a time so sends keep submission order (FIFO). Each task is
-    // self-contained (owns its payload); a throwing task is logged, never escalated -- an exception
-    // escaping here would otherwise abort the tbb worker thread.
-    for (;;)
-    {
-        std::function<void()> task;
-        while (m_sendQueue.try_pop(task))
+    // Serialize the send onto the shared pool: the strand runs tasks FIFO and never concurrently,
+    // on the pool's threads (the same threading model as the old single-drainer, minus the
+    // hand-rolled CAS / lost-wakeup bookkeeping).
+    //
+    // PRECONDITION: FrontService must be owned by a shared_ptr (FrontServiceFactory is the only
+    // construction site and uses make_shared); stack-allocating one would make weak_from_this()
+    // empty and the send would never run.
+    //
+    // Hold the FrontService via weak_from_this, NOT a raw `this` and NOT shared_ptr: the shared
+    // IOServicePool is owned outside and cannot be joined, so a posted task can outlive
+    // ~FrontService and would touch destroyed members. Locking the weak_ptr keeps the object alive
+    // for the send and no-ops once it is gone. (A shared_ptr capture would also form a cycle:
+    // FrontService -> Strand -> queued task -> FrontService.)
+    m_sendStrand->post([weak = weak_from_this(), task = std::move(_sendTask)]() mutable {
+        if (auto self = weak.lock())
         {
-            try
-            {
-                task();
-            }
-            catch (std::exception const& e)
-            {
-                FRONT_LOG(WARNING) << LOG_BADGE("drainSendQueue")
-                                   << LOG_KV("error", boost::diagnostic_information(e));
-            }
-            catch (...)
-            {
-                // Nothing may escape this function: stop() now waits for the drainer slot, so an
-                // exception unwinding past the m_sendDraining.store(false) below would leave the
-                // slot latched forever and hang shutdown in that wait. Catching everything makes
-                // "the slot is always released" structural instead of a bet that no task throws
-                // something exotic -- including a bad_alloc from the logging in the handler above,
-                // which is exactly the memory-pressure case the queue's hard cap exists for. Same
-                // two-clause shape IOServicePool::safeExecute uses.
-                FRONT_LOG(WARNING) << LOG_BADGE("drainSendQueue") << LOG_DESC("unknown exception");
-            }
+            // this task no longer occupies queue space; decrement before running so the counter
+            // reflects queued depth while a blocking gateway send is in flight
+            self->m_pendingSendCount.fetch_sub(1, std::memory_order_acq_rel);
+            task();
         }
-        // release the drainer slot, then re-check to avoid a lost wakeup against a concurrent
-        // enqueueSend that pushed after our last try_pop but before we cleared the flag.
-        m_sendDraining.store(false);
-        if (m_sendQueue.empty())
-        {
-            break;
-        }
-        bool expected = false;
-        if (!m_sendDraining.compare_exchange_strong(expected, true))
-        {
-            break;
-        }
-    }
+        // else: FrontService is gone — its members (incl. m_pendingSendCount) are destroyed with
+        // it, so there is nothing to account for.
+    });
 }
 
 /**

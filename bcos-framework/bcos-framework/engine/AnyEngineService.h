@@ -22,7 +22,7 @@
 
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-task/Task.h"
-#include <proxy/proxy.h>
+#include <proxy/v3/proxy.h>
 #include <cassert>
 #include <optional>
 #include <string>

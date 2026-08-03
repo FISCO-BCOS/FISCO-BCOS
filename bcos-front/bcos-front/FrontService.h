@@ -24,7 +24,6 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <oneapi/tbb/concurrent_queue.h>
 #include <boost/asio.hpp>
 #include <atomic>
 #include <functional>
@@ -225,22 +224,20 @@ protected:
 
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
-    // FIB-185: hand a send task to the serial queue and return immediately; a single drainer runs
-    // tasks one at a time (FIFO) on the shared IOServicePool, so no caller thread runs the
+    // FIB-185: hand a send task to the serial send strand and return immediately; tasks run FIFO
+    // on the shared IOServicePool (serialized, never concurrently), so no caller thread runs the
     // gateway send.
     void enqueueSend(std::function<void()> _sendTask);
-    void drainSendQueue();
 
 private:
     bcos::IOServicePool::Ptr m_ioServicePool;
-    // FIB-185: serial async send queue + single-drainer guard. The drainer runs on the shared
-    // IOServicePool (it used to run on the FrontService task_group) — no new thread either way,
-    // which is the point: this fix only needs the send off the CALLER's thread and serialized, not
-    // isolated onto its own thread. Kept as an explicit queue rather than a bcos::Strand because
-    // Strand exposes no queue depth, and the backpressure below (warn, then shed the oldest at the
-    // hard cap) is part of the fix — an unbounded send queue is the OOM path FIB-185 closes.
-    tbb::concurrent_queue<std::function<void()>> m_sendQueue;
-    std::atomic_bool m_sendDraining{false};
+    // FIB-185: serial async send strand over the shared IOServicePool + a pending-send counter
+    // that bounds it. The strand provides the FIFO/serialized execution the fix needs (off the
+    // CALLER's thread, no new thread) without the hand-rolled queue + single-drainer CAS. It
+    // exposes no queue depth, so the backpressure below (warn, then shed at the hard cap — the OOM
+    // guard FIB-185 closes) tracks the pending count here instead. See enqueueSend().
+    std::unique_ptr<bcos::Strand> m_sendStrand;
+    std::atomic<size_t> m_pendingSendCount{0};
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
