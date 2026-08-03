@@ -74,6 +74,7 @@ if(TARGET bcos-framework)
         opstack/EbT8nReplayTest.cpp
         opstack/EthBlockHeaderTest.cpp
         opstack/OpSchedulerImplTest.cpp
+        opstack/RecentBlockHashesTest.cpp
         # op-validator-minimal-loop engine tests (Tasks 5a/5b/6). They drive
         # `bcos::engine::EngineServiceImpl` directly — the OP `newPayload` branch has no RPC
         # endpoint this cycle (spec §6.3/§6.4, 裁定 A6), so there is nothing else to drive.
