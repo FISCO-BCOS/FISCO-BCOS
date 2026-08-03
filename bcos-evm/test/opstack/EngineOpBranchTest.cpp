@@ -702,8 +702,12 @@ ValidScenario prepareValidScenario(StubFixture& fixture, bcos::h256 const& paren
 /// +1, caller-chosen timestamp. Unlike `prepareValidScenario`'s first block, this one's parent
 /// header IS in `s_eth_block_header` (the accepted block registered it), which is what makes the
 /// timestamp-monotonicity check live.
-ValidScenario prepareFollowOnScenario(
-    StubFixture& fixture, ValidScenario const& acceptedParent, uint64_t timestamp)
+/// `baseFeeOverride` (终审批 D-3): lets a caller force a baseFeePerGas the parent's header would
+/// NOT predict — it is applied BEFORE `sealWithBlockHash`, because blockHash commits to the
+/// header's baseFeePerGas and the D-3 consistency check must be reached with a consistent blockHash
+/// (otherwise the request is rejected at the earlier blockHash check instead).
+ValidScenario prepareFollowOnScenario(StubFixture& fixture, ValidScenario const& acceptedParent,
+    uint64_t timestamp, std::optional<bcos::u256> baseFeeOverride = std::nullopt)
 {
     ValidScenario scenario;
     scenario.rawTransaction = bcos::bytes{0x7e, 0x11, 0x22, 0x33};
@@ -711,6 +715,8 @@ ValidScenario prepareFollowOnScenario(
         {scenario.rawTransaction}, timestamp, acceptedParent.request.executionPayload.blockHash);
     scenario.request.executionPayload.blockNumber =
         acceptedParent.request.executionPayload.blockNumber + 1;
+    if (baseFeeOverride.has_value())
+        scenario.request.executionPayload.baseFeePerGas = *baseFeeOverride;
     sealWithBlockHash(scenario.request);
     scenario.header = rebuiltHeader(scenario.request);
     scenario.receipt = makeReceipt(fixture.receiptFactory, 21000);
@@ -1484,6 +1490,35 @@ TEST(EngineOpBranch, IncreasingTimestampIsAcceptedAndRegisters)
         boost::lexical_cast<std::string>(child.request.executionPayload.blockNumber));
     ASSERT_TRUE(childHeaderEntry.has_value());
     EXPECT_EQ(childHeaderEntry->get(), asStringView(child.header.encode()));
+}
+
+// (w2) 终审批 D-3 red witness: the engine-side baseFee consistency check (Step 3a-2,
+// calcOpBaseFee from the parent header). The accepted parent has gasUsed == gasTarget, so the
+// child's baseFeePerGas must equal the parent's (1000); claiming 1001 is INVALID with
+// latestValidHash = parent, before any execution, and the child is not registered.
+TEST(EngineOpBranch, BaseFeeMismatchAgainstParentIsInvalid)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto accepted = prepareValidScenario(fixture, parentHash);
+    ASSERT_EQ(bcos::task::syncWait(fixture.service.newPayload(accepted.request, 4)).status,
+        bcos::engine::PayloadValidationStatus::Valid);
+    const auto executeCallsAfterParent = fixture.scheduler.executeOpBlockCalls;
+
+    auto child =
+        prepareFollowOnScenario(fixture, accepted, accepted.request.executionPayload.timestamp + 1,
+            /*baseFeeOverride=*/bcos::u256(1001));
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(child.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    ASSERT_TRUE(status.latestValidHash.has_value());
+    EXPECT_EQ(*status.latestValidHash, accepted.request.executionPayload.blockHash);
+    ASSERT_TRUE(status.validationError.has_value());
+    EXPECT_NE(status.validationError->find("baseFeePerGas"), std::string::npos);
+    // Rejected before execution, and not registered.
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, executeCallsAfterParent);
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, child.request.executionPayload.blockHash));
 }
 
 // (x) The documented skip: a block whose parent was seeded as a trusted starting point (only
