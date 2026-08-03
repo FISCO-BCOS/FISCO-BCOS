@@ -55,11 +55,16 @@ namespace
 constexpr std::size_t c_maxPendingSendQueueWarnSize = 100000;
 // FIB-185 (review): hard ceiling as a last-resort OOM guard. If the gateway send stays convoyed on
 // the session lock under extreme churn the queue could otherwise grow without bound and exhaust
-// memory (each entry pins an encoded consensus message). Above this cap the OLDEST pending send is
-// shed (the most stale consensus message, least useful to retransmit) and an error is logged.
-// Dropping a message is strictly better than OOM-killing the node, and PBFT re-broadcast / the
-// view-change path recover from a dropped message. Set well above the warn size so shedding only
-// happens in a genuine runaway, after the warning has fired.
+// memory (each entry pins an encoded consensus message). Above this cap a send is shed and an error
+// is logged.
+//
+// NOTE — intentional behavior change from the pre-Strand code: the old tbb queue shed the OLDEST
+// queued send (try_pop on the head). The bcos::Strand queue is opaque and cannot be reached into,
+// so here the INCOMING (newest) send is shed instead. The memory bound is identical, but under
+// sustained overload the node keeps draining older (staler) messages while dropping fresh ones;
+// PBFT re-broadcast / the view-change path recover from any dropped message, so dropping is
+// strictly better than OOM-killing the node. Set well above the warn size so shedding only happens
+// in a genuine runaway, after the warning has fired.
 constexpr std::size_t c_maxPendingSendQueueHardCap = 10 * c_maxPendingSendQueueWarnSize;
 }  // namespace
 
@@ -309,15 +314,29 @@ void FrontService::stop()
         // drainSendQueue()/drainer-slot wait provided (which itself replaced task_group.wait()).
         //
         // This must NOT run from a strand task (posting a barrier and waiting on it would
-        // self-deadlock), and it requires the shared IOServicePool to still be running. Both hold:
-        // stop() is driven by the owning thread, never from a send task, and the pool is owned
-        // outside the FrontService and outlives it (services are stopped before the pool is torn
-        // down), so the barrier is always processed.
+        // self-deadlock), and it requires the shared IOServicePool to still be running. Both hold
+        // on the normal shutdown path: stop() is driven by the owning thread, never from a send
+        // task, and the pool is owned outside the FrontService and outlives it (services are
+        // stopped before the pool is torn down).
+        //
+        // Bound the wait rather than blocking forever: ~FrontService() -> stop() can be driven
+        // from a pool worker thread (the IOServicePool dtor comments on exactly this — FrontService
+        // destroyed by a temporary shared_ptr held in a completion handler). In that case the
+        // round-robin dispatch may hand the barrier to this very thread's io_context, which is
+        // blocked in wait() and can never run it — an unbounded wait would self-deadlock. So wait
+        // at most 5s and log on timeout (same pattern as Worker::stop / SchedulerImpl shutdown):
+        // pending sends may be dropped, but a bounded ERROR is strictly better than a hang.
         if (m_sendStrand)
         {
             auto flushed = std::make_shared<std::promise<void>>();
             m_sendStrand->post([flushed]() { flushed->set_value(); });
-            flushed->get_future().wait();
+            if (flushed->get_future().wait_for(std::chrono::seconds(5)) !=
+                std::future_status::ready)
+            {
+                FRONT_LOG(ERROR) << LOG_BADGE("stop")
+                                 << LOG_DESC("timed out flushing the send strand; "
+                                             "pending sends may be dropped");
+            }
         }
     }
     catch (const std::exception& e)
@@ -521,11 +540,12 @@ void FrontService::enqueueSend(std::function<void()> _sendTask)
     // Backpressure / OOM guard: the bcos::Strand queue is opaque (no depth), so track the pending
     // count here. A gateway send convoyed on the session lock can otherwise grow the queue without
     // bound (each entry pins an encoded consensus message) and exhaust memory. Warn while still
-    // unbounded; above the hard cap the INCOMING send is shed and an error is logged — the strand
-    // queue cannot be reached into to shed the oldest, so the shed choice is "newest" rather than
-    // "oldest", but the memory bound is identical and PBFT re-broadcast / the view-change path
-    // recover from any dropped message. Dropping a message is strictly better than OOM-killing the
-    // node. Set well above the warn size so shedding only happens in a genuine runaway.
+    // unbounded; above the hard cap the INCOMING send is shed and an error is logged — an
+    // intentional behavior change vs. the pre-Strand "shed the oldest" (the strand queue cannot be
+    // reached into to shed the oldest, so the shed choice is "newest" rather than "oldest"). The
+    // memory bound is identical and PBFT re-broadcast / the view-change path recover from any
+    // dropped message. Dropping a message is strictly better than OOM-killing the node. Set well
+    // above the warn size so shedding only happens in a genuine runaway.
     auto depth = m_pendingSendCount.fetch_add(1, std::memory_order_acq_rel) + 1;
     if (depth > c_maxPendingSendQueueHardCap)
     {
