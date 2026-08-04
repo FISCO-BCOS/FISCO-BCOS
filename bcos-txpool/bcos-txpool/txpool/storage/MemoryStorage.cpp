@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
+#include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <oneapi/tbb/blocked_range.h>
@@ -32,7 +33,11 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <atomic>
 #include <memory>
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/remove_if.hpp>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
@@ -80,7 +85,22 @@ void MemoryStorage::stop()
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
     protocol::Transaction::Ptr transaction, bool waitForReceipt)
 {
+    if (!transaction) [[unlikely]]
+    {
+        co_return nullptr;
+    }
     transaction->setImportTime(utcTime());
+    // SharedState holds the once-flag and result independently of the Awaitable's lifetime.
+    // The callback lambda captures a shared_ptr<SharedState>, so even if the coroutine frame
+    // (and the Awaitable embedded in it) is destroyed after the first resume(), a late second
+    // callback invocation will only touch the still-alive SharedState and safely see
+    // m_resumed==true — avoiding heap-use-after-free on the sentinel (FIB-48).
+    struct SharedState
+    {
+        std::atomic_bool m_resumed{false};
+        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
+            m_submitResult;
+    };
     struct Awaitable
     {
         [[maybe_unused]] bool await_ready()
@@ -97,7 +117,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                                   << LOG_KV(
                                          "TxHash", m_transaction ? m_transaction->hash().hex() : "")
                                   << LOG_KV("result", result);
-                m_submitResult.emplace<Error::Ptr>(
+                m_state->m_submitResult.emplace<Error::Ptr>(
                     BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
             }
             else
@@ -107,34 +127,43 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                 res->setTxHash(m_transaction->hash());
                 res->setSender(std::string(m_transaction->sender()));
                 res->setTo(std::string(m_transaction->to()));
-                m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
+                m_state->m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
             }
             return true;
         }
 
         [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
+            // Build a self-contained completeOnce that owns SharedState via shared_ptr.
+            // This lambda may outlive the Awaitable (e.g. stored in a Transaction callback),
+            // so it must NOT capture 'this'.
+            auto completeOnce = [state = m_state, handle](Error::Ptr error,
+                                    bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                bool expected = false;
+                if (!state->m_resumed.compare_exchange_strong(
+                        expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+                {
+                    return;
+                }
+                if (error)
+                {
+                    state->m_submitResult.emplace<Error::Ptr>(std::move(error));
+                }
+                else
+                {
+                    state->m_submitResult.emplace<bcos::protocol::TransactionSubmitResult::Ptr>(
+                        std::move(result));
+                }
+                if (handle)
+                {
+                    handle.resume();
+                }
+            };
+
             try
             {
-                auto result = m_self->verifyAndSubmitTransaction(
-                    m_transaction,
-                    [this, m_handle = handle](Error::Ptr error,
-                        bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
-                        if (error)
-                        {
-                            m_submitResult.emplace<Error::Ptr>(std::move(error));
-                        }
-                        else
-                        {
-                            m_submitResult.emplace<bcos::protocol::TransactionSubmitResult::Ptr>(
-                                std::move(result));
-                        }
-                        if (m_handle)
-                        {
-                            m_handle.resume();
-                        }
-                    },
-                    true, true);
+                auto result =
+                    m_self->verifyAndSubmitTransaction(m_transaction, completeOnce, true, true);
 
                 if (result != TransactionStatus::None)
                 {
@@ -142,38 +171,37 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         << "Submit transaction failed! "
                         << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
                         << LOG_KV("result", result);
-                    m_submitResult.emplace<Error::Ptr>(
-                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
-                    handle.resume();
+                    completeOnce(
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)), nullptr);
                 }
             }
             catch (std::exception& e)
             {
                 TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
-                m_submitResult.emplace<Error::Ptr>(
-                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"));
-                handle.resume();
+                completeOnce(
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"),
+                    nullptr);
             }
         }
+
         bcos::protocol::TransactionSubmitResult::Ptr await_resume()
         {
-            if (std::holds_alternative<Error::Ptr>(m_submitResult))
+            if (std::holds_alternative<Error::Ptr>(m_state->m_submitResult))
             {
-                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_state->m_submitResult));
             }
 
             return std::move(
-                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
+                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_state->m_submitResult));
         }
 
         protocol::Transaction::Ptr m_transaction;
         std::shared_ptr<MemoryStorage> m_self;
-        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
-            m_submitResult;
+        std::shared_ptr<SharedState> m_state;
         bool m_waitForReceipt;
     } awaitable{.m_transaction = std::move(transaction),
         .m_self = shared_from_this(),
-        .m_submitResult = {},
+        .m_state = std::make_shared<SharedState>(),
         .m_waitForReceipt = waitForReceipt};
 
     co_return co_await awaitable;
@@ -201,17 +229,43 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     auto hash = transaction.hash();
-    if (TxsMap::ReadAccessor accessor;
-        m_bcosTransactions.unsealTransactions.find<TxsMap::ReadAccessor>(accessor, hash) ||
-        m_bcosTransactions.sealedTransactions.find<TxsMap::ReadAccessor>(accessor, hash))
-    {
-        if (txSubmitCallback && !accessor.value()->submitCallback())
+
+    // Per-map double-checked lookup: ReadAccessor (shared lock) first, upgrade to
+    // exclusive lock only when mutation is needed.  Each map uses its own accessor
+    // so the correct bucket lock is held.
+    auto checkMap = [&](auto& txMap) -> std::optional<TransactionStatus> {
+        // Fast path: shared (read) lock
+        TxsMap::ReadAccessor readAccessor;
+        if (!txMap.find(readAccessor, hash))
         {
-            accessor.value()->setSubmitCallback(std::move(txSubmitCallback));
-            return TransactionStatus::AlreadyInTxPoolAndAccept;
+            return std::nullopt;  // not in this map
+        }
+        if (!txSubmitCallback || readAccessor.value()->submitCallback())
+        {
+            return TransactionStatus::AlreadyInTxPool;  // no mutation needed
         }
 
-        return TransactionStatus::AlreadyInTxPool;
+        // Slow path: upgrade read lock -> write lock in-place
+        if (!readAccessor.upgradeToWriter() && !readAccessor.revalidate(hash))
+        {
+            return std::nullopt;  // tx removed during non-atomic upgrade
+        }
+        // Double-check under exclusive lock
+        if (!readAccessor.value()->submitCallback())
+        {
+            readAccessor.value()->setSubmitCallback(std::move(txSubmitCallback));
+            return TransactionStatus::AlreadyInTxPoolAndAccept;
+        }
+        return TransactionStatus::AlreadyInTxPool;  // another thread set it first
+    };
+
+    if (const auto result = checkMap(m_bcosTransactions.unsealTransactions))
+    {
+        return *result;
+    }
+    if (const auto result = checkMap(m_bcosTransactions.sealedTransactions))
+    {
+        return *result;
     }
     return TransactionStatus::None;
 }
@@ -220,6 +274,19 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
 TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 {
     auto txHash = _tx->hash();
+    // Issue #5318: transactions on this path come from another node's proposal and bypass
+    // validateTransaction(), so re-check `to` here — otherwise a proposal carrying a
+    // malformed `to` is imported, passes verification and deterministically fails
+    // execution, halting consensus. Rejecting it fails the proposal verification instead,
+    // and PBFT view-changes to a leader with a clean proposal.
+    if (!isValidToField(_tx->to()))
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for malformed to field")
+                            << LOG_KV("to", _tx->to()) << LOG_KV("importTxHash", txHash.abridged())
+                            << LOG_KV("importBatchId", _tx->batchId())
+                            << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+        return TransactionStatus::Malformed;
+    }
     // the transaction has already onChain, reject it
     // check ledger tx
     // check web3 tx
@@ -308,7 +375,22 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().SUBMIT_TX);
 
-    // Define validation steps as a chain of validators
+    // Step 1: Check if transaction already exists in txpool
+    {
+        auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
+        if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
+        {
+            // Callback has been moved to the existing transaction; return success immediately
+            // without proceeding to insert() to avoid use-after-free and double-resume (FIB-48)
+            return TransactionStatus::None;
+        }
+        if (result != TransactionStatus::None)
+        {
+            return result;
+        }
+    }
+
+    // Define remaining validation steps as a chain
     // Each step returns TransactionStatus::None if validation passes, or an error status otherwise
     const std::vector<std::function<TransactionStatus()>> validationSteps = {
         [this, transaction, &txSubmitCallback]() {
@@ -322,6 +404,16 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             }
             return result;
         },
+        [this, checkPoolLimit]() {
+            // Step 1.5: Enforce pool size limit before running expensive validation steps (FIB-55)
+            if (checkPoolLimit &&
+                (m_bcosTransactions.unsealTransactions.size() +
+                    m_bcosTransactions.sealedTransactions.size()) >= m_config->poolLimit())
+            {
+                return TransactionStatus::TxPoolIsFull;
+            }
+            return TransactionStatus::None;
+        },
         [this, transaction]() {
             // Step 2: Verify transaction signature (if enabled)
             return m_config->checkTransactionSignature() ?
@@ -332,16 +424,22 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             // Step 3: Validate transaction format and constraints
             return m_config->txValidator()->validateTransaction(*transaction);
         },
-        // [this, transaction]() {
-        //     // Step 4: Validate balance
-        //     return task::syncWait(
-        //         m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
-        // },
+        [this, transaction]() {
+            // Step 4: Validate balance (only for Web3 transactions)
+            if (transaction->type() ==
+                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+            {
+                return task::syncWait(
+                    m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
+            }
+            return bcos::protocol::TransactionStatus::None;
+        },
         [this, transaction]() {
             // Step 5: Check chain Id
             return task::syncWait(
                 m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
-        }};
+        },
+    };
 
     // Execute validation chain - stop at first failure
     for (const auto& step : validationSteps)
@@ -352,7 +450,33 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
     }
 
-    // All validations passed, prepare for insertion
+    // All validations passed — now insert nonce atomically before inserting the transaction.
+    // Nonce insertion is done here (not inside verify()) so that failures in validateTransaction()
+    // or validateChainId() cannot leave a stale nonce in the pool (FIB-50).
+    // Atomic check-and-reserve: insert() returns false when the nonce already exists,
+    // eliminating the TOCTOU window between separate checkNonce() + insert() calls (FIB-51).
+    if (m_config->checkTransactionSignature())
+    {
+        if (transaction->type() != static_cast<uint8_t>(TransactionType::Web3Transaction))
+        {
+            if (!m_config->txPoolNonceChecker()->insert(std::string(transaction->nonce())))
+                [[unlikely]]
+            {
+                return TransactionStatus::NonceCheckFail;
+            }
+        }
+        else
+        {
+            if (!task::syncWait(m_config->txValidator()->web3NonceChecker()->insertMemoryNonce(
+                    std::string(transaction->sender()), std::string(transaction->nonce()))))
+                [[unlikely]]
+            {
+                return TransactionStatus::NonceCheckFail;
+            }
+        }
+    }
+
+    // Prepare for insertion
     auto const txImportTime = transaction->importTime();
     if (txSubmitCallback)
     {
@@ -574,19 +698,18 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_FETCH_TXS);
     TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", txsSize)
                      << LOG_KV("limit", _txsLimit);
-    auto blockFactory = m_config->blockFactory();
-    auto recordT = utcTime();
+    const auto recordT = utcTime();
     auto startT = utcTime();
-    auto lockT = utcTime() - startT;
+    const auto lockT = utcTime() - startT;
     startT = utcTime();
-    auto currentTime = utcTime();
+    const auto currentTime = utcTime();
     size_t traverseCount = 0;
     size_t sealed = 0;
 
     std::vector<Transaction::Ptr> invalidTxs;
     auto handleTx = [&](const Transaction::Ptr& tx) {
         traverseCount++;
-        auto txHash = tx->hash();
+        const auto txHash = tx->hash();
         // the transaction has already been sealed for newer proposal
         if (tx->sealed())
         {
@@ -594,7 +717,11 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
             return false;
         }
 
-        if (currentTime > (tx->importTime() + m_txsExpirationTime))
+        // Treat a negative importTime as already expired to prevent unsigned overflow when
+        // adding a negative int64_t to uint64_t m_txsExpirationTime (FIB-61)
+        auto const importTime = tx->importTime();
+        if (importTime < 0 ||
+            currentTime > (static_cast<uint64_t>(importTime) + m_txsExpirationTime))
         {
             invalidTxs.emplace_back(tx);
             return false;
@@ -605,7 +732,7 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         // txPool, the txs with duplicated nonce here are already-committed, but have not been
         // dropped
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkTransaction(*tx, true);
+        const auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result == TransactionStatus::NonceCheckFail)
         {
             TXPOOL_LOG(WARNING) << "txPool nonce check failed, hash:" << tx->hash()
@@ -651,7 +778,9 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         return true;
     };
 
-    for (auto& accessor : m_bcosTransactions.unsealTransactions.rangeByKey<TxsMap::ReadAccessor>(
+    // Use WriteAccessor so that mutations inside handleTx (setSealed, setBatchId, setBatchHash)
+    // are performed under an exclusive bucket lock (FIB-54)
+    for (auto& accessor : m_bcosTransactions.unsealTransactions.rangeByKey<TxsMap::WriteAccessor>(
              m_knownLatestSealedTxHash))
     {
         const auto& tx = accessor.value();
@@ -661,7 +790,7 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
             break;
         }
     }
-    auto invalidTxsSize = invalidTxs.size();
+    const auto invalidTxsSize = invalidTxs.size();
     removeInvalidTxs(invalidTxs);
 
     auto systemHashes =
@@ -682,10 +811,13 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
                     }
                 }
             });
-    m_bcosTransactions.sealedTransactions.batchInsert(::ranges::views::transform(
-        values, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
+    auto sealedPairs =
+        values | ::ranges::views::filter([](const auto& tx) { return tx != nullptr; }) |
+        ::ranges::views::transform([](const auto& tx) { return std::make_pair(tx->hash(), tx); }) |
+        ::ranges::to<std::vector>();
+    m_bcosTransactions.sealedTransactions.batchInsert(::ranges::views::all(sealedPairs));
 
-    auto fetchTxsT = utcTime() - startT;
+    const auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
                      << LOG_KV("time", (utcTime() - recordT)) << LOG_KV("txsSize", _txsList.size())
                      << LOG_KV("sysTxsSize", _sysTxsList.size())
@@ -809,8 +941,11 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
     TxsMap* toMap = _sealFlag ? std::addressof(m_bcosTransactions.sealedTransactions) :
                                 std::addressof(m_bcosTransactions.unsealTransactions);
     std::vector<Transaction::Ptr> moveTransactions(_txsHashList.size());
-    fromMap->traverse<TxsMap::ReadAccessor, true>(
-        _txsHashList, [&](TxsMap::ReadAccessor& accessor, const auto& range, auto& bucket) {
+    // Use WriteAccessor so that mutations to transaction fields (setSealed, setBatchId,
+    // setBatchHash) are performed under an exclusive bucket lock, preventing data races
+    // with concurrent readers of the same bucket (FIB-54)
+    fromMap->traverse<TxsMap::WriteAccessor, true>(
+        _txsHashList, [&](TxsMap::WriteAccessor& accessor, const auto& range, auto& bucket) {
             size_t localNotFound = 0;
             size_t localReSealed = 0;
             size_t localSuccess = 0;
@@ -819,10 +954,13 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
             {
                 auto hash = _txsHashList[index];
                 protocol::Transaction::Ptr transaction;
+                // Track whether the tx came from fromMap; only record for movement if it passes
+                // the re-seal guard below — prevents stranding re-sealed txs (FIB-60)
+                bool foundInFromMap = false;
                 if (bucket.find(accessor, hash))
                 {
                     transaction = accessor.value();
-                    moveTransactions[index] = transaction;
+                    foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
                     toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
@@ -843,6 +981,12 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     continue;
                 }
 
+                // Assign to moveTransactions only after the re-seal guard passes
+                if (foundInFromMap)
+                {
+                    moveTransactions[index] = transaction;
+                }
+
                 transaction->setSealed(_sealFlag);
                 ++localSuccess;
                 // set the block information for the transaction
@@ -860,7 +1004,8 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
             successCount += localSuccess;
             notFound += localNotFound;
             reSealed += localReSealed;
-            if (localKnownLatestSealedTxIndex > 0)
+            // FIB-65: sentinel is -1; index 0 is valid, so use >= 0 not > 0
+            if (localKnownLatestSealedTxIndex >= 0)
             {
                 auto current = knownLatestSealedTxIndex.load();
                 while (localKnownLatestSealedTxIndex > current &&
@@ -870,7 +1015,8 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                 }
             }
         });
-    if (knownLatestSealedTxIndex > 0)
+    // FIB-65: sentinel is -1; index 0 is valid, so use >= 0 not > 0
+    if (knownLatestSealedTxIndex >= 0)
     {
         m_knownLatestSealedTxHash = _txsHashList[knownLatestSealedTxIndex];
     }

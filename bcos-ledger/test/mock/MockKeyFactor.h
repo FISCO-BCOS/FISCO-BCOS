@@ -69,10 +69,10 @@ public:
         {
             endIt = startIt + 4 * sizeof(byte);
         }
-        return *toHexString(startIt, endIt) + "...";
+        return toHex(bytes(startIt, endIt)) + "...";
     }
 
-    std::string hex() override { return *toHexString(*m_keyData); }
+    std::string hex() override { return toHex(*m_keyData); }
 
 private:
     std::shared_ptr<bytes> m_keyData;

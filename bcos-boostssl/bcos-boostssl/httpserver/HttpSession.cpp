@@ -1,4 +1,5 @@
 #include "HttpSession.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/system/error_code.hpp>
 
 bcos::boostssl::http::HttpSession::HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig)
@@ -247,4 +248,24 @@ std::shared_ptr<std::string> bcos::boostssl::http::HttpSession::nodeId()
 void bcos::boostssl::http::HttpSession::setNodeId(std::shared_ptr<std::string> _nodeId)
 {
     m_nodeId = std::move(_nodeId);
+}
+
+uint32_t bcos::boostssl::http::HttpSession::httpBodySizeLimit() const
+{
+    return m_httpBodySizeLimit;
+}
+
+void bcos::boostssl::http::HttpSession::setHttpBodySizeLimit(uint32_t _httpBodySizeLimit)
+{
+    m_httpBodySizeLimit = _httpBodySizeLimit;
+}
+
+bcos::boostssl::http::CorsConfig bcos::boostssl::http::HttpSession::corsConfig() const
+{
+    return m_corsConfig;
+}
+
+void bcos::boostssl::http::HttpSession::setCorsConfig(CorsConfig _corsConfig)
+{
+    m_corsConfig = std::move(_corsConfig);
 }

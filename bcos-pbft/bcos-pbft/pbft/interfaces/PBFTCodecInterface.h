@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "PBFTBaseMessageInterface.h"
+#include "bcos-pbft/pbft/utilities/PBFTMsgVersion.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 namespace bcos
@@ -33,8 +34,11 @@ public:
     PBFTCodecInterface() = default;
     virtual ~PBFTCodecInterface() {}
 
-    virtual bytesPointer encode(
-        PBFTBaseMessageInterface::Ptr _pbftMessage, int32_t _version = 0) const = 0;
+    // FIB-134: default to the current protocol version so every sender binds
+    // packetType into the digest. A stale `0` default here is what left the
+    // ViewChange/NewView outer-signature path unauthenticated.
+    virtual bytesPointer encode(PBFTBaseMessageInterface::Ptr _pbftMessage,
+        int32_t _version = toWireVersion(c_currentPBFTMsgVersion)) const = 0;
     // Taking into account the situation of future blocks, verify the signature if and only when
     // processing the message packet
     virtual PBFTBaseMessageInterface::Ptr decode(bytesConstRef _data) const = 0;

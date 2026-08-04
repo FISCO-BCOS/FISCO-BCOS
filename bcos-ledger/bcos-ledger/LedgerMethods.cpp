@@ -56,7 +56,11 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledger::tag_t<storeTransactionsAndReceipts> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block)
 {
-    ledger.storeTransactionsAndReceipts(std::move(blockTxs), std::move(block));
+    auto error = ledger.storeTransactionsAndReceipts(std::move(blockTxs), std::move(block));
+    if (error)
+    {
+        BOOST_THROW_EXCEPTION(*error);
+    }
     co_return;
 }
 

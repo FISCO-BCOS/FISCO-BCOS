@@ -24,7 +24,6 @@
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
 #include "BlockContext.h"
-#include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-table/src/StorageWrapper.h"
@@ -81,11 +80,7 @@ public:
     // External call request
     virtual CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input);
 
-    auto& storage()
-    {
-        assert(m_storageWrapper);
-        return *m_storageWrapper;
-    }
+    storage::StorageWrapper& storage();
 
 
     const BlockContext& blockContext() { return m_blockContext; }
@@ -106,21 +101,11 @@ public:
     virtual std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address,
         uint32_t version, bool isAuth, const ledger::Features& features) const;
 
-    void setStaticPrecompiled(std::shared_ptr<const std::set<std::string>> _staticPrecompiled)
-    {
-        m_staticPrecompiled = std::move(_staticPrecompiled);
-    }
+    void setStaticPrecompiled(std::shared_ptr<const std::set<std::string>> _staticPrecompiled);
 
-    inline bool isStaticPrecompiled(const std::string& _a) const
-    {
-        return _a.starts_with(precompiled::SYS_ADDRESS_PREFIX) && m_staticPrecompiled->contains(_a);
-    }
+    bool isStaticPrecompiled(const std::string& _a) const;
 
-    inline bool isEthereumPrecompiled(const std::string& _a) const
-    {
-        return m_evmPrecompiled != nullptr && _a.starts_with(precompiled::EVM_PRECOMPILED_PREFIX) &&
-               m_evmPrecompiled->contains(_a);
-    }
+    bool isEthereumPrecompiled(const std::string& _a) const;
 
     std::pair<bool, bytes> executeOriginPrecompiled(const std::string& _a, bytesConstRef _in) const;
 
@@ -182,14 +167,7 @@ protected:
     //    virtual TransactionExecutive::Ptr buildChildExecutive(const std::string& _contractAddress,
     //        int64_t contextID, int64_t seq, bool useCoroutine = true)
     virtual TransactionExecutive::Ptr buildChildExecutive(
-        const std::string& _contractAddress, int64_t contextID, int64_t seq)
-    {
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(
-            m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
-
-
-        return executiveFactory->build(_contractAddress, contextID, seq, ExecutiveType::common);
-    }
+        const std::string& _contractAddress, int64_t contextID, int64_t seq);
 
     void revert();
 
@@ -197,12 +175,7 @@ protected:
     CallParameters::UniquePtr parseEVMCResult(
         CallParameters::UniquePtr callResults, const Result& _result);
 
-    void writeErrInfoToOutput(std::string const& errInfo, CallParameters& _callParameters)
-    {
-        bcos::codec::abi::ContractABICodec abi(*m_hashImpl);
-        auto codecOutput = abi.abiIn("Error(string)", errInfo);
-        _callParameters.data = std::move(codecOutput);
-    }
+    void writeErrInfoToOutput(std::string const& errInfo, CallParameters& _callParameters);
 
     bool checkExecAuth(const CallParameters::UniquePtr& callParameters);
     int32_t checkContractAvailable(const CallParameters::UniquePtr& callParameters);

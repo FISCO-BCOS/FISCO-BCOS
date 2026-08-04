@@ -33,12 +33,7 @@ class SM2Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<SM2Crypto>;
-    SM2Crypto()
-    {
-        m_signer = wedpr_sm2_sign_fast;
-        m_verifier = wedpr_sm2_verify;
-        m_keyPairFactory = std::make_shared<SM2KeyPairFactory>();
-    }
+    SM2Crypto();
     ~SM2Crypto() = default;
     std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _hash,
         bool _signatureWithPub = false) const override;

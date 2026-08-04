@@ -27,6 +27,126 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
+RouterTableEntry::RouterTableEntry()
+  : m_inner([m_entry = bcostars::RouterTableEntry()]() mutable { return &m_entry; })
+{}
+
+RouterTableEntry::RouterTableEntry(std::function<bcostars::RouterTableEntry*()> _inner)
+  : m_inner(std::move(_inner))
+{}
+
+void RouterTableEntry::setDstNode(std::string const& _dstNode)
+{
+    m_inner()->dstNode = _dstNode;
+}
+
+void RouterTableEntry::setNextHop(std::string const& _nextHop)
+{
+    m_inner()->nextHop = _nextHop;
+}
+
+void RouterTableEntry::clearNextHop()
+{
+    m_inner()->nextHop = std::string();
+}
+
+void RouterTableEntry::setDistance(int32_t _distance)
+{
+    m_inner()->distance = _distance;
+}
+
+void RouterTableEntry::incDistance(int32_t _deltaDistance)
+{
+    m_inner()->distance += _deltaDistance;
+}
+
+std::string const& RouterTableEntry::dstNode() const
+{
+    return m_inner()->dstNode;
+}
+
+std::string const& RouterTableEntry::nextHop() const
+{
+    return m_inner()->nextHop;
+}
+
+int32_t RouterTableEntry::distance() const
+{
+    return m_inner()->distance;
+}
+
+bcostars::RouterTableEntry const& RouterTableEntry::inner() const
+{
+    return *(m_inner());
+}
+
+void RouterTableEntry::setDstNodeInfo(P2PInfo const& _dstNodeInfo)
+{
+    assignNodeIDInfo(m_inner()->dstNodeInfo, _dstNodeInfo);
+}
+
+void RouterTableEntry::resetDstNodeInfo(P2PInfo const& _dstNodeInfo)
+{
+    if (!m_inner()->dstNodeInfo.p2pID.empty())
+    {
+        return;
+    }
+    if (_dstNodeInfo.p2pID.empty())
+    {
+        return;
+    }
+    setDstNodeInfo(_dstNodeInfo);
+}
+
+P2PInfo RouterTableEntry::dstNodeInfo() const
+{
+    return {m_inner()->dstNodeInfo.p2pID, dstNode()};
+}
+
+RouterTable::RouterTable()
+  : m_inner([m_table = bcostars::RouterTable()]() mutable { return &m_table; })
+{}
+
+RouterTable::RouterTable(bytesConstRef _decodedData) : RouterTable()
+{
+    decode(_decodedData);
+}
+
+std::map<std::string, RouterTableEntryInterface::Ptr> const& RouterTable::routerEntries()
+{
+    return m_routerEntries;
+}
+
+void RouterTable::setNodeID(std::string const& _nodeID)
+{
+    m_nodeID = _nodeID;
+}
+
+std::string const& RouterTable::nodeID() const
+{
+    return m_nodeID;
+}
+
+void RouterTable::setUnreachableDistance(int _unreachableDistance)
+{
+    m_unreachableDistance = _unreachableDistance;
+}
+
+RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable()
+{
+    return std::make_shared<RouterTable>();
+}
+
+RouterTableInterface::Ptr RouterTableFactoryImpl::createRouterTable(bcos::bytesConstRef _decodedData)
+{
+    return std::make_shared<RouterTable>(_decodedData);
+}
+
+RouterTableEntryInterface::Ptr RouterTableFactoryImpl::createRouterEntry()
+{
+    return std::make_shared<RouterTableEntry>();
+}
+
 void RouterTable::encode(bcos::bytes& _encodedData)
 {
     WriteGuard writeGuard(x_routerEntries);

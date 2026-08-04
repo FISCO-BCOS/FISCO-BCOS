@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(test_contractABIType)
         // BOOST_CHECK(value->name());
         BOOST_CHECK_EQUAL(value->offsetAsBytes(), MAX_BYTE_LENGTH);
         BOOST_CHECK(value->value() == bs);
-        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + *toHexString(bs));
+        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + toHex(bs));
 
         // clone test
         auto cloneValuePtr = value->clone();
@@ -171,11 +171,11 @@ BOOST_AUTO_TEST_CASE(test_contractABIType)
         BOOST_CHECK_EQUAL(
             toHexStringWithPrefix(cloneValue->value()), toHexStringWithPrefix(cloneU));
         BOOST_CHECK_EQUAL(cloneValue->name(), value->name());
-        BOOST_CHECK_EQUAL(cloneValue->toJson().asString(), "hex://" + *toHexString(cloneU));
+        BOOST_CHECK_EQUAL(cloneValue->toJson().asString(), "hex://" + toHex(cloneU));
 
         // old value compare
         BOOST_CHECK_EQUAL(toHexStringWithPrefix(value->value()), toHexStringWithPrefix(bs));
-        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + *toHexString(bs));
+        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + toHex(bs));
     }
 
     {
@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(test_contractABIType)
         // BOOST_CHECK(value->name());
         BOOST_CHECK_EQUAL(value->offsetAsBytes(), MAX_BYTE_LENGTH);
         BOOST_CHECK_EQUAL(toHexStringWithPrefix(value->value()), toHexStringWithPrefix(bs));
-        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + *toHexString(bs));
+        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + toHex(bs));
 
         // clone test
         auto cloneValuePtr = value->clone();
@@ -207,11 +207,11 @@ BOOST_AUTO_TEST_CASE(test_contractABIType)
         BOOST_CHECK_EQUAL(
             toHexStringWithPrefix(cloneValue->value()), toHexStringWithPrefix(cloneU));
         BOOST_CHECK_EQUAL(cloneValue->name(), value->name());
-        BOOST_CHECK_EQUAL(cloneValue->toJson().asString(), "hex://" + *toHexString(cloneU));
+        BOOST_CHECK_EQUAL(cloneValue->toJson().asString(), "hex://" + toHex(cloneU));
 
         // old value compare
         BOOST_CHECK_EQUAL(toHexStringWithPrefix(value->value()), toHexStringWithPrefix(bs));
-        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + *toHexString(bs));
+        BOOST_CHECK_EQUAL(value->toJson().asString(), "hex://" + toHex(bs));
     }
 
     {
@@ -700,7 +700,7 @@ BOOST_AUTO_TEST_CASE(test_contractABIType)
                     "000000000000000000000000000000000000000000000000000000000000000000000000000000"
                     "000000000000000000053132333435000000000000000000000000000000000000000000000000"
                     "000000",
-                    *toHexString(buffer));
+                    toHex(buffer));
 
                 auto cloneStruct = struct_->clone();
                 BOOST_CHECK(struct_->isEqual(*cloneStruct));

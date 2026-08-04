@@ -34,21 +34,20 @@ BOOST_AUTO_TEST_CASE(testBase64DecodeBytes)
     const std::string encodeStr = "MTIzNEFCY2Q=";
     auto decodeStr = base64DecodeBytes(encodeStr);
     std::string oriStr;
-    for (size_t i = 0; i < decodeStr->size(); i++)
+    for (size_t i = 0; i < decodeStr.size(); i++)
     {
-        oriStr += char((*decodeStr)[i]);
+        oriStr += char(decodeStr[i]);
     }
     BOOST_CHECK(oriStr == "1234ABcd");
 
     std::string originString = "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b";
-    bytes originBytes = *fromHexString(originString);
+    bytes originBytes = fromHex(originString);
     std::string base64Str = base64Encode(bytesConstRef(originBytes.data(), originBytes.size()));
-    std::cout << "base64Encode for " << *toHexString(originBytes) << " is: " << base64Str
-              << std::endl;
+    std::cout << "base64Encode for " << toHex(originBytes) << " is: " << base64Str << std::endl;
     // decode the base64Str
     auto decodedBytes = base64DecodeBytes(base64Str);
-    std::cout << "decodedBytes is: " << *toHexString(*decodedBytes) << std::endl;
-    BOOST_CHECK(*toHexString(*decodedBytes) == originString);
+    std::cout << "decodedBytes is: " << toHex(decodedBytes) << std::endl;
+    BOOST_CHECK(toHex(decodedBytes) == originString);
 
     auto encodedStr = base64Encode(originString);
     std::string decodedString = base64Decode(encodedStr);
@@ -78,8 +77,8 @@ BOOST_AUTO_TEST_CASE(testBase64Codec)
         BOOST_CHECK_EQUAL(s0.size(), s.size());
         BOOST_CHECK_EQUAL(s, s0);
         auto bytes = base64DecodeBytes(base64);
-        BOOST_CHECK_EQUAL(bytes->size(), s.size());
-        auto s1 = std::string(bytes->begin(), bytes->end());
+        BOOST_CHECK_EQUAL(bytes.size(), s.size());
+        auto s1 = std::string(bytes.begin(), bytes.end());
         BOOST_CHECK_EQUAL(s1.size(), s.size());
         BOOST_CHECK_EQUAL(s, s1);
     }

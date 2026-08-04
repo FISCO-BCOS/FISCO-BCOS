@@ -22,6 +22,9 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
+#include <limits>
+#include <algorithm>
+#include <string>
 
 namespace bcos::protocol
 {
@@ -31,8 +34,14 @@ template <typename T>
 bytesPointer encodePBObject(T _pbObject)
 {
     auto encodedData = std::make_shared<bytes>();
-    encodedData->resize(_pbObject->ByteSizeLong());
-    if (_pbObject->SerializeToArray(encodedData->data(), encodedData->size()))
+    auto size = _pbObject->ByteSizeLong();
+    if (size > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        BOOST_THROW_EXCEPTION(PBObjectEncodeException() << errinfo_comment(
+                                  "encode PBObject failed: data size exceeds int range"));
+    }
+    encodedData->resize(size);
+    if (_pbObject->SerializeToArray(encodedData->data(), static_cast<int>(encodedData->size())))
     {
         return encodedData;
     }
@@ -46,9 +55,14 @@ bytesPointer encodePBObject(T _pbObject)
 template <typename T>
 void encodePBObject(bytes& _encodedData, T _pbObject)
 {
-    auto encodedData = std::make_shared<bytes>();
-    _encodedData.resize(_pbObject->ByteSizeLong());
-    if (!_pbObject->SerializeToArray(_encodedData.data(), _encodedData.size()))
+    auto size = _pbObject->ByteSizeLong();
+    if (size > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        BOOST_THROW_EXCEPTION(PBObjectEncodeException() << errinfo_comment(
+                                  "encode PBObject failed: data size exceeds int range"));
+    }
+    _encodedData.resize(size);
+    if (!_pbObject->SerializeToArray(_encodedData.data(), static_cast<int>(_encodedData.size())))
     {
         BOOST_THROW_EXCEPTION(
             PBObjectEncodeException() << errinfo_comment("encode PBObject into bytes data failed"));
@@ -58,11 +72,26 @@ void encodePBObject(bytes& _encodedData, T _pbObject)
 template <typename T>
 void decodePBObject(T _pbObject, bytesConstRef _data)
 {
-    if (!_pbObject->ParseFromArray(_data.data(), _data.size()))
+    if (_data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
     {
+        BOOST_THROW_EXCEPTION(PBObjectDecodeException() << errinfo_comment(
+                                  "decode PBObject failed: data size exceeds int range"));
+    }
+    if (!_pbObject->ParseFromArray(_data.data(), static_cast<int>(_data.size())))
+    {
+        // Truncate hex output to avoid excessive memory usage for large payloads
+        constexpr size_t c_maxHexBytes = 64;
+        const auto truncatedRef = _data.getCroppedData(0, std::min(_data.size(), c_maxHexBytes));
+        auto hexStr = toHex(truncatedRef);
+        const auto shownBytes = std::min(_data.size(), c_maxHexBytes);
+        if (_data.size() > c_maxHexBytes)
+        {
+            hexStr += "...(truncated)";
+        }
         BOOST_THROW_EXCEPTION(
             PBObjectDecodeException() << errinfo_comment(
-                "decode bytes data into PBObject failed, data: " + *toHexString(_data)));
+                "decode bytes data into PBObject failed, size: " + std::to_string(_data.size()) +
+                ", shown: " + std::to_string(shownBytes) + " bytes, data: " + hexStr));
     }
 }
 

@@ -24,13 +24,15 @@ private:
         bool read = false;
         bool write = false;
     };
+
     std::unordered_map<size_t, ReadWriteFlag> m_readWriteSet;
+
     using Storage = StorageType;
 
     void putSet(bool write, size_t hash)
     {
-        auto [it, inserted] = m_readWriteSet.try_emplace(
-            hash, typename ReadWriteSetStorage::ReadWriteFlag{.read = !write, .write = write});
+        auto [it, inserted] =
+            m_readWriteSet.try_emplace(hash, ReadWriteFlag{.read = !write, .write = write});
         if (!inserted)
         {
             it->second.write |= write;
@@ -43,93 +45,122 @@ private:
         putSet(write, hash);
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
-        ReadWriteSetStorage& storage, ::ranges::input_range auto keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
+public:
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.get().readSomeRaw(
+            std::move(keys), std::forward<decltype(args)>(args)...))>>
+    {
+        co_return co_await m_storage.get().readSomeRaw(
+            std::move(keys), std::forward<decltype(args)>(args)...);
+    }
+
+    auto readOneRaw(auto key, auto&&... args)
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.get().readOneRaw(
+            std::move(key), std::forward<decltype(args)>(args)...))>>
+    {
+        co_return co_await m_storage.get().readOneRaw(
+            std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
+    // Transaction-visible reads must be tracked so that hasRAWIntersection
+    // can detect a chunk reading a key written by an earlier chunk.
+    auto readSome(::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         for (auto&& key : keys)
         {
-            storage.putSet(false, key);
+            putSet(false, key);
         }
-        co_return co_await storage2::readSome(storage.m_storage.get(), std::move(keys));
+        co_return co_await storage2::readSome(m_storage.get(), std::move(keys));
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/,
-        ReadWriteSetStorage& storage, ::ranges::input_range auto keys, storage2::DIRECT_TYPE direct)
-        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome,
-            std::add_lvalue_reference_t<Storage>, decltype(std::move(keys))>>>
-    {
-        co_return co_await storage2::readSome(storage.m_storage.get(), std::move(keys), direct);
-    }
-
-    friend auto tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, ReadWriteSetStorage& storage, auto key)
+    auto readOne(auto key)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
             std::add_lvalue_reference_t<Storage>, decltype(key)>>>
     {
-        storage.putSet(false, key);
-        co_return co_await storage2::readOne(storage.m_storage.get(), std::move(key));
+        putSet(false, key);
+        co_return co_await storage2::readOne(m_storage.get(), std::move(key));
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-        ReadWriteSetStorage& storage, const auto& key, storage2::DIRECT_TYPE direct)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
+    // FIB-100: DIRECT reads are Rollbackable's pre-image snapshots — internal
+    // bookkeeping, not transaction-visible reads. Tracking them would create
+    // phantom read dependencies (a chunk that only wrote a key would look
+    // like it also read it, triggering false RAW). Rollback correctness is
+    // protected instead by WAW detection in hasRAWIntersection: two chunks
+    // writing the same key are forced to serialize, so the "read stale
+    // pre-image" window cannot open.
+    auto readSome(::ranges::input_range auto keys, storage2::DIRECT_TYPE direct)
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome, Storage&,
+            decltype(keys), storage2::DIRECT_TYPE>>>
     {
-        co_return co_await storage2::readOne(storage.m_storage.get(), key, direct);
+        co_return co_await storage2::readSome(m_storage.get(), std::move(keys), direct);
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
-        ReadWriteSetStorage& storage, auto key, auto value)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
+    auto readOne(auto key, storage2::DIRECT_TYPE direct) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key), storage2::DIRECT_TYPE>>>
     {
-        storage.putSet(true, key);
-        co_await storage2::writeOne(storage.m_storage.get(), std::move(key), std::move(value));
+        co_return co_await storage2::readOne(m_storage.get(), std::move(key), direct);
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-        ReadWriteSetStorage& storage, ::ranges::input_range auto keyValues)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
+    auto existsOne(auto key) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ExistsOne, Storage&, decltype(key)>>>
+    {
+        putSet(false, key);
+        co_return co_await storage2::existsOne(m_storage.get(), std::move(key));
+    }
+
+    auto writeOne(auto key, auto value) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
+    {
+        putSet(true, key);
+        co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
+    }
+
+    // FIB-106: forward_range is required so the two-pass pattern (track keys
+    // then forward to backend) does not silently consume a single-pass input.
+    auto writeSome(::ranges::forward_range auto keyValues) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
     {
         for (auto&& [key, _] : keyValues)
         {
-            storage.putSet(true, key);
+            putSet(true, key);
         }
-        co_return co_await storage2::writeSome(storage.m_storage.get(), std::move(keyValues));
+        co_return co_await storage2::writeSome(m_storage.get(), std::move(keyValues));
     }
 
-    friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/,
-        ReadWriteSetStorage& storage, auto key, auto&&... args)
+    task::Task<void> removeOne(auto key, auto&&... args)
     {
-        storage.putSet(true, key);
+        putSet(true, key);
         co_await storage2::removeOne(
-            storage.m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
+            m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        ReadWriteSetStorage& storage, ::ranges::input_range auto keys, auto&&... args)
+    auto removeSome(::ranges::forward_range auto keys, auto&&... args)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
             decltype(keys), decltype(args)...>>>
     {
         for (auto&& key : keys)
         {
-            storage.putSet(true, key);
+            putSet(true, key);
         }
         co_return co_await storage2::removeSome(
-            storage.m_storage.get(), std::move(keys), std::forward<decltype(args)>(args)...);
+            m_storage.get(), std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
-    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/,
-        ReadWriteSetStorage& storage, auto&&... args)
-        -> task::Task<storage2::ReturnType<
-            std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
+    // NOTE: range() does not track reads because it returns a lazy iterator whose
+    // keys are not known until consumption. This is a known limitation (FIB-100).
+    // range() on ReadWriteSetStorage is not invoked during parallel chunk
+    // execution — the only production caller is BaselineScheduler's
+    // calculateStateRoot, which runs after all chunks have merged and hashes
+    // the committed storage directly (bypassing this wrapper). EVM /
+    // precompiled / ledger / account paths do not use range either. No read
+    // tracking required.
+    auto range(auto&&... args) -> task::Task<
+        storage2::ReturnType<std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
     {
-        co_return co_await storage2::range(
-            storage.m_storage.get(), std::forward<decltype(args)>(args)...);
+        co_return co_await storage2::range(m_storage.get(), std::forward<decltype(args)>(args)...);
     }
+
 
     friend auto& readWriteSet(ReadWriteSetStorage& storage) { return storage.m_readWriteSet; }
     friend auto const& readWriteSet(ReadWriteSetStorage const& storage)
@@ -149,7 +180,14 @@ private:
         }
     }
 
-    // RAW: read after write
+    // Conflict detection between a prior-chunks aggregated write set (lhs) and
+    // the current chunk's tracked set (rhs). Returns true when the current
+    // chunk either:
+    //   * read a key that a prior chunk wrote (RAW), or
+    //   * wrote a key that a prior chunk wrote (WAW) — FIB-100: rollback
+    //     semantics make writes implicitly read-dependent on the pre-image,
+    //     so WAW must serialize to keep Rollbackable from snapshotting a
+    //     stale value.
     friend bool hasRAWIntersection(ReadWriteSetStorage const& lhs, const auto& rhs)
     {
         auto const& lhsSet = readWriteSet(lhs);
@@ -162,7 +200,7 @@ private:
 
         for (auto const& [key, flag] : rhsSet)
         {
-            if (flag.read && lhsSet.contains(key))
+            if ((flag.read || flag.write) && lhsSet.contains(key))
             {
                 return true;
             }

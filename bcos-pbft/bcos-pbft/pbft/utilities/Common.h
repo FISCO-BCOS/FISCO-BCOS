@@ -21,6 +21,8 @@
 #include <bcos-framework/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <stdint.h>
+#include <string>
+#include <string_view>
 
 #define PBFT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
 #define PBFT_STORAGE_LOG(LEVEL) \
@@ -45,4 +47,24 @@ enum PacketType : uint32_t
 };
 DERIVE_BCOS_EXCEPTION(UnknownPBFTMsgType);
 DERIVE_BCOS_EXCEPTION(InitPBFTException);
+DERIVE_BCOS_EXCEPTION(InvalidPBFTMessage);
+
+/// Maximum number of entries allowed in any PBFT repeated protobuf field
+/// (signatureList, nodeList).  Prevents memory-exhaustion attacks via
+/// crafted messages (CertiK FIB-120, FIB-123).
+inline constexpr std::size_t MAX_PBFT_REPEATED_FIELD_SIZE = 100000;
+
+/// Validate that a protobuf repeated field does not exceed the given maximum.
+/// Throws InvalidPBFTMessage (a bcos::Exception subtype) on violation.
+template <class RepeatedField>
+inline void validateRepeatedSize(
+    RepeatedField const& field, std::size_t maxSize, std::string_view fieldName)
+{
+    if (static_cast<std::size_t>(field.size()) > maxSize)
+    {
+        BOOST_THROW_EXCEPTION(InvalidPBFTMessage() << errinfo_comment(
+                                  std::string{"PBFT repeated field "} + std::string{fieldName} +
+                                  " exceeds max size: " + std::to_string(field.size())));
+    }
+}
 }  // namespace bcos::consensus

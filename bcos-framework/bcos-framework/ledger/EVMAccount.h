@@ -3,11 +3,12 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
+#include <range/v3/algorithm/copy.hpp>
 
 namespace bcos::ledger::account
 {
@@ -191,6 +192,22 @@ public:
         }
     }
 
+    // DIRECT-tagged storage read: bypasses any read-set tracking on the storage
+    // wrapper. Use for metadata-only reads (e.g. computing evmc_storage_status)
+    // that must not register as a semantic read for parallel conflict detection.
+    task::Task<evmc_bytes32> storage(const evmc_bytes32& key, storage2::DIRECT_TYPE direct)
+    {
+        auto rawValue = co_await m_storage.get().readOneRaw(
+            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, direct);
+        evmc_bytes32 value{};
+        if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
+        {
+            auto field = entry->get();
+            std::uninitialized_copy_n(field.data(), sizeof(value), value.bytes);
+        }
+        co_return value;
+    }
+
     task::Task<void> setStorage(const evmc_bytes32& key, const evmc_bytes32& value)
     {
         storage::Entry valueEntry(concepts::bytebuffer::toView(value.bytes));
@@ -231,7 +248,8 @@ public:
                 auto addressView = std::span(address.bytes);
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + addressView.size());
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_tableName.append((const char*)addressView.data(), addressView.size());
+                m_tableName.append(reinterpret_cast<const char*>(addressView.data()),  // NOLINT
+                    addressView.size());
             }
             else
             {
@@ -279,7 +297,7 @@ public:
             storage,
             [](const bcos::Address& address) {
                 evmc_address evmcAddress;
-                ::ranges::copy(address, evmcAddress.bytes);
+                ::ranges::copy(address, std::span{evmcAddress.bytes}.data());
                 return evmcAddress;
             }(address),
             binaryAddress)

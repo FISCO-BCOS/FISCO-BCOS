@@ -19,9 +19,15 @@
  * @date 2021-04-20
  */
 
-#include "BlockImpl.h"
+// On Windows tup/Tars.h must be parsed before the generated tars headers,
+// otherwise the tars namespace is broken for them (same workaround as
+// bcos-tars-protocol/Common.h).
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
+#include "BlockImpl.h"
 #include "bcos-concepts/Serialize.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -30,21 +36,34 @@
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/transform.hpp>
 
-using namespace bcostars;
-using namespace bcostars::protocol;
+bcostars::protocol::BlockImpl::BlockImpl(bcostars::Block _block) : BlockImpl()
+{
+    m_inner = std::move(_block);
+}
 
-void BlockImpl::decode(bcos::bytesConstRef _data, bool, bool)
+int32_t bcostars::protocol::BlockImpl::version() const
+{
+    return m_inner.blockHeader.data.version;
+}
+
+void bcostars::protocol::BlockImpl::setVersion(int32_t _version)
+{
+    m_inner.blockHeader.data.version = _version;
+}
+
+void bcostars::protocol::BlockImpl::decode(bcos::bytesConstRef _data, bool, bool)
 {
     bcos::concepts::serialize::decode(_data, m_inner);
 }
 
-void BlockImpl::encode(bcos::bytes& _encodeData) const
+void bcostars::protocol::BlockImpl::encode(bcos::bytes& _encodeData) const
 {
     bcos::concepts::serialize::encode(m_inner, _encodeData);
 }
 
-bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
+bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockImpl::blockHeader()
 {
     return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
         [self = shared_from_this()]() mutable {
@@ -52,7 +71,7 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
         });
 }
 
-bcos::protocol::AnyBlockHeader BlockImpl::blockHeader() const
+bcos::protocol::AnyBlockHeader bcostars::protocol::BlockImpl::blockHeader() const
 {
     bcos::protocol::AnyBlockHeader header(bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
         [self = std::const_pointer_cast<BlockImpl>(shared_from_this())]() mutable
@@ -60,7 +79,7 @@ bcos::protocol::AnyBlockHeader BlockImpl::blockHeader() const
     return header;
 }
 
-void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
+void bcostars::protocol::BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
 {
     if (_blockHeader)
     {
@@ -69,7 +88,8 @@ void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
     }
 }
 
-void BlockImpl::setReceipt(uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt)
+void bcostars::protocol::BlockImpl::setReceipt(
+    uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt)
 {
     if (_index >= m_inner.receipts.size())
     {
@@ -80,18 +100,23 @@ void BlockImpl::setReceipt(uint64_t _index, bcos::protocol::TransactionReceipt::
     m_inner.receipts[_index] = innerReceipt;
 }
 
-void BlockImpl::appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt)
+void bcostars::protocol::BlockImpl::appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt)
 {
     m_inner.receipts.emplace_back(
         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(_receipt)->inner());
 }
 
-void BlockImpl::setNonceList(::ranges::any_view<std::string> nonces)
+void bcostars::protocol::BlockImpl::clearReceipts()
+{
+    m_inner.receipts.clear();
+}
+
+void bcostars::protocol::BlockImpl::setNonceList(::ranges::any_view<std::string> nonces)
 {
     m_inner.nonceList = ::ranges::to<std::vector>(nonces);
 }
 
-::ranges::any_view<std::string> BlockImpl::nonceList() const
+::ranges::any_view<std::string> bcostars::protocol::BlockImpl::nonceList() const
 {
     return m_inner.nonceList;
 }
@@ -103,14 +128,15 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::transactionHash(uint64_t _
         bcos::bytesConstRef((const bcos::byte*)hashBytes.data(), hashBytes.size())};
 }
 
-void BlockImpl::appendTransactionMetaData(bcos::protocol::TransactionMetaData::Ptr _txMetaData)
+void bcostars::protocol::BlockImpl::appendTransactionMetaData(
+    bcos::protocol::TransactionMetaData::Ptr _txMetaData)
 {
     auto txMetaDataImpl =
         std::dynamic_pointer_cast<bcostars::protocol::TransactionMetaDataImpl>(_txMetaData);
     m_inner.transactionsMetaData.emplace_back(txMetaDataImpl->inner());
 }
 
-uint64_t BlockImpl::transactionsMetaDataSize() const
+uint64_t bcostars::protocol::BlockImpl::transactionsMetaDataSize() const
 {
     return m_inner.transactionsMetaData.size();
 }

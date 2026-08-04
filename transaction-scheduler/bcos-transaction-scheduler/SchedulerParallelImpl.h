@@ -17,7 +17,10 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <range/v3/view/chunk.hpp>
+#include <range/v3/view/drop.hpp>
 #include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/zip.hpp>
 
 namespace bcos::scheduler_v1
 {
@@ -79,6 +82,10 @@ public:
         m_executeContexts.reserve(::ranges::size(m_contexts));
         for (auto& context : m_contexts)
         {
+            if (m_hasRAW.get().test())
+            {
+                break;
+            }
             m_executeContexts.emplace_back(
                 co_await m_executor.get().createExecuteContext(m_readWriteSetStorage, blockHeader,
                     *context.transaction, context.contextID, ledgerConfig, false));

@@ -33,6 +33,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <gsl/span>
 #include <memory>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
 {
@@ -44,14 +45,14 @@ public:
     BlockImpl(BlockImpl&&) = delete;
     BlockImpl& operator=(const BlockImpl&) = delete;
     BlockImpl& operator=(BlockImpl&&) = delete;
-    explicit BlockImpl(bcostars::Block _block) : BlockImpl() { m_inner = std::move(_block); }
+    explicit BlockImpl(bcostars::Block _block);
     ~BlockImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data, bool _calculateHash, bool _checkSig) override;
     void encode(bcos::bytes& _encodeData) const override;
 
-    int32_t version() const override { return m_inner.blockHeader.data.version; }
-    void setVersion(int32_t _version) override { m_inner.blockHeader.data.version = _version; }
+    int32_t version() const override;
+    void setVersion(int32_t _version) override;
 
     bcos::protocol::BlockType blockType() const override;
     // FIXME: this will cause the same blockHeader calculate hash multiple times
@@ -70,6 +71,7 @@ public:
 
     void setReceipt(uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt) override;
     void appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt) override;
+    void clearReceipts() override;
 
     void appendTransactionMetaData(bcos::protocol::TransactionMetaData::Ptr _txMetaData) override;
 
@@ -79,8 +81,8 @@ public:
     // get receipts size
     uint64_t receiptsSize() const override;
 
-    void setNonceList(RANGES::any_view<std::string> nonces) override;
-    RANGES::any_view<std::string> nonceList() const override;
+    void setNonceList(::ranges::any_view<std::string> nonces) override;
+    ::ranges::any_view<std::string> nonceList() const override;
 
     const bcostars::Block& inner() const;
     bcostars::Block& inner();

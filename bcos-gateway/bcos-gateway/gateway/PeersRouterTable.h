@@ -82,6 +82,24 @@ private:
     // groupID => NodeID => set<P2pID>
     std::map<std::string, std::map<std::string, std::set<P2pID>, std::less<>>, std::less<>>
         m_groupNodeList;
+    // FIB-186 (vector D): reverse index p2pID => the (groupID, nodeID) entries that p2pID appears
+    // under in m_groupNodeList. removeP2PIDFromGroupNodeList used to scan the whole forward map
+    // (O(groups x nodes x p2pIDs)) under x_groupNodeList's WriteLock; under a persistent
+    // bulk-disconnect the teardown thread reacquires that WriteLock once per dropped peer and
+    // blocks queryP2pIDs -- the ReadLock on the unicast routing hot path
+    // (Gateway::asyncSendMessageByNodeID). This index lets removal touch only the entries a peer
+    // actually holds, bounding the WriteLock hold time to O(K). Maintained under x_groupNodeList
+    // together with m_groupNodeList (same lock, so the two are always consistent).
+    //
+    // Each entry stores POINTERS to the (groupID, nodeID) key strings owned by m_groupNodeList's
+    // nodes, not copies, to avoid duplicating every groupID/nodeID string.
+    // Lifetime invariant: std::map/std::set keep a node's key object at a stable address until that
+    // element is erased, and removeP2PIDFromGroupNodeList erases a (group)/(node) element only when
+    // its p2pID set empties -- i.e. when no peer (including this one) still references it -- so a
+    // pointer stored here always outlives the reverse entry holding it. This REQUIRES
+    // m_groupNodeList to remain a node-based container: do NOT switch it to a flat/vector-backed
+    // map whose keys move on insert/rehash, or these pointers dangle.
+    std::map<P2pID, std::set<std::pair<const std::string*, const std::string*>>> m_p2pID2GroupNodes;
     std::map<std::string, bcos::protocol::ProtocolInfo::ConstPtr> m_nodeProtocolInfo;
     mutable SharedMutex x_groupNodeList;
 

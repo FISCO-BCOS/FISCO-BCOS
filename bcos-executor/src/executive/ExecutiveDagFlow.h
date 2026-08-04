@@ -42,46 +42,21 @@ public:
     using Ptr = std::shared_ptr<ExecutiveDagFlow>;
 
     ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory,
-        std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
-      : ExecutiveStackFlow(executiveFactory), m_abiCache(abiCache)
-    {}
+                std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache);
     virtual ~ExecutiveDagFlow() = default;
 
     void submit(CallParameters::UniquePtr txInput) override;
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
 
 
-    void stop() override
-    {
-        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveDagFlow";
-        if (!m_isRunning)
-        {
-            EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
-            return;
-        }
+    void stop() override;
 
-        m_isRunning = false;
-        ExecutiveStackFlow::stop();
-    };
-
-    void setDagFlowIfNotExists(TxDAGFlow::Ptr dagFlow)
-    {
-        bcos::RecursiveGuard lock(x_lock);
-        if (!m_dagFlow)
-        {
-            m_dagFlow = dagFlow;
-        }
-    }
+    void setDagFlowIfNotExists(TxDAGFlow::Ptr dagFlow);
 
     static TxDAGFlow::Ptr prepareDagFlow(const BlockContext& blockContext,
         ExecutiveFactory::Ptr executiveFactory,
         std::vector<std::unique_ptr<CallParameters>>& inputs,
-        std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
-    {
-        critical::CriticalFieldsInterface::Ptr criticals =
-            generateDagCriticals(blockContext, executiveFactory, inputs, abiCache);
-        return generateDagFlow(blockContext, criticals);
-    }
+        std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache);
 
 protected:
     void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn) override;

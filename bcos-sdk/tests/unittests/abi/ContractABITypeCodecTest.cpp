@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
 
         codec.serialize(u0, 256, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000001",
-            *toHexString(buffer));
+            toHex(buffer));
 
         u256 u00 = 0;
         codec.deserialize(u00, buffer, 0);
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         // uint
         codec.serialize(u1, 256, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000f6b75ab2bc471c7",
-            *toHexString(buffer));
+            toHex(buffer));
 
         u256 u10 = 0;
         codec.deserialize(u10, buffer, 0);
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         // uint
         codec.serialize(u2, 256, buffer);
         BOOST_CHECK_EQUAL("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-            *toHexString(buffer));
+            toHex(buffer));
 
         u256 u20 = 0;
         codec.deserialize(u20, buffer, 0);
@@ -79,7 +79,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         // int
         codec.serialize(s0, 256, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000001",
-            *toHexString(buffer));
+            toHex(buffer));
 
         s256 s00 = 0;
         codec.deserialize(s00, buffer, 0);
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         // int
         codec.serialize(s1, 256, buffer);
         BOOST_CHECK_EQUAL("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-            *toHexString(buffer));
+            toHex(buffer));
 
         s256 s10 = 0;
         codec.deserialize(s10, buffer, 0);
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         // int
         codec.serialize(s2, 2565, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000007fffffffffffffff",
-            *toHexString(buffer));
+            toHex(buffer));
 
         s256 s20 = 0;
         codec.deserialize(s20, buffer, 0);
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         // int
         codec.serialize(s3, 256, buffer);
         BOOST_CHECK_EQUAL("fffffffffffffffffffffffffffffffffffffffffffffffff0948a54d43b8e39",
-            *toHexString(buffer));
+            toHex(buffer));
 
         s256 s30 = 0;
         codec.deserialize(s30, buffer, 0);
@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         bcos::bytes buffer;
         codec.serialize(b0, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000001",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bool b00;
         codec.deserialize(b00, buffer, 0);
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         bool b1(false);
         codec.serialize(b1, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bool b10;
         codec.deserialize(b10, buffer, 0);
@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         bcos::bytes buffer;
         codec.serialize(addr0, buffer);
         BOOST_CHECK_EQUAL("000000000000000000000000be5422d15f39373eb0a97ff8c10fbd0e40e29338",
-            *toHexString(buffer));
+            toHex(buffer));
 
         Address addr00;
         codec.deserialize(addr00, buffer, 0);
@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         Address addr1("0x0");
         codec.serialize(addr1, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         Address addr10;
         codec.deserialize(addr10, buffer, 0);
@@ -171,22 +171,22 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         codec.serialize(bs0, true, buffer);
 
         BOOST_CHECK_EQUAL("0001020304050000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bcos::bytes bs00;
         codec.deserialize(bs00, buffer, 0, 6);
-        BOOST_CHECK_EQUAL(*toHexString(bs0), *toHexString(bs00));
+        BOOST_CHECK_EQUAL(toHex(bs0), toHex(bs00));
 
         buffer.clear();
 
         bcos::bytes bs1{0};
         codec.serialize(bs1, true, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bcos::bytes bs10;
         codec.deserialize(bs10, buffer, 0, 1);
-        BOOST_CHECK_EQUAL(*toHexString(bs1), *toHexString(bs10));
+        BOOST_CHECK_EQUAL(toHex(bs1), toHex(bs10));
 
         buffer.clear();
 
@@ -195,11 +195,11 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         bcos::bytes bs2(s.begin(), s.end());
         codec.serialize(bs2, true, buffer);
         BOOST_CHECK_EQUAL("6461766500000000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bcos::bytes bs20;
         codec.deserialize(bs20, buffer, 0, 4);
-        BOOST_CHECK_EQUAL(*toHexString(bs2), *toHexString(bs20));
+        BOOST_CHECK_EQUAL(toHex(bs2), toHex(bs20));
 
         std::string s1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         bcos::bytes bs3(s1.begin(), s1.end());
@@ -208,17 +208,17 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
 
     {
         // bytes
-        bcos::bytes bs0(*fromHexString("692a70d2e424a56d2c6c27aa97d1a86395877b3a"));
+        bcos::bytes bs0(fromHex("692a70d2e424a56d2c6c27aa97d1a86395877b3a"));
         bcos::bytes buffer;
         codec.serialize(bs0, buffer);
         BOOST_CHECK_EQUAL(
             "0000000000000000000000000000000000000000000000000000000000000014692a70d2e424a56d2c6c27"
             "aa97d1a86395877b3a000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bcos::bytes bs00;
         codec.deserialize(bs00, buffer, 0);
-        BOOST_CHECK_EQUAL(*toHexString(bs0), *toHexString(bs00));
+        BOOST_CHECK_EQUAL(toHex(bs0), toHex(bs00));
 
         buffer.clear();
 
@@ -248,11 +248,11 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
             "63617420637570696461746174206e6f6e2070726f6964656e742c2073756e7420696e2063756c70612071"
             "7569206f666669636961206465736572756e74206d6f6c6c697420616e696d20696420657374206c61626f"
             "72756d2e000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bcos::bytes bs10;
         codec.deserialize(bs10, buffer, 0);
-        BOOST_CHECK_EQUAL(*toHexString(bs1), *toHexString(bs10));
+        BOOST_CHECK_EQUAL(toHex(bs1), toHex(bs10));
 
         buffer.clear();
 
@@ -261,11 +261,11 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         BOOST_CHECK_EQUAL(
             "0000000000000000000000000000000000000000000000000000000000000006"
             "0001020304050000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         bcos::bytes bs20;
         codec.deserialize(bs20, buffer, 0);
-        BOOST_CHECK_EQUAL(*toHexString(bs2), *toHexString(bs20));
+        BOOST_CHECK_EQUAL(toHex(bs2), toHex(bs20));
     }
 
     {
@@ -276,7 +276,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         BOOST_CHECK_EQUAL(
             "00000000000000000000000000000000000000000000000000000000000000046461766500000000000000"
             "000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         std::string s00;
         codec.deserialize(s00, buffer, 0);
@@ -287,7 +287,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
         std::string s1;
         codec.serialize(s1, buffer);
         BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         std::string s10;
         codec.deserialize(s10, buffer, 0);
@@ -319,7 +319,7 @@ BOOST_AUTO_TEST_CASE(test_solBaseTypeABIType)
             "63617420637570696461746174206e6f6e2070726f6964656e742c2073756e7420696e2063756c70612071"
             "7569206f666669636961206465736572756e74206d6f6c6c697420616e696d20696420657374206c61626f"
             "72756d2e000000",
-            *toHexString(buffer));
+            toHex(buffer));
 
         std::string s20;
         codec.deserialize(s20, buffer, 0);
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
                 "0000000000000000000000000000000000000000000000000000000000000020"
                 "000000000000000000000000000000000000000000000000000000000000000a"
                 "4772656574696e67732100000000000000000000000000000000000000000000",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = sPtr->clone();
             sPtr0->clear();
@@ -373,7 +373,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
             BOOST_CHECK_EQUAL(
                 "0000000000000000000000000000000000000000000000000000000000000045"
                 "0000000000000000000000000000000000000000000000000000000000000001",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = sPtr->clone();
             sPtr0->clear();
@@ -407,7 +407,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
             BOOST_CHECK_EQUAL(
                 "6162630000000000000000000000000000000000000000000000000000000000"
                 "6465660000000000000000000000000000000000000000000000000000000000",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = sPtr->clone();
             sPtr0->clear();
@@ -456,7 +456,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
                 "0000000000000000000000000000000000000000000000000000000000000001"
                 "0000000000000000000000000000000000000000000000000000000000000002"
                 "0000000000000000000000000000000000000000000000000000000000000003",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = sPtr->clone();
             sPtr0->clear();
@@ -473,7 +473,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
             codec.serialize(*dyList, buffer);
 
             BOOST_CHECK_EQUAL("0000000000000000000000000000000000000000000000000000000000000000",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = dyList->clone();
             sPtr0->clear();
@@ -527,7 +527,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
                 "0000000000000000000000000000000000078900000000000000000000000000000000000000000000"
                 "0000000000000000000d48656c6c6f2c20776f726c6421000000000000000000000000000000000000"
                 "00",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = sPtr->clone();
             sPtr0->clear();
@@ -596,7 +596,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
                 "74776f0000000000000000000000000000000000000000000000000000000000"
                 "0000000000000000000000000000000000000000000000000000000000000005"
                 "7468726565000000000000000000000000000000000000000000000000000000",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = sPtr->clone();
             sPtr0->clear();
@@ -716,7 +716,7 @@ BOOST_AUTO_TEST_CASE(test_abstractType)
                 "0000000000000000000000000000000000000000000000000000000000000007"
                 "000000000000000000000000000000000000000000000000000000000000000c"
                 "48656c6c6f20776f726c64210000000000000000000000000000000000000000",
-                *toHexString(buffer));
+                toHex(buffer));
 
             auto sPtr0 = sPtr->clone();
             sPtr0->clear();

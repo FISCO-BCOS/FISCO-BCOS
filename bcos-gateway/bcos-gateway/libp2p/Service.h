@@ -27,7 +27,7 @@ class Service : public P2PInterface, public std::enable_shared_from_this<Service
 {
 public:
     Service(P2PInfo const& _p2pInfo);
-    ~Service() override { stop(); }
+    ~Service() override;
 
     using Ptr = std::shared_ptr<Service>;
 

@@ -19,7 +19,6 @@ using namespace bcos::storage2::memory_storage;
 using namespace bcos::executor_v1;
 
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
-static_assert(HasReadOneDirect<MutableStorage>);
 
 struct Fixture
 {

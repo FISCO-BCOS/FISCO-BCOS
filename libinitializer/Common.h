@@ -82,12 +82,12 @@ inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
     std::string keyHex(privateKeyData.get());
     if (keyHex.size() >= _hexedPrivateKeySize)
     {
-        return fromHexString(keyHex);
+        return std::make_shared<bytes>(fromHex(keyHex));
     }
     for (size_t i = keyHex.size(); i < _hexedPrivateKeySize; i++)
     {
         keyHex = '0' + keyHex;
     }
-    return fromHexString(keyHex);
+    return std::make_shared<bytes>(fromHex(keyHex));
 }
 }  // namespace bcos::initializer

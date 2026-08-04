@@ -28,8 +28,6 @@
 #include <atomic>
 #include <stack>
 
-
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -37,6 +35,8 @@ namespace bcos
 {
 namespace test
 {
+using namespace std;
+
 struct ExecutiveStackFlowFixture
 {
     ExecutiveStackFlowFixture()

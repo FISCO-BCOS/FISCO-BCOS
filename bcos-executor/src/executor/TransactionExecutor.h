@@ -169,12 +169,12 @@ public:
 
     void updateEoaNonce(std::unordered_map<std::string, u256> const& nonceMap) override;
 
-    void start() override { m_isRunning = true; }
+    void start() override;
     void stop() override;
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
         std::string_view key, bcos::protocol::BlockNumber number) override;
 
-    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
+    void registerNeedSwitchEvent(std::function<void()> event);
 
     // only for test, do not use in formal environment
     void setKeyPageIgnoreTable(auto ignoreTable) { m_keyPageIgnoreTables = std::move(ignoreTable); }

@@ -30,53 +30,35 @@ class RouterTableEntry : public RouterTableEntryInterface
 {
 public:
     using Ptr = std::shared_ptr<RouterTableEntry>;
-    RouterTableEntry()
-      : m_inner([m_entry = bcostars::RouterTableEntry()]() mutable { return &m_entry; })
-    {}
-    RouterTableEntry(std::function<bcostars::RouterTableEntry*()> _inner)
-      : m_inner(std::move(_inner))
-    {}
+        RouterTableEntry();
+        RouterTableEntry(std::function<bcostars::RouterTableEntry*()> _inner);
     RouterTableEntry(RouterTableEntry&&) = delete;
     RouterTableEntry(const RouterTableEntry&) = delete;
     RouterTableEntry& operator=(const RouterTableEntry&) = delete;
     RouterTableEntry& operator=(RouterTableEntry&&) = delete;
     ~RouterTableEntry() override = default;
 
-    void setDstNode(std::string const& _dstNode) override { m_inner()->dstNode = _dstNode; }
-    void setNextHop(std::string const& _nextHop) override { m_inner()->nextHop = _nextHop; }
-    void clearNextHop() override { m_inner()->nextHop = std::string(); }
-    void setDistance(int32_t _distance) override { m_inner()->distance = _distance; }
-    void incDistance(int32_t _deltaDistance) override { m_inner()->distance += _deltaDistance; }
+    void setDstNode(std::string const& _dstNode) override;
+    void setNextHop(std::string const& _nextHop) override;
+    void clearNextHop() override;
+    void setDistance(int32_t _distance) override;
+    void incDistance(int32_t _deltaDistance) override;
 
     // Note: for compatibility, use long p2p-id
-    std::string const& dstNode() const override { return m_inner()->dstNode; }
+    std::string const& dstNode() const override;
     // Note: for compatibility, use long p2p-id
-    std::string const& nextHop() const override { return m_inner()->nextHop; }
-    int32_t distance() const override { return m_inner()->distance; }
+    std::string const& nextHop() const override;
+    int32_t distance() const override;
 
-    bcostars::RouterTableEntry const& inner() const { return *(m_inner()); }
+    bcostars::RouterTableEntry const& inner() const;
 
     // set the dstNodeInfo
-    void setDstNodeInfo(P2PInfo const& _dstNodeInfo) override
-    {
-        assignNodeIDInfo(m_inner()->dstNodeInfo, _dstNodeInfo);
-    }
+    void setDstNodeInfo(P2PInfo const& _dstNodeInfo) override;
 
-    void resetDstNodeInfo(P2PInfo const& _dstNodeInfo) override
-    {
-        if (!m_inner()->dstNodeInfo.p2pID.empty())
-        {
-            return;
-        }
-        if (_dstNodeInfo.p2pID.empty())
-        {
-            return;
-        }
-        setDstNodeInfo(_dstNodeInfo);
-    }
+    void resetDstNodeInfo(P2PInfo const& _dstNodeInfo) override;
 
     // the short p2p id
-    P2PInfo dstNodeInfo() const override { return {m_inner()->dstNodeInfo.p2pID, dstNode()}; }
+    P2PInfo dstNodeInfo() const override;
 
 private:
     static void assignNodeIDInfo(bcostars::NodeIDInfo& nodeIDInfo, P2PInfo const& routerNodeID)
@@ -91,8 +73,8 @@ class RouterTable : public RouterTableInterface
 {
 public:
     using Ptr = std::shared_ptr<RouterTable>;
-    RouterTable() : m_inner([m_table = bcostars::RouterTable()]() mutable { return &m_table; }) {}
-    RouterTable(bytesConstRef _decodedData) : RouterTable() { decode(_decodedData); }
+    RouterTable();
+    RouterTable(bytesConstRef _decodedData);
     RouterTable(RouterTable&&) = delete;
     RouterTable(const RouterTable&) = delete;
     RouterTable& operator=(const RouterTable&) = delete;
@@ -102,23 +84,17 @@ public:
     void encode(bcos::bytes& _encodedData) override;
     void decode(bcos::bytesConstRef _decodedData) override;
 
-    std::map<std::string, RouterTableEntryInterface::Ptr> const& routerEntries() override
-    {
-        return m_routerEntries;
-    }
+    std::map<std::string, RouterTableEntryInterface::Ptr> const& routerEntries() override;
     // append the unreachableNodes into param _unreachableNodes
     bool update(std::set<std::string>& _unreachableNodes, std::string const& _generatedFrom,
         RouterTableEntryInterface::Ptr _entry) override;
     // append the unreachableNodes into param _unreachableNodes
     bool erase(std::set<std::string>& _unreachableNodes, std::string const& _p2pNodeID) override;
 
-    void setNodeID(std::string const& _nodeID) override { m_nodeID = _nodeID; }
-    std::string const& nodeID() const override { return m_nodeID; }
+    void setNodeID(std::string const& _nodeID) override;
+    std::string const& nodeID() const override;
 
-    void setUnreachableDistance(int _unreachableDistance) override
-    {
-        m_unreachableDistance = _unreachableDistance;
-    }
+    void setUnreachableDistance(int _unreachableDistance) override;
 
     std::string getNextHop(std::string const& _nodeID) override;
     std::set<std::string> getAllReachableNode() override;
@@ -141,19 +117,10 @@ class RouterTableFactoryImpl : public RouterTableFactory
 {
 public:
     using Ptr = std::shared_ptr<RouterTableFactoryImpl>;
-    RouterTableInterface::Ptr createRouterTable() override
-    {
-        return std::make_shared<RouterTable>();
-    }
-    RouterTableInterface::Ptr createRouterTable(bcos::bytesConstRef _decodedData) override
-    {
-        return std::make_shared<RouterTable>(_decodedData);
-    }
+    RouterTableInterface::Ptr createRouterTable() override;
+    RouterTableInterface::Ptr createRouterTable(bcos::bytesConstRef _decodedData) override;
 
-    RouterTableEntryInterface::Ptr createRouterEntry() override
-    {
-        return std::make_shared<RouterTableEntry>();
-    }
+    RouterTableEntryInterface::Ptr createRouterEntry() override;
 };
 
 }  // namespace bcos::gateway

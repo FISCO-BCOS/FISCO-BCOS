@@ -35,6 +35,41 @@ using namespace bcos::gateway::ratelimiter;
 const std::string RateLimiterStat::TOTAL_INCOMING = "total  ";
 const std::string RateLimiterStat::TOTAL_OUTGOING = "total  ";
 
+const auto& RateLimiterStat::inStat() const
+{
+    return m_inStat;
+}
+
+const auto& RateLimiterStat::outStat() const
+{
+    return m_outStat;
+}
+
+int32_t RateLimiterStat::statInterval() const
+{
+    return m_statInterval;
+}
+
+void RateLimiterStat::setStatInterval(int32_t _statInterval)
+{
+    m_statInterval = _statInterval;
+}
+
+bool RateLimiterStat::enableConnectDebugInfo() const
+{
+    return m_enableConnectDebugInfo;
+}
+
+void RateLimiterStat::setEnableConnectDebugInfo(bool _enableConnectDebugInfo)
+{
+    m_enableConnectDebugInfo = _enableConnectDebugInfo;
+}
+
+bool RateLimiterStat::working() const
+{
+    return m_running;
+}
+
 std::optional<std::string> Stat::toString(const std::string& _prefix, uint32_t _periodMS) const
 {
     // Notice: no data interaction, ignore, no display

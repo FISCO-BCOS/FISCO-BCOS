@@ -22,12 +22,12 @@ public:
     using ContractView = std::string_view;
     using KeyView = std::string_view;
 
-    GraphKeyLocks() = default;
+    GraphKeyLocks();
     GraphKeyLocks(const GraphKeyLocks&) = delete;
     GraphKeyLocks(GraphKeyLocks&&) = delete;
     GraphKeyLocks& operator=(const GraphKeyLocks&) = delete;
     GraphKeyLocks& operator=(GraphKeyLocks&&) = delete;
-    virtual ~GraphKeyLocks() = default;
+    virtual ~GraphKeyLocks();
 
     bool batchAcquireKeyLock(std::string_view contract, gsl::span<std::string const> keyLocks,
         ContextID contextID, Seq seq);
@@ -46,17 +46,7 @@ public:
     {
         using std::variant<ContextID, KeyLock>::variant;
 
-        bool operator==(const KeyLockView& rhs) const
-        {
-            if (index() != 1)
-            {
-                return false;
-            }
-
-            auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(*this))),
-                std::string_view(std::get<1>(std::get<1>(*this))));
-            return view == rhs;
-        }
+        bool operator==(const KeyLockView& rhs) const;
     };
 
 private:
@@ -92,29 +82,9 @@ private:
 
 namespace std
 {
-inline bool operator<(const bcos::scheduler::GraphKeyLocks::Vertex& lhs,
-    const bcos::scheduler::GraphKeyLocks::KeyLockView& rhs)
-{
-    if (lhs.index() != 1)
-    {
-        return true;
-    }
+bool operator<(const bcos::scheduler::GraphKeyLocks::Vertex& lhs,
+    const bcos::scheduler::GraphKeyLocks::KeyLockView& rhs);
 
-    auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(lhs))),
-        std::string_view(std::get<1>(std::get<1>(lhs))));
-    return view < rhs;
-}
-
-inline bool operator<(const bcos::scheduler::GraphKeyLocks::KeyLockView& lhs,
-    const bcos::scheduler::GraphKeyLocks::Vertex& rhs)
-{
-    if (rhs.index() != 1)
-    {
-        return false;
-    }
-
-    auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(rhs))),
-        std::string_view(std::get<1>(std::get<1>(rhs))));
-    return lhs < view;
-}
+bool operator<(const bcos::scheduler::GraphKeyLocks::KeyLockView& lhs,
+    const bcos::scheduler::GraphKeyLocks::Vertex& rhs);
 }  // namespace std

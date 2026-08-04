@@ -43,6 +43,14 @@ public:
     void setShouldRotateSealers(bool _shouldRotateSealers);
     bool shouldRotateSealers(protocol::BlockNumber) const;
 
+    // FIB-146 follow-up: register a handler to be fired when the working
+    // sealer node list actually changes (i.e. when updateWorkingSealerNodeList
+    // detects a delta). Used by PBFTInitializer to reset PBFTPipeline state.
+    void registerOnSealerListChanged(std::function<void()> handler)
+    {
+        m_onSealerListChanged = std::move(handler);
+    }
+
 private:
     // the node index in working consensus node list
     std::atomic<IndexType> m_nodeIndexInWorkingSealer{0};
@@ -65,6 +73,10 @@ private:
     bcos::protocol::BlockNumber m_epochSealerNumEnableNumber{0};
 
     std::atomic_uint64_t m_notifyRotateFlag{0};
+
+    // FIB-146 follow-up: fired from updateWorkingSealerNodeList when the
+    // sealer list actually changes.
+    std::function<void()> m_onSealerListChanged;
 };
 
 }  // namespace bcos::consensus

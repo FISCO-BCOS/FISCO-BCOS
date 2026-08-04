@@ -39,8 +39,8 @@ std::string toJonString(boost::multiprecision::number<boost::multiprecision::cpp
         boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>> const&
         _arithNumber)
 {
-    auto hexString = toHexString(toCompactBigEndian(_arithNumber, 1));
-    return "0x" + ((*hexString)[0] == '0' ? (hexString->substr(1)) : *hexString);
+    auto hexString = toHex(toCompactBigEndian(_arithNumber, 1));
+    return "0x" + (hexString[0] == '0' ? (hexString.substr(1)) : hexString);
 }
 
 template <unsigned T>
@@ -61,7 +61,7 @@ std::string toJonString(T const& _i)
 
 bytes jonStringToBytes(std::string const& _stringData)
 {
-    return *fromHexString(_stringData);
+    return fromHex(_stringData);
 }
 
 template <unsigned N>
@@ -88,7 +88,7 @@ jsonStringToInt(std::string const& _s)
     {
         return fromBigEndian<boost::multiprecision::number<boost::multiprecision::cpp_int_backend<
             N * 8, N * 8, boost::multiprecision::unsigned_magnitude,
-            boost::multiprecision::unchecked, void>>>(*fromHexString(_s.substr(2)));
+            boost::multiprecision::unchecked, void>>>(fromHex(_s.substr(2)));
     }
     // Decimal
     else if (_s.find_first_not_of("0123456789") == std::string::npos)

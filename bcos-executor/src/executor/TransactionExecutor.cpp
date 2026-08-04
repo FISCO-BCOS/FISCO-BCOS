@@ -54,6 +54,7 @@
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/ledger/FeaturesStorage.h"
 
 #include <array>
 #include <cstring>
@@ -150,7 +151,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 #endif
 
-    m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
+    m_threadPool =
+        std::make_shared<bcos::ThreadPool>(name, std::max(1u, std::thread::hardware_concurrency()));
     setBlockVersion(m_ledgerCache->ledgerConfig().compatibilityVersion());
     if (m_ledgerCache->ledgerConfig().compatibilityVersion() >= BlockVersion::V3_3_VERSION)
     {
@@ -180,6 +182,16 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
 
     assert(m_precompiled != nullptr && m_precompiled->size() > 0);
     start();
+}
+
+void TransactionExecutor::start()
+{
+    m_isRunning = true;
+}
+
+void TransactionExecutor::registerNeedSwitchEvent(std::function<void()> event)
+{
+    f_onNeedSwitchEvent = std::move(event);
 }
 
 void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
@@ -1685,8 +1697,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
                                     << LOG_DESC("ABI loaded") << LOG_KV("address", to)
-                                    << LOG_KV("selector", toHexString(selector))
-                                    << LOG_KV("ABI", abiStr);
+                                    << LOG_KV("selector", toHex(selector)) << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);
                                 if (!functionAbi)

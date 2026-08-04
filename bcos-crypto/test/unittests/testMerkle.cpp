@@ -150,14 +150,14 @@ std::shared_ptr<std::string> calculateRootByMerkleProof(
         auto& right = oneLevel.second;
         // left
         std::for_each(left.begin(), left.end(),
-            [&hasher](const std::string& _hash) { hasher.update(*fromHexString(_hash)); });
+            [&hasher](const std::string& _hash) { hasher.update(fromHex(_hash)); });
         hasher.update(txHash);
         // right
         std::for_each(right.begin(), right.end(),
-            [&hasher](const std::string& _hash) { hasher.update(*fromHexString(_hash)); });
+            [&hasher](const std::string& _hash) { hasher.update(fromHex(_hash)); });
         hasher.final(txHash);
     }
-    return toHexString(txHash);
+    return std::make_shared<std::string>(toHex(txHash));
 }
 
 BOOST_AUTO_TEST_CASE(performance) {}

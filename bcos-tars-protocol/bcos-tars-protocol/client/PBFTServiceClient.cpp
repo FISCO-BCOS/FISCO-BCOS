@@ -255,6 +255,12 @@ void PBFTServiceClient::asyncGetConsensusStatus(
 }
 bcostars::PBFTServiceClient::PBFTServiceClient(bcostars::PBFTServicePrx _proxy) : m_proxy(_proxy) {}
 bcostars::PBFTServiceClient::~PBFTServiceClient() {}
+void bcostars::PBFTServiceClient::start() {}
+void bcostars::PBFTServiceClient::stop() {}
+bcostars::BlockSyncServiceClient::BlockSyncServiceClient(bcostars::PBFTServicePrx _proxy)
+    : PBFTServiceClient(_proxy)
+{}
+bcostars::BlockSyncServiceClient::~BlockSyncServiceClient() = default;
 void bcostars::PBFTServiceClient::notifyHighestSyncingNumber(bcos::protocol::BlockNumber _number)
 {
     throw std::runtime_error(

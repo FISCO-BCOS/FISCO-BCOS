@@ -231,10 +231,7 @@ public:
      * @param sv string_view item
      * @return reference to stream
      */
-    ScaleEncoderStream& operator<<(std::string_view sv)
-    {
-        return encodeCollection(sv.size(), sv.begin(), sv.end());
-    }
+    ScaleEncoderStream& operator<<(std::string_view sv);
 
     /**
      * @brief scale-encodes any integral type including bool
@@ -284,11 +281,7 @@ public:
      */
     ScaleEncoderStream& operator<<(const CompactInteger& v);
 
-    ScaleEncoderStream& operator<<(s256 const& v)
-    {
-        u256 unsignedValue = s2u(v);
-        return *this << unsignedValue;
-    }
+    ScaleEncoderStream& operator<<(s256 const& v);
 
     ScaleEncoderStream& operator<<(const u256& v);
 
@@ -342,11 +335,7 @@ protected:
      * @param v byte value
      * @return reference to stream
      */
-    ScaleEncoderStream& putByte(uint8_t v)
-    {
-        m_stream.emplace_back(v);
-        return *this;
-    }
+    ScaleEncoderStream& putByte(uint8_t v);
 
 private:
     ScaleEncoderStream& encodeOptionalBool(const boost::optional<bool>& v);

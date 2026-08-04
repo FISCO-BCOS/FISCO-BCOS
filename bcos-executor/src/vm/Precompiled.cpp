@@ -35,6 +35,69 @@ namespace bcos::executor
 {
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
 
+PrecompiledRegistrar* PrecompiledRegistrar::get()
+{
+    if (s_this == nullptr)
+    {
+        s_this = new PrecompiledRegistrar;
+    }
+    return s_this;
+}
+
+PrecompiledExecutor PrecompiledRegistrar::registerExecutor(
+    std::string const& _name, PrecompiledExecutor const& _exec)
+{
+    return (get()->m_execs[_name] = _exec);
+}
+
+void PrecompiledRegistrar::unregisterExecutor(std::string const& _name)
+{
+    get()->m_execs.erase(_name);
+}
+
+PrecompiledPricer PrecompiledRegistrar::registerPricer(
+    std::string const& _name, PrecompiledPricer const& _exec)
+{
+    return (get()->m_pricers[_name] = _exec);
+}
+
+void PrecompiledRegistrar::unregisterPricer(std::string const& _name)
+{
+    get()->m_pricers.erase(_name);
+}
+
+PrecompiledContract::PrecompiledContract(PrecompiledPricer const& _cost,
+    PrecompiledExecutor const& _exec, u256 const& _startingBlock)
+  : m_cost(_cost), m_execute(_exec), m_startingBlock(_startingBlock)
+{}
+
+PrecompiledContract::PrecompiledContract(
+    unsigned _base, unsigned _word, PrecompiledExecutor const& _exec, u256 const& _startingBlock)
+  : PrecompiledContract(
+        [=](bytesConstRef _in) -> bigint {
+            bigint size = _in.size();
+            bigint base = _base;
+            bigint word = _word;
+            return base + (size + 31) / 32 * word;
+        },
+        _exec, _startingBlock)
+{}
+
+bigint PrecompiledContract::cost(bytesConstRef _in) const
+{
+    return m_cost(_in);
+}
+
+std::pair<bool, bytes> PrecompiledContract::execute(bytesConstRef _in) const
+{
+    return m_execute(_in);
+}
+
+u256 const& PrecompiledContract::startingBlock() const
+{
+    return m_startingBlock;
+}
+
 bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(std::string_view _key,
     uint32_t version, bool isAuth, ledger::Features const& features) const noexcept
 {
@@ -61,19 +124,48 @@ bool bcos::executor::PrecompiledMap::contains(std::string const& key, uint32_t v
 
 PrecompiledExecutor const& PrecompiledRegistrar::executor(std::string const& _name)
 {
-    if (!get()->m_execs.count(_name))
+    auto const it = get()->m_execs.find(_name);
+    if (it == get()->m_execs.end())
+    {
         BOOST_THROW_EXCEPTION(ExecutorNotFound());
-    return get()->m_execs[_name];
+    }
+    return it->second;
 }
 
 PrecompiledPricer const& PrecompiledRegistrar::pricer(std::string const& _name)
 {
-    if (!get()->m_pricers.count(_name))
+    const auto it = get()->m_pricers.find(_name);
+    if (it == get()->m_pricers.end())
+    {
         BOOST_THROW_EXCEPTION(PricerNotFound());
-    return get()->m_pricers[_name];
+    }
+    return it->second;
 }
 
 }  // namespace bcos::executor
+
+namespace bcos::precompiled
+{
+
+Precompiled::Precompiled(crypto::Hash::Ptr _hashImpl)
+  : m_hashImpl(std::move(_hashImpl))
+{
+    assert(m_hashImpl);
+    m_precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();
+    assert(m_precompiledGasFactory);
+}
+
+bool Precompiled::isParallelPrecompiled()
+{
+    return false;
+}
+
+std::vector<std::string> Precompiled::getParallelTag(bytesConstRef, bool)
+{
+    return {};
+}
+
+}  // namespace bcos::precompiled
 
 namespace
 {
@@ -323,7 +415,7 @@ ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
     // U256(BLS_MODULUS).to_be_bytes32()) refer to
     // https://github.com/erigontech/silkworm/blob/85ba5171e88855a6702602d38f102aae9b896f9c/silkworm/core/execution/precompile.cpp#L502-L524
     return {true,
-        *bcos::fromHexString("000000000000000000000000000000000000000000000000000000000000100073eda"
+        bcos::fromHex("000000000000000000000000000000000000000000000000000000000000100073eda"
                              "753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")};
 }
 
@@ -546,7 +638,7 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("wedpr_secp256k1_recover_public_key")
                     << LOG_KV("hash", toHexStringWithPrefix(mHash))
-                    << LOG_KV("rsv", *toHexString(rawRSV, rawRSV + RSV_LENGTH));
+                    << LOG_KV("rsv", toHex(bytesConstRef(rawRSV, RSV_LENGTH)));
     if (pk == nullptr)
     {
         BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover publicKey failed");

@@ -26,6 +26,22 @@
 using namespace bcos;
 using namespace bcos::crypto;
 
+Ed25519KeyPair::Ed25519KeyPair()
+  : KeyPair(ED25519_PUBLIC_LEN, ED25519_PRIVATE_LEN, KeyPairType::Ed25519)
+{}
+
+Ed25519KeyPair::Ed25519KeyPair(SecretPtr _secretKey) : Ed25519KeyPair()
+{
+    m_secretKey = _secretKey;
+    m_publicKey = priToPub(_secretKey);
+    m_type = KeyPairType::Ed25519;
+}
+
+PublicPtr Ed25519KeyPair::priToPub(SecretPtr _secretKey)
+{
+    return ed25519PriToPub(_secretKey);
+}
+
 PublicPtr bcos::crypto::ed25519PriToPub(SecretPtr _secretKey)
 {
     CInputBuffer privateKey{_secretKey->constData(), _secretKey->size()};

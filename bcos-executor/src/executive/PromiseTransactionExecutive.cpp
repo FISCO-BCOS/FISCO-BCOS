@@ -2,6 +2,58 @@
 #include "bcos-framework/executor/ExecuteError.h"
 
 using namespace bcos::executor;
+
+MessagePromiseSwapper::MessagePromiseSwapper(ThreadPool::Ptr pool) : m_pool(std::move(pool)) {}
+
+void MessagePromiseSwapper::spawnAndCall(
+    std::function<CallParameters::UniquePtr()> spawnCall,
+    std::function<void(CallParameters::UniquePtr)> waitAndDo)
+{
+    assert(m_pool);
+
+    auto lastPromise = m_currentPromise;
+
+    m_currentPromise = std::make_shared<std::promise<CallParameters::UniquePtr>>();
+    m_pool->enqueue([this, lastPromise, spawnCall = std::move(spawnCall)]() {
+        auto message = spawnCall();
+
+        auto promise = lastPromise ? lastPromise : m_currentPromise;
+        promise->set_value(std::move(message));
+    });
+
+    auto message = m_currentPromise->get_future().get();
+    waitAndDo(std::move(message));
+}
+
+PromiseTransactionExecutive::PromiseTransactionExecutive(ThreadPool::Ptr pool,
+    const BlockContext& blockContext, std::string contractAddress, int64_t contextID,
+    int64_t seq, const wasm::GasInjector& gasInjector)
+  : CoroutineTransactionExecutive(
+        blockContext, std::move(contractAddress), contextID, seq, gasInjector),
+    m_messageSwapper(std::make_shared<MessagePromiseSwapper>(std::move(pool)))
+{}
+
+CallParameters::UniquePtr PromiseTransactionExecutive::resume()
+{
+    CallParameters::UniquePtr exchangeMessage;
+    m_messageSwapper->spawnAndCall([this]() { return std::move(m_exchangeMessage); },
+        [&exchangeMessage](CallParameters::UniquePtr message) {
+            exchangeMessage = std::move(message);
+        });
+
+    return exchangeMessage;
+}
+
+MessagePromiseSwapper::Ptr PromiseTransactionExecutive::getPromiseMessageSwapper()
+{
+    return m_messageSwapper;
+}
+
+void PromiseTransactionExecutive::setPromiseMessageSwapper(MessagePromiseSwapper::Ptr swapper)
+{
+    m_messageSwapper = std::move(swapper);
+}
+
 CallParameters::UniquePtr PromiseTransactionExecutive::start(CallParameters::UniquePtr input)
 {
     auto spawnCall = [this, &input]() {

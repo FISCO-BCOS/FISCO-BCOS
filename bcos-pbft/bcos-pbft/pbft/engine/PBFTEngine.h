@@ -22,9 +22,12 @@
 #include "PBFTLogSync.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
+#include "bcos-pbft/pbft/utilities/PBFTPipeline.h"
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace bcos
@@ -66,6 +69,11 @@ public:
 
     std::shared_ptr<PBFTConfig> pbftConfig() { return m_config; }
 
+    // FIB-146 follow-up: exposed so the initializer can wire reset() to
+    // sealer-set rotation. Not for use on the hot path — admit() / consumed()
+    // are called via the engine itself.
+    PBFTPipeline& pipeline() { return m_pipeline; }
+
     // Receive PBFT message package from frontService
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, std::string const& _id,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data);
@@ -92,6 +100,10 @@ public:
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
     void clearAllCache();
+    // FIB-137: drain m_msgQueue. Called by PBFTImpl::enableAsMasterNode on demotion
+    // (discard stale messages routed under a previous master role) and on promotion
+    // before resuming processing (discard messages enqueued during demotion).
+    void clearMsgQueue();
     void recoverState();
 
     void fetchAndUpdateLedgerConfig();
@@ -101,6 +113,11 @@ public:
 protected:
     virtual void initSendResponseHandler();
     virtual void tryToResendCheckPoint();
+    // FIB-185: watchdog that recovers a stalled consensus timer. If the node is a running
+    // consensus node sitting in the timeout state but the view-change timer is not armed,
+    // re-arm it. Only re-arms the timer (the actual view-change fires later from onTimeout),
+    // so it cannot itself emit a view-change. Invoked from the periodic checkpoint timer path.
+    virtual void checkConsensusTimerWatchdog();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse);
 
@@ -154,6 +171,10 @@ protected:
     virtual bool handleNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual void reHandlePrePrepareProposals(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual bool isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
+    // FIB-124: verify every prePrepareList item carried by a NewView is exactly justified
+    // by the bundled viewChange evidence (mirrors PBFTCacheProcessor::generatePrePrepareMsg).
+    // Called from isValidNewViewMsg after viewChange signatures and quorum weight pass.
+    virtual bool isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual void reachNewView(ViewType _view);
 
     // handle the checkpoint message
@@ -201,6 +222,10 @@ protected:
     virtual void onStableCheckPointCommitFailed(
         Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal);
 
+    // FIB-132: helpers for in-flight proposal deduplication
+    static std::string inFlightKey(std::shared_ptr<PBFTBaseMessageInterface> const& _msg);
+    void eraseInFlightProposal(std::shared_ptr<PBFTBaseMessageInterface> const& _msg);
+
 private:
     // utility functions
     void waitSignal()
@@ -232,6 +257,11 @@ protected:
     const unsigned c_PopWaitSeconds = 5;
     const std::set<PacketType> c_consensusPacket = {PrePreparePacket, PreparePacket, CommitPacket};
 
+    // FIB-126: Maximum allowed clock skew (ms) between the proposed block timestamp and the
+    // local wall-clock time.  Proposals more than this far in the future are rejected.
+    // 15 seconds matches common blockchain practice for BFT networks.
+    static constexpr int64_t c_maxAllowedFutureTimestampMs = 15'000;
+
     std::atomic_bool m_stopped = {false};
 
     // the timer used to resend checkPointProposal
@@ -239,6 +269,28 @@ protected:
 
     ledger::LedgerInterface::Ptr m_ledger;
     ledger::LedgerConfig::Ptr m_ledgerConfig;
+
+public:
+    // FIB-132: hard cap on in-flight verifications. Sized well above the
+    // typical worker-pool concurrency so legitimate load never hits it;
+    // reaches the cap only under a flood of distinct invalid PrePrepares
+    // whose verify callbacks lag.
+    static constexpr size_t c_maxInFlightProposals = 1024;
+
+protected:
+    // FIB-132: in-flight verification set keyed by "<index>:<hash>:<view>".
+    // Prevents the same PrePrepare proposal from being re-submitted to
+    // verifyProposal() while a prior verification is still pending.
+    // Bounded by c_maxInFlightProposals; new entries are rejected when full.
+    std::unordered_set<std::string> m_inFlightProposals;
+
+    // FIB-145 / FIB-146: 3-stage admission pipeline applied before m_msgQueue.push().
+    PBFTPipeline m_pipeline;
+    // FIB-131: per-peer consecutive invalid-pre-prepare counter used to suppress reseal storms.
+    // Key: node index (IndexType). Protected by m_mutex.
+    // Resets on any successful pre-prepare from the same peer.
+    static constexpr uint32_t c_maxInvalidPrePreparePerPeer = 3;
+    std::unordered_map<IndexType, uint32_t> m_invalidPrePrepareCount;
 };
 }  // namespace consensus
 }  // namespace bcos

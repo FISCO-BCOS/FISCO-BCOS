@@ -30,19 +30,29 @@ public:
     using Ptr = std::shared_ptr<BlocksMsgImpl>;
     BlocksMsgImpl() : BlockSyncMsgImpl()
     {
-        setPacketType(BlockSyncPacketType::BlockResponsePacket);
+        BlockSyncMsgImpl::setPacketType(BlockSyncPacketType::BlockResponsePacket);
     }
-    explicit BlocksMsgImpl(BlockSyncMsgImpl::Ptr _blockSyncMsg)
+    explicit BlocksMsgImpl(const BlockSyncMsgImpl::Ptr& _blockSyncMsg)
       : BlocksMsgImpl(_blockSyncMsg->syncMessage())
     {}
 
-    explicit BlocksMsgImpl(bytesConstRef _data) : BlocksMsgImpl() { decode(_data); }
+    explicit BlocksMsgImpl(bytesConstRef _data) : BlocksMsgImpl()
+    {
+        BlockSyncMsgImpl::decode(_data);
+    }
     ~BlocksMsgImpl() override = default;
 
     size_t blocksSize() const override { return m_syncMessage->blocksdata_size(); }
     bytesConstRef blockData(size_t _index) const override
     {
-        auto const& blockData = m_syncMessage->blocksdata(_index);
+        auto const size = blocksSize();
+        if (_index >= size)
+        {
+            BOOST_THROW_EXCEPTION(
+                std::out_of_range("blockData index out of range, index: " + std::to_string(_index) +
+                                  ", blocksSize: " + std::to_string(size)));
+        }
+        auto const& blockData = m_syncMessage->blocksdata(static_cast<int>(_index));
         return {(byte const*)blockData.data(), blockData.size()};
     }
 

@@ -38,7 +38,7 @@ public:
     AMOPImpl(TopicManager::Ptr _topicManager, AMOPMessageFactory::Ptr _messageFactory,
         bcos::protocol::AMOPRequestFactory::Ptr _requestFactory,
         bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID);
-    virtual ~AMOPImpl() {}
+    virtual ~AMOPImpl();
 
     virtual void start();
     virtual void stop();
@@ -70,7 +70,7 @@ public:
         bcos::gateway::P2PSession::Ptr _session,
         std::shared_ptr<bcos::gateway::P2PMessage> _message);
 
-    virtual TopicManager::Ptr topicManager() { return m_topicManager; }
+    virtual TopicManager::Ptr topicManager();
 
 protected:
     virtual void dispatcherAMOPMessage(bcos::gateway::NetworkException const& _e,

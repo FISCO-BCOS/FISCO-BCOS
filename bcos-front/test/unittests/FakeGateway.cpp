@@ -21,6 +21,8 @@
 
 #include "FakeGateway.h"
 #include <bcos-front/Common.h>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/join.hpp>
 
 using namespace bcos;
 using namespace bcos::front;

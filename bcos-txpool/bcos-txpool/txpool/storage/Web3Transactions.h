@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/Exceptions.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/multi_index/composite_key.hpp>
@@ -104,7 +105,7 @@ private:
     bool m_rawAddress{};
 
     void add(protocol::Transaction::Ptr transaction);
-    void remove(SenderNonces auto senderNonces)
+    void removeBySenderNonces(SenderNonces auto senderNonces)
     {
         auto& senderNonceIndex = m_transactions.get<0>();
 
@@ -129,7 +130,7 @@ public:
         }
     }
 
-    task::Task<void> seal(int64_t limit,
+    void seal(int64_t limit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
         std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
@@ -143,7 +144,7 @@ public:
             ledger::account::EVMAccount account(state, sender, m_rawAddress);
 
             int64_t currentNonce = 0;
-            if (auto nonceStr = co_await account.nonce())
+            if (auto nonceStr = task::syncWait(account.nonce()))
             {
                 if (auto result = std::from_chars(
                         nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
@@ -170,7 +171,7 @@ public:
             }
             if (currentNonce > startNonce)
             {
-                co_await account.setNonce(std::to_string(currentNonce));
+                task::syncWait(account.setNonce(std::to_string(currentNonce)));
             }
             if (count >= limit)
             {
@@ -179,7 +180,7 @@ public:
         }
     }
 
-    task::Task<void> remove(storage2::ReadableStorage<executor_v1::StateKeyView> auto& state)
+    void remove(storage2::ReadableStorage<executor_v1::StateKeyView> auto& state)
     {
         std::unique_lock lock(m_mutex);
         auto& senderNonceIndex = m_transactions.get<0>();
@@ -192,7 +193,7 @@ public:
         for (auto& [sender, nonce] : senderNonces)
         {
             ledger::account::EVMAccount account(state, sender, m_rawAddress);
-            if (auto nonceStr = co_await account.nonce())
+            if (auto nonceStr = task::syncWait(account.nonce()))
             {
                 if (auto result = std::from_chars(
                         nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
@@ -202,7 +203,7 @@ public:
                 }
             }
         }
-        remove(::ranges::views::all(senderNonces));
+        removeBySenderNonces(::ranges::views::all(senderNonces));
     }
 
     void remove(InputHashes auto hashes)
@@ -225,7 +226,7 @@ public:
                 }
             }
         }
-        remove(::ranges::views::all(senderNonceMap));
+        removeBySenderNonces(::ranges::views::all(senderNonceMap));
     }
 
     template <InputHashes TransactionHashes>

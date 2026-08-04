@@ -34,12 +34,7 @@ class ExecutiveState
 public:
     using Ptr = std::shared_ptr<ExecutiveState>;
 
-    ExecutiveState(ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input)
-      : m_isStaticCall(input->staticCall),
-        m_contextID(input->contextID),
-        m_seq(input->seq),
-        m_input(std::move(input)),
-        m_executiveFactory(executiveFactory){};
+        ExecutiveState(ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input);
 
     enum Status
     {
@@ -49,11 +44,11 @@ public:
         FINISHED = 3,
     };
 
-    Status getStatus() { return m_status; }
+    Status getStatus();
     CallParameters::UniquePtr go();
     void setResumeParam(CallParameters::UniquePtr pullParam);
-    int64_t getContextID() const { return m_contextID; }
-    int64_t getSeq() const { return m_seq; }
+    int64_t getContextID() const;
+    int64_t getSeq() const;
 
     void appendKeyLocks(std::vector<std::string> keyLocks);
 

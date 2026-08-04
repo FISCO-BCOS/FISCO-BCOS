@@ -18,12 +18,15 @@
  * @date 2021-05-04
  */
 
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/transform.hpp>
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-utilities/ZstdCompress.h"
 #include <boost/asio/detail/socket_ops.hpp>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -31,19 +34,19 @@ using namespace bcos::gateway;
 bool P2PMessageOptions::encode(bytes& _buffer) const
 {
     // parameters check
-    if (m_groupID.size() > MAX_GROUPID_LENGTH)
+    if (m_groupID.size() > MAX_GROUPID_LENGTH) [[unlikely]]
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("groupID length overflow")
                           << LOG_KV("groupID length", m_groupID.size());
         return false;
     }
-    if (m_srcNodeID.empty() || (m_srcNodeID.size() > MAX_NODEID_LENGTH))
+    if (m_srcNodeID.empty() || (m_srcNodeID.size() > MAX_NODEID_LENGTH)) [[unlikely]]
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("srcNodeID length valid")
                           << LOG_KV("srcNodeID length", m_srcNodeID.size());
         return false;
     }
-    if (m_dstNodeIDs.size() > MAX_DST_NODEID_COUNT)
+    if (m_dstNodeIDs.size() > MAX_DST_NODEID_COUNT) [[unlikely]]
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("dstNodeID amount overfow")
                           << LOG_KV("dstNodeID size", m_dstNodeIDs.size());
@@ -114,6 +117,14 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
             boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
         offset += 2;
 
+        // FIB-67: validate groupID length against protocol maximum
+        if (groupIDLength > MAX_GROUPID_LENGTH)
+        {
+            P2PMSG_LOG(ERROR) << LOG_DESC("decode: groupID length overflow")
+                              << LOG_KV("groupIDLength", groupIDLength);
+            return MessageDecodeStatus::MESSAGE_ERROR;
+        }
+
         // groupID
         if (groupIDLength > 0)
         {
@@ -128,6 +139,14 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
             boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
         offset += 2;
 
+        // FIB-67: validate nodeID length against protocol maximum
+        if (nodeIDLength > MAX_NODEID_LENGTH) [[unlikely]]
+        {
+            P2PMSG_LOG(ERROR) << LOG_DESC("decode: nodeID length overflow")
+                              << LOG_KV("nodeIDLength", nodeIDLength);
+            return MessageDecodeStatus::MESSAGE_ERROR;
+        }
+
         checkOffset(offset + nodeIDLength, length);
         m_srcNodeID.clear();
         m_srcNodeID.insert(
@@ -139,7 +158,15 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         uint8_t dstNodeCount = *((uint8_t*)&_buffer[offset]);
         offset += 1;
 
-        checkOffset(offset + dstNodeCount * nodeIDLength, length);
+        // FIB-67: validate dstNodeCount against protocol maximum
+        if (dstNodeCount > MAX_DST_NODEID_COUNT) [[unlikely]]
+        {
+            P2PMSG_LOG(ERROR) << LOG_DESC("decode: dstNodeID count overflow")
+                              << LOG_KV("dstNodeCount", dstNodeCount);
+            return MessageDecodeStatus::MESSAGE_ERROR;
+        }
+
+        checkOffset(offset + (static_cast<size_t>(dstNodeCount) * nodeIDLength), length);
         // dstNodeIDs
         m_dstNodeIDs.reserve(dstNodeCount);
         for (size_t i = 0; i < dstNodeCount; i++)
@@ -185,8 +212,6 @@ bool P2PMessage::encodeHeader(bytes& _buffer) const
 
 bool bcos::gateway::P2PMessage::encodeHeaderImpl(bytes& _buffer) const
 {
-    auto offset = _buffer.size();
-
     // set length to zero first
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
@@ -304,10 +329,27 @@ int32_t P2PMessage::decodeHeader(const bytesConstRef& _buffer)
         boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)&_buffer[offset]));
     offset += 4;
 
+    // FIB-66: reject frames where length is less than header size
+    if (m_length < MESSAGE_HEADER_LENGTH) [[unlikely]]
+    {
+        P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: length less than header")
+                            << LOG_KV("length", m_length)
+                            << LOG_KV("headerLen", MESSAGE_HEADER_LENGTH);
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
+
     // version
     m_version =
         boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
     offset += 2;
+
+    // FIB-66: validate version range
+    if (m_version > static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V3))
+    {
+        P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: unsupported version")
+                            << LOG_KV("version", m_version);
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
 
     // packetType
     m_packetType =
@@ -334,8 +376,12 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
 
     int32_t offset = decodeHeader(_buffer);
-    if (offset <= 0)
-    {  // The packet was not fully received by the network.
+    if (offset < 0)
+    {
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
+    if (offset == 0)
+    {
         return MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
 
@@ -361,8 +407,13 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
         offset += optionsOffset;
     }
 
-    uint32_t length = _buffer.size();
-    checkOffset(offset, m_length);
+    // FIB-66: verify offset does not exceed m_length to prevent unsigned underflow
+    if (std::cmp_greater(offset, m_length)) [[unlikely]]
+    {
+        P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: offset exceeds length")
+                            << LOG_KV("offset", offset) << LOG_KV("length", m_length);
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // raw data cropped from buffer, maybe be compressed or not
 

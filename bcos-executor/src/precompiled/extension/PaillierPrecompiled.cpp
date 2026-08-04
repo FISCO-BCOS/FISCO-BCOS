@@ -51,6 +51,18 @@ PaillierPrecompiled::PaillierPrecompiled(const crypto::Hash::Ptr& _hashImpl)
         getFuncSelector(PAILLIER_METHOD_ADD_RAW_STR, _hashImpl);
 }
 
+PaillierPrecompiled::~PaillierPrecompiled() = default;
+
+bool PaillierPrecompiled::isParallelPrecompiled()
+{
+    return true;
+}
+
+std::vector<std::string> PaillierPrecompiled::getParallelTag(bytesConstRef, bool)
+{
+    return {};
+}
+
 PrecompiledExecResult::Ptr PaillierPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)

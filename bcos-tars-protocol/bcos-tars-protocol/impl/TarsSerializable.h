@@ -3,6 +3,8 @@
 #include "TarsStruct.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/primitives.hpp>
 
 namespace bcostars
 {
@@ -22,7 +24,7 @@ void impl_decode(bcos::concepts::bytebuffer::ByteBuffer auto const& buffer,
     bcostars::protocol::impl::TarsStruct auto& out)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)RANGES::data(buffer), RANGES::size(buffer));
+    input.setBuffer((const char*)::ranges::data(buffer), ::ranges::size(buffer));
     out.readFrom(input);
 }
 

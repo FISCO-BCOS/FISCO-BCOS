@@ -104,16 +104,16 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
     }
 #if 0
     std::cout << "##### testPBTransactionReceipt:"
-              << "encodedData:" << *toHexString(*encodedData) << std::endl;
-    std::cout << "receipt->output():" << *toHexString(receipt->output()) << std::endl;
-    std::cout << "receipt->contractAddress():" << *toHexString(receipt->contractAddress())
+              << "encodedData:" << toHex(*encodedData) << std::endl;
+    std::cout << "receipt->output():" << toHex(receipt->output()) << std::endl;
+    std::cout << "receipt->contractAddress():" << toHex(receipt->contractAddress())
               << std::endl;
     std::cout << "receipt->hash().hex(): " << receipt->hash().hex() << std::endl;
     auto& logEntry = (receipt->logEntries())[1];
     std::cout << "(logEntry.topics()[0]).hex():" << (logEntry.topics()[0]).hex() << std::endl;
-    std::cout << "*toHexString(logEntry.address()):" << *toHexString(logEntry.address())
+    std::cout << "toHex(logEntry.address()):" << toHex(logEntry.address())
               << std::endl;
-    std::cout << "*toHexString(logEntry.data()):" << *toHexString(logEntry.data()) << std::endl;
+    std::cout << "toHex(logEntry.data()):" << toHex(logEntry.data()) << std::endl;
 
     std::cout << "##### ScaleReceipt encodeT: " << (utcTime() - start)
               << ", encodedData size:" << encodedData->size() << std::endl;

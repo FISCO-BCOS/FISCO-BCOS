@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1KeyPair)
     for (int i = 0; i < 10; i++)
     {
         pub1 = secp256k1PriToPub(sec1);
-        BOOST_CHECK_EQUAL(*toHexString(pub1->data()),
+        BOOST_CHECK_EQUAL(toHex(pub1->data()),
             "3378c2b7bcdce20357eb3dbb62590b88d4711dae74e1ea47dd4207441734d2fc7cf6df92fd8c0a3368ba5a"
             "1f5f9c3318d19a3f00ba2f2bd9f508b953be299fb5");
     }
@@ -108,14 +108,14 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
 {
     auto keyPair = secp256k1GenerateKeyPair();
     auto hashData = keccak256Hash(bytesConstRef((std::string)("abcd")));
-    std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
+    std::cout << "### hashData:" << toHex(hashData) << std::endl;
     std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
     std::cout << "#### publicKey shortHex:" << keyPair->publicKey()->shortHex() << std::endl;
     /// normal check
     // sign
     auto signData = secp256k1Sign(*keyPair, hashData);
-    std::cout << "### signData:" << *toHexString(*signData) << std::endl;
-    std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
+    std::cout << "### signData:" << toHex(*signData) << std::endl;
+    std::cout << "### hashData:" << toHex(hashData) << std::endl;
     std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
 
     // verify
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
         keyPair->publicKey(), hashData, bytesConstRef(signData->data(), signData->size()));
     BOOST_CHECK(result == true);
     std::cout << "### verify result:" << result << std::endl;
-    std::cout << "### hashData:" << *toHexString(hashData) << std::endl;
+    std::cout << "### hashData:" << toHex(hashData) << std::endl;
     std::cout << "#### publicKey:" << keyPair->publicKey()->hex() << std::endl;
 
     // recover
@@ -138,8 +138,8 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
 
     BOOST_CHECK(address.asBytes() == ret.second);
     std::cout << "### secp256k1Recover begin, publicKey:"
-              << *toHexString(keyPair->publicKey()->data()) << std::endl;
-    std::cout << "#### recoverd publicKey:" << *toHexString(pub->data()) << std::endl;
+              << toHex(keyPair->publicKey()->data()) << std::endl;
+    std::cout << "#### recoverd publicKey:" << toHex(pub->data()) << std::endl;
     BOOST_CHECK(pub->data() == keyPair->publicKey()->data());
     BOOST_TEST(toHex(pub->data()) == toHex(keyPair->publicKey()->data()));
     /// exception check:
@@ -268,15 +268,15 @@ inline void SM2SignAndVerifyTest(SM2Crypto::Ptr _smCrypto)
     auto sec = std::make_shared<KeyImpl>(secret.asBytes());
     auto keyPair = _smCrypto->createKeyPair(sec);
     BOOST_CHECK(keyPair->publicKey()->data() ==
-                *(fromHexString("f7dee65e76603ed7cd4c598d53cabe875c459e0fae4c6fd7b858189fd4741081e9"
-                                "70bca0d5cb571a7ac30586aec71b23187d4b25e59143812f74a2744604d42b")));
-    auto signatureData = fromHexString(
+            fromHex("f7dee65e76603ed7cd4c598d53cabe875c459e0fae4c6fd7b858189fd4741081e9"
+                "70bca0d5cb571a7ac30586aec71b23187d4b25e59143812f74a2744604d42b"));
+    auto signatureData = fromHex(
         "cd39bf939d999ca710576a629c962edfc28608701a3a7b61c971daeac5a1399cf4a7272fa80783e171c7fd5b03"
         "8a3af4521f681ebe9fd44db3b60e750c438293f7dee65e76603ed7cd4c598d53cabe875c459e0fae4c6fd7b858"
         "189fd4741081e970bca0d5cb571a7ac30586aec71b23187d4b25e59143812f74a2744604d42b");
     // check verify
     bool result = _smCrypto->verify(keyPair->publicKey(), hashData,
-        bytesConstRef(signatureData->data(), signatureData->size()));
+        bytesConstRef(signatureData.data(), signatureData.size()));
     BOOST_CHECK(result == true);
 
     keyPair = _smCrypto->generateKeyPair();
@@ -286,8 +286,8 @@ inline void SM2SignAndVerifyTest(SM2Crypto::Ptr _smCrypto)
     result =
         _smCrypto->verify(keyPair->publicKey(), hashData, bytesConstRef(sig->data(), sig->size()));
 
-    std::cout << "#### privateKey:" << *toHexString(keyPair->secretKey()->data()) << std::endl;
-    std::cout << "#### phase 1, signatureData:" << *toHexString(*sig) << std::endl;
+    std::cout << "#### privateKey:" << toHex(keyPair->secretKey()->data()) << std::endl;
+    std::cout << "#### phase 1, signatureData:" << toHex(*sig) << std::endl;
     BOOST_CHECK(result == true);
     // recover
     auto pub = _smCrypto->recover(hashData, bytesConstRef(sig->data(), sig->size()));
@@ -333,13 +333,13 @@ inline void SM2SignAndVerifyTest(SM2Crypto::Ptr _smCrypto)
     // test padding
     unsigned fieldLen = 32;
     std::shared_ptr<bytes> data = std::make_shared<bytes>(fieldLen, 0);
-    auto binData = fromHexString("508b2b49c1d2dc46cbd5a011686fdc19937dbc704afe6c547a862b3e2b6c69");
-    memcpy(data->data(), binData->data(), binData->size());
+    auto binData = fromHex("508b2b49c1d2dc46cbd5a011686fdc19937dbc704afe6c547a862b3e2b6c69");
+    memcpy(data->data(), binData.data(), binData.size());
     // padding zero to the r field
-    memmove(data->data() + (fieldLen - binData->size()), data->data(), binData->size());
-    memset(data->data(), 0, (fieldLen - binData->size()));
-    std::cout << "#### data:" << *toHexString(*data) << std::endl;
-    std::cout << "#### binData:" << *toHexString(*binData) << std::endl;
+    memmove(data->data() + (fieldLen - binData.size()), data->data(), binData.size());
+    memset(data->data(), 0, (fieldLen - binData.size()));
+    std::cout << "#### data:" << toHex(*data) << std::endl;
+    std::cout << "#### binData:" << toHex(binData) << std::endl;
     std::cout << "### data 0:" << int((*data)[0]) << std::endl;
     std::cout << "### data 1:" << int((*data)[1]) << std::endl;
 }
@@ -368,8 +368,8 @@ BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
     // verify
     bool result = signatureCrypto->verify(
         keyPair->publicKey(), hashData, bytesConstRef(sig->data(), sig->size()));
-    std::cout << "#### phase 1, signatureData:" << *toHexString(*sig) << std::endl;
-    std::cout << "#### keyPair->publicKey():" << *toHexString(keyPair->publicKey()->data())
+    std::cout << "#### phase 1, signatureData:" << toHex(*sig) << std::endl;
+    std::cout << "#### keyPair->publicKey():" << toHex(keyPair->publicKey()->data())
               << std::endl;
     BOOST_CHECK(result == true);
     // recover

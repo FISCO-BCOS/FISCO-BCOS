@@ -21,6 +21,7 @@
 #pragma once
 // if windows, manual include tup/Tars.h first
 #include <bcos-framework/consensus/ConsensusNode.h>
+#include <algorithm>
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -42,6 +43,7 @@
 #include <bcos-utilities/Common.h>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
 
 namespace bcostars
@@ -417,9 +419,9 @@ inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEnt
 {
     bcostars::LogEntry logEntry;
     logEntry.address.assign(_logEntry.address().begin(), _logEntry.address().end());
-    for (auto& topicIt : _logEntry.topics())
+    for (const auto& topicIt : _logEntry.topics())
     {
-        logEntry.topic.push_back(std::vector<char>(topicIt.begin(), topicIt.end()));
+        logEntry.topic.emplace_back(topicIt.begin(), topicIt.end());
     }
     logEntry.data.assign(_logEntry.data().begin(), _logEntry.data().end());
     return logEntry;
@@ -428,12 +430,13 @@ inline bcostars::LogEntry toTarsLogEntry(bcos::protocol::LogEntry const& _logEnt
 inline bcos::protocol::LogEntry toBcosLogEntry(bcostars::LogEntry const& _logEntry)
 {
     std::vector<bcos::h256> topics;
-    for (auto& topicIt : _logEntry.topic)
+    topics.reserve(_logEntry.topic.size());
+    for (const auto& topicIt : _logEntry.topic)
     {
         topics.emplace_back((const bcos::byte*)topicIt.data(), topicIt.size());
     }
-    return bcos::protocol::LogEntry(bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()),
-        topics, bcos::bytes(_logEntry.data.begin(), _logEntry.data.end()));
+    return {bcos::bytes(_logEntry.address.begin(), _logEntry.address.end()), topics,
+        bcos::bytes(_logEntry.data.begin(), _logEntry.data.end())};
 }
 
 inline bcos::protocol::LogEntry takeToBcosLogEntry(bcostars::LogEntry&& _logEntry)
@@ -442,13 +445,14 @@ inline bcos::protocol::LogEntry takeToBcosLogEntry(bcostars::LogEntry&& _logEntr
     for (auto&& topicIt : _logEntry.topic)
     {
         bcos::h256 topic;
-        RANGES::move(topicIt.begin(), topicIt.end(), topic.mutableData().data());
-        topics.push_back(std::move(topic));
+        std::move(topicIt.begin(), topicIt.end(), topic.mutableData().data());
+        topics.push_back(topic);
     }
     bcos::bytes address;
-    RANGES::move(std::move(_logEntry.address), std::back_inserter(address));
+    std::move(_logEntry.address.begin(), _logEntry.address.end(), std::back_inserter(address));
     bcos::bytes data;
-    RANGES::move(std::move(_logEntry.data), std::back_inserter(data));
+    std::move(_logEntry.data.begin(), _logEntry.data.end(), std::back_inserter(data));
     return {std::move(address), std::move(topics), std::move(data)};
 }
+
 }  // namespace bcostars

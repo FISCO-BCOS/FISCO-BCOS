@@ -69,7 +69,7 @@ void ContractABICodec::stringToJsonValue(const std::string& _params, Json::Value
 bcos::bytes ContractABICodec::encodeConstructor(
     const std::string& _abi, const std::string& _bin, const std::string& _jsonParams)
 {
-    return *fromHexString(_bin) +
+    return fromHex(_bin) +
            encodeMethod(_abi, ContractABIMethodDefinition::CONSTRUCTOR_TYPE, _jsonParams);
 }
 
@@ -236,7 +236,7 @@ bcos::bytes decodeBytesFromString(const std::string& _str)
     {  // hex format
         try
         {
-            return std::move(*fromHexString(_str.substr(hexPrefix.size())));
+            return fromHex(_str.substr(hexPrefix.size()));
         }
         catch (...)
         {
@@ -249,7 +249,7 @@ bcos::bytes decodeBytesFromString(const std::string& _str)
         try
         {
             // base64 format
-            return std::move(*base64DecodeBytes(_str.substr(base64Prefix.size())));
+            return base64DecodeBytes(_str.substr(base64Prefix.size()));
         }
         catch (...)
         {

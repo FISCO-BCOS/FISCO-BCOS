@@ -31,6 +31,7 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/ITTAPI.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/bind/bind.hpp>
 #include <utility>
@@ -74,6 +75,15 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     // Timer is used to manage checkpoint timeout
     m_timer =
         std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "checkPointResendTimer");
+
+    // Configure the admission pipeline from PBFTConfig (originally from node.ini).
+    // Safe to call here because the worker thread has not yet been started.
+    PBFTPipeline::Config pipelineCfg;
+    pipelineCfg.enabled = m_config->pipelineAdmissionEnabled();
+    pipelineCfg.perPeerCapacity = m_config->pipelinePerPeerCapacity();
+    pipelineCfg.lruCapacity = m_config->pipelineLruCapacity();
+    pipelineCfg.maxPeers = m_config->pipelineMaxPeers();
+    m_pipeline.configure(pipelineCfg);
 }
 
 void PBFTEngine::initSendResponseHandler()
@@ -148,13 +158,61 @@ void PBFTEngine::tryToResendCheckPoint()
         RecursiveGuard l(m_mutex);
         m_cacheProcessor->tryToResendCheckPoint();
     }
+    // FIB-185: run the consensus-timer watchdog on this periodic path.
+    checkConsensusTimerWatchdog();
     m_timer->restart();
+}
+
+void PBFTEngine::checkConsensusTimerWatchdog()
+{
+    // FIB-185: under adversarial consensus input concurrent with session-teardown churn, a node
+    // can commit its last block, emit a single view-change, and then never re-arm its consensus
+    // timer (an inferred race between session-teardown callbacks and the consensus worker/timer).
+    // The wedge signature is: consensus node, in timeout state (a view-change is pending), but the
+    // view-change timer is not running. Detect that and re-arm the timer. restart() only re-arms
+    // the timer; onTimeout (which actually drives the view-change) fires later, so this watchdog
+    // cannot itself emit a view-change or perturb the view-change cache.
+    if (m_stopped.load())
+    {
+        return;
+    }
+    if (!m_config->isConsensusNode())
+    {
+        return;
+    }
+    auto consensusTimer = m_config->timer();
+    if (!consensusTimer)
+    {
+        return;
+    }
+    if (m_config->timeout() && !consensusTimer->running())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "checkConsensusTimerWatchdog: consensus timer stalled while in "
+                                 "timeout state, re-arm the timer")
+                          << m_config->printCurrentState();
+        consensusTimer->restart();
+    }
 }
 
 void PBFTEngine::restart()
 {
     PBFT_LOG(INFO) << LOG_DESC("restart the consensus module");
-    m_config->enableAsMasterNode(true);
+    // FIB-138: only re-affirm the master flag when we are ALREADY in master state
+    // (steady-state recovery-in-place). When this restart() is invoked from
+    // PBFTImpl::enableAsMasterNode(true)'s promotion sequence, the flag is still
+    // false and PBFTImpl owns the final flip after init/recover/restart all succeed.
+    // Pre-empting the flag here would re-open the consensus-state race that FIB-138
+    // is meant to close.
+    if (m_config->asMasterNode())
+    {
+        m_config->enableAsMasterNode(true);
+    }
+    else
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+            "restart: skip master-flag flip during promotion transition (FIB-138)");
+    }
     triggerTimeout(false);
 }
 
@@ -264,11 +322,9 @@ void PBFTEngine::onProposalApplySuccess(
 
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to the consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     auto startT = utcTime();
     auto recordT = utcTime();
     // Note: must lock here to ensure thread safe
@@ -418,10 +474,9 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
                    << LOG_KV("index", pbftMessage->index())
                    << LOG_KV("encode(ms)", encodeEnd - encodeStart)
                    << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
-    task::wait([](auto front, decltype(encodedData) encoded) -> task::Task<void> {
-        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
-            ::ranges::views::single(ref(std::as_const(*encoded))));
-    }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // handle the pre-prepare packet
     RecursiveGuard lock(m_mutex);
@@ -543,6 +598,19 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
             }
             return;
         }
+        // FIB-145 / FIB-146: 3-stage admission pipeline.
+        // Stage 1 drops stale-height messages; Stage 1b drops far-future (>2×
+        // pipeline width past committed) so they cannot trigger the executeWorker
+        // re-queue CPU busy-spin; Stage 3 enforces per-peer capacity. Commit and
+        // CheckPoint bypass Stage 1/1b for consensus liveness.
+        auto lastApplied = m_config->committedProposal() ?
+                               m_config->committedProposal()->index() :
+                               static_cast<bcos::protocol::BlockNumber>(0);
+        auto maxFutureIndex = lastApplied + 2 * m_config->waterMarkLimit();
+        if (!m_pipeline.admit(pbftMsg, lastApplied, maxFutureIndex))
+        {
+            return;
+        }
         m_msgQueue.push(pbftMsg);
         m_signalled.notify_all();
     }
@@ -560,6 +628,24 @@ void PBFTEngine::clearAllCache()
 {
     RecursiveGuard l(m_mutex);
     m_cacheProcessor->clearAllCache();
+}
+
+void PBFTEngine::clearMsgQueue()
+{
+    // FIB-137: tbb::concurrent_queue has no .clear(); drain via try_pop loop.
+    // Discards stale PBFT messages enqueued under a previous role/term so they are
+    // not replayed against the freshly-recovered state after a role transition.
+    std::shared_ptr<PBFTBaseMessageInterface> msg;
+    std::size_t drained = 0;
+    while (m_msgQueue.try_pop(msg))
+    {
+        ++drained;
+    }
+    if (drained > 0)
+    {
+        PBFT_LOG(INFO) << LOG_DESC("clearMsgQueue: drained stale PBFT messages")
+                       << LOG_KV("drained", drained);
+    }
 }
 
 void PBFTEngine::executeWorker()
@@ -604,6 +690,8 @@ void PBFTEngine::executeWorker()
             }
             return;
         }
+        // FIB-145: notify pipeline that a message was consumed (decrements per-peer counter)
+        m_pipeline.consumed(pbftMsg);
         handleMsg(pbftMsg);
     }
     else
@@ -703,13 +791,16 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
                         << LOG_KV("proposalCommitted", proposalCommitted);
         return CheckResult::INVALID;
     }
-    // Note: Accept pbft message with larger view then local view, for other nodes may viewchange to
-    // a larger view, and the node-self is not aware of the viewchange.
-    // In normal case, it will not happen, node-self will recover the view from the viewchange, and
-    // soon will reach to new view.
-    // BUT in the Byzantium case, malicious node will send the pre-prepare message with a larger
-    // view, to lay down some specific txs.
-    // FIXME: to check this logic.
+    // Note: Accept pbft message with larger view than local view, for other nodes may viewchange
+    // to a larger view, and the node-self is not aware of the viewchange.
+    // In normal case, it will not happen — node-self will recover the view from the viewchange
+    // and soon reach the new view.
+    // BUT in the Byzantium case, a malicious node may send a higher-view message to nudge state.
+    //
+    // FIB-133: the PrePrepare normal path (handlePrePrepareMsg, _generatedFromNewView==false)
+    // additionally enforces strict view equality, so cross-view PrePrepare caching is no longer
+    // possible.  The Prepare/Commit paths still rely on this broader acceptance window —
+    // tightening them would require a separate audit pass.
     if (_pbftReq->view() < m_config->view())
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid view")
@@ -774,7 +865,7 @@ CheckResult PBFTEngine::checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface>
 CheckResult PBFTEngine::checkSignature(PBFTBaseMessageInterface::Ptr _req)
 {
     // check the signature
-    auto* nodeInfo = m_config->getConsensusNodeByIndex(_req->generatedFrom());
+    auto nodeInfo = m_config->getConsensusNodeByIndex(_req->generatedFrom());
     if (!nodeInfo)
     {
         PBFT_LOG(WARNING) << LOG_DESC("checkSignature failed for the node is not a consensus node")
@@ -782,10 +873,24 @@ CheckResult PBFTEngine::checkSignature(PBFTBaseMessageInterface::Ptr _req)
         return CheckResult::INVALID;
     }
     auto publicKey = nodeInfo->nodeID;
-    if (!_req->verifySignature(m_config->cryptoSuite(), publicKey))
+    // FIB-136: the secp256k1 signature backend throws on malformed input (e.g.
+    // invalid length or recovery id) instead of returning false. Catch here and
+    // treat as INVALID so malformed packets from a Byzantine peer cannot cause
+    // exception churn and ERROR log spam in the consensus worker loop.
+    try
     {
-        PBFT_LOG(WARNING) << LOG_DESC("checkSignature failed for invalid signature")
-                          << printPBFTMsgInfo(_req);
+        if (!_req->verifySignature(m_config->cryptoSuite(), publicKey))
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("checkSignature failed for invalid signature")
+                              << printPBFTMsgInfo(_req);
+            return CheckResult::INVALID;
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        PBFT_LOG(DEBUG) << LOG_DESC("checkSignature: verifySignature threw, treating as invalid")
+                        << printPBFTMsgInfo(_req)
+                        << LOG_KV("what", boost::diagnostic_information(_e));
         return CheckResult::INVALID;
     }
     return CheckResult::VALID;
@@ -798,8 +903,8 @@ bool PBFTEngine::checkProposalSignature(
     {
         return false;
     }
-    auto* nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
-    if (nodeInfo == nullptr)
+    auto nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
+    if (!nodeInfo)
     {
         PBFT_LOG(WARNING) << LOG_DESC(
                                  "checkProposalSignature failed for the node "
@@ -880,6 +985,20 @@ bool PBFTEngine::isSyncingHigher()
     return syncNumber >= (committedIndex + m_config->waterMarkLimit());
 }
 
+// FIB-132: build an in-flight dedup key from (index, hash, view)
+std::string PBFTEngine::inFlightKey(std::shared_ptr<PBFTBaseMessageInterface> const& _msg)
+{
+    return std::to_string(_msg->index()) + ":" + _msg->hash().hex() + ":" +
+           std::to_string(_msg->view());
+}
+
+// FIB-132: remove proposal from the in-flight set (called on all verify exit paths)
+void PBFTEngine::eraseInFlightProposal(std::shared_ptr<PBFTBaseMessageInterface> const& _msg)
+{
+    RecursiveGuard lock(m_mutex);
+    m_inFlightProposals.erase(inFlightKey(_msg));
+}
+
 bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     bool _needVerifyProposal, bool _generatedFromNewView, bool _needCheckSignature)
 {
@@ -921,6 +1040,20 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     if (!_generatedFromNewView)
     {
+        // FIB-133: reject PrePrepare messages whose view() does not match the local view.
+        // checkPBFTMsgState() accepts messages with view() >= local view (up to watermark),
+        // so without this check a byzantine leader can send a PrePrepare with a higher view
+        // that still passes the leader check (computed from local view) and causes the node
+        // to emit a Prepare at m_config->view() while caching a pre-prepare at a different
+        // view — breaking liveness and cross-view consistency.
+        if (_prePrepareMsg->view() != m_config->view())
+        {
+            PBFT_LOG(INFO) << LOG_DESC(
+                                  "handlePrePrepareMsg: reject non-local-view PrePrepare "
+                                  "in the normal path")
+                           << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
         // packet can be processed in this round of consensus
         // check the proposal is generated from the leader
         auto expectedLeader = m_config->leaderIndex(_prePrepareMsg->index());
@@ -938,13 +1071,143 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
             result = checkSignature(_prePrepareMsg);
             if (result == CheckResult::INVALID)
             {
-                m_config->notifySealer(_prePrepareMsg->index(), true);
+                // FIB-131: rate-limit reseal notifications on consecutive sig failures from the
+                // same peer to prevent a Byzantine leader from triggering an unbounded reseal
+                // storm via repeated invalid pre-prepares.
+                auto peerIdx = _prePrepareMsg->generatedFrom();
+                auto& failCount = m_invalidPrePrepareCount[peerIdx];
+                failCount++;
+                if (failCount <= c_maxInvalidPrePreparePerPeer)
+                {
+                    m_config->notifySealer(_prePrepareMsg->index(), true);
+                }
+                else
+                {
+                    PBFT_LOG(WARNING)
+                        << LOG_DESC(
+                               "handlePrePrepareMsg: suppressing notifySealer due to repeated "
+                               "sig failures from peer (FIB-131)")
+                        << LOG_KV("peer", peerIdx) << LOG_KV("failCount", failCount)
+                        << printPBFTMsgInfo(_prePrepareMsg);
+                }
                 return false;
             }
         }
     }
+    // FIB-131: reset the per-peer failure counter on any successfully-signed pre-prepare.
+    m_invalidPrePrepareCount.erase(_prePrepareMsg->generatedFrom());
+    // FIB-130: cross-check the outer PBFT envelope index against the inner proposal index BEFORE
+    // decoding the block body. The outer index drives leaderIndex(), notifySealer() and cache
+    // keys, while the inner index drives verifyProposal() and post-verify routing. A Byzantine
+    // leader could craft a pre-prepare with mismatched outer/inner indices to make the pipeline
+    // track consensus state for one slot while sealing txs for another.
+    if (_prePrepareMsg->index() != _prePrepareMsg->consensusProposal()->index())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("handlePrePrepareMsg: outer/inner index mismatch (FIB-130)")
+                          << LOG_KV("outerIndex", _prePrepareMsg->index())
+                          << LOG_KV("innerIndex", _prePrepareMsg->consensusProposal()->index())
+                          << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+        return false;
+    }
     auto block = m_config->blockFactory().createBlock(
         _prePrepareMsg->consensusProposal()->data(), false, false);
+    // Validate the decoded proposal block before it enters the cache.  The structural
+    // cross-check (FIB-130) and the timestamp policy (FIB-126) both run here — after
+    // createBlock() and before the no-verify fast-path / async verifyProposal path — so a
+    // Byzantine leader cannot smuggle an inconsistent proposal through either route.  Fetch
+    // the header once and share it across both checks.
+    auto blockHeader = block->blockHeader();
+
+    // FIB-130: cross-check the decoded block header against the carried proposal metadata.
+    // A Byzantine leader could (a) carry a proposal index whose block-header number differs,
+    // or (b) sign hash(A) while broadcasting body(B) under the same proposal hash, decoupling
+    // the consensus identity from the executed payload. createBlock(data, false, false) leaves
+    // the header hash as whatever bytes were on the wire, so we recompute via calculateHash()
+    // before comparing.  Only meaningful when the proposal carries a body.
+    if (!_prePrepareMsg->consensusProposal()->data().empty())
+    {
+        if (!blockHeader)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: decoded block has no header (FIB-130)")
+                              << printPBFTMsgInfo(_prePrepareMsg);
+            return false;
+        }
+        if (blockHeader->number() != _prePrepareMsg->consensusProposal()->index())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: block header number mismatch (FIB-130)")
+                              << LOG_KV("headerNumber", blockHeader->number())
+                              << LOG_KV("msgIndex", _prePrepareMsg->consensusProposal()->index())
+                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+        blockHeader->calculateHash(*m_config->cryptoSuite()->hashImpl());
+        if (blockHeader->hash() != _prePrepareMsg->consensusProposal()->hash())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: decoded block hash != proposal "
+                                     "hash (FIB-130)")
+                              << LOG_KV("expected",
+                                     _prePrepareMsg->consensusProposal()->hash().abridged())
+                              << LOG_KV("decoded", blockHeader->hash().abridged())
+                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+        // FIB-142 receiver-side (defence-in-depth): FIB-130 above only proves the
+        // header is internally consistent (header.hash binds the header fields,
+        // incl. txsRoot). It does NOT prove the decoded body matches that txsRoot.
+        // Recompute the body's Merkle root and reject any mismatch, so a byzantine
+        // leader cannot ship a body whose real root differs from header.txsRoot —
+        // otherwise the poisoned (hash, data) pair is cached/forwarded and only
+        // fails much later during execution.
+        if (auto computedTxsRoot =
+                block->calculateTransactionRoot(*m_config->cryptoSuite()->hashImpl());
+            computedTxsRoot != blockHeader->txsRoot())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: reject for decoded body txsRoot "
+                                     "does not match header.txsRoot (FIB-142)")
+                              << LOG_KV("headerTxsRoot", blockHeader->txsRoot().abridged())
+                              << LOG_KV("computedTxsRoot", computedTxsRoot.abridged())
+                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+    }
+
+    // FIB-126: validate the proposed block's header timestamp against two invariants:
+    //   1. Monotonicity — proposedTs must be strictly greater than the last committed block
+    //      timestamp (prevents time-reversal).  Skipped at genesis (parentTs == 0) to avoid
+    //      false positives on the first block.
+    //   2. Future-drift — proposedTs must not exceed wall-clock by more than
+    //      c_maxAllowedFutureTimestampMs (prevents far-future timestamp attacks).
+    if (blockHeader)
+    {
+        int64_t proposedTs = blockHeader->timestamp();
+        int64_t parentTs = m_ledgerConfig->timestamp();
+        // utcTime() returns uint64_t; make the narrowing to int64_t explicit so -Wconversion
+        // stays quiet and the signed arithmetic below is unambiguous.
+        int64_t nowTs = static_cast<int64_t>(utcTime());
+
+        if (parentTs > 0 && proposedTs <= parentTs)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("handlePrePrepareMsg: reject proposal with non-monotonic timestamp")
+                << LOG_KV("proposedTs", proposedTs) << LOG_KV("parentTs", parentTs)
+                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+        if (proposedTs > nowTs + c_maxAllowedFutureTimestampMs)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("handlePrePrepareMsg: reject proposal with far-future timestamp")
+                << LOG_KV("proposedTs", proposedTs) << LOG_KV("nowTs", nowTs)
+                << LOG_KV("maxDrift", c_maxAllowedFutureTimestampMs)
+                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+    }
+
     // add the prePrepareReq to the cache
     if (!_needVerifyProposal)
     {
@@ -964,11 +1227,36 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     // verify the proposal
     auto self = weak_from_this();
-    auto* leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
-    if (leaderNodeInfo == nullptr)
+    auto leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
+    if (!leaderNodeInfo)
     {
         return false;
     }
+    // FIB-132: guard against re-entering verifyProposal for a proposal that is
+    // already being verified. Without this guard a Byzantine peer can flood the
+    // same PrePrepare and trigger redundant verification work for every copy.
+    // A hard cap (c_maxInFlightProposals) bounds set size under flood.
+    {
+        RecursiveGuard lock(m_mutex);
+        auto key = inFlightKey(_prePrepareMsg);
+        if (m_inFlightProposals.count(key))
+        {
+            PBFT_LOG(DEBUG) << LOG_DESC(
+                                   "handlePrePrepareMsg: proposal already in-flight, skip verify")
+                            << printPBFTMsgInfo(_prePrepareMsg);
+            return true;
+        }
+        if (m_inFlightProposals.size() >= c_maxInFlightProposals)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("handlePrePrepareMsg: in-flight set at cap, rejecting new verify")
+                << LOG_KV("cap", c_maxInFlightProposals) << printPBFTMsgInfo(_prePrepareMsg);
+            return false;
+        }
+        m_inFlightProposals.insert(key);
+    }
+    // leaderNodeInfo is captured by value into the lambda: it is a ConsensusNode copy made
+    // while the list lock was held (FIB-125), so it remains valid after setConsensusNodeList().
     m_config->validator()->verifyProposal(leaderNodeInfo->nodeID,
         _prePrepareMsg->consensusProposal()->index(), block,
         [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature, block](
@@ -980,16 +1268,13 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 {
                     return;
                 }
+                // FIB-132: always erase the in-flight entry on completion
+                pbftEngine->eraseInFlightProposal(_prePrepareMsg);
                 auto committedIndex = pbftEngine->m_config->committedProposal()->index();
                 if (committedIndex >= _prePrepareMsg->index())
                 {
                     return;
                 }
-                // Note: must reset the txs to be sealed no matter verify success or
-                // failed because some nodes may verify failed for timeout,  while
-                // other nodes may verify success
-                pbftEngine->m_config->validator()->asyncResetTxsFlag(*block, true);
-
                 // verify exceptioned
                 if (_error != nullptr)
                 {
@@ -1014,6 +1299,11 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
+                // FIB-129: reset tx flags only after the proposal has passed both signature
+                // verification (checked before entering the verify path) and block content
+                // verification (checked above). Moving this call earlier would allow a Byzantine
+                // leader to trigger tx-flag resets with forged/invalid proposals.
+                pbftEngine->m_config->validator()->asyncResetTxsFlag(*block, true);
                 // verify success
                 RecursiveGuard lock(pbftEngine->m_mutex);
                 auto ret = pbftEngine->handlePrePrepareMsg(
@@ -1025,6 +1315,11 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
             }
             catch (std::exception const& _e)
             {
+                // FIB-132: ensure in-flight entry is removed even on exception
+                if (auto pbftEngine = self.lock())
+                {
+                    pbftEngine->eraseInFlightProposal(_prePrepareMsg);
+                }
                 PBFT_LOG(WARNING) << LOG_DESC("exception when calls onVerifyFinishedHandler")
                                   << printPBFTMsgInfo(_prePrepareMsg)
                                   << LOG_KV("message", boost::diagnostic_information(_e));
@@ -1048,11 +1343,9 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
                    << LOG_KV("packetSize", encodedData->size())
                    << LOG_KV("index", _prePrepareMsg->index());
     // only broadcast to the consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     // try to precommit the message
     m_cacheProcessor->checkAndPreCommit();
 }
@@ -1196,9 +1489,11 @@ void PBFTEngine::sendViewChange(bcos::crypto::NodeIDPtr _dstNode)
     auto viewChangeReq = generateViewChange();
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(viewChangeReq);
-    // only broadcast to the consensus nodes
-    m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::PBFT, std::move(_dstNode), ref(*encodedData), 0, nullptr);
+    // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
+    // (the gateway session-lock acquire runs on the front's send queue, not on the consensus
+    // worker)
+    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+        ModuleID::PBFT, std::move(_dstNode), std::move(encodedData));
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
@@ -1217,8 +1512,10 @@ void PBFTEngine::sendRecoverResponse(bcos::crypto::NodeIDPtr _dstNode)
     response->setTimestamp(utcTime());
     response->setIndex(m_config->committedProposal()->index());
     auto encodedData = m_config->codec()->encode(response);
-    m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::PBFT, _dstNode, ref(*encodedData), 0, nullptr);
+    // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
+    // (copy _dstNode; it is logged below). The gateway send runs on the front's send queue.
+    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+        ModuleID::PBFT, _dstNode, std::move(encodedData));
     PBFT_LOG(DEBUG) << LOG_DESC("sendRecoverResponse") << LOG_KV("peer", _dstNode->shortHex())
                     << m_config->printCurrentState();
 }
@@ -1231,10 +1528,15 @@ void PBFTEngine::broadcastViewChangeReq()
     // only broadcast to the consensus nodes
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
                    << LOG_KV("packetSize", encodedData->size());
-    task::wait([](FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
-            ::ranges::views::single(ref(*encodedData)));
-    }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: this runs under m_mutex (onTimeout -> triggerTimeout holds it). Hand the owned
+    // payload to FrontService::asyncBroadcastMessageByOwnedPayload, which enqueues the gateway send
+    // onto its serial send queue and returns immediately -- the gateway-session-lock-acquiring send
+    // no longer runs on the consensus worker while m_mutex is held (the coupling that wedged
+    // consensus under session-teardown churn is decoupled at the FrontService layer), and the owned
+    // payload is forwarded without copying. The view-change cache mutations below stay under the
+    // lock, unchanged.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
@@ -1377,7 +1679,7 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
                               << printPBFTMsgInfo(viewChangeReq);
             return false;
         }
-        auto* nodeInfo = m_config->getConsensusNodeByIndex(viewChangeReq->generatedFrom());
+        auto nodeInfo = m_config->getConsensusNodeByIndex(viewChangeReq->generatedFrom());
         if (!nodeInfo)
         {
             continue;
@@ -1392,9 +1694,123 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
                           << LOG_KV("minRequiredQuorum", m_config->minRequiredQuorum());
         return false;
     }
-    // TODO: check the prePrepared message
+    // FIB-124: cross-check the prePrepareList against the bundled viewChange evidence.
+    // The dedicated helper mirrors PBFTCacheProcessor::generatePrePrepareMsg so a byzantine
+    // new leader cannot substitute prepared proposals from view-changes the receiver has
+    // already independently validated above.
+    if (!isValidNewViewPrePrepareList(_newViewMsg))
+    {
+        return false;
+    }
+    // Verify the outer NewView wrapper signature (the embedded prePrepares are unsigned by design;
+    // after FIB-124 cross-check above, the bypass of per-item sig checks in
+    // reHandlePrePrepareProposals is safe).
     auto ret = checkSignature(_newViewMsg);
     return ret != CheckResult::INVALID;
+}
+
+bool PBFTEngine::isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterface> _newViewMsg)
+{
+    // FIB-124 contract:
+    //   Every entry in _newViewMsg->prePrepareList() whose index appears in the union of
+    //   preparedProposals across _newViewMsg->viewChangeMsgList() must carry exactly the
+    //   hash of the highest-view prepared proposal for that index, and its view must equal
+    //   the target view. Indices without viewChange evidence are the new leader's fresh
+    //   proposals and are deliberately left for downstream content verification.
+    //
+    // Embedded prePrepares are unsigned by design (the new leader constructs them via
+    // populateFrom() which never calls generateAndSetSignatureData()); security comes
+    // from this cross-check plus the outer NewView signature verified by the caller.
+    auto const& viewChangeList = _newViewMsg->viewChangeMsgList();
+    auto committedIndex = m_config->committedProposal()->index();
+    auto toView = _newViewMsg->view();
+
+    // Step 1: collect the union of preparedProposals from the bundled viewChanges, keeping
+    // the highest-view proposal per index. Mirrors PBFTCacheProcessor::generatePrePrepareMsg
+    // (PBFTCacheProcessor.cpp:584-624) — drift here re-opens FIB-124.
+    std::map<BlockNumber, PBFTMessageInterface::Ptr> preparedProposals;
+    for (const auto& viewChangeReq : viewChangeList)
+    {
+        for (const auto& proposal : viewChangeReq->preparedProposals())
+        {
+            if (proposal->index() <= committedIndex)
+            {
+                continue;
+            }
+            if (!preparedProposals.contains(proposal->index()))
+            {
+                preparedProposals[proposal->index()] = proposal;
+                continue;
+            }
+            auto existing = preparedProposals[proposal->index()];
+            // Fatal: two proposals for the same index in the same view with different hash —
+            // PBFT safety guarantees at most one prepared value per (index, view), so this
+            // indicates a forged or corrupt viewChange bundle.
+            if (existing->view() == proposal->view() && existing->hash() != proposal->hash())
+                [[unlikely]]
+            {
+                PBFT_LOG(WARNING)
+                    << LOG_DESC("InvalidNewViewMsg: conflicting prepared proposals for index")
+                    << LOG_KV("index", proposal->index())
+                    << LOG_KV("existingHash", existing->hash().abridged())
+                    << LOG_KV("newHash", proposal->hash().abridged());
+                return false;
+            }
+            // Keep the higher-view one.
+            if (existing->view() < proposal->view())
+            {
+                preparedProposals[proposal->index()] = proposal;
+            }
+        }
+    }
+
+    // Step 2: verify each prePrepareList item that has viewChange evidence.
+    // NOTE: generatePrePrepareMsg builds the new prePrepare from
+    // preparedProposals[i]->consensusProposal() (see PBFTCacheProcessor line ~634),
+    // so the justified-hash to compare is justified->consensusProposal()->hash(), NOT
+    // justified->hash() (the latter is the outer PBFT-message hash, which the new leader
+    // legitimately changes on rebuild).
+    for (const auto& prePrepare : _newViewMsg->prePrepareList())
+    {
+        auto ppIndex = prePrepare->consensusProposal() ? prePrepare->consensusProposal()->index() :
+                                                         prePrepare->index();
+        auto ppHash = prePrepare->consensusProposal() ? prePrepare->consensusProposal()->hash() :
+                                                        prePrepare->hash();
+
+        if (!preparedProposals.contains(ppIndex))
+        {
+            // No viewChange evidence for this index: the new leader may propose any block
+            // (including an empty-block placeholder from generateEmptyProposal). No hash
+            // binding is required here; downstream verifyProposal() runs full content checks.
+            continue;
+        }
+
+        auto& justified = preparedProposals[ppIndex];
+        auto justifiedPropHash = justified->consensusProposal() ?
+                                     justified->consensusProposal()->hash() :
+                                     justified->hash();
+        if (ppHash != justifiedPropHash)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "InvalidNewViewMsg: prePrepare hash does not match viewChange "
+                                     "evidence (FIB-124)")
+                              << LOG_KV("ppIndex", ppIndex) << LOG_KV("ppHash", ppHash.abridged())
+                              << LOG_KV("justifiedHash", justifiedPropHash.abridged())
+                              << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
+            return false;
+        }
+        if (prePrepare->view() != toView)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "InvalidNewViewMsg: prePrepare view does not match newView "
+                                     "target (FIB-124)")
+                              << LOG_KV("ppIndex", ppIndex) << LOG_KV("ppView", prePrepare->view())
+                              << LOG_KV("toView", toView) << printPBFTMsgInfo(_newViewMsg)
+                              << m_config->printCurrentState();
+            return false;
+        }
+    }
+    return true;
 }
 
 bool PBFTEngine::handleNewViewMsg(NewViewMsgInterface::Ptr _newViewMsg)
@@ -1424,6 +1840,10 @@ void PBFTEngine::reachNewView(ViewType _view)
     PBFT_LOG(INFO) << LOG_DESC("reachNewView") << m_config->printCurrentState()
                    << LOG_KV("lowWaterMark", m_config->lowWaterMark())
                    << LOG_KV("highWaterMark", m_config->highWaterMark());
+    // FIB-146 follow-up: dedup state from the previous view has no value after
+    // we cross into a new view — drop it to bound long-term memory and avoid
+    // stale entries shadowing legitimate first-occurrence msgs in the new view.
+    m_pipeline.reset();
     m_cacheProcessor->tryToApplyCommitQueue();
     m_cacheProcessor->tryToCommitStableCheckPoint();
 }
@@ -1461,7 +1881,11 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
             continue;
         }
         // miss the cache, request to from node
-        auto* from = m_config->getConsensusNodeByIndex(prePrepare->generatedFrom());
+        auto from = m_config->getConsensusNodeByIndex(prePrepare->generatedFrom());
+        if (!from)
+        {
+            continue;
+        }
         m_logSync->requestPrecommitData(
             from->nodeID, prePrepare, [self](PBFTMessageInterface::Ptr _prePrepare) {
                 auto engine = self.lock();
@@ -1496,6 +1920,11 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
 void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
     RecursiveGuard lock(m_mutex);
+    // Keep m_ledgerConfig in sync with the freshly-committed block.  Without this,
+    // m_ledgerConfig stays at the value loaded by fetchAndUpdateLedgerConfig() at init
+    // and is only refreshed on exception paths, leaving readers (e.g. FIB-126 timestamp
+    // validation in handlePrePrepareMsg) anchored to a stale parent timestamp.
+    *m_ledgerConfig = *_ledgerConfig;
     // try to switch rpbft
     switchToRPBFT(_ledgerConfig);
     // resetConfig after submit the block to ledger

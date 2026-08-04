@@ -29,6 +29,15 @@ static constexpr const size_t MAX_DOWNLOAD_BLOCK_QUEUE_SIZE = 256;
 static constexpr const size_t MAX_DOWNLOAD_REQUEST_QUEUE_SIZE = 1000;
 // the max number of blocks this node can request to
 static constexpr const size_t MAX_REQUEST_BLOCKS_COUNT = 8;
+// Hard cap on the number of block requests a single DownloadRequestQueue::mergeAndPop() may
+// generate (FIB-19). A malicious peer can craft a request whose [fromNumber, toNumber] range
+// spans billions of blocks; without a cap, mergeAndPop() expands it into an unbounded fetchSet
+// and maintainBlockRequest() issues one ledger read + outbound message per entry, exhausting
+// CPU/memory/network. The cap equals the worst-case legitimate volume (a full request queue of
+// MAX_DOWNLOAD_REQUEST_QUEUE_SIZE entries, each requesting MAX_REQUEST_BLOCKS_COUNT blocks), so
+// it never truncates honest traffic. The requester retries for any blocks beyond the cap.
+static constexpr const size_t MAX_MERGED_REQUEST_BLOCKS_COUNT =
+    MAX_DOWNLOAD_REQUEST_QUEUE_SIZE * MAX_REQUEST_BLOCKS_COUNT;
 static constexpr const size_t DOWNLOAD_TIMEOUT_TTL = 200;
 enum BlockSyncPacketType : int32_t
 {

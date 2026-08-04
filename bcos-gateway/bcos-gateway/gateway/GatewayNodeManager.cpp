@@ -19,6 +19,7 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
+#include <cstring>
 
 using namespace std;
 using namespace bcos;
@@ -26,6 +27,48 @@ using namespace gateway;
 using namespace bcos::protocol;
 using namespace bcos::group;
 using namespace bcos::crypto;
+
+GatewayNodeManager::~GatewayNodeManager() = default;
+
+void GatewayNodeManager::start()
+{
+    m_timer->start();
+}
+
+LocalRouterTable::Ptr GatewayNodeManager::localRouterTable()
+{
+    return m_localRouterTable;
+}
+
+PeersRouterTable::Ptr GatewayNodeManager::peersRouterTable()
+{
+    return m_peersRouterTable;
+}
+
+std::shared_ptr<bcos::crypto::KeyFactory> GatewayNodeManager::keyFactory()
+{
+    return m_keyFactory;
+}
+
+GatewayNodeManager::GatewayNodeManager(std::string const& _uuid,
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+  : m_uuid(_uuid),
+    m_keyFactory(_keyFactory),
+    m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
+    m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface)),
+    m_gatewayNodeStatusFactory(std::make_shared<GatewayNodeStatusFactory>())
+{}
+
+uint32_t GatewayNodeManager::increaseSeq()
+{
+    uint32_t statusSeq = ++m_statusSeq;
+    return statusSeq;
+}
+
+uint32_t GatewayNodeManager::statusSeq()
+{
+    return m_statusSeq;
+}
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
@@ -51,8 +94,29 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
         boost::bind(&GatewayNodeManager::onReceiveNodeStatus, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
     m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
-    // broadcast seq periodically
-    m_timer->registerTimeoutHandler([this]() { broadcastStatusSeq(); });
+    // broadcast seq periodically; also flush a coalesced node-list sync if peers dropped since the
+    // last tick (FIB-186 vector D: one sync per period instead of one per dropped session)
+    m_timer->registerTimeoutHandler([this]() {
+        if (m_nodeIDListDirty.exchange(false, std::memory_order_acq_rel))
+        {
+            // FIB-186 (vector D): syncLatestNodeIDList runs on the timer thread, before
+            // broadcastStatusSeq() re-arms the timer (m_timer->restart() is its first line).
+            // Timer's async_wait handler only logs a throwing timeout handler and does NOT
+            // reschedule, so an exception escaping here would leave the timer un-rearmed and the
+            // seqSync timer would die permanently (all status-seq broadcasts and node-list syncs
+            // would stop). Contain it so broadcastStatusSeq() always runs and re-arms the timer.
+            try
+            {
+                syncLatestNodeIDList();
+            }
+            catch (std::exception const& e)
+            {
+                NODE_MANAGER_LOG(WARNING)
+                    << LOG_DESC("syncLatestNodeIDList exception") << LOG_KV("error", e.what());
+            }
+        }
+        broadcastStatusSeq();
+    });
 }
 
 void GatewayNodeManager::stop()
@@ -101,8 +165,18 @@ void GatewayNodeManager::onReceiveStatusSeq(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto statusSeq =
-        boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)_msg->payload().data()));
+    // FIB-183: onReceiveStatusSeq reads a 4-byte sequence via *(uint32_t*)payload().data()
+    // with no size check (same defect class fixed in ServiceV2::onReceiveRouterSeq); a 0-3 byte
+    // payload reads past the decoded buffer. Drop short payloads and use memcpy for the read.
+    if (_msg->payload().size() < sizeof(uint32_t))
+    {
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq short payload, drop")
+                                  << LOG_KV("size", _msg->payload().size());
+        return;
+    }
+    uint32_t rawStatusSeq = 0;
+    std::memcpy(&rawStatusSeq, _msg->payload().data(), sizeof(rawStatusSeq));
+    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(rawStatusSeq);
     auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
     auto statusSeqChanged = statusChanged(from, statusSeq);
     if (!statusSeqChanged)
@@ -260,8 +334,28 @@ void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
         m_p2pID2Seq.erase(_p2pID);
     }
     m_peersRouterTable->removeP2PID(_p2pID);
-    // notify nodeIDs to front service
-    syncLatestNodeIDList();
+    // FIB-186 (vector D): notify the local front promptly without re-introducing the per-disconnect
+    // sync flood. removeP2PID above updates the gateway's own routing table immediately; the
+    // front's cached node-list is refreshed by syncLatestNodeIDList. Sync inline only on the first
+    // drop of a burst (the clean->dirty transition); further drops within the window leave the flag
+    // dirty and are coalesced by the seqSync timer (at most one inline sync per SEQ_SYNC_PERIOD, so
+    // a persistent bulk-disconnect cannot flood the front). Without the inline sync the front would
+    // keep a stale node-list for up to a full period, issuing messages to the departed node that
+    // the gateway then drops. This runs on the teardown executor inside Service::onMessage's
+    // try/catch, but wrap it so a throw cannot skip the rest of onDisconnect (other disconnect
+    // handlers, session erase).
+    if (!m_nodeIDListDirty.exchange(true, std::memory_order_acq_rel))
+    {
+        try
+        {
+            syncLatestNodeIDList();
+        }
+        catch (std::exception const& e)
+        {
+            NODE_MANAGER_LOG(WARNING)
+                << LOG_DESC("onRemoveNodeIDs inline sync exception") << LOG_KV("error", e.what());
+        }
+    }
 }
 
 

@@ -33,39 +33,19 @@ public:
 
     void nextDmcRound();
 
-    uint32_t getRound() { return m_round; }
+    uint32_t getRound();
 
-    std::string toHex(uint32_t x)
-    {
-        std::stringstream ss;
-        ss << std::setbase(16) << x;  // to hex
-        return ss.str();
-    }
+    std::string toHex(uint32_t x);
 
-    std::string getChecksum()
-    {
-        return toHex(m_checksum) + ":" + getSendChecksum() + ":" + getReceiveChecksum() + ":" +
-               std::to_string(m_round);
-    }
+    std::string getChecksum();
 
-    std::string getSendChecksum() { return toHex(m_sendChecksum); }
+    std::string getSendChecksum();
 
-    std::string getReceiveChecksum() { return toHex(m_receiveChecksum); }
+    std::string getReceiveChecksum();
 
-    void clear()
-    {
-        m_sendChecksum = 0;
-        m_receiveChecksum = 0;
-        m_checksum = 0;
-        m_round = 0;
-    }
+    void clear();
 
-    std::string dumpAndClearChecksum()
-    {
-        std::string checksum = getChecksum();
-        clear();
-        return checksum;
-    }
+    std::string dumpAndClearChecksum();
 
     // TODO: record execute history
 

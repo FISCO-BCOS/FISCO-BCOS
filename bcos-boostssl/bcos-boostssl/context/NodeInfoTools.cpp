@@ -20,6 +20,7 @@
 
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/NodeInfoTools.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -146,8 +147,7 @@ NodeInfoTools::initCert2PubHexHandler()
                 break;
             }
 
-            auto hex = bcos::toHexString(pubKey->data, pubKey->data + pubKey->length, "");
-            _pubHex = *hex.get();
+            _pubHex = bcos::toHex(bytesConstRef((const byte*)pubKey->data, pubKey->length));
 
             NODEINFO_LOG(INFO) << LOG_DESC("initCert2PubHexHandler ") << LOG_KV("cert", _cert)
                                << LOG_KV("pubHex: ", _pubHex);
@@ -170,8 +170,7 @@ std::function<bool(X509* cert, std::string& pubHex)> NodeInfoTools::initSSLConte
             return false;
         }
 
-        auto hex = bcos::toHexString(pubKey->data, pubKey->data + pubKey->length, "");
-        _pubHex = *hex.get();
+        _pubHex = bcos::toHex(bytesConstRef((const byte*)pubKey->data, pubKey->length));
 
         NODEINFO_LOG(INFO) << LOG_DESC("[NEW]SSLContext pubHex: " + _pubHex);
         return true;

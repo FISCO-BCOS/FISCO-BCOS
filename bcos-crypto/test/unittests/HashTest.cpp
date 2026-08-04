@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(testKeccak256)
         ts, std::string("6377c7e66081cb65e473c1b95db5195a27d04a7108b468890224bedbe1a8a6eb"));
 
     h256 emptyKeccak256(
-        *fromHexString("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        fromHex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
     BOOST_REQUIRE_EQUAL(emptyKeccak256, keccak256->emptyHash());
 
     BOOST_REQUIRE_EQUAL(cryptoSuite->hash(""sv),
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(testSM3)
         ts, std::string("afe4ccac5ab7d52bcae36373676215368baf52d3905e1fecbe369cc120e97628"));
 
     h256 emptySM3(
-        *fromHexString("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
+        fromHex("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
     BOOST_REQUIRE_EQUAL(emptySM3, sm3->emptyHash());
 
     BOOST_REQUIRE_EQUAL(cryptoSuite->hash(""sv),
@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(testSha3)
         ts, std::string("d716ec61e18904a8f58679b71cb065d4d5db72e0e0c3f155a4feff7add0e58eb"));
 
     h256 emptySha3(
-        *fromHexString("a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"));
+        fromHex("a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"));
     BOOST_REQUIRE_EQUAL(emptySha3, sha3->emptyHash());
 
     BOOST_REQUIRE_EQUAL(cryptoSuite->hash(""sv),

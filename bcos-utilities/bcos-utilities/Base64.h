@@ -26,6 +26,6 @@ std::string base64Encode(const byte* _begin, size_t _dataSize);
 std::string base64Encode(std::string const& _data);
 std::string base64Encode(bytesConstRef _data);
 
-std::shared_ptr<bytes> base64DecodeBytes(std::string const& _data);
+bytes base64DecodeBytes(std::string const& _data);
 std::string base64Decode(std::string const& _data);
 }  // namespace bcos

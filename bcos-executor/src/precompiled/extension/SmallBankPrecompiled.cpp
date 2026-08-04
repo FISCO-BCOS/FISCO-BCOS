@@ -88,7 +88,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     PrecompiledExecResult::Ptr _callParameters)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHexString(_callParameters->input()));
+                           << LOG_KV("param", toHex(_callParameters->input()));
     // parse function name
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();

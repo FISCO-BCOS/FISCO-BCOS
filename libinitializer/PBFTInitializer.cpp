@@ -297,11 +297,24 @@ void PBFTInitializer::registerHandlers()
 
     // the consensus moudle notify new block to the sync module
     std::weak_ptr<BlockSyncInterface> weakedSync = m_blockSync;
+    // FIB-167: propagate the live blockTxCountLimit (system-contract governance value) to
+    // txpool on every committed block so fillBlock's bound check tracks the current chain
+    // policy instead of the init-time snapshot. weak_ptr avoids extending txpool lifetime
+    // via this PBFT-owned callback.
+    std::weak_ptr<bcos::txpool::TxPoolInterface> weakedTxpool = m_txpool;
     m_pbft->registerNewBlockNotifier(
-        [weakedSync, weakedSealer](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
+        [weakedSync, weakedSealer, weakedTxpool](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
             std::function<void(Error::Ptr)> _onRecv) {
             try
             {
+                // FIB-167: push the limit to txpool first -- it is a local config update and
+                // must take effect before any subsequent fillBlock the sync notification may
+                // unblock. A missing txpool (shutdown race) is silently skipped; the sync
+                // notification still proceeds below.
+                if (auto txpool = weakedTxpool.lock())
+                {
+                    txpool->notifyBlockTxCountLimit(_ledgerConfig->blockTxCountLimit());
+                }
                 auto sync = weakedSync.lock();
                 auto sealer = weakedSealer.lock();
                 if (!sync || !sealer)
@@ -448,6 +461,25 @@ void PBFTInitializer::createPBFT()
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
     pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());
     pbftConfig->setPipeLineSize(m_nodeConfig->pipelineSize());
+    pbftConfig->setPipelineAdmissionEnabled(m_nodeConfig->pipelineAdmissionEnabled());
+    pbftConfig->setPipelinePerPeerCapacity(m_nodeConfig->pipelinePerPeerCapacity());
+    pbftConfig->setPipelineLruCapacity(m_nodeConfig->pipelineLruCapacity());
+    pbftConfig->setPipelineMaxPeers(m_nodeConfig->pipelineMaxPeers());
+
+    // FIB-146 follow-up: reset PBFTPipeline state when sealer set actually
+    // changes. RPBFT installs the tools instance during config construction;
+    // for non-rPBFT (plain PBFT), rpbftConfigTools() returns nullptr so we
+    // skip the hook.
+    if (auto rpbftTools = pbftConfig->rpbftConfigTools())
+    {
+        auto engineWeak = std::weak_ptr<bcos::consensus::PBFTEngine>(m_pbft->pbftEngine());
+        rpbftTools->registerOnSealerListChanged([engineWeak]() {
+            if (auto engine = engineWeak.lock())
+            {
+                engine->pipeline().reset();
+            }
+        });
+    }
 
     if (m_nodeConfig->singlePointConsensus())
     {

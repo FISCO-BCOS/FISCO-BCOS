@@ -22,6 +22,7 @@
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -29,16 +30,39 @@
 #include "bcos-utilities/DataConvertUtility.h"
 
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <cctype>
 
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::txpool;
 
-TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
+bool bcos::txpool::isValidToField(std::string_view toField)
+{
+    if (toField.empty() || g_BCOSConfig.isWasm())
+    {
+        return true;
+    }
+    if (toField.starts_with("0x") || toField.starts_with("0X"))
+    {
+        toField.remove_prefix(2);
+    }
+    constexpr size_t addressHexLength = 40;
+    return toField.size() == addressHexLength &&
+           std::ranges::all_of(
+               toField, [](unsigned char character) { return std::isxdigit(character) != 0; });
+}
+
+TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
 {
     if (_tx.invalid()) [[unlikely]]
     {
         return TransactionStatus::InvalidSignature;
+    }
+    // Reject unknown transaction types to prevent signature binding bypass
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::BCOSTransaction) &&
+        _tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
+    {
+        return TransactionStatus::Malformed;
     }
     if (_tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
@@ -57,6 +81,9 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     // remove in front module check signature
     try
     {
+        // Defensively reset sender/hash and mark tx tainted so verify() always performs
+        // signature recovery even when the input transaction was previously clean.
+        _tx.clearSenderAndHash();
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
     }
     catch (...)
@@ -74,12 +101,9 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     {
         _tx.setSystemTx(true);
     }
-    m_txPoolNonceChecker->insert(std::string(_tx.nonce()));
-    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
-    {
-        task::syncWait(m_web3NonceChecker->insertMemoryNonce(
-            std::string(_tx.sender()), std::string(_tx.nonce())));
-    }
+    // Nonce insertion is deferred to after all validation steps complete in
+    // verifyAndSubmitTransaction(), so that a failure in validateTransaction() or
+    // validateChainId() does not leave a leaked nonce in the pool (FIB-50)
     return TransactionStatus::None;
 }
 
@@ -136,6 +160,14 @@ bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
 
 TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transaction& _tx)
 {
+    // Issue #5318: reject a malformed `to` at admission time so it can never reach a block.
+    if (!isValidToField(_tx.to()))
+    {
+        TX_VALIDATOR_CHECKER_LOG(WARNING)
+            << LOG_BADGE("ValidateTransaction") << LOG_DESC("RejectTransactionWithInvalidTo")
+            << LOG_KV("to", _tx.to()) << LOG_KV("hash", _tx.hash().abridged());
+        return TransactionStatus::Malformed;
+    }
     if (_tx.value().length() > TRANSACTION_VALUE_MAX_LENGTH)
     {
         return TransactionStatus::OverFlowValue;
@@ -160,6 +192,10 @@ TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transac
 task::Task<TransactionStatus> TxValidator::validateBalance(
     const bcos::protocol::Transaction& _tx, std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
 {
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction))
+    {
+        co_return TransactionStatus::None;
+    }
     auto sender = toHex(_tx.sender());
 
     u256 balanceValue{};
@@ -191,28 +227,62 @@ task::Task<TransactionStatus> TxValidator::validateBalance(
                 << LOG_KV("error", boost::diagnostic_information(e));
         }
     }
-    // if gasPriceConfig is not set, we can skip the balance check
+    // Gas price config handling:
+    // - config set to 0  → skip all balance checks (free-gas chain)
+    // - config unset     → only check value (no baseline to validate gas cost against)
+    // - config set > 0   → FIB-75: also validate tx.effectiveGasPrice >= config and
+    //                       include gasLimit * effectiveGasPrice in required amount
     bool skipBalanceCheck = false;
-    if (auto gasPriceConfig = co_await ledger::getSystemConfig(
-            *_ledger->getStateStorage(), ledger::SYSTEM_KEY_TX_GAS_PRICE, ledger::fromStorage))
+    u256 systemGasPrice{0};
+    if (auto gasPriceConfig =
+            co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE))
     {
-        if (auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
-            gasPriceStr == "0x0" || gasPriceStr == "0")
+        auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
+        if (gasPriceStr == "0x0" || gasPriceStr == "0")
         {
             skipBalanceCheck = true;
             TX_VALIDATOR_CHECKER_LOG(TRACE) << LOG_BADGE("validateBalance")
                                             << LOG_DESC("Skip balance check due to zero gas price")
                                             << LOG_KV("gasPrice", gasPriceStr);
         }
+        else
+        {
+            systemGasPrice = u256(gasPriceStr);
+        }
     }
-    if (auto txValue = u256(_tx.value());
-        !skipBalanceCheck && (balanceValue < txValue || balanceValue == 0))
+    if (!skipBalanceCheck)
     {
-        TX_VALIDATOR_CHECKER_LOG(TRACE)
-            << LOG_BADGE("ValidateTransactionWithState") << LOG_DESC("InsufficientFunds")
-            << LOG_KV("sender", sender) << LOG_KV("balance", balanceValue)
-            << LOG_KV("txValue", txValue);
-        co_return TransactionStatus::InsufficientFunds;
+        u256 gasCost{0};
+        // Only validate gas price / gas cost when systemGasPrice is configured (> 0)
+        if (systemGasPrice > 0)
+        {
+            // effectiveGasPrice() handles legacy (gasPrice field) and EIP-1559 (maxFeePerGas)
+            const auto txGasPrice = protocol::effectiveGasPrice(_tx);
+            if (txGasPrice < systemGasPrice)
+            {
+                TX_VALIDATOR_CHECKER_LOG(TRACE)
+                    << LOG_BADGE("ValidateTransactionWithState")
+                    << LOG_DESC("tx gasPrice below system minimum") << LOG_KV("sender", sender)
+                    << LOG_KV("txGasPrice", txGasPrice) << LOG_KV("systemGasPrice", systemGasPrice);
+                co_return TransactionStatus::InsufficientFunds;
+            }
+            if (_tx.gasLimit() > 0)
+            {
+                gasCost = u256(_tx.gasLimit()) * txGasPrice;
+            }
+        }
+
+        auto txValue = u256(_tx.value());
+        if (auto totalRequired = txValue + gasCost;
+            balanceValue < totalRequired || balanceValue == 0)
+        {
+            TX_VALIDATOR_CHECKER_LOG(TRACE)
+                << LOG_BADGE("ValidateTransactionWithState") << LOG_DESC("InsufficientFunds")
+                << LOG_KV("sender", sender) << LOG_KV("balance", balanceValue)
+                << LOG_KV("txValue", txValue) << LOG_KV("gasCost", gasCost)
+                << LOG_KV("totalRequired", totalRequired);
+            co_return TransactionStatus::InsufficientFunds;
+        }
     }
 
     co_return TransactionStatus::None;

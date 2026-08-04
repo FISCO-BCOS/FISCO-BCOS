@@ -34,22 +34,14 @@ class TopicManager : public std::enable_shared_from_this<TopicManager>
 {
 public:
     using Ptr = std::shared_ptr<TopicManager>;
-    TopicManager(std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network)
-    {
-        m_rpcServiceName = _rpcServiceName;
-        m_network = _network;
-    }
-    virtual ~TopicManager() {}
+    TopicManager(std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network);
+    virtual ~TopicManager();
 
-    virtual void start() { notifyRpcToSubscribeTopics(); }
-    virtual void stop() {}
+    virtual void start();
+    virtual void stop();
 
-    uint32_t topicSeq() const { return m_topicSeq; }
-    uint32_t incTopicSeq()
-    {
-        uint32_t topicSeq = ++m_topicSeq;
-        return topicSeq;
-    }
+    uint32_t topicSeq() const;
+    uint32_t incTopicSeq();
 
     /**
      * @brief: parse client sub topics json

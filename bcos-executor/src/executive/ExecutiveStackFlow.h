@@ -37,11 +37,9 @@ class ExecutiveStackFlow : public virtual ExecutiveFlowInterface,
                            public std::enable_shared_from_this<ExecutiveStackFlow>
 {
 public:
-    ExecutiveStackFlow(ExecutiveFactory::Ptr executiveFactory)
-      : m_executiveFactory(executiveFactory)
-    {}
+        ExecutiveStackFlow(ExecutiveFactory::Ptr executiveFactory);
 
-    virtual ~ExecutiveStackFlow() {}
+        virtual ~ExecutiveStackFlow();
 
     void submit(CallParameters::UniquePtr txInput) override;
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
@@ -64,18 +62,7 @@ public:
         }
     };
 
-    void stop() override
-    {
-        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveStackFlow";
-        if (!m_isRunning)
-        {
-            EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
-            return;
-        }
-
-        m_isRunning = false;
-        ExecutiveFlowInterface::stop();
-    };
+    void stop() override;
 
 protected:
     void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,

@@ -40,34 +40,22 @@ public:
     using Ptr = std::shared_ptr<TopicItem>;
 
 public:
-    TopicItem() {}
-    TopicItem(const std::string& _topicName) : m_topicName(_topicName) {}
+    TopicItem();
+    TopicItem(const std::string& _topicName);
 
 private:
     std::string m_topicName;
 
 public:
-    std::string topicName() const { return m_topicName; }
-    void setTopicName(const std::string& _topicName) { m_topicName = _topicName; }
+    std::string topicName() const;
+    void setTopicName(const std::string& _topicName);
 };
 
-inline bool operator<(const TopicItem& _topicItem0, const TopicItem& _topicItem1)
-{
-    return _topicItem0.topicName() < _topicItem1.topicName();
-}
+bool operator<(const TopicItem& _topicItem0, const TopicItem& _topicItem1);
 using TopicItems = std::set<TopicItem>;
 
-inline std::string randomChoose(std::vector<std::string> _datas)
-{
-    auto seed = std::chrono::system_clock::now().time_since_epoch().count();
-    std::default_random_engine e(seed);
-    std::shuffle(_datas.begin(), _datas.end(), e);
-    return *(_datas.begin());
-}
+std::string randomChoose(std::vector<std::string> _datas);
 
-inline std::string shortHex(std::string const& _nodeID)
-{
-    return _nodeID.substr(0, 8);
-}
+std::string shortHex(std::string const& _nodeID);
 }  // namespace amop
 }  // namespace bcos

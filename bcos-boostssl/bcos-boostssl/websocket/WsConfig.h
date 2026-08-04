@@ -93,59 +93,45 @@ private:
     http::CorsConfig m_corsConfig;
 
 public:
-    void setModel(WsModel _model) { m_model = _model; }
-    WsModel model() const { return m_model; }
+    void setModel(WsModel _model);
+    WsModel model() const;
 
-    bool asClient() const { return (m_model & WsModel::Client) != 0; }
-    bool asServer() const { return (m_model & WsModel::Server) != 0; }
+    bool asClient() const;
+    bool asServer() const;
 
-    void setListenIP(std::string _listenIP) { m_listenIP = std::move(_listenIP); }
-    std::string listenIP() const { return m_listenIP; }
+    void setListenIP(std::string _listenIP);
+    std::string listenIP() const;
 
-    void setListenPort(uint16_t _listenPort) { m_listenPort = _listenPort; }
-    uint16_t listenPort() const { return m_listenPort; }
+    void setListenPort(uint16_t _listenPort);
+    uint16_t listenPort() const;
 
-    void setSmSSL(bool _isSmSSL) { m_smSSL = _isSmSSL; }
-    bool smSSL() const { return m_smSSL; }
+    void setSmSSL(bool _isSmSSL);
+    bool smSSL() const;
 
-    void setMaxMsgSize(uint32_t _maxMsgSize) { m_maxMsgSize = _maxMsgSize; }
-    uint32_t maxMsgSize() const { return m_maxMsgSize; }
+    void setMaxMsgSize(uint32_t _maxMsgSize);
+    uint32_t maxMsgSize() const;
 
-    uint32_t reconnectPeriod() const
-    {
-        return m_reconnectPeriod > MIN_RECONNECT_PERIOD_MS ? m_reconnectPeriod :
-                                                             MIN_RECONNECT_PERIOD_MS;
-    }
-    void setReconnectPeriod(uint32_t _reconnectPeriod) { m_reconnectPeriod = _reconnectPeriod; }
+    uint32_t reconnectPeriod() const;
+    void setReconnectPeriod(uint32_t _reconnectPeriod);
 
-    uint32_t heartbeatPeriod() const
-    {
-        return m_heartbeatPeriod > MIN_HEART_BEAT_PERIOD_MS ? m_heartbeatPeriod :
-                                                              MIN_HEART_BEAT_PERIOD_MS;
-    }
-    void setHeartbeatPeriod(uint32_t _heartbeatPeriod) { m_heartbeatPeriod = _heartbeatPeriod; }
+    uint32_t heartbeatPeriod() const;
+    void setHeartbeatPeriod(uint32_t _heartbeatPeriod);
 
-    int32_t sendMsgTimeout() const { return m_sendMsgTimeout; }
-    void setSendMsgTimeout(int32_t _sendMsgTimeout) { m_sendMsgTimeout = _sendMsgTimeout; }
+    int32_t sendMsgTimeout() const;
+    void setSendMsgTimeout(int32_t _sendMsgTimeout);
 
-    uint32_t threadPoolSize() const
-    {
-        return m_threadPoolSize != 0U ? m_threadPoolSize : MIN_THREAD_POOL_SIZE;
-    }
-    void setThreadPoolSize(uint32_t _threadPoolSize) { m_threadPoolSize = _threadPoolSize; }
+    uint32_t threadPoolSize() const;
+    void setThreadPoolSize(uint32_t _threadPoolSize);
 
-    EndPointsPtr connectPeers() const { return m_connectPeers; }
-    void setConnectPeers(EndPointsPtr _connectPeers) { m_connectPeers = std::move(_connectPeers); }
-    bool disableSsl() const { return m_disableSsl; }
-    void setDisableSsl(bool _disableSsl) { m_disableSsl = _disableSsl; }
+    EndPointsPtr connectPeers() const;
+    void setConnectPeers(EndPointsPtr _connectPeers);
+    bool disableSsl() const;
+    void setDisableSsl(bool _disableSsl);
 
-    std::shared_ptr<context::ContextConfig> contextConfig() const { return m_contextConfig; }
-    void setContextConfig(std::shared_ptr<context::ContextConfig> _contextConfig)
-    {
-        m_contextConfig = std::move(_contextConfig);
-    }
+    std::shared_ptr<context::ContextConfig> contextConfig() const;
+    void setContextConfig(std::shared_ptr<context::ContextConfig> _contextConfig);
 
-    http::CorsConfig corsConfig() const { return m_corsConfig; }
-    void setCorsConfig(http::CorsConfig _corsConfig) { m_corsConfig = std::move(_corsConfig); }
+    http::CorsConfig corsConfig() const;
+    void setCorsConfig(http::CorsConfig _corsConfig);
 };
 }  // namespace bcos::boostssl::ws

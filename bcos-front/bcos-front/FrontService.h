@@ -25,9 +25,12 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/concurrent_queue.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
+#include <atomic>
+#include <functional>
 #include <utility>
 
 namespace bcos::front
@@ -94,6 +97,19 @@ public:
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
 
+    // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
+    // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
+    // The owned payload is captured by the queued task -> the message body is never copied.
+    void asyncBroadcastMessageByOwnedPayload(
+        uint16_t type, int moduleID, bytesPointer payload) override;
+
+    // FIB-185: dispatch the point-to-point gateway send onto the serial send queue (off the caller
+    // thread), so sendViewChange / sendRecoverResponse run under m_mutex without contending the
+    // gateway session lock. Point-to-point encodes the wire frame, so this is not zero-copy; the
+    // owned payload is captured only to keep it alive across the deferred encode.
+    void asyncSendMessageByNodeIDByOwnedPayload(
+        int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload) override;
+
     /**
      * @brief: receive nodeIDs from gateway
      * @param _groupID: groupID
@@ -149,73 +165,44 @@ public:
     void onMessageTimeout(const boost::system::error_code& _error, bcos::crypto::NodeIDPtr _nodeID,
         const std::string& _uuid);
 
-    FrontMessageFactory::Ptr messageFactory() const { return m_messageFactory; }
+    FrontMessageFactory::Ptr messageFactory() const;
 
-    void setMessageFactory(FrontMessageFactory::Ptr _messageFactory)
-    {
-        m_messageFactory = std::move(_messageFactory);
-    }
+    void setMessageFactory(FrontMessageFactory::Ptr _messageFactory);
 
-    bcos::crypto::NodeIDPtr nodeID() const { return m_nodeID; }
-    void setNodeID(bcos::crypto::NodeIDPtr _nodeID) { m_nodeID = std::move(_nodeID); }
-    std::string groupID() const { return m_groupID; }
-    void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
+    bcos::crypto::NodeIDPtr nodeID() const;
+    void setNodeID(bcos::crypto::NodeIDPtr _nodeID);
+    std::string groupID() const;
+    void setGroupID(const std::string& _groupID);
 
-    std::shared_ptr<gateway::GatewayInterface> gatewayInterface() { return m_gatewayInterface; }
+    std::shared_ptr<gateway::GatewayInterface> gatewayInterface();
 
-    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override
-    {
-        Guard guard(x_groupNodeInfo);
-        return m_groupNodeInfo;
-    }
+    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override;
 
-    void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
-    {
-        m_gatewayInterface = std::move(_gatewayInterface);
-    }
+    void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface);
 
-    std::shared_ptr<boost::asio::io_context> ioService() const { return m_ioService; }
-    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
-    {
-        m_ioService = std::move(_ioService);
-    }
+    std::shared_ptr<boost::asio::io_context> ioService() const;
+    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService);
 
     // register message _dispatcher for module
     void registerModuleMessageDispatcher(int _moduleID,
-        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)> _dispatcher)
-    {
-        m_moduleID2MessageDispatcher[_moduleID] = std::move(_dispatcher);
-    }
+        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>
+            _dispatcher);
 
     // only for ut
     std::unordered_map<int,
         std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
-    moduleID2MessageDispatcher() const
-    {
-        return m_moduleID2MessageDispatcher;
-    }
+    moduleID2MessageDispatcher() const;
 
     // only for ut
     std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
-    module2GroupNodeInfoNotifier() const
-    {
-        return m_module2GroupNodeInfoNotifier;
-    }
+    module2GroupNodeInfoNotifier() const;
     // register nodeIDs _dispatcher for module
     void registerGroupNodeInfoNotification(int _moduleID,
         std::function<void(
             bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback)>
-            _dispatcher)
-    {
-        m_module2GroupNodeInfoNotifier[_moduleID] = _dispatcher;
-    }
+            _dispatcher);
 
-    bcos::protocol::ProtocolInfo::ConstPtr getLocalProtocolInfo() const
-    {
-        auto ret = std::make_shared<bcos::protocol::ProtocolInfo>(*m_localProtocol);
-        ret->setVersion(m_localProtocolVersion);
-        return ret;
-    }
+    bcos::protocol::ProtocolInfo::ConstPtr getLocalProtocolInfo() const;
 
     struct Callback : public std::enable_shared_from_this<Callback>
     {
@@ -230,30 +217,11 @@ public:
     std::unordered_map<std::string, Callback::Ptr> m_callback;
 
     // only for ut
-    std::unordered_map<std::string, Callback::Ptr> callback() const { return m_callback; }
+    std::unordered_map<std::string, Callback::Ptr> callback() const;
 
-    Callback::Ptr getAndRemoveCallback(const std::string& _uuid)
-    {
-        Callback::Ptr callback = nullptr;
+    Callback::Ptr getAndRemoveCallback(const std::string& _uuid);
 
-        {
-            Guard guard(x_callback);
-            auto it = m_callback.find(_uuid);
-            if (it != m_callback.end())
-            {
-                callback = it->second;
-                m_callback.erase(it);
-            }
-        }
-
-        return callback;
-    }
-
-    void addCallback(const std::string& _uuid, Callback::Ptr callback)
-    {
-        Guard guard(x_callback);
-        m_callback[_uuid] = std::move(callback);
-    }
+    void addCallback(const std::string& _uuid, Callback::Ptr callback);
 
 protected:
     virtual void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
@@ -263,9 +231,17 @@ protected:
 
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
+    // FIB-185: hand a send task to the serial queue and return immediately; a single drainer runs
+    // tasks one at a time (FIFO) on m_asyncGroup, so no caller thread runs the gateway send.
+    void enqueueSend(std::function<void()> _sendTask);
+    void drainSendQueue();
+
 private:
     tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;
+    // FIB-185: serial async send queue + single-drainer guard (reuses m_asyncGroup, no new thread).
+    tbb::concurrent_queue<std::function<void()>> m_sendQueue;
+    std::atomic_bool m_sendDraining{false};
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface

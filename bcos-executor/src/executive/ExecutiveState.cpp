@@ -24,6 +24,30 @@
 using namespace bcos;
 using namespace bcos::executor;
 
+ExecutiveState::ExecutiveState(
+    ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input)
+  : m_isStaticCall(input->staticCall),
+    m_contextID(input->contextID),
+    m_seq(input->seq),
+    m_input(std::move(input)),
+    m_executiveFactory(std::move(executiveFactory))
+{}
+
+ExecutiveState::Status ExecutiveState::getStatus()
+{
+    return m_status;
+}
+
+int64_t ExecutiveState::getContextID() const
+{
+    return m_contextID;
+}
+
+int64_t ExecutiveState::getSeq() const
+{
+    return m_seq;
+}
+
 CallParameters::UniquePtr ExecutiveState::go()
 {
     // init

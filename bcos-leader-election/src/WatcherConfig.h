@@ -20,6 +20,9 @@
  */
 #pragma once
 #include "ElectionConfig.h"
+#include <cstddef>
+#include <string>
+#include <string_view>
 
 namespace bcos
 {
@@ -29,6 +32,26 @@ class WatcherConfig : public ElectionConfig
 {
 public:
     using Ptr = std::shared_ptr<WatcherConfig>;
+
+    // FIB-168: hard upper bound on watched etcd value sizes. Values exceeding
+    // this cap are rejected before decode to limit the worst-case CPU and log
+    // amplification a malicious or compromised etcd writer can inflict on the
+    // watcher thread.
+    static constexpr std::size_t c_maxEtcdValueSize = 64 * 1024;
+    // FIB-168: log only the first c_logValuePrefixBytes bytes of a payload on
+    // failure paths so corrupt or oversized values cannot blow up log volume.
+    static constexpr std::size_t c_logValuePrefixBytes = 64;
+
+    /// FIB-168 testable helper: reject values whose size exceeds c_maxEtcdValueSize.
+    static bool isOversizeEtcdValue(std::size_t _size) noexcept
+    {
+        return _size > c_maxEtcdValueSize;
+    }
+
+    /// FIB-168 testable helper: produce a hex-prefix representation of the
+    /// value capped at c_logValuePrefixBytes bytes for safe logging.
+    static std::string truncateValueForLog(std::string_view _value);
+
     WatcherConfig(std::string const& _etcdEndPoint, std::string const& _watchDir,
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose,
         const std::string& _caPath = "", const std::string& _certPath = "",
@@ -38,8 +61,11 @@ public:
 
     void start() override
     {
-        ElectionConfig::start();
+        // Fetch initial state before starting watcher to avoid race where
+        // watcher events update m_keyToLeader before fetchLeadersInfo()
+        // overwrites it with potentially stale data
         fetchLeadersInfo();
+        ElectionConfig::start();
     }
 
     std::string const& watchDir() const { return m_watchDir; }
@@ -63,15 +89,15 @@ public:
     void addMemberChangeNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
     {
-        ReadGuard l(x_notificationHandlers);
-        m_notificationHandlers.emplace_back(_handler);
+        WriteGuard l(x_notificationHandlers);
+        m_notificationHandlers.emplace_back(std::move(_handler));
     }
 
     void addMemberDeleteNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
     {
-        ReadGuard l(x_onMemberDeleted);
-        m_onMemberDeleted.emplace_back(_handler);
+        WriteGuard l(x_onMemberDeleted);
+        m_onMemberDeleted.emplace_back(std::move(_handler));
     }
 
 protected:
@@ -89,6 +115,8 @@ protected:
 private:
     std::string m_watchDir;
     std::map<std::string, bcos::protocol::MemberInterface::Ptr> m_keyToLeader;
+    // track last-seen modified_index per key to reject out-of-order updates
+    std::map<std::string, int64_t> m_keyToLeaderSeq;
     mutable SharedMutex x_keyToLeader;
 
     std::vector<std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)>>

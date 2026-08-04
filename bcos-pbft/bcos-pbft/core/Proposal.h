@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-framework/consensus/ProposalInterface.h"
 #include "bcos-pbft/core/proto/Consensus.pb.h"
+#include "bcos-pbft/pbft/utilities/Common.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>
 
@@ -132,15 +133,32 @@ public:
 protected:
     void setRawProposal(std::shared_ptr<RawProposal> _rawProposal)
     {
-        m_rawProposal = _rawProposal;
+        m_rawProposal = std::move(_rawProposal);
         deserializeObject();
     }
     virtual void deserializeObject()
     {
         auto const& hashData = m_rawProposal->hash();
-        if (hashData.size() < bcos::crypto::HashType::SIZE)
+        // FIB-174: drop any stale/default identity before validating, so a
+        // failed decode on a reused object cannot retain the prior proposal's
+        // hash. An empty hash field (size 0) is the not-yet-set state of a
+        // freshly constructed proposal (e.g. PBFTProposal() before setHash());
+        // leave m_hash default-constructed and do not treat that as malformed.
+        m_hash = bcos::crypto::HashType{};
+        if (hashData.empty())
         {
             return;
+        }
+        // FIB-149 / FIB-174: a present-but-non-canonical hash length (oversize OR
+        // undersize) is malformed wire data — reject it at decode instead of
+        // silently returning. Pre-fix used `<`, which silently truncated oversize
+        // input to the first 32 bytes, and the undersize case returned without
+        // surfacing the malformed input as an invalid PBFT message.
+        if (hashData.size() != bcos::crypto::HashType::SIZE)
+        {
+            BOOST_THROW_EXCEPTION(InvalidPBFTMessage() << errinfo_comment(
+                                      "Proposal::deserializeObject malformed hash length: " +
+                                      std::to_string(hashData.size())));
         }
         m_hash =
             bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE);

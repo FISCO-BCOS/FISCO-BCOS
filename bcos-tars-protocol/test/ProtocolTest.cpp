@@ -92,12 +92,23 @@ BOOST_AUTO_TEST_CASE(transaction)
     auto tx = factory.createTransaction(
         0, to, input, nonce, 100, "testChain", "testGroup", 1000, *keyPair);
 
+    BOOST_CHECK(tx->tainted());
+
     tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
     BOOST_CHECK(!tx->sender().empty());
+    BOOST_CHECK(!tx->tainted());
+    BOOST_CHECK_THROW(tx->forceSender(bcos::bytes{0x1}), std::invalid_argument);
     bcos::bytes buffer;
     tx->encode(buffer);
 
     auto decodedTx = factory.createTransaction(bcos::ref(buffer), true);
+    BOOST_CHECK(!decodedTx->tainted());
+
+    auto storageTx = factory.createTransaction(bcos::ref(buffer), false, false, false);
+    BOOST_CHECK(!storageTx->tainted());
+    BOOST_CHECK_THROW(storageTx->forceSender(bcos::bytes{0x2}), std::invalid_argument);
+    storageTx->clearSenderAndHash();
+    BOOST_CHECK(storageTx->tainted());
 
     BOOST_CHECK_EQUAL(tx->hash(), decodedTx->hash());
     BOOST_CHECK_EQUAL(tx->version(), 0);
@@ -479,7 +490,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
     BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
     for (auto [originParentInfo, decodeParentInfo] :
-        RANGES::views::zip(header->parentInfo(), decodedHeader->parentInfo()))
+        ::ranges::views::zip(header->parentInfo(), decodedHeader->parentInfo()))
     {
         BOOST_CHECK_EQUAL(
             bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));
@@ -623,8 +634,8 @@ void checkExecutionMessage(bcostars::protocol::ExecutionMessageImpl::Ptr executi
     BOOST_CHECK_EQUAL(anotherExecutionMsg->internalCreate(), executionMsg->internalCreate());
     BOOST_CHECK_EQUAL(anotherExecutionMsg->internalCall(), executionMsg->internalCall());
     BOOST_CHECK_EQUAL(anotherExecutionMsg->gasAvailable(), executionMsg->gasAvailable());
-    BOOST_CHECK_EQUAL(*(bcos::toHexString(anotherExecutionMsg->data().toBytes())),
-        *(bcos::toHexString(executionMsg->data().toBytes())));
+    BOOST_CHECK_EQUAL(bcos::toHex(anotherExecutionMsg->data().toBytes()),
+        bcos::toHex(executionMsg->data().toBytes()));
     BOOST_CHECK_EQUAL(anotherExecutionMsg->staticCall(), executionMsg->staticCall());
     BOOST_CHECK_EQUAL(
         anotherExecutionMsg->createSalt().value(), executionMsg->createSalt().value());
@@ -697,8 +708,7 @@ BOOST_AUTO_TEST_CASE(testExecutionMessage)
     BOOST_CHECK_EQUAL(executionMsg->internalCreate(), internalCreate);
     BOOST_CHECK_EQUAL(executionMsg->internalCall(), internalCall);
     BOOST_CHECK_EQUAL(executionMsg->gasAvailable(), gasAvailable);
-    BOOST_CHECK_EQUAL(
-        *(bcos::toHexString(executionMsg->data().toBytes())), *(bcos::toHexString(data)));
+    BOOST_CHECK_EQUAL(bcos::toHex(executionMsg->data().toBytes()), bcos::toHex(data));
     BOOST_CHECK_EQUAL(executionMsg->staticCall(), staticCall);
     BOOST_CHECK_EQUAL(executionMsg->createSalt().value(), salt);
     BOOST_CHECK_EQUAL(executionMsg->status(), status);

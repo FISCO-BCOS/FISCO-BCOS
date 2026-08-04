@@ -120,6 +120,17 @@ void encodeCompactInteger(const CompactInteger& value, ScaleEncoderStream& out)
     }
 }
 
+ScaleEncoderStream& ScaleEncoderStream::operator<<(std::string_view sv)
+{
+    return encodeCollection(sv.size(), sv.begin(), sv.end());
+}
+
+ScaleEncoderStream& ScaleEncoderStream::operator<<(s256 const& v)
+{
+    u256 unsignedValue = s2u(v);
+    return *this << unsignedValue;
+}
+
 ScaleEncoderStream& ScaleEncoderStream::operator<<(const u256& _value)
 {
     // convert u256 to big-edian bytes(Note: must be 32bytes)
@@ -153,4 +164,10 @@ ScaleEncoderStream& ScaleEncoderStream::encodeOptionalBool(const boost::optional
         result = OptionalBool::FalseValue;
     }
     return putByte(static_cast<uint8_t>(result));
+}
+
+ScaleEncoderStream& ScaleEncoderStream::putByte(uint8_t v)
+{
+    m_stream.emplace_back(v);
+    return *this;
 }

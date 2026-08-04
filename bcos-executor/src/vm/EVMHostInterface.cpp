@@ -80,12 +80,36 @@ evmc_storage_status setStorage(evmc_host_context* context,
     auto& hostContext = static_cast<HostContext&>(*context);
 
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
-    // TODO: use evmc_storage_status 5-8
-    auto status = EVMC_STORAGE_MODIFIED;
-    if (value == 0)  // TODO: Should use 32 bytes 0
+
+    evmc_storage_status status;
+    if (hostContext.features().get(ledger::Features::Flag::bugfix_evm_storage_status))
     {
-        status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
+        // TODO: full EIP-2200 support — also report the 5 dirty-slot statuses
+        // (DELETED_ADDED, MODIFIED_DELETED, DELETED_RESTORED, ADDED_DELETED,
+        // MODIFIED_RESTORED). Requires tracking the transaction-original value
+        // per slot to distinguish clean (o == c) from dirty (o != c) writes.
+        const auto existingValue = hostContext.store(key);
+        const bool existingIsZero =
+            concepts::bytebuffer::equalTo(existingValue.bytes, EMPTY_EVM_BYTES32.bytes);
+        if (concepts::bytebuffer::equalTo(value->bytes, EMPTY_EVM_BYTES32.bytes))
+        {
+            status = existingIsZero ? EVMC_STORAGE_ASSIGNED : EVMC_STORAGE_DELETED;
+        }
+        else
+        {
+            status = existingIsZero ? EVMC_STORAGE_ADDED : EVMC_STORAGE_MODIFIED;
+        }
+        // evmone applies gas_refund from the returned status; no manual refund bookkeeping.
+    }
+    else
+    {
+        // Legacy behavior preserved verbatim for consensus compatibility.
+        status = EVMC_STORAGE_MODIFIED;
+        if (value == 0)  // historical: pointer compared against 0; effectively never true
+        {
+            status = EVMC_STORAGE_DELETED;
+            hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
+        }
     }
     hostContext.setStore(key, value);  // Interface uses native endianness
     return status;

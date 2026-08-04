@@ -272,8 +272,8 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     return ContractStatus::Available;
 }
 
-bool precompiled::checkPathValid(
-    std::string_view _path, std::variant<uint32_t, protocol::BlockVersion> version)
+bool precompiled::checkPathValid(std::string_view _path,
+    std::variant<uint32_t, protocol::BlockVersion> version, const ledger::Features* features)
 {
     if (_path.empty()) [[unlikely]]
         return false;
@@ -310,7 +310,7 @@ bool precompiled::checkPathValid(
     }
     std::vector<std::string> pathList;
     //    constexpr std::string_view delim{"/"};
-    //    auto spliter = RANGES::split_view(absoluteDir, delim);
+    //    auto spliter = ::ranges::split_view(absoluteDir, delim);
     boost::split(pathList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     if (pathList.size() > FS_PATH_MAX_LEVEL || pathList.empty())
     {
@@ -319,6 +319,20 @@ bool precompiled::checkPathValid(
             << LOG_DESC("resource path's level is too deep, level over FS_PATH_MAX_LEVEL")
             << LOG_KV("path", _path);
         return false;
+    }
+    // FIB-83: reject paths ending with reserved _accessAuth suffix to prevent auth table squatting
+    if (features != nullptr && features->get(ledger::Features::Flag::bugfix_auth_check))
+    {
+        for (const auto& component : pathList)
+        {
+            if (component.ends_with(executor::CONTRACT_SUFFIX))
+            {
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
+                                       << LOG_DESC("path ends with reserved _accessAuth suffix")
+                                       << LOG_KV("component", component) << LOG_KV("path", _path);
+                return false;
+            }
+        }
     }
     const static boost::regex oldRegex(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
     const static boost::regex newRegex(R"(^[\w]+[\w\-#@.]*$)");

@@ -43,21 +43,21 @@ public:
 
 
     using Ptr = std::shared_ptr<AMOPMessage>;
-    AMOPMessage() {}
-    AMOPMessage(bytesConstRef _data) { decode(_data); }
-    virtual ~AMOPMessage() {}
+    AMOPMessage();
+    AMOPMessage(bytesConstRef _data);
+    virtual ~AMOPMessage();
 
-    virtual uint16_t type() const { return m_type; }
-    virtual void setType(uint16_t _type) { m_type = _type; }
+    virtual uint16_t type() const;
+    virtual void setType(uint16_t _type);
 
-    virtual bytesConstRef data() const { return m_data; }
+    virtual bytesConstRef data() const;
     // Note: must maintain life time for _data
-    virtual void setData(bcos::bytesConstRef _data) { m_data = _data; }
-    virtual void setStatus(uint16_t _status) { m_status = _status; }
-    virtual uint16_t status() const { return m_status; }
+    virtual void setData(bcos::bytesConstRef _data);
+    virtual void setStatus(uint16_t _status);
+    virtual uint16_t status() const;
 
-    virtual uint16_t version() const { return m_version; }
-    virtual void setVersion(uint16_t version) { m_version = version; }
+    virtual uint16_t version() const;
+    virtual void setVersion(uint16_t version);
 
 public:
     bool encode(bytes& _buffer);
@@ -74,12 +74,9 @@ class AMOPMessageFactory
 public:
     using Ptr = std::shared_ptr<AMOPMessageFactory>;
     AMOPMessageFactory() = default;
-    AMOPMessage::Ptr buildMessage() { return std::make_shared<AMOPMessage>(); }
+    AMOPMessage::Ptr buildMessage();
     // Note: must maintain lifetime of _data
-    AMOPMessage::Ptr buildMessage(bytesConstRef _data)
-    {
-        return std::make_shared<AMOPMessage>(_data);
-    }
+    AMOPMessage::Ptr buildMessage(bytesConstRef _data);
 };
 }  // namespace amop
 }  // namespace bcos

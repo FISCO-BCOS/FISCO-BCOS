@@ -20,10 +20,10 @@
 
 #pragma once
 #include "Common.h"
+#include "bcos-utilities/Error.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <utility>
-#include <vector>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
 // Note:https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/

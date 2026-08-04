@@ -31,6 +31,14 @@ using namespace bcos::protocol;
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
+BlockExecutiveFactory::BlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize)
+    : m_isSerialExecute(isSerialExecute),
+        m_contract2ShardCache(std::make_shared<ShardCache>(128)),
+        m_keyPageSize(keyPageSize)
+{}
+
+BlockExecutiveFactory::~BlockExecutiveFactory() = default;
+
 
 std::shared_ptr<BlockExecutive> BlockExecutiveFactory::build(bcos::protocol::Block::Ptr block,
     SchedulerImpl* scheduler, size_t startContextID,

@@ -19,7 +19,6 @@
 #include <random>
 
 using namespace bcos::storage;
-using namespace std;
 
 // ostream& operator<<(ostream& os, const std::unique_ptr<bcos::Error>& error)
 // {
@@ -29,6 +28,8 @@ using namespace std;
 
 namespace bcos::test::rocksdb_test
 {
+using namespace std;
+
 class Header256Hash : public bcos::crypto::Hash
 {
 public:
@@ -551,7 +552,7 @@ BOOST_AUTO_TEST_CASE(rocksDBiter)
 
         for (size_t j = 0; j != 1000; ++j)
         {
-            std::string key = *(bcos::toHexString(std::string((char*)&i, sizeof(i)))) + "_key_" +
+            std::string key = bcos::toHex(std::string((char*)&i, sizeof(i))) + "_key_" +
                               boost::lexical_cast<std::string>(j);
             std::string value = "hello world!";
 

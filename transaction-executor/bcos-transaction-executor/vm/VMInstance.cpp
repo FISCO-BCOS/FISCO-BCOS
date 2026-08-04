@@ -20,7 +20,9 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
         *msg, rev, *host, context, std::basic_string_view<uint8_t>(code, codeSize), {});
     auto result = EVMCResult(evmone::baseline::execute(
         *static_cast<evmone::VM const*>(evm), msg->gas, *executionState, *m_instance));
-    if (!localExecutionState)
+    // FIB-96: only cache ExecutionState if memory usage is reasonable
+    constexpr size_t MAX_CACHED_MEMORY = 1024 * 1024;  // 1MB threshold
+    if (!localExecutionState && executionState->memory.size() <= MAX_CACHED_MEMORY)
     {
         localExecutionState = std::move(executionState);
     }

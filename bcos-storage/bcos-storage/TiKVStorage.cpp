@@ -176,8 +176,8 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
 }
 
 void TiKVStorage::asyncGetRows(std::string_view _table,
-    RANGES::any_view<std::string_view,
-        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
         keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
 {
@@ -528,9 +528,9 @@ void TiKVStorage::asyncRollback(
 }
 
 bcos::Error::Ptr TiKVStorage::setRows(std::string_view tableName,
-    RANGES::any_view<std::string_view, RANGES::category::random_access | RANGES::category::sized>
+    ::ranges::any_view<std::string_view, ::ranges::category::random_access | ::ranges::category::sized>
         keys,
-    RANGES::any_view<std::string_view, RANGES::category::random_access | RANGES::category::sized>
+    ::ranges::any_view<std::string_view, ::ranges::category::random_access | ::ranges::category::sized>
         values) noexcept
 {
     bcos::Error::Ptr err = nullptr;

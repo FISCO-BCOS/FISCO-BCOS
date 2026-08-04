@@ -43,7 +43,9 @@ public:
     virtual void batchRemove(bcos::protocol::NonceList const& _nonceList) = 0;
     virtual void batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
         std::hash<bcos::protocol::NonceType>> const& _nonceList) = 0;
-    virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
+    // Returns true if the nonce was newly inserted, false if it already existed.
+    // Callers should treat false as NonceCheckFail (atomic check-and-reserve, FIB-51).
+    virtual bool insert(bcos::protocol::NonceType const& _nonce) = 0;
 
     virtual void remove(bcos::protocol::NonceType const& _nonce) = 0;
 };
