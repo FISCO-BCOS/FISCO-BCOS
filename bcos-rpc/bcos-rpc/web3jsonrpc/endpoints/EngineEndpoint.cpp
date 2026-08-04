@@ -32,16 +32,27 @@ using namespace bcos::rpc;
 EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService))
 {}
 
+void EngineEndpoint::buildEngineNotAvailableError(Json::Value& response) const
+{
+    Json::Value error;
+    error["code"] = Web3DefaultError;
+    error["message"] = "Engine service is not available on this node";
+    response["jsonrpc"] = "2.0";
+    response["error"] = std::move(error);
+}
+
 task::Task<void> EngineEndpoint::exchangeCapabilities(
     const Json::Value& request, Json::Value& response)
 {
-    // engineService is guaranteed to be wired in when the OP-Engine RPC port is
-    // enabled (AirNodeInitializer unconditionally builds it; the MAX/tars path has
-    // no op_engine_rpc entry point yet). The assert documents that invariant —
-    // it compiles out under NDEBUG, and reaching here without the service is a
-    // wiring bug, not a runtime state.
     auto& engineService = m_nodeService->engineService();
-    assert(engineService && "engineService is not available");
+    if (!engineService)
+    {
+        // The engine service may be absent (e.g. a MAX/tars node without
+        // op_engine_rpc wiring). Return a clean JSON-RPC error instead of
+        // dereferencing null under release builds (where assert is compiled out).
+        buildEngineNotAvailableError(response);
+        co_return;
+    }
 
     std::vector<std::string> remoteCaps;
     auto const& capsArray = request[0u];
@@ -90,10 +101,12 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(
 task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     engine::ApiVersion version, const Json::Value& request, Json::Value& response)
 {
-    // engineService is always wired when this endpoint is reachable (see
-    // exchangeCapabilities for the invariant rationale).
     auto& engineService = m_nodeService->engineService();
-    assert(engineService && "engineService is not available");
+    if (!engineService)
+    {
+        buildEngineNotAvailableError(response);
+        co_return;
+    }
 
     auto forkchoiceState = parseForkchoiceState(request);
     auto payloadAttrs = parsePayloadAttributes(request, version);
@@ -141,7 +154,11 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     engine::ApiVersion version, const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    assert(engineService && "engineService is not available");
+    if (!engineService)
+    {
+        buildEngineNotAvailableError(response);
+        co_return;
+    }
 
     engine::PayloadID payloadId = request[0u].asString();
     auto engineResult = co_await engineService->getPayload(
@@ -189,7 +206,11 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     engine::ApiVersion version, const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    assert(engineService && "engineService is not available");
+    if (!engineService)
+    {
+        buildEngineNotAvailableError(response);
+        co_return;
+    }
 
     auto newPayloadReq =
         parseNewPayloadRequest(request, *m_nodeService->blockFactory()->transactionFactory(), version);

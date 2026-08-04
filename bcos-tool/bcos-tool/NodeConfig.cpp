@@ -698,7 +698,6 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
         enable=false
         listen_ip=127.0.0.1
         listen_port=8551
-        thread_count=4
         request_body_size_limit=10485760
         batch_request_size_limit=8
         jwt_secret_file=conf/op-engine/jwt.hex

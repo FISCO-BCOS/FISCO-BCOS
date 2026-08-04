@@ -54,6 +54,9 @@ private:
     task::Task<void> handleNewPayload(
         engine::ApiVersion version, const Json::Value&, Json::Value&);
 
+    /// Build a JSON-RPC error response when the engine service is unavailable.
+    void buildEngineNotAvailableError(Json::Value& response) const;
+
     NodeService::Ptr m_nodeService;
 };
 }  // namespace bcos::rpc

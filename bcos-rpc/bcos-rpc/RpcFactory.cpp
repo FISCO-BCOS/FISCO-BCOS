@@ -343,6 +343,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
         // expose the port to cross-origin pages. Disable it explicitly.
         wsConfig->setCorsConfig(
             bcos::boostssl::http::CorsConfig{.enableCORS = false});
+        // The engine API is JSON-RPC over HTTP only, no websocket transport is
+        // supported. Disable WS so Upgrade: websocket requests are rejected.
+        wsConfig->setEnableWebSocket(false);
     }
     else
     {

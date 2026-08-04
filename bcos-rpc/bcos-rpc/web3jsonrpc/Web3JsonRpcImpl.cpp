@@ -205,11 +205,18 @@ void Web3JsonRpcImpl::onRPCRequest(const bcos::boostssl::http::HttpRequest& _req
     {
         Json::Value request;
         Json::Value response;
-        buildJsonError(request, bcos::rpc::toJsonRpcJwtErrorCode(verifyResult.error),
+        auto jsonRpcError = bcos::rpc::toJsonRpcJwtErrorCode(verifyResult.error);
+        buildJsonError(request, jsonRpcError,
             "JWT authentication failed: " + verifyResult.errorMessage, response);
-        auto httpStatus = (verifyResult.error == bcos::rpc::JwtError::SecretReadFailed) ?
-            boost::beast::http::status::internal_server_error :
-            boost::beast::http::status::unauthorized;
+        auto httpStatus = boost::beast::http::status::unauthorized;
+        if (jsonRpcError == bcos::rpc::JwtForbidden)
+        {
+            httpStatus = boost::beast::http::status::forbidden;
+        }
+        else if (jsonRpcError == bcos::rpc::InternalError)
+        {
+            httpStatus = boost::beast::http::status::internal_server_error;
+        }
         _sender(toBytesResponse(response), httpStatus);
         return;
     }

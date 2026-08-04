@@ -60,8 +60,10 @@ private:
     std::optional<std::string> readSecret() const;
 
     JwtConfig::Ptr m_config;
-    // Loaded once in the constructor; read-only afterwards, so concurrent
-    // verify() calls from multiple RPC IO threads never race on this member.
-    std::optional<std::string> m_secret;
+    // Secret cache. Populated at construction, or lazily on the first
+    // successful read when the file was not ready at startup. Const methods
+    // (verify/verifyToken) may publish a late-arriving secret; concurrent
+    // writers always write an identical value, which is benign.
+    mutable std::optional<std::string> m_secret;
 };
 }  // namespace bcos::rpc
