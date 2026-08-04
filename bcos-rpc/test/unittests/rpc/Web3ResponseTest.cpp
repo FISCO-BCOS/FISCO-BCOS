@@ -13,6 +13,7 @@
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -226,6 +227,45 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsDepositFieldsFromMeta)
     BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x5");
     BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x1");
     BOOST_CHECK(!result.isMember("l1GasPrice"));
+}
+
+// combineTxResponseFromWeb3 对 deposit(0x7e)的输出:handler 委托的 nonce/type/value/chainId
+// 必须齐全(Task 8 修复,Task 5/7 审查移交),sourceHash/mint/isSystemTx 存在。
+BOOST_AUTO_TEST_CASE(combineTxResponseFromWeb3EmitsDepositFields)
+{
+    Web3Transaction web3Tx;
+    web3Tx.type = rpc::TransactionType::Deposit;
+    web3Tx.sourceHash = h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    web3Tx.from = Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001");
+    web3Tx.to = Address("0x4200000000000000000000000000000000000015");
+    web3Tx.value = 0;
+    web3Tx.gasLimit = 1000000;
+    web3Tx.isSystemTx = false;
+    web3Tx.data = fromHex("0x098999be00000558000c5fc5");
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x7e;
+
+    Json::Value result(Json::objectValue);
+    combineTxResponseFromWeb3(result, web3Tx, /*transactionIndex=*/0, /*blockNumber=*/1, blockHash);
+
+    // 通用块输出
+    BOOST_CHECK_EQUAL(result["blockHash"].asString(), blockHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["transactionIndex"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["blockNumber"].asString(), "0x1");
+    BOOST_CHECK_EQUAL(result["gas"].asString(), "0xf4240");
+    BOOST_CHECK_EQUAL(result["input"].asString(), "0x098999be00000558000c5fc5");
+    BOOST_CHECK_EQUAL(result["from"].asString(), "0xDeaDDEaDDeAdDeAdDEAdDEaddeAddEAdDEAd0001");
+    BOOST_CHECK_EQUAL(result["to"].asString(), "0x4200000000000000000000000000000000000015");
+    // 类型相关字段委托 handler:deposit 必须输出 nonce/type/value/chainId
+    BOOST_CHECK_EQUAL(result["type"].asString(), "0x7e");
+    BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["value"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["chainId"].asString(), "0x0");
+    // deposit 专属字段
+    BOOST_CHECK_EQUAL(result["sourceHash"].asString(), web3Tx.sourceHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["mint"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["isSystemTx"].asBool(), false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
