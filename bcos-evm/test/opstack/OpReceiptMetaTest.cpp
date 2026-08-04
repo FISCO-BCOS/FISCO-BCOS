@@ -162,6 +162,8 @@ TEST(OpReceiptMeta, EmptyMetaEncodesEmptyPresenceList)
     EXPECT_FALSE(decoded.da_footprint);
     EXPECT_FALSE(decoded.deposit_nonce);
     EXPECT_FALSE(decoded.deposit_receipt_version);
+    EXPECT_FALSE(decoded.l1_gas_used);
+    EXPECT_FALSE(decoded.operator_fee);
 }
 
 TEST(OpReceiptMeta, DecodeRejectsMalformedInput)
@@ -173,10 +175,9 @@ TEST(OpReceiptMeta, DecodeRejectsMalformedInput)
         bcos::codec::rlp::decodeOpReceiptMeta(bcos::bytesConstRef{bad.data(), bad.size()}, decoded),
         nullptr);
 
-    // Presence mask with a bit beyond the field count (kOpReceiptMetaFieldCount = 11, so bit 11
-    // = 0x800 is out of range) — must error. The mask is the second RLP item after the list
-    // header: rlp list [0x800] == 0xc3 ‖ rlp(0x800) == 0xc3 0x82 0x08 0x00.
-    std::array<bcos::byte, 4> badMask = {0xc3, 0x82, 0x08, 0x00};
+    // Presence mask with a bit beyond the field count (kOpReceiptMetaFieldCount = 13, so bit 13
+    // = 0x2000 is out of range) — must error. rlp list [0x2000] == 0xc3 0x82 0x20 0x00.
+    std::array<bcos::byte, 4> badMask = {0xc3, 0x82, 0x20, 0x00};
     bcos::codec::rlp::OpReceiptMetaFields decoded2;
     EXPECT_NE(bcos::codec::rlp::decodeOpReceiptMeta(
                   bcos::bytesConstRef{badMask.data(), badMask.size()}, decoded2),
@@ -190,4 +191,33 @@ TEST(OpReceiptMeta, DecodeRejectsMalformedInput)
     EXPECT_NE(bcos::codec::rlp::decodeOpReceiptMeta(
                   bcos::bytesConstRef{trailing.data(), trailing.size()}, decoded3),
         nullptr);
+}
+
+TEST(OpReceiptMeta, WireRoundTripNewFieldsAndOldBlobCompat)
+{
+    // New fields (indices 11/12) round-trip through the wire codec.
+    bcos::codec::rlp::OpReceiptMetaFields fields;
+    fields.l1_gas_used = 100;
+    fields.operator_fee = bcos::bytes{0x03, 0xe8};  // 0x3e8 = 1000
+    auto encoded = bcos::codec::rlp::encodeOpReceiptMeta(fields);
+    bcos::codec::rlp::OpReceiptMetaFields decoded;
+    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
+                  bcos::bytesConstRef{encoded.data(), encoded.size()}, decoded),
+        nullptr);
+    ASSERT_TRUE(decoded.l1_gas_used);
+    EXPECT_EQ(*decoded.l1_gas_used, 100u);
+    ASSERT_TRUE(decoded.operator_fee);
+    EXPECT_EQ(*decoded.operator_fee, (bcos::bytes{0x03, 0xe8}));
+
+    // An old 11-field blob (mask has no bits 11/12) decodes cleanly with the new codec — the new
+    // fields stay absent. Byte-for-byte, encoding only-old-fields is the old format.
+    bcos::codec::rlp::OpReceiptMetaFields oldFields;
+    oldFields.l1_gas_price = bcos::bytes{0x01};
+    auto oldEncoded = bcos::codec::rlp::encodeOpReceiptMeta(oldFields);
+    bcos::codec::rlp::OpReceiptMetaFields oldDecoded;
+    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
+                  bcos::bytesConstRef{oldEncoded.data(), oldEncoded.size()}, oldDecoded),
+        nullptr);
+    EXPECT_FALSE(oldDecoded.l1_gas_used);
+    EXPECT_FALSE(oldDecoded.operator_fee);
 }

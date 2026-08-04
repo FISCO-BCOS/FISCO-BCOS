@@ -9,8 +9,12 @@
 //
 // Scope is deliberately narrow: only the fields op-geth emits for OP blocks (see the wire list
 // below). `operatorFee` (the actually-charged value, OpReceiptMeta::operator_fee) is a FISCO
-// extension with no op-geth receipt field, and `l1GasUsed` was deprecated as of Fjord — both are
-// deliberately NOT serialized here.
+// extension with no op-geth receipt field (it IS serialized, wire index 12). `l1GasUsed` is an
+// unconditional op-geth field since Fjord (api.go:1780), wire index 11.
+//
+// Append-only wire evolution: new fields MUST be added at the end of the struct (next free index),
+// never inserted in the middle — decode derives field positions from the presence bitmask and the
+// fixed index order.
 //
 // Format: RLP list [ presence(uint16), v0, v1, ... ] — a presence bitmask followed by only the
 // present fields, in fixed order. Presence (not the value) distinguishes "0" from "absent", the
@@ -47,6 +51,8 @@ namespace bcos::codec::rlp
 ///   9. blobGasUsed       (hexutil.Uint64)  — meta.da_footprint (Jovian reuses blobGasUsed)
 ///  10. depositNonce     (hexutil.Uint64)   — OpDepositReceipt::deposit_nonce
 ///  11. depositReceiptVersion (hexutil.Uint64) — OpDepositReceipt::deposit_receipt_version
+///  12. l1GasUsed         (hexutil.Uint64) — meta.l1_gas_used (Fjord+)
+///  13. operatorFee       (hexutil.Big)    — meta.operator_fee (FISCO extension)
 struct OpReceiptMetaFields
 {
     std::optional<bcos::bytes> l1_gas_price;      // big-endian, trimmed
@@ -60,9 +66,11 @@ struct OpReceiptMetaFields
     std::optional<uint64_t> da_footprint;
     std::optional<uint64_t> deposit_nonce;
     std::optional<uint64_t> deposit_receipt_version;
+    std::optional<uint64_t> l1_gas_used;      // Fjord+ (op-geth api.go:1780)
+    std::optional<bcos::bytes> operator_fee;  // FISCO extension: actually-charged value
 };
 
-inline constexpr size_t kOpReceiptMetaFieldCount = 11;
+inline constexpr size_t kOpReceiptMetaFieldCount = 13;
 
 /// Encode the field set into the opReceiptMeta byte string. The RLP list always has exactly
 /// `kOpReceiptMetaFieldCount + 1` items (presence mask first) — a fixed shape, so decode never
@@ -99,6 +107,8 @@ inline bcos::bytes encodeOpReceiptMeta(OpReceiptMetaFields const& fields)
     pushU64(8, fields.da_footprint);
     pushU64(9, fields.deposit_nonce);
     pushU64(10, fields.deposit_receipt_version);
+    pushU64(11, fields.l1_gas_used);
+    push(12, fields.operator_fee);
 
     // Items: presence mask first (as an RLP integer), then each present field as bytes.
     bcos::bytes payload;
@@ -191,6 +201,10 @@ inline bcos::Error::UniquePtr decodeOpReceiptMeta(bcos::bytesConstRef in, OpRece
     if (auto e = takeU64(9, out.deposit_nonce))
         return e;
     if (auto e = takeU64(10, out.deposit_receipt_version))
+        return e;
+    if (auto e = takeU64(11, out.l1_gas_used))
+        return e;
+    if (auto e = takeField(12, out.operator_fee))
         return e;
     if (!from.empty())
     {
