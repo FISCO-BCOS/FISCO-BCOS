@@ -25,7 +25,6 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
-#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <utility>
 
@@ -33,9 +32,14 @@ namespace bcos
 {
 namespace rpc
 {
+// These three using-declarations are NOT dead: they are the ADL bridge that lets the generic
+// codec templates (RLPEncode.h encodeItems/Common.h lengthOfItems/RLPDecode.h decodeItems) find
+// the AccessListEntry/Web3Transaction overloads defined at the bottom of this file. Those overloads
+// live in namespace codec::rlp, which is not an associated namespace of bcos::rpc::AccessListEntry;
+// without the using-declaration the unity build fails with "neither visible in the template
+// definition nor found by argument-dependent lookup". Keep the three in sync with the overloads.
 using codec::rlp::decode;
 using codec::rlp::encode;
-using codec::rlp::header;
 using codec::rlp::length;
 
 bcos::bytes Web3Transaction::encodeForSign() const
@@ -94,7 +98,8 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     {
         bcostars::Transaction tarsTx{};
         tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
-        tarsTx.web3TypedTxKind = static_cast<tars::Char>(0x7e);
+        tarsTx.web3TypedTxKind =
+            static_cast<tars::Char>(static_cast<uint8_t>(TransactionType::Deposit));
         tarsTx.sourceHash = sourceHash.hex();
         tarsTx.sender.assign(from.begin(), from.end());
         // 带 0x 前缀,与读取端 u256(...) 匹配(TransactionImpl.cpp mint() 解析)

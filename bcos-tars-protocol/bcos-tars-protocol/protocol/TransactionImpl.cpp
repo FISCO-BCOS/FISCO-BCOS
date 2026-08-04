@@ -39,6 +39,11 @@
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
+// EIP-2718 deposit transaction type byte (OP Stack). Matches
+// rpc::TransactionType::Deposit in bcos-rpc; defined here as a local literal because
+// bcos-tars-protocol sits below bcos-rpc and must not depend on it.
+constexpr uint8_t kDepositTxType = 0x7e;
+
 #define WEB3_ACCESS_LIST_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
 bcostars::protocol::TransactionImpl::TransactionImpl(std::function<bcostars::Transaction*()> inner)
@@ -244,7 +249,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // which would try to splice a 65-byte signature that a deposit does not carry.
     // Use the accessor (not the raw tars field): it returns 0 unless type()==Web3Transaction,
     // so a forged BCOS tx (type=0, web3TypedTxKind=0x7e) can never hit the deposit branch.
-    if (web3TypedTxKind() == 0x7e)
+    if (web3TypedTxKind() == kDepositTxType)
     {
         auto h = bcos::crypto::keccak256Hash(extraTransactionBytes());
         m_inner()->extraTransactionHash.assign(h.begin(), h.end());
@@ -444,7 +449,7 @@ bool bcostars::protocol::TransactionImpl::isDepositTx() const
     // be misclassified.
     // Also use the accessor (not the raw tars field): it returns 0 unless type()==Web3Transaction,
     // so a forged BCOS tx (type=0, web3TypedTxKind=0x7e) is never treated as a deposit.
-    return web3TypedTxKind() == 0x7e;
+    return web3TypedTxKind() == kDepositTxType;
 }
 
 bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
