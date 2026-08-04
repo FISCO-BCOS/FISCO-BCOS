@@ -1652,6 +1652,41 @@ BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(genesisEVMCRevision)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        GenesisConfig genesisConfig;
+        genesisConfig.m_evmcRevision = EVMC_CANCUN;
+        genesisConfig.m_evmcRevisionForks[100000] = EVMC_OSAKA;
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        auto value = co_await storage2::readOne(*storage,
+            executor_v1::StateKeyView(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_EVMC_REVISION));
+        BOOST_REQUIRE(value);
+
+        auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(value->get());
+        using namespace std::string_view_literals;
+        // The block-0 base (Cancun) is emitted first, followed by the 100000 Osaka transition.
+        BOOST_CHECK_EQUAL(std::get<0>(entry), "0:cancun,100000:osaka"sv);
+
+        // Round-trip through the LedgerConfig population used by getLedgerConfig.
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, std::get<0>(entry));
+        BOOST_CHECK(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(99999), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100000), EVMC_OSAKA);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100001), EVMC_OSAKA);
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(replaceBinary)
 {
     task::syncWait([this]() -> task::Task<void> {

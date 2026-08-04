@@ -173,6 +173,12 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
+    /// EthereumExecutor (executor_version=2) baseline scheduler holder + notifier setter. Kept
+    /// as members so the holder lambda (which captures the EthereumExecutor shared_ptr) stays
+    /// alive for the whole Initializer lifetime.
+    std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setEthereumSchedulerBlockNumberNotifier;
 
     protocol::BlockNumber getCurrentBlockNumber(
         bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr);

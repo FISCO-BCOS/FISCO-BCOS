@@ -8,7 +8,9 @@ namespace bcos::scheduler_v1
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:
-    std::array<scheduler::SchedulerInterface::Ptr, 2> m_schedulers;
+    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 3;
+
+    std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;
 
     bcos::scheduler::SchedulerInterface& getScheduler();
@@ -16,7 +18,8 @@ private:
 public:
     bcos::scheduler::SchedulerInterface& scheduler(int version);
 
-    MultiVersionScheduler(std::array<scheduler::SchedulerInterface::Ptr, 2> schedulers);
+    MultiVersionScheduler(
+        std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers);
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>

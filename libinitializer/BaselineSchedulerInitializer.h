@@ -14,7 +14,7 @@ namespace bcos::scheduler_v1
 class BaselineSchedulerInitializer
 {
 public:
-    template <class SchedulerType>
+    template <class SchedulerType, class Executor>
     static std::tuple<std::function<std::shared_ptr<scheduler::SchedulerInterface>()>,
         std::function<void(std::function<void(protocol::BlockNumber)>)>>
     build(std::shared_ptr<initializer::GlobalStateStorageInitializer> storageInitializer,
@@ -22,10 +22,10 @@ public:
         std::shared_ptr<SchedulerType> scheduler, std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
         std::shared_ptr<ledger::LedgerInterface> ledger,
-        std::shared_ptr<executor_v1::TransactionExecutorImpl> transactionExecutor)
+        std::shared_ptr<Executor> transactionExecutor)
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
-            executor_v1::TransactionExecutorImpl, SchedulerType, ledger::LedgerInterface>>(
+            Executor, SchedulerType, ledger::LedgerInterface>>(
             storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
             *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
         baselineScheduler->registerTransactionNotifier(

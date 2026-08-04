@@ -291,6 +291,10 @@ public:
     bool preStoreBackpressureEnabled() const;
     size_t preStoreMaxInflight() const;
     int executorVersion() const;
+    /// EVMC revision config (ethereum-executor, executor_version=2): explicit single
+    /// revision applied to all blocks, plus block-height fork transitions.
+    std::optional<evmc_revision> evmcRevision() const;
+    std::map<protocol::BlockNumber, evmc_revision> const& evmcRevisionForks() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);

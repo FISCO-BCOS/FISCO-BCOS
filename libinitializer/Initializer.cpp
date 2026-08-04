@@ -43,6 +43,8 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include "ethereum-executor/EthereumExecutor.h"
+#include "ethereum-executor/StorageBlockHashes.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
@@ -305,6 +307,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         *m_protocolInitializer->blockFactory()->receiptFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), *m_precompiledManager);
 
+    // EthereumExecutor (executor_version=2): pure-Ethereum execution layer driven through the
+    // same scheduler prepare()/execute()/finish() pipeline as TransactionExecutorImpl.
+    // The injected StorageBlockHashes provider resolves BLOCKHASH against the committed
+    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash LedgerMethod), so
+    // it outlives any single block's execute view — matching the semantics documented in
+    // EthereumExecutor.h.
+    auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
+        *m_protocolInitializer->blockFactory()->receiptFactory(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(),
+        std::make_shared<
+            executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
+            m_globalStateStorageInitializer->storage().latestBackend()));
+
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =
@@ -323,6 +338,23 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
             parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+
+        // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
+        // scheduler. Only one scheduler version is active at a time (selected via
+        // MultiVersionScheduler), so a dedicated instance avoids any cross-version state.
+        auto ethereumParallelScheduler =
+            std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>(
+                m_ioServicePool);
+        ethereumParallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
+        if (tbbThreadCount > 0)
+        {
+            ethereumParallelScheduler->m_maxConcurrency = tbbThreadCount;
+        }
+        std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
+            scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), ethereumParallelScheduler,
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
+                ethereumExecutor);
     }
     else
     {
@@ -335,6 +367,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), serialScheduler,
             transactionExecutor, m_memPoolInitializer->memPool());
+
+        // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
+        auto ethereumSerialScheduler =
+            std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
+            scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
+                ethereumExecutor);
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -351,7 +392,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
 
     auto executorVersion = m_nodeConfig->executorVersion();
     if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
@@ -560,6 +601,17 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
+
+    // executor_version=2 (EthereumExecutor): keep the RPC block-number notifications flowing
+    // when the ethereum baseline scheduler is the active executor version.
+    if (m_setEthereumSchedulerBlockNumberNotifier)
+    {
+        m_setEthereumSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
 
     m_pbftInitializer->initNotificationHandlers(_rpc);
 }

@@ -47,6 +47,7 @@ enum class SystemConfig
     web3_chain_id,
     balance_transfer,
     executor_version,
+    evmc_revision,
 };
 
 struct SystemConfigs

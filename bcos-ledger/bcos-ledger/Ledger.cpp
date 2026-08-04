@@ -2224,6 +2224,19 @@ bool Ledger::buildGenesisBlock(
                 balanceTransfer);
         }
 
+        // Write EVMC revision config (consumed by ethereum-executor, executor_version=2).
+        // Only written when explicitly configured in the genesis config; otherwise
+        // getLedgerConfig falls back to the latest revision from genesis.
+        if (versionNumber >= BlockVersion::V3_18_0_VERSION &&
+            (genesis.m_evmcRevision || !genesis.m_evmcRevisionForks.empty()))
+        {
+            Entry evmcRevisionEntry;
+            evmcRevisionEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{
+                encodeEVMCRevisionConfig(genesis.m_evmcRevision, genesis.m_evmcRevisionForks), 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EVMC_REVISION), evmcRevisionEntry);
+        }
+
         // write consensus node list
         // update some node type to CONSENSUS_CANDIDATE_SEALER
         if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&

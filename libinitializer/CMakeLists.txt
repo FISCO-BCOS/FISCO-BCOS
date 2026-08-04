@@ -41,6 +41,7 @@ target_link_libraries(init PUBLIC
     engine
     ledger
     transaction-scheduler transaction-executor
+    ethereum-executor
     scheduler storage executor rpc
     bcos-boostssl
     tomlplusplus::tomlplusplus

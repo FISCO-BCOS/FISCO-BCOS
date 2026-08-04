@@ -6,7 +6,7 @@ bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::
 }
 
 bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
-    std::array<scheduler::SchedulerInterface::Ptr, 2> schedulers)
+    std::array<scheduler::SchedulerInterface::Ptr, 3> schedulers)
   : m_schedulers(std::move(schedulers)), m_currentIndex(0)
 {}
 
@@ -75,6 +75,13 @@ void bcos::scheduler_v1::MultiVersionScheduler::stop()
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     int version, ledger::LedgerConfig::Ptr ledgerConfig)
 {
+    if (version < 0 || static_cast<size_t>(version) >= m_schedulers.size())
+    {
+        BOOST_THROW_EXCEPTION(
+            std::out_of_range("executor version " + std::to_string(version) +
+                              " is not supported, supported versions: 0.." +
+                              std::to_string(m_schedulers.size() - 1)));
+    }
     m_currentIndex = version;
 }
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(

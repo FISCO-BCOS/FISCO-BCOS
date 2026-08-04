@@ -481,6 +481,17 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     {
         ledgerConfig.setExecutorVersion(boost::lexical_cast<int>(executorVersion.value().first));
     }
+
+    // EVMC revision (used by ethereum-executor, executor_version=2). When the genesis config
+    // did not set one, default to the latest revision from genesis.
+    if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
+    {
+        ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
+    }
+    else
+    {
+        ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
+    }
 }
 
 bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(

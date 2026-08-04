@@ -1488,6 +1488,82 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                   "executor.is_auth_check/"
                                   "executor.is_serial_execute is null, please set it!"));
     }
+    // EVMC revision config — consumed by ethereum-executor (executor_version=2):
+    //   executor.evm_revision       = explicit single revision for all blocks, e.g. "cancun"
+    //   executor.evm_revision_forks = comma-separated "block:revision" fork transitions,
+    //                                 e.g. "0:cancun,100000:osaka"
+    // If neither is set, the ethereum-executor defaults to the latest revision from genesis.
+    try
+    {
+        auto evmcRevisionStr = _genesisConfig.get<std::string>("executor.evm_revision", "");
+        if (!evmcRevisionStr.empty())
+        {
+            if (auto rev = ledger::evmcRevisionFromName(evmcRevisionStr); rev)
+            {
+                m_genesisConfig.m_evmcRevision = *rev;
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                    "executor.evm_revision is invalid: " + evmcRevisionStr +
+                    ", supported revisions: frontier/homestead/tangerinewhistle/"
+                    "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
+                    "london/paris/shanghai/cancun/prague/osaka"));
+            }
+        }
+
+        auto evmcForksStr = _genesisConfig.get<std::string>("executor.evm_revision_forks", "");
+        if (!evmcForksStr.empty())
+        {
+            auto trim = [](std::string_view s) -> std::string_view {
+                auto b = s.find_first_not_of(" \t\r\n");
+                if (b == std::string_view::npos)
+                {
+                    return {};
+                }
+                auto e = s.find_last_not_of(" \t\r\n");
+                return s.substr(b, e - b + 1);
+            };
+            std::stringstream ss(evmcForksStr);
+            std::string token;
+            while (std::getline(ss, token, ','))
+            {
+                auto entry = trim(token);
+                if (entry.empty())
+                {
+                    continue;
+                }
+                auto colon = entry.find(':');
+                if (colon == std::string_view::npos)
+                {
+                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision_forks invalid entry (expected "
+                        "\"block:revision\"): " + std::string(entry)));
+                }
+                auto blockStr = trim(entry.substr(0, colon));
+                auto name = trim(entry.substr(colon + 1));
+                auto block = boost::lexical_cast<protocol::BlockNumber>(blockStr);
+                auto rev = ledger::evmcRevisionFromName(name);
+                if (!rev)
+                {
+                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision_forks invalid revision \"" + std::string(name) +
+                        "\" in entry: " + std::string(entry)));
+                }
+                m_genesisConfig.m_evmcRevisionForks[block] = *rev;
+            }
+        }
+    }
+    catch (InvalidConfig const& e)
+    {
+        throw;  // already carries a precise message
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Invalid executor.evm_revision config: " +
+                                               std::string(e.what())));
+    }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
     if (_genesisConfig.get<bool>("executor.is_wasm", false))
@@ -2312,6 +2388,13 @@ std::string bcos::tool::generateGenesisData(
            << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
            << "authAdminAccount:" << genesisConfig.m_authAdminAccount << '\n'
            << "isSerialExecute:" << genesisConfig.m_isSerialExecute << '\n';
+        if (genesisConfig.m_evmcRevision || !genesisConfig.m_evmcRevisionForks.empty())
+        {
+            ss << "evmRevision:"
+               << ledger::encodeEVMCRevisionConfig(
+                      genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
+               << '\n';
+        }
         if (genesisConfig.m_compatibilityVersion >=
             (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
@@ -2374,6 +2457,14 @@ bool bcos::tool::NodeConfig::checkParallelConflict() const
 int bcos::tool::NodeConfig::executorVersion() const
 {
     return m_genesisConfig.m_executorVersion;
+}
+std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
+{
+    return m_genesisConfig.m_evmcRevision;
+}
+std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks() const
+{
+    return m_genesisConfig.m_evmcRevisionForks;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

@@ -24,7 +24,14 @@
 #include "Features.h"
 #include "SystemConfigs.h"
 #include <evmc/evmc.hpp>
+#include <algorithm>
+#include <charconv>
+#include <cctype>
 #include <map>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace bcos::ledger
@@ -247,4 +254,183 @@ private:
     std::optional<evmc_revision> m_explicitRevision;
     std::map<bcos::protocol::BlockNumber, evmc_revision> m_forkTransitions;
 };
+
+/// The latest EVM revision supported by the ethereum-executor — used as the default
+/// EVMC revision applied from genesis when no evmc_revision config is present.
+inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
+
+/// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an
+/// EVMC revision. Returns nullopt for unknown names so callers can fall back to a default.
+inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
+{
+    std::string n(name);
+    std::transform(n.begin(), n.end(), n.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (n == "frontier")
+        return EVMC_FRONTIER;
+    if (n == "homestead")
+        return EVMC_HOMESTEAD;
+    if (n == "tangerinewhistle" || n == "tangerine whistle" || n == "eip150")
+        return EVMC_TANGERINE_WHISTLE;
+    if (n == "spuriousdragon" || n == "spurious dragon" || n == "eip158")
+        return EVMC_SPURIOUS_DRAGON;
+    if (n == "byzantium")
+        return EVMC_BYZANTIUM;
+    if (n == "constantinople")
+        return EVMC_CONSTANTINOPLE;
+    if (n == "petersburg" || n == "constantinoplefix")
+        return EVMC_PETERSBURG;
+    if (n == "istanbul" || n == "muirglacier" || n == "muir glacier")
+        return EVMC_ISTANBUL;
+    if (n == "berlin")
+        return EVMC_BERLIN;
+    if (n == "london")
+        return EVMC_LONDON;
+    if (n == "paris" || n == "merge")
+        return EVMC_PARIS;
+    if (n == "shanghai")
+        return EVMC_SHANGHAI;
+    if (n == "cancun")
+        return EVMC_CANCUN;
+    if (n == "prague")
+        return EVMC_PRAGUE;
+    if (n == "osaka")
+        return EVMC_OSAKA;
+    return std::nullopt;
+}
+
+/// Canonical (space-free) fork name for an EVMC revision, used when serializing the
+/// evmc_revision system config value.
+inline std::string_view evmcRevisionName(evmc_revision rev)
+{
+    switch (rev)
+    {
+    case EVMC_FRONTIER:
+        return "frontier";
+    case EVMC_HOMESTEAD:
+        return "homestead";
+    case EVMC_TANGERINE_WHISTLE:
+        return "tangerinewhistle";
+    case EVMC_SPURIOUS_DRAGON:
+        return "spuriousdragon";
+    case EVMC_BYZANTIUM:
+        return "byzantium";
+    case EVMC_CONSTANTINOPLE:
+        return "constantinople";
+    case EVMC_PETERSBURG:
+        return "petersburg";
+    case EVMC_ISTANBUL:
+        return "istanbul";
+    case EVMC_BERLIN:
+        return "berlin";
+    case EVMC_LONDON:
+        return "london";
+    case EVMC_PARIS:
+        return "paris";
+    case EVMC_SHANGHAI:
+        return "shanghai";
+    case EVMC_CANCUN:
+        return "cancun";
+    case EVMC_PRAGUE:
+        return "prague";
+    default:
+        return "osaka";
+    }
+}
+
+/// Serialize an EVMC revision config (explicit revision + fork transitions) to the
+/// SYS_CONFIG value string. Format: a comma-separated list of "block:forkName" entries.
+/// The first entry is always the block-0 base revision, so decoding always yields a
+/// complete fork schedule.
+inline std::string encodeEVMCRevisionConfig(
+    std::optional<evmc_revision> explicitRev,
+    std::map<bcos::protocol::BlockNumber, evmc_revision> const& forks)
+{
+    evmc_revision base = EVMC_REVISION_DEFAULT;
+    if (auto it = forks.find(0); it != forks.end())
+    {
+        base = it->second;
+    }
+    else if (explicitRev)
+    {
+        base = *explicitRev;
+    }
+    else if (!forks.empty())
+    {
+        base = forks.begin()->second;
+    }
+
+    std::ostringstream oss;
+    oss << "0:" << evmcRevisionName(base);
+    for (auto const& [block, rev] : forks)
+    {
+        if (block <= 0)
+        {
+            continue;  // block-0 entry is already emitted as the base
+        }
+        oss << "," << block << ":" << evmcRevisionName(rev);
+    }
+    return oss.str();
+}
+
+/// Parse a SYS_CONFIG value string produced by encodeEVMCRevisionConfig and populate
+/// @p ledgerConfig's EVMC revision settings (explicit revision + fork transitions).
+inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view value)
+{
+    ledgerConfig.clearForkTransitions();
+    std::optional<evmc_revision> base;
+    std::optional<evmc_revision> single;
+
+    std::string_view::size_type pos = 0;
+    while (pos < value.size())
+    {
+        auto comma = value.find(',', pos);
+        auto entry =
+            value.substr(pos, comma == std::string_view::npos ? std::string_view::npos : comma - pos);
+        pos = comma == std::string_view::npos ? value.size() : comma + 1;
+
+        auto colon = entry.find(':');
+        if (colon == std::string_view::npos)
+        {
+            // Bare fork name -> explicit single revision for all blocks.
+            if (auto rev = evmcRevisionFromName(entry); rev)
+            {
+                single = *rev;
+            }
+            continue;
+        }
+
+        auto blockStr = entry.substr(0, colon);
+        auto name = entry.substr(colon + 1);
+        bcos::protocol::BlockNumber block = 0;
+        auto [ptr, ec] =
+            std::from_chars(blockStr.data(), blockStr.data() + blockStr.size(), block);
+        if (ec != std::errc())
+        {
+            continue;
+        }
+        if (auto rev = evmcRevisionFromName(name); rev)
+        {
+            ledgerConfig.addForkTransition(block, *rev);
+            if (!base || block == 0)
+            {
+                base = *rev;
+            }
+        }
+    }
+
+    if (single)
+    {
+        // A single explicit revision covers every block.
+        ledgerConfig.clearForkTransitions();
+        ledgerConfig.setEVMCRevision(*single);
+    }
+    else if (base)
+    {
+        // Expose the block-0 base (or the earliest fork) through the explicit slot so
+        // evmcRevisionForBlock has a fallback for blocks before the first fork.
+        ledgerConfig.setEVMCRevision(*base);
+    }
+}
 }  // namespace bcos::ledger

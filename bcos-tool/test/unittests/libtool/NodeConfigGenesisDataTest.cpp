@@ -60,6 +60,44 @@ BOOST_AUTO_TEST_CASE(modernSectionedFormat)
     BOOST_CHECK(data.find("node.0") != std::string::npos);          // node loop ran
 }
 
+// EVMC revision config (ethereum-executor, executor_version=2): parses the
+// explicit revision and the block-height fork transitions from the genesis
+// config, and the serialized form shows up in the generated genesis data.
+BOOST_AUTO_TEST_CASE(evmcRevisionConfig)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    std::string genesis =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "evm_revision=cancun\n"
+        "evm_revision_forks=0:cancun, 100000:osaka\n";
+
+    NodeConfig cfg(keyFactory);
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+    BOOST_REQUIRE(cfg.ledgerConfig());
+
+    auto const& gc = cfg.genesisConfig();
+    BOOST_REQUIRE(gc.m_evmcRevision.has_value());
+    BOOST_CHECK_EQUAL(*gc.m_evmcRevision, EVMC_CANCUN);
+    BOOST_REQUIRE_EQUAL(gc.m_evmcRevisionForks.size(), 2u);
+    BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(0), EVMC_CANCUN);
+    BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(100000), EVMC_OSAKA);
+
+    auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
+    BOOST_CHECK(data.find("evmRevision:0:cancun,100000:osaka") != std::string::npos);
+}
+
 // A compatibilityVersion below V3.1 takes the legacy dash-joined branch.
 BOOST_AUTO_TEST_CASE(legacyDashJoinedFormat)
 {
