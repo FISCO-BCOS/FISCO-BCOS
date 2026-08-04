@@ -72,9 +72,10 @@ struct OpReceiptMetaFields
 
 inline constexpr size_t kOpReceiptMetaFieldCount = 13;
 
-/// Encode the field set into the opReceiptMeta byte string. The RLP list always has exactly
-/// `kOpReceiptMetaFieldCount + 1` items (presence mask first) — a fixed shape, so decode never
-/// has to guess.
+/// Encode the field set into the opReceiptMeta byte string. The RLP list is a presence mask
+/// followed by only the present fields in fixed index order — the length is variable (an empty
+/// meta encodes to a single-item list of just the presence mask), so decode derives field
+/// presence from the bitmask and never has to guess how many fields follow.
 inline bcos::bytes encodeOpReceiptMeta(OpReceiptMetaFields const& fields)
 {
     // Presence bitmask: bit i set == field i present (order as in the struct above).

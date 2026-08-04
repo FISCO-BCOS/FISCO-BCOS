@@ -60,6 +60,30 @@ TEST(OpReceiptMeta, JovianFillsDaFootprint)
     EXPECT_EQ(*m.da_footprint, size * 2u);
 }
 
+TEST(OpReceiptMeta, JovianFillsL1GasUsed)
+{
+    OpFeeParams fee{};
+    fee.da_footprint_gas_scalar = 2;
+    std::vector<uint8_t> env(50, 0x11);
+    const auto flz = flzCompressLen({env.data(), env.size()});
+    const auto m = deriveOpReceiptMeta(jovianConfig(), fee, flz, 0_u256, 0_u256, false);
+    ASSERT_TRUE(m.l1_gas_used.has_value());
+    // Fjord l1GasUsed = estimatedDaSizeScaled(flz) * 16 / 1e6 (op-geth rollup_cost.go:623-624).
+    const auto expected = static_cast<uint64_t>(
+        estimatedDaSizeScaled(flz) * intx::uint256{16} / intx::uint256{1000000});
+    EXPECT_EQ(*m.l1_gas_used, expected);
+}
+
+TEST(OpReceiptMeta, NoDaNoL1GasUsed)
+{
+    // isthmusConfig() has has_da_footprint = false (no DA footprint), so derive fills neither
+    // da_footprint nor l1_gas_used — this pins the has_da_footprint gate, not "pre-Fjord".
+    std::vector<uint8_t> env{0x02};
+    const auto m = deriveOpReceiptMeta(isthmusConfig(), OpFeeParams{},
+        flzCompressLen({env.data(), env.size()}), 0_u256, 0_u256, false);
+    EXPECT_FALSE(m.l1_gas_used.has_value());
+}
+
 TEST(OpReceiptMeta, EncodeDecodeRoundTripPreservesAllFields)
 {
     OpReceiptMeta m;
@@ -72,6 +96,8 @@ TEST(OpReceiptMeta, EncodeDecodeRoundTripPreservesAllFields)
     m.operator_fee_constant = 13;
     m.da_footprint_gas_scalar = 2;
     m.da_footprint = 100;
+    m.l1_gas_used = 100;
+    m.operator_fee = 1000_u256;
 
     auto encoded = encodeOpReceiptMeta(m);
     bcos::codec::rlp::OpReceiptMetaFields decoded;
@@ -99,6 +125,12 @@ TEST(OpReceiptMeta, EncodeDecodeRoundTripPreservesAllFields)
     EXPECT_EQ(*decoded.da_footprint_gas_scalar, 2u);
     ASSERT_TRUE(decoded.da_footprint);
     EXPECT_EQ(*decoded.da_footprint, 100u);
+    // l1_gas_used travels as a plain uint64 RLP integer; operator_fee as trimmed big-endian bytes
+    // (1000 -> 0x03e8).
+    ASSERT_TRUE(decoded.l1_gas_used);
+    EXPECT_EQ(*decoded.l1_gas_used, 100u);
+    ASSERT_TRUE(decoded.operator_fee);
+    EXPECT_EQ(*decoded.operator_fee, (bcos::bytes{0x03, 0xe8}));
     // Absent fields stay absent (not zero-valued).
     EXPECT_FALSE(decoded.deposit_nonce);
     EXPECT_FALSE(decoded.deposit_receipt_version);

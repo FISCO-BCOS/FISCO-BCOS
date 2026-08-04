@@ -20,6 +20,11 @@ intx::uint256 estimatedDaSizeScaled(uint32_t fastlzSize) noexcept;
 /// already-computed flz to avoid re-compressing).
 uint64_t estimatedDaSizeFromFlz(uint32_t flzLen) noexcept;
 
+/// Fjord+ l1GasUsed: estimatedDaSizeScaled(flzLen) * 16 / 1e6 (op-geth
+/// core/types/rollup_cost.go:623-624, TxDataNonZeroGasEIP2028 = 16). Multiply-then-divide to match
+/// op-geth exactly (no intermediate rounding). Returns 0 when flzLen==0.
+uint64_t estimatedL1GasUsedFromFlz(uint32_t flzLen) noexcept;
+
 /// estimatedSize = estimatedDaSizeScaled(flz) / 1e6; returns 0 for an empty envelope.
 uint64_t estimatedDaSize(evmc::bytes_view signedTxEnvelope) noexcept;
 

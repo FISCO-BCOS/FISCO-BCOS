@@ -29,6 +29,7 @@ OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fe
         const auto scalar = static_cast<uint64_t>(fee.da_footprint_gas_scalar);
         m.da_footprint_gas_scalar = scalar;
         m.da_footprint = estimatedDaSizeFromFlz(flzLen) * scalar;
+        m.l1_gas_used = estimatedL1GasUsedFromFlz(flzLen);
     }
     return m;
 }

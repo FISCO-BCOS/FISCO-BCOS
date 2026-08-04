@@ -146,3 +146,19 @@ TEST(RollupCost, FromFlzVariantsMatchEnvelopeVariants)
         computeL1CostFromFlz(fee, flz, fjordConfig()), computeL1Cost(fee, env, fjordConfig()));
     EXPECT_EQ(computeL1CostFromFlz(fee, 0, fjordConfig()), intx::uint256{0});
 }
+
+TEST(RollupCost, EstimatedL1GasUsedFromFlz)
+{
+    using bcos::evm::opstack::estimatedDaSizeScaled;
+    using bcos::evm::opstack::estimatedL1GasUsedFromFlz;
+    // flzLen == 0 -> 0 (same guard as estimatedDaSizeFromFlz).
+    EXPECT_EQ(estimatedL1GasUsedFromFlz(0), 0u);
+    // Multiply-then-divide: for a range of inputs, equals scaled*16/1e6 with no rounding gap.
+    for (uint32_t flz : {1u, 64u, 200u, 1000000u, 4000000000u})
+    {
+        const auto scaled = estimatedDaSizeScaled(flz);
+        const auto expected =
+            static_cast<uint64_t>(scaled * intx::uint256{16} / intx::uint256{1000000});
+        EXPECT_EQ(estimatedL1GasUsedFromFlz(flz), expected);
+    }
+}

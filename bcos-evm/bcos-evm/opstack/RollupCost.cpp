@@ -139,6 +139,16 @@ uint64_t estimatedDaSizeFromFlz(uint32_t flzLen) noexcept
         estimatedDaSizeScaled(flzLen) / intx::uint256{kDaSizeScaleDivisor});
 }
 
+uint64_t estimatedL1GasUsedFromFlz(uint32_t flzLen) noexcept
+{
+    if (flzLen == 0)
+        return 0;
+    // Multiply-then-divide — (scaled * 16) fits in uint256 comfortably, and this is the exact
+    // op-geth order (no intermediate rounding on the /1e6).
+    return static_cast<uint64_t>(
+        estimatedDaSizeScaled(flzLen) * intx::uint256{16} / intx::uint256{kDaSizeScaleDivisor});
+}
+
 uint64_t estimatedDaSize(evmc::bytes_view signedTxEnvelope) noexcept
 {
     if (signedTxEnvelope.empty())
