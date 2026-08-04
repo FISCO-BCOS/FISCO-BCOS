@@ -239,6 +239,15 @@ static bcos::crypto::HashType recomputeWeb3CanonicalHash(
 
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
+    // deposit (0x7e): the canonical hash is keccak256 of the full envelope, no signature
+    // appended (same predicate as isDepositTx()). Checked before the generic Web3 branch,
+    // which would try to splice a 65-byte signature that a deposit does not carry.
+    if (static_cast<uint8_t>(m_inner()->web3TypedTxKind) == 0x7e)
+    {
+        auto h = bcos::crypto::keccak256Hash(extraTransactionBytes());
+        m_inner()->extraTransactionHash.assign(h.begin(), h.end());
+        return;
+    }
     // Web3: the hash is the canonical txHash = keccak256(rlp(signed tx)), stored in
     // extraTransactionHash (which hash() returns). Recompute it from the signed payload
     // unconditionally -- a wire-supplied value is never believed, even when a caller reaches
@@ -410,6 +419,30 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
 }
 
+std::string_view bcostars::protocol::TransactionImpl::sourceHash() const
+{
+    return m_inner()->sourceHash;
+}
+
+bcos::u256 bcostars::protocol::TransactionImpl::mint() const
+{
+    if (m_inner()->mint.empty())
+    {
+        return 0;
+    }
+    // Stored as "0x"+hex (see Web3Transaction::takeToTarsTransaction), so the prefixed string
+    // parses directly (bcos::u256 handles the 0x prefix).
+    return bcos::u256(m_inner()->mint);
+}
+
+bool bcostars::protocol::TransactionImpl::isDepositTx() const
+{
+    // Use web3TypedTxKind == 0x7e, NOT isSystemTransaction: isSystemTransaction is a
+    // per-transaction flag, so a non-system deposit (isSystemTx=false, the vast majority) would
+    // be misclassified.
+    return static_cast<uint8_t>(m_inner()->web3TypedTxKind) == 0x7e;
+}
+
 bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
@@ -555,5 +588,7 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraData.size();
     size += m_inner()->extraTransactionBytes.size();
     size += m_inner()->extraTransactionHash.size();
+    size += m_inner()->sourceHash.size();
+    size += m_inner()->mint.size();
     return size;
 }
