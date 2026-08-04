@@ -248,17 +248,6 @@ void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes _extraData)
     clearDataHash();
 }
 
-bcos::bytes bcostars::protocol::BlockHeaderImpl::coinbase() const
-{
-    auto const& cb = m_inner()->data.coinbase;
-    return {cb.begin(), cb.end()};
-}
-
-void bcostars::protocol::BlockHeaderImpl::setCoinbase(bcos::bytes _coinbase)
-{
-    m_inner()->data.coinbase.assign(_coinbase.begin(), _coinbase.end());
-    clearDataHash();
-}
 void bcostars::protocol::BlockHeaderImpl::setSignatureList(
     bcos::protocol::SignatureList&& _signatureList)
 {

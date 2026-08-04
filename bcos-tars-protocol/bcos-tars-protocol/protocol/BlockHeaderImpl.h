@@ -70,7 +70,6 @@ public:
     bcos::bytesConstRef extraData() const override;
     gsl::span<const bcos::protocol::Signature> signatureList() const override;
     gsl::span<const uint64_t> consensusWeights() const override;
-    bcos::bytes coinbase() const override;
 
     void setVersion(uint32_t _version) override;
     void setParentInfo(bcos::protocol::ParentInfo parentInfo) override;

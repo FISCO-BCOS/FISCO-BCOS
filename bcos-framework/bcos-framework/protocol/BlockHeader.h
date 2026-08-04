@@ -122,8 +122,6 @@ public:
     virtual u256 gasUsed() const = 0;
     virtual int64_t timestamp() const = 0;
     virtual bytesConstRef extraData() const = 0;
-    virtual gsl::span<const Signature> signatureList() const = 0;
-    virtual gsl::span<const uint64_t> consensusWeights() const = 0;
 
     virtual void setParentInfo(bcos::protocol::ParentInfo parentInfo) = 0;
     virtual void setTxsRoot(bcos::crypto::HashType _txsRoot) = 0;
@@ -132,18 +130,8 @@ public:
     virtual void setNumber(BlockNumber _blockNumber) = 0;
     virtual void setGasUsed(u256 _gasUsed) = 0;
     virtual void setTimestamp(int64_t _timestamp) = 0;
-    virtual void setSealer(int64_t _sealerId) = 0;
-
-    virtual void setSealerList(gsl::span<const bytes> const& _sealerList) = 0;
-    virtual void setSealerList(std::vector<bytes>&& _sealerList) = 0;
-
-    virtual void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) = 0;
-    virtual void setConsensusWeights(std::vector<uint64_t>&& _weightList) = 0;
 
     virtual void setExtraData(bytes _extraData) = 0;
-
-    virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
-    virtual void setSignatureList(SignatureList&& _signatureList) = 0;
 
     virtual size_t size() const = 0;
 

@@ -35,7 +35,6 @@ public:
     bytesConstRef extraData() const override { return {}; }
     gsl::span<const protocol::Signature> signatureList() const override { return {}; }
     gsl::span<const uint64_t> consensusWeights() const override { return {}; }
-    bytes coinbase() const override { return {}; }
 
     void setVersion(uint32_t _version) override {}
     void setParentInfo(bcos::protocol::ParentInfo parentInfo) override {}
