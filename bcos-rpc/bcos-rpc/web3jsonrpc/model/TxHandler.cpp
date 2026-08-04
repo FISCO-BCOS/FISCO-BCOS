@@ -1,6 +1,7 @@
 // bcos-rpc/bcos-rpc/web3jsonrpc/model/TxHandler.cpp
 #include "TxHandler.h"
 #include "Web3Transaction.h"
+#include <bcos-codec/rlp/OpDepositEncode.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <cstdint>
 
@@ -614,6 +615,137 @@ struct EIP1559TxHandler : TxHandler
     }
 };
 
+struct DepositTxHandler : TxHandler
+{
+    // 完整 RLP: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
+    // —— 复用 OpDepositEncode.h 的 8 字段无签名布局(字段顺序/类型已对 op-geth DepositTx 校验)。
+    bcos::bytes encode(const Web3Transaction& tx) const override
+    {
+        bcos::codec::rlp::OpDepositFields fields{
+            .sourceHash = tx.sourceHash,
+            .from = tx.from,
+            .to = tx.to,
+            .mint = tx.mint,
+            .value = tx.value,
+            .gas = tx.gasLimit,
+            .isSystemTransaction = tx.isSystemTx,
+            .data = tx.data,
+        };
+        return bcos::codec::rlp::encodeDepositEnvelope(fields);
+    }
+
+    // deposit 无签名:签名预映像即完整 envelope(对齐 op-geth DepositTx.SigningHash,
+    // 用于 extraTransactionBytes)。
+    bcos::bytes encodeForSign(const Web3Transaction& tx) const override { return encode(tx); }
+
+    // RLP header(长度计算): 8 字段长度之和(不含 type byte —— 与其它 typed handler 一致)。
+    codec::rlp::Header header(const Web3Transaction& tx) const override
+    {
+        codec::rlp::Header h{.isList = true};
+        h.payloadLength += codec::rlp::length(tx.sourceHash);  // h256
+        h.payloadLength += codec::rlp::length(tx.from);        // Address
+        // to(optional Address): 空串 0x80 占 1 字节,或 20 字节地址 + 1 字节长度头
+        h.payloadLength += (tx.to.has_value()) ? (Address::SIZE + 1) : 1;
+        h.payloadLength += codec::rlp::length(tx.mint);      // u256
+        h.payloadLength += codec::rlp::length(tx.value);     // u256
+        h.payloadLength += codec::rlp::length(tx.gasLimit);  // uint64
+        h.payloadLength += 1;  // isSystemTransaction(0x80 空串 或 0x01)
+        h.payloadLength += codec::rlp::length(tx.data);  // bytes
+        return h;
+    }
+
+    // 解码: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
+    // ⚠️ decode 契约: typed handler 自包含(自行消费 type byte + list header);分派方
+    // (Web3Transaction::decode)不预先裁剪 type byte。
+    bcos::Error::UniquePtr decode(
+        bcos::bytesRef& in, Web3Transaction& out, bool /*withSig*/) const override
+    {
+        if (in.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
+        if (in[0] != static_cast<bcos::byte>(TransactionType::Deposit))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnsupportedTransactionType,
+                "Unsupported transaction type");
+        }
+        out.type = TransactionType::Deposit;
+        in = in.getCroppedData(1);
+        auto&& [e, head] = codec::rlp::decodeHeader(in);
+        if (e != nullptr)
+        {
+            return std::move(e);
+        }
+        if (!head.isList)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::UnexpectedString, "deposit: expected RLP list");
+        }
+        // 每个字段解码都检查错误并传播(不得静默吞掉)
+        if (auto err = codec::rlp::decode(in, out.sourceHash); err != nullptr)
+            return err;  // h256
+        if (auto err = codec::rlp::decode(in, out.from); err != nullptr)
+            return err;  // Address
+        // to(optional Address;空串 0x80 = nullopt 合约创建)
+        if (in[0] == codec::rlp::BYTES_HEAD_BASE)
+        {
+            out.to = std::nullopt;
+            in = in.getCroppedData(1);
+        }
+        else
+        {
+            Address addr{};
+            if (auto err = codec::rlp::decode(in, addr); err != nullptr)
+                return err;
+            out.to.emplace(addr);
+        }
+        if (auto err = codec::rlp::decode(in, out.mint); err != nullptr)
+            return err;  // u256
+        if (auto err = codec::rlp::decode(in, out.value); err != nullptr)
+            return err;  // u256
+        if (auto err = codec::rlp::decode(in, out.gasLimit); err != nullptr)
+            return err;  // uint64
+        // ⚠️ isSystemTransaction 不能用 codec::rlp::decode(bool)(RLPDecode.h:200-217 要求
+        // payloadLength==1,对 golden 的 0x80 空串报 UnexpectedLength)。必须字节语义:
+        // 空串 0x80 → false(op-geth RLP nil);单字节 0x01 → true;其它报错。
+        {
+            bcos::bytes raw{};
+            if (auto err = codec::rlp::decode(in, raw); err != nullptr)
+                return err;
+            if (raw.empty())
+            {
+                out.isSystemTx = false;
+            }
+            else if (raw.size() == 1 && raw[0] == 1)
+            {
+                out.isSystemTx = true;
+            }
+            else
+            {
+                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedLength,
+                    "deposit: invalid isSystemTransaction value");
+            }
+        }
+        if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
+            return err;  // bytes
+        out.nonce = 0;   // deposit nonce 恒 0
+        return nullptr;
+    }
+
+    // RPC JSON 输出(类型相关字段): type/sourceHash/mint/isSystemTx。
+    // ⚠️ 职责边界: from/to/gas/input/value/nonce/hash/r/s/v 由 combineTxResponseFromWeb3 的
+    // 通用块输出(见 Task 5 Step 4 的注),不在此覆盖。
+    void toJson(const Web3Transaction& tx, Json::Value& result) const override
+    {
+        result["type"] = toQuantity(static_cast<uint8_t>(TransactionType::Deposit));
+        result["sourceHash"] = tx.sourceHash.hexPrefixed();
+        // mint 带 0x 前缀,对齐 op-geth hexutil.Big
+        result["mint"] = "0x" + tx.mint.str(0, std::ios_base::hex);
+        result["isSystemTx"] = tx.isSystemTx;
+    }
+};
+
 struct EIP4844TxHandler : TxHandler
 {
     static codec::rlp::Header headerTxBase(const Web3Transaction& tx) noexcept
@@ -806,6 +938,7 @@ TxHandler& handlerFor(TransactionType type)
     static EIP2930TxHandler eip2930;
     static EIP1559TxHandler eip1559;
     static EIP4844TxHandler eip4844;
+    static DepositTxHandler deposit;
     switch (type)
     {
     case TransactionType::Legacy:
@@ -817,8 +950,7 @@ TxHandler& handlerFor(TransactionType type)
     case TransactionType::EIP4844:
         return eip4844;
     case TransactionType::Deposit:
-        // TODO(Task 5): 真正的 DepositTxHandler;当前防御性回退到 Legacy,导致 deposit 解码失败(红)
-        return legacy;
+        return deposit;
     }
     return legacy;
 }
