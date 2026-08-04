@@ -418,5 +418,37 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     BOOST_CHECK_EQUAL(address, "0xc1b634853cb333d3ad8663715b08f41a3aec47cc");
 }
 
+BOOST_AUTO_TEST_CASE(testDepositTransactionDecode)
+{
+    // 来自 golden corpus isthmus_transfer_basic 的 deposit(0x7e),264 字节
+    // clang-format off
+    constexpr std::string_view rawTx =
+        "0x7ef90104a06ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58"
+        "817142a645d794deaddeaddeaddeaddeaddeaddeaddeaddead000194420000"
+        "00000000000000000000000000000000158080830f424080b8b0098999be00"
+        "000558000c5fc5000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000006fc23ac"
+        "0000000000000000000000000000000000000000000000000000000000000f"
+        "42400000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000";
+    // clang-format on
+    auto bytes = fromHexWithPrefix(rawTx);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto e = codec::rlp::decode(bRef, tx);
+    BOOST_CHECK(!e);
+    BOOST_CHECK(tx.type == rpc::TransactionType::Deposit);
+    // FixedBytes::hex() 无 0x 前缀
+    BOOST_CHECK_EQUAL(tx.from.hex(), "deaddeaddeaddeaddeaddeaddeaddeaddead0001");
+    BOOST_CHECK_EQUAL(
+        tx.sourceHash.hex(), "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    BOOST_CHECK_EQUAL(tx.isSystemTx, false);  // golden 的 isSystemTx = 0x80 空串 = false
+    BOOST_CHECK_EQUAL(tx.to.value().hex(), "4200000000000000000000000000000000000015");
+    BOOST_CHECK_EQUAL(tx.gasLimit, 1000000u);  // gas = 0x0f4240
+    BOOST_CHECK_EQUAL(tx.mint, 0u);            // mint = 0x80 空串 = 0
+    BOOST_CHECK_EQUAL(tx.value, 0u);           // value = 0x80 空串 = 0
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

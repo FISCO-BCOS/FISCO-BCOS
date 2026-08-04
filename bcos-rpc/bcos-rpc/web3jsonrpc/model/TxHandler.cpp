@@ -816,6 +816,9 @@ TxHandler& handlerFor(TransactionType type)
         return eip1559;
     case TransactionType::EIP4844:
         return eip4844;
+    case TransactionType::Deposit:
+        // TODO(Task 5): 真正的 DepositTxHandler;当前防御性回退到 Legacy,导致 deposit 解码失败(红)
+        return legacy;
     }
     return legacy;
 }

@@ -157,6 +157,9 @@ uint64_t Web3Transaction::getSignatureV() const
 }
 std::string Web3Transaction::sender() const
 {
+    // deposit(0x7e):无签名,sender 直接取 from 字段
+    if (type == TransactionType::Deposit)
+        return toHexStringWithPrefix(from);
     bcos::bytes sign{};
     sign.reserve(crypto::SECP256K1_SIGNATURE_LEN);
     sign.insert(sign.end(), signatureR.begin(), signatureR.end());

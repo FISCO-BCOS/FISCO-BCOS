@@ -39,9 +39,10 @@ namespace rpc
 enum class TransactionType : uint8_t
 {
     Legacy = 0,
-    EIP2930 = 1,  // https://eips.ethereum.org/EIPS/eip-2930
-    EIP1559 = 2,  // https://eips.ethereum.org/EIPS/eip-1559
-    EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
+    EIP2930 = 1,     // https://eips.ethereum.org/EIPS/eip-2930
+    EIP1559 = 2,     // https://eips.ethereum.org/EIPS/eip-1559
+    EIP4844 = 3,     // https://eips.ethereum.org/EIPS/eip-4844
+    Deposit = 0x7e,  // deposit-only system tx (OP Stack)
 };
 
 constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
@@ -104,6 +105,11 @@ public:
     // EIP-4844: Shard Blob Transactions
     u256 maxFeePerBlobGas{0};
     h256s blobVersionedHashes;
+    // deposit-only (0x7e)
+    h256 sourceHash;
+    Address from;
+    u256 mint{0};
+    bool isSystemTx{false};
     // TODO)) blob
     bcos::bytes signatureR;
     bcos::bytes signatureS;
