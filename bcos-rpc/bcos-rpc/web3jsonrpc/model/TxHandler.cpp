@@ -733,12 +733,16 @@ struct DepositTxHandler : TxHandler
         return nullptr;
     }
 
-    // RPC JSON 输出(类型相关字段): type/sourceHash/mint/isSystemTx。
-    // ⚠️ 职责边界: from/to/gas/input/value/nonce/hash/r/s/v 由 combineTxResponseFromWeb3 的
-    // 通用块输出(见 Task 5 Step 4 的注),不在此覆盖。
+    // RPC JSON 输出(类型相关字段): 公共字段 nonce/type/value/chainId + deposit 专属
+    // sourceHash/mint/isSystemTx。
+    // ⚠️ 职责边界: from/to/gas/gasPrice/hash/input/r/s/v 由 combineTxResponseFromWeb3 的通用块
+    // 输出,但 nonce/type/value/chainId 也委托 handler —— 这里必须输出,否则 deposit 响应缺这 4
+    // 个字段(Task 5/7 审查移交;被删的旧占位曾输出 nonce/value="0x0")。对齐 op-geth DepositTx:
+    // nonce()=0、chainID()=Big0、value()=真实 value(outputCommonFields 对 nullopt chainId 输出
+    // "0x0",与其它类型的 pre-EIP-155 分支一致)。
     void toJson(const Web3Transaction& tx, Json::Value& result) const override
     {
-        result["type"] = toQuantity(static_cast<uint8_t>(TransactionType::Deposit));
+        outputCommonFields(result, tx);
         result["sourceHash"] = tx.sourceHash.hexPrefixed();
         // mint 带 0x 前缀,对齐 op-geth hexutil.Big
         result["mint"] = "0x" + tx.mint.str(0, std::ios_base::hex);
