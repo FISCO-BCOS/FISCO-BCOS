@@ -117,7 +117,13 @@ void bcos::rpc::combineTxResponseFromWeb3(Json::Value& result, const Web3Transac
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
     result["transactionIndex"] = toQuantity(transactionIndex);
-    auto from = toHex(web3Tx.sender());
+    auto from = web3Tx.sender();
+    // sender() returns "0x"-prefixed hex (toHexStringWithPrefix); strip the prefix and checksum
+    // the bare 40-char address — toHex(sender()) would double-encode the 42-char string.
+    if (from.starts_with("0x"))
+    {
+        from = from.substr(2);
+    }
     toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);
     if (!web3Tx.to.has_value())

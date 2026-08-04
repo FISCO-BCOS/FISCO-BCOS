@@ -81,10 +81,12 @@ BOOST_AUTO_TEST_CASE(EmitsOpExtensionFieldsFromOpReceiptMeta)
     // recomputes the same recovery combineReceiptResponseFromWeb3 performs internally (FISCO
     // calculateAddress = keccak256(X||Y), 64-byte no-0x04-prefix, last 20 bytes); asserting the
     // exact recovered address pins the fixture's signature to the reviewer-verified sender.
-    // (Note: combineReceiptResponseFromWeb3's emitted "from" is currently double-encoded by
-    // toHex(sender()) — sender() returns a "0x"-prefixed hex string — a pre-existing bug tracked
-    // separately; this assertion targets the fixture's crypto validity, not that formatting.)
     BOOST_CHECK_EQUAL(w3.sender(), "0xe80f05d47864eaaa8382155a5a51b91175231241");
+    // The emitted "from" must be the EIP-55 checksummed address: sender() returns "0x"-prefixed
+    // hex, combineReceiptResponseFromWeb3 strips the prefix, checksums, and re-adds "0x" (a
+    // toHex(sender()) call would double-encode). Reviewer verified this checksummed value
+    // independently.
+    BOOST_CHECK_EQUAL(result["from"].asString(), "0xe80F05D47864eaAa8382155a5A51b91175231241");
 }
 
 BOOST_AUTO_TEST_CASE(MissingMetaEmitsNoOpFields)
