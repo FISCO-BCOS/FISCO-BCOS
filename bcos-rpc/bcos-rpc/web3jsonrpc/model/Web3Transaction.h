@@ -117,9 +117,6 @@ void encode(bcos::bytes& out, const rpc::AccessListEntry&) noexcept;
 size_t length(const rpc::AccessListEntry&) noexcept;
 
 size_t length(const rpc::Web3Transaction&) noexcept;
-Header headerForSign(const rpc::Web3Transaction& tx) noexcept;
-Header headerTxBase(const rpc::Web3Transaction& tx) noexcept;
-Header header(const rpc::Web3Transaction& tx) noexcept;
 void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;

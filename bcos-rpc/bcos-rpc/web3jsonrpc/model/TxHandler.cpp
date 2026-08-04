@@ -214,7 +214,12 @@ struct LegacyTxHandler : TxHandler
             out.to.emplace(addr);
         }
 
-        decodeError = codec::rlp::decodeItems(in, out.value, out.data);
+        // ⚠️ 立即检查 value/data 解码错误:若延迟到 withSig 分支再赋值,
+        // 后续签名解码成功会覆盖 decodeError,把畸形输入误判为成功。
+        if (auto err = codec::rlp::decodeItems(in, out.value, out.data); err != nullptr)
+        {
+            return err;
+        }
         if (withSig)
         {
             if (decodeError =

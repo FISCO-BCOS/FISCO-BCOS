@@ -77,6 +77,22 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 }
 
+BOOST_AUTO_TEST_CASE(testLegacyDecodeRejectsMalformedValue)
+{
+    // Legacy tx RLP 中 value 字段是 RLP list(0xc0)而非整数:
+    // rlp([nonce=1, gasPrice=1, gasLimit=1, to=empty, value=list(), data=empty, v=27, r=empty,
+    // s=empty])。value/data 解码失败(UnexpectedList),但后续签名(v/r/s)解码成功 —— 旧实现会被
+    // withSig 分支覆盖 decodeError,把畸形输入误判为成功。
+    const std::string rawTx = "0xc901010180c0801b8080";
+    auto bytes = fromHexWithPrefix(rawTx);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto e = codec::rlp::decode(bRef, tx);
+    BOOST_REQUIRE(e != nullptr);
+    BOOST_CHECK_EQUAL(
+        e->errorCode(), static_cast<int64_t>(codec::rlp::DecodingError::UnexpectedList));
+}
+
 BOOST_AUTO_TEST_CASE(testConstructTx)
 {
     Web3Transaction testTx;
