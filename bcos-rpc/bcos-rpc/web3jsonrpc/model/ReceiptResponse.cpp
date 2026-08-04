@@ -127,7 +127,9 @@ void bcos::rpc::combineReceiptResponseFromWeb3(Json::Value& result, const Web3Tr
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
-        auto address = std::string(receiptLog[i].address());
+        // LogEntry::address() returns the raw 20-byte address (LogEntry.h:41), not hex — hex-encode
+        // before checksumming, same as the from/to paths.
+        auto address = toHex(receiptLog[i].address());
         toChecksumAddress(address, bcos::crypto::keccak256Hash(bcos::bytesConstRef(address)).hex());
         log["address"] = "0x" + std::move(address);
         log["topics"] = Json::arrayValue;
@@ -209,7 +211,9 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
-        auto address = std::string(receiptLog[i].address());
+        // LogEntry::address() returns the raw 20-byte address (LogEntry.h:41), not hex — hex-encode
+        // before checksumming, same as the from/to paths.
+        auto address = toHex(receiptLog[i].address());
         toChecksumAddress(address, bcos::crypto::keccak256Hash(bcos::bytesConstRef(address)).hex());
         log["address"] = "0x" + std::move(address);
         log["topics"] = Json::arrayValue;
