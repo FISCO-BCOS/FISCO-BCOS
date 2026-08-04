@@ -38,7 +38,9 @@ public:
     {
         std::promise<bcos::bytes> promise;
         web3JsonRpc->onRPCRequest(
-            request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+            request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -208,6 +210,36 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
     // Non-decodable raw tx must surface a JSON-RPC error, not crash.
     auto resp = call(req("eth_sendRawTransaction", R"(["0xdeadbeef"])"));
     BOOST_CHECK(resp.isMember("error") || resp.isMember("result"));
+    BOOST_CHECK(resp.isMember("id"));
+}
+
+BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsDeposit)
+{
+    // deposit (0x7e) txs are L1-derived system transactions (no signature, self-reported
+    // from): user submission via eth_sendRawTransaction must be rejected with InvalidParams.
+    // Same golden envelope as testDepositTransactionDecode (isthmus_transfer_basic).
+    // clang-format off
+    constexpr std::string_view rawDeposit =
+        "0x7ef90104a06ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58"
+        "817142a645d794deaddeaddeaddeaddeaddeaddeaddeaddead000194420000"
+        "00000000000000000000000000000000000158080830f424080b8b0098999be00"
+        "000558000c5fc5000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000006fc23ac"
+        "0000000000000000000000000000000000000000000000000000000000000f"
+        "42400000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000";
+    // clang-format on
+    auto resp = call(
+        req("eth_sendRawTransaction", std::string(R"([")") + std::string(rawDeposit) + R"("])"));
+    BOOST_CHECK_MESSAGE(
+        resp.isMember("error"), "deposit must be rejected, got: " << resp.toStyledString());
+    if (resp.isMember("error"))
+    {
+        BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(),
+            static_cast<int>(bcos::rpc::JsonRpcError::InvalidParams));
+    }
+    BOOST_CHECK(!resp.isMember("result"));
     BOOST_CHECK(resp.isMember("id"));
 }
 

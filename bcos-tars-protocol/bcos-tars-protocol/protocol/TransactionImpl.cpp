@@ -242,7 +242,9 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // deposit (0x7e): the canonical hash is keccak256 of the full envelope, no signature
     // appended (same predicate as isDepositTx()). Checked before the generic Web3 branch,
     // which would try to splice a 65-byte signature that a deposit does not carry.
-    if (static_cast<uint8_t>(m_inner()->web3TypedTxKind) == 0x7e)
+    // Use the accessor (not the raw tars field): it returns 0 unless type()==Web3Transaction,
+    // so a forged BCOS tx (type=0, web3TypedTxKind=0x7e) can never hit the deposit branch.
+    if (web3TypedTxKind() == 0x7e)
     {
         auto h = bcos::crypto::keccak256Hash(extraTransactionBytes());
         m_inner()->extraTransactionHash.assign(h.begin(), h.end());
@@ -437,10 +439,12 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
 
 bool bcostars::protocol::TransactionImpl::isDepositTx() const
 {
-    // Use web3TypedTxKind == 0x7e, NOT isSystemTransaction: isSystemTransaction is a
+    // Use web3TypedTxKind() == 0x7e, NOT isSystemTransaction: isSystemTransaction is a
     // per-transaction flag, so a non-system deposit (isSystemTx=false, the vast majority) would
     // be misclassified.
-    return static_cast<uint8_t>(m_inner()->web3TypedTxKind) == 0x7e;
+    // Also use the accessor (not the raw tars field): it returns 0 unless type()==Web3Transaction,
+    // so a forged BCOS tx (type=0, web3TypedTxKind=0x7e) is never treated as a deposit.
+    return web3TypedTxKind() == 0x7e;
 }
 
 bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const

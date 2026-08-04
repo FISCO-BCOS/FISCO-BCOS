@@ -547,6 +547,13 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
+    // deposit (0x7e) txs are system transactions derived locally from L1 data: they carry no
+    // signature and self-report their from address, so they must never be accepted from a user.
+    if (web3Tx.type == TransactionType::Deposit) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "deposit transactions cannot be submitted via eth_sendRawTransaction"));
+    }
     auto encodeTxHash = web3Tx.txHash();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
