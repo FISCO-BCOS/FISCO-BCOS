@@ -44,11 +44,13 @@ namespace bcos::executor_v1::eth
 /// (Ethereum yellow paper H.4). The current committed height is read from
 /// storage via ledger::getCurrentBlockNumber; a request outside
 /// [currentHeight - 255, currentHeight] is reported as an unknown block (zero
-/// hash) without touching the hash table. When the committed height is unknown
-/// (-1, e.g. genesis or standalone execution) the bound is skipped. Unknown
-/// heights and any negative input read as a zero hash; a storage backend
-/// failure is logged and likewise reported as zero, so an exception can never
-/// cross the noexcept boundary.
+/// hash) without touching the hash table. The bound is waived only when the
+/// chain has no committed height yet (a height of -1, e.g. genesis or
+/// standalone execution). A *failed* height read fails closed — reported as an
+/// unknown block — so a broken backend can never make an arbitrarily old hash
+/// resolvable by skipping the bound. Any negative input, an out-of-window
+/// request, or a storage backend failure is reported as zero; an exception can
+/// never cross the noexcept boundary.
 template <class Storage>
 class StorageBlockHashes : public evmone::state::BlockHashes
 {
@@ -67,7 +69,13 @@ public:
         // Bound BLOCKHASH to the last 256 ancestors. currentHeight is the last
         // committed height (the parent of the block being executed), so the
         // reachable range is [currentHeight - 255, currentHeight].
-        int64_t currentHeight = -1;
+        //
+        // The two "height unknown" cases are deliberately handled differently:
+        // a chain with no committed height yet (genesis/standalone) reports -1
+        // and waives the bound, while a *failed* height read fails closed (an
+        // unknown block) — a broken backend must never make an arbitrarily old
+        // hash resolvable by skipping the bound.
+        std::optional<int64_t> currentHeight;
         try
         {
             currentHeight = task::tbb::syncWait(
@@ -77,15 +85,18 @@ public:
         {
             BCOS_LOG(ERROR) << LOG_DESC("StorageBlockHashes: getCurrentBlockNumber failed")
                             << LOG_KV("blockNumber", blockNumber) << LOG_KV("reason", e.what());
+            return {};
         }
         catch (...)
         {
             BCOS_LOG(ERROR) << LOG_DESC("StorageBlockHashes: getCurrentBlockNumber failed")
                             << LOG_KV("blockNumber", blockNumber);
+            return {};
         }
 
-        if (currentHeight >= 0 &&
-            (blockNumber > currentHeight || currentHeight - blockNumber > kMaxBlockHashLookback - 1))
+        if (currentHeight.has_value() && *currentHeight >= 0 &&
+            (blockNumber > *currentHeight ||
+                *currentHeight - blockNumber > kMaxBlockHashLookback - 1))
         {
             // Not among the last kMaxBlockHashLookback ancestors — unknown block.
             return {};

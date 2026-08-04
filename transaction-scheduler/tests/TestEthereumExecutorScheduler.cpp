@@ -459,6 +459,132 @@ BOOST_AUTO_TEST_CASE(serialInvalidTxDoesNotAbortBlock)
     }());
 }
 
+// Round-2 discriminating case (comment on PR #5391): execute() must validate
+// *every* transaction against the state it actually runs on, not only those
+// that failed prepare(). One sender funded for exactly one transfer, two
+// transactions both carrying nonce "0". The second transaction is valid at
+// prepare() (storage nonce is still 0) but invalid by the time it executes —
+// the first bumped the nonce. Without unconditional validation in execute(),
+// transition() runs it anyway: it bumps the nonce again and wraps the sender's
+// balance to ~2^256 (ether created from nothing, consensus divergence). With
+// the fix the second transaction is rejected as NONCE_TOO_LOW, gets a failure
+// receipt, and the sender keeps its remaining balance.
+
+BOOST_AUTO_TEST_CASE(serialSameNonceSecondRejected)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialSameNonceGC");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEMakeAddress(81);
+        auto recipient0 = EEMakeAddress(91);
+        auto recipient1 = EEMakeAddress(92);
+
+        // Funded for exactly one transfer (nonce "0" is the only valid one).
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient0, 0);
+        co_await EEFundAccount(backendStorage, recipient1, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient0, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 100, "0"));
+
+        co_await EEWriteBlockHash(
+            backendStorage, 0, cryptoSuite->hashImpl()->hash(std::string("genesis")));
+        co_await EEWriteBlockHash(
+            backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
+        co_await EEWriteCurrentNumber(backendStorage, 0);
+
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setNumber(1);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        ledger::LedgerConfig ledgerConfig;
+        ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+
+        auto transactions =
+            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, blockHeader, transactions, ledgerConfig);
+
+        BOOST_CHECK_EQUAL(receipts.size(), 2u);
+        BOOST_CHECK_EQUAL(receipts[0]->status(), 0);  // first nonce-"0" tx succeeds
+        BOOST_CHECK(receipts[1]->status() != 0);  // second same-nonce tx rejected
+
+        // The sender must NOT be wrapped to ~2^256: only the first transfer is
+        // debited, and the rejected second one writes nothing.
+        auto senderBalance = co_await EEReadBalance(view, sender);
+        BOOST_CHECK(senderBalance == EEFunding - 100);
+        auto recipient0Balance = co_await EEReadBalance(view, recipient0);
+        BOOST_CHECK(recipient0Balance == u256(100));
+        auto recipient1Balance = co_await EEReadBalance(view, recipient1);
+        BOOST_CHECK(recipient1Balance == u256(0));
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(parallelSameNonceSecondRejected)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool =
+            std::make_shared<bcos::IOServicePool>(1, "testEthParallelSameNonceGC");
+        SchedulerParallelImpl<EEMutableStorage> scheduler(ioServicePool);
+
+        auto sender = EEMakeAddress(82);
+        auto recipient0 = EEMakeAddress(93);
+        auto recipient1 = EEMakeAddress(94);
+
+        // Funded for exactly one transfer (nonce "0" is the only valid one).
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient0, 0);
+        co_await EEFundAccount(backendStorage, recipient1, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient0, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 100, "0"));
+
+        co_await EEWriteBlockHash(
+            backendStorage, 0, cryptoSuite->hashImpl()->hash(std::string("genesis")));
+        co_await EEWriteBlockHash(
+            backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
+        co_await EEWriteCurrentNumber(backendStorage, 0);
+
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setNumber(1);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        ledger::LedgerConfig ledgerConfig;
+        ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+
+        auto transactions =
+            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, blockHeader, transactions, ledgerConfig);
+
+        BOOST_CHECK_EQUAL(receipts.size(), 2u);
+        BOOST_CHECK_EQUAL(receipts[0]->status(), 0);  // first nonce-"0" tx succeeds
+        BOOST_CHECK(receipts[1]->status() != 0);  // second same-nonce tx rejected
+
+        auto senderBalance = co_await EEReadBalance(view, sender);
+        BOOST_CHECK(senderBalance == EEFunding - 100);
+        auto recipient0Balance = co_await EEReadBalance(view, recipient0);
+        BOOST_CHECK(recipient0Balance == u256(100));
+        auto recipient1Balance = co_await EEReadBalance(view, recipient1);
+        BOOST_CHECK(recipient1Balance == u256(0));
+    }());
+}
+
 // StorageBlockHashes only resolves the last 256 ancestor block hashes (Ethereum
 // BLOCKHASH semantics). With a committed height of 300, block 50 is reachable
 // (300-50=250) but block 5 is not (300-5=295 > 255) — even though its hash IS

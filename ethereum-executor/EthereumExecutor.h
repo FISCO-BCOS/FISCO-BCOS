@@ -10,6 +10,14 @@
 /// (precompiled management, auth committee, gas payment precheck, etc.).
 /// It is designed for EEST (Ethereum Execution Spec Tests) compliance
 /// testing and Ethereum-compatible chain execution.
+///
+/// Strict nonce ordering is a precondition for use: Ethereum semantics require
+/// each transaction's nonce to equal the sender's current storage nonce, so a
+/// sender's transactions must be presented in nonce order. If a block contains
+/// a sender's transactions out of order, the higher-nonce one validates as
+/// NONCE_TOO_HIGH and is dropped as a failure receipt (it must be resubmitted).
+/// Whoever wires this executor in must therefore ensure the sealer packs each
+/// sender's transactions in nonce order.
 
 #pragma once
 
@@ -165,12 +173,12 @@ public:
         evmone::state::TransactionProperties m_txProps;
         evmone::state::BlobParams m_blobParams;
         int64_t m_blobGasLeft = 0;
-        // Set when prepare()'s validate_transaction failed. The scheduler
-        // batches prepare() across a whole chunk before any execute(), so a
-        // transaction whose nonce/balance depends on an earlier same-chunk
-        // transaction can fail here against a still-unmodified state. execute()
-        // re-runs validation against the now-current state; only a transaction
-        // that fails both is genuinely invalid and gets a failure receipt.
+        // Set when execute()'s validate_transaction failed against the state
+        // the transaction would actually run on. Validation runs once, in
+        // execute(), against the current state (after earlier same-chunk
+        // transactions have had their writes applied); a failure here means the
+        // transaction is genuinely invalid and gets a failure receipt from
+        // finish(), with no state written for it.
         std::optional<std::error_code> m_validationError;
         evmone::state::TransactionReceipt m_evmReceipt;
 
@@ -186,21 +194,24 @@ public:
             m_stateView(storage.get())
         {}
 
-        /// Phase 1 — validation.
+        /// Phase 1 — setup (no state access).
         ///
-        /// Converts the BCOS types to evmone types and runs evmone's
-        /// validate_transaction() against the StorageStateView created in the
-        /// constructor. The view is not a snapshot: it reads through to the
-        /// live storage on every call, which is what lets execute() re-validate
-        /// (and transition()) observe writes applied by earlier transactions in
-        /// the same chunk. No state is written in this phase.
+        /// Converts the BCOS types to evmone types and resolves the block-level
+        /// parameters (revision, block info, blob schedule). The scheduler
+        /// batches prepare() across a whole chunk (and the serial pipeline
+        /// overlaps a chunk's prepare filter with the previous chunk's execute
+        /// filter), so this phase deliberately reads no state: validation
+        /// happens once, in execute(), against the state the transaction
+        /// actually executes on.
         ///
-        /// A validation failure is recorded in m_validationError rather than
-        /// thrown: with the schedulers batching prepare() across a whole chunk,
-        /// a failure here may simply mean an earlier same-chunk transaction has
-        /// not had its nonce/balance change applied yet. execute() re-validates
-        /// against the now-current state and only falls back to a failure
-        /// receipt when the transaction is genuinely invalid.
+        /// blob_gas_left is the block's remaining blob gas (max_blob_gas_per_block
+        /// minus already-included blobs). It must NOT be the tx's own blob gas,
+        /// otherwise a tx with too many blobs would pass validation. Matches
+        /// evmone's t8n/blockchaintest runners which start blob_gas_left at
+        /// max_blob_gas_per_block(blob_params). EIP-7840 blob schedule
+        /// constants (target, max, base_fee_update_fraction) live in
+        /// BCOS2Evmone.h so both this executor and blockHeaderToBlockInfo
+        /// share them.
         task::Task<void> prepare()
         {
             auto revOpt = ledgerConfig.get().evmcRevisionForBlock(blockHeader.get().number());
@@ -213,38 +224,59 @@ public:
             m_blockInfo = blockHeaderToBlockInfo(blockHeader.get(), ledgerConfig.get(), m_rev);
             m_evmTx = bcosTransactionToEvmone(transaction.get());
             m_validationError.reset();
-
-            // Validate transaction using evmone's built-in logic.
-            // This ensures the intrinsic gas, min_gas_cost, and all validation
-            // checks match evmone exactly.
-            // blob_gas_left is the block's remaining blob gas (max_blob_gas_per_block
-            // minus already-included blobs). It must NOT be the tx's own blob gas,
-            // otherwise a tx with too many blobs would pass validation. Matches
-            // evmone's t8n/blockchaintest runners which start blob_gas_left at
-            // max_blob_gas_per_block(blob_params). EIP-7840 blob schedule
-            // constants (target, max, base_fee_update_fraction) live in
-            // BCOS2Evmone.h so both this executor and blockHeaderToBlockInfo
-            // share them.
             m_blobParams = blobParamsForRevision(m_rev);
             m_blobGasLeft =
                 static_cast<int64_t>(evmone::state::max_blob_gas_per_block(m_blobParams));
+            co_return;
+        }
+
+        /// Phase 2 — validate & execute.
+        ///
+        /// Runs evmone's validate_transaction() against the current storage
+        /// state, then — if valid — transition() and immediately applies the
+        /// returned StateDiff back to the storage.
+        ///
+        /// Validation happens here, once per transaction, against the state the
+        /// transaction actually executes on. It must not live in prepare():
+        /// the schedulers batch prepare() for a whole chunk before any
+        /// execute(), so validating there would run every transaction against
+        /// the pre-chunk state. Both directions are wrong:
+        ///   * a transaction invalid at prepare() (e.g. nonce ahead of an
+        ///     earlier same-chunk transaction) can be valid by the time it
+        ///     executes, and
+        ///   * a transaction valid at prepare() but invalidated by an earlier
+        ///     same-chunk transaction (same sender, same nonce; or a sender
+        ///     drained by an earlier transaction) must be rejected, not
+        ///     executed: evmone's transition() trusts its caller and does not
+        ///     re-check nonce/balance (state.cpp bumps the sender nonce and
+        ///     subtracts the max cost unconditionally, and the balance is an
+        ///     intx::uint256 that would wrap).
+        /// A transaction that fails this validation is genuinely invalid: it is
+        /// skipped (no state written) and finish() emits a failure receipt.
+        ///
+        /// Writing the diff here — not in finish() — is what gives transactions
+        /// within a chunk sequential read-through semantics, matching
+        /// TransactionExecutorImpl: both schedulers batch each phase across a
+        /// whole chunk, so if the diff were only applied in finish(), every
+        /// transaction in the chunk would execute against the same unmodified
+        /// state (and, since the diffs are absolute post-state values, later
+        /// diffs would silently discard earlier ones). Reads through the state
+        /// view are synchronously bridged with task::tbb::syncWait.
+        task::Task<void> execute()
+        {
             auto validationResult =
                 evmone::state::validate_transaction(m_stateView, m_blockInfo, m_evmTx, m_rev,
                     m_blockInfo.gas_limit /*block_gas_left*/, m_blobGasLeft /*blob_gas_left*/);
-
             if (auto* props = std::get_if<evmone::state::TransactionProperties>(&validationResult))
             {
-                // Validation succeeded - use evmone's computed properties
+                // Valid against the current state — use evmone's computed properties.
                 m_txProps = *props;
             }
             else
             {
-                // Invalid (per the state as of prepare()). Record it instead of
-                // throwing: the schedulers batch prepare() for a whole chunk, so
-                // this may be a transaction whose only problem is that an earlier
-                // same-chunk transaction has not yet had its nonce/balance change
-                // applied. execute() re-validates against the current state.
-                // NOTE: we no longer special-case SENDER_NOT_EOA here. EIP-3607
+                // Genuinely invalid — skip execution; finish() produces a
+                // failure receipt and nothing is written for this transaction.
+                // NOTE: we do not special-case SENDER_NOT_EOA here. EIP-3607
                 // requires rejecting transactions whose sender has non-delegating
                 // code, and EEST tests check this (e.g.
                 // test_set_code_from_account_with_non_delegating_code). Only
@@ -252,49 +284,7 @@ public:
                 // may be senders, which evmone's validate_transaction already
                 // accepts.
                 m_validationError = std::get<std::error_code>(validationResult);
-            }
-            co_return;
-        }
-
-        /// Phase 2 — EVM execution.
-        ///
-        /// Runs evmone's transition() against the current storage state and
-        /// immediately applies the returned StateDiff back to the storage.
-        /// Writing here — not in finish() — is what gives transactions within a
-        /// chunk sequential read-through semantics, matching TransactionExecutorImpl:
-        /// both schedulers batch each phase across a whole chunk, so if the diff
-        /// were only applied in finish(), every transaction in the chunk would
-        /// execute against the same unmodified state (and, since the diffs are
-        /// absolute post-state values, later diffs would silently discard earlier
-        /// ones). Reads through the state view are synchronously bridged with
-        /// task::tbb::syncWait.
-        ///
-        /// If prepare() recorded a validation failure, re-validate against the
-        /// current state: an earlier same-chunk transaction may have satisfied
-        /// the dependency (e.g. the sender's nonce bumped by the previous
-        /// transaction). If the transaction still fails validation it is
-        /// genuinely invalid, so it is skipped — finish() emits a failure
-        /// receipt and nothing is written to storage for it.
-        task::Task<void> execute()
-        {
-            if (m_validationError.has_value())
-            {
-                auto validationResult =
-                    evmone::state::validate_transaction(m_stateView, m_blockInfo, m_evmTx, m_rev,
-                        m_blockInfo.gas_limit /*block_gas_left*/,
-                        m_blobGasLeft /*blob_gas_left*/);
-                if (auto* props =
-                        std::get_if<evmone::state::TransactionProperties>(&validationResult))
-                {
-                    m_validationError.reset();
-                    m_txProps = *props;
-                }
-                else
-                {
-                    // Genuinely invalid — skip execution, finish() produces a
-                    // failure receipt.
-                    co_return;
-                }
+                co_return;
             }
 
             m_evmReceipt = evmone::state::transition(m_stateView, m_blockInfo,
@@ -311,9 +301,8 @@ public:
         ///
         /// Produces the BCOS receipt. The state was already applied in
         /// execute(); this phase only converts the evmone receipt. The one
-        /// exception is a transaction that failed validation in both prepare()
-        /// and execute()'s re-check: it gets a failure receipt and no state was
-        /// written for it.
+        /// exception is a transaction that failed validation in execute(): it
+        /// gets a failure receipt and no state was written for it.
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
             if (m_validationError.has_value())

@@ -42,9 +42,13 @@ evmone::state::BlockInfo blockHeaderToBlockInfo(
     if (cb.size() == sizeof(evmc_address))
         std::copy_n(cb.begin(), sizeof(evmc_address), info.coinbase.bytes);
     // base_fee is a hex string that may or may not carry the 0x prefix; parse
-    // it the same robust way as chainId/nonce (bcos::u256), then truncate to
-    // uint64 as before. std::stoull(base, 16) would mis-read a decimal value
-    // that happens to lack the 0x prefix and throw for values > uint64.
+    // it the same way as chainId/nonce (bcos::u256), then truncate to uint64
+    // as before. The string is always interpreted as hex (the 0x prefix is just
+    // added when missing), so an unprefixed value is read exactly as the old
+    // std::stoull(s, nullptr, 16) read it. The improvement over stoull is only
+    // that bcos::u256 does not throw on a value above uint64 — matching how
+    // chainId/nonce are parsed elsewhere — and the truncation below is the only
+    // place a value too large for base_fee would be noticed.
     auto baseFeeStr = std::get<0>(config.gasPrice());
     if (!baseFeeStr.empty() && baseFeeStr != "0x" && baseFeeStr != "0x0")
     {
