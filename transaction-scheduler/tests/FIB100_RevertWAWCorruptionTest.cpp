@@ -68,26 +68,23 @@ struct MockRevertExecutor
           : rollbackable(storage), contextID(id), key(std::move(contendedKey))
         {}
 
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute()
         {
-            // Mirror production: the EVM (and any REVERT) runs in step 1.
-            if constexpr (step == 1)
+            // Mirror production: the EVM (and any REVERT) runs in execute().
+            auto savepoint = rollbackable.current();
+
+            storage::Entry entry;
+            entry.set(contextID == 0 ? "1" : "2");
+            co_await storage2::writeOne(rollbackable, key, std::move(entry));
+
+            if (contextID == 1)
             {
-                auto savepoint = rollbackable.current();
-
-                storage::Entry entry;
-                entry.set(contextID == 0 ? "1" : "2");
-                co_await storage2::writeOne(rollbackable, key, std::move(entry));
-
-                if (contextID == 1)
-                {
-                    // Tx2 reverts — exactly HostContext.h:530 on EVMC_REVERT.
-                    co_await rollbackable.rollback(savepoint);
-                }
+                // Tx2 reverts — exactly HostContext.h:530 on EVMC_REVERT.
+                co_await rollbackable.rollback(savepoint);
             }
-            co_return {};
         }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,

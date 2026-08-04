@@ -8,7 +8,7 @@
 namespace bcos::executor
 {
 
-/// Resolved Web3 typed-tx metadata from protocol fields and/or extraTransactionBytes.
+/// Resolved Web3 typed-tx metadata from protocol (Tars) fields.
 struct Web3AccessListResolved
 {
     /// EIP-2718 envelope / typed kind (1 = EIP-2930). 0 = unset / not applicable.

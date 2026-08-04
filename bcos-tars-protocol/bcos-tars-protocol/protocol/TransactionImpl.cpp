@@ -31,6 +31,7 @@
 #include <boost/throw_exception.hpp>
 #include <cstring>
 #include <exception>
+#include <set>
 #include <stdexcept>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
@@ -80,6 +81,39 @@ bcos::crypto::HashType bcostars::protocol::TransactionImpl::hash() const
     return hashResult;
 }
 
+static bcos::crypto::HashType recomputeWeb3CanonicalHash(
+    bcos::bytesConstRef payload, bcos::bytesConstRef signature)
+{
+    // Use the shared codec encoder (same path as RPC ingress txHash()) so typed /
+    // legacy shapes stay in one place. Signature wire format (tars): r(32)||s(32)||yParity(1).
+    if (signature.size() != 65) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "invalid Web3 signature length, expect 65, got " + std::to_string(signature.size())));
+    }
+    if (payload.empty()) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument("recompute canonical Web3 txHash: empty payload"));
+    }
+
+    bcos::bytes buffer(payload.begin(), payload.end());
+    bcos::bytesRef cursor(buffer.data(), buffer.size());
+    bcos::rpc::Web3Transaction w3{};
+    if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(cursor, w3);
+        decodeError != nullptr) [[unlikely]]
+    {
+        BCOS_LOG(INFO) << LOG_DESC("recompute canonical Web3 txHash: decode failed")
+                       << LOG_KV("msg", decodeError->errorMessage());
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("recompute canonical Web3 txHash: decode failed"));
+    }
+
+    w3.signatureR.assign(signature.begin(), signature.begin() + 32);
+    w3.signatureS.assign(signature.begin() + 32, signature.begin() + 64);
+    w3.signatureV = static_cast<uint64_t>(signature[64]);
+    return w3.txHash();
+}
+
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
     // Web3: the hash is the canonical txHash = keccak256(rlp(signed tx)), stored in
@@ -87,7 +121,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // unconditionally -- a wire-supplied value is never believed, even when a caller reaches
     // verify() without clearing it first (e.g. TransactionFactoryImpl::createTransaction skips
     // the hash-match check for non-BCOS types), so no caller discipline is required (FIB-New1).
-    // The recompute is a byte splice plus one keccak, cheap enough to always run.
+    // The recompute uses the shared codec (decodeFromPayload + txHash), cheap enough to always run.
     if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
         auto const canonicalTxHash =
@@ -214,43 +248,12 @@ void bcostars::protocol::TransactionImpl::clearSenderAndHash()
     // untrusted enough to warrant this: the P2P import path (TransactionSync) receives it from an
     // untrusted peer, and the RPC submit path (TxValidator::verify) only pre-wrote a value it can
     // cheaply recompute anyway. Harmless for BCOS transactions (the field is never populated).
-    // data.accessList / web3TypedTxKind are NOT cleared: admission
-    // (web3TarsFieldsMatchSignedExtra) already rejected forged copies, and execution reads them.
+    // data.accessList / web3TypedTxKind are deliberately NOT cleared here: admission
+    // (web3TarsFieldsMatchSignedExtra) already rejected Tars vs signed-RLP disagreement, and
+    // execution reads the Tars fields as the fast path. Follow-up: RLPTransaction retires the
+    // Tars mirror entirely so this dual representation (and Web3TxConsistency) can go away.
     m_inner()->extraTransactionHash.clear();
     setTainted(true);
-}
-
-bcos::crypto::HashType bcostars::protocol::TransactionImpl::recomputeWeb3CanonicalHash(
-    bcos::bytesConstRef payload, bcos::bytesConstRef signature)
-{
-    // Use the shared codec encoder (same path as RPC ingress txHash()) so typed /
-    // legacy shapes stay in one place. Signature wire format (tars): r(32)||s(32)||yParity(1).
-    if (signature.size() != 65) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(std::invalid_argument(
-            "invalid Web3 signature length, expect 65, got " + std::to_string(signature.size())));
-    }
-    if (payload.empty()) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(std::invalid_argument("recompute canonical Web3 txHash: empty payload"));
-    }
-
-    bcos::bytes buffer(payload.begin(), payload.end());
-    bcos::bytesRef cursor(buffer.data(), buffer.size());
-    bcos::rpc::Web3Transaction w3{};
-    if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(cursor, w3);
-        decodeError != nullptr) [[unlikely]]
-    {
-        BCOS_LOG(INFO) << LOG_DESC("recompute canonical Web3 txHash: decode failed")
-                       << LOG_KV("msg", decodeError->errorMessage());
-        BOOST_THROW_EXCEPTION(
-            std::invalid_argument("recompute canonical Web3 txHash: decode failed"));
-    }
-
-    w3.signatureR.assign(signature.begin(), signature.begin() + 32);
-    w3.signatureS.assign(signature.begin() + 32, signature.begin() + 64);
-    w3.signatureV = static_cast<uint64_t>(signature[64]);
-    return w3.txHash();
 }
 
 void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)
@@ -288,21 +291,13 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
 }
 
-void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
+bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
-    std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
-    if (m_web3AccessListCacheBuilt)
-    {
-        return;
-    }
-    m_web3AccessListCache.clear();
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-    {
-        m_web3AccessListCacheBuilt = true;
-        return;
-    }
+        return {};
     auto const& entries = m_inner()->data.accessList;
-    m_web3AccessListCache.reserve(entries.size());
+    bcos::protocol::Web3AccessList result;
+    result.reserve(entries.size());
     for (auto const& entry : entries)
     {
         bcos::protocol::Web3AccessListEntry out;
@@ -332,15 +327,75 @@ void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
             std::memcpy(key.data(), keyBytes.data(), bcos::h256::SIZE);
             out.storageKeys.emplace_back(key);
         }
-        m_web3AccessListCache.emplace_back(std::move(out));
+        result.emplace_back(std::move(out));
     }
-    m_web3AccessListCacheBuilt = true;
+    return result;
 }
 
-bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3AccessList() const
+bcos::protocol::AuthorizationList bcostars::protocol::TransactionImpl::authorizationList() const
 {
-    ensureWeb3AccessListCache();
-    return m_web3AccessListCache;
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        return {};
+    auto const& entries = m_inner()->data.authorizationList;
+    bcos::protocol::AuthorizationList result;
+    result.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        bcos::protocol::Authorization auth;
+        auth.chainId = entry.chainID;
+        auth.nonce = entry.nonce;
+        auth.v = entry.v;
+        // EIP-7702 authorization entries are consensus-critical.
+        // Fail-loud on malformed data instead of silently skipping
+        // (which produces wrong state root vs Ethereum reference).
+        // However, empty signer/address (from unrecoverable signatures in
+        // EEST fixtures) must be allowed: use zero address, evmone will skip.
+        auth.address = entry.address.empty() ? bcos::Address() : bcos::toAddress(entry.address);
+        auth.signer = entry.signer.empty() ? bcos::Address() : bcos::toAddress(entry.signer);
+        auth.r = bcos::hex2u(entry.r);
+        auth.s = bcos::hex2u(entry.s);
+        result.emplace_back(std::move(auth));
+    }
+    return result;
+}
+
+bcos::protocol::VersionedHashes bcostars::protocol::TransactionImpl::blobVersionedHashes() const
+{
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        return {};
+    auto const& entries = m_inner()->data.blobVersionedHashes;
+    bcos::protocol::VersionedHashes result;
+    result.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        if (entry.size() != 32)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "blobVersionedHash must be exactly 32 bytes, got " + std::to_string(entry.size())));
+        }
+        bcos::h256 h{};
+        std::copy_n(entry.begin(), 32, h.begin());
+        result.emplace_back(std::move(h));
+    }
+    return result;
+}
+
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerBlobGas() const
+{
+    if (m_inner()->data.maxFeePerBlobGas.empty())
+        return std::nullopt;
+    auto val = bcos::hex2u(m_inner()->data.maxFeePerBlobGas);
+    // Defend against hex2u silently returning 0 for malformed input
+    if (val == 0)
+    {
+        auto const& s = m_inner()->data.maxFeePerBlobGas;
+        static const std::set<std::string_view> validZeros = {"0", "0x0", "0x00", "0x", "00"};
+        if (!validZeros.count(s))
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("Invalid maxFeePerBlobGas: " + s));
+        }
+    }
+    return val;
 }
 
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const

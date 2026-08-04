@@ -127,7 +127,6 @@ BOOST_AUTO_TEST_CASE(legacy_web3_rejects_forged_tars_access_list)
     bcostars::Web3AccessListEntry forged;
     forged.account = "1111111111111111111111111111111111111111";
     tarsHolder->data.accessList.emplace_back(std::move(forged));
-    // Invalidate TransactionImpl cache so web3AccessList() rebuilds.
     bcostars::protocol::TransactionImpl poisoned([tarsHolder]() { return tarsHolder.get(); });
     BOOST_CHECK(!web3TarsFieldsMatchSignedExtra(poisoned));
 }

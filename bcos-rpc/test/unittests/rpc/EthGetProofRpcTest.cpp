@@ -18,6 +18,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-ledger/mpt/Account.h>
@@ -49,6 +50,12 @@ public:
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
         BOOST_TEST(web3JsonRpc != nullptr);
+        // These cases assert scenario-B semantics (feature_l2_ethereum_compat: complete storage
+        // tries, exclusion = provable zero). The scenario-A SlotNotInMPT behavior is covered by
+        // EthGetProofSlotNotInMPTTest.cpp.
+        ledger::Features features;
+        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
+        m_ledger->setFeatures(features);
     }
 
     /// Commit @p entries into a fresh trie in @p storage and flush the produced nodes, returning
@@ -267,7 +274,7 @@ BOOST_AUTO_TEST_CASE(UnknownStateRootReturns32004)
         resp["error"]["message"].asString().find("not in MPT node storage") != std::string::npos);
 }
 
-// No MPT node reader wired (production state until PR-18) -> -32603 "MPT not enabled".
+// No MPT node reader wired (production: a tars-built NodeService) -> -32603 "MPT not enabled".
 BOOST_AUTO_TEST_CASE(ReaderUnsetReturns32603)
 {
     buildTrie();  // trie + stateRoot exist, but the reader stays unset

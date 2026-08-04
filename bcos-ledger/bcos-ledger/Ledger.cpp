@@ -32,6 +32,7 @@
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Common.h"
@@ -1892,15 +1893,17 @@ bool Ledger::buildGenesisBlock(
         }
         auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
-        // op-geth-compatible Ethereum state root over the allocs. Empty (zero)
-        // for pbft chains with no allocs. Set as the L2 genesis block's
-        // stateRoot below, and re-derived on restart to guard alloc
-        // immutability. computeGenesisStateRoot only reads genesis.m_allocs, so
-        // it does not depend on the genesis state being written first.
-        bcos::h256 ethStateRoot;
+        // op-geth-compatible Ethereum state trie over the allocs: the root is
+        // empty (zero) for pbft chains with no allocs, set as the L2 genesis
+        // block's stateRoot below, and re-derived on restart to guard alloc
+        // immutability; the produced nodes are persisted further below on
+        // first init of an L2 chain. computeGenesisStateTrie only reads
+        // genesis.m_allocs, so it does not depend on the genesis state being
+        // written first.
+        GenesisStateTrie ethStateTrie;
         if (!genesis.m_allocs.empty())
         {
-            ethStateRoot = co_await computeGenesisStateRoot(genesis);
+            ethStateTrie = co_await computeGenesisStateTrie(genesis);
         }
         if (genesisBlockHash)
         {
@@ -1918,18 +1921,19 @@ bool Ledger::buildGenesisBlock(
             // config change to any alloc changes that root, so compare the
             // stored header's stateRoot against the freshly derived one.
             if (existsGenesisData == genesisData && !genesis.m_allocs.empty() &&
-                genesisBlockHeader->stateRoot() != ethStateRoot)
+                genesisBlockHeader->stateRoot() != ethStateTrie.root)
             {
                 LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
                                   << LOG_DESC("genesis allocs changed since first init")
                                   << LOG_KV(
                                          "storedStateRoot", genesisBlockHeader->stateRoot().hex())
-                                  << LOG_KV("computedStateRoot", ethStateRoot.hex());
+                                  << LOG_KV("computedStateRoot", ethStateTrie.root.hex());
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "genesis allocs changed since first init (op-geth state root mismatch); "
                         "refuse to start. stored=" +
-                        genesisBlockHeader->stateRoot().hex() + " computed=" + ethStateRoot.hex()));
+                        genesisBlockHeader->stateRoot().hex() +
+                        " computed=" + ethStateTrie.root.hex()));
             }
 
             if (existsGenesisData == genesisData)
@@ -2062,7 +2066,7 @@ bool Ledger::buildGenesisBlock(
         // so only the (previously empty) genesis block carries it.
         if (!genesis.m_allocs.empty())
         {
-            header->setStateRoot(ethStateRoot);
+            header->setStateRoot(ethStateTrie.root);
         }
         header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
@@ -2141,6 +2145,29 @@ bool Ledger::buildGenesisBlock(
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
         co_await importGenesisState(
             genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+
+        // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
+        // root (buildAndCollect with the genesis root as parent) and reads the parent trie
+        // through "/mpt/" state rows, so every genesis trie node — account trie plus each
+        // account's storage sub-trie — must be persisted here, on the same storage the alloc
+        // flat rows above just went to. A missing node aborts block-1 execution loudly
+        // (MPTInvariantViolation). Non-MPT chains never read these rows and get none; scenario
+        // A (feature_mpt_state_root activated mid-chain) starts its first MPT block from
+        // emptyRootHash() and needs no genesis nodes either.
+        if (std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
+                [](ledger::FeatureSet const& featureSet) {
+                    return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
+                           featureSet.enable > 0;
+                }))
+        {
+            for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
+            {
+                Entry nodeEntry;
+                nodeEntry.set(std::move(nodeRlp));
+                co_await storage2::writeOne(
+                    *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
+            }
+        }
 
         // consensus leader period
         Entry leaderPeriodEntry;

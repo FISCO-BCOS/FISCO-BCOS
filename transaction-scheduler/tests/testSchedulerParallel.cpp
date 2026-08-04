@@ -23,11 +23,9 @@ struct MockExecutorParallel
     template <class Storage>
     struct ExecuteContext
     {
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
-        {
-            co_return {};
-        }
+        task::Task<void> prepare() { co_return; }
+        task::Task<void> execute() { co_return; }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
@@ -115,38 +113,36 @@ struct MockConflictExecutor
         std::string fromAddress;
         std::string toAddress;
 
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        task::Task<void> prepare()
         {
-            if constexpr (step == 0)
-            {
-                auto input = transaction->input();
-                auto inputNum = boost::lexical_cast<int>(
-                    std::string_view((const char*)input.data(), input.size()));
-                fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
-                toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
-            }
-            else if constexpr (step == 1)
-            {
-                StateKey fromKey{"t_test"sv, fromAddress};
-                auto fromEntry = co_await storage2::readOne(*storage, fromKey);
-                fromEntry->set(boost::lexical_cast<std::string>(
-                    boost::lexical_cast<int>(fromEntry->get()) - 1));
-                co_await storage2::writeOne(*storage, fromKey, *fromEntry);
+            auto input = transaction->input();
+            auto inputNum = boost::lexical_cast<int>(
+                std::string_view((const char*)input.data(), input.size()));
+            fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
+            toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
+            co_return;
+        }
 
-                // Read toKey and +1
-                StateKey toKey{"t_test"sv, toAddress};
-                auto toEntry = co_await storage2::readOne(*storage, toKey);
-                toEntry->set(
-                    boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
-                co_await storage2::writeOne(*storage, toKey, *toEntry);
-            }
-            else if constexpr (step == 2)
-            {
-                co_return std::shared_ptr<bcos::protocol::TransactionReceipt>(
-                    (bcos::protocol::TransactionReceipt*)0x10086, [](auto* p) {});
-            }
-            co_return {};
+        task::Task<void> execute()
+        {
+            StateKey fromKey{"t_test"sv, fromAddress};
+            auto fromEntry = co_await storage2::readOne(*storage, fromKey);
+            fromEntry->set(boost::lexical_cast<std::string>(
+                boost::lexical_cast<int>(fromEntry->get()) - 1));
+            co_await storage2::writeOne(*storage, fromKey, *fromEntry);
+
+            // Read toKey and +1
+            StateKey toKey{"t_test"sv, toAddress};
+            auto toEntry = co_await storage2::readOne(*storage, toKey);
+            toEntry->set(
+                boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
+            co_await storage2::writeOne(*storage, toKey, *toEntry);
+        }
+
+        task::Task<protocol::TransactionReceipt::Ptr> finish()
+        {
+            co_return std::shared_ptr<bcos::protocol::TransactionReceipt>(
+                (bcos::protocol::TransactionReceipt*)0x10086, [](auto* p) {});
         }
     };
 
