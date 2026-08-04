@@ -90,6 +90,30 @@ bcos::crypto::HashType Web3Transaction::hashForSign() const
 
 bcostars::Transaction Web3Transaction::takeToTarsTransaction()
 {
+    if (type == TransactionType::Deposit)
+    {
+        bcostars::Transaction tarsTx{};
+        tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+        tarsTx.web3TypedTxKind = static_cast<tars::Char>(0x7e);
+        tarsTx.sourceHash = sourceHash.hex();
+        tarsTx.sender.assign(from.begin(), from.end());
+        // 带 0x 前缀,与读取端 u256(...) 匹配(TransactionImpl.cpp mint() 解析)
+        tarsTx.mint = "0x" + mint.str(0, std::ios_base::hex);
+        tarsTx.isSystemTransaction = isSystemTx ? 1 : 0;
+        // 完整 0x7E envelope(encode());calculateHash 对 web3TypedTxKind==0x7e 直接
+        // keccak256(extraTransactionBytes) 得到 extraTransactionHash,无需在此填充
+        auto encoded = encode();
+        tarsTx.extraTransactionBytes.reserve(encoded.size());
+        ::ranges::move(encoded, std::back_inserter(tarsTx.extraTransactionBytes));
+        // 通用字段(避免走 tars 通用读路径的消费者读到空值)
+        tarsTx.data.to = to.has_value() ? to->hexPrefixed() : "";
+        tarsTx.data.input.assign(data.begin(), data.end());
+        tarsTx.data.value = "0x" + value.str(0, std::ios_base::hex);
+        tarsTx.data.gasLimit = gasLimit;
+        tarsTx.data.nonce = "0x0";  // deposit nonce 恒 0
+        tarsTx.data.chainID = "0";
+        return tarsTx;
+    }
     bcostars::Transaction tarsTx{};
     tarsTx.data.to = (this->to.has_value()) ? this->to.value().hexPrefixed() : "";
     tarsTx.data.input.reserve(this->data.size());
