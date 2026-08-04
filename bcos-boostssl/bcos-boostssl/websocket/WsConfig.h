@@ -83,6 +83,11 @@ private:
 
     bool m_disableSsl{false};
 
+    // Whether the HTTP server on this port also accepts websocket upgrades.
+    // Set false for HTTP-only ports (e.g. the OP-Engine RPC port), which then
+    // rejects Upgrade: websocket requests instead of registering a WS handler.
+    bool m_enableWebSocket{true};
+
     // cert config for boostssl
     std::shared_ptr<context::ContextConfig> m_contextConfig;
 
@@ -127,6 +132,9 @@ public:
     void setConnectPeers(EndPointsPtr _connectPeers);
     bool disableSsl() const;
     void setDisableSsl(bool _disableSsl);
+
+    bool enableWebSocket() const;
+    void setEnableWebSocket(bool _enableWebSocket);
 
     std::shared_ptr<context::ContextConfig> contextConfig() const;
     void setContextConfig(std::shared_ptr<context::ContextConfig> _contextConfig);

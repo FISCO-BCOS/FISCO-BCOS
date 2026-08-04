@@ -30,4 +30,14 @@ enum Web3JsonRpcError : int32_t
 {
     Web3DefaultError = -32000,
 };
+enum EngineError : int32_t
+{
+    // -38000: Engine API base
+    UnknownPayload = -38001,
+    InvalidForkchoiceState = -38002,
+    InvalidPayloadAttributes = -38003,
+    TooLargeRequest = -38004,
+    UnsupportedFork = -38005,
+    TooDeepReorg = -38006,
+};
 }  // namespace bcos::rpc

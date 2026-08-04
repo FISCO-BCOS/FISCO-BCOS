@@ -43,6 +43,15 @@ inline JwtVerifyResult makeError(JwtError _error)
     };
 }
 
+JwtVerifier::JwtVerifier(JwtConfig::Ptr _config) : m_config(std::move(_config))
+{
+    if (!readSecret().has_value())
+    {
+        RPC_LOG(WARNING) << "JwtVerifier: JWT secret is not available at construction time; "
+                         << "it will be re-attempted lazily on the first verify() call";
+    }
+}
+
 JwtVerifyResult JwtVerifier::verify(std::string_view _authorizationHeader) const
 {
     if (_authorizationHeader.empty())
@@ -163,6 +172,9 @@ bool JwtVerifier::validateSecret(std::string_view _secret) const
 
 std::optional<std::string> JwtVerifier::readSecret() const
 {
+    // The secret is read once at construction and cached in m_secret.
+    // NOTE: key rotation / hot-reload is intentionally deferred — a future design
+    // should revisit secret refresh without blocking RPC IO threads on file I/O.
     if (m_secret.has_value())
     {
         return m_secret;
@@ -185,7 +197,6 @@ std::optional<std::string> JwtVerifier::readSecret() const
     }
     if (!secretContent || secretContent->empty())
     {
-        // File not ready yet; retry next time
         return std::nullopt;
     }
 
@@ -217,7 +228,11 @@ std::optional<std::string> JwtVerifier::readSecret() const
         return std::nullopt;
     }
 
-    m_secret = decoded;
-    return decoded;
+    // Publish the successfully decoded secret into the cache. Multiple threads
+    // may race here after a constructor-time failure; writing the same value is
+    // benign (the optional write is the only mutation, and all writers write an
+    // identical string).
+    m_secret = std::move(decoded);
+    return m_secret;
 }
 }  // namespace bcos::rpc

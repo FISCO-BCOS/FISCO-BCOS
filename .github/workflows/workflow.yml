@@ -199,7 +199,7 @@ jobs:
           pip3 install --quiet requests 2>/dev/null || \
           pip3 install --break-system-packages --quiet requests 2>/dev/null || true
           # Run engine API integration test (curl smoke + Python mock CL)
-          bash tools/engine_integration_test.sh build 8645
+          bash tools/engine_integration_test.sh build 8551
       - name: Engine API integration test (with Lodestar)
         if: matrix.os == 'ubuntu-24.04'
         run: |
@@ -208,7 +208,7 @@ jobs:
           pip3 install --quiet requests 2>/dev/null || \
           pip3 install --break-system-packages --quiet requests 2>/dev/null || true
           # Run engine API integration test with Lodestar dev mode
-          RUN_LODESTAR=1 bash tools/engine_integration_test.sh build 8645
+          RUN_LODESTAR=1 bash tools/engine_integration_test.sh build 8551
       - name: Reduce vcpkg cache size
         if: matrix.os != 'windows-2025'
         run: |

@@ -32,14 +32,16 @@ struct MockEngineService
 {
     std::vector<std::string> m_capabilities;
     ForkchoiceUpdatedResult m_forkchoiceResult{
-        .payloadStatus = PayloadStatus{.status = PayloadValidationStatus::Valid,
+        .payloadStatus = PayloadStatus{
             .latestValidHash = std::nullopt,
-            .validationError = std::nullopt},
+            .validationError = std::nullopt,
+            .status = PayloadValidationStatus::Valid},
         .payloadId = std::nullopt};
-    GetPayloadResult m_getPayloadResult;
-    PayloadStatus m_payloadStatus{.status = PayloadValidationStatus::Valid,
+    GetPayloadResult m_getPayloadResult = std::make_unique<GetPayloadData>();
+    PayloadStatus m_payloadStatus{
         .latestValidHash = std::nullopt,
-        .validationError = std::nullopt};
+        .validationError = std::nullopt,
+        .status = PayloadValidationStatus::Valid};
     std::optional<BlockNumber> m_safeBlockNumber{42};
     std::optional<BlockNumber> m_finalizedBlockNumber{21};
 
@@ -70,7 +72,7 @@ struct MockEngineService
     {
         m_capturedPayloadId = payloadId;
         m_capturedGetPayloadVersion = version;
-        co_return m_getPayloadResult;
+        co_return std::make_unique<GetPayloadData>(*m_getPayloadResult);
     }
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version)
@@ -117,9 +119,10 @@ struct NonCopyableEngineService
         const ForkchoiceState&, const PayloadAttributes*, std::uint32_t)
     {
         co_return ForkchoiceUpdatedResult{
-            .payloadStatus = PayloadStatus{.status = PayloadValidationStatus::Valid,
+            .payloadStatus = PayloadStatus{
                 .latestValidHash = std::nullopt,
-                .validationError = std::nullopt},
+                .validationError = std::nullopt,
+                .status = PayloadValidationStatus::Valid},
             .payloadId = std::nullopt};
     }
 
@@ -130,9 +133,10 @@ struct NonCopyableEngineService
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest&, std::uint32_t)
     {
-        co_return PayloadStatus{.status = PayloadValidationStatus::Valid,
+        co_return PayloadStatus{
             .latestValidHash = std::nullopt,
-            .validationError = std::nullopt};
+            .validationError = std::nullopt,
+            .status = PayloadValidationStatus::Valid};
     }
 
     std::optional<BlockNumber> getSafeBlockNumber() const { return m_safeBlockNumber; }
@@ -166,7 +170,7 @@ BOOST_AUTO_TEST_SUITE(TestAnyEngineService)
 BOOST_AUTO_TEST_CASE(constructWithMock)
 {
     bcos::test::MockEngineService mock;
-    AnyEngineService any(mock);
+    AnyEngineService any(std::move(mock));
 
     BOOST_CHECK(static_cast<bool>(any));
 }
@@ -175,7 +179,7 @@ BOOST_AUTO_TEST_CASE(constructWithMock)
 BOOST_AUTO_TEST_CASE(exchangeCapabilitiesDelegates)
 {
     bcos::test::MockEngineService mock;
-    AnyEngineService any(mock);
+    AnyEngineService any(std::move(mock));
 
     auto result =
         task::syncWait(any.exchangeCapabilities(std::vector<std::string>{"cap1", "cap2"}));
@@ -190,7 +194,7 @@ BOOST_AUTO_TEST_CASE(getSafeBlockNumberDelegates)
 {
     bcos::test::MockEngineService mock;
     mock.m_safeBlockNumber = 42;
-    AnyEngineService any(mock);
+    AnyEngineService any(std::move(mock));
 
     auto result = any.getSafeBlockNumber();
 
@@ -203,7 +207,7 @@ BOOST_AUTO_TEST_CASE(getFinalizedBlockNumberDelegates)
 {
     bcos::test::MockEngineService mock;
     mock.m_finalizedBlockNumber = 21;
-    AnyEngineService any(mock);
+    AnyEngineService any(std::move(mock));
 
     auto result = any.getFinalizedBlockNumber();
 
@@ -218,7 +222,7 @@ BOOST_AUTO_TEST_CASE(getSafeBlockNumberOnConst)
 {
     bcos::test::MockEngineService mock;
     mock.m_safeBlockNumber = 99;
-    const AnyEngineService any(mock);
+    const AnyEngineService any(std::move(mock));
 
     auto result = any.getSafeBlockNumber();
 
@@ -231,7 +235,7 @@ BOOST_AUTO_TEST_CASE(getFinalizedBlockNumberOnConst)
 {
     bcos::test::MockEngineService mock;
     mock.m_finalizedBlockNumber = 55;
-    const AnyEngineService any(mock);
+    const AnyEngineService any(std::move(mock));
 
     auto result = any.getFinalizedBlockNumber();
 
@@ -303,7 +307,7 @@ BOOST_AUTO_TEST_CASE(moveConstruction)
 {
     bcos::test::MockEngineService mock;
     mock.m_safeBlockNumber = 77;
-    AnyEngineService any1(mock);
+    AnyEngineService any1(std::move(mock));
 
     AnyEngineService any2(std::move(any1));
 
@@ -322,8 +326,8 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
     mock1.m_safeBlockNumber = 88;
     bcos::test::MockEngineService mock2;
     mock2.m_safeBlockNumber = 99;
-    AnyEngineService any1(mock1);
-    AnyEngineService any2(mock2);
+    AnyEngineService any1(std::move(mock1));
+    AnyEngineService any2(std::move(mock2));
 
     any2 = std::move(any1);
 
