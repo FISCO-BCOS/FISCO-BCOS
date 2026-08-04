@@ -369,6 +369,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr 
     }
 
     Json::Value jParentInfo(Json::arrayValue);
+    if (_blockHeaderPtr->number() > 0)
     {
         Json::Value jp;
         jp["blockNumber"] = _blockHeaderPtr->parentInfo().blockNumber;

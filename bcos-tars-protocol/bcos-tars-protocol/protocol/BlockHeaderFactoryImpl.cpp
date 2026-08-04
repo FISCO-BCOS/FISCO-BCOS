@@ -21,7 +21,7 @@ bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::cre
 bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::createBlockHeader(
     bcos::bytesConstRef _data)
 {
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();;
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->decode(_data);
 
     auto& inner = blockHeader->inner();

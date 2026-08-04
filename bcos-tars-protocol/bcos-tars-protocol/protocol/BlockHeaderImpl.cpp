@@ -90,7 +90,7 @@ bcos::protocol::ParentInfo bcostars::protocol::BlockHeaderImpl::parentInfo() con
 
 bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::txsRoot() const
 {
-    if (!m_inner->data.txsRoot.empty())
+    if (m_inner->data.txsRoot.size() >= bcos::crypto::HashType::SIZE)
     {
         return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner->data.txsRoot.data()));
     }
@@ -99,7 +99,7 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::txsRoot() const
 
 bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::stateRoot() const
 {
-    if (!m_inner->data.stateRoot.empty())
+    if (m_inner->data.stateRoot.size() >= bcos::crypto::HashType::SIZE)
     {
         return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner->data.stateRoot.data()));
     }
@@ -108,7 +108,7 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::stateRoot() const
 
 bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::receiptsRoot() const
 {
-    if (!m_inner->data.receiptRoot.empty())
+    if (m_inner->data.receiptRoot.size() >= bcos::crypto::HashType::SIZE)
     {
         return *(
             reinterpret_cast<const bcos::crypto::HashType*>(m_inner->data.receiptRoot.data()));
@@ -129,11 +129,8 @@ void bcostars::protocol::BlockHeaderImpl::setParentInfo(
     bcos::protocol::ParentInfo parentInfo)
 {
     auto& parentInfos = m_inner->data.parentInfo;
-    if (parentInfos.empty())
-    {
-        parentInfos.emplace_back();
-    }
-    auto& _parentInfo = parentInfos.front();
+    parentInfos.clear();
+    auto& _parentInfo = parentInfos.emplace_back();
     _parentInfo.blockNumber = parentInfo.blockNumber;
     _parentInfo.blockHash.assign(parentInfo.blockHash.begin(), parentInfo.blockHash.end());
     clearDataHash();
@@ -285,9 +282,6 @@ bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(std::shared_ptr<bcostars::B
 bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl()
   : m_inner(std::make_shared<bcostars::BlockHeader>())
 {}
-bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
-  : m_inner(std::shared_ptr<bcostars::BlockHeader>(std::shared_ptr<void>{}, &blockHeader))
-{}
 uint32_t bcostars::protocol::BlockHeaderImpl::version() const
 {
     return m_inner->data.version;
@@ -354,7 +348,7 @@ void bcostars::protocol::BlockHeaderImpl::setGasLimit(bcos::u256 _limit)
 bcos::h256 bcostars::protocol::BlockHeaderImpl::prevRandao() const
 {
     const auto& _prevRandao = inner().data.prevRandao;
-    if (!_prevRandao.empty())
+    if (_prevRandao.size() >= bcos::h256::SIZE)
     {
         return *(reinterpret_cast<const bcos::h256*>(_prevRandao.data()));
     }
@@ -386,7 +380,7 @@ void bcostars::protocol::BlockHeaderImpl::setBaseFee(bcos::u256 _fee)
 std::optional<bcos::h256> bcostars::protocol::BlockHeaderImpl::withdrawalsRoot() const
 {
     const auto& _withdrawalsHash = inner().data.withdrawalsHash;
-    if (!_withdrawalsHash.empty())
+    if (_withdrawalsHash.size() >= bcos::h256::SIZE)
     {
         return *(reinterpret_cast<const bcos::h256*>(_withdrawalsHash.data()));
     }
@@ -434,7 +428,7 @@ void bcostars::protocol::BlockHeaderImpl::setExcessBlobGas(bcos::u256 _val)
 std::optional<bcos::h256> bcostars::protocol::BlockHeaderImpl::parentBeaconBlockRoot() const
 {
     const auto& _parentBeaconRoot = inner().data.parentBeaconRoot;
-    if (!_parentBeaconRoot.empty())
+    if (_parentBeaconRoot.size() >= bcos::h256::SIZE)
     {
         return *(reinterpret_cast<const bcos::h256*>(_parentBeaconRoot.data()));
     }
@@ -450,7 +444,7 @@ void bcostars::protocol::BlockHeaderImpl::setParentBeaconBlockRoot(bcos::h256 _r
 std::optional<bcos::h256> bcostars::protocol::BlockHeaderImpl::requestsHash() const
 {
     const auto& _requestsHash = inner().data.requestsHash;
-    if (!_requestsHash.empty())
+    if (_requestsHash.size() >= bcos::h256::SIZE)
     {
         return *(reinterpret_cast<const bcos::h256*>(_requestsHash.data()));
     }
@@ -466,7 +460,7 @@ void bcostars::protocol::BlockHeaderImpl::setRequestsHash(bcos::h256 _hash)
 std::optional<bcos::h256> bcostars::protocol::BlockHeaderImpl::blockAccessListHash() const
 {
     const auto& _blockAccessListHash = inner().data.blockAccessListHash;
-    if (!_blockAccessListHash.empty())
+    if (_blockAccessListHash.size() >= bcos::h256::SIZE)
     {
         return *(reinterpret_cast<const bcos::h256*>(_blockAccessListHash.data()));
     }
@@ -482,7 +476,7 @@ void bcostars::protocol::BlockHeaderImpl::setBlockAccessListHash(bcos::h256 _has
 std::optional<uint64_t> bcostars::protocol::BlockHeaderImpl::slotNumber() const
 {
     const auto& _slotNumber = inner().data.slotNumber;
-    if (_slotNumber == 0)
+    if (_slotNumber == -1)  // Tars default sentinel: unset
     {
         return std::nullopt;
     }

@@ -13,13 +13,6 @@ module bcostars {
         2 optional vector<byte> signature;
     };
 
-    struct Withdrawal {
-        1 optional long index;
-        2 optional long validatorIndex;
-        3 optional vector<byte> address;  // 20-byte address
-        4 optional long amount;
-    };
-
     struct BlockHeaderData {
         // ---- Original FISCO-BCOS fields ----
         2 optional int version; 
@@ -36,9 +29,9 @@ module bcostars {
         13 optional vector<long> consensusWeights;
 
         // ---- Ethereum-compatible header fields (added) ----
-        14 optional vector<byte> logsBloom;            // 256-byte bloom filter
-        15 optional string gasLimit;                   // u256 as string
-        16 optional vector<byte> coinbase;             // 20-byte address
+        14 optional vector<byte> coinbase;             // 20-byte address
+        15 optional vector<byte> logsBloom;            // 256-byte bloom filter
+        16 optional string gasLimit;                   // u256 as string
         18 optional vector<byte> prevRandao;           // 32-byte hash
         21 optional string baseFee;                    // optional u256 as string
         22 optional vector<byte> withdrawalsHash;      // optional 32-byte hash
@@ -47,7 +40,7 @@ module bcostars {
         25 optional vector<byte> parentBeaconRoot;     // optional 32-byte hash
         26 optional vector<byte> requestsHash;         // optional 32-byte hash
         27 optional vector<byte> blockAccessListHash;  // optional 32-byte hash
-        28 optional long slotNumber;                   // optional
+        28 optional long slotNumber = -1;             // optional, -1 means unset
     };
 
     struct BlockHeader {
@@ -70,8 +63,5 @@ module bcostars {
         9 optional vector<vector<byte>> transactionsMerkle;
         10 optional vector<vector<byte>> receiptsMerkle;
         11 optional vector<byte> logsBloom;
-
-        // ---- Ethereum-compatible block fields (added) ----
-        12 optional vector<Withdrawal> withdrawals;
     };
 };

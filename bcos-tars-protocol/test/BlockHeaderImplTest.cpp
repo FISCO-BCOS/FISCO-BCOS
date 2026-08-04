@@ -10,6 +10,7 @@
 
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include <boost/test/unit_test.hpp>
+#include <memory>
 #include <utility>
 
 using namespace bcostars::protocol;
@@ -18,12 +19,12 @@ namespace bcos::test
 {
 BOOST_AUTO_TEST_SUITE(TarsBlockHeaderImplTest)
 
-// The bcostars::BlockHeader& constructor wraps an external tars struct by
-// reference, so reads/writes go through to it; inner()/setInner() expose it.
-BOOST_AUTO_TEST_CASE(referenceConstructorInnerAndSetInner)
+// The std::shared_ptr<bcostars::BlockHeader> constructor wraps an external tars struct by
+// shared ownership, so reads/writes go through to it; inner()/setInner() expose it.
+BOOST_AUTO_TEST_CASE(sharedPtrConstructorInnerAndSetInner)
 {
-    bcostars::BlockHeader tars;  // must outlive the wrapper below
-    tars.data.version = 3;
+    auto tars = std::make_shared<bcostars::BlockHeader>();  // shared ownership with the wrapper
+    tars->data.version = 3;
     BlockHeaderImpl header(tars);
     BOOST_CHECK_EQUAL(header.version(), 3U);
 
@@ -33,12 +34,12 @@ BOOST_AUTO_TEST_CASE(referenceConstructorInnerAndSetInner)
     BOOST_CHECK_EQUAL(std::as_const(header).inner().data.version, 5);
     // const inner() must return a reference to the same external struct, not a
     // copy — a copy would still satisfy the value check above. Compare addresses.
-    BOOST_CHECK(&std::as_const(header).inner() == &tars);
+    BOOST_CHECK(&std::as_const(header).inner() == tars.get());
 
     // setInner replaces the referenced struct's contents
-    bcostars::BlockHeader other;
-    other.data.version = 7;
-    header.setInner(other);
+    auto other = std::make_shared<bcostars::BlockHeader>();
+    other->data.version = 7;
+    header.setInner(*other);
     BOOST_CHECK_EQUAL(header.version(), 7U);
 }
 

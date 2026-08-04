@@ -148,12 +148,6 @@ public:
     size_t size() const override { return m_delegate->size(); }
     bytesConstRef logsBloom() const override { return m_delegate->logsBloom(); }
     void setLogsBloom(bytesConstRef l) override { m_delegate->setLogsBloom(l); }
-    void appendWithdrawal(const EthWithdrawal& wd) override { m_delegate->appendWithdrawal(wd); }
-    gsl::span<const EthWithdrawal> withdrawals() const override
-    {
-        return m_delegate->withdrawals();
-    }
-    size_t withdrawalsSize() const override { return m_delegate->withdrawalsSize(); }
 
 private:
     Block::Ptr m_delegate;

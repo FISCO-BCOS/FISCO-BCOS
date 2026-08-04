@@ -44,8 +44,6 @@ public:
     BlockHeaderImpl(BlockHeaderImpl&&) noexcept = default;
     BlockHeaderImpl& operator=(const BlockHeaderImpl&) = default;
     BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = default;
-    
-    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader);
     ~BlockHeaderImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data) override;
@@ -125,9 +123,6 @@ public:
 
     std::optional<uint64_t> slotNumber() const override;
     void setSlotNumber(uint64_t _val) override;
-
-    // Eth block detection (coinbase is non-empty for Eth headers)
-    bool isEthBlock() const { return !m_inner->data.coinbase.empty(); }
 
     const bcostars::BlockHeader& inner() const;
     bcostars::BlockHeader& inner();
