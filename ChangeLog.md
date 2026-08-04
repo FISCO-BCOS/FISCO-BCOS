@@ -1,4 +1,111 @@
 
+### v3.17.0
+
+(2026-08)
+
+本版本为安全加固版本，集中修复 2026-03 CertiK 安全审计发现的问题（FB-039~047、FIB-18~186 系列），覆盖交易池、共识、网关、执行器、调度器、同步等核心模块。
+
+**交易池（txpool）**
+
+* 修复交易提交路径的 use-after-free 与 double-resume（FIB-48）；nonce 检查-预留原子化（FIB-51）、nonce 规范化后再查缓存（FIB-58）、nonce 验证全部通过后再落库（FIB-50）
+* 修复 PairHash 未组合 sender 与 nonce 的哈希缺陷（FIB-52）、StringHash 增加进程级随机种子防 HashDoS（FIB-64）
+* 系统交易分类限定 BCOS 交易并规范化地址前缀（FB-043、FB-046）；`m_systemTx` 原子化（FB-047）
+* 提交路径强制池容量上限（FIB-55）、nonce 字符串长度限制修复 LRU 容量核算（FIB-57）
+* `asyncVerifyBlock` 预存去重、限容与清理（FIB-154）；tree broadcast、fillBlock 边界及 nonce 竞态修复（FIB-114、157、165~167）
+* 交易新增 tainted 状态（FIB-49）；准入阶段拒绝 `to` 字段非法的交易
+
+**共识（PBFT / rPBFT / sealer）**
+
+* 修复 pre-prepare 路径签名/鉴权绕过（FIB-124、127、129~131）；拒绝畸形 proposal hash（FIB-174、181）
+* 将 packetType 绑定进 PBFT 摘要（FIB-134，协议 hardfork，随兼容版本 3.17.0 启用）
+* 视图切换与分叉处理加固（FIB-115、128、133）；时间戳校验与 commit-hash 不变量（FIB-126、172）
+* 解码边界检查与子消息生命周期修复（FIB-120~123、140）；资源 DoS/去重/退避加固（FIB-111、112、132、135、136、145、146）
+* sealer：proposal hash 等价性、单块上限、系统交易门控与时序加固（FIB-117、142、151~153、161~164）
+* rPBFT 五项审计修复（FIB-119、137、138、147、160）
+
+**网关与网络（gateway / front）**
+
+* P2P 帧头与 options 解码边界校验（FIB-66、67、183）；FrontMessage 解码边界与载荷上限（FIB-69）
+* 修复 TLS 会话拆除 use-after-free（FIB-70、97、184，改为 shared ownership + 单线程收尾）
+* 修复连接洪泛导致共识停摆（FIB-186）：TLS 握手准入控制、会话拆除隔离到专用线程、三处连接抖动死锁
+* 会话资源上限与共识重触发（FIB-183~185）
+
+**执行器 / VM / 调度器（executor / scheduler）**
+
+* 修复余额不足回滚导致的 gas 支付绕过（FIB-75）、fatal EVM 错误时 gas_left 归零（FIB-78）、预编译 gas 校验与退款（FIB-76、79、80）
+* 修复 auth 检查 CREATE2 绕过与表名抢占（FIB-77、81~83）；预编译查找按 feature 门控（FIB-84）
+* `unhexAddress` 十六进制长度校验防缓冲区溢出（FIB-73、74）；HostContext 错误处理加固（FIB-85~92）；`setStorage` 返回正确状态（FIB-94）；`analyze()` 异常处理与缓存内存上限（FIB-95、96）
+* scheduler：RAW/WAW 冲突检测（FIB-100、106）、提交原子性与计数器原子化（FIB-101~104）、畸形区块 DoS 防护（FIB-107）、GC 背压（FIB-110）等（FIB-98~110）
+
+**同步 / 选主 / 其他模块**
+
+* sync：区块请求限容等四项修复（FIB-18-new、19、150、158、171）；下载交易处理异常捕获（FB-039）
+* leader-election：etcd keepalive/campaign/lease/watcher 恢复与校验、载荷上限（FIB-168、169、173~178、182）
+* utilities：Zstd 解压上限防解压炸弹（FIB-68）
+* Web3：verify 阶段重算规范 txHash 防伪造（FIB-New1）；EOA nonce 与块内交易顺序解耦
+
+**工程 / CI**
+
+* 12 个审计 bugfix flag 合并为 `bugfix_auth_check`、`bugfix_v1_error_handling` 等 6 个；默认兼容版本提升至 3.17.0
+* 新增 `tools/version_sync.sh` 单源同步版本号并接入 CI 校验
+* 多模块头文件实现下沉至 cpp；windows-2025 / macos-15-intel CI 修复；单测行覆盖率提升至 60.6%
+
+**升级描述**
+
+* 先滚动替换节点二进制（混跑不分叉），全网替换完成后将 `compatibility_version` 提升至 3.17.0，以启用受版本门控的共识协议加固项（含 FIB-134 hardfork）与审计 bugfix flag
+
+---
+
+### v3.16.4
+
+(2026-01)
+
+**新增/修改**
+
+* EthEndpoint / TransactionExecutor 增强 gas 估算支持，改进区块响应格式；新增十六进制字符串补齐工具
+* 新增 `getPendingStorageAt`，支持读取 pending 状态的合约存储
+
+**修复**
+
+* 修复 revert 场景下的日志处理（新增 bugfix 开关）
+* RPC JsonValidator 支持字符串类型 id 并精简校验逻辑
+
+**工程**
+
+* CI 增加 ubuntu-24.04 二进制产物上传并启用静态构建；补充余额不足、日志清理等测试
+
+**升级描述**
+
+* 直接替换节点可执行程序即可获得上述修复/改进
+
+---
+
+### v3.16.3
+
+(2025-11)
+
+**新增/修改**
+
+* 新增 Web3Transactions 功能与单元测试；重构相关异常处理
+* 新增 AnyStorage、bloom storage；`MultiLayerStorage` 迁移至 bcos-framework 并统一命名空间
+* 交易存储并发处理增强与重构
+
+**修复**
+
+* 修复区块同步时 web3 内存 nonce 未更新的问题
+* 修复 macOS x86 对齐错误
+
+**工程**
+
+* `std::regex` 替换为 `boost::regex`；清理无用头文件；移除 MoveBase/MoveImpl
+* 新增 macOS 15 Intel workflow；补充 gateway 测试；版本号/默认兼容版本提升至 3.16.3
+
+**升级描述**
+
+* 直接替换节点可执行程序即可获得上述修复/改进
+
+---
+
 ### v3.16.2
 
 (2025-10)
