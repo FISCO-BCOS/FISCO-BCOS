@@ -52,6 +52,11 @@ void appendOpReceiptMetaFields(Json::Value& result, protocol::TransactionReceipt
         result["daFootprintGasScalar"] = toQuantity(*fields.da_footprint_gas_scalar);
     if (fields.da_footprint)
         result["blobGasUsed"] = toQuantity(*fields.da_footprint);
+    if (fields.l1_gas_used)
+        result["l1GasUsed"] = toQuantity(*fields.l1_gas_used);
+    if (fields.operator_fee)
+        result["operatorFee"] = toQuantity(bcos::fromBigEndian<bcos::u256>(
+            bcos::bytesConstRef{fields.operator_fee->data(), fields.operator_fee->size()}));
     if (fields.deposit_nonce)
         result["depositNonce"] = toQuantity(*fields.deposit_nonce);
     if (fields.deposit_receipt_version)
