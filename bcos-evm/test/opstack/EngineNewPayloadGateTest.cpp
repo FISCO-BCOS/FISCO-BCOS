@@ -362,26 +362,28 @@ using GenericEngineService = bcos::engine::EngineServiceImpl<StubMemPool, MLS, M
 static_assert(OpEngineService::c_opMode, "OP composition root must be detected as OP mode");
 static_assert(!GenericEngineService::c_opMode, "generic composition root must not be OP mode");
 
-/// Mutation class #7's compile-time half (see the test for the other half): `NewPayloadRequest`
-/// has no `executionRequests` carrier, which is precisely why design §6.1 step 2's
-/// "executionRequests 在场且空" constraint is *vacuously* satisfied rather than enforced by
-/// `validateOpNewPayloadRequest`. The day a carrier is added this assertion fires and forces the
-/// real check (and a real test) to be written, instead of the constraint silently staying unmet.
+/// Mutation class #7's compile-time half (see the test for the other half): design §6.1 step 2's
+/// "executionRequests 在场且空" constraint is enforced by `validateOpNewPayloadRequest` (a
+/// present-and-NON-empty list is rejected INVALID before parentKnown), and the rejection is pinned
+/// by `NonEmptyExecutionRequestsLandsInBlockHashBucket` below -- which mutates the REAL
+/// `executionRequests` carrier, no longer a `requestsHash` surrogate. The reconstructed header
+/// keeps pinning `requestsHash` to the OP empty-requests constant, which is now provably
+/// consistent because non-empty requests never reach the reconstruction (they are rejected above).
 ///
-/// The probe has to go through a *templated* concept: inside a requires-expression whose operand
-/// is already a concrete (non-dependent) type, `request.executionRequests` is not a substitution
-/// failure but a plain "no member named" error, so the naive
-/// `static_assert(!requires(NewPayloadRequest r) { r.executionRequests; })` fails to compile
-/// rather than evaluating to `true` (build-verification fix). Parameterising on the request type
-/// makes the member access dependent, which is what turns the failure into an unsatisfied
-/// constraint.
+/// A positive probe pins that the carrier still exists (so nobody silently deletes the field the
+/// runtime check reads). The probe has to go through a *templated* concept: inside a
+/// requires-expression whose operand is already a concrete (non-dependent) type,
+/// `request.executionRequests` is not a substitution failure but a plain "no member named" error,
+/// so the naive `static_assert(requires(NewPayloadRequest r) { r.executionRequests; })` fails to
+/// compile rather than evaluating to `true`. Parameterising on the request type makes the member
+/// access dependent, which is what turns the absence into an unsatisfied constraint.
 template <class Request>
 concept HasExecutionRequestsCarrier = requires(Request request) { request.executionRequests; };
 
-static_assert(!HasExecutionRequestsCarrier<bcos::engine::NewPayloadRequest>,
-    "NewPayloadRequest gained an executionRequests carrier: design §6.1 step 2's non-empty -> "
-    "INVALID check must now be implemented in validateOpNewPayloadRequest, and mutation case #7 "
-    "below must stop using the requestsHash surrogate and mutate the real field");
+static_assert(HasExecutionRequestsCarrier<bcos::engine::NewPayloadRequest>,
+    "NewPayloadRequest lost its executionRequests carrier: mutation class #7's runtime check in "
+    "validateOpNewPayloadRequest would silently read nothing, and the non-empty rejection is "
+    "pinned by the test below.");
 
 // ───────────────────────────────── golden loading ─────────────────────────────────
 
@@ -1540,31 +1542,25 @@ TEST(EngineNewPayloadMutation, JovianDaFootprintOverGasLimitIsInvalid)
 
 // ── #7 executionRequests non-empty -> INVALID + null (the blockHash bucket) ───────────────────
 //
-// `NewPayloadRequest` has no `executionRequests` carrier (the static_assert at the top of this
-// file pins that, and fires the day one is added), so the list cannot be set directly. It is not
-// silently ignored either: the reconstructed header pins `requestsHash` to the OP empty-requests
-// constant, so a block that really carried a non-empty list would arrive with a blockHash
-// committing to a *different* requestsHash — and land in exactly the bucket the spec assigns it
-// to. This case reproduces that arrival: the golden header with only `requestsHash` displaced,
-// hashed, and submitted as the payload's blockHash.
+// `NewPayloadRequest` now carries a real `executionRequests` carrier, and design §6.1 step 2's
+// "executionRequests 在场且空" is enforced explicitly by `validateOpNewPayloadRequest` (non-empty
+// -> INVALID + latestValidHash=null, before parentKnown -- the same "blockHash 失配桶" the spec
+// assigns it to). This case pins that enforcement: it sets the REAL carrier, leaves the golden
+// blockHash untouched (the static check fires before any hash comparison), and asserts the
+// rejection lands in the blockHash bucket (null latestValidHash) with the stated message.
 TEST(EngineNewPayloadMutation, NonEmptyExecutionRequestsLandsInBlockHashBucket)
 {
     auto scenario = prepareScenario("isthmus_transfer_basic");
-    auto header = productionHeaderOf(scenario.request);
 
-    // sha256("") — `OP_EMPTY_REQUESTS_HASH`, cross-checked against the golden corpus by Task 3.
-    const bcos::h256 emptyRequestsHash{bcos::fromHex(
-        std::string{"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"})};
-    ASSERT_EQ(header.requestsHash, emptyRequestsHash);
-
-    header.requestsHash.data()[0] ^= 0x01;  // stands for "the list was not empty"
-    scenario.request.executionPayload.blockHash = header.hash();
+    // A non-empty list — one execution-request entry (the exact byte shape is irrelevant; the
+    // check is only "present and non-empty").
+    scenario.request.executionRequests = std::vector<bcos::bytes>{{0x01}};
 
     auto status = bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
 
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
     EXPECT_FALSE(status.latestValidHash.has_value());
-    expectValidationError(status, "blockHash does not match the reconstructed block header");
+    expectValidationError(status, "executionRequests must be absent or empty on the OP path");
 }
 
 // ── #8.1-#8.5 five of the six comparison surfaces, one mutation each ──────────────────────────

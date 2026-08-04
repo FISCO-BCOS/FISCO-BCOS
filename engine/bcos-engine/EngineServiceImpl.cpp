@@ -436,14 +436,20 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
         return std::string("DA footprint (blobGasUsed) exceeds the block gas limit");
     }
 
-    // NOT checked here -- `executionRequests` (design §6.1 step 2 "executionRequests 在场且空"):
-    // `NewPayloadRequest` (bcos-framework/engine/Types.h) has no such member, so a non-empty
-    // requests list has no way to reach this layer at all and the constraint is vacuously
-    // satisfied. It is not silently dropped, either: the reconstructed header pins `requestsHash`
-    // to the OP empty-requests constant, so once an `executionRequests` carrier does exist, a
-    // non-empty list will produce a blockHash mismatch -- exactly the bucket the spec assigns it
-    // to ("非空 -> INVALID + latestValidHash=null,归 blockHash 失配桶"). Recorded as a deviation
-    // in the task-5b report.
+    // Design §6.1 step 2 "executionRequests 在场且空": the OP path carries no execution requests
+    // (there is no engine API to set them -- the RPC layer always sends nullopt,
+    // EngineHelper.cpp:100-105), so a present-and-NON-empty list contradicts the protocol's
+    // request shape and is rejected here, in the same "blockHash 失配桶" as every other static
+    // check above (INVALID + latestValidHash=null, before parentKnown). This is the explicit check
+    // the sentinel static_assert (EngineNewPayloadGateTest.cpp, mutation class #7's compile-time
+    // half) forced once `NewPayloadRequest::executionRequests` existed; the mutation test now sets
+    // the real carrier instead of the requestsHash surrogate. Rejecting rather than hashing keeps
+    // the reconstructed header's `requestsHash` pin to the OP empty-requests constant provably
+    // consistent: a non-empty list never reaches the reconstruction.
+    if (request.executionRequests.has_value() && !request.executionRequests->empty())
+    {
+        return std::string("executionRequests must be absent or empty on the OP path");
+    }
     return std::nullopt;
 }
 
