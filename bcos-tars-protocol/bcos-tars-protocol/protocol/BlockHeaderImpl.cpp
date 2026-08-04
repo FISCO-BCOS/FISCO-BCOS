@@ -56,7 +56,7 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::hash() const
     }
 
     bcos::crypto::HashType hashResult(
-        (bcos::byte*)m_inner->dataHash.data(), m_inner->dataHash.size());
+        reinterpret_cast<bcos::byte*>(m_inner->dataHash.data()), m_inner->dataHash.size());
 
     return hashResult;
 }
@@ -84,8 +84,8 @@ bcos::protocol::ParentInfo bcostars::protocol::BlockHeaderImpl::parentInfo() con
     const auto& first = parentInfos.front();
     return bcos::protocol::ParentInfo{
         .blockNumber = first.blockNumber,
-        .blockHash = bcos::crypto::HashType(
-            (bcos::byte*)first.blockHash.data(), first.blockHash.size())};
+        .blockHash = bcos::crypto::HashType(reinterpret_cast<const bcos::byte*>(first.blockHash.data()),
+            first.blockHash.size())};
 }
 
 bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::txsRoot() const
@@ -320,7 +320,7 @@ void bcostars::protocol::BlockHeaderImpl::setCoinbase(bcos::Address _addr)
 bcos::bytesConstRef bcostars::protocol::BlockHeaderImpl::logsBloom() const
 {
     const auto& data = m_inner->data.logsBloom;
-    return {(const unsigned char*)data.data(), data.size()};
+    return {reinterpret_cast<const bcos::byte*>(data.data()), data.size()};
 }
 
 void bcostars::protocol::BlockHeaderImpl::setLogsBloom(bcos::bytesConstRef _bloom)
