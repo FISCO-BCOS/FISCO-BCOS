@@ -130,6 +130,17 @@ private:
 
     /// Check whether the account table contains any storage slot (a key that
     /// is not one of the fixed account field names).
+    ///
+    /// NOTE (read-write-set tracking): this probe scans the account table with
+    /// storage2::range(), and ReadWriteSetStorage::range() does not record
+    /// reads (its keys are unknown until the lazy iterator is consumed). Under
+    /// SchedulerParallelImpl a chunk that only writes a storage slot of
+    /// account X is therefore not flagged as conflicting with another chunk
+    /// that reads X's has_storage here, so the reader may observe stale data.
+    /// The main-field reads (exists/nonce/balance/codeHash) above ARE tracked,
+    /// so this only bites when the two chunks touch *storage slots* of the
+    /// same account. Not exercised by the current EEST/scheduler tests (they
+    /// do not write contract storage); tracked as a known limitation.
     task::Task<bool> hasStorageImpl(bcos::ledger::account::EVMAccount<Storage>& evmAccount) const
     {
         using namespace bcos::ledger;

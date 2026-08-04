@@ -83,6 +83,10 @@ void Rpc::start()
     {
         m_web3Service->start();
     }
+    if (m_opEngineService)
+    {
+        m_opEngineService->start();
+    }
     RPC_LOG(INFO) << LOG_DESC("start rpc successfully");
 }
 
@@ -106,6 +110,10 @@ void Rpc::stop()
     if (m_web3Service)
     {
         m_web3Service->stop();
+    }
+    if (m_opEngineService)
+    {
+        m_opEngineService->stop();
     }
 
     RPC_LOG(INFO) << LOG_DESC("[RPC][RPC][stop]") << LOG_DESC("stop rpc successfully");

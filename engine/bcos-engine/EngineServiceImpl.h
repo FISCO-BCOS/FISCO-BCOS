@@ -108,7 +108,7 @@ std::vector<std::string> supportedCapabilities();
 /// generic path's capability list stays byte-for-byte the pre-existing 10 entries.
 std::vector<std::string> supportedOpCapabilities();
 
-bool isGetPayloadVersionCompatible(EngineApiVersion requestVersion, std::uint32_t payloadVersion);
+bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
 
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
@@ -197,7 +197,7 @@ public:
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(EngineApiVersion::V3))
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3))
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
@@ -412,7 +412,7 @@ public:
                 .shouldOverrideBuilder = false,
                 .view = std::make_shared<ViewType>(std::move(view)),
             };
-            if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
+            if (version == static_cast<std::uint32_t>(ApiVersion::V3))
             {
                 entry.blobsBundle = BlobsBundleV1{};
             }
@@ -477,7 +477,7 @@ private:
     /// ("版本上界成员化").
     bool isVersionSupported(std::uint32_t version) const
     {
-        return version >= static_cast<std::uint32_t>(EngineApiVersion::V1) &&
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
                version <= m_maxEngineVersion;
     }
 
@@ -486,9 +486,9 @@ private:
         std::optional<std::string> validationError = std::nullopt)
     {
         return PayloadStatus{
-            .status = status,
             .latestValidHash = latestValidHash,
             .validationError = std::move(validationError),
+            .status = status,
         };
     }
 
@@ -521,19 +521,20 @@ private:
                 BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
             }
             if (!detail::isGetPayloadVersionCompatible(
-                    static_cast<EngineApiVersion>(version), it->second.version))
+                    static_cast<ApiVersion>(version), it->second.version))
             {
                 BOOST_THROW_EXCEPTION(
                     IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                         "Payload version is incompatible with requested method version"});
             }
 
-            return GetPayloadResult{
+            return std::make_unique<GetPayloadData>(GetPayloadData{
                 .executionPayload = it->second.executionPayload,
                 .blockValue = it->second.blockValue,
                 .blobsBundle = it->second.blobsBundle,
                 .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
-            };
+                .executionRequests = std::nullopt,
+            });
         }
     }
 
@@ -568,7 +569,7 @@ private:
         // mis-configuration, not a new rule for the existing one.
         if constexpr (!c_opMode)
         {
-            if (version >= static_cast<std::uint32_t>(EngineApiVersion::V3) + 1)
+            if (version >= static_cast<std::uint32_t>(ApiVersion::V3) + 1)
             {
                 BOOST_THROW_EXCEPTION(
                     UnsupportedEngineApiVersion{} << bcos::errinfo_comment{
@@ -644,7 +645,7 @@ private:
                 .shouldOverrideBuilder = false,
                 .view = nullptr,
             };
-            if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
+            if (version == static_cast<std::uint32_t>(ApiVersion::V3))
             {
                 entry.blobsBundle = BlobsBundleV1{};
             }
@@ -1015,7 +1016,6 @@ private:
             .extraData = payload.extraData,
             .blobGasUsed = detail::narrowU256ToU64(*payload.blobGasUsed).value(),
         };
-
         std::optional<typename SchedulerType::ExecuteResult> executeResult;
         try
         {
@@ -1293,31 +1293,33 @@ private:
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
         ExecutionPayload executionPayload{
+            .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
-            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .stateRoot = detail::syntheticHash(std::string("state") + payloadId),
             .receiptsRoot = detail::syntheticHash(std::string("receipts") + payloadId),
-            .logsBloom = Bloom{},
             .prevRandao = payloadAttributes.prevRandao,
-            .blockNumber = nextBlockNumber,
             .gasLimit = 0,
             .gasUsed = 0,
-            .timestamp = payloadAttributes.timestamp,
-            .extraData = {},
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(sealedTxs),
+            .extraData = {},
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .timestamp = payloadAttributes.timestamp,
+            .blockNumber = nextBlockNumber,
             .withdrawals = std::nullopt,
             .blobGasUsed = std::nullopt,
             .excessBlobGas = std::nullopt,
+            .blockAccessList = std::nullopt,
+            .slotNumber = std::nullopt,
         };
 
-        if (version >= static_cast<std::uint32_t>(EngineApiVersion::V2))
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
         {
             executionPayload.withdrawals =
                 payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{});
         }
-        if (version >= static_cast<std::uint32_t>(EngineApiVersion::V3))
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);

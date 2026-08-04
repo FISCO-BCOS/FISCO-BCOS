@@ -74,7 +74,7 @@ public:
             std::string(blockTag) + "]}";
         std::promise<bcos::bytes> promise;
         web3->onRPCRequest(
-            payload, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
+            payload, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;

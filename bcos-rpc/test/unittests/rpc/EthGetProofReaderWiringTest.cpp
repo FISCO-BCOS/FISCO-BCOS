@@ -108,7 +108,7 @@ public:
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
         web3JsonRpc->onRPCRequest(
-            req, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
+            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);

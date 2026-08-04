@@ -87,17 +87,17 @@ std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
-    EngineApiVersion requestVersion, std::uint32_t payloadVersion)
+    ApiVersion requestVersion, std::uint32_t payloadVersion)
 {
-    if (requestVersion == EngineApiVersion::V1)
+    if (requestVersion == ApiVersion::V1)
     {
         return payloadVersion == 1;
     }
-    if (requestVersion == EngineApiVersion::V2)
+    if (requestVersion == ApiVersion::V2)
     {
         return payloadVersion <= 2;
     }
-    if (requestVersion == EngineApiVersion::V3)
+    if (requestVersion == ApiVersion::V3)
     {
         return payloadVersion <= 3;
     }
