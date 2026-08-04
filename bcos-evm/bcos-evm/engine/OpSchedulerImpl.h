@@ -1162,8 +1162,22 @@ public:
                     }
                 },
                 receiptVariant);
-            receipts.push_back(
-                mapOpReceipt(innerReceipt, m_receiptFactory, blk.number, std::move(meta)));
+            std::optional<intx::uint256> effectiveGasPrice = std::visit(
+                [](const auto& r) -> std::optional<intx::uint256> {
+                    using R = std::decay_t<decltype(r)>;
+                    if constexpr (std::is_same_v<R, bcos::evm::opstack::OpTxReceipt>)
+                    {
+                        return r.meta.effective_gas_price;
+                    }
+                    else
+                    {
+                        return std::nullopt;  // deposits: no effective gas price (RPC "0x0"
+                                              // fallback)
+                    }
+                },
+                receiptVariant);
+            receipts.push_back(mapOpReceipt(
+                innerReceipt, m_receiptFactory, blk.number, std::move(meta), effectiveGasPrice));
         }
 
         co_return OpExecuteBlockResult{

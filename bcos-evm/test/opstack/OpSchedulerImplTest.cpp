@@ -740,6 +740,15 @@ TEST(OpSchedulerImpl, ExecuteOpBlockCarriesReceiptMetaToRpcLayer)
         EXPECT_FALSE(fields.operator_fee_scalar.has_value());
         EXPECT_FALSE(fields.deposit_nonce.has_value()) << "normal txs are not deposits";
         EXPECT_FALSE(fields.da_footprint.has_value()) << "DA footprint is Jovian-only";
+
+        // G3: effective gas price lands on the user tx receipt (was empty -> RPC "0x0"), never on
+        // the deposit receipt (deposits have no fee market; op-geth deposit effectiveGasPrice = 0).
+        EXPECT_FALSE(result.receipts[1]->effectiveGasPrice().empty());
+        EXPECT_TRUE(result.receipts[1]->effectiveGasPrice().starts_with("0x"));
+        // Stronger: distinguish "set to a real value" from the empty-string (deposit) fallback — a
+        // user tx whose effective price is 0 is set to "0x0", never left empty.
+        EXPECT_NE(result.receipts[1]->effectiveGasPrice(), "0x0");
+        EXPECT_TRUE(result.receipts[0]->effectiveGasPrice().empty());
     }
 }
 

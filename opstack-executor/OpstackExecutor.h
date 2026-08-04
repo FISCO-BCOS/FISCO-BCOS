@@ -333,6 +333,11 @@ private:
 
         auto out =
             eth::evmoneReceiptToBcos(opReceipt.receipt, m_receiptFactory, blockHeader.number());
+        if (opReceipt.meta.effective_gas_price)
+        {
+            out->setEffectiveGasPrice(
+                "0x" + intx::to_string(*opReceipt.meta.effective_gas_price, 16));
+        }
         auto metaBytes = op::encodeOpReceiptMeta(opReceipt.meta);
         if (!metaBytes.empty())
             out->setOpReceiptMeta(std::string(metaBytes.begin(), metaBytes.end()));

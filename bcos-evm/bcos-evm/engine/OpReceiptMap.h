@@ -27,6 +27,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <cstring>
+#include <intx/intx.hpp>
 
 namespace bcos::evm::engine
 {
@@ -74,13 +75,19 @@ inline bcos::protocol::LogEntries mapOpLogs(const std::vector<evmone::state::Log
 inline bcos::protocol::TransactionReceipt::Ptr mapOpReceipt(
     const evmone::state::TransactionReceipt& receipt,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
-    protocol::BlockNumber blockNumber, bcos::bytes opReceiptMeta)
+    protocol::BlockNumber blockNumber, bcos::bytes opReceiptMeta,
+    std::optional<intx::uint256> effectiveGasPrice = std::nullopt)
 {
     const bcos::u256 gasUsed(static_cast<uint64_t>(receipt.gas_used));
     const int32_t status =
         receipt.status == EVMC_SUCCESS ? kOpReceiptStatusSuccess : kOpReceiptStatusFailure;
     auto out = receiptFactory->createReceipt(gasUsed, std::string{}, mapOpLogs(receipt.logs),
         status, bcos::bytesConstRef{}, blockNumber);
+    if (effectiveGasPrice)
+    {
+        // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros.
+        out->setEffectiveGasPrice("0x" + intx::to_string(*effectiveGasPrice, 16));
+    }
     if (!opReceiptMeta.empty())
     {
         out->setOpReceiptMeta(std::string(opReceiptMeta.begin(), opReceiptMeta.end()));

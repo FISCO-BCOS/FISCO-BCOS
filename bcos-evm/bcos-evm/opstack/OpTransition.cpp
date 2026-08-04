@@ -199,6 +199,7 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
 
     auto meta = deriveOpReceiptMeta(cfg, props.fee, props.flz_len, props.l1_cost, opAtUsed,
         /*fill_operator_scalars=*/true);
+    meta.effective_gas_price = effective_gas_price;  // base_fee + priority_gas_price (line 163)
     return OpTxReceipt{std::move(receipt), meta};
 }
 

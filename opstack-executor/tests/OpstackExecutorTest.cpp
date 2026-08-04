@@ -306,6 +306,17 @@ TEST_F(Fixture, ReceiptMetaSurvives)
     ASSERT_TRUE(fields.l1_gas_price.has_value());
     // l1_gas_price = 1000 -> trimmed big-endian 0x03e8.
     EXPECT_EQ(*fields.l1_gas_price, (bcos::bytes{0x03, 0xe8}));
+
+    // G1/G2: Jovian derive fills l1_gas_used and operator_fee (Task 2's new wire fields end-to-end
+    // visible on the decoded receipt meta).
+    EXPECT_TRUE(fields.l1_gas_used.has_value());
+    EXPECT_TRUE(fields.operator_fee.has_value());
+
+    // G3: effective_gas_price = base_fee(0 in buildOpBlockInfo for this test) + min(maxPriority,
+    // maxFee - 0). For this EIP-2930 fixture BCOS2Evmone.h:110-113 maps max_gas_price =
+    // max_priority_gas_price = gasPrice, so effective = gasPrice = 0x6fc23ac00 (from the
+    // envelope's 8506fc23ac00: RLP 0x06FC23AC00 = 30000000000, leading zeros trimmed).
+    EXPECT_EQ(receipt->effectiveGasPrice(), "0x6fc23ac00");
 }
 
 // ---- executeDeposit + finalizeBlock(reuses bcos-evm/opstack runDeposit / finalizeOpBlock)----
