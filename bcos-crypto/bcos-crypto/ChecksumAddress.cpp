@@ -20,9 +20,9 @@
 #include <bcos-codec/bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-#include <fmt/format.h>
 #include <cctype>
 #include <memory>
 #include <span>
@@ -54,6 +54,12 @@ void toChecksumAddress(
 {
     for (size_t i = prefix.size(); i < _addr.size(); ++i)
     {
+        // addressHashHex is the EIP-55 hash hex (64 chars); an input longer than that would read
+        // past the string_view — anything beyond it is not checksummed, stop.
+        if (i >= addressHashHex.size())
+        {
+            break;
+        }
         if (std::isdigit(static_cast<unsigned char>(_addr[i])))
         {
             continue;
@@ -149,11 +155,11 @@ std::string newLegacyEVMAddressString(bytesConstRef sender, std::string const& n
     return newLegacyEVMAddressString(sender, uNonce);
 }
 
-std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
-    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
+std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
+    bytesConstRef _init, u256 const& _salt)
 {
-    auto hash = _hashImpl->hash(bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) +
-                                _hashImpl->hash(_init));
+    auto hash = _hashImpl->hash(
+        bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) + _hashImpl->hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);
