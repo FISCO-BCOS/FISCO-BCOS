@@ -302,6 +302,19 @@ inline void throwOnDecodeError(bcos::Error::UniquePtr&& err)
 //       into a runtime invariant checked on every transaction.
 // With all three, non-canonical input does not survive decoding, and the raw-bytes txRoot equals
 // op-geth's re-encoded DeriveSha for everything that does.
+//
+// **Contract, pinned by tests (do not relax):** each of the three layers and the txRoot
+// equivalence below is asserted in `bcos-evm/test/opstack/OpSchedulerImplTest.cpp` — the B4-2
+// per-field cases (NonCanonicalLeadingZeroScalarIsConsensusError …
+// ZeroByteBoolFieldIsConsensusError), the C1 length-prefix case
+// (NonCanonicalOuterFramingIsRejectedAtDecode), the whole-envelope round-trip invariant
+// (RoundTripInvariantReproducesDepositBytesExactly /
+// RoundTripInvariantReproducesNonDepositBytesExactly / RoundTripInvariantFiresOnMismatch), and the
+// raw-bytes-txRoot == re-encoded-DeriveSha equivalence
+// (TxRootEqualsReencodedDeriveShaForCanonicalInput). A change that relaxes decoding strictness is
+// expected to turn those red first; the 33-vector t8n corpus (replayed by OpT8nReplay.Vectors,
+// ledger in vectors/DIVERGENCES.md) is the corpus-scale proof that the invariant never
+// false-rejects canonical op-geth bytes.
 
 /// Reads one RLP string payload, requiring it to be a canonical unsigned scalar: no leading zero
 /// byte, no wider than `maxBytes`. Returns a view of the payload and advances `in` past it.

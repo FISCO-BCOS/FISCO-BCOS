@@ -208,3 +208,22 @@ parent 高度返回零；engine 执行器自 D1 起用 `RecentBlockHashes`（懒
 **未来耦合**：若新增含 `blockhash(N-2)`（N-2 ≥ 0）的向量，harness 桩会返回零而 engine 返回
 真实 hash → golden 与 engine 分歧。届时须同步更新 harness 桩（或给桩注入 RecentBlockHashes 的
 TestState 变体），否则回放 gate 翻红。本备注即该耦合的预警。
+
+---
+
+## FINDING-A5 解码严格性契约（不立案：单元测试直接覆盖，gate 不可观测）
+
+> **只做文档备注，不登记 ALLOWLIST。** 回放器对「本轮从未命中的豁免条目」判 FAILURE
+> （T8nReplayHarness.h:199-200，防僵尸 ALLOWLIST）；本备注无对应向量，登记即翻红。
+
+**契约**（`OpSchedulerImpl.h` "canonical-encoding strictness" 注释块）：三层解码严格性
+（B4-2 per-field + C1 length-prefix + whole-envelope `assertCanonicalRoundTrip`）保证非
+canonical RLP 不 survive 解码，从而 raw-bytes `computeOpTxRoot` == op-geth 式重编码
+`DeriveSha` 的 txRoot。
+
+**与本 gate 的关系**：本 gate 的 33-vector 语料（真实 op-geth `tx.MarshalBinary()` 字节）正是
+"round-trip 恒不误杀 canonical 输入" 的 corpus-scale 证明 —— 全部向量经 `decodeOneRawTx` +
+`assertCanonicalRoundTrip` 回放通过。但 gate 本身**观测不到**该契约（语料无任何非 canonical
+字节，回放只能证明 "canonical 全过"，不能证明 "非 canonical 全拒"）。故契约由
+`OpSchedulerImplTest.cpp` 的 B4-2/C1/RoundTrip/txRoot 等价单测直接钉住；**改解码器者须先跑
+`OpSchedulerImpl.*` + `OpT8nReplay.*`**（任一红 = 严格性被放宽，或误杀了 canonical 字节）。

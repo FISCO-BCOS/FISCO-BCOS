@@ -1547,6 +1547,110 @@ TEST(OpSchedulerImpl, RoundTripInvariantFiresOnMismatch)
     EXPECT_TRUE(threw) << "round-trip invariant did not fire on a mismatched envelope";
 }
 
+// ══════════════ A5: 解码严格性契约固化 (gaps 1 & 2) ══════════════
+//
+// OpSchedulerImpl.h 的三层严格性声明 (per-field B4-2 + length-prefix C1 + whole-envelope
+// assertCanonicalRoundTrip) 以 "canonical 输入 raw-bytes txRoot == op-geth 重编码 DeriveSha;
+// 非 canonical 输入不 survive 解码" 收尾。此前该断言的两条义务只被间接钉住:
+//   * 非 deposit (typed-tx) 的 re-encode 路径没有 decode 期 round-trip 正例 —— 只有 deposit 有,
+//     其余靠 *晚期* 的 block-hash 级 txRoot golden 兜底;
+//   * raw-bytes txRoot == 重编码 txRoot 的等价契约没有直接测试。
+// 下面两条测试补齐这两个缺口 (任务 A5)。
+
+// Gap 1: 非 deposit round-trip 正例。若未来改坏 typed-tx 的 canonical 重编码, 唯一会被抓的将
+// 是晚期的 txRoot 分叉 —— 这里把每条非 deposit wire tx 钉在 DECODE 期:
+// canonicalEnvelopeBytes(decode(raw)) 必须逐字节复现 raw。
+TEST(OpSchedulerImpl, RoundTripInvariantReproducesNonDepositBytesExactly)
+{
+    // vector id -> 该向量贡献的非 deposit wire 形状。注意: 33-vector 语料里不存在真正的
+    // EIP-2930 (type 0x01) 交易 —— 逐一核对 golden/engine/*.golden.json, 所有非 deposit raw
+    // 首字节都是 0x02 或 0x04。因此 "access-list RLP" 形状改用 isthmus_access_list 里**携带
+    // access list 的 EIP-1559** 交易来钉 (与 0x01 走同一条 access-list RLP re-encode 分支)。
+    struct Case
+    {
+        const char* id;
+        const char* shape;
+    };
+    constexpr Case kCases[] = {
+        {"isthmus_access_list", "eip1559 with access list (access-list RLP re-encode shape)"},
+        {"isthmus_transfer_basic", "plain eip1559 value transfer"},
+        {"isthmus_setcode_7702", "7702 set_code (type 0x04)"},
+    };
+
+    for (auto const& c : kCases)
+    {
+        SCOPED_TRACE(c.id);
+        auto vectors = loadJsonOrFail(fs::path(OP_T8N_VECTORS_DIR) / (std::string(c.id) + ".json"));
+        auto golden = loadJsonOrFail(
+            fs::path(OP_T8N_GOLDEN_ENGINE_DIR) / (std::string(c.id) + ".golden.json"));
+        auto rawTxBytes = rawTxBytesOf(golden);
+        ASSERT_FALSE(rawTxBytes.empty()) << c.id << ": no rawTransactions in golden";
+
+        for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+        {
+            auto const& raw = rawTxBytes[i];
+            if (raw.empty() || raw[0] == 0x7e)
+                continue;  // L1-attributes deposit — 由
+                           // RoundTripInvariantReproducesDepositBytesExactly 钉住
+            SCOPED_TRACE("raw tx [" + std::to_string(i) + "]");
+            auto decoded = bcos::evm::engine::detail::decodeOneRawTx(raw, kChainId);
+            EXPECT_EQ(bcos::evm::engine::detail::canonicalEnvelopeBytes(decoded), raw)
+                << "non-deposit wire tx is not byte-identical to its canonical re-encoding ("
+                << c.shape << ")";
+        }
+    }
+}
+
+// Gap 2: raw-bytes txRoot == op-geth 式重编码 DeriveSha 的 txRoot —— 直接断言, 而非只靠整块
+// golden txRoot 值。canonical 输入两者必等 (round-trip 使 raw == canonical, 同一计算);
+// 非 canonical 输入 decode 必拒, 且 raw (非 canonical) wire bytes 的 txRoot 与 canonical
+// 重编码的 txRoot **不同** —— 即注释宣称的 "divergent txRoot", 正是严格性阻止它进入
+// block-hash 推导的那个晚期 catch。
+TEST(OpSchedulerImpl, TxRootEqualsReencodedDeriveShaForCanonicalInput)
+{
+    // 语料中的 canonical 非 deposit 交易: isthmus_transfer_basic tx[1] (plain EIP-1559 转账;
+    // tx[0] 是 L1-attributes deposit)。
+    auto golden =
+        loadJsonOrFail(fs::path(OP_T8N_GOLDEN_ENGINE_DIR) / "isthmus_transfer_basic.golden.json");
+    auto rawTxBytes = rawTxBytesOf(golden);
+    ASSERT_EQ(rawTxBytes.size(), 2u);
+    auto const& raw = rawTxBytes[1];
+    ASSERT_EQ(raw[0], 0x02);  // EIP-1559
+
+    // Canonical 路径: decode → 重编码逐字节复现 raw, 故两 txRoot 相等。
+    auto decoded = bcos::evm::engine::detail::decodeOneRawTx(raw, kChainId);
+    auto canonical = bcos::evm::engine::detail::canonicalEnvelopeBytes(decoded);
+    ASSERT_EQ(canonical, raw);
+    EXPECT_EQ(bcos::evm::engine::computeOpTxRoot(std::vector<bcos::bytes>{raw}),
+        bcos::evm::engine::computeOpTxRoot(std::vector<bcos::bytes>{canonical}));
+
+    // 非 canonical 路径: 同一信封加 leading-zero 长度前缀 —— C1 找到的那一类
+    // (非最小 long-form list 头 0xf9 0x00 <len>, 替代 canonical 的 0xf8 <len>)。
+    ASSERT_EQ(raw[1], 0xf8);  // 单字节 long-list 长度前缀 (body 56..255 bytes)
+    bcos::bytes nonCanonical{raw[0], 0xf9, 0x00, raw[2]};
+    nonCanonical.insert(nonCanonical.end(), raw.begin() + 3, raw.end());
+
+    // (1) 解码器拒绝它 —— 非 canonical 输入不 survive 解码。消息断言到 "leading zero":
+    //    只有 C1 的 throw site (bcos-codec/rlp/RLPDecode.h) 产生该子串, 证明确实是
+    //    length-prefix 非 canonical 这一类别 (而非 chain-id 错、越界之类的其他失败)。
+    bool threw = false;
+    try
+    {
+        bcos::evm::engine::detail::decodeOneRawTx(nonCanonical, kChainId);
+    }
+    catch (const bcos::evm::engine::OpConsensusError& e)
+    {
+        threw = true;
+        EXPECT_NE(std::string(e.what()).find("leading zero"), std::string::npos)
+            << "e.what()=\"" << e.what() << "\"";
+    }
+    EXPECT_TRUE(threw) << "non-canonical (leading-zero length prefix) tx survived decoding";
+    // (2) 且若它真走到 block-hash 路径, raw wire bytes 的 txRoot 会与 canonical 重编码的
+    // txRoot **不同** —— 严格性所阻止的那个分叉, 在此被直接观测。
+    EXPECT_NE(bcos::evm::engine::computeOpTxRoot(std::vector<bcos::bytes>{nonCanonical}),
+        bcos::evm::engine::computeOpTxRoot(std::vector<bcos::bytes>{canonical}));
+}
+
 // ══════════════ final review batch 4: B4-2 non-canonical RLP is rejected ══════════════
 //
 // Go's `rlp` — which produced every byte this decoder will legitimately see — rejects each of
