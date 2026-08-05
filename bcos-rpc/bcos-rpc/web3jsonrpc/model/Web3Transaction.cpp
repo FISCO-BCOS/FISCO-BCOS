@@ -101,12 +101,13 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
         tarsTx.web3TypedTxKind =
             static_cast<tars::Char>(static_cast<uint8_t>(TransactionType::Deposit));
+        tarsTx.sourceHash = sourceHash.hex();
         tarsTx.sender.assign(from.begin(), from.end());
+        // 带 0x 前缀,与读取端 u256(...) 匹配(TransactionImpl.cpp mint() 解析)
+        tarsTx.mint = "0x" + mint.str(0, std::ios_base::hex);
+        tarsTx.isSystemTransaction = isSystemTx ? 1 : 0;
         // 完整 0x7E envelope(encode());calculateHash 对 web3TypedTxKind==0x7e 直接
         // keccak256(extraTransactionBytes) 得到 extraTransactionHash,无需在此填充
-        // ⚠️ 适配 incoming 基线:Transaction.tars 已删 sourceHash/mint/isSystemTransaction
-        // 三个 deposit 元数据槽位(旧分支曾在此回填)。deposit 元数据全部随 0x7E envelope
-        // (extraTransactionBytes)走,执行层 OpTransition 直接解码 envelope,无需 tars 槽位。
         auto encoded = encode();
         tarsTx.extraTransactionBytes.reserve(encoded.size());
         ::ranges::move(encoded, std::back_inserter(tarsTx.extraTransactionBytes));
