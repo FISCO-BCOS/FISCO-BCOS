@@ -22,8 +22,12 @@
 #include "TransactionImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
+#include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -31,6 +35,7 @@
 #include <cstring>
 #include <exception>
 #include <range/v3/view/any_view.hpp>
+#include <set>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
@@ -79,8 +84,174 @@ bcos::crypto::HashType bcostars::protocol::TransactionImpl::hash() const
     return hashResult;
 }
 
+static bcos::crypto::HashType recomputeWeb3CanonicalHash(
+    bcos::bytesConstRef payload, bcos::bytesConstRef signature)
+{
+    // The byte-splice logic mirrors Web3Transaction::encode() / txHash() in
+    // bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3Transaction.h (the reference implementation used
+    // on the RPC ingress path). Keep the two in sync when adding new transaction types.
+    //
+    // NB: rlp free functions are fully qualified below -- TransactionImpl has member encode()/
+    // decode() that would otherwise shadow bcos::codec::rlp::encode()/decode() in this scope.
+
+    // Signature wire format (tars): r(32) || s(32) || yParity(1).
+    if (signature.size() != 65) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "invalid Web3 signature length, expect 65, got " + std::to_string(signature.size())));
+    }
+    // RLP encodes integers with no leading zeros, so trim r/s before re-emitting them (this is
+    // exactly what Web3Transaction::encode() does via getSignatureRef()).
+    auto trimLeadingZeros = [](bcos::bytesConstRef in) {
+        size_t offset = 0;
+        while (offset < in.size() && in[offset] == 0)
+        {
+            ++offset;
+        }
+        return in.getCroppedData(offset);
+    };
+    auto const r = trimLeadingZeros(signature.getCroppedData(0, 32));
+    auto const s = trimLeadingZeros(signature.getCroppedData(32, 32));
+    auto const yParity = static_cast<uint64_t>(signature[64]);
+
+    auto throwDecode = [](std::string_view stage) {
+        BCOS_LOG(INFO) << LOG_DESC("recompute canonical Web3 txHash: decode failed")
+                       << LOG_KV("stage", stage);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            std::string("recompute canonical Web3 txHash: decode failed at ").append(stage)));
+    };
+    if (payload.empty()) [[unlikely]]
+    {
+        throwDecode("empty payload");
+    }
+
+    // decodeHeader crops the header off the cursor as it parses, so work over a mutable copy of
+    // the preimage bytes -- the underlying bytes are only read, never written.
+    bcos::bytes buffer(payload.begin(), payload.end());
+    bcos::bytesRef cursor(buffer.data(), buffer.size());
+
+    bcos::bytes full;
+    auto const firstByte = buffer[0];
+    if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
+    {
+        // Typed transaction (EIP-2718: EIP-2930 / EIP-1559 / EIP-4844).
+        //   preimage = type || rlp([...fields])
+        //   full     = type || rlp([...fields, yParity, r, s])
+        // Every field byte is identical between the two; only the outer list header grows (it now
+        // covers three extra items) and the signature items are appended. So we reuse the field
+        // bytes verbatim and re-emit just the header + signature.
+        auto const txType = firstByte;
+        cursor = cursor.getCroppedData(1);  // drop the EIP-2718 type byte
+        auto [error, header] = bcos::codec::rlp::decodeHeader(cursor);
+        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+        {
+            throwDecode("typed body");
+        }
+        bcos::bytesConstRef fields(cursor.data(), header.payloadLength);
+
+        bcos::bytes sig;
+        bcos::codec::rlp::encode(sig, yParity);  // typed txs carry the raw yParity (0/1), not an
+                                                 // EIP-155 v
+        bcos::codec::rlp::encode(sig, r);
+        bcos::codec::rlp::encode(sig, s);
+
+        full.push_back(txType);
+        bcos::codec::rlp::encodeHeader(full,
+            bcos::codec::rlp::Header{.isList = true, .payloadLength = fields.size() + sig.size()});
+        full.insert(full.end(), fields.begin(), fields.end());
+        full.insert(full.end(), sig.begin(), sig.end());
+    }
+    else
+    {
+        // Legacy transaction.
+        //   pre-EIP-155 preimage = rlp([nonce,gasPrice,gasLimit,to,value,data])            (6
+        //   items) EIP-155     preimage = rlp([nonce,gasPrice,gasLimit,to,value,data,chainId,0,0])
+        //   (9 items) full                 = rlp([nonce,gasPrice,gasLimit,to,value,data,v,r,s])
+        // The 6 leading field items are identical between preimage and full. EIP-155 replaces its
+        // trailing chainId,0,0 with v,r,s (v = chainId*2+35+yParity); pre-155 simply appends v,r,s
+        // (v = yParity+27). We locate the end of the 6 field items, reuse those bytes, and emit a
+        // fresh list header + v,r,s.
+        auto [error, header] = bcos::codec::rlp::decodeHeader(cursor);
+        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+        {
+            throwDecode("legacy header");
+        }
+        auto const* fieldsStart = cursor.data();
+        bcos::bytesRef walker(cursor.data(), header.payloadLength);
+        for (int i = 0; i < 6; ++i)
+        {
+            auto [fieldError, fieldHeader] = bcos::codec::rlp::decodeHeader(walker);
+            if (fieldError || fieldHeader.payloadLength > walker.size()) [[unlikely]]
+            {
+                throwDecode("legacy field");
+            }
+            walker = walker.getCroppedData(fieldHeader.payloadLength);
+        }
+        auto const fieldsLength = static_cast<size_t>(walker.data() - fieldsStart);
+        bcos::bytesConstRef fields(fieldsStart, fieldsLength);
+
+        uint64_t v = 0;
+        if (fieldsLength == header.payloadLength)
+        {
+            // pre-EIP-155: exactly 6 items, nothing trailing
+            v = yParity + 27;
+        }
+        else
+        {
+            // EIP-155: item 7 is the signed chainId (items 8,9 are the 0,0 placeholders). Read
+            // chainId from the preimage itself -- that is the value the sender actually signed, so
+            // it is authoritative even though the whole tx arrived from an untrusted peer.
+            uint64_t chainId = 0;
+            if (auto chainIdError = bcos::codec::rlp::decode(walker, chainId)) [[unlikely]]
+            {
+                throwDecode("legacy chainId");
+            }
+            // The preimage must end with exactly chainId,0,0 -- reject 7/8-item lists and
+            // non-zero trailers rather than misreading item 7 of some other shape as a chainId.
+            for (int i = 0; i < 2; ++i)
+            {
+                uint64_t zero = 0;
+                if (auto zeroError = bcos::codec::rlp::decode(walker, zero); zeroError || zero != 0)
+                    [[unlikely]]
+                {
+                    throwDecode("legacy trailing zeros");
+                }
+            }
+            if (!walker.empty()) [[unlikely]]
+            {
+                throwDecode("legacy trailing garbage");
+            }
+            v = chainId * 2 + 35 + yParity;
+        }
+
+        bcos::bytes sig;
+        bcos::codec::rlp::encode(sig, v);
+        bcos::codec::rlp::encode(sig, r);
+        bcos::codec::rlp::encode(sig, s);
+
+        bcos::codec::rlp::encodeHeader(full,
+            bcos::codec::rlp::Header{.isList = true, .payloadLength = fields.size() + sig.size()});
+        full.insert(full.end(), fields.begin(), fields.end());
+        full.insert(full.end(), sig.begin(), sig.end());
+    }
+    return bcos::crypto::keccak256Hash(bcos::ref(full));
+}
+
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
+    // Web3: the hash is the canonical txHash = keccak256(rlp(signed tx)), stored in
+    // extraTransactionHash (which hash() returns). Recompute it from the signed payload
+    // unconditionally -- a wire-supplied value is never believed, even when a caller reaches
+    // verify() without clearing it first (e.g. TransactionFactoryImpl::createTransaction skips
+    // the hash-match check for non-BCOS types), so no caller discipline is required (FIB-New1).
+    // The recompute is a byte splice plus one keccak, cheap enough to always run.
+    if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        auto const canonicalTxHash =
+            recomputeWeb3CanonicalHash(extraTransactionBytes(), signatureData());
+        m_inner()->extraTransactionHash.assign(canonicalTxHash.begin(), canonicalTxHash.end());
+        return;
+    }
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
@@ -195,8 +366,15 @@ void bcostars::protocol::TransactionImpl::clearSenderAndHash()
 {
     m_inner()->sender.clear();
     m_inner()->dataHash.clear();
+    // FIB-New1: also drop the wire-supplied canonical Web3 txHash (extraTransactionHash) so
+    // verify() recomputes it from the signed payload. Both re-verification call sites are
+    // untrusted enough to warrant this: the P2P import path (TransactionSync) receives it from an
+    // untrusted peer, and the RPC submit path (TxValidator::verify) only pre-wrote a value it can
+    // cheaply recompute anyway. Harmless for BCOS transactions (the field is never populated).
+    m_inner()->extraTransactionHash.clear();
     setTainted(true);
 }
+
 void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)
 {
     m_inner()->signature.assign(signature.begin(), signature.end());
@@ -232,21 +410,13 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
 }
 
-void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
+bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
-    std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
-    if (m_web3AccessListCacheBuilt)
-    {
-        return;
-    }
-    m_web3AccessListCache.clear();
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-    {
-        m_web3AccessListCacheBuilt = true;
-        return;
-    }
+        return {};
     auto const& entries = m_inner()->data.accessList;
-    m_web3AccessListCache.reserve(entries.size());
+    bcos::protocol::Web3AccessList result;
+    result.reserve(entries.size());
     for (auto const& entry : entries)
     {
         bcos::protocol::Web3AccessListEntry out;
@@ -276,15 +446,75 @@ void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
             std::memcpy(key.data(), keyBytes.data(), bcos::h256::SIZE);
             out.storageKeys.emplace_back(key);
         }
-        m_web3AccessListCache.emplace_back(std::move(out));
+        result.emplace_back(std::move(out));
     }
-    m_web3AccessListCacheBuilt = true;
+    return result;
 }
 
-bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3AccessList() const
+bcos::protocol::AuthorizationList bcostars::protocol::TransactionImpl::authorizationList() const
 {
-    ensureWeb3AccessListCache();
-    return m_web3AccessListCache;
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        return {};
+    auto const& entries = m_inner()->data.authorizationList;
+    bcos::protocol::AuthorizationList result;
+    result.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        bcos::protocol::Authorization auth;
+        auth.chainId = entry.chainID;
+        auth.nonce = entry.nonce;
+        auth.v = entry.v;
+        // EIP-7702 authorization entries are consensus-critical.
+        // Fail-loud on malformed data instead of silently skipping
+        // (which produces wrong state root vs Ethereum reference).
+        // However, empty signer/address (from unrecoverable signatures in
+        // EEST fixtures) must be allowed: use zero address, evmone will skip.
+        auth.address = entry.address.empty() ? bcos::Address() : bcos::toAddress(entry.address);
+        auth.signer = entry.signer.empty() ? bcos::Address() : bcos::toAddress(entry.signer);
+        auth.r = bcos::hex2u(entry.r);
+        auth.s = bcos::hex2u(entry.s);
+        result.emplace_back(std::move(auth));
+    }
+    return result;
+}
+
+bcos::protocol::VersionedHashes bcostars::protocol::TransactionImpl::blobVersionedHashes() const
+{
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        return {};
+    auto const& entries = m_inner()->data.blobVersionedHashes;
+    bcos::protocol::VersionedHashes result;
+    result.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        if (entry.size() != 32)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "blobVersionedHash must be exactly 32 bytes, got " + std::to_string(entry.size())));
+        }
+        bcos::h256 h{};
+        std::copy_n(entry.begin(), 32, h.begin());
+        result.emplace_back(std::move(h));
+    }
+    return result;
+}
+
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerBlobGas() const
+{
+    if (m_inner()->data.maxFeePerBlobGas.empty())
+        return std::nullopt;
+    auto val = bcos::hex2u(m_inner()->data.maxFeePerBlobGas);
+    // Defend against hex2u silently returning 0 for malformed input
+    if (val == 0)
+    {
+        auto const& s = m_inner()->data.maxFeePerBlobGas;
+        static const std::set<std::string_view> validZeros = {"0", "0x0", "0x00", "0x", "00"};
+        if (!validZeros.count(s))
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("Invalid maxFeePerBlobGas: " + s));
+        }
+    }
+    return val;
 }
 
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const

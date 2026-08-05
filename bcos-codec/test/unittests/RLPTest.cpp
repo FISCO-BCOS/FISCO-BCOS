@@ -329,5 +329,48 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
 }
 
 
+// Malformed RLP inputs must be reported as typed decoding errors rather than
+// crashing or silently producing a value. Uses a REQUIRE guard before reading
+// the error so a missing error aborts cleanly instead of dereferencing null.
+BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
+{
+    auto decodeErr = [](std::string_view hex, auto& out) {
+        bcos::bytes buffer = fromHex(hex);
+        auto view = bcos::ref(buffer);
+        return bcos::codec::rlp::decode(view, out);
+    };
+
+    {  // empty buffer: nothing to read
+        uint64_t value{};
+        auto err = decodeErr(""sv, value);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+    }
+    {  // short-string header claims one content byte but none follows
+        std::string str;
+        auto err = decodeErr("81"sv, str);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+    }
+    {  // long-string header (0xb8) announces 56 bytes but the payload is missing
+        std::string str;
+        auto err = decodeErr("b838"sv, str);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+    }
+    {  // a byte < 0x80 wrapped in a 1-byte string is a non-canonical encoding
+        std::string str;
+        auto err = decodeErr("8100"sv, str);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+    {  // a list where a scalar is expected
+        uint64_t value{};
+        auto err = decodeErr("c0"sv, value);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedList);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

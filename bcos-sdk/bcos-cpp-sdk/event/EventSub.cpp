@@ -26,6 +26,7 @@
 #include <bcos-cpp-sdk/event/EventSubRequest.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
 #include <bcos-cpp-sdk/event/EventSubStatus.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <json/reader.h>
 #include <boost/thread/thread.hpp>
@@ -51,8 +52,8 @@ void EventSub::start()
     // start websocket service
     m_service->start();
 
-    m_timer = std::make_shared<bcos::Timer>(
-        *m_ioContext, m_config->reconnectPeriod(), "sdkEventLoop");
+    m_timer =
+        std::make_shared<bcos::Timer>(*m_ioContext, m_config->reconnectPeriod(), "sdkEventLoop");
     m_timer->registerTimeoutHandler([this]() { doLoop(); });
     m_timer->start();
     EVENT_SUB(INFO) << LOG_BADGE("start") << LOG_DESC("start event sub successfully")

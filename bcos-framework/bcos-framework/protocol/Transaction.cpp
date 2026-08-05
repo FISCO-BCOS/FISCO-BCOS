@@ -11,15 +11,24 @@
 
 namespace bcos::protocol
 {
-Web3AccessList const& Transaction::emptyWeb3AccessList()
+Web3AccessList Transaction::web3AccessList() const
 {
-    static Web3AccessList const empty;
-    return empty;
+    return {};
 }
 
-Web3AccessList const& Transaction::web3AccessList() const
+AuthorizationList Transaction::authorizationList() const
 {
-    return emptyWeb3AccessList();
+    return {};
+}
+
+VersionedHashes Transaction::blobVersionedHashes() const
+{
+    return {};
+}
+
+std::optional<u256> Transaction::maxFeePerBlobGas() const
+{
+    return std::nullopt;
 }
 
 Transaction::Transaction(const Transaction& other)
@@ -101,8 +110,14 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
     }
     else if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
     {
-        auto const bytesRef = extraTransactionBytes();
-        hashResult = bcos::crypto::keccak256Hash(bytesRef);
+        // Recompute and store the canonical txHash from the signed payload. The computation lives
+        // in the tars layer (calculateHash -> hash::calculate), so this framework core stays free
+        // of RLP/codec. Callers clear extraTransactionHash before verify() (clearSenderAndHash),
+        // so a wire-supplied value from an untrusted peer is never believed (FIB-New1).
+        calculateHash(hashImpl);
+        // Recover uses the EIP signing hash keccak256(preimage), which differs from the canonical
+        // txHash stored above.
+        hashResult = bcos::crypto::keccak256Hash(extraTransactionBytes());
     }
 
     auto const signature = signatureData();

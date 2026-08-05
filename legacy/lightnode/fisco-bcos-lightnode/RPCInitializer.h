@@ -150,7 +150,8 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
             jsonrpc->onRPCRequest(req, [m_buffer = buffer, msg = std::move(msg),
-                                           session = std::move(session)](bcos::bytes resp) {
+                                           session = std::move(session)](
+                                           bcos::bytes resp, boost::beast::http::status) {
                 if (session && session->isConnected())
                 {
                     msg->setPayload(std::move(resp));
@@ -174,8 +175,8 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     if (httpServer)
     {
         httpServer->setHttpReqHandler(
-            [jsonrpc](const std::string_view req, std::function<void(bcos::bytes)> sender) {
-                jsonrpc->onRPCRequest(req, std::move(sender));
+            [jsonrpc](const bcos::boostssl::http::HttpRequest& req, auto sender) {
+                jsonrpc->onRPCRequest(req.body(), std::move(sender));
             });
     }
 

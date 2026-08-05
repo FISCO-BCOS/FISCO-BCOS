@@ -32,14 +32,26 @@ public:
     using Ptr = std::shared_ptr<CampaignConfig>;
     CampaignConfig(bcos::protocol::MemberInterface::Ptr _self, std::string const& _etcdEndPoint,
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _leaderKey,
-        std::string const& _purpose, boost::asio::io_context& _ioContext,
-        unsigned _leaseTTL = 3, const std::string& _caPath = "",
-        const std::string& _certPath = "", const std::string& _keyPath = "")
+        std::string const& _purpose, boost::asio::io_context& _ioContext, unsigned _leaseTTL = 3,
+        const std::string& _caPath = "", const std::string& _certPath = "",
+        const std::string& _keyPath = "")
       : ElectionConfig(
             _etcdEndPoint, _memberFactory, _purpose, _ioContext, _caPath, _certPath, _keyPath)
     {
         m_leaderKey = _leaderKey;
-        m_leaseTTL = _leaseTTL;
+        // FIB-176: leaseTTL is unsigned and feeds directly into the election
+        // timers. A value of 0 yields a 0ms campaign timer and underflows
+        // `leaseTTL() - 1` (the keepAlive interval) to a huge value; a value of
+        // 1 yields a 0s keepAlive interval. Clamp to a safe minimum before any
+        // timer is derived from it.
+        if (_leaseTTL < c_minLeaseTTL)
+        {
+            ELECTION_LOG(WARNING) << LOG_DESC(
+                                         "CampaignConfig: leaseTTL too small, clamp to minimum")
+                                  << LOG_KV("requested", _leaseTTL)
+                                  << LOG_KV("clamped", c_minLeaseTTL);
+        }
+        m_leaseTTL = clampLeaseTTL(_leaseTTL);
         m_self = _self;
         m_self->encode(m_leaderValue);
         ELECTION_LOG(INFO) << LOG_DESC("CampaignConfig") << LOG_KV("selfID", m_self->memberID())
@@ -47,6 +59,15 @@ public:
     }
 
     ~CampaignConfig() override {}
+
+    // FIB-176: minimum lease TTL (seconds). Below this the derived campaign
+    // timer (leaseTTL*1000 ms) and keepAlive interval (leaseTTL-1 s) degenerate
+    // or underflow.
+    static constexpr unsigned c_minLeaseTTL = 2;
+    static unsigned clampLeaseTTL(unsigned _ttl) noexcept
+    {
+        return _ttl < c_minLeaseTTL ? c_minLeaseTTL : _ttl;
+    }
 
     std::string const& leaderKey() const { return m_leaderKey; }
     virtual bcos::protocol::MemberInterface::Ptr fetchLeader();
@@ -88,6 +109,11 @@ public:
         m_self->encode(m_leaderValue);
     }
 
+    // FIB-173: exposed so the election layer can drop the stale self-leader
+    // pointer when the keepAlive heartbeat dies (the etcd lease is gone, so
+    // node-self is no longer the leader).
+    void resetLeader(bcos::protocol::MemberInterface::Ptr _leader);
+
 protected:
     virtual void fetchLeaderInfoFromEtcd();
     virtual void onLeaderKeyChanged(etcd::Response _response);
@@ -106,8 +132,6 @@ protected:
                 self->onLeaderKeyChanged(std::move(response));
             });
     }
-
-    void resetLeader(bcos::protocol::MemberInterface::Ptr _leader);
 
 protected:
     // the leader key that multiple workers compete for, eg: "/consensus"

@@ -76,9 +76,16 @@ jobs:
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         run: brew install libomp autoconf automake libtool
-      - name: Add MSbuild to PATH
+      - name: Set up MSVC environment
+        # The windows-2025 image ships Visual Studio 18 (2026), which the pinned
+        # CMake 3.28 cannot recognize as a generator: generator auto-detection
+        # falls back to "NMake Makefiles" and fails with "'nmake' '-?' failed"
+        # because nothing put the VC tools on PATH. Use the Ninja generator with
+        # cl.exe from the developer environment instead (version-agnostic).
         if: matrix.os == 'windows-2025'
-        uses: microsoft/setup-msbuild@v1.1
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - uses: actions-rs/toolchain@v1
         if: matrix.os != 'windows-2025'
         with:
@@ -130,6 +137,32 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
+      - name: Download EEST fixtures
+        if: matrix.os != 'windows-2025'
+        run: |
+          cd ${{ github.workspace }}
+          # --fail: a 404 would otherwise write the error page into the tarball
+          # and surface as a confusing tar error; --retry handles release hiccups.
+          curl --fail --retry 3 -L -o fixtures_stable.tar.gz https://github.com/ethereum/execution-spec-tests/releases/download/v5.4.0/fixtures_stable.tar.gz
+          tar -xzf fixtures_stable.tar.gz
+          # The tarball may extract to fixtures_stable/; ensure we have fixtures/
+          if [ -d fixtures_stable ] && [ ! -d fixtures ]; then
+            mv fixtures_stable fixtures
+          fi
+      - name: Run EEST fixture tests
+        if: matrix.os != 'windows-2025'
+        run: |
+          # pipefail so a runner crash (not just a low pass rate) fails the job.
+          set -o pipefail
+          cd build/ethereum-executor/tests
+          ./eest-runner --fixture-dir ../../../fixtures/ --no-log 2>&1 | tee eest_output.txt
+          PASS_RATE=$(sed -nE 's/.*Pass rate:[[:space:]]+([0-9]+)%.*/\1/p' eest_output.txt)
+          echo "EEST pass rate: ${PASS_RATE}%"
+          if [ -z "${PASS_RATE}" ] || [ "${PASS_RATE}" -lt 100 ]; then
+            echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 100% threshold"
+            exit 1
+          fi
+          echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v4
@@ -166,7 +199,7 @@ jobs:
           pip3 install --quiet requests 2>/dev/null || \
           pip3 install --break-system-packages --quiet requests 2>/dev/null || true
           # Run engine API integration test (curl smoke + Python mock CL)
-          bash tools/engine_integration_test.sh build 8645
+          bash tools/engine_integration_test.sh build 8551
       - name: Engine API integration test (with Lodestar)
         if: matrix.os == 'ubuntu-24.04'
         run: |
@@ -175,7 +208,7 @@ jobs:
           pip3 install --quiet requests 2>/dev/null || \
           pip3 install --break-system-packages --quiet requests 2>/dev/null || true
           # Run engine API integration test with Lodestar dev mode
-          RUN_LODESTAR=1 bash tools/engine_integration_test.sh build 8645
+          RUN_LODESTAR=1 bash tools/engine_integration_test.sh build 8551
       - name: Reduce vcpkg cache size
         if: matrix.os != 'windows-2025'
         run: |
@@ -368,6 +401,11 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: build/coverage.info
+          # Upload only the clean lcov file. Without this, codecov-cli also
+          # sweeps the build/ tree and uploads thousands of raw .gcov/.gcda
+          # intermediates whose paths do not map to the repo, which makes
+          # Codecov reject the whole commit as an unusable report.
+          disable_search: true
           flags: unittests
           fail_ci_if_error: false
           verbose: true

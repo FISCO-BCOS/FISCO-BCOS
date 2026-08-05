@@ -6,7 +6,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include <proxy/proxy.h>
+#include <proxy/v3/proxy.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -16,7 +16,6 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
-#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <range/v3/range/concepts.hpp>

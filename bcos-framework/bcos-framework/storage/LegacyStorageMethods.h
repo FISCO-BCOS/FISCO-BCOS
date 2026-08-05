@@ -5,6 +5,8 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/primitives.hpp>
 
 namespace bcos::storage
 {
@@ -77,8 +79,7 @@ task::Task<std::vector<std::optional<Entry>>> tag_invoke(
     }
     for (auto&& key : keys)
     {
-        values.emplace_back(
-            co_await storage2::readOne(storage, std::forward<decltype(key)>(key)));
+        values.emplace_back(co_await storage2::readOne(storage, std::forward<decltype(key)>(key)));
     }
 
     co_return values;
@@ -94,8 +95,8 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused
     }
 }
 
-inline task::Task<void> tag_invoke(
-    storage2::tag_t<storage2::writeOne> /*unused*/, StorageInterface& storage, auto stateKey, Entry entry)
+inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
+    StorageInterface& storage, auto stateKey, Entry entry)
 {
     struct Awaitable
     {

@@ -25,6 +25,7 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-utilities/Error.h>
+#include <boost/beast/http/status.hpp>
 #include <json/json.h>
 #include <util/tc_json.h>
 #include <functional>
@@ -32,7 +33,7 @@
 namespace bcos::rpc
 {
 
-using Sender = std::function<void(bcos::bytes)>;
+using Sender = std::function<void(bcos::bytes, boost::beast::http::status)>;
 using RespFunc = std::function<void(bcos::Error::Ptr, Json::Value&)>;
 using MethodMap = std::unordered_map<std::string, std::function<void(Json::Value&, RespFunc)>>;
 

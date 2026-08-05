@@ -20,6 +20,7 @@
 
 #include <bcos-cpp-sdk/event/Common.h>
 #include <bcos-cpp-sdk/event/EventSubRequest.h>
+#include <bcos-utilities/BoostLog.h>
 
 #include <json/json.h>
 #include <exception>
@@ -246,7 +247,7 @@ bool EventSubSubRequest::fromJson(const std::string& _request)
                     if (jIndex.isArray())
                     {  // array topics
                         for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size();
-                             ++innerIndex)
+                            ++innerIndex)
                         {
                             params->addTopic(index, jIndex[innerIndex].asString());
                         }

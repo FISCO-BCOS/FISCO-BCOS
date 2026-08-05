@@ -21,6 +21,12 @@
 
 #pragma once
 
+// On Windows tup/Tars.h must be parsed before the generated tars headers,
+// otherwise the tars namespace is broken for them (same workaround as
+// bcos-tars-protocol/Common.h).
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-tars-protocol/tars/TransactionSubmitResult.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>

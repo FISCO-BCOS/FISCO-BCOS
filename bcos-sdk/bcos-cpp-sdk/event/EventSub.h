@@ -24,6 +24,7 @@
 #include <bcos-cpp-sdk/event/EventSubInterface.h>
 #include <bcos-cpp-sdk/event/EventSubTask.h>
 #include <bcos-cpp-sdk/ws/Service.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/asio/io_context.hpp>
 #include <boost/thread/thread.hpp>
 #include <atomic>

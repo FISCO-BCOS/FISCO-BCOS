@@ -161,7 +161,7 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                         << LOG_KV("response",
                                std::string_view((const char*)strResp.data(), strResp.size()));
                 }
-                _sender(std::move(strResp));
+                _sender(std::move(strResp), boost::beast::http::status::ok);
             });
 
         // success response
@@ -192,7 +192,7 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                         << LOG_KV("request", _requestBody)
                         << LOG_KV("response",
                                std::string_view((const char*)strResp.data(), strResp.size()));
-    _sender(std::move(strResp));
+    _sender(std::move(strResp), boost::beast::http::status::ok);
 }
 
 void bcos::rpc::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& _jsonRequest)

@@ -25,6 +25,9 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/asio.hpp>
+#include <atomic>
+#include <functional>
+#include <utility>
 
 namespace bcos::front
 {
@@ -89,6 +92,19 @@ public:
 
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
+
+    // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
+    // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
+    // The owned payload is captured by the queued task -> the message body is never copied.
+    void asyncBroadcastMessageByOwnedPayload(
+        uint16_t type, int moduleID, bytesPointer payload) override;
+
+    // FIB-185: dispatch the point-to-point gateway send onto the serial send queue (off the caller
+    // thread), so sendViewChange / sendRecoverResponse run under m_mutex without contending the
+    // gateway session lock. Point-to-point encodes the wire frame, so this is not zero-copy; the
+    // owned payload is captured only to keep it alive across the deferred encode.
+    void asyncSendMessageByNodeIDByOwnedPayload(
+        int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload) override;
 
     /**
      * @brief: receive nodeIDs from gateway
@@ -208,8 +224,20 @@ protected:
 
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
+    // FIB-185: hand a send task to the serial send strand and return immediately; tasks run FIFO
+    // on the shared IOServicePool (serialized, never concurrently), so no caller thread runs the
+    // gateway send.
+    void enqueueSend(std::function<void()> _sendTask);
+
 private:
     bcos::IOServicePool::Ptr m_ioServicePool;
+    // FIB-185: serial async send strand over the shared IOServicePool + a pending-send counter
+    // that bounds it. The strand provides the FIFO/serialized execution the fix needs (off the
+    // CALLER's thread, no new thread) without the hand-rolled queue + single-drainer CAS. It
+    // exposes no queue depth, so the backpressure below (warn, then shed at the hard cap — the OOM
+    // guard FIB-185 closes) tracks the pending count here instead. See enqueueSend().
+    std::unique_ptr<bcos::Strand> m_sendStrand;
+    std::atomic<size_t> m_pendingSendCount{0};
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
@@ -222,8 +250,10 @@ private:
     std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
         m_module2GroupNodeInfoNotifier;
 
-    // service is running or not
-    bool m_run = false;
+    // service is running or not. Atomic because the FIB-185 send path reads it from the caller's
+    // thread (enqueueSend's post-stop guard) while stop() clears it from the shutdown thread, and
+    // the drain-at-stop reasoning depends on that store being visible.
+    std::atomic_bool m_run = false;
     // NodeID
     bcos::crypto::NodeIDPtr m_nodeID;
     // GroupID

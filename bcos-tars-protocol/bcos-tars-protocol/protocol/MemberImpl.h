@@ -22,6 +22,12 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+// On Windows tup/Tars.h must be parsed before the generated tars headers,
+// otherwise the tars namespace is broken for them (same workaround as
+// bcos-tars-protocol/Common.h).
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "bcos-tars-protocol/tars/Member.h"
 #include <bcos-framework/protocol/MemberInterface.h>
 namespace bcostars

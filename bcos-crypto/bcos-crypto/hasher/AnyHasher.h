@@ -2,6 +2,8 @@
 #include "Hasher.h"
 #include "bcos-crypto/TrivialObject.h"
 #include <memory>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/primitives.hpp>
 #include <span>
 
 namespace bcos::crypto::hasher

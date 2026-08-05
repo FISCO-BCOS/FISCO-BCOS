@@ -6,6 +6,18 @@ module bcostars {
         1 optional vector<vector<byte>> storageKeys;  // each key is 32 bytes (h256)
     };
 
+    /// EIP-7702 authorization entry (set_code transactions, Prague+).
+    struct AuthorizationEntry
+    {
+        0 optional long   chainID;       // EIP-155 chain ID (0 = any)
+        1 optional string address;       // 40-char hex delegation target, no 0x prefix
+        2 optional long   nonce;         // signer nonce at authorization time
+        3 optional string signer;        // 40-char hex recovered signer address
+        4 optional string r;             // ECDSA signature r (hex, 0x prefix)
+        5 optional string s;             // ECDSA signature s (hex, 0x prefix)
+        6 optional byte   v;             // y_parity (0 or 1)
+    };
+
     struct TransactionData {
         1  optional int          version;
         2  optional string       chainID;
@@ -22,6 +34,9 @@ module bcostars {
         13 optional string       maxPriorityFeePerGas;
         14 optional vector<byte> extension;
         15 optional vector<Web3AccessListEntry> accessList;
+        16 optional vector<AuthorizationEntry> authorizationList;  // EIP-7702
+        17 optional string                    maxFeePerBlobGas;    // EIP-4844 blob gas price cap
+        18 optional vector<vector<byte>>      blobVersionedHashes; // EIP-4844 blob commitments
     };
 
     struct Transaction

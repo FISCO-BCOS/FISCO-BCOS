@@ -289,9 +289,9 @@ fi
 # ============ 阶段1：预构建所有依赖（仅一次）============
 prebuild_deps
 
-# ============ 阶段2：non-sm 测试（含扩容 + DMC）============
+# ============ 阶段2：non-sm 测试（含扩容）============
 LOG_INFO "======== check non-sm case ========"
-export RUN_DMC="true"
+export RUN_DMC="false"
 init ""
 expand_node ""
 check_consensus

@@ -58,6 +58,10 @@ public:
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
+    // FIB-184: bind an opaque object to this session's lifetime (released when the session is
+    // destroyed). Non-pure so existing test doubles need not implement it.
+    virtual void setLifetimeGuard(std::shared_ptr<void> /*guard*/) {}
+
     virtual bool active() const = 0;
 
     virtual std::size_t writeQueueSize() = 0;

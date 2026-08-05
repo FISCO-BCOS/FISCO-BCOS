@@ -19,7 +19,7 @@
  * @date: 2021-09-26
  */
 #include "TiKVStorage.h"
-#include "Common.h"
+#include "bcos-storage/Common.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "tikv_client.h"

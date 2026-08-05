@@ -30,6 +30,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <gsl/span>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
 {
@@ -69,6 +70,7 @@ public:
     bcos::bytesConstRef extraData() const override;
     gsl::span<const bcos::protocol::Signature> signatureList() const override;
     gsl::span<const uint64_t> consensusWeights() const override;
+    bcos::bytes coinbase() const override;
 
     void setVersion(uint32_t _version) override;
     void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override;
@@ -84,6 +86,7 @@ public:
     void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) override;
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override;
     void setExtraData(bcos::bytes _extraData) override;
+    void setCoinbase(bcos::bytes _coinbase) override;
     void setSignatureList(
         gsl::span<const bcos::protocol::Signature> const& _signatureList) override;
     void setSignatureList(bcos::protocol::SignatureList&& _signatureList) override;

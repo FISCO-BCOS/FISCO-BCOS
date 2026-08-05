@@ -19,6 +19,7 @@
 #pragma once
 #include "TransactionSubmitResult.h"
 #include "Web3AccessList.h"
+#include "Authorization.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
@@ -91,7 +92,17 @@ public:
     /// unset.
     virtual uint8_t web3TypedTxKind() const { return 0; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
-    virtual Web3AccessList const& web3AccessList() const;
+    virtual Web3AccessList web3AccessList() const;
+
+    /// EIP-7702 authorization list (Prague+ set_code transactions).
+    /// Returns empty vector for non-set_code transactions.
+    virtual AuthorizationList authorizationList() const;
+
+    /// EIP-4844 blob versioned hashes (Cancun+ blob transactions, type 3).
+    virtual VersionedHashes blobVersionedHashes() const;
+
+    /// EIP-4844 max fee per blob gas (type 3 blob transactions).
+    virtual std::optional<u256> maxFeePerBlobGas() const;
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl);
 
@@ -124,7 +135,9 @@ public:
     virtual uint8_t type() const = 0;
 
     virtual void forceSender(const bcos::bytes& _sender) = 0;
-    // Clear both sender and hash fields and mark transaction tainted for re-verification
+    // Clear sender and all cached/derived hashes (dataHash and, for Web3 tx, the wire-supplied
+    // canonical extraTransactionHash) and mark the transaction tainted for re-verification, so
+    // verify() recomputes them from the signed payload rather than trusting stale/wire values.
     virtual void clearSenderAndHash() = 0;
     // Recompute hash from transaction data fields
     virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
@@ -194,8 +207,6 @@ private:
     mutable bool m_tainted = {true};
     // the transaction has been stored to the storage or not
     mutable bool m_storeToBackend = {false};
-
-    static Web3AccessList const& emptyWeb3AccessList();
 };
 
 // FIB-75: Return the effective gas price for a transaction.

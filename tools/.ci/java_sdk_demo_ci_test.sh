@@ -247,9 +247,10 @@ contract_test()
     bash console.sh setSystemConfigByKey feature_dmc2serial 1
     check_all_contract
 
-    LOG_INFO "\n=====> Test sharding: set feature_sharding"
-    bash console.sh setSystemConfigByKey feature_sharding 1
-    check_all_contract
+    # feature_sharding is deprecated, skip sharding test
+    # LOG_INFO "\n=====> Test sharding: set feature_sharding"
+    # bash console.sh setSystemConfigByKey feature_sharding 1
+    # check_all_contract
 }
 
 

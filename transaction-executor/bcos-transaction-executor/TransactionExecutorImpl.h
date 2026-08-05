@@ -128,49 +128,36 @@ public:
                 executor, storage, blockHeader, transaction, contextID, ledgerConfig, call))
         {}
 
-        template <int step>
-        task::Task<protocol::TransactionReceipt::Ptr> executeStep()
+        task::Task<void> prepare() { co_await m_data->m_hostContext.prepare(); }
+
+        task::Task<void> execute()
         {
-            if constexpr (step == 0)
+            auto updated = co_await updateNonce();
+            if (updated)
             {
-                co_await m_data->m_hostContext.prepare();
-            }
-            else if constexpr (step == 1)
-            {
-                auto updated = co_await updateNonce();
-                if (updated)
-                {
-                    m_data->m_startSavepoint = m_data->m_rollbackableStorage.current();
-                }
-
-                if (const auto gasPrice =
-                        u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
-                    m_data->m_transaction.get().type() == 1 &&  // web3Tx
-                    m_data->m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::bugfix_gas_payment_balance_precheck) &&
-                    gasPrice > 0)
-                {
-                    // FIB-75 geth-style: buy gas (pre-deduct), execute, refund unused gas.
-                    if (!co_await buyGas())
-                    {
-                        co_return {};
-                    }
-                    m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
-                    co_await refundGas();
-                }
-                else
-                {
-                    // Legacy path
-                    m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
-                    co_await consumeBalance();
-                }
-            }
-            else if constexpr (step == 2)
-            {
-                co_return co_await finish();
+                m_data->m_startSavepoint = m_data->m_rollbackableStorage.current();
             }
 
-            co_return {};
+            if (const auto gasPrice = u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
+                m_data->m_transaction.get().type() == 1 &&  // web3Tx
+                m_data->m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_gas_payment_balance_precheck) &&
+                gasPrice > 0)
+            {
+                // FIB-75 geth-style: buy gas (pre-deduct), execute, refund unused gas.
+                if (!co_await buyGas())
+                {
+                    co_return;
+                }
+                m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
+                co_await refundGas();
+            }
+            else
+            {
+                // Legacy path
+                m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
+                co_await consumeBalance();
+            }
         }
 
         task::Task<bool> updateNonce()
@@ -190,7 +177,17 @@ public:
                 }
                 auto nonceInStorage = co_await account.nonce();
                 auto storageNonce = u256(nonceInStorage.value_or("0"));
-                u256 newNonce = std::max(callNonce, storageNonce) + 1;
+                // bugfix_nonce_ordering: make the committed nonce independent of the intra-block
+                // execution order of a sender's transactions. The sealer packs same-sender txs in
+                // hash order, so a lower-nonce tx may execute after a higher-nonce one has already
+                // raised the storage nonce; the legacy max(callNonce, storageNonce) + 1 then reads
+                // the raised value and over-increments. max(callNonce + 1, storageNonce) yields the
+                // identical result for in-order execution but stays stable when storageNonce is
+                // already ahead of callNonce.
+                u256 newNonce = m_data->m_ledgerConfig.get().features().get(
+                                    ledger::Features::Flag::bugfix_nonce_ordering) ?
+                                    std::max(callNonce + 1, storageNonce) :
+                                    std::max(callNonce, storageNonce) + 1;
                 co_await account.setNonce(newNonce.convert_to<std::string>());
                 co_return true;
             }
@@ -443,9 +440,9 @@ public:
         auto executeContext = co_await createExecuteContext(
             storage, blockHeader, transaction, contextID, ledgerConfig, call);
 
-        co_await executeContext.template executeStep<0>();
-        co_await executeContext.template executeStep<1>();
-        co_return co_await executeContext.template executeStep<2>();
+        co_await executeContext.prepare();
+        co_await executeContext.execute();
+        co_return co_await executeContext.finish();
     }
 };
 

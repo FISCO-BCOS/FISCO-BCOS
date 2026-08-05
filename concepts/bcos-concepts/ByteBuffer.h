@@ -3,6 +3,10 @@
 #include "Basic.h"
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/primitives.hpp>
+#include <range/v3/range/traits.hpp>
 
 namespace bcos::concepts::bytebuffer
 {

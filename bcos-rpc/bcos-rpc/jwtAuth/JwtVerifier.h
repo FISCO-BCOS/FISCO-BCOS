@@ -45,7 +45,7 @@ class JwtVerifier
 public:
     using Ptr = std::shared_ptr<JwtVerifier>;
 
-    explicit JwtVerifier(JwtConfig::Ptr _config) : m_config(std::move(_config)) {}
+    explicit JwtVerifier(JwtConfig::Ptr _config);
 
     ~JwtVerifier() = default;
 
@@ -55,12 +55,15 @@ public:
     bool verifyAlgorithm(std::string_view alg) const;
     bool verifyIat(int64_t iat) const;
 
-    bool validateSecret(std::string_view secret) const;
-
 private:
+    bool validateSecret(std::string_view secret) const;
     std::optional<std::string> readSecret() const;
 
     JwtConfig::Ptr m_config;
+    // Secret cache. Populated at construction, or lazily on the first
+    // successful read when the file was not ready at startup. Const methods
+    // (verify/verifyToken) may publish a late-arriving secret; concurrent
+    // writers always write an identical value, which is benign.
     mutable std::optional<std::string> m_secret;
 };
 }  // namespace bcos::rpc

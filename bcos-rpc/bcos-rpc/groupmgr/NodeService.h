@@ -76,14 +76,18 @@ public:
     }
 
     /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
-    /// hash, value = the node's raw RLP encoding, physically stored under the /mpt/<hash> key
-    /// prefix of the default column family (bcos-storage KeyPrefixes.h::makeMPTNodeKey).
+    /// hash, value = the node's raw RLP encoding, physically stored as ordinary state rows —
+    /// StateKey{"/mpt/", <32 raw digest bytes>}, i.e. "/mpt/:" + digest = 38 bytes in the
+    /// default column family. Build those keys ONLY with bcos-storage
+    /// KeyPrefixes.h::mptNodeStateKey; the physical form is produced and parsed solely by
+    /// StateKeyResolver.
     using MPTNodeReader = bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>;
 
-    /// Non-owning: the AnyStorage view holds a raw pointer to the underlying storage, whose
-    /// ownership stays with the Initializer; that storage must outlive this NodeService.
-    /// Default unset — the production wiring arrives with the scheduler-injection PR (PR-18);
-    /// until then nothing sets it and eth_getProof answers "MPT not enabled on this node".
+    /// The handle owns its key-translating adapter (storage2::makeMPTNodeReader), but the
+    /// storage underneath it is borrowed — owned by the Initializer, which must outlive this
+    /// NodeService. AIR wires it in AirNodeInitializer (Initializer::mptNodeReader over the
+    /// committed state backend); a tars-built NodeService has no local storage, leaves it
+    /// unset, and eth_getProof answers "MPT not enabled on this node".
     /// shared_ptr because AnyStorage itself is move-only and not default-constructible.
     void setMPTNodeReader(std::shared_ptr<MPTNodeReader> _reader) noexcept
     {
@@ -109,7 +113,8 @@ private:
 
     std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
 
-    /// Non-owning MPT node reader; see setMPTNodeReader() for the lifetime contract.
+    /// MPT node reader handle (owns its adapter, borrows the underlying storage); see
+    /// setMPTNodeReader() for the lifetime contract.
     std::shared_ptr<MPTNodeReader> m_mptNodeReader;
 
     bcostars::LedgerServicePrx m_ledgerPrx;

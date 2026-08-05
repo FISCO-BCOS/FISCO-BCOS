@@ -88,7 +88,7 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
     auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp) {
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
         auto end = std::chrono::high_resolution_clock::now();

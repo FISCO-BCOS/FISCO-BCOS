@@ -189,8 +189,10 @@ public:
                 }
             }
         };
-        m_httpServer->setHttpReqHandler([this](auto&& PH1, auto&& PH2) {
-            handleHttpRequest(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2));
+        m_httpServer->setHttpReqHandler([this](const bcos::boostssl::http::HttpRequest& req, auto sender) {
+            handleHttpRequest(req.body(), [sender = std::move(sender)](bcos::bytes resp) mutable {
+                sender(std::move(resp), boost::beast::http::status::ok);
+            });
         });
     }
 
