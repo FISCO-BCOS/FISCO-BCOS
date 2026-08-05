@@ -3,11 +3,15 @@
 
 // EthBlockHeaderTest.cpp — 闭环 Task 3(design §5.1/§7.5,决策 C3/C6)。
 //
-// 覆盖两个独立 GTest 套件(brief 裁定 C6,套件名钉死):
+// 覆盖一个 GTest 套件(brief 裁定 C6,套件名钉死):
 //   - EthBlockHeader:      bcos::codec::rlp::encodeOpHeader()/opHeaderHash()/decodeOpHeader()
 //     (2026-08-05 迁移:载体从退役的 EthBlockHeader 结构换成 FISCO BlockHeader + OpHeaderConst,
 //     RLP 字节与 blockHash 逐字节不变,见 spec 2026-08-05-opstack-blockheader-fisco-adaptation)
-//   - OpDepositEncode:     bcos::codec::rlp::encodeDepositEnvelope()
+//
+// 原 OpDepositEncode 套件(OpDepositFields/encodeDepositEnvelope 自由函数对 op-geth golden
+// rawTransactions 的逐字节比对)已于 2026-08-05 迁移:编码随退役的 bcos-codec
+// OpDepositEncode.h/.cpp 一起内联进 bcos-rpc 的 DepositTxHandler(TxHandler.cpp),golden
+// 覆盖随之搬到 bcos-rpc/test/unittests/rpc/OpDepositEncodeTest.cpp。
 //
 // 金值全部来自 Task 2 的产物,不自算(brief 明示):
 //   - t8n/vectors/<id>.json 的 env(+parentHash/parentBeaconBlockRoot/currentCoinbase/
@@ -18,9 +22,7 @@
 //     transactionsRoot,不读 encodedHeaderHex 来"拼出" encode() 的输入)。
 //   - t8n/golden/engine/<id>.golden.json 的 extraData(原样发射)/excessBlobGas/
 //     transactionsRoot/blockHash/encodedHeaderHex/rawTransactions(Task 2 离线金值,
-//     pinned op-geth 背书)。
-//   - t8n/cases/<id>.in.json 的 transactions[].{_op_type=="deposit" ? _op_deposit : ...}
-//     结构化 deposit 字段,用于喂 encodeDepositEnvelope()。
+//     pinned op-geth 背书;rawTransactions 供 bcos-rpc 的 deposit 套件用)。
 //   - 3 个协议常量(ommersHash=keccak256(rlp([]))、difficulty=0、nonce=8 零字节)——
 //     post-merge/PoS 链头恒定值,向量语料本就不携带这三个字段,op-geth 自身也是硬编码
 //     (core/types 的 EmptyUncleHash 等),不是"自算自证"。
@@ -35,7 +37,6 @@
 // target 只在完整 CMake 树(顶层 add_subdirectory(bcos-codec))下存在,恰与
 // bcos-framework 存在性同条件,见 test/CMakeLists.txt 的 if(TARGET bcos-framework)。
 
-#include <bcos-codec/rlp/OpDepositEncode.h>
 #include <bcos-codec/rlp/OpHeaderCodec.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-utilities/Common.h>
@@ -58,9 +59,7 @@ using bcos::h256;
 using bcos::h64;
 using bcos::u256;
 using bcos::codec::rlp::decodeOpHeader;
-using bcos::codec::rlp::encodeDepositEnvelope;
 using bcos::codec::rlp::encodeOpHeader;
-using bcos::codec::rlp::OpDepositFields;
 using bcos::codec::rlp::OpHeaderConst;
 using bcos::codec::rlp::opHeaderHash;
 
@@ -159,41 +158,6 @@ void expectSameBytes(bcos::bytesConstRef a, bcos::bytesConstRef b, std::string c
     {
         EXPECT_TRUE(std::equal(a.begin(), a.end(), b.begin())) << what;
     }
-}
-
-// cases/<id>.in.json 的一枚 `_op_deposit` 结构化块 → OpDepositFields。字段名与向量语料
-// 一一对齐(brief:"结构化字段,签名对齐向量 _op_deposit")。39 笔 deposit tx 里 37 笔
-// `to` 存在,2 笔(isthmus_contract_create/jovian_contract_create 的 tx index 1)
-// `to` 为 JSON null——真实 contract-creation deposit 样本,`OpDepositFields::to` 的
-// optional/nil 分支确有金值覆盖,非纯理论分支(见下方 is_null() 处理)。
-OpDepositFields buildDepositFields(Json const& tx)
-{
-    auto const& dep = tx.at("_op_deposit");
-    OpDepositFields f;
-    f.sourceHash = asH256(dep.at("source_hash").get<std::string>());
-    f.from = asAddress(dep.at("from").get<std::string>());
-    // `to` is JSON `null` (present-but-null, not absent) for the two contract-creation
-    // deposits in this corpus (isthmus_contract_create/jovian_contract_create, tx index 1) —
-    // `contains("to")` alone is true either way, so it must be paired with `!is_null()`.
-    if (dep.contains("to") && !dep.at("to").is_null())
-    {
-        f.to = asAddress(dep.at("to").get<std::string>());
-    }
-    if (dep.contains("mint"))
-    {
-        f.mint = asU256(dep.at("mint").get<std::string>());
-    }
-    if (dep.contains("value"))
-    {
-        f.value = asU256(dep.at("value").get<std::string>());
-    }
-    f.gas = asU64(dep.at("gas").get<std::string>());
-    f.isSystemTransaction = dep.at("is_system_tx").get<bool>();
-    if (tx.contains("data"))
-    {
-        f.data = asBytes(tx.at("data").get<std::string>());
-    }
-    return f;
 }
 
 // golden/engine/manifest.txt → 33 个 golden 文件名(去后缀即 id),过滤注释/空行/
@@ -332,90 +296,4 @@ TEST(EthBlockHeader, AllThirtyThreeGoldenVectors)
         SCOPED_TRACE(id);
         expectHeaderMatchesGolden(id);
     }
-}
-
-// ─────────────────────────── OpDepositEncode 套件 ──────────────────────────
-
-// Step 1(TDD deposit 腿):isthmus_transfer_basic 的 attributes deposit(index 0,无
-// mint/value,`to` 为既有系统合约地址)。
-TEST(OpDepositEncode, IsthmusTransferBasicDepositEnvelope)
-{
-    auto sample = loadSample("isthmus_transfer_basic");
-    auto const& tx = sample.caseDoc.at("transactions").at(0);
-    ASSERT_EQ(tx.at("_op_type").get<std::string>(), "deposit");
-
-    const bytes encoded = encodeDepositEnvelope(buildDepositFields(tx));
-    const bytes expected = asBytes(sample.golden.at("rawTransactions").at(0).get<std::string>());
-    EXPECT_EQ(encoded, expected);
-}
-
-// mint/value 两个可选字段同时在场的分支(isthmus_deposit_mint index 1)——覆盖
-// OpDepositFields::mint/value 非默认值路径。
-TEST(OpDepositEncode, DepositWithMintAndValue)
-{
-    auto sample = loadSample("isthmus_deposit_mint");
-    auto const& tx = sample.caseDoc.at("transactions").at(1);
-    ASSERT_EQ(tx.at("_op_type").get<std::string>(), "deposit");
-    ASSERT_TRUE(tx.at("_op_deposit").contains("mint"));
-    ASSERT_TRUE(tx.at("_op_deposit").contains("value"));
-
-    const bytes encoded = encodeDepositEnvelope(buildDepositFields(tx));
-    const bytes expected = asBytes(sample.golden.at("rawTransactions").at(1).get<std::string>());
-    EXPECT_EQ(encoded, expected);
-}
-
-// `to` == JSON null: real contract-creation deposit (isthmus_contract_create index 1) —
-// exercises OpDepositFields::to == nullopt, which must RLP-encode as the empty string, not as
-// a present-but-zero 20-byte address. This is a genuine golden sample, not a synthetic one.
-TEST(OpDepositEncode, ContractCreationDepositNilTo)
-{
-    auto sample = loadSample("isthmus_contract_create");
-    auto const& tx = sample.caseDoc.at("transactions").at(1);
-    ASSERT_EQ(tx.at("_op_type").get<std::string>(), "deposit");
-    ASSERT_TRUE(tx.at("_op_deposit").at("to").is_null());
-
-    const OpDepositFields fields = buildDepositFields(tx);
-    ASSERT_FALSE(fields.to.has_value());
-
-    const bytes encoded = encodeDepositEnvelope(fields);
-    const bytes expected = asBytes(sample.golden.at("rawTransactions").at(1).get<std::string>());
-    EXPECT_EQ(encoded, expected);
-}
-
-// Step 3(closes Task 2 自检 (b) 的 deposit 半部):33 条向量的全部 deposit 交易逐字节
-// 重建,与 golden.rawTransactions 对应下标比对。T2 报告记录 167 笔非 deposit 已比对
-// (167/167 match),deposit 39 笔留待本任务——这里断言重建计数恰为 39,防止
-// `_op_type == "deposit"` 判据静默漏判导致循环体空跑却仍然"绿"。
-TEST(OpDepositEncode, AllDepositTransactionsAcrossThirtyThreeGoldenVectors)
-{
-    auto ids = loadManifestIds();
-    ASSERT_EQ(ids.size(), 33U);
-
-    std::size_t depositCount = 0;
-    for (auto const& id : ids)
-    {
-        SCOPED_TRACE(id);
-        auto sample = loadSample(id);
-        auto const& txs = sample.caseDoc.at("transactions");
-        auto const& rawTransactions = sample.golden.at("rawTransactions");
-        ASSERT_EQ(txs.size(), rawTransactions.size())
-            << id << ": case transaction count != golden.rawTransactions count";
-
-        for (std::size_t i = 0; i < txs.size(); ++i)
-        {
-            auto const& tx = txs.at(i);
-            if (tx.at("_op_type").get<std::string>() != "deposit")
-            {
-                continue;
-            }
-            ++depositCount;
-            const bytes encoded = encodeDepositEnvelope(buildDepositFields(tx));
-            const bytes expected = asBytes(rawTransactions.at(i).get<std::string>());
-            EXPECT_EQ(encoded, expected) << id << ": deposit tx index " << i;
-        }
-    }
-    // Task 2 report: "deposit 交易(39 笔)" across the 33-vector corpus.
-    EXPECT_EQ(depositCount, 39U)
-        << "expected 39 deposit transactions across the 33-vector corpus (Task 2 report count); "
-           "a different count means either the corpus changed or `_op_type` matching regressed";
 }

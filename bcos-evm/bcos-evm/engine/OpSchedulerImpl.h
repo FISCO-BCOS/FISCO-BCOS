@@ -382,8 +382,8 @@ inline intx::uint256 decodeAuthYParityScalar(bcos::bytesRef& in)
 
 /// isSystemTransaction (op-geth's DepositTx.IsSystemTransaction, encoded as a plain RLP scalar
 /// 0/1 — Go's rlp package's *native* bool encoding, which false=empty-string(payloadLength=0)/
-/// true=0x01, matching Task 3's own encode side: OpDepositEncode.cpp encodes this field via the
-/// generic UnsignedByte scalar path (`isSystemTransactionByte ? 1 : 0`), not
+/// true=0x01, matching Task 3's own encode side: bcos-rpc's DepositTxHandler::encode encodes
+/// this field via the generic UnsignedByte scalar path (`isSystemTransactionByte ? 1 : 0`), not
 /// `bcos::codec::rlp::encode(bytes&, bool&)` — no such overload exists in RLPEncode.h (`bool`
 /// does not satisfy the `UnsignedByte`/`UnsignedIntegral` concepts). Correspondingly,
 /// `bcos::codec::rlp::decode(bytesRef&, bool&)` (RLPDecode.h) — which rejects payloadLength != 1
@@ -538,9 +538,9 @@ inline evmc::address recoverTxSender(const evmc::bytes& signingPreimage,
     return *recovered;
 }
 
-/// DepositTx (OpDepositTx.h field order, cross-checked against Task 3's OpDepositFields /
-/// encodeDepositEnvelope, bcos-codec/rlp/OpDepositEncode.h): [sourceHash, from, to, mint, value,
-/// gas, isSystemTransaction, data] — no signature (`from` is explicit); `signedEnvelope` stays
+/// DepositTx (OpDepositTx.h field order, cross-checked against Task 3's encode side,
+/// bcos-rpc TxHandler.cpp DepositTxHandler::encode): [sourceHash, from, to, mint, value, gas,
+/// isSystemTransaction, data] — no signature (`from` is explicit); `signedEnvelope` stays
 /// empty per OpBlockExecute.h's OpBlockTx contract ("empty for deposit", OpBlockExecute.h:18).
 inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 {
@@ -555,8 +555,8 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
     dep.from = decodeAddressField(listBody);
     dep.to = decodeOptionalAddressField(listBody);
     // mint/value nilability: nil and a present-but-zero big.Int are RLP-indistinguishable (both
-    // encode to the empty string) — OpDepositEncode.h's OpDepositFields comment resolves this
-    // same ambiguity the same way (a plain, non-optional scalar defaulting to 0); decoding
+    // encode to the empty string) — DepositTxHandler::encode's comment (TxHandler.cpp) resolves
+    // this same ambiguity the same way (a plain, non-optional scalar defaulting to 0); decoding
     // DepositTx::mint as present-and-possibly-zero rather than guessing nullopt mirrors that,
     // even though DepositTx::mint (OpDepositTx.h:29) is itself std::optional for execution-side
     // reasons this decoder cannot recover from the wire bytes alone.
@@ -858,7 +858,7 @@ inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64
 {
     if (rawEntry.empty())
         throw OpConsensusError("OpSchedulerImpl: raw tx decode: empty envelope");
-    constexpr uint8_t kDepositTypeByte = 0x7e;     // OpDepositFields::kDepositTxType (Task 3)
+    constexpr uint8_t kDepositTypeByte = 0x7e;     // DepositTxHandler::encode type byte (Task 3)
     constexpr uint8_t kAccessListTypeByte = 0x01;  // evmone::state::Transaction::Type::access_list
     constexpr uint8_t kEip1559TypeByte = 0x02;     // evmone::state::Transaction::Type::eip1559
     constexpr uint8_t kSetCodeTypeByte = 0x04;     // evmone::state::Transaction::Type::set_code

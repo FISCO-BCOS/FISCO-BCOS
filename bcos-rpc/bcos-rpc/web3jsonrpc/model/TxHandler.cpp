@@ -1,7 +1,6 @@
 // bcos-rpc/bcos-rpc/web3jsonrpc/model/TxHandler.cpp
 #include "TxHandler.h"
 #include "Web3Transaction.h"
-#include <bcos-codec/rlp/OpDepositEncode.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <cstdint>
 
@@ -618,20 +617,30 @@ struct EIP1559TxHandler : TxHandler
 struct DepositTxHandler : TxHandler
 {
     // 完整 RLP: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
-    // —— 复用 OpDepositEncode.h 的 8 字段无签名布局(字段顺序/类型已对 op-geth DepositTx 校验)。
+    // —— 自包含内联(与同文件其它 typed handler 一致),8 字段无签名布局的字段顺序/类型已对
+    // op-geth DepositTx 校验;字节级金值由 bcos-rpc 的 OpDepositEncodeTest 对 op-geth
+    // golden rawTransactions 逐字节比对。`to` nilability 改变 RLP 形状(空串 vs 20 字节地址),
+    // contract-creation 分支须独立编码。
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
-        bcos::codec::rlp::OpDepositFields fields{
-            .sourceHash = tx.sourceHash,
-            .from = tx.from,
-            .to = tx.to,
-            .mint = tx.mint,
-            .value = tx.value,
-            .gas = tx.gasLimit,
-            .isSystemTransaction = tx.isSystemTx,
-            .data = tx.data,
-        };
-        return bcos::codec::rlp::encodeDepositEnvelope(fields);
+        bcos::bytes out;
+        out.push_back(static_cast<bcos::byte>(TransactionType::Deposit));
+        // isSystemTransaction 用 uint32_t(非 uint8_t):RLPEncode.h 的 uint8_t 泛型标量编码
+        // odr-使用非模板 toCompactBigEndian(byte, unsigned) 重载,其唯一定义在
+        // DataConvertUtility.cpp 而非头文件(既有 bcos-utilities 头/库边界缺陷);
+        // uint32_t 只匹配头内模板,输出字节一致。
+        const uint32_t isSystemTransactionByte = tx.isSystemTx ? 1 : 0;
+        if (tx.to.has_value())
+        {
+            codec::rlp::encode(out, tx.sourceHash, tx.from, *tx.to, tx.mint, tx.value, tx.gasLimit,
+                isSystemTransactionByte, tx.data);
+        }
+        else
+        {
+            codec::rlp::encode(out, tx.sourceHash, tx.from, bcos::bytesConstRef{}, tx.mint,
+                tx.value, tx.gasLimit, isSystemTransactionByte, tx.data);
+        }
+        return out;
     }
 
     // deposit 无签名:签名预映像即完整 envelope(对齐 op-geth DepositTx.SigningHash,
