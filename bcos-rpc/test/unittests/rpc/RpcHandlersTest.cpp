@@ -193,5 +193,30 @@ BOOST_AUTO_TEST_CASE(callViaAsyncWait)
     BOOST_CHECK(!result.value.isNull() || result.hasError);
 }
 
+BOOST_AUTO_TEST_CASE(sendTransactionTimeoutStatusNotMaskedByEmptyReceipt)
+{
+    // Regression test for the sendTransaction timeout fix. When a tx expires in the
+    // txpool before being sealed, removeInvalidTxs() notifies the submit callback with
+    // a TransactionSubmitResult whose status is TransactionPoolTimeout but whose
+    // embedded receipt is a default-constructed empty receipt (status=0,
+    // blockNumber=0, gasUsed=0). JsonRpcImpl_2_0::sendTransaction passes the submit
+    // status into toJsonResp; toJsonResp must serialize the submit status (10010) and
+    // NOT the empty receipt's status (0), otherwise the client sees a bogus
+    // "status=0, blockNumber=0" indistinguishable from a successful execution.
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    auto emptyReceipt = receiptFactory->createReceipt();  // default: status=0, blockNumber=0
+    BOOST_REQUIRE(emptyReceipt);
+    BOOST_CHECK_EQUAL(emptyReceipt->status(), 0);
+    BOOST_CHECK_EQUAL(emptyReceipt->blockNumber(), 0);
+
+    Json::Value jResp;
+    toJsonResp(jResp, "0x0000", protocol::TransactionStatus::TransactionPoolTimeout, *emptyReceipt,
+        /*_isWasm=*/false, *hashImpl);
+
+    // The submit status must win over the empty receipt's status.
+    BOOST_CHECK_EQUAL(jResp["status"].asInt(),
+        static_cast<int32_t>(protocol::TransactionStatus::TransactionPoolTimeout));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
