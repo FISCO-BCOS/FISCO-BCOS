@@ -92,6 +92,41 @@ file(INSTALL
 file(INSTALL "${SOURCE_PATH}/lib/evmone_precompiles/pairing"
      DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmone_precompiles")
 
+# 4d. Install evmone's test/utils sources (headers AND .cpp) verbatim under their upstream
+#     include prefix. bcos-evm consumes them directly (compiling the .cpp files from this
+#     directory) instead of carrying an in-repo vendored copy; the upstream-quoted includes
+#     ("statetest.hpp", "stdx/utility.hpp") resolve in-directory, and the <test/state/...>
+#     cross-references are satisfied by the consumer (bcos-evm forwards them to its vendored
+#     eth/state copy, which is byte-identical to upstream test/state modulo include paths).
+#     Install only what bcos-evm actually consumes, not the whole harness. The closure is
+#     rlp.hpp / rlp_encode.{hpp,cpp} / test_state.{hpp,cpp} plus stdx/ — verified by taking the
+#     files bcos-evm includes and following their in-directory quoted includes to a fixed point.
+#     A blanket glob additionally shipped statetest*, blockchaintest* and bytecode.hpp, two of
+#     which (statetest.hpp, statetest_loader.cpp) include <nlohmann/json.hpp> — a dependency this
+#     port does not declare, i.e. a header that cannot compile, placed on the include path of
+#     every evmone consumer in the tree, not just this module.
+file(INSTALL
+        "${SOURCE_PATH}/test/utils/rlp.hpp"
+        "${SOURCE_PATH}/test/utils/rlp_encode.hpp"
+        "${SOURCE_PATH}/test/utils/rlp_encode.cpp"
+        "${SOURCE_PATH}/test/utils/test_state.hpp"
+        "${SOURCE_PATH}/test/utils/test_state.cpp"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils")
+file(INSTALL "${SOURCE_PATH}/test/utils/stdx"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils")
+
+# 4e. bcos-evm's state::transition() takes the node's chain id as an explicit trailing argument
+#     (EIP-7702 step 1 must not compare tx.chain_id against itself — see
+#     bcos-evm/eth/state/state.hpp). test_state.cpp is the only caller that cannot be edited in
+#     tree, and leaving it on the upstream arity would force a default argument onto the
+#     declaration, i.e. make the unsafe value the API's default for every future caller. Patch
+#     this one call site to state tx.chain_id in its own source instead; it is a test helper, so
+#     upstream behaviour is preserved exactly.
+vcpkg_replace_string(
+    "${CURRENT_PACKAGES_DIR}/include/test/utils/test_state.cpp"
+    "get<state::TransactionProperties>(tx_props_or_error))"
+    "get<state::TransactionProperties>(tx_props_or_error), tx.chain_id)")
+
 # 5. Write a manual cmake config file (avoids install(EXPORT) issues)
 #    Creates evmone::evmone imported target with proper dependencies.
 #    Uses platform-aware library suffixes (.lib on Windows, .a on Unix).
