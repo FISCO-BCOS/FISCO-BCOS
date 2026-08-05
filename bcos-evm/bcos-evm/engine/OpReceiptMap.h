@@ -20,6 +20,7 @@
 // to a single non-zero "failed" code here — this is the "只映射 status" scope the brief
 // specifies, not an oversight.
 
+#include <bcos-evm/opstack/OpReceiptMeta.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
@@ -66,16 +67,61 @@ inline bcos::protocol::LogEntries mapOpLogs(const std::vector<evmone::state::Log
     return out;
 }
 
+/// Local helper: intx::uint256 → bcos::u256, full-width big-endian conversion. intx only exposes
+/// an explicit low-64-bit cast operator, so a plain `static_cast<bcos::u256>` would silently drop
+/// the high 192 bits — go through a big-endian byte store + bcos::fromBigEndian instead (same
+/// pattern as ReceiptResponse.cpp's decode path).
+inline bcos::u256 intxToBcosU256(intx::uint256 const& val)
+{
+    auto be = intx::be::store<evmc::uint256be>(val);
+    return bcos::fromBigEndian<bcos::u256>(
+        bcos::bytesConstRef{reinterpret_cast<bcos::byte const*>(be.bytes), sizeof(be.bytes)});
+}
+
+/// Convert the execution layer's opstack::OpReceiptMeta into the framework layer's
+/// bcos::protocol::OpStackReceiptMeta (the typed view over the tars opStackMeta hex-string
+/// fields). uint256 fields use intxToBcosU256 (full-width); uint64/uint32 scalar fields are
+/// assigned directly. Presence is preserved per-field.
+inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(
+    const bcos::evm::opstack::OpReceiptMeta& meta)
+{
+    bcos::protocol::OpStackReceiptMeta out;
+    if (meta.l1_gas_price)
+        out.l1_gas_price = intxToBcosU256(*meta.l1_gas_price);
+    if (meta.l1_fee)
+        out.l1_fee = intxToBcosU256(*meta.l1_fee);
+    if (meta.l1_blob_base_fee)
+        out.l1_blob_base_fee = intxToBcosU256(*meta.l1_blob_base_fee);
+    if (meta.l1_base_fee_scalar)
+        out.l1_base_fee_scalar = *meta.l1_base_fee_scalar;  // uint64 标量直接赋值
+    if (meta.l1_blob_base_fee_scalar)
+        out.l1_blob_base_fee_scalar = *meta.l1_blob_base_fee_scalar;
+    if (meta.operator_fee_scalar)
+        out.operator_fee_scalar = *meta.operator_fee_scalar;
+    if (meta.operator_fee_constant)
+        out.operator_fee_constant = *meta.operator_fee_constant;
+    if (meta.da_footprint_gas_scalar)
+        out.da_footprint_gas_scalar = *meta.da_footprint_gas_scalar;
+    if (meta.da_footprint)
+        out.da_footprint = *meta.da_footprint;
+    if (meta.l1_gas_used)
+        out.l1_gas_used = *meta.l1_gas_used;
+    if (meta.operator_fee)
+        out.operator_fee = intxToBcosU256(*meta.operator_fee);
+    return out;
+}
+
 /// Maps one OP-executed transaction's receipt (the evmone::state::TransactionReceipt common to
 /// both OpDepositReceipt and OpTxReceipt, see OpBlockExecute.h's OpBlockResult) into a
 /// bcos::protocol::TransactionReceipt via the injected factory. Only status/gasUsed/logs are
-/// populated from the evmone receipt; blockNumber and the OP receipt meta (opReceiptMeta) are
+/// populated from the evmone receipt; blockNumber and the OP receipt meta (opStackMeta) are
 /// carried explicitly — the meta is what lets the RPC layer emit op-geth's OP extension fields
 /// (see OpReceiptMetaCodec.h and EthEndpoint's OP fallback path).
 inline bcos::protocol::TransactionReceipt::Ptr mapOpReceipt(
     const evmone::state::TransactionReceipt& receipt,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
-    protocol::BlockNumber blockNumber, bcos::bytes opReceiptMeta,
+    protocol::BlockNumber blockNumber,
+    std::optional<bcos::protocol::OpStackReceiptMeta> opStackMeta,
     std::optional<intx::uint256> effectiveGasPrice = std::nullopt)
 {
     const bcos::u256 gasUsed(static_cast<uint64_t>(receipt.gas_used));
@@ -88,9 +134,9 @@ inline bcos::protocol::TransactionReceipt::Ptr mapOpReceipt(
         // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros.
         out->setEffectiveGasPrice("0x" + intx::to_string(*effectiveGasPrice, 16));
     }
-    if (!opReceiptMeta.empty())
+    if (opStackMeta.has_value())
     {
-        out->setOpReceiptMeta(std::string(opReceiptMeta.begin(), opReceiptMeta.end()));
+        out->setOpStackMeta(*opStackMeta);
     }
     return out;
 }
