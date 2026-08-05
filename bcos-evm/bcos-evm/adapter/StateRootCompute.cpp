@@ -1,32 +1,30 @@
 // bcos-evm-ref/bcos-evm-ref/adapter/StateRootCompute.cpp
 #include <bcos-evm/adapter/StateRootCompute.h>
 
-// TODO(eth-utils-removal): 去除本 include,mpt_hash 调用改为自研 MPT 建根实现。
-#include <bcos-evm/eth/utils/mpt_hash.hpp>
+#include <bcos-ledger/mpt/HashBuilder.h>
+#include <cstring>
 
 namespace bcos::evm
 {
-evmone::hash256 stateRootOf(const evmone::test::TestState& state)
-{
-    return evmone::state::mpt_hash(state);
-}
-
 evmone::hash256 accountStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage)
 {
-    // Aligned with evmone mpt_hash.cpp:13-24 (private helper, not exported) and with
-    // bcos-evm/opstack/OpBlockSeal.cpp::opStorageRoot (same construction, logic duplicated
-    // rather than called through — see the StateRootCompute.h doc comment on this function for
-    // the layering/upstream-diff-golden rationale): secure-trie key, trimmed value; a defensive
-    // continue on zero values (semantically equivalent to "called after removal", matching
-    // opStorageRoot's own defensive stance rather than upstream's debug-only assert).
-    evmone::state::MPT trie;
-    for (const auto& [key, value] : storage)
+    // Secure-trie over one account's live slot map: key = keccak256(slot), value = rlp(trimmed
+    // value). Same construction as the retired evmone mpt_hash.cpp:13-24 and
+    // bcos-evm/opstack/OpBlockSeal.cpp::opStorageRoot (logic duplicated rather than called
+    // through — see the StateRootCompute.h doc comment). Defensive continue on zero values.
+    std::map<bcos::h256, bcos::bytes> entries;
+    for (auto const& [key, value] : storage)
     {
         if (evmc::is_zero(value))
             continue;
-        trie.insert(evmone::keccak256(evmc::bytes_view(key)),
-            evmone::rlp::encode(evmone::rlp::trim(evmc::bytes_view(value))));
+        bcos::bytes leaf;
+        bcos::codec::rlp::encode(
+            leaf, trimmedBigEndian(bcos::bytesConstRef{value.bytes, sizeof(value.bytes)}));
+        entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
     }
-    return trie.hash();
+    auto result = bcos::ledger::mpt::computeTrieRoot(entries);
+    evmone::hash256 root{};
+    std::memcpy(root.bytes, result.root.data(), sizeof(root.bytes));
+    return root;
 }
 }  // namespace bcos::evm
