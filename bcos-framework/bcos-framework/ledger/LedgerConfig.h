@@ -262,16 +262,18 @@ private:
 };
 
 /// The latest EVM revision supported by the ethereum-executor. This is a fallback only:
-/// NodeConfig::loadExecutorConfig requires an explicit evm_revision for executor_version=2,
-/// so a fresh v2 chain always persists its revision on-chain and getLedgerConfig applies
-/// this constant solely on the (defensive) v2-missing-config path, plus test / EEST-runner
-/// convenience.
+/// NodeConfig::loadExecutorConfig requires an explicit evm_revision for executor_version>=2,
+/// so a fresh v2 chain always persists its revision on-chain, and the startup path refuses
+/// to boot a v2 chain whose row is absent (no binary-side default). The constant applies
+/// solely on the (defensive) v2-missing-config path in getLedgerConfig, plus test /
+/// EEST-runner convenience.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 
 /// Executor version selecting the pure-Ethereum EthereumExecutor (ethereum-executor).
 /// Canonical value kept here so lower layers (bcos-ledger, bcos-tool) can gate on it
 /// without depending on libinitializer; libinitializer/MultiVersionScheduler.h keeps a
-/// scheduler_v1-scoped alias for the same value.
+/// scheduler_v1-scoped alias for the same value. Versions >= this all select the v2
+/// executor (setVersion saturates), leaving room above 2 for a future executor.
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
 
 /// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an

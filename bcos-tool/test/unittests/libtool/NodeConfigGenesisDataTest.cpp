@@ -192,9 +192,8 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
 }
 
 // evm_revision_forks edge cases (review test suggestion): out-of-order entries are
-// normalized by the map (ascending), a negative block height is accepted by the config
-// loader but dropped when serialized (encodeEVMCRevisionConfig skips block <= 0), and
-// an unknown revision name is rejected.
+// normalized by the map (ascending), a negative block height is rejected, and an
+// unknown revision name is rejected.
 BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -241,6 +240,51 @@ BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
         NodeConfig cfg(keyFactory);
         std::string genesis = base + "evm_revision_forks=0:notafork\n";
         BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(genesis), InvalidConfig);
+    }
+}
+
+// EVMC_EXPERIMENTAL is evmone's bucket for in-development EIPs (semantics change between
+// releases), not a released fork. Pinning a v2 chain to it would tie consensus to the
+// binary, so it must be rejected at config load in both the single-revision and the
+// fork-transition forms (the round-trip helper still accepts it — the two name tables
+// agree; this is a config-policy decision).
+BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n";
+
+    // Single revision = experimental -> rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(
+            cfg.loadGenesisConfigFromString(base + "evm_revision=experimental\n"), InvalidConfig);
+    }
+    // Fork transition to experimental -> rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(
+                              base + "evm_revision_forks=0:experimental\n"),
+            InvalidConfig);
+    }
+    // Control: a released revision is still accepted.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(base + "evm_revision=cancun\n"));
     }
 }
 

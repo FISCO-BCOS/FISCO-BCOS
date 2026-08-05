@@ -190,7 +190,17 @@ Out fromHexWithPrefix(const Hex& hex)
     return fromHex(hex);
 }
 
+/// Parse a hex quantity string ("0x..."/"0X...", or bare hex digits) to uint64_t.
+/// Strict: no leading sign, no trailing garbage, must fit in uint64; the value must
+/// be non-empty after an optional 0x/0X prefix. Throws std::invalid_argument on any
+/// malformed input (unlike the previous stoull-based version, which silently stopped
+/// at the first non-hex character and accepted a leading '-').
 uint64_t fromQuantity(std::string const& quantity);
+
+/// Non-throwing strict hex-quantity parser, mirroring the fromHex / safeFromHex
+/// pairing above. Returns nullopt on any parse failure (empty, sign, trailing
+/// garbage, or overflow) instead of throwing.
+std::optional<uint64_t> safeFromQuantity(std::string_view quantity);
 
 u256 fromBigQuantity(std::string_view quantity);
 

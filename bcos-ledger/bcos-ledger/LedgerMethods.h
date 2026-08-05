@@ -398,8 +398,9 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     // corrupt/legacy state).
     //
     // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
-    // The effective revision is logged once at startup (Initializer), which the CI pins.
-    if (executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION)
+    // The effective revision is parsed and logged once at startup (Initializer), which the
+    // CI pins and where a corrupt value becomes a boot refusal.
+    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
         {

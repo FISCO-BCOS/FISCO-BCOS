@@ -1506,6 +1506,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         {
             if (auto rev = ledger::evmcRevisionFromName(evmcRevisionStr); rev)
             {
+                if (*rev == EVMC_EXPERIMENTAL)
+                {
+                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision=experimental is not a released fork: evmone's "
+                        "semantics for it change between versions, which would tie consensus "
+                        "to the binary"));
+                }
                 m_genesisConfig.m_evmcRevision = *rev;
             }
             else
@@ -1566,6 +1573,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                         "executor.evm_revision_forks invalid revision \"" + std::string(name) +
                         "\" in entry: " + std::string(entry)));
                 }
+                if (*rev == EVMC_EXPERIMENTAL)
+                {
+                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision_forks revision \"experimental\" is not a "
+                        "released fork (evmone semantics change between versions); entry: " +
+                        std::string(entry)));
+                }
                 m_genesisConfig.m_evmcRevisionForks[block] = *rev;
             }
         }
@@ -1580,12 +1594,13 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
             InvalidConfig() << errinfo_comment("Invalid executor.evm_revision config: " +
                                                std::string(e.what())));
     }
-    // A v2 chain (ethereum-executor) MUST pin its EVMC revision explicitly. Unlike v0/v1 the
-    // revision is consumed on every block, and a binary-side default would be recorded nowhere
-    // on-chain — tying "upgrade the binary" to a hard fork (replay/resync would diverge and a
-    // mixed-version network could split, without either side erroring). Requiring it here makes
-    // the effective revision part of the genesis config and therefore of the on-chain state.
-    if (m_genesisConfig.m_executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION &&
+    // A v2 chain (executor_version >= 2 selects the ethereum-executor) MUST pin its EVMC
+    // revision explicitly. Unlike v0/v1 the revision is consumed on every block, and a
+    // binary-side default would be recorded nowhere on-chain — tying "upgrade the binary" to a
+    // hard fork (replay/resync would diverge and a mixed-version network could split, without
+    // either side erroring). Requiring it here makes the effective revision part of the
+    // genesis config and therefore of the on-chain state.
+    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
         !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -1600,7 +1615,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // ignored (the chain runs the binary default); below 3.15.0 executor_version is not
     // persisted either, so getLedgerConfig never injects a revision and every transaction
     // throws EvmcRevisionNotConfigured. Reject both ranges up front.
-    if (m_genesisConfig.m_executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION &&
+    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
         m_genesisConfig.m_compatibilityVersion <
             static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
     {

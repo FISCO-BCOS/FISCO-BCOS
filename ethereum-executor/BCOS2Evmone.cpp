@@ -16,7 +16,6 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <algorithm>
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <system_error>
 
@@ -200,9 +199,10 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
         evmTx.blob_hashes.push_back(hash);
     }
     // chainId and nonce from BCOS tx may or may not have 0x prefix.
-    // RPC/Web3 decoding stores values with 0x prefix (toQuantity).
-    // Guard against double 0x (e.g. "0x0x1a"), non-numeric values (e.g. a
-    // FISCO chain_id like "chain0") and values above uint64 (silent truncation).
+    // RPC/Web3 decoding stores values with 0x prefix (toQuantity). Parse strictly and
+    // non-throwing via the shared helper (fromQuantity / safeFromQuantity), so a
+    // double 0x (e.g. "0x0x1a"), a non-numeric value (e.g. a FISCO chain_id like
+    // "chain0"), a sign, trailing garbage, or a value above uint64 all fall through to 0.
     // A value that cannot be parsed is left at 0. Note that 0 is NOT a
     // guaranteed rejection:
     //   * chain_id 0 never matches a real chain id (and evmone's
@@ -214,35 +214,8 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
     //     nonce is part of the signed payload, so a malformed nonce means the
     //     signature check failed upstream — this fallback only ever matters for
     //     byzantine/unsigned inputs.
-    auto parseQuantity = [](std::string_view s) -> uint64_t {
-        if (s.empty())
-        {
-            return 0;
-        }
-        auto hexStr = (s.size() >= 2 && s[0] == '0' && s[1] == 'x') ?
-                          std::string(s) :
-                          "0x" + std::string(s);
-        try
-        {
-            auto v = bcos::u256(hexStr);
-            if (v > std::numeric_limits<uint64_t>::max())
-            {
-                return 0;
-            }
-            return static_cast<uint64_t>(v);
-        }
-        catch (std::exception const&)
-        {
-            // Parse failure — bcos::u256 throws std::exception subclasses (std::runtime_error)
-            // on a bad hex literal. Handling std::exception explicitly (instead of catch (...))
-            // documents that only parse/overflow failures are expected here; genuinely
-            // unexpected non-std exceptions still propagate instead of being silently
-            // conflated with "unparseable input".
-            return 0;
-        }
-    };
-    evmTx.chain_id = parseQuantity(tx.chainId());
-    evmTx.nonce = parseQuantity(tx.nonce());
+    evmTx.chain_id = bcos::safeFromQuantity(tx.chainId()).value_or(0);
+    evmTx.nonce = bcos::safeFromQuantity(tx.nonce()).value_or(0);
     for (auto const& auth : tx.authorizationList())
     {
         evmone::state::Authorization ea{};

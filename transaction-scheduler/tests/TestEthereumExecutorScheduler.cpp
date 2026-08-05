@@ -687,8 +687,7 @@ BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
         }
         co_await EEFundAccount(backendStorage, recipient, 0);
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.setNumber(1);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 

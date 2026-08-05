@@ -23,7 +23,6 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
-#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
@@ -116,18 +115,13 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
-            // executor_version=2 (ethereum-executor) is a genesis-time decision: a v2 chain
-            // skips FISCO system contracts, has no Engine API, and pins its EVMC revision at
-            // genesis. Switching to it at runtime would leave the chain half-configured and
-            // fork nodes on restart. Enforce the documented "no runtime switching for v2"
-            // limitation here so it is real, not advisory — and so the Engine-API gate in
-            // Initializer can never be reached with a ledger saying 2.
-            if (_value >= static_cast<int64_t>(ledger::ETHEREUM_EXECUTOR_VERSION))
-            {
-                BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
-                    "executor_version must be 0 or 1: version 2 (ethereum-executor) is "
-                    "selected at genesis and cannot be switched at runtime"));
-            }
+            // NOTE: deliberately no upper bound here. A value >= 2 (or any value above
+            // today's set) runs the v2 ethereum-executor via MultiVersionScheduler's
+            // saturating setVersion; banning values here would be an unversioned consensus
+            // change (validate() runs inside block execution) that breaks replay/resync of
+            // historical blocks that set executor_version on the old binary. The v2-only
+            // guardrails live in node-local startup (Initializer refuses to boot a v2 chain
+            // without an on-chain evmc_revision), not in this per-block validator.
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility

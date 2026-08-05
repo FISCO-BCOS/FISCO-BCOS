@@ -75,15 +75,19 @@ void bcos::scheduler_v1::MultiVersionScheduler::stop()
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     int version, ledger::LedgerConfig::Ptr ledgerConfig)
 {
-    if (version < 0 || static_cast<size_t>(version) >= m_schedulers.size())
+    if (version < 0)
     {
         // BCOS exception (not std::out_of_range) so it stays within the codebase's
         // exception taxonomy and carries the same error-channel conventions.
         BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported() << errinfo_comment(
-            "executor version " + std::to_string(version) + " is not supported, "
-            "supported versions: 0.." + std::to_string(m_schedulers.size() - 1)));
+            "executor version " + std::to_string(version) + " is not supported "
+            "(must be >= 0)"));
     }
-    m_currentIndex = version;
+    // Saturate the upper bound: any version >= the last scheduler index selects the
+    // newest executor (the v2 EthereumExecutor). This keeps the version space
+    // open-ended above 2 so a future executor version needs no array/schema change.
+    m_currentIndex =
+        static_cast<int>(std::min<size_t>(static_cast<size_t>(version), m_schedulers.size() - 1));
 }
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(
     int version)

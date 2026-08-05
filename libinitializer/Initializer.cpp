@@ -337,13 +337,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_executorVersion = executorVersion;
 
     // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
-    // It must not be built for executor_version=2: a v2 chain's state transitions run
+    // It must not be built for executor_version >= 2: a v2 chain's state transitions run
     // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
     // executor would produce blocks with v1 semantics that diverge from the v2 main chain
     // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
     // respond "engine service not available" (see EngineEndpoint.cpp).
     const bool engineApiForV1Only =
-        (m_executorVersion != scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+        (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
 
     if (baselineSchedulerConfig.parallel)
     {
@@ -429,23 +429,35 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
     m_scheduler->setVersion(m_executorVersion, {});
 
-    // Log the effective EVMC revision once at startup (v2 only). It is fixed at genesis
-    // (NodeConfig requires an explicit evm_revision for executor_version=2), so a one-time
+    // Parse and log the effective EVMC revision once at startup (v2+). It is fixed at genesis
+    // (NodeConfig requires an explicit evm_revision for executor_version>=2), so a one-time
     // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
     // The CI integration test greps this line to pin the effective revision.
-    if (m_executorVersion == scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
+    if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
         {
+            // Parse here so a corrupt persisted value fails at BOOT (an explicit startup
+            // failure) instead of on the first block execution, where getLedgerConfig's
+            // outer catch would turn it into a per-block "Execute block failed!" loop.
+            ledger::LedgerConfig probe;
+            ledger::applyEVMCRevisionConfig(probe, std::get<0>(*evmcRev));
             INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2)")
                                   << LOG_KV("evmcRevision", std::get<0>(*evmcRev));
         }
         else
         {
-            INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2, defaulted)")
-                                  << LOG_KV("evmcRevision",
-                                        ledger::evmcRevisionName(ledger::EVMC_REVISION_DEFAULT));
+            // v2 with no evmc_revision row: the effective revision would fall back to a
+            // binary-side default (EVMC_REVISION_DEFAULT), tying consensus to the binary.
+            // A fresh v2 chain always has the row, so reaching here means a runtime switch
+            // to v2 without genesis config. Refuse to start (node-local policy — no block
+            // semantics touched) instead of defaulting.
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                "executor_version >= 2 but no evmc_revision system config is recorded "
+                "on-chain; the effective EVM revision would be a binary-side default. "
+                "Refusing to start — configure executor.evm_revision at genesis, or run "
+                "executor_version 0/1"));
         }
     }
 
@@ -663,14 +675,15 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
 
 void Initializer::initSysContract()
 {
-    // The pure-Ethereum EthereumExecutor (executor_version=2) does not support FISCO system
-    // contracts (BFS/Auth precompiles): its initSysContract block would be rejected and the
-    // chain could not proceed to seal. Skip the system-contract deployment entirely for v2.
-    if (m_executorVersion == scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
+    // The pure-Ethereum EthereumExecutor (executor_version >= 2 selects it) does not support
+    // FISCO system contracts (BFS/Auth precompiles): its initSysContract block would be
+    // rejected and the chain could not proceed to seal. Skip the system-contract deployment
+    // entirely for v2+.
+    if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
     {
         INITIALIZER_LOG(INFO)
             << LOG_DESC("SysInitializer: skip system-contract deployment for ethereum executor "
-                        "(executor_version=2)");
+                        "(executor_version>=2)");
         return;
     }
     // check is it deploy first time
