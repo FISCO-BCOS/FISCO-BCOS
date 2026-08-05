@@ -99,4 +99,14 @@ const OpForkConfig& karstConfig() noexcept
     }();
     return cfg;
 }
+
+const OpForkConfig& configAt(uint64_t timestamp, const OpForkTimestamps& thresholds) noexcept
+{
+    // decision A5: [isthmusTime, jovianTime) -> Isthmus, [jovianTime, +inf) -> Jovian; timestamps
+    // below isthmusTime also fall through to Isthmus (see header comment — no pre-Isthmus config
+    // exists in this minimal loop).
+    if (timestamp >= thresholds.jovianTime)
+        return jovianConfig();
+    return isthmusConfig();
+}
 }  // namespace bcos::evm::opstack
