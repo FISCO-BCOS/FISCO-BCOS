@@ -4,8 +4,9 @@
 // EthBlockHeaderTest.cpp — 闭环 Task 3(design §5.1/§7.5,决策 C3/C6)。
 //
 // 覆盖一个 GTest 套件(brief 裁定 C6,套件名钉死):
-//   - EthBlockHeader:      bcos::codec::rlp::encodeOpHeader()/opHeaderHash()/decodeOpHeader()
-//     (2026-08-05 迁移:载体从退役的 EthBlockHeader 结构换成 FISCO BlockHeader + OpHeaderConst,
+//   - EthBlockHeader:      protocol::BlockHeader 的 OP 能力 encodeOpHeader()/opHeaderHash()/
+//     decodeOpHeader()(2026-08-05 迁移:载体从退役的 EthBlockHeader 结构换成 FISCO
+//     BlockHeader + OpHeaderConst,又随 bcos-codec/rlp/OpHeaderCodec 消除改为接口方法,
 //     RLP 字节与 blockHash 逐字节不变,见 spec 2026-08-05-opstack-blockheader-fisco-adaptation)
 //
 // 原 OpDepositEncode 套件(OpDepositFields/encodeDepositEnvelope 自由函数对 op-geth golden
@@ -37,7 +38,6 @@
 // target 只在完整 CMake 树(顶层 add_subdirectory(bcos-codec))下存在,恰与
 // bcos-framework 存在性同条件,见 test/CMakeLists.txt 的 if(TARGET bcos-framework)。
 
-#include <bcos-codec/rlp/OpHeaderCodec.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -58,10 +58,8 @@ using bcos::h2048;
 using bcos::h256;
 using bcos::h64;
 using bcos::u256;
-using bcos::codec::rlp::decodeOpHeader;
-using bcos::codec::rlp::encodeOpHeader;
-using bcos::codec::rlp::OpHeaderConst;
-using bcos::codec::rlp::opHeaderHash;
+using bcos::protocol::BlockHeader;
+using OpHeaderConst = bcos::protocol::BlockHeader::OpHeaderConst;
 
 namespace
 {
@@ -213,11 +211,11 @@ void expectHeaderMatchesGolden(std::string const& id)
     auto header = buildHeader(sample.vector, sample.golden);
 
     // encode 字段级断言先于 hash(裁定 C3)。
-    const bytes encoded = encodeOpHeader(*header, kOpHeaderConst);
+    const bytes encoded = header->encodeOpHeader(kOpHeaderConst);
     const bytes expectedEncoded = asBytes(sample.golden.at("encodedHeaderHex").get<std::string>());
     EXPECT_EQ(encoded, expectedEncoded) << id << ": encodeOpHeader != golden.encodedHeaderHex";
 
-    const h256 hash = opHeaderHash(*header, kOpHeaderConst);
+    const h256 hash = header->opHeaderHash(kOpHeaderConst);
     const h256 expectedHash = asH256(sample.golden.at("blockHash").get<std::string>());
     EXPECT_EQ(hash, expectedHash) << id << ": opHeaderHash != golden.blockHash";
 
@@ -230,8 +228,8 @@ void expectHeaderMatchesGolden(std::string const& id)
     bytes decodableCopy = expectedEncoded;
     bcostars::protocol::BlockHeaderImpl decoded;
     OpHeaderConst decodedConst;
-    auto decodeError = decodeOpHeader(
-        bcos::bytesRef(decodableCopy.data(), decodableCopy.size()), decoded, decodedConst);
+    auto decodeError = decoded.decodeOpHeader(
+        bcos::bytesRef(decodableCopy.data(), decodableCopy.size()), decodedConst);
     ASSERT_EQ(decodeError, nullptr) << id << ": decodeOpHeader rejected golden.encodedHeaderHex";
     // 3 个常量经 out-param 往返(无 tars 载体)。
     EXPECT_EQ(decodedConst.ommersHash, kOpHeaderConst.ommersHash) << id;
@@ -260,7 +258,7 @@ void expectHeaderMatchesGolden(std::string const& id)
     EXPECT_EQ(decoded.parentBeaconBlockRoot().value(), header->parentBeaconBlockRoot().value())
         << id;
     EXPECT_EQ(decoded.requestsHash().value(), header->requestsHash().value()) << id;
-    EXPECT_EQ(encodeOpHeader(decoded, decodedConst), expectedEncoded)
+    EXPECT_EQ(decoded.encodeOpHeader(decodedConst), expectedEncoded)
         << id << ": decodeOpHeader()->encodeOpHeader is not identity";
 }
 

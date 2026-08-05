@@ -62,7 +62,6 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-codec/rlp/OpHeaderCodec.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -456,12 +455,14 @@ bcos::protocol::BlockHeader::Ptr rebuiltHeader(
 }
 
 /// Sets `blockHash` to the hash the OP branch will recompute for this payload. OP hash =
-/// keccak(RLP(21 字段)),经 codec(不得用 BlockHeader::hash()——dataHash 空/工厂 TARS 序回填)。
+/// keccak(RLP(21 字段)),经 protocol::BlockHeader 的 OP 能力(不得用 BlockHeader::hash()——
+/// dataHash 空/工厂 TARS 序回填)。
 void sealWithBlockHash(bcos::protocol::BlockHeaderFactory::Ptr const& factory,
     bcos::engine::NewPayloadRequest& request)
 {
-    request.executionPayload.blockHash = bcos::codec::rlp::opHeaderHash(
-        *rebuiltHeader(factory, request), bcos::engine::detail::opHeaderConst());
+    auto header = rebuiltHeader(factory, request);
+    request.executionPayload.blockHash =
+        header->opHeaderHash(bcos::engine::detail::opHeaderConst());
 }
 
 // ---- StubOpScheduler: the seam driven by a scriptable stand-in ----
@@ -1000,8 +1001,7 @@ TEST(EngineOpBranch, ValidPayloadRegistersAllFourTables)
     // The stored header is the one whose keccak is the accepted blockHash — i.e. the registry is
     // self-consistent with the verdict.
     EXPECT_EQ(
-        bcos::codec::rlp::opHeaderHash(*scenario.header, bcos::engine::detail::opHeaderConst()),
-        payload.blockHash);
+        scenario.header->opHeaderHash(bcos::engine::detail::opHeaderConst()), payload.blockHash);
 
     // 4. s_hash_2_receipt — key = keccak(raw EIP-2718 envelope), value = encoded receipt.
     const auto txHash =

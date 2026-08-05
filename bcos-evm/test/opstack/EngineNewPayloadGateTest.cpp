@@ -79,7 +79,6 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-codec/rlp/OpHeaderCodec.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/Sha256.h>
@@ -568,12 +567,13 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
 /// Mutation-only (see the file header's scoped exception): recomputes `blockHash` so a mutated
 /// payload survives the static blockHash check and reaches the branch actually under test.
 /// NEVER called for an unmutated vector or for the chained pair. OP hash = keccak(RLP(21 字段)),
-/// 经 codec(不得用 BlockHeader::hash()——dataHash 空/工厂 TARS 序回填)。
+/// 经 protocol::BlockHeader 的 OP 能力(不得用 BlockHeader::hash()——dataHash 空/工厂 TARS 序回填)。
 void resealBlockHash(
     bcos::protocol::BlockFactory::Ptr const& blockFactory, bcos::engine::NewPayloadRequest& request)
 {
-    request.executionPayload.blockHash = bcos::codec::rlp::opHeaderHash(
-        *productionHeaderOf(blockFactory, request), bcos::engine::detail::opHeaderConst());
+    auto header = productionHeaderOf(blockFactory, request);
+    request.executionPayload.blockHash =
+        header->opHeaderHash(bcos::engine::detail::opHeaderConst());
 }
 
 std::string hexOfBytes(bcos::bytes const& data)
@@ -625,7 +625,7 @@ std::string recordKey(std::string const& id, std::string_view suffix)
 /// FISCO header accessors; the 3 post-merge constants (ommersHash/difficulty/nonce) have no tars
 /// carrier and come from `c`. timestamp recorded in SECONDS (÷1000) to match the golden corpus.
 void recordHeaderFields(std::string const& id, bcos::protocol::BlockHeader const& header,
-    bcos::codec::rlp::OpHeaderConst const& c)
+    bcos::protocol::BlockHeader::OpHeaderConst const& c)
 {
     using ::testing::Test;
     auto const logsBloomBytes = header.logsBloom();
@@ -902,8 +902,7 @@ void runGoldenVector(std::string const& id)
     // (2) Field-level RLP assertion BEFORE the hash-level one (裁定 C3). This is what localises a
     //     wrong payload-field -> header-field mapping; the 21-field dump makes it actionable.
     const auto header = productionHeaderOf(scenario.fixture->blockFactory, scenario.request);
-    const auto encoded =
-        bcos::codec::rlp::encodeOpHeader(*header, bcos::engine::detail::opHeaderConst());
+    const auto encoded = header->encodeOpHeader(bcos::engine::detail::opHeaderConst());
     const auto goldenEncoded = asBytes(golden.at("encodedHeaderHex"));
     if (encoded != goldenEncoded)
     {
@@ -954,8 +953,7 @@ void runGoldenVector(std::string const& id)
         bcos::bytes storedHeaderBytes(headerEntry->get().begin(), headerEntry->get().end());
         auto storedHeader = scenario.fixture->blockFactory->blockHeaderFactory()->createBlockHeader(
             storedHeaderBytes);
-        const auto reEncoded =
-            bcos::codec::rlp::encodeOpHeader(*storedHeader, bcos::engine::detail::opHeaderConst());
+        const auto reEncoded = storedHeader->encodeOpHeader(bcos::engine::detail::opHeaderConst());
         EXPECT_EQ(reEncoded, goldenEncoded)
             << id << ": stored header re-encoded must be op-geth's encodedHeaderHex byte for byte";
     }
@@ -1851,7 +1849,6 @@ TEST(EngineNewPayloadGate, OpHeaderRegisteredInStandardHeaderTable)
         scenario.fixture->blockFactory->blockHeaderFactory()->createBlockHeader(headerBytes);
     EXPECT_EQ(decoded->number(), payload.blockNumber);
     // 注意:不得断言 decoded->hash() == payload.blockHash ——工厂已把 dataHash 回填为 TARS 序
-    // hash(spec §6 已知坑)。OP hash 只能经 codec 的 opHeaderHash 得到。
-    EXPECT_EQ(bcos::codec::rlp::opHeaderHash(*decoded, bcos::engine::detail::opHeaderConst()),
-        payload.blockHash);
+    // hash(spec §6 已知坑)。OP hash 只能经 protocol::BlockHeader 的 opHeaderHash 得到。
+    EXPECT_EQ(decoded->opHeaderHash(bcos::engine::detail::opHeaderConst()), payload.blockHash);
 }

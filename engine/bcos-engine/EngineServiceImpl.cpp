@@ -29,8 +29,8 @@ constexpr std::size_t c_payloadIdBytes = 8;
 //
 // These three header fields have no carrier in `ExecutionPayload` because they are fixed by the
 // protocol on post-merge OP chains; the header reconstruction below must still emit them (they
-// are real RLP fields, see `bcos-codec/rlp/OpHeaderCodec.h`'s `OpHeaderConst` (spec §11 D5: the
-// codec never hardcodes a value -- the caller supplies the constant).
+// are real RLP fields, see `protocol::BlockHeader::OpHeaderConst` (spec §11 D5: the OP capability
+// never hardcodes a value -- the caller supplies the constant).
 //
 // Values are byte-identical to the two other places in this repo that pin them:
 // `bcos-evm/test/opstack/EthBlockHeaderTest.cpp`'s `kEmptyOmmersHash`/`kPosNonce` (Task 3's
@@ -48,9 +48,9 @@ const bcos::h256 c_opEmptyRequestsHash{
     std::string{"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}};
 }  // namespace
 
-bcos::codec::rlp::OpHeaderConst bcos::engine::detail::opHeaderConst()
+bcos::protocol::BlockHeader::OpHeaderConst bcos::engine::detail::opHeaderConst()
 {
-    return bcos::codec::rlp::OpHeaderConst{
+    return bcos::protocol::BlockHeader::OpHeaderConst{
         .ommersHash = c_emptyOmmersHash, .difficulty = bcos::u256(0), .nonce = c_posNonce};
 }
 
@@ -466,8 +466,8 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot)
 {
     // Design §6.1 step 2 / §5.1: 21 字段,其中 18 个住进 FISCO BlockHeader(tars,PR #5385),3 个
-    // post-merge 常量(ommersHash/difficulty/nonce)经 codec 的 OpHeaderConst 注入(见
-    // opHeaderConst)。 字段来源:17 个来自 payload 逐字(extraData "原样",never re-derived),1
+    // post-merge 常量(ommersHash/difficulty/nonce)经 protocol::BlockHeader 的 OpHeaderConst 注入
+    // (见 opHeaderConst)。 字段来源:17 个来自 payload 逐字(extraData "原样",never re-derived),1
     // 个为调用方派生的 transactionsRoot(payload 无此字段),常量见本文件顶部。timestamp 按 FISCO
     // 惯例存毫秒 (spec §7:blockHash/RLP/执行面永远秒,tars 存储用毫秒)。
     //

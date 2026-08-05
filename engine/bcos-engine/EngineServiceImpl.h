@@ -39,12 +39,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
-// bcos-codec is already a (transitive, PUBLIC) dependency of the `engine` target via `ledger`
-// (bcos-ledger/CMakeLists.txt:27 links `codec` PUBLIC), so this adds no new library edge -- and
-// notably it is NOT a bcos-evm dependency: the OP header codec lives in bcos-codec
-// (`OpHeaderCodec`, replacing the retired `EthBlockHeader`) precisely so that both the engine and
-// the OP execution side can reach it.
-#include <bcos-codec/rlp/OpHeaderCodec.h>
+#include <bcos-framework/protocol/BlockHeader.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
 #include <functional>
@@ -147,8 +142,9 @@ bcos::u256 calcOpBaseFee(
 
 /// The OP header's 3 post-merge constants (ommersHash/difficulty/nonce) — the values live in
 /// EngineServiceImpl.cpp's anonymous namespace; this accessor lets the engine's step-2 blockHash
-/// check and the test seal helpers share one source.
-bcos::codec::rlp::OpHeaderConst opHeaderConst();
+/// check and the test seal helpers share one source. `BlockHeader::OpHeaderConst` is the carrier
+/// the protocol::BlockHeader OP capability takes.
+bcos::protocol::BlockHeader::OpHeaderConst opHeaderConst();
 
 /// Reconstructs the 21-field ETH/OP header from the payload (design §6.1 step 2 / §5.1) as a
 /// FISCO `protocol::BlockHeader` (tars) with 18 fields filled; the 3 post-merge constants are
@@ -797,11 +793,10 @@ private:
         const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
         const auto ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
             payload, transactionsRoot, *request.parentBeaconBlockRoot);
-        // OP hash = keccak(RLP(21 字段)),经 codec(opHeaderConst 注入 3 个 post-merge 常量)。
-        // 不得用 BlockHeader::hash()——tars dataHash 为空会抛 EmptyBlockHeaderHash,且若工厂
-        // 回填则会是 TARS 序 hash(spec §6 已知坑)。
-        if (bcos::codec::rlp::opHeaderHash(*ethHeader, detail::opHeaderConst()) !=
-            payload.blockHash)
+        // OP hash = keccak(RLP(21 字段)),经 protocol::BlockHeader 的 OP 能力
+        // (opHeaderConst 注入 3 个 post-merge 常量)。不得用 BlockHeader::hash()——tars dataHash
+        // 为空会抛 EmptyBlockHeaderHash,且若工厂回填则会是 TARS 序 hash(spec §6 已知坑)。
+        if (ethHeader->opHeaderHash(detail::opHeaderConst()) != payload.blockHash)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("blockHash does not match the reconstructed block header"));
