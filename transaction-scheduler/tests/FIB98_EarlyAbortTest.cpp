@@ -145,8 +145,7 @@ BOOST_AUTO_TEST_CASE(createContextsAbortsWhenHasRAWIsSet)
             executor.createCount.store(0);
             ChunkType chunk(0, hasRAW, contextRange, executor, view.backendStorageRef());
 
-            bcostars::protocol::BlockHeaderImpl blockHeader(
-                [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            bcostars::protocol::BlockHeaderImpl blockHeader;
             ledger::LedgerConfig ledgerConfig;
             co_await chunk.createContexts(blockHeader, ledgerConfig);
 
@@ -161,8 +160,7 @@ BOOST_AUTO_TEST_CASE(createContextsAbortsWhenHasRAWIsSet)
             executor.createCount.store(0);
             ChunkType chunk(0, hasRAW, contextRange, executor, view.backendStorageRef());
 
-            bcostars::protocol::BlockHeaderImpl blockHeader(
-                [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+            bcostars::protocol::BlockHeaderImpl blockHeader;
             ledger::LedgerConfig ledgerConfig;
             co_await chunk.createContexts(blockHeader, ledgerConfig);
 

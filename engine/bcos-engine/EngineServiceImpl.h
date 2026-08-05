@@ -1339,9 +1339,9 @@ private:
         if (executionPayload.transactions.empty())
         {
             auto emptyHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-            std::vector<bcos::protocol::ParentInfo> parentInfos{
-                {.blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash}};
-            emptyHeader->setParentInfo(parentInfos);
+            bcos::protocol::ParentInfo parentInfo{
+                .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash};
+            emptyHeader->setParentInfo(parentInfo);
             emptyHeader->setNumber(nextBlockNumber);
             emptyHeader->setVersion(blockVersion);
             emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
@@ -1359,9 +1359,9 @@ private:
 
         // Step 2b: Create BlockHeader for the new block
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {.blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash};
+        blockHeader->setParentInfo(parentInfo);
         blockHeader->setNumber(nextBlockNumber);
         blockHeader->setVersion(blockVersion);
         blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));

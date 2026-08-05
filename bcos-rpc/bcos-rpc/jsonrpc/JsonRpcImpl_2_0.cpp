@@ -371,11 +371,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr 
     }
 
     Json::Value jParentInfo(Json::arrayValue);
-    for (const auto& p : _blockHeaderPtr->parentInfo())
+    if (_blockHeaderPtr->number() > 0)
     {
         Json::Value jp;
-        jp["blockNumber"] = p.blockNumber;
-        jp["blockHash"] = toHexStringWithPrefix(p.blockHash);
+        jp["blockNumber"] = _blockHeaderPtr->parentInfo().blockNumber;
+        jp["blockHash"] = toHexStringWithPrefix(_blockHeaderPtr->parentInfo().blockHash);
         jParentInfo.append(jp);
     }
     jResp["parentInfo"] = jParentInfo;

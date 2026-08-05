@@ -66,16 +66,13 @@ void bcostars::protocol::BlockImpl::encode(bcos::bytes& _encodeData) const
 bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockImpl::blockHeader()
 {
     return std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [self = shared_from_this()]() mutable {
-            return std::addressof(self->m_inner.blockHeader);
-        });
+        std::shared_ptr<bcostars::BlockHeader>(shared_from_this(), &m_inner.blockHeader));
 }
 
 bcos::protocol::AnyBlockHeader bcostars::protocol::BlockImpl::blockHeader() const
 {
     bcos::protocol::AnyBlockHeader header(bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
-        [self = std::const_pointer_cast<BlockImpl>(shared_from_this())]() mutable
-            -> bcostars::BlockHeader* { return &self->m_inner.blockHeader; });
+        std::shared_ptr<bcostars::BlockHeader>(shared_from_this(), &m_inner.blockHeader));
     return header;
 }
 
