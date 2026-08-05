@@ -162,6 +162,11 @@ enum class BlockVersion : uint32_t
     MAX_VERSION = V3_18_0_VERSION,
 };
 
+// Version marker for Ethereum-standard block headers. FISCO-BCOS versions encode as
+// 0xMMmmpp00 (the lowest byte is reserved and always 0), so a non-zero low byte
+// unambiguously marks an Eth header without colliding with any FISCO version.
+constexpr uint32_t ETH_BLOCK_HEADER_VERSION = 0x03120001;
+
 enum class TransactionVersion : uint32_t
 {
     V0_VERSION = 0x00000000,

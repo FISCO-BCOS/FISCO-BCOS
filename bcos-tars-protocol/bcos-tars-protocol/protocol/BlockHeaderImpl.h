@@ -28,6 +28,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Error.h>
 #include <gsl/span>
@@ -123,6 +124,11 @@ public:
 
     std::optional<uint64_t> slotNumber() const override;
     void setSlotNumber(uint64_t _val) override;
+
+    // Inject a pre-computed Ethereum RLP hash (set by the rlp-protocol layer via
+    // EthBlockHeader::calculateHash). For Eth headers (version == ETH_BLOCK_HEADER_VERSION)
+    // calculateHash() keeps this value instead of recomputing the FISCO Tars hash.
+    void setRLPHash(bcos::crypto::HashType _hash);
 
     const bcostars::BlockHeader& inner() const;
     bcostars::BlockHeader& inner();

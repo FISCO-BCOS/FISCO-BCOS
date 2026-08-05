@@ -63,6 +63,20 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::hash() const
 
 void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
+    if (version() == bcos::protocol::ETH_BLOCK_HEADER_VERSION)
+    {
+        // Eth header: the RLP hash must have been injected via setRLPHash.
+        if (m_inner->dataHash.empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                EmptyBlockHeaderHash{}
+                << bcos::errinfo_comment(
+                       "Eth block header hash is empty: setRLPHash must be called before "
+                       "calculateHash on an Ethereum-standard header"));
+        }
+        return;
+    }
+
     // FISCO-BCOS block — original Tars hash
     bcos::crypto::HashType hashResult;
     bcos::concepts::hash::calculate(*m_inner, hashImpl.hasher(), hashResult);
@@ -487,4 +501,9 @@ void bcostars::protocol::BlockHeaderImpl::setSlotNumber(uint64_t _val)
 {
     m_inner->data.slotNumber = static_cast<long>(_val);
     clearDataHash();
+}
+
+void bcostars::protocol::BlockHeaderImpl::setRLPHash(bcos::crypto::HashType _hash)
+{
+    m_inner->dataHash.assign(_hash.begin(), _hash.end());
 }

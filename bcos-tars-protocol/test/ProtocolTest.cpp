@@ -1,4 +1,5 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -606,6 +607,72 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
     BOOST_CHECK(shortImpl->stateRoot() == bcos::crypto::HashType{});
     BOOST_CHECK(shortImpl->txsRoot() == bcos::crypto::HashType{});
     BOOST_CHECK(shortImpl->receiptsRoot() == bcos::crypto::HashType{});
+}
+
+// Eth RLP hash flow: calculateRLPHash computes keccak256(rlp(header)) and injects it into
+// the Tars-backed BlockHeaderImpl; calculateHash() on an Eth-versioned header keeps that
+// value instead of recomputing the FISCO Tars hash.
+BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHash)
+{
+    auto header = blockHeaderFactory->createBlockHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+
+    // Fill all Eth-required fields so the header is a valid Eth header
+    impl->setNumber(1);
+    impl->setTimestamp(1700000000);
+    impl->setGasLimit(bcos::u256(30000000));
+    impl->setGasUsed(bcos::u256(21000));
+    impl->setCoinbase(bcos::Address(std::string_view(
+        "0xdead000000000000000000000000000000000000"), bcos::Address::FromHex));
+    bcos::h256 stateRoot(std::string_view(
+        "0x1111111111111111111111111111111111111111111111111111111111111111"),
+        bcos::h256::FromHex);
+    impl->setStateRoot(stateRoot);
+    impl->setTxsRoot(bcos::crypto::HashType(std::string_view(
+        "0x4444444444444444444444444444444444444444444444444444444444444444"),
+        bcos::crypto::HashType::FromHex));
+    impl->setReceiptsRoot(bcos::crypto::HashType(std::string_view(
+        "0x5555555555555555555555555555555555555555555555555555555555555555"),
+        bcos::crypto::HashType::FromHex));
+    bcos::Bloom bloom{};
+    std::fill(bloom.begin(), bloom.end(), 0xcd);
+    impl->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    impl->setPrevRandao(bcos::h256(std::string_view(
+        "0x2222222222222222222222222222222222222222222222222222222222222222"),
+        bcos::h256::FromHex));
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = 0,
+        .blockHash = bcos::crypto::HashType(std::string_view(
+            "0x3333333333333333333333333333333333333333333333333333333333333333"),
+            bcos::crypto::HashType::FromHex)};
+    impl->setParentInfo(parentInfo);
+
+    // FISCO path: default version -> Tars hash
+    impl->calculateHash(*cryptoSuite->hashImpl());
+    auto fiscoHash = impl->hash();
+    BOOST_CHECK(fiscoHash != bcos::crypto::HashType{});
+
+    // Eth path: calculateRLPHash computes keccak256(rlp(header)) and injects it
+    bcos::Error::UniquePtr error;
+    bcos::protocol::EthBlockHeader::calculateRLPHash(header, error);
+    BOOST_CHECK(!error);
+    auto ethHash = impl->hash();
+
+    // calculateHash on an Eth-versioned header keeps the injected RLP hash
+    impl->calculateHash(*cryptoSuite->hashImpl());
+    BOOST_CHECK(impl->hash() == ethHash);
+    // And it differs from the FISCO hash computed on the same fields
+    BOOST_CHECK(ethHash != fiscoHash);
+}
+
+// Eth header without an injected RLP hash must fail calculateHash with a clear error
+BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHashMissing)
+{
+    auto header = blockHeaderFactory->createBlockHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    impl->setVersion(bcos::protocol::ETH_BLOCK_HEADER_VERSION);
+
+    BOOST_CHECK_THROW(impl->calculateHash(*cryptoSuite->hashImpl()), std::exception);
 }
 
 
