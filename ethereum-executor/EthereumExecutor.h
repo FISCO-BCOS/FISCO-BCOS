@@ -194,6 +194,14 @@ public:
             m_stateView(storage.get())
         {}
 
+        /// Node chain id for EIP-7702 auth validation; 0 if unconfigured.
+        uint64_t nodeChainId() const
+        {
+            if (auto const& cid = ledgerConfig.get().chainId(); cid.has_value())
+                return static_cast<uint64_t>(intx::be::load<intx::uint256>(*cid));
+            return 0;
+        }
+
         /// Phase 1 — setup (no state access).
         ///
         /// Converts the BCOS types to evmone types and resolves the block-level
@@ -288,7 +296,8 @@ public:
             }
 
             m_evmReceipt = evmone::state::transition(m_stateView, m_blockInfo,
-                executor.get().blockHashes(), m_evmTx, m_rev, executor.get().vm(), m_txProps);
+                executor.get().blockHashes(), m_evmTx, m_rev, executor.get().vm(), m_txProps,
+                nodeChainId());
 
             // Apply the resulting state diff immediately so later transactions
             // in the same chunk observe it.

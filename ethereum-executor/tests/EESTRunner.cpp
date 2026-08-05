@@ -1285,6 +1285,8 @@ public:
     {
         configureFork(forkName);
         m_chainId = fixture.chainId;
+        m_ledgerConfig.setChainId(
+            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
         configureEnvironment(fixture.env);
 
         MutableStorage storage;
@@ -1562,6 +1564,8 @@ public:
         }
         configureFork(forkName);
         m_chainId = fixture.chainId;
+        m_ledgerConfig.setChainId(
+            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
 
         // Set up pre-state once
         MutableStorage storage;
