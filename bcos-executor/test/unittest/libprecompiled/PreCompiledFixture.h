@@ -290,8 +290,7 @@ public:
             // for parallel test
             return;
         }
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(blockNumber);
         Features features;
         features.setUpgradeFeatures(BlockVersion::V3_0_VERSION, version);
@@ -299,8 +298,7 @@ public:
 
         bcos::protocol::ParentInfo p{
             .blockNumber = blockNumber - 1, .blockHash = h256(blockNumber - 1)};
-        std::vector<bcos::protocol::ParentInfo> parentInfos{p};
-        blockHeader->setParentInfo(parentInfos);
+        blockHeader->setParentInfo(p);
 
         blockHeader->setVersion((uint32_t)version);
         ledger->setBlockNumber(blockNumber - 1);

@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief implementation for BlockHeader
+ * @brief implementation for BlockHeader — unified FISCO-BCOS + Ethereum
  * @file BlockHeaderImpl.h
  * @author: ancelmo
  * @date 2021-04-20
@@ -29,6 +29,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-utilities/Error.h>
 #include <gsl/span>
 #include <range/v3/view/any_view.hpp>
 
@@ -37,13 +38,12 @@ namespace bcostars::protocol
 class BlockHeaderImpl : public bcos::protocol::BlockHeader
 {
 public:
-    explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner);
+    explicit BlockHeaderImpl(std::shared_ptr<bcostars::BlockHeader> inner);
     BlockHeaderImpl();
     BlockHeaderImpl(const BlockHeaderImpl&) = default;
     BlockHeaderImpl(BlockHeaderImpl&&) noexcept = default;
     BlockHeaderImpl& operator=(const BlockHeaderImpl&) = default;
     BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = default;
-    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader);
     ~BlockHeaderImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data) override;
@@ -54,9 +54,7 @@ public:
     void clear() override;
 
     uint32_t version() const override;
-    ::ranges::any_view<bcos::protocol::ParentInfo,
-        ::ranges::category::input | ::ranges::category::sized>
-    parentInfo() const override;
+    bcos::protocol::ParentInfo parentInfo() const override;
 
     bcos::crypto::HashType txsRoot() const override;
     bcos::crypto::HashType stateRoot() const override;
@@ -70,10 +68,9 @@ public:
     bcos::bytesConstRef extraData() const override;
     gsl::span<const bcos::protocol::Signature> signatureList() const override;
     gsl::span<const uint64_t> consensusWeights() const override;
-    bcos::bytes coinbase() const override;
 
     void setVersion(uint32_t _version) override;
-    void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override;
+    void setParentInfo(bcos::protocol::ParentInfo parentInfo) override;
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override;
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override;
     void setStateRoot(bcos::crypto::HashType _stateRoot) override;
@@ -86,11 +83,46 @@ public:
     void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) override;
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override;
     void setExtraData(bcos::bytes _extraData) override;
-    void setCoinbase(bcos::bytes _coinbase) override;
     void setSignatureList(
         gsl::span<const bcos::protocol::Signature> const& _signatureList) override;
     void setSignatureList(bcos::protocol::SignatureList&& _signatureList) override;
 
+    // ---- Ethereum-specific header field accessors ----
+    bcos::Address coinbase() const override;
+    void setCoinbase(bcos::Address _addr) override;
+
+    bcos::bytesConstRef logsBloom() const override;
+    void setLogsBloom(bcos::bytesConstRef _bloom) override;
+
+    bcos::u256 gasLimit() const override;
+    void setGasLimit(bcos::u256 _limit) override;
+
+    bcos::h256 prevRandao() const override;
+    void setPrevRandao(bcos::h256 _digest) override;
+
+    std::optional<bcos::u256> baseFee() const override;
+    void setBaseFee(bcos::u256 _fee) override;
+
+    std::optional<bcos::h256> withdrawalsRoot() const override;
+    void setWithdrawalsRoot(bcos::h256 _hash) override;
+
+    std::optional<bcos::u256> blobGasUsed() const override;
+    void setBlobGasUsed(bcos::u256 _val) override;
+
+    std::optional<bcos::u256> excessBlobGas() const override;
+    void setExcessBlobGas(bcos::u256 _val) override;
+
+    std::optional<bcos::h256> parentBeaconBlockRoot() const override;
+    void setParentBeaconBlockRoot(bcos::h256 _root) override;
+
+    std::optional<bcos::h256> requestsHash() const override;
+    void setRequestsHash(bcos::h256 _hash) override;
+
+    std::optional<bcos::h256> blockAccessListHash() const override;
+    void setBlockAccessListHash(bcos::h256 _hash) override;
+
+    std::optional<uint64_t> slotNumber() const override;
+    void setSlotNumber(uint64_t _val) override;
 
     const bcostars::BlockHeader& inner() const;
     bcostars::BlockHeader& inner();
@@ -102,6 +134,6 @@ private:
     // be cleaned up
     void clearDataHash();
 
-    std::function<bcostars::BlockHeader*()> m_inner;
+    std::shared_ptr<bcostars::BlockHeader> m_inner;
 };
 }  // namespace bcostars::protocol

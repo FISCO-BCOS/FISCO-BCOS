@@ -56,7 +56,7 @@ bcostars::Error ExecutorServiceServer::nextBlockHeader(tars::Int64 schedulerTerm
 {
     _current->setResponse(false);
     auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_header = _blockHeader]() mutable { return &m_header; });
+        std::make_shared<bcostars::BlockHeader>(_blockHeader));
     m_executor->nextBlockHeader(schedulerTermId, header, [_current](bcos::Error::UniquePtr _error) {
         async_response_nextBlockHeader(_current, toTarsError(std::move(_error)));
     });
@@ -124,7 +124,7 @@ bcostars::Error ExecutorServiceServer::preExecuteTransactions(tars::Int64 schedu
 {
     _current->setResponse(false);
     auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_header = _blockHeader]() mutable { return &m_header; });
+        std::make_shared<bcostars::BlockHeader>(_blockHeader));
 
     auto executionMessages =
         std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();

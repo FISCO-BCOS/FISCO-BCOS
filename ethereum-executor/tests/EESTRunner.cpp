@@ -1005,7 +1005,12 @@ public:
         if (!env.coinbase.empty())
         {
             auto cbBytes = test::hexToBytes(env.coinbase);
-            header.setCoinbase(std::move(cbBytes));
+            bcos::Address coinbaseAddr;
+            if (cbBytes.size() >= bcos::Address::SIZE)
+            {
+                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
+            }
+            header.setCoinbase(coinbaseAddr);
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
@@ -1474,7 +1479,12 @@ public:
         if (!bh.coinbase.empty())
         {
             auto cbBytes = test::hexToBytes(bh.coinbase);
-            header.setCoinbase(std::move(cbBytes));
+            bcos::Address coinbaseAddr;
+            if (cbBytes.size() >= bcos::Address::SIZE)
+            {
+                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
+            }
+            header.setCoinbase(coinbaseAddr);
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;

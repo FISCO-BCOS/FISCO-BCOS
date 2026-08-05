@@ -297,10 +297,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) 
 
     auto parentInfo = _header->parentInfo();
     std::stringstream parentInfoStr;
-    for (auto const& parent : parentInfo)
-    {
-        parentInfoStr << parent.blockNumber << ":" << parent.blockHash << ", ";
-    }
+    parentInfoStr << parentInfo.blockNumber << ":" << parentInfo.blockHash << ", ";
     oss << LOG_KV("hash", _header->hash()) << LOG_KV("version", _header->version())
         << LOG_KV("txsRoot", _header->txsRoot()) << LOG_KV("receiptsRoot", _header->receiptsRoot())
         << LOG_KV("dbHash", _header->stateRoot()) << LOG_KV("number", _header->number())

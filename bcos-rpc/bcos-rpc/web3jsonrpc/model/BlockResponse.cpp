@@ -13,11 +13,7 @@ void bcos::rpc::combineBlockResponse(
     auto blockNumber = blockHeader->number();
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();
-    // Only one parent block in BCOS. It is empty for genesis block
-    for (const auto& info : blockHeader->parentInfo())
-    {
-        result["parentHash"] = info.blockHash.hexPrefixed();
-    }
+    result["parentHash"] = blockHeader->parentInfo().blockHash.hexPrefixed();
     result["nonce"] = "0x0000000000000000";
     // empty uncle hash: keccak256(RLP([]))
     result["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";

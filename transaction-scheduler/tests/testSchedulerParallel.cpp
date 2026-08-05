@@ -79,8 +79,7 @@ BOOST_AUTO_TEST_CASE(simple)
         auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testParallelGC");
         SchedulerParallelImpl<MutableStorage> scheduler(ioServicePool);
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         auto transactions =
             ::ranges::iota_view<int, int>(0, 100) | ::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
@@ -187,8 +186,7 @@ BOOST_AUTO_TEST_CASE(conflict)
             co_await storage2::writeOne(front, key, std::move(entry));
         }
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         constexpr static auto TRANSACTION_COUNT = 1000;
         auto transactions =
             ::ranges::views::iota(0, TRANSACTION_COUNT) | ::ranges::views::transform([](int index) {
