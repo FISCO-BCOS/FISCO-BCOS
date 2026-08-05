@@ -66,7 +66,8 @@ add_library(bcos-evm-eth STATIC
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
-    # rlp_encode：OpReceipt.cpp 的回执编码用它，属生产依赖。
+    # rlp_encode：块级回执建根（sealOpBlock 的 receipts-root leaf）用 evmone 编码作金值锚，
+    # 属生产依赖。
     #
     # DEBT(eth-utils-removal): test_state 是 evmone 的内存**测试**账本。全部 11 个引用点都在
     # bcos-evm/test/ 下，两个生产库一个都不引用（nm 核验），所以它出现在生产库
@@ -125,7 +126,6 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpFeeParams.cpp
     bcos-evm/opstack/RollupCost.cpp
     bcos-evm/opstack/OpTransition.cpp
-    bcos-evm/opstack/OpReceipt.cpp
     # 块级执行层（op-validator-loop 移植）：processOpBlock / finalizeOpBlock / sealOpBlock。
     bcos-evm/opstack/OpBlockExecute.cpp
     bcos-evm/opstack/OpBlockFinalize.cpp
