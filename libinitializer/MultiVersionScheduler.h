@@ -5,6 +5,10 @@
 namespace bcos::scheduler_v1
 {
 
+/// The executor version that selects the pure-Ethereum EthereumExecutor
+/// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
+constexpr static int ETHEREUM_EXECUTOR_VERSION = 2;
+
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:

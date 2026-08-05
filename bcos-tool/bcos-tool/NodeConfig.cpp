@@ -260,8 +260,14 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
                     InvalidConfig() << errinfo_comment(
                         "[" + kv.first + "].nonce must fit in uint64: " + alloc.nonce));
             }
-            alloc.code = kv.second.get<std::string>("code");
-            requireHexField(kv.first, "code", alloc.code, 0, true);
+            alloc.code = kv.second.get<std::string>("code", "");
+            // An EOA alloc (no deployed code) is represented by an empty `code`.
+            // importGenesisState / computeGenesisStateTrie already treat an empty
+            // code as "no code", so only a non-empty value is validated here.
+            if (!alloc.code.empty())
+            {
+                requireHexField(kv.first, "code", alloc.code, 0, true);
+            }
             // storage section is a sibling flat key "<alloc.N>.storage"; '\0'
             // separator avoids boost interpreting the dots as a nested path.
             boost::property_tree::ptree::path_type storagePath(kv.first + ".storage", '\0');

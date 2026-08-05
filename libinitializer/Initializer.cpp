@@ -402,6 +402,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
     }
     INITIALIZER_LOG(INFO) << "Set executor version to: " << executorVersion;
+    m_executorVersion = executorVersion;
     m_scheduler->setVersion(executorVersion, {});
 
     // Set scheduler to TxPoolInitializer after scheduler is created
@@ -618,6 +619,16 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
 
 void Initializer::initSysContract()
 {
+    // The pure-Ethereum EthereumExecutor (executor_version=2) does not support FISCO system
+    // contracts (BFS/Auth precompiles): its initSysContract block would be rejected and the
+    // chain could not proceed to seal. Skip the system-contract deployment entirely for v2.
+    if (m_executorVersion == scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
+    {
+        INITIALIZER_LOG(INFO)
+            << LOG_DESC("SysInitializer: skip system-contract deployment for ethereum executor "
+                        "(executor_version=2)");
+        return;
+    }
     // check is it deploy first time
     std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {

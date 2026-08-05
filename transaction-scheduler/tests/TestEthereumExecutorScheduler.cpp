@@ -91,16 +91,27 @@ std::string EEQuantity(uint64_t value)
     return oss.str();
 }
 
-/// A legacy value-transfer transaction. `to` is stored as the 20 raw address
-/// bytes, `value`/`gasPrice` as hex strings, `sender` forced to `from`.
+/// A legacy value-transfer transaction. `to` is stored as the "0x"-prefixed
+/// lowercase hex address string (exactly the encoding every real tx path uses:
+/// Web3Transaction::takeToTarsTransaction() writes hexPrefixed(), and the RPC
+/// /txpool paths all treat `to` as a hex string — see
+/// TxValidator::isValidToField() and ReceiptResponse). `sender` is forced to
+/// `from` as raw 20 bytes (what TxValidator::verify() writes for web3 txs), and
+/// `value`/`gasPrice` as hex strings.
+///
+/// Regression anchor: before the recipient-credit fix, bcosTransactionToEvmone
+/// treated a hex-string `to` as raw address bytes and credited the ASCII chars
+/// (e.g. "0x307863336561..." instead of the real 20-byte address), leaving the
+/// recipient's balance at 0.
 std::shared_ptr<bcostars::protocol::TransactionImpl> EEMakeTransferTx(
     bcostars::protocol::TransactionFactoryImpl& factory,
     std::shared_ptr<bcos::crypto::CryptoSuite> const& cryptoSuite, evmc_address const& from,
     evmc_address const& to, uint64_t value, std::string const& nonce)
 {
-    bcos::bytes toBytes(std::begin(to.bytes), std::end(to.bytes));
-    auto tx = factory.createTransaction(1 /* V1 */, std::string(toBytes.begin(), toBytes.end()), {},
-        nonce, 1000 /* blockLimit */, "0x1" /* chainId */, "" /* groupId */, 0 /* importTime */,
+    auto toHexStr = bcos::toHexStringWithPrefix(
+        bcos::bytes(std::begin(to.bytes), std::end(to.bytes)));
+    auto tx = factory.createTransaction(1 /* V1 */, toHexStr, {}, nonce,
+        1000 /* blockLimit */, "0x1" /* chainId */, "" /* groupId */, 0 /* importTime */,
         {} /* abi */, EEQuantity(value) /* value */, "0x0" /* gasPrice */, 21000 /* gasLimit */);
     tx->forceSender(bcos::bytes(std::begin(from.bytes), std::end(from.bytes)));
     tx->calculateHash(*cryptoSuite->hashImpl());
@@ -260,6 +271,40 @@ BOOST_AUTO_TEST_CASE(serialExecuteBlock)
         auto resolved = blockHashes->get_block_hash(0);
         BOOST_CHECK_EQUAL(
             std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
+    }());
+}
+
+// Regression: `to` is uniformly a "0x"-prefixed hex address string on every
+// real tx path (Web3Transaction::takeToTarsTransaction() writes hexPrefixed();
+// TxValidator::isValidToField() requires exactly 40 hex chars). Before the fix,
+// bcosTransactionToEvmone copied the first 20 ASCII chars as the address, so
+// the recipient was credited at a mangled account (the ASCII bytes) and the
+// real recipient's balance stayed 0. EEMakeTransferTx (used by every transfer
+// test below) stores the same "0x..." hex encoding; this case is an explicit
+// anchor that a hex-encoded `to` must credit the real recipient.
+BOOST_AUTO_TEST_CASE(serialExecuteBlockWithHexTo)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialHexToGC");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEMakeAddress(41);
+        auto recipient0 = EEMakeAddress(51);
+        auto recipient1 = EEMakeAddress(52);
+
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient0, 0);
+        co_await EEFundAccount(backendStorage, recipient1, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient0, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 200, "1"));
+
+        co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
+            cryptoSuite, txs,
+            {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
     }());
 }
 

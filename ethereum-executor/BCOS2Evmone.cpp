@@ -12,6 +12,7 @@
 #include "bcos-evm/eth/state/transaction.hpp"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -124,10 +125,34 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
     if (sb.size() >= sizeof(evmc_address))
         std::copy_n(sb.begin(), sizeof(evmc_address), evmTx.sender.bytes);
     auto const& tb = tx.to();
-    if (!tb.empty() && tb.size() >= sizeof(evmc_address))
+    if (!tb.empty())
     {
         evmc_address ta{};
-        std::copy_n(tb.begin(), sizeof(evmc_address), ta.bytes);
+        // `to` is uniformly an ASCII hex address string ("0x..." / 40 hex chars)
+        // on every tx path: Web3Transaction::takeToTarsTransaction() writes
+        // hexPrefixed(), RPC/txpool treat it as hex (TxValidator::isValidToField
+        // requires exactly 40 hex chars), and the test helpers use the same
+        // "0x..." encoding. The raw 20-byte branch below is kept only as a
+        // defensive fallback.
+        const bool has0x =
+            tb.size() >= 2 && tb[0] == '0' && (tb[1] == 'x' || tb[1] == 'X');
+        const bool is40Hex = tb.size() == sizeof(evmc_address) * 2 &&
+                             std::all_of(tb.begin(), tb.end(), [](char c) {
+                                 return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+                                        (c >= 'A' && c <= 'F');
+                             });
+        if (has0x || is40Hex)
+        {
+            if (auto decoded = safeFromHex(tb);
+                decoded && decoded->size() <= sizeof(evmc_address))
+            {
+                std::copy(decoded->begin(), decoded->end(), ta.bytes);
+            }
+        }
+        else
+        {
+            std::copy_n(tb.begin(), std::min(tb.size(), size_t(sizeof(evmc_address))), ta.bytes);
+        }
         evmTx.to = ta;
     }
     evmTx.value = toIntxU256(tx.value());
@@ -152,24 +177,29 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
     }
     // chainId and nonce from BCOS tx may or may not have 0x prefix.
     // RPC/Web3 decoding stores values with 0x prefix (toQuantity).
-    // Guard against double 0x (e.g. "0x0x1a") which would throw.
-    auto cid = tx.chainId();
-    if (!cid.empty())
-    {
-        auto cidStr = std::string(cid);
-        if (cidStr.size() >= 2 && cidStr[0] == '0' && cidStr[1] == 'x')
-            evmTx.chain_id = static_cast<uint64_t>(bcos::u256(cidStr));
-        else
-            evmTx.chain_id = static_cast<uint64_t>(bcos::u256("0x" + cidStr));
-    }
-    auto nonceStr = std::string(tx.nonce());
-    if (!nonceStr.empty())
-    {
-        if (nonceStr.size() >= 2 && nonceStr[0] == '0' && nonceStr[1] == 'x')
-            evmTx.nonce = static_cast<uint64_t>(bcos::u256(nonceStr));
-        else
-            evmTx.nonce = static_cast<uint64_t>(bcos::u256("0x" + nonceStr));
-    }
+    // Guard against double 0x (e.g. "0x0x1a") and non-numeric values (e.g. a
+    // FISCO chain_id like "chain0"). A tx whose chainId/nonce cannot be parsed
+    // is left at its default (0) so evmone's validate_transaction rejects it with
+    // a clean failure receipt instead of crashing the whole chunk.
+    auto parseQuantity = [](std::string_view s) -> uint64_t {
+        if (s.empty())
+        {
+            return 0;
+        }
+        auto hexStr = (s.size() >= 2 && s[0] == '0' && s[1] == 'x') ?
+                          std::string(s) :
+                          "0x" + std::string(s);
+        try
+        {
+            return static_cast<uint64_t>(bcos::u256(hexStr));
+        }
+        catch (...)
+        {
+            return 0;
+        }
+    };
+    evmTx.chain_id = parseQuantity(tx.chainId());
+    evmTx.nonce = parseQuantity(tx.nonce());
     for (auto const& auth : tx.authorizationList())
     {
         evmone::state::Authorization ea{};
