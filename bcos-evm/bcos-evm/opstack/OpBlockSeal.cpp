@@ -1,30 +1,35 @@
-#include <bcos-evm/eth/utils/mpt.hpp>
-#include <bcos-evm/eth/utils/mpt_hash.hpp>
 #include <bcos-evm/opstack/OpBlockSeal.h>
 #include <bcos-evm/opstack/OpReceipt.h>
+#include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-ledger/mpt/HashBuilder.h>
 #include <algorithm>
-// TODO(eth-utils-removal): mpt/rlp(test/utils)→自研 MPT + bcos-codec/rlp/RLPEncode.h。
-// 注意:opStorageRoot 与 receipts_root 循环属 upstream-diff 追踪段(op_storage_root/
-// receipts_root_loop),替换后须 --regenerate-goldens 并重验 33/33 向量。
-#include <test/utils/rlp.hpp>
+#include <cstring>
 #include <functional>
 
 namespace bcos::evm::opstack
 {
 evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage)
 {
-    // Aligned with evmone mpt_hash.cpp:13-24 (private helper, not exported): secure-trie key,
-    // trimmed value; upstream asserts that zero values are removed beforehand, here a defensive
-    // continue — semantically equivalent to "called after removal".
-    evmone::state::MPT trie;
+    // Secure-trie over one account's live slot map, built with FISCO computeTrieRoot (same
+    // construction as the retired evmone mpt_hash.cpp:13-24: key = keccak256(slot), value =
+    // rlp(trimmed value)). Defensive continue on zero values.
+    std::map<bcos::h256, bcos::bytes> entries;
     for (const auto& [key, value] : storage)
     {
         if (evmc::is_zero(value))
             continue;
-        trie.insert(evmone::keccak256(evmc::bytes_view(key)),
-            evmone::rlp::encode(evmone::rlp::trim(evmc::bytes_view(value))));
+        size_t first = 0;
+        while (first < sizeof(value.bytes) && value.bytes[first] == 0)
+        {
+            ++first;
+        }
+        bcos::bytes leaf(value.bytes + first, value.bytes + sizeof(value.bytes));
+        entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
     }
-    return trie.hash();
+    auto result = bcos::ledger::mpt::computeTrieRoot(entries);
+    evmone::hash256 root{};
+    std::memcpy(root.bytes, result.root.data(), sizeof(root.bytes));
+    return root;
 }
 
 OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
@@ -32,15 +37,20 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
 {
     OpBlockSeal seal{};
 
-    // receipts-root: key = rlp(index), leaf = EncodeIndex-semantics encoding (Task 1).
-    // Structurally aligned with evmone's list-trie template (mpt_hash.cpp:38-46); that template
-    // takes the leaf value via rlp_encode(T) and is only explicitly instantiated for 3 upstream
-    // types, so the OP custom leaf encoding cannot reuse it — hence these 4 lines are reproduced
-    // here (added to the manifest).
-    evmone::state::MPT trie;
+    // receipts-root: key = rlp(index), leaf = EncodeIndex-semantics encoding. Built with FISCO
+    // computeTrieRootVarKey (variable-length keys rlp(0..N), ascending, non-prefix-of-each-other —
+    // the same construction as the retired evmone list-trie mpt_hash.cpp:38-46).
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> receiptsEntries;
+    receiptsEntries.reserve(result.receipts.size());
     for (size_t i = 0; i < result.receipts.size(); ++i)
-        trie.insert(evmone::rlp::encode(i), encodeReceiptForRoot(result.receipts[i]));
-    seal.receiptsRoot = trie.hash();
+    {
+        bcos::bytes key;
+        bcos::codec::rlp::encode(key, static_cast<uint64_t>(i));
+        auto const leaf = encodeReceiptForRoot(result.receipts[i]);
+        receiptsEntries.emplace_back(std::move(key), bcos::bytes{leaf.begin(), leaf.end()});
+    }
+    auto receiptsResult = bcos::ledger::mpt::computeTrieRootVarKey(receiptsEntries);
+    std::memcpy(seal.receiptsRoot.bytes, receiptsResult.root.data(), sizeof(seal.receiptsRoot.bytes));
 
     // Block-level logsBloom: bitwise-OR each receipt's bloom (aligned with the
     // span<TransactionReceipt> overload in bloom_filter.cpp:46-53; a variant sequence cannot be fed
@@ -66,8 +76,9 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     else
     {
         // Canyon+ withdrawals list is always empty → empty-trie root; the requests header field
-        // does not exist in the CANCUN family
-        seal.withdrawalsRoot = evmone::state::EMPTY_MPT_HASH;
+        // does not exist in the CANCUN family. FISCO emptyRootHash() == keccak256(RLP("")).
+        auto const emptyRoot = bcos::ledger::mpt::emptyRootHash();
+        std::memcpy(seal.withdrawalsRoot.bytes, emptyRoot.data(), sizeof(seal.withdrawalsRoot.bytes));
     }
 
     // Jovian block-header BlobGasUsed reuse slot (equivalent to CalcDAFootprint, see header
