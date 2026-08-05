@@ -53,4 +53,21 @@ struct OpBlockSeal
 /// EMPTY_MPT_HASH rather than an error).
 [[nodiscard]] OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage);
+
+/// receipts-root leaf encoding rebuilt from a bcos::protocol::TransactionReceipt (方案 A 阶段 2 —
+/// replaces the former OpDepositReceipt/OpTxReceipt-based encoders). `txType` is the EIP-2718
+/// type byte that produced the receipt (kDepositTxType for deposits, else the Transaction::Type
+/// value) — the FISCO receipt interface has no tx-type slot, so the caller threads it through
+/// OpBlockResult::txTypes. Byte-for-byte op-geth `Receipts.EncodeIndex` semantics
+/// (receipt.go:568-592 — note this is NOT MarshalBinary :279-288; the two deliberately differ for
+/// a receipt that "has nonce, has no version", and the function-header comment :564-567
+/// explicitly forbids changing that):
+///   deposit: 0x7E || rlp([status, cumulativeGasUsed, logsBloom, logs, depositNonce,
+///   depositReceiptVersion]) — nonce/version read from opStackMeta (depositReceiptRLP :136-148).
+///   normal tx: typed raw-byte prefix (empty for legacy) + rlp([status, cumGas, bloom, logs]),
+///   byte-identical to EncodeIndex for type 0/1/2/4.
+/// status is projected as bool (FISCO 0 == success); cumulativeGasUsed() is parsed from its hex
+/// string; logsBloom() is the 256-byte bloom; logEntries() re-encode the evmone Log shape.
+[[nodiscard]] evmc::bytes encodeReceiptForRoot(
+    const bcos::protocol::TransactionReceipt& r, uint8_t txType);
 }  // namespace bcos::evm::opstack

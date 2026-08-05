@@ -1,7 +1,6 @@
 #include "TestPrinters.h"
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpReceipt.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/RollupCost.h>
 #include <boost/test/unit_test.hpp>
