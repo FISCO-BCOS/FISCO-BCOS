@@ -1,67 +1,58 @@
 #include "ReceiptResponse.h"
 #include "Log.h"
 #include "Web3Transaction.h"
-#include "bcos-codec/rlp/OpReceiptMetaCodec.h"
 #include "bcos-crypto/ChecksumAddress.h"
-#include <bcos-crypto/hash/Keccak256.h>
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-crypto/hash/Keccak256.h>
 #include <cstdint>
 
 namespace
 {
 /// Append an OP receipt's extension fields to the JSON response, mirroring op-geth's
-/// ethapi.MarshalReceipt (internal/ethapi/api.go:1744-1830). Field presence is driven by the
-/// serialized OpReceiptMeta (see OpReceiptMetaCodec.h): a field only appears when the execution
-/// layer recorded it, which is what distinguishes Isthmus (operator fees) from Jovian (DA
-/// footprint) from plain Ecotone-era L1 passthrough.
+/// ethapi.MarshalReceipt (internal/ethapi/api.go:1744-1830). The fields are read directly off the
+/// typed OpStackReceiptMeta struct carried on the receipt (tars opStackMeta, Task 1): a field only
+/// appears when the execution layer recorded it, which is what distinguishes Isthmus (operator
+/// fees) from Jovian (DA footprint) from plain Ecotone-era L1 passthrough. There is no RLP round-
+/// trip anymore — opStackMeta() already does the tars hex-string decode, and returns nullopt when
+/// all 13 fields are absent (legacy receipts).
 void appendOpReceiptMetaFields(Json::Value& result, protocol::TransactionReceipt const& receipt)
 {
-    auto metaView = receipt.opReceiptMeta();
-    if (metaView.empty())
+    auto meta = receipt.opStackMeta();
+    // opStackMeta() returns nullopt when every field is nullopt (legacy receipt), so a single
+    // has_value() check is the entire emptiness test.
+    if (!meta.has_value())
     {
-        return;
-    }
-    bcos::codec::rlp::OpReceiptMetaFields fields;
-    if (auto error = bcos::codec::rlp::decodeOpReceiptMeta(
-            bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields))
-    {
-        WEB3_LOG(DEBUG) << "appendOpReceiptMetaFields: invalid opReceiptMeta: "
-                        << boost::diagnostic_information(*error);
         return;
     }
     // uint256 fields are hexutil.Big in op-geth — compact big-endian hex (leading zeros trimmed),
-    // not fixed-width. toQuantity(BigNumber) goes through toCompactBigEndian for exactly that.
-    if (fields.l1_gas_price)
-        result["l1GasPrice"] = toQuantity(bcos::fromBigEndian<bcos::u256>(
-            bcos::bytesConstRef{fields.l1_gas_price->data(), fields.l1_gas_price->size()}));
-    if (fields.l1_fee)
-        result["l1Fee"] = toQuantity(bcos::fromBigEndian<bcos::u256>(
-            bcos::bytesConstRef{fields.l1_fee->data(), fields.l1_fee->size()}));
-    if (fields.l1_blob_base_fee)
-        result["l1BlobBaseFee"] = toQuantity(bcos::fromBigEndian<bcos::u256>(
-            bcos::bytesConstRef{fields.l1_blob_base_fee->data(), fields.l1_blob_base_fee->size()}));
-    if (fields.l1_base_fee_scalar)
-        result["l1BaseFeeScalar"] = toQuantity(*fields.l1_base_fee_scalar);
-    if (fields.l1_blob_base_fee_scalar)
-        result["l1BlobBaseFeeScalar"] = toQuantity(*fields.l1_blob_base_fee_scalar);
-    if (fields.operator_fee_scalar)
-        result["operatorFeeScalar"] = toQuantity(*fields.operator_fee_scalar);
-    if (fields.operator_fee_constant)
-        result["operatorFeeConstant"] = toQuantity(*fields.operator_fee_constant);
-    if (fields.da_footprint_gas_scalar)
-        result["daFootprintGasScalar"] = toQuantity(*fields.da_footprint_gas_scalar);
-    if (fields.da_footprint)
-        result["blobGasUsed"] = toQuantity(*fields.da_footprint);
-    if (fields.l1_gas_used)
-        result["l1GasUsed"] = toQuantity(*fields.l1_gas_used);
-    if (fields.operator_fee)
-        result["operatorFee"] = toQuantity(bcos::fromBigEndian<bcos::u256>(
-            bcos::bytesConstRef{fields.operator_fee->data(), fields.operator_fee->size()}));
-    if (fields.deposit_nonce)
-        result["depositNonce"] = toQuantity(*fields.deposit_nonce);
-    if (fields.deposit_receipt_version)
-        result["depositReceiptVersion"] = toQuantity(*fields.deposit_receipt_version);
+    // not fixed-width. toQuantity(u256) goes through toCompactBigEndian for exactly that.
+    if (meta->l1_gas_price)
+        result["l1GasPrice"] = toQuantity(*meta->l1_gas_price);
+    if (meta->l1_fee)
+        result["l1Fee"] = toQuantity(*meta->l1_fee);
+    if (meta->l1_blob_base_fee)
+        result["l1BlobBaseFee"] = toQuantity(*meta->l1_blob_base_fee);
+    if (meta->l1_base_fee_scalar)
+        result["l1BaseFeeScalar"] = toQuantity(*meta->l1_base_fee_scalar);
+    if (meta->l1_blob_base_fee_scalar)
+        result["l1BlobBaseFeeScalar"] = toQuantity(*meta->l1_blob_base_fee_scalar);
+    if (meta->operator_fee_scalar)
+        result["operatorFeeScalar"] = toQuantity(*meta->operator_fee_scalar);
+    if (meta->operator_fee_constant)
+        result["operatorFeeConstant"] = toQuantity(*meta->operator_fee_constant);
+    if (meta->da_footprint_gas_scalar)
+        result["daFootprintGasScalar"] = toQuantity(*meta->da_footprint_gas_scalar);
+    if (meta->da_footprint)
+        result["blobGasUsed"] = toQuantity(*meta->da_footprint);
+    if (meta->l1_gas_used)
+        result["l1GasUsed"] = toQuantity(*meta->l1_gas_used);
+    if (meta->operator_fee)
+        result["operatorFee"] = toQuantity(*meta->operator_fee);
+    if (meta->deposit_nonce)
+        result["depositNonce"] = toQuantity(*meta->deposit_nonce);
+    if (meta->deposit_receipt_version)
+        result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
 }
 }  // namespace
 
@@ -246,8 +237,8 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         }
     }
     result["type"] = toQuantity(static_cast<uint64_t>(type));
-    // No-op for legacy receipts (opReceiptMeta is empty); OP receipts that reach this path (e.g.
-    // the RPC layer resolves an OP tx hash via the generic path first) still get their extension
-    // fields.
+    // No-op for legacy receipts (opStackMeta() returns nullopt); OP receipts that reach this path
+    // (e.g. the RPC layer resolves an OP tx hash via the generic path first) still get their
+    // extension fields.
     appendOpReceiptMetaFields(result, receipt);
 }

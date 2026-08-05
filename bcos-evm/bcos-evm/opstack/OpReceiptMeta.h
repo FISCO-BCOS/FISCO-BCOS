@@ -1,6 +1,5 @@
 #pragma once
 
-#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <cstdint>
@@ -60,42 +59,4 @@ inline bcos::bytes trimBigEndian(intx::uint256 value)
     return bcos::bytes(be.bytes + first, be.bytes + sizeof(be.bytes));
 }
 
-/// Serialize an OpTxReceipt's meta into the opReceiptMeta byte string (bcos-codec RLP format,
-/// see OpReceiptMetaCodec.h). Never throws.
-inline bcos::bytes encodeOpReceiptMeta(const OpReceiptMeta& meta)
-{
-    bcos::codec::rlp::OpReceiptMetaFields fields;
-    if (meta.l1_gas_price)
-        fields.l1_gas_price = trimBigEndian(*meta.l1_gas_price);
-    if (meta.l1_fee)
-        fields.l1_fee = trimBigEndian(*meta.l1_fee);
-    if (meta.l1_blob_base_fee)
-        fields.l1_blob_base_fee = trimBigEndian(*meta.l1_blob_base_fee);
-    if (meta.l1_base_fee_scalar)
-        fields.l1_base_fee_scalar = *meta.l1_base_fee_scalar;
-    if (meta.l1_blob_base_fee_scalar)
-        fields.l1_blob_base_fee_scalar = *meta.l1_blob_base_fee_scalar;
-    if (meta.operator_fee_scalar)
-        fields.operator_fee_scalar = *meta.operator_fee_scalar;
-    if (meta.operator_fee_constant)
-        fields.operator_fee_constant = *meta.operator_fee_constant;
-    if (meta.da_footprint_gas_scalar)
-        fields.da_footprint_gas_scalar = *meta.da_footprint_gas_scalar;
-    if (meta.da_footprint)
-        fields.da_footprint = *meta.da_footprint;
-    if (meta.l1_gas_used)
-        fields.l1_gas_used = *meta.l1_gas_used;
-    if (meta.operator_fee)
-        fields.operator_fee = trimBigEndian(*meta.operator_fee);
-    return bcos::codec::rlp::encodeOpReceiptMeta(fields);
-}
-
-/// Serialize an OpDepositReceipt's deposit fields into the opReceiptMeta byte string.
-inline bcos::bytes encodeOpDepositMeta(uint64_t deposit_nonce, uint64_t deposit_receipt_version)
-{
-    bcos::codec::rlp::OpReceiptMetaFields fields;
-    fields.deposit_nonce = deposit_nonce;
-    fields.deposit_receipt_version = deposit_receipt_version;
-    return bcos::codec::rlp::encodeOpReceiptMeta(fields);
-}
 }  // namespace bcos::evm::opstack

@@ -116,7 +116,7 @@ inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(
 /// bcos::protocol::TransactionReceipt via the injected factory. Only status/gasUsed/logs are
 /// populated from the evmone receipt; blockNumber and the OP receipt meta (opStackMeta) are
 /// carried explicitly — the meta is what lets the RPC layer emit op-geth's OP extension fields
-/// (see OpReceiptMetaCodec.h and EthEndpoint's OP fallback path).
+/// (ReceiptResponse.cpp reads it straight off the struct; see EthEndpoint's OP fallback path).
 inline bcos::protocol::TransactionReceipt::Ptr mapOpReceipt(
     const evmone::state::TransactionReceipt& receipt,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
