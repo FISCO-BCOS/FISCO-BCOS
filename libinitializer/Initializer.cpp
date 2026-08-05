@@ -320,6 +320,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
             m_globalStateStorageInitializer->storage().latestBackend()));
 
+    // Resolve the effective executor version BEFORE gating Engine API / wiring the
+    // schedulers. The on-chain value overrides the genesis-file value (executor_version is
+    // runtime-settable via SystemConfigPrecompiled, though >= 2 is now rejected there — v2
+    // is genesis-only). Using the unresolved node-config value here would build the Engine
+    // API on the v1 executor for a ledger that actually says v2 — the state-root divergence
+    // the gate exists to prevent. Genesis is already built (LedgerInitializer), so m_ledger
+    // is readable at this point.
+    auto executorVersion = m_nodeConfig->executorVersion();
+    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
+            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    {
+        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
+        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+    }
+    m_executorVersion = executorVersion;
+
     // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
     // It must not be built for executor_version=2: a v2 chain's state transitions run
     // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
@@ -327,7 +343,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
     // respond "engine service not available" (see EngineEndpoint.cpp).
     const bool engineApiForV1Only =
-        (m_nodeConfig->executorVersion() != scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+        (m_executorVersion != scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
 
     if (baselineSchedulerConfig.parallel)
     {
@@ -409,16 +425,29 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                  schedulerSeq, factory, executorManager, m_ioServicePool),
                 m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
 
-    auto executorVersion = m_nodeConfig->executorVersion();
-    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
-            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
+    INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
+    m_scheduler->setVersion(m_executorVersion, {});
+
+    // Log the effective EVMC revision once at startup (v2 only). It is fixed at genesis
+    // (NodeConfig requires an explicit evm_revision for executor_version=2), so a one-time
+    // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
+    // The CI integration test greps this line to pin the effective revision.
+    if (m_executorVersion == scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
     {
-        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
-        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+        if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
+        {
+            INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2)")
+                                  << LOG_KV("evmcRevision", std::get<0>(*evmcRev));
+        }
+        else
+        {
+            INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2, defaulted)")
+                                  << LOG_KV("evmcRevision",
+                                        ledger::evmcRevisionName(ledger::EVMC_REVISION_DEFAULT));
+        }
     }
-    INITIALIZER_LOG(INFO) << "Set executor version to: " << executorVersion;
-    m_executorVersion = executorVersion;
-    m_scheduler->setVersion(executorVersion, {});
 
     // Set scheduler to TxPoolInitializer after scheduler is created
     m_txpoolInitializer->setScheduler(m_scheduler);

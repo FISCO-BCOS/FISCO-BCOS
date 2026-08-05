@@ -30,8 +30,8 @@ private:
 public:
     bcos::scheduler::SchedulerInterface& scheduler(int version);
 
-    MultiVersionScheduler(
-        std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers);
+    MultiVersionScheduler(std::array<scheduler::SchedulerInterface::Ptr,
+        SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers);
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>

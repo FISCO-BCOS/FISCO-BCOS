@@ -1549,6 +1549,16 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                 auto blockStr = trim(entry.substr(0, colon));
                 auto name = trim(entry.substr(colon + 1));
                 auto block = boost::lexical_cast<protocol::BlockNumber>(blockStr);
+                if (block < 0)
+                {
+                    // A negative fork height would otherwise become the block-0 baseline
+                    // (encodeEVMCRevisionConfig picks forks.begin()->second when no 0: entry
+                    // exists) — an operator typing -5 instead of 5 would silently get a
+                    // different fork schedule. Reject it here.
+                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision_forks block height must be >= 0, got " +
+                        std::to_string(block) + " in entry: " + std::string(entry)));
+                }
                 auto rev = ledger::evmcRevisionFromName(name);
                 if (!rev)
                 {
@@ -1583,6 +1593,21 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
             "executor.evm_revision (or executor.evm_revision_forks) so the EVM "
             "revision is recorded on-chain; refusing to run with an implicit "
             "binary-side default"));
+    }
+    // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
+    // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for
+    // >= V3_15_0). Below 3.18.0 the operator would be forced to write a value that is then
+    // ignored (the chain runs the binary default); below 3.15.0 executor_version is not
+    // persisted either, so getLedgerConfig never injects a revision and every transaction
+    // throws EvmcRevisionNotConfigured. Reject both ranges up front.
+    if (m_genesisConfig.m_executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION &&
+        m_genesisConfig.m_compatibilityVersion <
+            static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+            "executor.version=2 requires compatibility_version >= 3.18.0: below that "
+            "Ledger::buildGenesisBlock cannot persist evmc_revision, so the EVM revision "
+            "would not be recorded on-chain"));
     }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
@@ -2482,7 +2507,8 @@ std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
 {
     return m_genesisConfig.m_evmcRevision;
 }
-std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks() const
+std::map<protocol::BlockNumber, evmc_revision> const&
+bcos::tool::NodeConfig::evmcRevisionForks() const
 {
     return m_genesisConfig.m_evmcRevisionForks;
 }

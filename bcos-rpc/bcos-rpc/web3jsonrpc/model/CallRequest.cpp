@@ -39,7 +39,13 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
             if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
                     bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
             {
-                nonce = entry->get();
+                // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
+                // convert_to<std::string>(); StorageStateView reads them unprefixed),
+                // but bcosTransactionToEvmone's parseQuantity reads HEX. Normalize here
+                // so a deployment eth_estimateGas at nonce >= 10 does not get its decimal
+                // "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9 coincide in both
+                // bases, which is why only the 11th+ deployment would break.
+                nonce = toQuantity(bcos::u256(entry->get()));
             }
         }
     }

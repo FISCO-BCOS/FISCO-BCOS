@@ -37,6 +37,12 @@
 namespace bcos::ledger
 {
 
+/// Thrown when a persisted evmc_revision SYS_CONFIG value cannot be parsed. The EVM
+/// revision is a consensus parameter on a v2 chain, so a corrupt value must halt loudly
+/// (explicit startup failure) rather than fall back to a compile-time default that could
+/// differ between binaries (a silent state-root fork).
+DERIVE_BCOS_EXCEPTION(InvalidEVMCRevisionConfig);
+
 constexpr static uint64_t DEFAULT_GAS_LIMIT = 3000000000;
 constexpr static std::uint64_t DEFAULT_EPOCH_SEALER_NUM = 4;
 constexpr static std::uint64_t DEFAULT_EPOCH_BLOCK_NUM = 1000;
@@ -255,8 +261,11 @@ private:
     std::map<bcos::protocol::BlockNumber, evmc_revision> m_forkTransitions;
 };
 
-/// The latest EVM revision supported by the ethereum-executor — used as the default
-/// EVMC revision applied from genesis when no evmc_revision config is present.
+/// The latest EVM revision supported by the ethereum-executor. This is a fallback only:
+/// NodeConfig::loadExecutorConfig requires an explicit evm_revision for executor_version=2,
+/// so a fresh v2 chain always persists its revision on-chain and getLedgerConfig applies
+/// this constant solely on the (defensive) v2-missing-config path, plus test / EEST-runner
+/// convenience.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 
 /// Executor version selecting the pure-Ethereum EthereumExecutor (ethereum-executor).
@@ -303,6 +312,8 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
         return EVMC_PRAGUE;
     if (n == "osaka")
         return EVMC_OSAKA;
+    if (n == "experimental")
+        return EVMC_EXPERIMENTAL;
     return std::nullopt;
 }
 
@@ -400,8 +411,8 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
     while (pos < value.size())
     {
         auto comma = value.find(',', pos);
-        auto entry =
-            value.substr(pos, comma == std::string_view::npos ? std::string_view::npos : comma - pos);
+        auto entry = value.substr(pos,
+            comma == std::string_view::npos ? std::string_view::npos : comma - pos);
         pos = comma == std::string_view::npos ? value.size() : comma + 1;
 
         auto colon = entry.find(':');
@@ -449,10 +460,12 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
     else
     {
         // Nothing parsed (empty value, or every entry failed from_chars /
-        // evmcRevisionFromName). Fail safe — mirror the missing-config path by
-        // defaulting to EVMC_REVISION_DEFAULT, so the chain keeps producing
-        // blocks instead of EvmcRevisionNotConfigured on every transaction.
-        ledgerConfig.setEVMCRevision(EVMC_REVISION_DEFAULT);
+        // evmcRevisionFromName). The EVM revision is a consensus parameter on a v2
+        // chain, so a corrupt persisted value must halt loudly, not silently fall back
+        // to a compile-time default: two nodes on different binaries would otherwise
+        // execute the same blocks under different revisions (a silent state-root fork).
+        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+            "cannot parse evmc_revision config value: " + std::string(value)));
     }
 }
 }  // namespace bcos::ledger

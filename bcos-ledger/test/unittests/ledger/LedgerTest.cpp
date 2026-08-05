@@ -1687,6 +1687,35 @@ BOOST_AUTO_TEST_CASE(genesisEVMCRevision)
     }());
 }
 
+// Every evmc_revision enumerator must round-trip encode -> decode (finding 6):
+// evmcRevisionName and evmcRevisionFromName are two hand-maintained tables, and a
+// name one emits must be accepted by the other. This pins the invariant and would
+// catch a future evmc bump that adds a revision handled in only one direction.
+BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
+{
+    for (int rev = static_cast<int>(EVMC_FRONTIER); rev <= static_cast<int>(EVMC_MAX_REVISION);
+         ++rev)
+    {
+        auto r = static_cast<evmc_revision>(rev);
+        auto name = ledger::evmcRevisionName(r);
+        // evmcRevisionName is a total switch, so it must always yield a non-empty name.
+        BOOST_REQUIRE(!name.empty());
+        auto decoded = ledger::evmcRevisionFromName(name);
+        BOOST_REQUIRE_MESSAGE(decoded.has_value(),
+            "evmcRevisionName(" << rev << ") = \"" << name
+                                << "\" is not accepted by evmcRevisionFromName");
+        BOOST_CHECK_EQUAL(static_cast<int>(*decoded), rev);
+
+        // Full encode -> apply round-trip through the same path getLedgerConfig uses.
+        std::map<bcos::protocol::BlockNumber, evmc_revision> forks;
+        auto encoded = ledger::encodeEVMCRevisionConfig(r, forks);
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, encoded);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(replaceBinary)
 {
     task::syncWait([this]() -> task::Task<void> {

@@ -668,7 +668,13 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
 // shape — empty nonce, omitted gas, no gasPrice — from a sender whose nonce is no
 // longer 0 was therefore rejected with NONCE_TOO_LOW / INTRINSIC_GAS_TOO_LOW.
 // The dry-run is normalized to Ethereum RPC semantics instead (nonce = sender's
-// current nonce, gas = block gas limit, base fee zeroed) and must succeed.
+// current nonce, gas = min(block gas limit, MAX_TX_GAS_LIMIT), base fee and gas
+// price zeroed) and must succeed.
+//
+// Runs at EVMC_OSAKA deliberately: this is EVMC_REVISION_DEFAULT and the revision
+// where EIP-7825 (MAX_TX_GAS_LIMIT = 2^24) bites — FISCO's block ceiling is 3e9, so
+// without the per-tx cap the dry-run would fail MAX_GAS_LIMIT_EXCEEDED. The gas cap
+// and unconditional price/base-fee zeroing are exactly what this case guards.
 BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
 {
     task::syncWait([&, this]() -> task::Task<void> {
@@ -691,7 +697,7 @@ BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         ledger::LedgerConfig ledgerConfig;
-        ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
+        ledgerConfig.setEVMCRevision(EVMC_OSAKA);
 
         // Call-shaped tx: empty nonce, gas limit 0, no gasPrice — exactly what
         // CallRequest::takeToTransaction produces for an eth_call that omits them.

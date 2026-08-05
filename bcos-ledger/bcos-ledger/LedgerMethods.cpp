@@ -492,20 +492,20 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     // the fallback here covers a v2 genesis without one (defensive — NodeConfig::loadExecutorConfig
     // requires an explicit revision for executor_version=2, so this default only fires on
     // corrupt/legacy state).
+    //
+    // No per-call logging here: getLedgerConfig sits on the per-block / per-RPC hot path.
+    // The effective revision is logged once at startup (Initializer), which the CI pins.
     if (executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
         {
+            // A corrupt persisted value halts loudly (InvalidEVMCRevisionConfig) instead of
+            // silently running a compile-time default that could differ between binaries.
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
-            LEDGER2_LOG(INFO) << LOG_DESC("EVMC revision resolved")
-                              << LOG_KV("evmcRevision", evmcRevision.value().first);
         }
         else
         {
             ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
-            LEDGER2_LOG(INFO) << LOG_DESC("EVMC revision defaulted")
-                              << LOG_KV("evmcRevision",
-                                    ledger::evmcRevisionName(ledger::EVMC_REVISION_DEFAULT));
         }
     }
 }

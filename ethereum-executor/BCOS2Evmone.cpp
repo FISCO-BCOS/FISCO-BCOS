@@ -12,12 +12,15 @@
 #include "bcos-evm/eth/state/transaction.hpp"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <system_error>
+
+#define BCOS2EVMONE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BCOS2EVMONE")
 
 namespace bcos::executor_v1::eth
 {
@@ -161,11 +164,14 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
         }
         else if (tb.size() == sizeof(evmc_address))
         {
-            // Defensive fallback for raw 20-byte addresses. No production tx
-            // path uses this encoding today (EEMakeTransferTx and every RPC/
-            // txpool path write hex), but if it ever appears it must be a full
-            // 20-byte value — a shorter copy would silently fabricate an
-            // address out of the first bytes.
+            // Defensive fallback for raw 20-byte addresses. No production tx path uses this
+            // encoding today (EEMakeTransferTx and every RPC/txpool path write hex), but if it
+            // ever appears it must be a full 20-byte value — a shorter copy would silently
+            // fabricate an address out of the first bytes. Log a warning so an unexpected
+            // input encoding that reaches this branch surfaces instead of passing silently.
+            BCOS2EVMONE_LOG(WARNING)
+                << "to field uses raw 20-byte encoding (fallback branch); not expected "
+                   "from any production tx path";
             evmc_address ta{};
             std::copy_n(tb.begin(), sizeof(evmc_address), ta.bytes);
             evmTx.to = ta;
@@ -225,8 +231,13 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
             }
             return static_cast<uint64_t>(v);
         }
-        catch (...)
+        catch (std::exception const&)
         {
+            // Parse failure — bcos::u256 throws std::exception subclasses (std::runtime_error)
+            // on a bad hex literal. Handling std::exception explicitly (instead of catch (...))
+            // documents that only parse/overflow failures are expected here; genuinely
+            // unexpected non-std exceptions still propagate instead of being silently
+            // conflated with "unparseable input".
             return 0;
         }
     };
