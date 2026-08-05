@@ -4,7 +4,9 @@
 // EthBlockHeaderTest.cpp — 闭环 Task 3(design §5.1/§7.5,决策 C3/C6)。
 //
 // 覆盖两个独立 GTest 套件(brief 裁定 C6,套件名钉死):
-//   - EthBlockHeader:      bcos::codec::rlp::EthBlockHeader::encode()/hash()
+//   - EthBlockHeader:      bcos::codec::rlp::encodeOpHeader()/opHeaderHash()/decodeOpHeader()
+//     (2026-08-05 迁移:载体从退役的 EthBlockHeader 结构换成 FISCO BlockHeader + OpHeaderConst,
+//     RLP 字节与 blockHash 逐字节不变,见 spec 2026-08-05-opstack-blockheader-fisco-adaptation)
 //   - OpDepositEncode:     bcos::codec::rlp::encodeDepositEnvelope()
 //
 // 金值全部来自 Task 2 的产物,不自算(brief 明示):
@@ -33,8 +35,9 @@
 // target 只在完整 CMake 树(顶层 add_subdirectory(bcos-codec))下存在,恰与
 // bcos-framework 存在性同条件,见 test/CMakeLists.txt 的 if(TARGET bcos-framework)。
 
-#include <bcos-codec/rlp/EthBlockHeader.h>
 #include <bcos-codec/rlp/OpDepositEncode.h>
+#include <bcos-codec/rlp/OpHeaderCodec.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -54,9 +57,12 @@ using bcos::h2048;
 using bcos::h256;
 using bcos::h64;
 using bcos::u256;
+using bcos::codec::rlp::decodeOpHeader;
 using bcos::codec::rlp::encodeDepositEnvelope;
-using bcos::codec::rlp::EthBlockHeader;
+using bcos::codec::rlp::encodeOpHeader;
 using bcos::codec::rlp::OpDepositFields;
+using bcos::codec::rlp::OpHeaderConst;
+using bcos::codec::rlp::opHeaderHash;
 
 namespace
 {
@@ -65,6 +71,10 @@ namespace
 const h256 kEmptyOmmersHash{bcos::fromHex(
     std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"})};
 const h64 kPosNonce{bcos::fromHex(std::string{"0x0000000000000000"})};
+
+const OpHeaderConst kOpHeaderConst{.ommersHash = kEmptyOmmersHash,
+    .difficulty = bcos::u256(0),
+    .nonce = kPosNonce};
 
 Json loadJsonOrFail(const fs::path& path)
 {
@@ -106,37 +116,49 @@ Json const& vectorBody(Json const& doc, std::string const& id)
     return doc.at(id);
 }
 
-// 组一枚 EthBlockHeader:向量自身 env/_op_expected.header(15 字段)+ golden 目录的
-// extraData/excessBlobGas/transactionsRoot(3 字段)+ 3 个协议常量。字段来源口径同
-// Task 2 report 自检 (a)。
-EthBlockHeader buildHeader(Json const& vec, Json const& golden)
+// 组一枚 FISCO BlockHeader(18 字段,经 #5385 访问器)+ 3 个协议常量(经 kOpHeaderConst)。
+// 字段来源口径同原 buildHeader:向量自身 env/_op_expected.header(15 字段)+ golden 目录的
+// extraData/excessBlobGas/transactionsRoot(3 字段)。timestamp 按 FISCO 惯例存毫秒。
+std::unique_ptr<bcostars::protocol::BlockHeaderImpl> buildHeader(
+    Json const& vec, Json const& golden)
 {
     auto const& env = vec.at("env");
     auto const& header = vec.at("_op_expected").at("header");
 
-    EthBlockHeader h;
-    h.parentHash = asH256(env.at("parentHash").get<std::string>());
-    h.ommersHash = kEmptyOmmersHash;
-    h.feeRecipient = asAddress(env.at("currentCoinbase").get<std::string>());
-    h.stateRoot = asH256(header.at("stateRoot").get<std::string>());
-    h.transactionsRoot = asH256(golden.at("transactionsRoot").get<std::string>());
-    h.receiptsRoot = asH256(header.at("receiptsRoot").get<std::string>());
-    h.logsBloom = h2048{asBytes(header.at("logsBloom").get<std::string>())};
-    h.difficulty = u256(0);
-    h.number = asU64(env.at("currentNumber").get<std::string>());
-    h.gasLimit = asU64(env.at("currentGasLimit").get<std::string>());
-    h.gasUsed = asU64(header.at("gasUsed").get<std::string>());
-    h.timestamp = asU64(env.at("currentTimestamp").get<std::string>());
-    h.extraData = asBytes(golden.at("extraData").get<std::string>());
-    h.prevRandao = asH256(env.at("currentRandom").get<std::string>());
-    h.nonce = kPosNonce;
-    h.baseFeePerGas = asU256(env.at("currentBaseFee").get<std::string>());
-    h.withdrawalsRoot = asH256(header.at("withdrawalsRoot").get<std::string>());
-    h.blobGasUsed = asU64(header.at("blobGasUsed").get<std::string>());
-    h.excessBlobGas = asU64(golden.at("excessBlobGas").get<std::string>());
-    h.parentBeaconBlockRoot = asH256(env.at("parentBeaconBlockRoot").get<std::string>());
-    h.requestsHash = asH256(header.at("requestsHash").get<std::string>());
+    auto h = std::make_unique<bcostars::protocol::BlockHeaderImpl>();
+    h->setNumber(static_cast<bcos::protocol::BlockNumber>(
+        asU64(env.at("currentNumber").get<std::string>())));
+    h->setTimestamp(
+        static_cast<int64_t>(asU64(env.at("currentTimestamp").get<std::string>())) * 1000);
+    h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = h->number() - 1,
+        .blockHash = asH256(env.at("parentHash").get<std::string>())});
+    h->setCoinbase(asAddress(env.at("currentCoinbase").get<std::string>()));
+    h->setStateRoot(asH256(header.at("stateRoot").get<std::string>()));
+    h->setTxsRoot(asH256(golden.at("transactionsRoot").get<std::string>()));
+    h->setReceiptsRoot(asH256(header.at("receiptsRoot").get<std::string>()));
+    const auto bloom = h2048{asBytes(header.at("logsBloom").get<std::string>())};
+    h->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    h->setGasLimit(asU256(env.at("currentGasLimit").get<std::string>()));
+    h->setGasUsed(asU256(header.at("gasUsed").get<std::string>()));
+    h->setExtraData(asBytes(golden.at("extraData").get<std::string>()));
+    h->setPrevRandao(asH256(env.at("currentRandom").get<std::string>()));
+    h->setBaseFee(asU256(env.at("currentBaseFee").get<std::string>()));
+    h->setWithdrawalsRoot(asH256(header.at("withdrawalsRoot").get<std::string>()));
+    h->setBlobGasUsed(asU256(header.at("blobGasUsed").get<std::string>()));
+    h->setExcessBlobGas(asU256(golden.at("excessBlobGas").get<std::string>()));
+    h->setParentBeaconBlockRoot(asH256(env.at("parentBeaconBlockRoot").get<std::string>()));
+    h->setRequestsHash(asH256(header.at("requestsHash").get<std::string>()));
     return h;
+}
+
+// 逐字节比较 bytesConstRef(span 无 operator==,审查用显式长度+逐字节避免误用)。
+void expectSameBytes(bcos::bytesConstRef a, bcos::bytesConstRef b, std::string const& what)
+{
+    EXPECT_EQ(a.size(), b.size()) << what;
+    if (a.size() == b.size())
+    {
+        EXPECT_TRUE(std::equal(a.begin(), a.end(), b.begin())) << what;
+    }
 }
 
 // cases/<id>.in.json 的一枚 `_op_deposit` 结构化块 → OpDepositFields。字段名与向量语料
@@ -224,49 +246,58 @@ GoldenSample loadSample(std::string const& id)
 void expectHeaderMatchesGolden(std::string const& id)
 {
     auto sample = loadSample(id);
-    EthBlockHeader header = buildHeader(sample.vector, sample.golden);
+    auto header = buildHeader(sample.vector, sample.golden);
 
-    // encode() 字段级断言先于 hash()(brief/spec §7.5 决议 C3)。
-    const bytes encoded = header.encode();
+    // encode 字段级断言先于 hash(裁定 C3)。
+    const bytes encoded = encodeOpHeader(*header, kOpHeaderConst);
     const bytes expectedEncoded = asBytes(sample.golden.at("encodedHeaderHex").get<std::string>());
-    EXPECT_EQ(encoded, expectedEncoded) << id << ": encode() != golden.encodedHeaderHex";
+    EXPECT_EQ(encoded, expectedEncoded) << id << ": encodeOpHeader != golden.encodedHeaderHex";
 
-    const h256 hash = header.hash();
+    const h256 hash = opHeaderHash(*header, kOpHeaderConst);
     const h256 expectedHash = asH256(sample.golden.at("blockHash").get<std::string>());
-    EXPECT_EQ(hash, expectedHash) << id << ": hash() != golden.blockHash";
+    EXPECT_EQ(hash, expectedHash) << id << ": opHeaderHash != golden.blockHash";
 
-    // decode() 反向断言(终审 B4-1 打通读路后新增):golden 的 encodedHeaderHex 必须解回一枚
-    // 与 buildHeader 逐字段相同的头,且再 encode() 回同一批字节。这条把 decode 钉在 op-geth
-    // 金值上——它是 s_eth_block_header 读路的正确性锚,engine 的 timestamp 单调校验(以及日后
+    // decode 反向断言(终审 B4-1 打通读路后新增):golden 的 encodedHeaderHex 必须解回一枚
+    // 与 buildHeader 逐字段相同的头,且再 encode 回同一批字节。这条把 decode 钉在 op-geth
+    // 金值上——它是 s_number_2_header 读路的正确性锚,engine 的 timestamp 单调校验(以及日后
     // Holocene baseFee / gasLimit 变化率)都建立在它之上。
     // 断言给的是**字段级**比较而非仅 re-encode 相等:后者在"decode 把两个同类型字段读反了、
     // encode 又按同样的错序写回"时会假绿(相邻防线失效仍通过 —— spec §11)。
     bytes decodableCopy = expectedEncoded;
-    EthBlockHeader decoded;
-    auto decodeError = decoded.decode(bcos::bytesRef(decodableCopy.data(), decodableCopy.size()));
-    ASSERT_EQ(decodeError, nullptr) << id << ": decode() rejected golden.encodedHeaderHex";
-    EXPECT_EQ(decoded.parentHash, header.parentHash) << id;
-    EXPECT_EQ(decoded.ommersHash, header.ommersHash) << id;
-    EXPECT_EQ(decoded.feeRecipient, header.feeRecipient) << id;
-    EXPECT_EQ(decoded.stateRoot, header.stateRoot) << id;
-    EXPECT_EQ(decoded.transactionsRoot, header.transactionsRoot) << id;
-    EXPECT_EQ(decoded.receiptsRoot, header.receiptsRoot) << id;
-    EXPECT_EQ(decoded.logsBloom, header.logsBloom) << id;
-    EXPECT_EQ(decoded.difficulty, header.difficulty) << id;
-    EXPECT_EQ(decoded.number, header.number) << id;
-    EXPECT_EQ(decoded.gasLimit, header.gasLimit) << id;
-    EXPECT_EQ(decoded.gasUsed, header.gasUsed) << id;
-    EXPECT_EQ(decoded.timestamp, header.timestamp) << id;
-    EXPECT_EQ(decoded.extraData, header.extraData) << id;
-    EXPECT_EQ(decoded.prevRandao, header.prevRandao) << id;
-    EXPECT_EQ(decoded.nonce, header.nonce) << id;
-    EXPECT_EQ(decoded.baseFeePerGas, header.baseFeePerGas) << id;
-    EXPECT_EQ(decoded.withdrawalsRoot, header.withdrawalsRoot) << id;
-    EXPECT_EQ(decoded.blobGasUsed, header.blobGasUsed) << id;
-    EXPECT_EQ(decoded.excessBlobGas, header.excessBlobGas) << id;
-    EXPECT_EQ(decoded.parentBeaconBlockRoot, header.parentBeaconBlockRoot) << id;
-    EXPECT_EQ(decoded.requestsHash, header.requestsHash) << id;
-    EXPECT_EQ(decoded.encode(), expectedEncoded) << id << ": decode()->encode() is not identity";
+    bcostars::protocol::BlockHeaderImpl decoded;
+    OpHeaderConst decodedConst;
+    auto decodeError = decodeOpHeader(
+        bcos::bytesRef(decodableCopy.data(), decodableCopy.size()), decoded, decodedConst);
+    ASSERT_EQ(decodeError, nullptr) << id << ": decodeOpHeader rejected golden.encodedHeaderHex";
+    // 3 个常量经 out-param 往返(无 tars 载体)。
+    EXPECT_EQ(decodedConst.ommersHash, kOpHeaderConst.ommersHash) << id;
+    EXPECT_EQ(decodedConst.difficulty, kOpHeaderConst.difficulty) << id;
+    EXPECT_EQ(decodedConst.nonce, kOpHeaderConst.nonce) << id;
+    // 18 个 tars 载体字段经访问器比较。
+    // parentInfo.blockNumber:decode 写 number-1(与 rebuildOpEthHeader 一致,审查 F1),golden 全
+    // 是 block 1,N-1=0,这里显式断言以钉死该约定,防止未来漂移。
+    EXPECT_EQ(decoded.parentInfo().blockHash, header->parentInfo().blockHash) << id;
+    EXPECT_EQ(decoded.parentInfo().blockNumber, header->parentInfo().blockNumber) << id;
+    EXPECT_EQ(decoded.coinbase(), header->coinbase()) << id;
+    EXPECT_EQ(decoded.stateRoot(), header->stateRoot()) << id;
+    EXPECT_EQ(decoded.txsRoot(), header->txsRoot()) << id;
+    EXPECT_EQ(decoded.receiptsRoot(), header->receiptsRoot()) << id;
+    expectSameBytes(decoded.logsBloom(), header->logsBloom(), id);
+    EXPECT_EQ(decoded.number(), header->number()) << id;
+    EXPECT_EQ(decoded.gasLimit(), header->gasLimit()) << id;
+    EXPECT_EQ(decoded.gasUsed(), header->gasUsed()) << id;
+    EXPECT_EQ(decoded.timestamp(), header->timestamp()) << id;
+    expectSameBytes(decoded.extraData(), header->extraData(), id);
+    EXPECT_EQ(decoded.prevRandao(), header->prevRandao()) << id;
+    EXPECT_EQ(decoded.baseFee().value(), header->baseFee().value()) << id;
+    EXPECT_EQ(decoded.withdrawalsRoot().value(), header->withdrawalsRoot().value()) << id;
+    EXPECT_EQ(decoded.blobGasUsed().value(), header->blobGasUsed().value()) << id;
+    EXPECT_EQ(decoded.excessBlobGas().value(), header->excessBlobGas().value()) << id;
+    EXPECT_EQ(decoded.parentBeaconBlockRoot().value(), header->parentBeaconBlockRoot().value())
+        << id;
+    EXPECT_EQ(decoded.requestsHash().value(), header->requestsHash().value()) << id;
+    EXPECT_EQ(encodeOpHeader(decoded, decodedConst), expectedEncoded)
+        << id << ": decodeOpHeader()->encodeOpHeader is not identity";
 }
 
 }  // namespace

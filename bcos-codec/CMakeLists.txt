@@ -30,7 +30,7 @@ target_include_directories(codec PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-codec>
 )
-target_link_libraries(codec PUBLIC bcos-crypto Microsoft.GSL::GSL)
+target_link_libraries(codec PUBLIC bcos-framework bcos-crypto Microsoft.GSL::GSL)
 set_target_properties(codec PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
