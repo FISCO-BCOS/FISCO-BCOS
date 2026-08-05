@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "bcos-evm/eth/state/state_view.hpp"
+#include <test/state/state_view.hpp>
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/TBBWait.h"

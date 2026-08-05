@@ -1,9 +1,9 @@
 /// @file EthereumExecutor.h
-/// @brief A pure-Ethereum transaction executor based on bcos-evm.
+/// @brief A pure-Ethereum transaction executor based on evmone::state.
 ///
 /// Implements the bcos::executor_v1::TransactionExecutor concept.
 /// Internally delegates all EVM execution and transaction validation to
-/// the bcos-evm library (evmone::state::transition / validate_transaction),
+/// the evmone::state library (transition / validate_transaction),
 /// which provides full Ethereum consensus compatibility.
 ///
 /// This executor does NOT support FISCO BCOS native transaction features
@@ -23,8 +23,8 @@
 
 #include "BCOS2Evmone.h"
 #include "StorageStateView.h"
-#include "bcos-evm/eth/state/errors.hpp"
-#include "bcos-evm/eth/state/state.hpp"
+#include <test/state/errors.hpp>
+#include <test/state/state.hpp>
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"

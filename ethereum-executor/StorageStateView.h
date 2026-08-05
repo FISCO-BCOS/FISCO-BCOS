@@ -2,14 +2,14 @@
 /// @brief An evmone::state::StateView adapter that reads from BCOS MutableStorage
 ///        via EVMAccount (synchronous bridge using TBB syncWait).
 ///
-/// This adapter allows bcos-evm's transition() engine to read pre-state from
+/// This adapter allows evmone::state's transition() engine to read pre-state from
 /// the BCOS storage layer without modification.  After execution, the returned
 /// StateDiff is written back by the caller.
 
 #pragma once
 
-#include "bcos-evm/eth/state/state.hpp"
-#include "bcos-evm/eth/state/state_view.hpp"
+#include <test/state/state.hpp>
+#include <test/state/state_view.hpp>
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-task/TBBWait.h"
 #include <evmc/evmc.h>

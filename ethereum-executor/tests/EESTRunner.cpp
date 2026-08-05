@@ -3,7 +3,7 @@
  * @brief Standalone Ethereum Execution Spec Tests (EEST) runner.
  *
  * A dedicated command-line tool for running EEST v5.4.0 JSON state test fixtures
- * against ethereum-executor (based on bcos-evm).  Provides detailed per-file and per-test
+ * against ethereum-executor (based on evmone::state).  Provides detailed per-file and per-test
  * diagnostic output, configurable verbosity, single-fixture regression mode,
  * and TBB-based parallel execution.
  *
@@ -17,7 +17,7 @@
 #include "EESTRunner.h"
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-evm/eth/state/system_contracts.hpp"
+#include <test/state/system_contracts.hpp>
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -1776,7 +1776,7 @@ public:
                 evmWithdrawals.push_back(ew);
             }
 
-            // Apply block reward via finalize() (uses bcos-evm's built-in logic)
+            // Apply block reward via finalize() (uses evmone::state's built-in logic)
             task::tbb::syncWait(executor.finalizeBlock(
                 storage, blockHdr, m_ledgerConfig, blockRev, blockReward, evmWithdrawals));
 

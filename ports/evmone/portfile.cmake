@@ -15,14 +15,14 @@ vcpkg_from_github(
     REF v0.21.0
     SHA512 bc2928d42140d2fbb47d1e06773e634d208945e52ac70a418798586897a60164910cc2b23c80479ae172941d8d9142ea6fdd86e13f560195cff44ccdc1f1d0f2
     HEAD_REF master
-    PATCHES fisco-sm3.patch
+    PATCHES fisco-sm3.patch fisco-test-state.patch
 )
 
 vcpkg_cmake_configure(
     SOURCE_PATH ${SOURCE_PATH}
     OPTIONS
         -DBUILD_SHARED_LIBS=OFF
-        -DEVMONE_TESTING=OFF
+        -DEVMONE_TESTING=ON
         -DEVMONE_FUZZING=OFF
         -DEVMONE_TOOLS=OFF
         -DHUNTER_ENABLED=OFF
@@ -70,6 +70,36 @@ if(NOT DEFINED VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
     file(INSTALL "${_precomp_rel_lib}" DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
 endif()
 
+# 4b. Install evmone-state static library (built when EVMONE_TESTING=ON) for
+#     bcos-evm / ethereum-executor. Use platform-aware library name: .lib on
+#     Windows, .a on Unix.
+if(VCPKG_TARGET_IS_WINDOWS)
+    set(_state_lib_name "evmone-state.lib")
+else()
+    set(_state_lib_name "libevmone-state.a")
+endif()
+
+file(GLOB_RECURSE _state_dbg_libs
+    "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-dbg/${_state_lib_name}")
+file(GLOB_RECURSE _state_rel_libs
+    "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/${_state_lib_name}")
+
+if(NOT DEFINED VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "debug")
+    if(NOT _state_dbg_libs)
+        message(FATAL_ERROR "debug ${_state_lib_name} not found in evmone build tree")
+    endif()
+    list(GET _state_dbg_libs 0 _state_dbg_lib)
+    file(INSTALL "${_state_dbg_lib}" DESTINATION "${CURRENT_PACKAGES_DIR}/debug/lib")
+endif()
+
+if(NOT DEFINED VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
+    if(NOT _state_rel_libs)
+        message(FATAL_ERROR "release ${_state_lib_name} not found in evmone build tree")
+    endif()
+    list(GET _state_rel_libs 0 _state_rel_lib)
+    file(INSTALL "${_state_rel_lib}" DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
+endif()
+
 # 4c. Install phase-1 precompile crypto headers used directly by FISCO-BCOS.
 #     (lib/evmone/*.hpp internal headers are installed by the patch's DIRECTORY install.)
 file(INSTALL
@@ -91,6 +121,17 @@ file(INSTALL
 
 file(INSTALL "${SOURCE_PATH}/lib/evmone_precompiles/pairing"
      DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmone_precompiles")
+
+# 4d. Install evmone-state test/state headers (consumed as <test/state/...>).
+#     The relative include "../utils/stdx/utility.hpp" from test/state/*.cpp
+#     resolves to test/utils/stdx/utility.hpp, hence that subtree is installed
+#     too.
+file(INSTALL "${SOURCE_PATH}/test/state/"
+    DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/state"
+    FILES_MATCHING PATTERN "*.hpp")
+file(INSTALL "${SOURCE_PATH}/test/utils/stdx/"
+    DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils/stdx"
+    FILES_MATCHING PATTERN "*.hpp")
 
 # 5. Write a manual cmake config file (avoids install(EXPORT) issues)
 #    Creates evmone::evmone imported target with proper dependencies.
@@ -133,6 +174,22 @@ if(NOT TARGET evmone::evmone)
         IMPORTED_LOCATION
             "${CMAKE_CURRENT_LIST_DIR}/../../lib/${_evmone_lib_prefix}evmone_precompiles${_evmone_lib_suffix}"
         INTERFACE_LINK_LIBRARIES "blst"
+    )
+
+    # evmone-state (test/state) static library, installed when EVMONE_TESTING=ON.
+    # Provides the Ethereum state-transition logic (validate_transaction,
+    # transition, finalize) used by bcos-evm / ethereum-executor.
+    add_library(evmone::state STATIC IMPORTED)
+    set_target_properties(evmone::state PROPERTIES
+        IMPORTED_LOCATION_RELEASE
+            "${CMAKE_CURRENT_LIST_DIR}/../../lib/${_evmone_lib_prefix}evmone-state${_evmone_lib_suffix}"
+        IMPORTED_LOCATION_DEBUG
+            "${CMAKE_CURRENT_LIST_DIR}/../../debug/lib/${_evmone_lib_prefix}evmone-state${_evmone_lib_suffix}"
+        IMPORTED_LOCATION
+            "${CMAKE_CURRENT_LIST_DIR}/../../lib/${_evmone_lib_prefix}evmone-state${_evmone_lib_suffix}"
+        INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../include"
+        INTERFACE_LINK_LIBRARIES
+            "evmone::evmone;evmone::precompiles"
     )
 
 endif()

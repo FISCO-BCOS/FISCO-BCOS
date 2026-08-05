@@ -62,7 +62,6 @@ if(FULLNODE)
     find_package(paillier CONFIG REQUIRED)
     find_package(blst CONFIG REQUIRED)
 
-    add_subdirectory(bcos-evm)
     add_subdirectory(ethereum-executor)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)

@@ -3,8 +3,8 @@
 #pragma once
 
 #include "StorageStateView.h"
-#include "bcos-evm/eth/state/state.hpp"
-#include "bcos-evm/eth/state/transaction.hpp"
+#include <test/state/state.hpp>
+#include <test/state/transaction.hpp>
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
@@ -47,7 +47,7 @@ evmone::state::BlockInfo blockHeaderToBlockInfo(
 evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& tx);
 
 // Builds a failed BCOS receipt for a transaction that failed evmone's
-// validate_transaction (see evmone::state::ErrorCode in bcos-evm errors.hpp).
+// validate_transaction (see evmone::state::ErrorCode in test/state errors.hpp).
 // Defined in BCOS2Evmone.cpp.
 protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& error,
     protocol::TransactionReceiptFactory const& rf, int64_t blockNumber);
@@ -165,7 +165,7 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
 
     // NOTE: evmone's State::build_diff() may not include recreated accounts
     // (destructed + recreated via CREATE2 in the same tx) in modified_accounts.
-    // This is a known limitation — without modifying bcos-evm, we cannot
+    // This is a known limitation — without modifying evmone::state, we cannot
     // recover the lost nonce/balance/code for these accounts.
 }
 

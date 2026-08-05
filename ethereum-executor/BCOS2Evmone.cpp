@@ -8,8 +8,8 @@
 
 #include "BCOS2Evmone.h"
 
-#include "bcos-evm/eth/state/state.hpp"
-#include "bcos-evm/eth/state/transaction.hpp"
+#include <test/state/state.hpp>
+#include <test/state/transaction.hpp>
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <algorithm>

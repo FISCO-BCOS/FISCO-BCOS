@@ -2,7 +2,7 @@
 find_package(jsoncpp CONFIG REQUIRED)
 add_executable(eest-runner EESTRunner.cpp)
 target_link_libraries(eest-runner
-    ethereum-executor bcos-evm-eth executor ledger protocol-tars bcos-framework rpc
+    ethereum-executor evmone::state executor ledger protocol-tars bcos-framework rpc
     evmone::evmone jsoncpp_static TBB::tbb)
 add_dependencies(eest-runner executor)
 set_source_files_properties("EESTRunner.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
