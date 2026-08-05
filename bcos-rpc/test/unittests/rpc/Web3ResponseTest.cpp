@@ -12,6 +12,7 @@
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -143,6 +144,125 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result.isMember("gasUsed"));
     BOOST_CHECK(result.isMember("logs"));
     BOOST_CHECK(result["logs"].isArray());
+}
+
+// An OP receipt's meta (written by the OP execution layer) must surface as op-geth's OP extension
+// fields in the receipt JSON. combineReceiptResponse appends them regardless of which transaction
+// shape produced the receipt — the legacy overload here stands in for the OP path.
+BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    std::vector<bcos::protocol::LogEntry> logs;
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+    receipt->setTransactionIndex(0);
+
+    // Meta mirroring what deriveOpReceiptMeta records on Isthmus+Jovian: L1 passthrough +
+    // operator scalars (Isthmus) + DA footprint (Jovian).
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.l1_gas_price = bcos::u256(1000);
+    meta.l1_fee = bcos::u256(123456);
+    meta.l1_base_fee_scalar = 7;
+    meta.operator_fee_scalar = 11;
+    meta.operator_fee_constant = 13;
+    meta.da_footprint_gas_scalar = 2;
+    meta.da_footprint = 100;
+    receipt->setOpStackMeta(std::move(meta));
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x88;
+
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, blockHash);
+
+    BOOST_CHECK_EQUAL(result["l1GasPrice"].asString(), "0x3e8");
+    BOOST_CHECK_EQUAL(result["l1Fee"].asString(), "0x1e240");
+    BOOST_CHECK_EQUAL(result["l1BaseFeeScalar"].asString(), "0x7");
+    BOOST_CHECK_EQUAL(result["operatorFeeScalar"].asString(), "0xb");
+    BOOST_CHECK_EQUAL(result["operatorFeeConstant"].asString(), "0xd");
+    BOOST_CHECK_EQUAL(result["daFootprintGasScalar"].asString(), "0x2");
+    BOOST_CHECK_EQUAL(result["blobGasUsed"].asString(), "0x64");  // Jovian reuses blobGasUsed
+    // deposit-only fields are absent for a normal tx.
+    BOOST_CHECK(!result.isMember("depositNonce"));
+    BOOST_CHECK(!result.isMember("depositReceiptVersion"));
+}
+
+// A deposit receipt's meta (depositNonce/depositReceiptVersion) must surface too.
+BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsDepositFieldsFromMeta)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    std::vector<bcos::protocol::LogEntry> logs;
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+    receipt->setTransactionIndex(0);
+
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = 5;
+    meta.deposit_receipt_version = 1;
+    receipt->setOpStackMeta(std::move(meta));
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x99;
+
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, blockHash);
+
+    BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x5");
+    BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x1");
+    BOOST_CHECK(!result.isMember("l1GasPrice"));
+}
+
+// combineTxResponseFromWeb3 对 deposit(0x7e)的输出:handler 委托的 nonce/type/value/chainId
+// 必须齐全(Task 8 修复,Task 5/7 审查移交),sourceHash/mint/isSystemTx 存在。
+BOOST_AUTO_TEST_CASE(combineTxResponseFromWeb3EmitsDepositFields)
+{
+    Web3Transaction web3Tx;
+    web3Tx.type = rpc::TransactionType::Deposit;
+    web3Tx.sourceHash = h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    web3Tx.from = Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001");
+    web3Tx.to = Address("0x4200000000000000000000000000000000000015");
+    web3Tx.value = 0;
+    web3Tx.gasLimit = 1000000;
+    web3Tx.isSystemTx = false;
+    web3Tx.data = fromHex("0x098999be00000558000c5fc5");
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x7e;
+
+    Json::Value result(Json::objectValue);
+    combineTxResponseFromWeb3(result, web3Tx, /*transactionIndex=*/0, /*blockNumber=*/1, blockHash);
+
+    // 通用块输出
+    BOOST_CHECK_EQUAL(result["blockHash"].asString(), blockHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["transactionIndex"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["blockNumber"].asString(), "0x1");
+    BOOST_CHECK_EQUAL(result["gas"].asString(), "0xf4240");
+    BOOST_CHECK_EQUAL(result["input"].asString(), "0x098999be00000558000c5fc5");
+    BOOST_CHECK_EQUAL(result["from"].asString(), "0xDeaDDEaDDeAdDeAdDEAdDEaddeAddEAdDEAd0001");
+    BOOST_CHECK_EQUAL(result["to"].asString(), "0x4200000000000000000000000000000000000015");
+    // 类型相关字段委托 handler:deposit 必须输出 nonce/type/value/chainId
+    BOOST_CHECK_EQUAL(result["type"].asString(), "0x7e");
+    BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["value"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["chainId"].asString(), "0x0");
+    // deposit 专属字段
+    BOOST_CHECK_EQUAL(result["sourceHash"].asString(), web3Tx.sourceHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["mint"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["isSystemTx"].asBool(), false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

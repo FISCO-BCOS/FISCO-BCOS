@@ -140,6 +140,9 @@ public:
 
     storage::StorageInterface::Ptr getStateStorage() override;
 
+    task::Task<std::optional<bcos::bytes>> asyncGetRawTransactionByHash(
+        crypto::HashType const& _txHash) override;
+
     // L2 mode: inject the per-block SystemConfig loader. AIR/MAX wire this only
     // when running in L2 chain mode; a null loader makes loadL2Config a no-op so
     // PBFT/non-L2 paths short-circuit without an EVM staticcall.

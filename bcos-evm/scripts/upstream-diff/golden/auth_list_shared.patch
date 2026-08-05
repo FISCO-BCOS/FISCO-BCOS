@@ -1,0 +1,20 @@
+--- upstream
++++ ref
+@@ -1,6 +1,6 @@
+         authority.access_status = EVMC_ACCESS_WARM;
+         if (authority.code_hash != Account::EMPTY_CODE_HASH &&
+-            !is_code_delegated(state.get_code(*auth.signer)))
++            !is_code_delegated(state.get_code(*signer)))
+             continue;
+         if (auth.nonce != authority.nonce)
+             continue;
+@@ -21,7 +21,8 @@
+         }
+         else
+         {
+-            auto new_code = bytes(DELEGATION_MAGIC) + bytes(auth.addr);
++            auto new_code =
++                bytes(DELEGATION_MAGIC) + bytes(auth.addr);
+             if (authority.code != new_code)
+             {
+                 authority.code_changed = true;

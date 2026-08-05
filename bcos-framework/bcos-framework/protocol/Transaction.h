@@ -17,9 +17,9 @@
  * @file Transaction.h
  */
 #pragma once
+#include "Authorization.h"
 #include "TransactionSubmitResult.h"
 #include "Web3AccessList.h"
-#include "Authorization.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
@@ -91,6 +91,10 @@ public:
     /// EIP-2718 typed tx kind when type()==Web3Transaction (see bcos::rpc::TransactionType). 0 if
     /// unset.
     virtual uint8_t web3TypedTxKind() const { return 0; }
+    /// deposit-only (0x7e) tx metadata (OP Stack). Empty/false when not a deposit.
+    virtual std::string_view sourceHash() const { return {}; }
+    virtual u256 mint() const { return {}; }
+    virtual bool isDepositTx() const { return false; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
     virtual Web3AccessList web3AccessList() const;
 

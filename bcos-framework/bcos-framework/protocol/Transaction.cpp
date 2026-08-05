@@ -102,6 +102,15 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
         return;
     }
 
+    if (isDepositTx())
+    {
+        // deposit has no signature: skip signature recovery, use the sender directly
+        auto const senderView = sender();
+        forceSender(bcos::bytes(senderView.begin(), senderView.end()));
+        setTainted(false);
+        return;
+    }
+
     crypto::HashType hashResult;
     if (type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {

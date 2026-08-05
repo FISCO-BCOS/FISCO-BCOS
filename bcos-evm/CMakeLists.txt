@@ -13,6 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(evmone CONFIG REQUIRED)
 
 add_library(bcos-evm-eth STATIC
+    bcos-evm/adapter/StateRootCompute.cpp
     bcos-evm/eth/EthTransition.cpp
     bcos-evm/eth/state/block.cpp
     bcos-evm/eth/state/bloom_filter.cpp
@@ -20,7 +21,18 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/precompiles.cpp
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
-    bcos-evm/eth/state/system_contracts.cpp)
+    bcos-evm/eth/state/system_contracts.cpp
+    bcos-evm/ledger/MemoryLedger.cpp
+    # TODO(eth-utils-removal): C 路线下移除以下 6 个 eth/utils 源——mpt/mpt_hash→自研 MPT,
+    # rlp_encode→bcos-codec RLP,test_state→自研内存账本,blob_schedule/utils 随
+    # statetest 装载链路迁测试侧或删除;同步清理下方告警抑制列表与 eth/state 对
+    # ../utils/stdx/utility.hpp 的相对引用(vendored 文件,需迁移点见移除清单文档)。
+    bcos-evm/eth/utils/blob_schedule.cpp
+    bcos-evm/eth/utils/mpt.cpp
+    bcos-evm/eth/utils/mpt_hash.cpp
+    bcos-evm/eth/utils/rlp_encode.cpp
+    bcos-evm/eth/utils/test_state.cpp
+    bcos-evm/eth/utils/utils.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
 target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
@@ -36,7 +48,41 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
+    bcos-evm/eth/utils/blob_schedule.cpp
+    bcos-evm/eth/utils/mpt.cpp
+    bcos-evm/eth/utils/mpt_hash.cpp
+    bcos-evm/eth/utils/rlp_encode.cpp
+    bcos-evm/eth/utils/test_state.cpp
+    bcos-evm/eth/utils/utils.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
+
+add_library(bcos-evm-opstack STATIC
+    bcos-evm/opstack/OpForkSchedule.cpp
+    bcos-evm/opstack/OpHost.cpp
+    bcos-evm/opstack/OpPrecompiles.cpp
+    bcos-evm/opstack/OpFeeParams.cpp
+    bcos-evm/opstack/OpPredeploys.cpp
+    bcos-evm/opstack/RollupCost.cpp
+    bcos-evm/opstack/OpValidate.cpp
+    bcos-evm/opstack/OpTransition.cpp
+    bcos-evm/opstack/OpExecCommon.cpp
+    bcos-evm/opstack/OpDepositTx.cpp
+    bcos-evm/opstack/OpReceiptMeta.cpp
+    bcos-evm/opstack/OpBlockFinalize.cpp
+    bcos-evm/opstack/OpBlockExecute.cpp
+    bcos-evm/opstack/OpReceiptEncode.cpp
+    bcos-evm/opstack/OpBlockSeal.cpp)
+add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
+target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
+# OpReceiptMeta.{h,cpp} serialize the OP receipt meta via bcos-codec's RLP codec
+# (OpReceiptMetaCodec.h). `codec` exists only in an in-tree build (top-level
+# add_subdirectory(bcos-codec) precedes add_subdirectory(bcos-evm)) — the same condition the
+# opstack test target gates its `codec` link on (test/CMakeLists.txt:146-151). Standalone
+# (BCOS_EVM_STANDALONE) builds never compile the OP stack's receipt-meta path.
+if(TARGET codec)
+    target_link_libraries(bcos-evm-opstack PUBLIC codec)
+endif()
 
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；
 # 否则整树 TESTS=ON 构建/CI 也不会编译 bcos-evm-eth-tests，回归无从暴露。

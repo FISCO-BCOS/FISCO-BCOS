@@ -77,6 +77,22 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 }
 
+BOOST_AUTO_TEST_CASE(testLegacyDecodeRejectsMalformedValue)
+{
+    // Legacy tx RLP 中 value 字段是 RLP list(0xc0)而非整数:
+    // rlp([nonce=1, gasPrice=1, gasLimit=1, to=empty, value=list(), data=empty, v=27, r=empty,
+    // s=empty])。value/data 解码失败(UnexpectedList),但后续签名(v/r/s)解码成功 —— 旧实现会被
+    // withSig 分支覆盖 decodeError,把畸形输入误判为成功。
+    const std::string rawTx = "0xc901010180c0801b8080";
+    auto bytes = fromHexWithPrefix(rawTx);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto e = codec::rlp::decode(bRef, tx);
+    BOOST_REQUIRE(e != nullptr);
+    BOOST_CHECK_EQUAL(
+        e->errorCode(), static_cast<int64_t>(codec::rlp::DecodingError::UnexpectedList));
+}
+
 BOOST_AUTO_TEST_CASE(testConstructTx)
 {
     Web3Transaction testTx;
@@ -400,6 +416,131 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     BOOST_CHECK(re);
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xc1b634853cb333d3ad8663715b08f41a3aec47cc");
+}
+
+BOOST_AUTO_TEST_CASE(testDepositTransactionDecode)
+{
+    // 来自 golden corpus isthmus_transfer_basic 的 deposit(0x7e),264 字节
+    // clang-format off
+    constexpr std::string_view rawTx =
+        "0x7ef90104a06ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58"
+        "817142a645d794deaddeaddeaddeaddeaddeaddeaddeaddead000194420000"
+        "00000000000000000000000000000000158080830f424080b8b0098999be00"
+        "000558000c5fc5000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000006fc23ac"
+        "0000000000000000000000000000000000000000000000000000000000000f"
+        "42400000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000";
+    // clang-format on
+    auto bytes = fromHexWithPrefix(rawTx);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto e = codec::rlp::decode(bRef, tx);
+    BOOST_CHECK(!e);
+    BOOST_CHECK(tx.type == rpc::TransactionType::Deposit);
+    // FixedBytes::hex() 无 0x 前缀
+    BOOST_CHECK_EQUAL(tx.from.hex(), "deaddeaddeaddeaddeaddeaddeaddeaddead0001");
+    BOOST_CHECK_EQUAL(
+        tx.sourceHash.hex(), "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    BOOST_CHECK_EQUAL(tx.isSystemTx, false);  // golden 的 isSystemTx = 0x80 空串 = false
+    BOOST_CHECK_EQUAL(tx.to.value().hex(), "4200000000000000000000000000000000000015");
+    BOOST_CHECK_EQUAL(tx.gasLimit, 1000000u);  // gas = 0x0f4240
+    BOOST_CHECK_EQUAL(tx.mint, 0u);            // mint = 0x80 空串 = 0
+    BOOST_CHECK_EQUAL(tx.value, 0u);           // value = 0x80 空串 = 0
+}
+
+BOOST_AUTO_TEST_CASE(testDepositTransactionEncodeRoundTrip)
+{
+    // 与 testDepositTransactionDecode 同源的 golden deposit(isthmus_transfer_basic,0x7e,264
+    // 字节)。用等价字段构造 → encode 必须逐字节还原 golden envelope(encode 是 decode 的规范逆)。
+    Web3Transaction tx{};
+    tx.type = rpc::TransactionType::Deposit;
+    tx.sourceHash = h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    tx.from = Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001");
+    tx.to = Address("0x4200000000000000000000000000000000000015");
+    tx.value = 0;
+    tx.gasLimit = 1000000;
+    tx.isSystemTx = false;
+    // attributes data(前 4 字节 0x098999be = isthmus selector),取自 golden envelope 的 data 字段
+    // clang-format off
+    tx.data = fromHex("0x098999be00000558000c5fc50000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000006"
+        "fc23ac0000000000000000000000000000000000000000000000000000000000"
+        "000f424000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000");
+    // clang-format on
+    bcos::bytes encoded{};
+    codec::rlp::encode(encoded, tx);
+    // golden 对照: encode 输出 == 原始 golden envelope 字节
+    // clang-format off
+    constexpr std::string_view goldenRawTx =
+        "0x7ef90104a06ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e5881"
+        "7142a645d794deaddeaddeaddeaddeaddeaddeaddeaddead0001944200000000"
+        "0000000000000000000000000000158080830f424080b8b0098999be00000558"
+        "000c5fc500000000000000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000000000000006fc23ac0000000000"
+        "000000000000000000000000000000000000000000000000000f424000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000";
+    // clang-format on
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(encoded), goldenRawTx);
+
+    // decode back → round-trip 字段保真
+    auto bRef = bcos::ref(encoded);
+    Web3Transaction decoded{};
+    auto e = codec::rlp::decode(bRef, decoded);
+    BOOST_CHECK(!e);
+    BOOST_CHECK(decoded.type == rpc::TransactionType::Deposit);
+    BOOST_CHECK_EQUAL(decoded.sourceHash, tx.sourceHash);
+    BOOST_CHECK_EQUAL(decoded.from, tx.from);
+    BOOST_CHECK_EQUAL(decoded.to.value(), tx.to.value());
+    BOOST_CHECK_EQUAL(decoded.gasLimit, tx.gasLimit);
+    BOOST_CHECK_EQUAL(decoded.value, tx.value);
+    BOOST_CHECK_EQUAL(decoded.mint, tx.mint);
+    BOOST_CHECK_EQUAL(decoded.isSystemTx, tx.isSystemTx);
+    BOOST_CHECK(decoded.data == tx.data);
+}
+
+BOOST_AUTO_TEST_CASE(testDepositToTarsRoundTrip)
+{
+    // deposit → tars 往返:验证 mint/value 的 0x 前缀存取正确(用非零值防回归 —— 若前缀处理
+    // 出错,非零 mint/value 会在读取端被误解析),sourceHash/isDepositTx/extraTransactionBytes
+    // 完整落 tars。
+    Web3Transaction tx{};
+    tx.type = rpc::TransactionType::Deposit;
+    tx.sourceHash = h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    tx.from = Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001");
+    tx.to = Address("0x4200000000000000000000000000000000000015");
+    tx.value = 123456789;  // 非零:防 value 0x 前缀地雷
+    tx.mint = 987654321;   // 非零:防 mint 0x 前缀地雷
+    tx.gasLimit = 1000000;
+    tx.isSystemTx = true;  // 非默认:验证 isSystemTransaction 落 tars
+    tx.data = fromHex("0x098999be00000558000c5fc5");
+
+    auto tarsTx = tx.takeToTarsTransaction();
+    bcostars::protocol::TransactionImpl impl(
+        [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
+
+    BOOST_CHECK(impl.isDepositTx());
+    BOOST_CHECK_EQUAL(impl.sourceHash(), tx.sourceHash.hex());
+    BOOST_CHECK_EQUAL(impl.mint(), tx.mint);
+    BOOST_CHECK_EQUAL(impl.value(), tx.value);
+    BOOST_CHECK_EQUAL(impl.gasLimit(), static_cast<int64_t>(tx.gasLimit));
+    BOOST_CHECK_EQUAL(impl.to(), tx.to.value().hexPrefixed());
+    BOOST_CHECK_EQUAL(impl.chainId(), "0");
+    // from 落 tars 的 sender 字段(20 字节原始地址,无 0x 前缀)
+    auto sender = impl.sender();
+    BOOST_CHECK_EQUAL(toHex(sender), tx.from.hex());
+    // extraTransactionBytes = 完整 0x7e envelope;hash = keccak(envelope)
+    auto extra = impl.extraTransactionBytes();
+    bcos::bytes expected{};
+    codec::rlp::encode(expected, tx);
+    BOOST_CHECK(bcos::bytes(extra.begin(), extra.end()) == expected);
+    impl.calculateHash(*hashImpl);
+    BOOST_CHECK_EQUAL(impl.hash().hexPrefixed(), tx.txHash().hexPrefixed());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

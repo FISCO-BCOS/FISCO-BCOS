@@ -994,6 +994,41 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
         });
 }
 
+task::Task<std::optional<bcos::bytes>> Ledger::asyncGetRawTransactionByHash(
+    crypto::HashType const& _txHash)
+{
+    auto key = bcos::concepts::bytebuffer::toView(_txHash);
+    // OP blocks store their raw EIP-2718 envelopes under SYS_ETH_HASH_2_RAWTX (same key as the
+    // receipt in SYS_HASH_2_RECEIPT); the generic SYS_HASH_2_TX is deliberately not written for
+    // them (spec §6.4 f). Absent row => not an OP transaction (or not seeded) => nullopt, which
+    // the caller treats as "not found" rather than an error.
+    struct Awaitable
+    {
+        bcos::storage::StorageInterface::Ptr m_storage;
+        std::string_view m_key;
+        std::optional<bcos::bytes> m_result;
+        bool m_done = false;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> handle)
+        {
+            m_storage->asyncGetRow(ledger::SYS_ETH_HASH_2_RAWTX, m_key,
+                [this, handle](
+                    Error::UniquePtr _error, std::optional<bcos::storage::Entry> _entry) {
+                    if (!_error && _entry)
+                    {
+                        auto value = _entry->get();
+                        m_result = bcos::bytes(value.begin(), value.end());
+                    }
+                    m_done = true;
+                    handle.resume();
+                });
+        }
+        std::optional<bcos::bytes> await_resume() { return std::move(m_result); }
+    };
+    co_return co_await Awaitable{getBlockStorage(), key, {}, false};
+}
+
 void Ledger::asyncGetTotalTransactionCount(
     std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
 {

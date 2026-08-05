@@ -1,0 +1,27 @@
+# M6 upstream diff manifest — bcos-evm-ref 照抄面 ↔ evmone REF (see EVMONE_REF).
+# Columns: id  ref_file  ref_begin  ref_end  upstream_file  up_begin  up_end
+# Update line ranges when editing copy surfaces; re-run with --regenerate-goldens after intentional forks.
+#
+# bcos-evm/opstack/OpTransition.cpp (evmone test/state/state.cpp)
+auth_constants	bcos-evm/opstack/OpTransition.cpp	27	32	test/state/state.cpp	20	25
+build_message	bcos-evm/opstack/OpExecCommon.cpp	11	31	test/state/state.cpp	180	199
+auth_list_shared	bcos-evm/opstack/OpTransition.cpp	85	138	test/state/state.cpp	124	177
+transition_buy_gas	bcos-evm/opstack/OpTransition.cpp	158	168	test/state/state.cpp	574	584
+# D-14a: transition_access/transition_delegate/transition_gas_settle 合并搬迁至
+# OpExecCommon.cpp::executeMessage（共享执行核，供 opTransition 与后续 runDeposit 复用）。
+exec_common_body	bcos-evm/opstack/OpExecCommon.cpp	38	71	test/state/state.cpp	599	636
+#
+# bcos-evm/opstack/OpHost.cpp (evmone test/state/host.cpp)
+apply_call_value	bcos-evm/opstack/OpHost.cpp	54	66	test/state/host.cpp	345	364
+call_depth_guard	bcos-evm/opstack/OpHost.cpp	127	132	test/state/host.cpp	224	226
+call_03_quirk	bcos-evm/opstack/OpHost.cpp	142	151	test/state/host.cpp	390	400
+#
+# bcos-evm/opstack/OpBlockSeal.cpp (evmone test/utils/mpt_hash.cpp, M-B2 Task 3 登记)
+# 已知偏离（不视为漂移，golden 已固化）：op_storage_root 用防御性 continue 代替上游
+# assert(!is_zero(value))（语义等同"剔除后调用"）；op_storage_root 的 keccak256 入参显式包装
+# evmc::bytes_view(key)，上游为隐式转换 keccak256(key)（语义等同，仅调用形式偏离）；
+# receipts_root_loop 叶值用
+# encodeReceiptForRoot（OP 定制 0x7E 编码）代替 rlp::encode(list[i])（上游模板仅显式实例化
+# 3 个类型，OP receipt variant 无法复用）。
+op_storage_root	bcos-evm/opstack/OpBlockSeal.cpp	13	26	test/utils/mpt_hash.cpp	13	24
+receipts_root_loop	bcos-evm/opstack/OpBlockSeal.cpp	36	39	test/utils/mpt_hash.cpp	38	46

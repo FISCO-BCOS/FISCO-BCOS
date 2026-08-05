@@ -232,6 +232,17 @@ inline constexpr struct GetReceipt
     }
 } getReceipt{};
 
+inline constexpr struct GetRawTransaction
+{
+    /// Fetch an OP block's raw EIP-2718 envelope by tx hash (SYS_ETH_HASH_2_RAWTX). Returns
+    /// nullopt when the hash is not an OP transaction (the generic SYS_HASH_2_TX is not written
+    /// for OP blocks). bcos-rpc uses this as the fallback when getTransactions comes back empty.
+    task::Task<std::optional<bcos::bytes>> operator()(auto& ledger, crypto::HashType hash) const
+    {
+        co_return co_await tag_invoke(*this, ledger, hash);
+    }
+} getRawTransaction{};
+
 inline constexpr struct GetTransactions
 {
     task::Task<protocol::TransactionsConstPtr> operator()(

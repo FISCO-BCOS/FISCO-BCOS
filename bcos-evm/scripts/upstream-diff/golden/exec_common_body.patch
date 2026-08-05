@@ -1,0 +1,33 @@
+--- upstream
++++ ref
+@@ -1,4 +1,4 @@
+-    sender_acc.access_status = EVMC_ACCESS_WARM;
++    state.get(tx.sender).access_status = EVMC_ACCESS_WARM;
+     if (tx.to.has_value())
+         host.access_account(*tx.to);
+     for (const auto& [a, storage_keys] : tx.access_list)
+@@ -8,8 +8,8 @@
+             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
+     }
+     if (rev >= EVMC_SHANGHAI)
+-        host.access_account(block.coinbase);
+-    auto message = build_message(tx, tx_props.execution_gas_limit);
++        host.access_account(coinbase);
++    auto message = build_message(tx, execution_gas_limit);
+     if (tx.to.has_value())
+     {
+         if (const auto delegate = get_delegate_address(host, *tx.to))
+@@ -19,11 +19,11 @@
+             host.access_account(message.code_address);
+         }
+     }
+-    const auto result = host.call(message);
++    auto result = host.call(message);
+     auto gas_used = tx.gas_limit - result.gas_left;
+     const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
+     const auto refund_limit = gas_used / max_refund_quotient;
+     const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
+     gas_used -= refund;
+     assert(gas_used > 0);
+-    gas_used = std::max(gas_used, tx_props.min_gas_cost);
++    gas_used = std::max(gas_used, min_gas_cost);

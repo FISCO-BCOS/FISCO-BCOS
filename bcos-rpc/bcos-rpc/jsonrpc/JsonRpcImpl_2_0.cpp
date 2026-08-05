@@ -88,7 +88,8 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
     auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp, boost::beast::http::status) {
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](
+                          bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
         auto end = std::chrono::high_resolution_clock::now();
@@ -258,7 +259,8 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
-        if (web3Tx.type >= TransactionType::EIP1559)
+        // 显式等值:deposit(0x7e=126)不得落入 EIP1559 分支输出空 maxFee 字段
+        if (web3Tx.type == TransactionType::EIP1559 || web3Tx.type == TransactionType::EIP4844)
         {
             jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
             jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();

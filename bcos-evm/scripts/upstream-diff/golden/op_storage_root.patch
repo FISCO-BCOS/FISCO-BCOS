@@ -1,0 +1,20 @@
+--- upstream
++++ ref
+@@ -1,12 +1,11 @@
+-namespace
++hash256 opStorageRoot(const std::map<bytes32, bytes32>& storage)
+ {
+-hash256 mpt_hash(const std::map<bytes32, bytes32>& storage)
+-{
+     MPT trie;
+     for (const auto& [key, value] : storage)
+     {
+-        assert(!is_zero(value));
+-        trie.insert(keccak256(key), rlp::encode(rlp::trim(value)));
++        if (is_zero(value))
++            continue;
++        trie.insert(keccak256(bytes_view(key)),
++            rlp::encode(rlp::trim(bytes_view(value))));
+     }
+     return trie.hash();
+-}

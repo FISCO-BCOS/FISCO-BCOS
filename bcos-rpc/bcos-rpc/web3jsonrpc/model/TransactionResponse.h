@@ -29,10 +29,17 @@
 
 namespace bcos::rpc
 {
+class Web3Transaction;
+
 // block and receipt are nullable
 void combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash);
 
 void combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
+    size_t transactionIndex, protocol::BlockNumber blockNumber, const crypto::HashType& blockHash);
+
+/// Transaction response for an OP-block transaction, built from a decoded Web3Transaction (OP
+/// blocks carry raw EIP-2718 envelopes, not tars Transaction objects).
+void combineTxResponseFromWeb3(Json::Value& result, const Web3Transaction& tx,
     size_t transactionIndex, protocol::BlockNumber blockNumber, const crypto::HashType& blockHash);
 }  // namespace bcos::rpc

@@ -1,0 +1,11 @@
+--- upstream
++++ ref
+@@ -1,8 +1 @@
+-template <typename T>
+-hash256 mpt_hash(std::span<const T> list)
+-{
+     MPT trie;
+-    for (size_t i = 0; i < list.size(); ++i)
+-        trie.insert(rlp::encode(i), rlp::encode(list[i]));
+-    return trie.hash();
+-}

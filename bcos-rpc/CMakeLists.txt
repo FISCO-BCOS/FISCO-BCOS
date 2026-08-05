@@ -24,6 +24,9 @@ find_package(jwt-cpp CONFIG REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
+# Sources are gathered via GLOB_RECURSE, so a newly added translation unit
+# (e.g. web3jsonrpc/model/TxHandler.cpp) is picked up automatically on the next
+# configure; touching this file forces CMake to re-run and re-glob.
 file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 
 find_package(tarscpp REQUIRED)

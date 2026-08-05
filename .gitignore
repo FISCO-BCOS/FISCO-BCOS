@@ -77,3 +77,14 @@ CLAUDE.local.md
 .worktrees/
 .claude/worktrees
 .claude/agents
+
+# build** 误伤 upstream-diff golden(build_message.patch 曾因此逃逸提交)
+!**/upstream-diff/golden/*.patch
+
+# OP Stack 工作文档(从版本控制移除但保留磁盘;DIVERGENCES.md/SHA256SUMS 是测试运行时依赖)
+docs/superpowers/
+opstack-executor/README.md
+bcos-evm/README.md
+bcos-evm/test/opstack/t8n/generator/README.md
+bcos-evm/test/opstack/t8n/golden/engine/README.md
+bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md
