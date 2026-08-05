@@ -23,6 +23,7 @@
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <boost/test/unit_test.hpp>
+#include <iostream>
 #include <memory>
 
 using namespace bcos;
@@ -42,15 +43,15 @@ static std::shared_ptr<bcostars::BlockHeader> makeEthTarsHeader()
     data.gasLimit = "30000000";
     data.gasUsed = "21000";
     data.baseFee = "1000000000";
-    data.coinbase.assign(20, 0xab);
-    data.stateRoot.assign(32, 0x11);
-    data.txsRoot.assign(32, 0x22);
-    data.receiptRoot.assign(32, 0x33);
-    data.prevRandao.assign(32, 0x44);
-    data.logsBloom.assign(256, 0xcd);
+    data.coinbase.assign(20, static_cast<char>(0xab));
+    data.stateRoot.assign(32, static_cast<char>(0x11));
+    data.txsRoot.assign(32, static_cast<char>(0x22));
+    data.receiptRoot.assign(32, static_cast<char>(0x33));
+    data.prevRandao.assign(32, static_cast<char>(0x44));
+    data.logsBloom.assign(256, static_cast<char>(0xcd));
     bcostars::ParentInfo parentInfo;
     parentInfo.blockNumber = 76;
-    parentInfo.blockHash.assign(32, 0x55);
+    parentInfo.blockHash.assign(32, static_cast<char>(0x55));
     data.parentInfo.push_back(parentInfo);
     return tars;
 }

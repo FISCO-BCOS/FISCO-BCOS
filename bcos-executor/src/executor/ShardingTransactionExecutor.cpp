@@ -210,7 +210,8 @@ void ShardingTransactionExecutor::preExecuteTransactions(int64_t schedulerTermId
         return;
     }
 
-    if (blockHeader->version() >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
+    if (blockHeader->version() != bcos::protocol::ETH_BLOCK_HEADER_VERSION &&
+        blockHeader->version() >= uint32_t(bcos::protocol::BlockVersion::V3_3_VERSION))
     {
         auto blockContext = createTmpBlockContext(blockHeader);
         auto executiveFactory = std::make_shared<ExecutiveFactory>(

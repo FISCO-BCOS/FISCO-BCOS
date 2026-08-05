@@ -237,13 +237,9 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcep
 template <typename T>
 inline bcos::Error::UniquePtr decode(bytesRef& from, std::optional<T>& to) noexcept
 {
-    if (from.empty() || from[0] == BYTES_HEAD_BASE || from[0] == LIST_HEAD_BASE)
+    if (from.empty())
     {
         to.reset();
-        if (!from.empty()) 
-        {
-            from = from.getCroppedData(1);
-        }
         return nullptr;
     }
     T value;
@@ -282,14 +278,14 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, Args&... args) noexcept
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
     }
-    const uint64_t leftover{from.size() - header.payloadLength};
+    const uint64_t leftOver{from.size() - header.payloadLength};
 
     if (auto decodeError = decodeItems(from, args...); decodeError != nullptr)
     {
         return std::move(decodeError);
     }
 
-    if (from.size() != leftover)
+    if (from.size() != leftOver)
     {
         return BCOS_ERROR_UNIQUE_PTR(
             DecodingError::UnexpectedListElements, "Unexpected list elements");

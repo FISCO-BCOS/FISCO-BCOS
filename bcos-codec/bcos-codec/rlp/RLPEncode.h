@@ -132,14 +132,6 @@ inline void encode(bcos::bytes& to, const std::optional<T>& v) noexcept
 {
     if (v.has_value()) {
         encode(to, *v);
-        return;
-    }
-    if constexpr (requires { 
-        requires !std::same_as<std::remove_cvref_t<typename T::value_type>, bcos::byte>; })
-    {
-        to.push_back(LIST_HEAD_BASE);
-    } else {
-        to.push_back(BYTES_HEAD_BASE);
     }
 }
 

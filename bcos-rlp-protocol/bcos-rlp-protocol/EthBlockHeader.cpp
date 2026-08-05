@@ -49,6 +49,7 @@ void EthBlockHeader::calculateRLPHash(
     auto ethHeader = EthBlockHeader(tarsHeader->inner());
     bcos::bytes encoded;
     ethHeader.rlpEncode(encoded);
+    tarsHeader->setVersion(bcos::protocol::ETH_BLOCK_HEADER_VERSION);
     tarsHeader->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(encoded)));
 }
 
@@ -92,45 +93,43 @@ bcos::protocol::BlockHeader::Ptr EthBlockHeader::toTarsHeader(
 
     tarsData.logsBloom.assign(ethHeader.data().logsBloom.begin(), ethHeader.data().logsBloom.end());
 
+    // London fork fields
     if (ethHeader.data().baseFee.has_value())
     {
         tarsData.baseFee = boost::lexical_cast<std::string>(*ethHeader.data().baseFee);
-    }
-    if (ethHeader.data().withdrawalsHash.has_value())
-    {
-        tarsData.withdrawalsHash.assign(
-            ethHeader.data().withdrawalsHash->begin(), ethHeader.data().withdrawalsHash->end());
-    }
-    if (ethHeader.data().blobGasUsed.has_value())
-    {
-        tarsData.blobGasUsed =
-            boost::lexical_cast<std::string>(*ethHeader.data().blobGasUsed);
-    }
-    if (ethHeader.data().excessBlobGas.has_value())
-    {
-        tarsData.excessBlobGas =
-            boost::lexical_cast<std::string>(*ethHeader.data().excessBlobGas);
-    }
-    if (ethHeader.data().parentBeaconRoot.has_value())
-    {
-        tarsData.parentBeaconRoot.assign(
-            ethHeader.data().parentBeaconRoot->begin(), ethHeader.data().parentBeaconRoot->end());
-    }
-    if (ethHeader.data().requestsHash.has_value())
-    {
-        tarsData.requestsHash.assign(
-            ethHeader.data().requestsHash->begin(), ethHeader.data().requestsHash->end());
-    }
-    if (ethHeader.data().blockAccessListHash.has_value())
-    {
-        tarsData.blockAccessListHash.assign(ethHeader.data().blockAccessListHash->begin(),
-            ethHeader.data().blockAccessListHash->end());
-    }
-    if (ethHeader.data().slotNumber.has_value())
-    {
-        tarsData.slotNumber = static_cast<long>(*ethHeader.data().slotNumber);
-    }
+        // Shanghai fork fields
+        if (ethHeader.data().withdrawalsHash.has_value())
+        {
+            tarsData.withdrawalsHash.assign(
+                ethHeader.data().withdrawalsHash->begin(), ethHeader.data().withdrawalsHash->end());
+            // Cancun fork fields
+            if (ethHeader.data().blobGasUsed.has_value())
+            {
+                tarsData.blobGasUsed =
+                    boost::lexical_cast<std::string>(*ethHeader.data().blobGasUsed);
+                tarsData.excessBlobGas =
+                    boost::lexical_cast<std::string>(*ethHeader.data().excessBlobGas);
+                tarsData.parentBeaconRoot.assign(
+                    ethHeader.data().parentBeaconRoot->begin(), ethHeader.data().parentBeaconRoot->end());
 
+                // Prague fork fields
+                if (ethHeader.data().requestsHash.has_value())
+                {
+                    tarsData.requestsHash.assign(
+                        ethHeader.data().requestsHash->begin(), ethHeader.data().requestsHash->end());
+                    // Osaka fork fields
+                    if (ethHeader.data().blockAccessListHash.has_value())
+                    {
+                        tarsData.blockAccessListHash.assign(
+                            ethHeader.data().blockAccessListHash->begin(), 
+                                ethHeader.data().blockAccessListHash->end());
+                        tarsData.slotNumber = static_cast<long>(*ethHeader.data().slotNumber);
+                    }
+                }
+            }
+        }
+    }
+    
     // Wrap in a BlockHeaderImpl so the caller holds a base-class pointer whose
     // concrete type is bcostars::protocol::BlockHeaderImpl.
     auto impl = std::make_shared<bcostars::protocol::BlockHeaderImpl>(result);
@@ -211,7 +210,6 @@ bool EthBlockHeader::validateTarsHeader(
     {
         return invalid("EthBlockHeader: missing timestamp");
     }
-
     return true;
 }
 
@@ -273,39 +271,45 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader) noexcep
         std::memcpy(m_data.logsBloom.data(), _data.logsBloom.data(), m_data.logsBloom.size());
     }
 
-    // Optional fields — check presence
+    // Optional fields — cascade-stop logic (nested if, matching toTarsHeader).
+    // Ethereum hard-fork fields are appended cumulatively at the tail of the header:
+    // if a field is absent (Tars unset), no later optional field can be present either.
+    // London fork fields
     if (!_data.baseFee.empty())
     {
         m_data.baseFee = boost::lexical_cast<u256>(_data.baseFee);
-    }
-    if (!_data.withdrawalsHash.empty())
-    {
-        m_data.withdrawalsHash = *reinterpret_cast<const h256*>(_data.withdrawalsHash.data());
-    }
-    if (!_data.blobGasUsed.empty())
-    {
-        m_data.blobGasUsed = boost::lexical_cast<u256>(_data.blobGasUsed);
-    }
-    if (!_data.excessBlobGas.empty())
-    {
-        m_data.excessBlobGas = boost::lexical_cast<u256>(_data.excessBlobGas);
-    }
-    if (!_data.parentBeaconRoot.empty())
-    {
-        m_data.parentBeaconRoot = *reinterpret_cast<const h256*>(_data.parentBeaconRoot.data());
-    }
-    if (!_data.requestsHash.empty())
-    {
-        m_data.requestsHash = *reinterpret_cast<const h256*>(_data.requestsHash.data());
-    }
-    if (!_data.blockAccessListHash.empty())
-    {
-        m_data.blockAccessListHash =
-            *reinterpret_cast<const h256*>(_data.blockAccessListHash.data());
-    }
-    if (_data.slotNumber != -1)  // -1 is the Tars unset sentinel
-    {
-        m_data.slotNumber = static_cast<uint64_t>(_data.slotNumber);
+        // Shanghai fork fields
+        if (!_data.withdrawalsHash.empty())
+        {
+            m_data.withdrawalsHash = *reinterpret_cast<const h256*>(_data.withdrawalsHash.data());
+            // Cancun fork fields
+            if (!_data.blobGasUsed.empty())
+            {
+                m_data.blobGasUsed = boost::lexical_cast<u256>(_data.blobGasUsed);
+                m_data.excessBlobGas = boost::lexical_cast<u256>(_data.excessBlobGas);
+                if (!_data.parentBeaconRoot.empty())
+                {
+                    m_data.parentBeaconRoot =
+                        *reinterpret_cast<const h256*>(_data.parentBeaconRoot.data());
+                    // Prague fork fields
+                    if (!_data.requestsHash.empty())
+                    {
+                        m_data.requestsHash =
+                            *reinterpret_cast<const h256*>(_data.requestsHash.data());
+                        // Osaka fork fields
+                        if (!_data.blockAccessListHash.empty())
+                        {
+                            m_data.blockAccessListHash = *reinterpret_cast<const h256*>(
+                                _data.blockAccessListHash.data());
+                            if (_data.slotNumber != -1)  // -1 is the Tars unset sentinel
+                            {
+                                m_data.slotNumber = static_cast<uint64_t>(_data.slotNumber);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

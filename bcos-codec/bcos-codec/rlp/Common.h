@@ -158,7 +158,7 @@ inline size_t length(const bcos::FixedBytes<N>& v) noexcept
 template <typename T>
 inline size_t length(const std::optional<T>& v) noexcept
 {
-    return v.has_value() ? length(*v) : 1;
+    return v.has_value() ? length(*v) : 0;
 }
 
 template <typename T>
