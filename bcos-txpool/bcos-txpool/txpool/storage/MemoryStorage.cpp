@@ -524,8 +524,12 @@ void MemoryStorage::notifyTxResult(
     txSubmitResult->setTo(std::string(transaction.to()));
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
-        TXPOOL_LOG(TRACE) << LOG_DESC("notifyTxResult")
-                          << LOG_KV("txSubmitResult", *txSubmitResult);
+        // Note: don't log the whole TransactionSubmitResult here. For a timeout/cleanup
+        // result its embedded receipt is an empty default receipt whose hash() throws
+        // EmptyReceiptHash (dataHash unset), which would abort this notification before
+        // the submit callback runs.
+        TXPOOL_LOG(TRACE) << LOG_DESC("notifyTxResult") << LOG_KV("tx", txHash.abridged())
+                          << LOG_KV("status", txSubmitResult->status());
     }
     try
     {
