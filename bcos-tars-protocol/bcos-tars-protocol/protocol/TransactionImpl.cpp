@@ -39,6 +39,11 @@
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
+// EIP-2718 deposit transaction type byte (OP Stack). Matches
+// rpc::TransactionType::Deposit in bcos-rpc; defined here as a local literal because
+// bcos-tars-protocol sits below bcos-rpc and must not depend on it.
+constexpr uint8_t kDepositTxType = 0x7e;
+
 #define WEB3_ACCESS_LIST_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
 bcostars::protocol::TransactionImpl::TransactionImpl(std::function<bcostars::Transaction*()> inner)
@@ -410,6 +415,32 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
 }
 
+std::string_view bcostars::protocol::TransactionImpl::sourceHash() const
+{
+    return m_inner()->sourceHash;
+}
+
+bcos::u256 bcostars::protocol::TransactionImpl::mint() const
+{
+    if (m_inner()->mint.empty())
+    {
+        return 0;
+    }
+    // Stored as "0x"+hex (see Web3Transaction::takeToTarsTransaction), so the prefixed string
+    // parses directly (bcos::u256 handles the 0x prefix).
+    return bcos::u256(m_inner()->mint);
+}
+
+bool bcostars::protocol::TransactionImpl::isDepositTx() const
+{
+    // Use web3TypedTxKind() == 0x7e, NOT isSystemTransaction: isSystemTransaction is a
+    // per-transaction flag, so a non-system deposit (isSystemTx=false, the vast majority) would
+    // be misclassified.
+    // Also use the accessor (not the raw tars field): it returns 0 unless type()==Web3Transaction,
+    // so a forged BCOS tx (type=0, web3TypedTxKind=0x7e) is never treated as a deposit.
+    return web3TypedTxKind() == kDepositTxType;
+}
+
 bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
@@ -555,5 +586,7 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraData.size();
     size += m_inner()->extraTransactionBytes.size();
     size += m_inner()->extraTransactionHash.size();
+    size += m_inner()->sourceHash.size();
+    size += m_inner()->mint.size();
     return size;
 }
