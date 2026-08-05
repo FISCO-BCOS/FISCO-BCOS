@@ -39,9 +39,10 @@ namespace rpc
 enum class TransactionType : uint8_t
 {
     Legacy = 0,
-    EIP2930 = 1,  // https://eips.ethereum.org/EIPS/eip-2930
-    EIP1559 = 2,  // https://eips.ethereum.org/EIPS/eip-1559
-    EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
+    EIP2930 = 1,     // https://eips.ethereum.org/EIPS/eip-2930
+    EIP1559 = 2,     // https://eips.ethereum.org/EIPS/eip-1559
+    EIP4844 = 3,     // https://eips.ethereum.org/EIPS/eip-4844
+    Deposit = 0x7e,  // deposit-only system tx (OP Stack)
 };
 
 constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
@@ -76,6 +77,10 @@ public:
 
     // encode for sign, rlp(tx_payload)
     bcos::bytes encodeForSign() const;
+    // full RLP(含 type byte) — 委托 handlerFor(type).encode
+    bcos::bytes encode() const;
+    // 解码 — 委托 handlerFor(type).decode,传播解码错误
+    bcos::Error::UniquePtr decode(bcos::bytesRef& in, bool withSig = true);
     // tx hash = keccak256(rlp(tx_payload,v,r,s))
     bcos::crypto::HashType txHash() const;
     // hash for sign = keccak256(rlp(tx_payload))
@@ -100,6 +105,11 @@ public:
     // EIP-4844: Shard Blob Transactions
     u256 maxFeePerBlobGas{0};
     h256s blobVersionedHashes;
+    // deposit-only (0x7e)
+    h256 sourceHash;
+    Address from;
+    u256 mint{0};
+    bool isSystemTx{false};
     // TODO)) blob
     bcos::bytes signatureR;
     bcos::bytes signatureS;
@@ -113,9 +123,6 @@ void encode(bcos::bytes& out, const rpc::AccessListEntry&) noexcept;
 size_t length(const rpc::AccessListEntry&) noexcept;
 
 size_t length(const rpc::Web3Transaction&) noexcept;
-Header headerForSign(const rpc::Web3Transaction& tx) noexcept;
-Header headerTxBase(const rpc::Web3Transaction& tx) noexcept;
-Header header(const rpc::Web3Transaction& tx) noexcept;
 void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
