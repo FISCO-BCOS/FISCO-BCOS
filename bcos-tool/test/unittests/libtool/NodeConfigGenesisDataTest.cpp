@@ -149,6 +149,54 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
     }
 }
 
+// evm_revision_forks edge cases (review test suggestion): out-of-order entries are
+// normalized by the map (ascending), a negative block height is accepted by the config
+// loader but dropped when serialized (encodeEVMCRevisionConfig skips block <= 0), and
+// an unknown revision name is rejected.
+BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n";
+
+    // Out-of-order + negative-height entries: accepted, normalized, negative dropped on encode.
+    {
+        NodeConfig cfg(keyFactory);
+        std::string genesis =
+            base + "evm_revision_forks=100000:osaka, 0:cancun, -5:cancun\n";
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+        auto const& gc = cfg.genesisConfig();
+        BOOST_REQUIRE_EQUAL(gc.m_evmcRevisionForks.size(), 3u);
+        // Map is key-ordered.
+        BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(-5), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(0), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(100000), EVMC_OSAKA);
+        auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
+        // The negative-height entry must not appear in the serialized schedule.
+        BOOST_CHECK(data.find("0:cancun,100000:osaka") != std::string::npos);
+    }
+
+    // Unknown revision name -> rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        std::string genesis = base + "evm_revision_forks=0:notafork\n";
+        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(genesis), InvalidConfig);
+    }
+}
+
 // A compatibilityVersion below V3.1 takes the legacy dash-joined branch.
 BOOST_AUTO_TEST_CASE(legacyDashJoinedFormat)
 {
