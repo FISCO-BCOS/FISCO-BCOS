@@ -263,5 +263,63 @@ BOOST_AUTO_TEST_CASE(builderV0ForcesZeroGasFields)
     BOOST_CHECK_EQUAL(tx->maxPriorityFeePerGas().value(), u256(0));
 }
 
+// deposit-only (0x7e) tars slots: sourceHash/mint/isSystemTransaction round-trip through
+// TransactionImpl accessors (sourceHash/mint/isDepositTx), plus the isSystemTransaction-vs-kind
+// distinction that isDepositTx() must honor.
+BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
+{
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    // hex without 0x prefix, matching Web3Transaction::takeToTarsTransaction (h256::hex())
+    inner.sourceHash = "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7";
+    // "0x"+hex, matching takeToTarsTransaction (mint() parses via bcos::u256)
+    inner.mint = "0x16345785d8a0000";
+    inner.isSystemTransaction = 1;
+
+    BOOST_CHECK(tx->isDepositTx());
+    BOOST_CHECK_EQUAL(tx->sourceHash(), "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    BOOST_CHECK_EQUAL(tx->mint(), u256("0x16345785d8a0000"));
+    // size() accounts for the deposit metadata
+    BOOST_CHECK(tx->size() >= inner.sourceHash.size() + inner.mint.size());
+
+    // A non-system deposit (isSystemTx=false) must still be a deposit: isDepositTx() keys off
+    // web3TypedTxKind(), never off the per-transaction isSystemTransaction flag.
+    auto nonSystemDeposit = std::make_shared<TransactionImpl>();
+    nonSystemDeposit->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    nonSystemDeposit->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    nonSystemDeposit->mutableInner().isSystemTransaction = 0;
+    BOOST_CHECK(nonSystemDeposit->isDepositTx());
+
+    // Empty mint reads back as zero.
+    auto noMint = std::make_shared<TransactionImpl>();
+    noMint->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    noMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    BOOST_CHECK(noMint->isDepositTx());
+    BOOST_CHECK_EQUAL(noMint->mint(), u256(0));
+    BOOST_CHECK(noMint->sourceHash().empty());
+
+    // A regular typed tx (EIP-1559) is not a deposit.
+    auto eip1559 = std::make_shared<TransactionImpl>();
+    eip1559->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    eip1559->mutableInner().web3TypedTxKind = static_cast<tars::Char>(2);
+    eip1559->mutableInner().isSystemTransaction = 1;
+    BOOST_CHECK(!eip1559->isDepositTx());
+    BOOST_CHECK(eip1559->sourceHash().empty());
+    BOOST_CHECK_EQUAL(eip1559->mint(), u256(0));
+
+    // A forged BCOS tx (type=0, kind=0x7e) is never a deposit: web3TypedTxKind() gates on
+    // type()==Web3Transaction.
+    auto forgedBcos = std::make_shared<TransactionImpl>();
+    forgedBcos->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::BCOSTransaction);
+    forgedBcos->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    BOOST_CHECK(!forgedBcos->isDepositTx());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
