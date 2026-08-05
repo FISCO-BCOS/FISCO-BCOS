@@ -26,10 +26,10 @@
 // `OpSchedulerImpl` supplies the field-projection.
 
 #include <bcos-evm/opstack/OpBlockSeal.h>
+#include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <bcos-evm/eth/utils/mpt.hpp>
-#include <test/utils/rlp.hpp>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <iterator>
@@ -170,16 +170,21 @@ inline OpBlockCommitments commitmentsOf(const bcos::evm::opstack::OpBlockSeal& s
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
 {
-    evmone::state::MPT txTrie;
+    // txRoot trie: key = rlp(index) (ascending, non-prefix-of-each-other), leaf = raw envelope
+    // bytes as-is. Built with FISCO computeTrieRootVarKey (same construction as the retired
+    // evmone list-trie mpt_hash.cpp:38-46).
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> entries;
+    entries.reserve(rawTxBytes.size());
     uint64_t index = 0;
     for (auto const& rawItem : rawTxBytes)
     {
-        const auto key = evmone::rlp::encode(index);
-        txTrie.insert(evmc::bytes_view{key.data(), key.size()},
-            evmc::bytes(std::begin(rawItem), std::end(rawItem)));
+        bcos::bytes key;
+        bcos::codec::rlp::encode(key, index);
+        entries.emplace_back(std::move(key), bcos::bytes(std::begin(rawItem), std::end(rawItem)));
         ++index;
     }
-    return detail::toBcosH256(txTrie.hash());
+    auto result = bcos::ledger::mpt::computeTrieRootVarKey(entries);
+    return result.root;  // already bcos::h256 (computeTrieRootVarKey returns bcos::h256)
 }
 
 }  // namespace bcos::evm::engine

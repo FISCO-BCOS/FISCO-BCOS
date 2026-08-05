@@ -1,7 +1,6 @@
 #pragma once
 
 #include <bcos-evm/eth/state/bloom_filter.hpp>
-#include <bcos-evm/eth/utils/mpt_hash.hpp>
 #include <bcos-evm/opstack/OpBlockExecute.h>
 #include <map>
 #include <optional>
