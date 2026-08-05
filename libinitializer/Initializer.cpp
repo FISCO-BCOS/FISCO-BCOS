@@ -316,17 +316,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
         *m_protocolInitializer->blockFactory()->receiptFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(),
-        std::make_shared<
-            executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
+        std::make_shared<executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
             m_globalStateStorageInitializer->storage().latestBackend()));
 
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
-    // schedulers. The on-chain value overrides the genesis-file value (executor_version is
-    // runtime-settable via SystemConfigPrecompiled, though >= 2 is now rejected there — v2
-    // is genesis-only). Using the unresolved node-config value here would build the Engine
-    // API on the v1 executor for a ledger that actually says v2 — the state-root divergence
-    // the gate exists to prevent. Genesis is already built (LedgerInitializer), so m_ledger
-    // is readable at this point.
+    // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
+    // at runtime (executor_version is runtime-settable via SystemConfigPrecompiled, and
+    // MultiVersionScheduler::setVersion saturates any version >= 2 onto the v2
+    // EthereumExecutor), so the gate below must read the ledger rather than the node
+    // config — a node whose genesis said v1 but whose ledger says v2 would otherwise build
+    // the Engine API on the v1 executor, the state-root divergence the gate exists to
+    // prevent. The residual risk of a runtime switch to v2 without genesis config is handled
+    // by the boot refusal below (no on-chain evmc_revision row), not by a per-block
+    // validator. Genesis is already built (LedgerInitializer), so m_ledger is readable at
+    // this point.
     auto executorVersion = m_nodeConfig->executorVersion();
     if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
             *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
@@ -342,8 +345,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // executor would produce blocks with v1 semantics that diverge from the v2 main chain
     // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
     // respond "engine service not available" (see EngineEndpoint.cpp).
-    const bool engineApiForV1Only =
-        (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+    const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
 
     if (baselineSchedulerConfig.parallel)
     {
@@ -453,11 +455,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             // A fresh v2 chain always has the row, so reaching here means a runtime switch
             // to v2 without genesis config. Refuse to start (node-local policy — no block
             // semantics touched) instead of defaulting.
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                "executor_version >= 2 but no evmc_revision system config is recorded "
-                "on-chain; the effective EVM revision would be a binary-side default. "
-                "Refusing to start — configure executor.evm_revision at genesis, or run "
-                "executor_version 0/1"));
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "executor_version >= 2 but no evmc_revision system config is recorded "
+                    "on-chain; the effective EVM revision would be a binary-side default. "
+                    "Refusing to start — configure executor.evm_revision at genesis, or run "
+                    "executor_version 0/1"));
         }
     }
 
@@ -681,9 +684,9 @@ void Initializer::initSysContract()
     // entirely for v2+.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
     {
-        INITIALIZER_LOG(INFO)
-            << LOG_DESC("SysInitializer: skip system-contract deployment for ethereum executor "
-                        "(executor_version>=2)");
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "SysInitializer: skip system-contract deployment for ethereum executor "
+            "(executor_version>=2)");
         return;
     }
     // check is it deploy first time

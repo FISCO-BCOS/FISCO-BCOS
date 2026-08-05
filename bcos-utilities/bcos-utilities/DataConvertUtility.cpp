@@ -130,8 +130,7 @@ std::optional<uint64_t> parseStrictQuantity(std::string_view quantity)
             // sign ('+', '-'), whitespace, or trailing garbage — reject, don't truncate.
             return std::nullopt;
         }
-        if (result >
-            (std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(digit)) / 16)
+        if (result > (std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(digit)) / 16)
         {
             return std::nullopt;  // overflow
         }

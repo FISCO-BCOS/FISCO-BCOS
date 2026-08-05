@@ -35,6 +35,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <optional>

@@ -72,8 +72,8 @@ evmone::state::BlockInfo blockHeaderToBlockInfo(
     if (rev >= EVMC_CANCUN)
     {
         const auto excess = config.excessBlobGas().value_or(0);
-        info.blob_base_fee = evmone::state::compute_blob_gas_price(
-            blobParamsForRevision(rev), excess);
+        info.blob_base_fee =
+            evmone::state::compute_blob_gas_price(blobParamsForRevision(rev), excess);
     }
     else
     {
@@ -136,13 +136,11 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
         // requires exactly 40 hex chars), and the test helpers use the same
         // "0x..." encoding. The raw 20-byte branch below is kept only as a
         // defensive fallback.
-        const bool has0x =
-            tb.size() >= 2 && tb[0] == '0' && (tb[1] == 'x' || tb[1] == 'X');
-        const bool is40Hex = tb.size() == sizeof(evmc_address) * 2 &&
-                             std::all_of(tb.begin(), tb.end(), [](char c) {
-                                 return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
-                                        (c >= 'A' && c <= 'F');
-                             });
+        const bool has0x = tb.size() >= 2 && tb[0] == '0' && (tb[1] == 'x' || tb[1] == 'X');
+        const bool is40Hex =
+            tb.size() == sizeof(evmc_address) * 2 && std::all_of(tb.begin(), tb.end(), [](char c) {
+                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            });
         if (has0x || is40Hex)
         {
             // Hex-string form. Only a well-formed 20-byte address decodes to a
@@ -153,8 +151,7 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
             // produce a wrong (or all-zero) address. Such input leaves `to`
             // unset, i.e. contract creation, matching base behaviour for
             // anything that is not a well-formed address.
-            if (auto decoded = safeFromHex(tb);
-                decoded && decoded->size() == sizeof(evmc_address))
+            if (auto decoded = safeFromHex(tb); decoded && decoded->size() == sizeof(evmc_address))
             {
                 evmc_address ta{};
                 std::copy(decoded->begin(), decoded->end(), ta.bytes);
@@ -326,8 +323,8 @@ protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& 
         }
     }();
     bcos::bytes output;
-    return rf.createReceipt(bcos::u256(0), std::string{}, {}, status, bcos::ref(output),
-        blockNumber);
+    return rf.createReceipt(
+        bcos::u256(0), std::string{}, {}, status, bcos::ref(output), blockNumber);
 }
 
 }  // namespace bcos::executor_v1::eth

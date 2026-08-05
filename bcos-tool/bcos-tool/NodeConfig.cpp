@@ -1508,20 +1508,22 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
             {
                 if (*rev == EVMC_EXPERIMENTAL)
                 {
-                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                        "executor.evm_revision=experimental is not a released fork: evmone's "
-                        "semantics for it change between versions, which would tie consensus "
-                        "to the binary"));
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision=experimental is not a released fork: evmone's "
+                            "semantics for it change between versions, which would tie consensus "
+                            "to the binary"));
                 }
                 m_genesisConfig.m_evmcRevision = *rev;
             }
             else
             {
-                BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                    "executor.evm_revision is invalid: " + evmcRevisionStr +
-                    ", supported revisions: frontier/homestead/tangerinewhistle/"
-                    "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
-                    "london/paris/shanghai/cancun/prague/osaka"));
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision is invalid: " + evmcRevisionStr +
+                        ", supported revisions: frontier/homestead/tangerinewhistle/"
+                        "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
+                        "london/paris/shanghai/cancun/prague/osaka"));
             }
         }
 
@@ -1550,8 +1552,9 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                 if (colon == std::string_view::npos)
                 {
                     BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                        "executor.evm_revision_forks invalid entry (expected "
-                        "\"block:revision\"): " + std::string(entry)));
+                                              "executor.evm_revision_forks invalid entry (expected "
+                                              "\"block:revision\"): " +
+                                              std::string(entry)));
                 }
                 auto blockStr = trim(entry.substr(0, colon));
                 auto name = trim(entry.substr(colon + 1));
@@ -1562,23 +1565,26 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                     // (encodeEVMCRevisionConfig picks forks.begin()->second when no 0: entry
                     // exists) — an operator typing -5 instead of 5 would silently get a
                     // different fork schedule. Reject it here.
-                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                        "executor.evm_revision_forks block height must be >= 0, got " +
-                        std::to_string(block) + " in entry: " + std::string(entry)));
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks block height must be >= 0, got " +
+                            std::to_string(block) + " in entry: " + std::string(entry)));
                 }
                 auto rev = ledger::evmcRevisionFromName(name);
                 if (!rev)
                 {
-                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                        "executor.evm_revision_forks invalid revision \"" + std::string(name) +
-                        "\" in entry: " + std::string(entry)));
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks invalid revision \"" + std::string(name) +
+                            "\" in entry: " + std::string(entry)));
                 }
                 if (*rev == EVMC_EXPERIMENTAL)
                 {
-                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                        "executor.evm_revision_forks revision \"experimental\" is not a "
-                        "released fork (evmone semantics change between versions); entry: " +
-                        std::string(entry)));
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks revision \"experimental\" is not a "
+                            "released fork (evmone semantics change between versions); entry: " +
+                            std::string(entry)));
                 }
                 m_genesisConfig.m_evmcRevisionForks[block] = *rev;
             }
@@ -1591,8 +1597,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("Invalid executor.evm_revision config: " +
-                                               std::string(e.what())));
+            InvalidConfig() << errinfo_comment(
+                "Invalid executor.evm_revision config: " + std::string(e.what())));
     }
     // A v2 chain (executor_version >= 2 selects the ethereum-executor) MUST pin its EVMC
     // revision explicitly. Unlike v0/v1 the revision is consumed on every block, and a
@@ -1603,11 +1609,12 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
         !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty())
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "executor.version=2 (ethereum-executor) requires an explicit "
-            "executor.evm_revision (or executor.evm_revision_forks) so the EVM "
-            "revision is recorded on-chain; refusing to run with an implicit "
-            "binary-side default"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.version=2 (ethereum-executor) requires an explicit "
+                "executor.evm_revision (or executor.evm_revision_forks) so the EVM "
+                "revision is recorded on-chain; refusing to run with an implicit "
+                "binary-side default"));
     }
     // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
     // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for
@@ -1619,10 +1626,11 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         m_genesisConfig.m_compatibilityVersion <
             static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-            "executor.version=2 requires compatibility_version >= 3.18.0: below that "
-            "Ledger::buildGenesisBlock cannot persist evmc_revision, so the EVM revision "
-            "would not be recorded on-chain"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.version=2 requires compatibility_version >= 3.18.0: below that "
+                "Ledger::buildGenesisBlock cannot persist evmc_revision, so the EVM revision "
+                "would not be recorded on-chain"));
     }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
@@ -2522,8 +2530,8 @@ std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
 {
     return m_genesisConfig.m_evmcRevision;
 }
-std::map<protocol::BlockNumber, evmc_revision> const&
-bcos::tool::NodeConfig::evmcRevisionForks() const
+std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks()
+    const
 {
     return m_genesisConfig.m_evmcRevisionForks;
 }

@@ -1,4 +1,6 @@
 #include "MultiVersionScheduler.h"
+#include "Common.h"
+#include <algorithm>
 
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::getScheduler()
 {
@@ -79,13 +81,26 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     {
         // BCOS exception (not std::out_of_range) so it stays within the codebase's
         // exception taxonomy and carries the same error-channel conventions.
-        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported() << errinfo_comment(
-            "executor version " + std::to_string(version) + " is not supported "
-            "(must be >= 0)"));
+        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
+                              << errinfo_comment("executor version " + std::to_string(version) +
+                                                 " is not supported "
+                                                 "(must be >= 0)"));
     }
     // Saturate the upper bound: any version >= the last scheduler index selects the
     // newest executor (the v2 EthereumExecutor). This keeps the version space
     // open-ended above 2 so a future executor version needs no array/schema change.
+    // The saturation itself is silent by design, but an unknown version above today's
+    // set deserves a log line: on a binary that has no such version, "see an unknown
+    // version, run the newest" means executing blocks under rules the chain did not
+    // explicitly ask for — make the guess visible instead of quiet.
+    if (static_cast<size_t>(version) >= m_schedulers.size())
+    {
+        INITIALIZER_LOG(WARNING) << LOG_DESC(
+                                        "executor version above the newest known executor; "
+                                        "saturating to the newest")
+                                 << LOG_KV("requested", version)
+                                 << LOG_KV("selected", m_schedulers.size() - 1);
+    }
     m_currentIndex =
         static_cast<int>(std::min<size_t>(static_cast<size_t>(version), m_schedulers.size() - 1));
 }

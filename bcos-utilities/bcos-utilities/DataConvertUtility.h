@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <optional>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
