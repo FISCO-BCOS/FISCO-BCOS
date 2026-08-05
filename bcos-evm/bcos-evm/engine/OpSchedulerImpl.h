@@ -48,7 +48,6 @@
 #include <bcos-evm/eth/state/state_view.hpp>
 #include <bcos-evm/eth/state/system_contracts.hpp>
 #include <bcos-evm/eth/state/transaction.hpp>
-#include <bcos-evm/eth/utils/mpt.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
 #include <cstdint>

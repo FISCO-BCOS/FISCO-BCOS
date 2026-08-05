@@ -59,14 +59,10 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
     # 自研内存账本（块级 PR 移植）：MemoryLedger 是 evmone test_state 的替换品，
-    # StateRootCompute 是状态根引擎（AccountVisitor 建根）。其 TestState 重放腿依赖
-    # evmone 的 MPT/mpt_hash——随 port 不再安装，故 vendored 于 eth/utils/ 下
-    # （mpt/mpt_hash 曾在此，后被移出；本 PR 因 StateRootCompute 重新引入）。
-    # rlp 不 vendored，直接引用包内 <test/utils/rlp.hpp>。
+    # StateRootCompute 是状态根引擎（AccountVisitor 建根，用 FISCO bcos-ledger/mpt
+    # computeTrieRoot，不再依赖 evmone 的 MPT/mpt_hash）。
     bcos-evm/ledger/MemoryLedger.cpp
     bcos-evm/adapter/StateRootCompute.cpp
-    bcos-evm/eth/utils/mpt.cpp
-    bcos-evm/eth/utils/mpt_hash.cpp
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
@@ -118,8 +114,6 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    bcos-evm/eth/utils/mpt.cpp
-    bcos-evm/eth/utils/mpt_hash.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
@@ -133,8 +127,6 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpTransition.cpp
     bcos-evm/opstack/OpReceipt.cpp
     # 块级执行层（op-validator-loop 移植）：processOpBlock / finalizeOpBlock / sealOpBlock。
-    # OpBlockSeal.cpp 的 receipts-root / opStorageRoot 依赖 evmone::state::MPT
-    # （bcos-evm/eth/utils/mpt.cpp，由 bcos-evm-eth 提供）。
     bcos-evm/opstack/OpBlockExecute.cpp
     bcos-evm/opstack/OpBlockFinalize.cpp
     bcos-evm/opstack/OpBlockSeal.cpp)
