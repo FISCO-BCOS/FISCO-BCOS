@@ -2,10 +2,11 @@
 
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpReceipt.h>
 #include <bcos-evm/opstack/OpTransition.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <span>
 #include <variant>
@@ -23,10 +24,16 @@ struct OpBlockTx
 
 /// Block execution result. receipts keep their original in-block order (M-B2's receipts-root /
 /// block-level bloom depend on this order; cumulative_gas_used is already filled in interleaved
-/// order).
+/// order). Each receipt is a bcos::protocol::TransactionReceipt directly produced by the execution
+/// layer (方案 A 阶段 2) — the OP metadata (l1/operator/DA, or deposit_nonce/version) rides in its
+/// opStackMeta, so no evmone receipt wrapper survives here. txTypes[i] carries the EIP-2718 type
+/// byte that produced receipts[i] (kDepositTxType for deposits, else the Transaction::Type
+/// value): the FISCO receipt interface has no tx-type slot, and sealOpBlock's EncodeIndex
+/// receipts-root leaf needs the typed prefix (op-geth Receipts.EncodeIndex semantics).
 struct OpBlockResult
 {
-    std::vector<std::variant<OpDepositReceipt, OpTxReceipt>> receipts;
+    std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
+    std::vector<uint8_t> txTypes;  // one EIP-2718 type byte per receipt, same order
     int64_t gasUsed = 0;                    // = last tx's cumulative
     evmone::state::StateDiff finalizeDiff;  // end-of-block finalize output (already delivered via
                                             // applyDiff)
@@ -47,6 +54,7 @@ struct OpBlockResult
 OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff);
 
 // ---- Jovian L1-attributes block shape (batch C, spec §6.4) ----

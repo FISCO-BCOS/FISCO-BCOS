@@ -24,7 +24,6 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/engine/OpEngineSeam.h>
-#include <bcos-evm/engine/OpReceiptMap.h>
 #include <bcos-evm/ledger/RecentBlockHashes.h>
 #include <bcos-evm/ledger/Storage2Ledger.h>
 #include <bcos-evm/opstack/OpBlockExecute.h>
@@ -1047,7 +1046,7 @@ public:
         try
         {
             result = bcos::evm::opstack::processOpBlock(
-                bridge, blk, hashes, txs, cfg, m_vm, m_chainId, applyDiff);
+                bridge, blk, hashes, txs, cfg, m_vm, m_chainId, m_receiptFactory, applyDiff);
         }
         catch (const std::exception& e)
         {
@@ -1134,39 +1133,11 @@ public:
         // second implementation.
         const auto txRoot = computeOpTxRoot(rawTxBytes);
 
-        std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
-        receipts.reserve(result.receipts.size());
-        for (auto const& receiptVariant : result.receipts)
-        {
-            // The variant carries the OP-specific extras alongside the common evmone receipt:
-            // OpTxReceipt.meta (l1/operator/DA fee fields, computed by deriveOpReceiptMeta) and
-            // OpDepositReceipt.deposit_nonce/receipt_version. mapOpReceipt only receives the
-            // common receipt. (Deferred on this branch: the source branch mapped those extras
-            // through OpStackReceiptMeta/setOpStackMeta — the tars receipt-meta struct does not
-            // exist on this baseline, see OpReceiptMap.h's deferral note.)
-            const auto& innerReceipt = std::visit(
-                [](const auto& r) -> const evmone::state::TransactionReceipt& { return r.receipt; },
-                receiptVariant);
-            std::optional<intx::uint256> effectiveGasPrice = std::visit(
-                [](const auto& r) -> std::optional<intx::uint256> {
-                    using R = std::decay_t<decltype(r)>;
-                    if constexpr (std::is_same_v<R, bcos::evm::opstack::OpTxReceipt>)
-                    {
-                        return r.meta.effective_gas_price;
-                    }
-                    else
-                    {
-                        return std::nullopt;  // deposits: no effective gas price (RPC "0x0"
-                                              // fallback)
-                    }
-                },
-                receiptVariant);
-            receipts.push_back(
-                mapOpReceipt(innerReceipt, m_receiptFactory, blk.number, effectiveGasPrice));
-        }
-
+        // 方案 A 阶段 2: the execution layer already produced bcos::protocol::TransactionReceipt
+        // objects (OP metadata in opStackMeta, effective gas price on the top-level field), so no
+        // mapOpReceipt projection happens here — the result receipts ARE the framework receipts.
         co_return OpExecuteBlockResult{
-            .receipts = std::move(receipts),
+            .receipts = std::move(result.receipts),
             .seal = seal,
             .stateRoot = detail::toBcosH256(stateRootHash),
             .gasUsed = static_cast<uint64_t>(result.gasUsed),

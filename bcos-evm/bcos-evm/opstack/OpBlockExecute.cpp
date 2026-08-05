@@ -6,6 +6,9 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <algorithm>
+#include <iomanip>
+#include <limits>
+#include <sstream>
 #include <stdexcept>
 
 namespace bcos::evm::opstack
@@ -26,6 +29,28 @@ namespace
     // hand-crafted payload fed directly to engine_newPayload, bypassing op-node. Keep this stricter
     // check: it rejects malformed blocks op-geth accepts, at zero cost on legitimate payloads.
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
+}
+
+/// Narrow the FISCO receipt's gasUsed (u256) back to the int64 the gas pool/cumulative accounting
+/// uses. The execution layer only ever stores a small positive gas_used, but the "widen -> check ->
+/// narrow" discipline (Storage2Ledger.h precedent) applies: a corrupt receipt must not silently
+/// wrap blockGasLeft/cumulative.
+[[nodiscard]] int64_t narrowGasUsed(const bcos::u256& gasUsed)
+{
+    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
+    if (gasUsed > kMaxInt64)
+        throw std::runtime_error("op block: receipt gasUsed exceeds int64_t range");
+    return static_cast<int64_t>(gasUsed);
+}
+
+/// "0x" + lowercase hex, no leading zeros (op-geth hexutil.Uint64 convention). Stored on the
+/// receipt's cumulativeGasUsed string field; encodeReceiptForRoot parses it back to the exact
+/// uint64 for the EncodeIndex leaf (see OpBlockSeal.cpp).
+[[nodiscard]] std::string hexCumulative(uint64_t cumulative)
+{
+    std::ostringstream oss;
+    oss << "0x" << std::hex << cumulative;
+    return oss.str();
 }
 }  // namespace
 
@@ -74,6 +99,7 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
 OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff)
 {
     // §4.1 step 1: pre-block system call (4788/2935; revision-gating and silent skip on missing
@@ -109,12 +135,16 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         {
             if (seenNonDeposit)
                 throw std::runtime_error("op block: deposit after non-deposit tx");
-            auto receipt = runDeposit(view, block, hashes, *dep, cfg, vm, chainId, blockGasLeft);
-            applyDiff(receipt.receipt.state_diff);
-            blockGasLeft -= receipt.receipt.gas_used;
-            cumulative += receipt.receipt.gas_used;
-            receipt.receipt.cumulative_gas_used = cumulative;
+            evmone::state::StateDiff diff;
+            auto receipt = runDeposit(
+                view, block, hashes, *dep, cfg, vm, chainId, blockGasLeft, receiptFactory, diff);
+            applyDiff(diff);
+            const auto gasUsed = narrowGasUsed(receipt->gasUsed());
+            blockGasLeft -= gasUsed;
+            cumulative += gasUsed;
+            receipt->setCumulativeGasUsed(hexCumulative(cumulative));
             result.receipts.emplace_back(std::move(receipt));
+            result.txTypes.emplace_back(static_cast<uint8_t>(kDepositTxType));
         }
         else
         {
@@ -160,13 +190,16 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 throw std::runtime_error("op block: invalid non-deposit tx: " + err->message());
             // L1/DA/operator cost were derived from `env` in opValidate and frozen into props;
             // opTransition charges from that same snapshot (no second fee read, no re-encoding).
-            auto receipt = opTransition(
-                view, block, hashes, tx, cfg, vm, std::get<OpTxProperties>(v), chainId);
-            applyDiff(receipt.receipt.state_diff);
-            blockGasLeft -= receipt.receipt.gas_used;
-            cumulative += receipt.receipt.gas_used;
-            receipt.receipt.cumulative_gas_used = cumulative;
+            evmone::state::StateDiff diff;
+            auto receipt = opTransition(view, block, hashes, tx, cfg, vm,
+                std::get<OpTxProperties>(v), chainId, receiptFactory, diff);
+            applyDiff(diff);
+            const auto gasUsed = narrowGasUsed(receipt->gasUsed());
+            blockGasLeft -= gasUsed;
+            cumulative += gasUsed;
+            receipt->setCumulativeGasUsed(hexCumulative(cumulative));
             result.receipts.emplace_back(std::move(receipt));
+            result.txTypes.emplace_back(static_cast<uint8_t>(tx.type));
         }
     }
 
