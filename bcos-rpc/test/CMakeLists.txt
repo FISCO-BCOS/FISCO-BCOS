@@ -35,6 +35,13 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 # reporting "unknown type" for a plain std::invalid_argument). The test file carries a
 # linkage-only definition of unhexAddress instead.
 target_link_libraries(${TEST_BINARY_NAME} txpool ledger rpc tool transaction-scheduler storage Boost::unit_test_framework)
+# OP Stack golden corpus (shared with bcos-evm's opstack/t8n): the deposit envelope encoder
+# lives in bcos-rpc (DepositTxHandler in TxHandler.cpp), so OpDepositEncodeTest.cpp cross-checks
+# it byte-for-byte against the op-geth golden rawTransactions here (in-tree build only, same as
+# the corpus's bcos-evm users). Paths point into the bcos-evm test source tree.
+target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
+    OP_T8N_CASES_DIR="${CMAKE_SOURCE_DIR}/bcos-evm/test/opstack/t8n/cases"
+    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_SOURCE_DIR}/bcos-evm/test/opstack/t8n/golden/engine")
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the

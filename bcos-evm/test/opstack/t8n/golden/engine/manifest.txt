@@ -1,0 +1,49 @@
+# Task 2 (op-validator-minimal-loop spec §7.1) engine-gate golden manifest.
+# One <id>.golden.json per vectors/<id>.json (same id, 33/33, set-equal to
+# cases/*.in.json -- checked at generation time). Each file carries exactly
+# the fields the corpus's own v3-block vectors are structurally missing:
+# blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/
+# encodedHeaderHex. vectors/*.json themselves are byte-for-byte untouched
+# (git diff --stat -- ../../vectors/ is empty by construction: golden output
+# and vector regeneration write to disjoint paths, see README.md ritual log).
+isthmus_deposit_only.golden.json
+jovian_deposit_only.golden.json
+isthmus_transfer_basic.golden.json
+jovian_transfer_basic.golden.json
+isthmus_transfer_multi.golden.json
+jovian_transfer_multi.golden.json
+isthmus_deposit_mint.golden.json
+jovian_deposit_mint.golden.json
+isthmus_deposit_failed.golden.json
+jovian_deposit_failed.golden.json
+isthmus_contract_logs.golden.json
+jovian_contract_logs.golden.json
+isthmus_message_passer_write.golden.json
+jovian_message_passer_write.golden.json
+isthmus_tx_reverted.golden.json
+jovian_tx_reverted.golden.json
+isthmus_setcode_7702.golden.json
+jovian_setcode_7702.golden.json
+isthmus_big_block_130tx.golden.json
+isthmus_system_contracts_real.golden.json
+jovian_system_contracts_real.golden.json
+jovian_first_block.golden.json
+jovian_da_mix.golden.json
+isthmus_fee_env_observer.golden.json
+jovian_fee_env_observer.golden.json
+isthmus_contract_create.golden.json
+jovian_contract_create.golden.json
+isthmus_access_list.golden.json
+jovian_access_list.golden.json
+isthmus_setcode_7702_skips.golden.json
+jovian_setcode_7702_skips.golden.json
+isthmus_empty_account_cleanup.golden.json
+jovian_empty_account_cleanup.golden.json
+#
+# Off-line chained pair (spec §7.1 rev.3 decision A2, Step 2): NOT part of
+# the 33-set above -- a dedicated 1->2 block chain (no vectors/ counterpart),
+# each file carrying the FULL v3-block payload merged flatly with the golden
+# extension. Lives in chained/, not listed by basename here (2 files, fixed
+# names, self-describing).
+#   chained/chainA.golden.json  chained/chainA.pre.json  chained/chainA.post.json
+#   chained/chainB.golden.json  chained/chainB.pre.json  chained/chainB.post.json
