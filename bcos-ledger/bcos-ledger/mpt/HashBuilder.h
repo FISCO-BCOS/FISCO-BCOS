@@ -64,6 +64,18 @@ TrieBuildResult computeTrieRoot(std::map<bcos::h256, bcos::bytes> const& entries
 TrieBuildResult computeTrieRootFromSorted(
     std::span<std::pair<bcos::h256, bcos::bytesConstRef> const> sortedEntries);
 
+/// Non-secure (variable-length key) build entry: computes a canonical MPT over (key, value) pairs
+/// where @p key is an arbitrary-length byte string (each byte → 2 nibbles via bytesToNibbles),
+/// NOT the 32-byte keccak-hashed secure-trie key `computeTrieRoot` assumes. Used for list tries
+/// whose keys are short RLP encodings (e.g. the OP receipts-root: key = rlp(index), 1–4 bytes).
+///
+/// Contract (differs from computeTrieRoot's 64-nibble assumption): the caller MUST guarantee no
+/// key is a prefix of another (a variable-length key may terminate inside a branch node, which
+/// this build does not support — the 64-nibble case never does). The OP receipts-root keys
+/// rlp(0..N) satisfy this by construction. Keys are also assumed distinct; the input is sorted by
+/// the caller (std::map<bcos::bytes> orders lexicographically = nibble-path order).
+TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::bytes> const> entries);
+
 /// Apply one change-set over a prior trie version and return the complete node delta — the single
 /// stateless entry point every trie producer commits through (spec §5.4, Revision 2026-07-09b:
 /// the stateful put/remove-accumulating HashBuilder class this replaces held no state that
