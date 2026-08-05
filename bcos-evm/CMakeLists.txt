@@ -123,7 +123,13 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpFeeParams.cpp
     bcos-evm/opstack/RollupCost.cpp
     bcos-evm/opstack/OpTransition.cpp
-    bcos-evm/opstack/OpReceipt.cpp)
+    bcos-evm/opstack/OpReceipt.cpp
+    # 块级执行层（op-validator-loop 移植）：processOpBlock / finalizeOpBlock / sealOpBlock。
+    # OpBlockSeal.cpp 的 receipts-root / opStorageRoot 依赖 evmone::state::MPT
+    # （bcos-evm/eth/utils/mpt.cpp，由 bcos-evm-eth 提供）。
+    bcos-evm/opstack/OpBlockExecute.cpp
+    bcos-evm/opstack/OpBlockFinalize.cpp
+    bcos-evm/opstack/OpBlockSeal.cpp)
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
