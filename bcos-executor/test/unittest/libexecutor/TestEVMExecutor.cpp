@@ -185,13 +185,12 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -262,12 +261,11 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     BOOST_CHECK_GT(entry->get().size(), 0);
 
     // start new block
-    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader2->setNumber(2);
 
-    parentInfos = {{{blockHeader2->number() - 1, h256(blockHeader2->number() - 1)}}};
-    blockHeader2->setParentInfo(parentInfos);
+    parentInfo = {blockHeader2->number() - 1, h256(blockHeader2->number() - 1)};
+    blockHeader2->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader2->number() - 1);
     blockHeader2->calculateHash(*cryptoSuite->hashImpl());
 
@@ -433,13 +431,12 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -837,13 +834,12 @@ BOOST_AUTO_TEST_CASE(performance)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(blockNumber);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+        blockHeader->setParentInfo(parentInfo);
         ledger->setBlockNumber(blockHeader->number() - 1);
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
@@ -1055,13 +1051,12 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         paramsList.emplace_back(std::move(params));
     }
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -1177,13 +1172,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(1);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+        blockHeader->setParentInfo(parentInfo);
         ledger->setBlockNumber(blockHeader->number() - 1);
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
@@ -1364,13 +1358,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         NativeExecutionMessage paramsBak = *params;
 
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(2);
 
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+        blockHeader->setParentInfo(parentInfo);
         ledger->setBlockNumber(blockHeader->number() - 1);
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
@@ -1524,14 +1517,13 @@ contract DelegateCallTest {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -1721,14 +1713,13 @@ contract HelloWorld {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {blockHeader->number() - 1, h256(blockHeader->number() - 1)}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -1900,13 +1891,12 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2038,14 +2028,13 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
 
     NativeExecutionMessage paramsBak1 = *params1;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2124,12 +2113,11 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2219,12 +2207,11 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2325,12 +2312,11 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2426,12 +2412,11 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
     params->setCreate(true);
 
     NativeExecutionMessage paramsBak = *params;
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2552,14 +2537,13 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
 
     NativeExecutionMessage paramsBak1 = *params1;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
@@ -2639,13 +2623,12 @@ contract HelloFactory {
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{
-        {{blockHeader->number() - 1, h256(blockHeader->number() - 1)}}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{
+        .blockNumber = blockHeader->number() - 1, .blockHash = h256(blockHeader->number() - 1)};
+    blockHeader->setParentInfo(parentInfo);
     ledger->setBlockNumber(blockHeader->number() - 1);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;

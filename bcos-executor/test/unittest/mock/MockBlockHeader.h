@@ -20,10 +20,9 @@ public:
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
-    ::ranges::any_view<bcos::protocol::ParentInfo, ::ranges::category::input | ::ranges::category::sized>
-    parentInfo() const override
+    bcos::protocol::ParentInfo parentInfo() const override
     {
-        return {};
+        return bcos::protocol::ParentInfo{};
     }
     crypto::HashType txsRoot() const override { return {}; }
     crypto::HashType receiptsRoot() const override { return {}; }
@@ -36,10 +35,9 @@ public:
     bytesConstRef extraData() const override { return {}; }
     gsl::span<const protocol::Signature> signatureList() const override { return {}; }
     gsl::span<const uint64_t> consensusWeights() const override { return {}; }
-    bytes coinbase() const override { return {}; }
 
     void setVersion(uint32_t _version) override {}
-    void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
+    void setParentInfo(bcos::protocol::ParentInfo parentInfo) override {}
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override {}
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override {}
     void setStateRoot(bcos::crypto::HashType _stateRoot) override {}
@@ -52,10 +50,35 @@ public:
     void setConsensusWeights(const gsl::span<const uint64_t>& _weightList) override {}
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override {}
     void setExtraData(bytes _extraData) override {}
-    void setCoinbase(bytes _coinbase) override {}
     void setSignatureList(const gsl::span<const protocol::Signature>& _signatureList) override {}
     void setSignatureList(protocol::SignatureList&& _signatureList) override {}
     size_t size() const override { return 0; }
+
+    // ---- Ethereum-specific field accessors ----
+    bcos::Address coinbase() const override { return {}; }
+    void setCoinbase(bcos::Address _addr) override {}
+    bcos::bytesConstRef logsBloom() const override { return {}; }
+    void setLogsBloom(bcos::bytesConstRef _bloom) override {}
+    u256 gasLimit() const override { return {}; }
+    void setGasLimit(u256 _limit) override {}
+    bcos::h256 prevRandao() const override { return {}; }
+    void setPrevRandao(bcos::h256 _digest) override {}
+    std::optional<u256> baseFee() const override { return std::nullopt; }
+    void setBaseFee(u256 _fee) override {}
+    std::optional<bcos::h256> withdrawalsRoot() const override { return std::nullopt; }
+    void setWithdrawalsRoot(bcos::h256 _hash) override {}
+    std::optional<u256> blobGasUsed() const override { return std::nullopt; }
+    void setBlobGasUsed(u256 _val) override {}
+    std::optional<u256> excessBlobGas() const override { return std::nullopt; }
+    void setExcessBlobGas(u256 _val) override {}
+    std::optional<bcos::h256> parentBeaconBlockRoot() const override { return std::nullopt; }
+    void setParentBeaconBlockRoot(bcos::h256 _root) override {}
+    std::optional<bcos::h256> requestsHash() const override { return std::nullopt; }
+    void setRequestsHash(bcos::h256 _hash) override {}
+    std::optional<bcos::h256> blockAccessListHash() const override { return std::nullopt; }
+    void setBlockAccessListHash(bcos::h256 _hash) override {}
+    std::optional<uint64_t> slotNumber() const override { return std::nullopt; }
+    void setSlotNumber(uint64_t _val) override {}
 
 private:
     protocol::BlockNumber m_blockNumber;

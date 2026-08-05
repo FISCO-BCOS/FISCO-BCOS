@@ -204,8 +204,7 @@ task::Task<void> EERunTransfers(Scheduler& scheduler, EthereumExecutor& executor
     // (the parent) stays resolvable.
     co_await EEWriteCurrentNumber(backendStorage, 0);
 
-    bcostars::protocol::BlockHeaderImpl blockHeader(
-        [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+    bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
@@ -480,8 +479,7 @@ BOOST_AUTO_TEST_CASE(serialInvalidTxDoesNotAbortBlock)
         co_await EEWriteBlockHash(
             backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.setNumber(1);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
@@ -542,8 +540,7 @@ BOOST_AUTO_TEST_CASE(serialSameNonceSecondRejected)
             backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
         co_await EEWriteCurrentNumber(backendStorage, 0);
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.setNumber(1);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
@@ -601,8 +598,7 @@ BOOST_AUTO_TEST_CASE(parallelSameNonceSecondRejected)
             backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
         co_await EEWriteCurrentNumber(backendStorage, 0);
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
         blockHeader.setNumber(1);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 

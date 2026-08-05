@@ -1005,7 +1005,12 @@ public:
         if (!env.coinbase.empty())
         {
             auto cbBytes = test::hexToBytes(env.coinbase);
-            header.setCoinbase(std::move(cbBytes));
+            bcos::Address coinbaseAddr;
+            if (cbBytes.size() >= bcos::Address::SIZE)
+            {
+                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
+            }
+            header.setCoinbase(coinbaseAddr);
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
@@ -1285,6 +1290,8 @@ public:
     {
         configureFork(forkName);
         m_chainId = fixture.chainId;
+        m_ledgerConfig.setChainId(
+            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
         configureEnvironment(fixture.env);
 
         MutableStorage storage;
@@ -1474,7 +1481,12 @@ public:
         if (!bh.coinbase.empty())
         {
             auto cbBytes = test::hexToBytes(bh.coinbase);
-            header.setCoinbase(std::move(cbBytes));
+            bcos::Address coinbaseAddr;
+            if (cbBytes.size() >= bcos::Address::SIZE)
+            {
+                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
+            }
+            header.setCoinbase(coinbaseAddr);
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
@@ -1562,6 +1574,8 @@ public:
         }
         configureFork(forkName);
         m_chainId = fixture.chainId;
+        m_ledgerConfig.setChainId(
+            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
 
         // Set up pre-state once
         MutableStorage storage;

@@ -141,8 +141,7 @@ BOOST_AUTO_TEST_CASE(revertedLaterChunkMustNotOverwriteEarlierWrite)
         scheduler.m_grainSize = 1;       // each tx is its own chunk
         scheduler.m_maxConcurrency = 2;  // allow the two chunks to overlap
 
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        bcostars::protocol::BlockHeaderImpl blockHeader;
 
         auto transactions =
             ::ranges::iota_view<int, int>(0, 2) | ::ranges::views::transform([](int /*index*/) {

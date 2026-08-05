@@ -90,10 +90,9 @@ BOOST_AUTO_TEST_CASE(testRotate)
         auto storageWrapper =
             std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
                 storage);
-        auto blockHeader = std::make_unique<bcostars::protocol::BlockHeaderImpl>(
-            [m_header = bcostars::BlockHeader()]() mutable { return std::addressof(m_header); });
+        auto blockHeader = std::make_unique<bcostars::protocol::BlockHeaderImpl>();
         bcos::protocol::ParentInfo parentInfo;
-        blockHeader->setParentInfo(::ranges::views::single(parentInfo));
+        blockHeader->setParentInfo(parentInfo);
         blockHeader->calculateHash(*hashImpl);
 
         auto blockContext = std::make_unique<executor::BlockContext>(
