@@ -22,6 +22,7 @@ struct OpReceiptMeta
     std::optional<uint32_t> l1_base_fee_scalar;
     std::optional<uint32_t> l1_blob_base_fee_scalar;
     std::optional<intx::uint256> l1_fee;  // = l1_cost
+    std::optional<uint64_t> l1_gas_used;  // Fjord+; wire index 11
     // operator (Isthmus+)
     std::optional<intx::uint256> operator_fee;    // FISCO extension: actually-charged value
                                                   // (op-geth receipt has no such field)
@@ -30,6 +31,10 @@ struct OpReceiptMeta
     // DA footprint (Jovian+; op-geth receipt BlobGasUsed semantics)
     std::optional<uint64_t> da_footprint_gas_scalar;
     std::optional<uint64_t> da_footprint;
+    // Effective gas price (base_fee + priority_gas_price). NOT serialized into opReceiptMeta —
+    // carried on the tars effectiveGasPrice base field instead (op-geth api.go:1775, RPC layer
+    // top-level output).
+    std::optional<intx::uint256> effective_gas_price;
 };
 
 struct OpTxReceipt
