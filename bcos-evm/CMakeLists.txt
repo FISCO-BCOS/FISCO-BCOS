@@ -98,6 +98,14 @@ target_include_directories(bcos-evm-eth PUBLIC
     ${EVMONE_PKG_SHIM_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
+# 自研建根(替代退役 evmone mpt/mpt_hash):StateRootCompute.h 用 bcos-codec RLP + bcos-ledger
+# computeTrieRoot。`codec` 仅 in-tree 存在;`ledger` 由顶层 add_subdirectory(bcos-ledger) 提供
+# (在 bcos-evm 之后,目标引用在 generate 期解析)。
+if(TARGET codec)
+    target_link_libraries(bcos-evm-eth PUBLIC codec)
+endif()
+target_link_libraries(bcos-evm-eth PUBLIC ledger)
+target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_SOURCE_DIR}/bcos-ledger)
 
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
 # （cmake/CompilerSettings.cmake），AppleClang 对上游代码报 missing-field-initializers。
