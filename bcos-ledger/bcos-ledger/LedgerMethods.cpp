@@ -476,21 +476,37 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     ledgerConfig.setBalanceTransfer(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
-    if (auto executorVersion = sysConfig.get(ledger::SystemConfig::executor_version);
-        executorVersion)
+    int executorVersion = 0;
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
+        versionConfig)
     {
-        ledgerConfig.setExecutorVersion(boost::lexical_cast<int>(executorVersion.value().first));
+        executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
+        ledgerConfig.setExecutorVersion(executorVersion);
     }
 
-    // EVMC revision (used by ethereum-executor, executor_version=2). When the genesis config
-    // did not set one, default to the latest revision from genesis.
-    if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
+    // EVMC revision — consumed only by the pure-Ethereum EthereumExecutor
+    // (executor_version=2); v0/v1 schedulers never read evmcRevision()/evmcRevisionForBlock(),
+    // so a non-v2 chain is left untouched (no implicit default injection, which would be an
+    // unnoticed behavior change if a future v0/v1 path started reading it). For v2, an
+    // explicitly configured revision was persisted at genesis (Ledger::buildGenesisBlock);
+    // the fallback here covers a v2 genesis without one (defensive — NodeConfig::loadExecutorConfig
+    // requires an explicit revision for executor_version=2, so this default only fires on
+    // corrupt/legacy state).
+    if (executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION)
     {
-        ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
-    }
-    else
-    {
-        ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
+        if (auto evmcRevision = sysConfig.get(ledger::SystemConfig::evmc_revision); evmcRevision)
+        {
+            ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
+            LEDGER2_LOG(INFO) << LOG_DESC("EVMC revision resolved")
+                              << LOG_KV("evmcRevision", evmcRevision.value().first);
+        }
+        else
+        {
+            ledgerConfig.setEVMCRevision(ledger::EVMC_REVISION_DEFAULT);
+            LEDGER2_LOG(INFO) << LOG_DESC("EVMC revision defaulted")
+                              << LOG_KV("evmcRevision",
+                                    ledger::evmcRevisionName(ledger::EVMC_REVISION_DEFAULT));
+        }
     }
 }
 

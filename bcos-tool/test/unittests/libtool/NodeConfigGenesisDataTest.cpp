@@ -98,6 +98,57 @@ BOOST_AUTO_TEST_CASE(evmcRevisionConfig)
     BOOST_CHECK(data.find("evmRevision:0:cancun,100000:osaka") != std::string::npos);
 }
 
+// A v2 chain (ethereum-executor) MUST pin its EVMC revision explicitly: the revision is
+// consumed on every block, and a binary-side default would be recorded nowhere on-chain
+// (an implicit hard fork on binary upgrade). loadExecutorConfig rejects executor.version=2
+// without evm_revision / evm_revision_forks. v0/v1 are unaffected.
+BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n";
+
+    // version=2 with no EVMC revision -> rejected.
+    {
+        NodeConfig cfg(keyFactory);
+        std::string genesis = base + "version=2\n";
+        BOOST_CHECK_THROW(cfg.loadGenesisConfigFromString(genesis), InvalidConfig);
+    }
+
+    // version=2 with an explicit single revision -> accepted.
+    {
+        NodeConfig cfg(keyFactory);
+        std::string genesis = base + "version=2\nevm_revision=cancun\n";
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+    }
+
+    // version=2 with fork transitions (no single revision) -> accepted.
+    {
+        NodeConfig cfg(keyFactory);
+        std::string genesis = base + "version=2\nevm_revision_forks=0:cancun,100000:osaka\n";
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+    }
+
+    // version=1 with no EVMC revision -> unaffected (v0/v1 never consume it).
+    {
+        NodeConfig cfg(keyFactory);
+        std::string genesis = base + "version=1\n";
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+    }
+}
+
 // A compatibilityVersion below V3.1 takes the legacy dash-joined branch.
 BOOST_AUTO_TEST_CASE(legacyDashJoinedFormat)
 {

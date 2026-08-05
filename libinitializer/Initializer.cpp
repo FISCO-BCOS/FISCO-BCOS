@@ -320,6 +320,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
             m_globalStateStorageInitializer->storage().latestBackend()));
 
+    // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
+    // It must not be built for executor_version=2: a v2 chain's state transitions run
+    // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
+    // executor would produce blocks with v1 semantics that diverge from the v2 main chain
+    // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
+    // respond "engine service not available" (see EngineEndpoint.cpp).
+    const bool engineApiForV1Only =
+        (m_nodeConfig->executorVersion() != scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =
@@ -335,9 +344,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor);
-        m_engineServiceInitializer = EngineServiceInitializer::build(
-            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-            parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+        if (engineApiForV1Only)
+        {
+            m_engineServiceInitializer = EngineServiceInitializer::build(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+        }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
         // scheduler. Only one scheduler version is active at a time (selected via
@@ -364,9 +376,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor);
-        m_engineServiceInitializer = EngineServiceInitializer::build(
-            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), serialScheduler,
-            transactionExecutor, m_memPoolInitializer->memPool());
+        if (engineApiForV1Only)
+        {
+            m_engineServiceInitializer = EngineServiceInitializer::build(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+        }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
         auto ethereumSerialScheduler =

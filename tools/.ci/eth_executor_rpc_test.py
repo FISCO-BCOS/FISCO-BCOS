@@ -3,8 +3,8 @@
 #
 # RPC integration test for the pure-Ethereum executor (executor_version=2).
 #
-# It reuses an EEST (execution-spec-tests) fixture as the "simple Ethereum
-# transaction case":
+# It cross-checks its parameters against an EEST (execution-spec-tests) fixture
+# so the case is provably a real Ethereum test vector rather than invented:
 #   * fixtures/state_tests/.../*.json embed a `transaction.secretKey` (the
 #     sender's private key) plus `to`/`value`/`gasLimit`, and a `pre` balance
 #     for the sender — exactly what a live node needs to run the tx.
@@ -13,8 +13,10 @@
 #     (chainId = the node's web3_chain_id), submit it via eth_sendRawTransaction,
 #     wait for a receipt and assert the transfer landed.
 #
-# The tx values are passed via CLI (defaults = the fixture case) so the script
-# works both in CI (fixtures downloaded) and locally without re-parsing JSON.
+# The tx values are passed via CLI (defaults = the fixture case). When the fixture
+# is present (CI downloads it), load_fixture_params() verifies/uses the fixture's
+# secretKey/to/sender; pass --require-fixture (as CI does) to fail loudly when the
+# fixture is absent instead of silently falling back to the defaults.
 import argparse
 import json
 import os
@@ -28,10 +30,17 @@ from eth_account import Account
 DEFAULT_FIXTURE_REL = "state_tests/berlin/eip2930_access_list/test_transaction_intrinsic_gas_cost.json"
 
 
-def load_fixture_params(fixture_dir, secret, to, sender):
-    """Cross-check the CLI params against the EEST fixture (proves reuse)."""
+def load_fixture_params(fixture_dir, secret, to, sender, require_fixture=False):
+    """Cross-check the CLI params against the EEST fixture (proves reuse).
+
+    When the fixture is absent and require_fixture is set, fail loudly: the
+    "reuse an EEST fixture" claim is only load-bearing if a missing fixture is
+    a test failure, not a silent fall back to the (identical) defaults.
+    """
     path = os.path.join(fixture_dir, DEFAULT_FIXTURE_REL)
     if not os.path.exists(path):
+        if require_fixture:
+            raise RuntimeError(f"EEST fixture not found: {path} (--require-fixture set)")
         return secret, to, sender  # fixtures absent (local run) -> use defaults
     with open(path) as fh:
         data = json.load(fh)
@@ -48,7 +57,7 @@ def load_fixture_params(fixture_dir, secret, to, sender):
             continue
         print(f"[eth-executor] fixture reuse: {key[:60]}...")
         return fx_secret, fx_to, fx_sender
-    return secret, to, sender
+    raise RuntimeError("EEST fixture found but no matching transaction entry")
 
 
 def rpc_call(url, method, params, timeout=15):
@@ -65,12 +74,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rpc", default="http://127.0.0.1:8545")
     ap.add_argument("--fixture-dir", default="fixtures")
+    ap.add_argument("--require-fixture", action="store_true",
+                    help="fail if the EEST fixture is missing (CI: the fixtures step runs first)")
     ap.add_argument("--secret", default="0xa4e7ea6dc542e6de38bf1229c3ea744aa6b9f501386aa167ad42f49e3787066f")
     ap.add_argument("--to", default="0xc3ea744aa6b9f501386aa167ad42f49e3787066f")
     ap.add_argument("--sender", default="0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0")
     args = ap.parse_args()
 
-    secret, to, sender = load_fixture_params(args.fixture_dir, args.secret, args.to, args.sender)
+    secret, to, sender = load_fixture_params(
+        args.fixture_dir, args.secret, args.to, args.sender, args.require_fixture)
 
     derived = Account.from_key(secret).address
     assert derived.lower() == sender.lower(), f"sender mismatch: derived={derived} cfg={sender}"
@@ -118,14 +130,30 @@ def main():
         f"sender balance not debited correctly: before={balance} after={bal_after}")
     print(f"[eth-executor] sender debited correctly: {balance} -> {bal_after}")
 
-    # Recipient must have been credited with the value.
+    # Recipient must have been credited with the value (the `to` hex-decoding
+    # fix in BCOS2Evmone.cpp: before it, the recipient's balance stayed 0).
     recip_after = int(rpc_call(args.rpc, "eth_getBalance", [to, "latest"]), 16)
     print(f"[eth-executor] recipient balance wei: {recip_after}")
-    # KNOWN ISSUE: on an L2 chain (feature_l2_ethereum_compat + MPT state root) a
-    # newly-created recipient account is not yet persisted through the commit path,
-    # so this assertion currently fails. Tracked separately from this test harness.
-    assert recip_after >= 1, (
-        f"recipient was not credited (balance={recip_after}); see known L2-commit issue")
+    assert recip_after >= 1, f"recipient was not credited (balance={recip_after})"
+
+    # eth_call / eth_estimateGas coverage (regression for the dry-run validation
+    # fix in EthereumExecutor.h): the standard MetaMask / ethers.js call shape —
+    # no gas, no nonce, no gasPrice — from a sender whose nonce is no longer 0
+    # (it is 1 after the transfer above) must NOT be rejected with
+    # INTRINSIC_GAS_TOO_LOW / NONCE_TOO_LOW. Before the fix both calls errored.
+    call_req = {
+        "from": sender,
+        "to": eth_utils.to_checksum_address(to),
+        "value": hex(1),
+        "data": "0x",
+    }
+    call_out = rpc_call(args.rpc, "eth_call", [call_req, "latest"])
+    print(f"[eth-executor] eth_call result: {call_out}")
+    assert call_out == "0x", f"eth_call without gas/nonce/gasPrice failed: {call_out}"
+
+    est_gas = rpc_call(args.rpc, "eth_estimateGas", [call_req, "latest"])
+    print(f"[eth-executor] eth_estimateGas: {est_gas}")
+    assert int(est_gas, 16) >= 21000, f"eth_estimateGas too low: {est_gas}"
 
     print("[eth-executor] PASS: simple Ethereum value-transfer executed via RPC on "
           "executor_version=2")

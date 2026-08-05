@@ -77,10 +77,11 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
 {
     if (version < 0 || static_cast<size_t>(version) >= m_schedulers.size())
     {
-        BOOST_THROW_EXCEPTION(
-            std::out_of_range("executor version " + std::to_string(version) +
-                              " is not supported, supported versions: 0.." +
-                              std::to_string(m_schedulers.size() - 1)));
+        // BCOS exception (not std::out_of_range) so it stays within the codebase's
+        // exception taxonomy and carries the same error-channel conventions.
+        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported() << errinfo_comment(
+            "executor version " + std::to_string(version) + " is not supported, "
+            "supported versions: 0.." + std::to_string(m_schedulers.size() - 1)));
     }
     m_currentIndex = version;
 }

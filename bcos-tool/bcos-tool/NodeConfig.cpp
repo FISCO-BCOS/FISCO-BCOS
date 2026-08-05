@@ -1570,6 +1570,20 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
             InvalidConfig() << errinfo_comment("Invalid executor.evm_revision config: " +
                                                std::string(e.what())));
     }
+    // A v2 chain (ethereum-executor) MUST pin its EVMC revision explicitly. Unlike v0/v1 the
+    // revision is consumed on every block, and a binary-side default would be recorded nowhere
+    // on-chain — tying "upgrade the binary" to a hard fork (replay/resync would diverge and a
+    // mixed-version network could split, without either side erroring). Requiring it here makes
+    // the effective revision part of the genesis config and therefore of the on-chain state.
+    if (m_genesisConfig.m_executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION &&
+        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+            "executor.version=2 (ethereum-executor) requires an explicit "
+            "executor.evm_revision (or executor.evm_revision_forks) so the EVM "
+            "revision is recorded on-chain; refusing to run with an implicit "
+            "binary-side default"));
+    }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
     if (_genesisConfig.get<bool>("executor.is_wasm", false))

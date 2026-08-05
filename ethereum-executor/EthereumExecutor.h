@@ -264,6 +264,40 @@ public:
         /// view are synchronously bridged with task::tbb::syncWait.
         task::Task<void> execute()
         {
+            if (call)
+            {
+                // Dry-run (eth_call / eth_estimateGas): the request is a read-only
+                // probe against a throwaway view (coCallLatest forks it, so nothing
+                // here persists), not a transaction to be admitted to the chain.
+                // Normalize it to Ethereum RPC semantics before validation so the
+                // standard MetaMask / ethers.js call shape — no gas, no nonce, no
+                // gasPrice — is not rejected by consensus-level admission checks:
+                //   * omitted gas   -> the block gas limit (0 would fail the
+                //                       intrinsic-gas check);
+                //   * omitted nonce -> the sender's current nonce (0 would fail
+                //                       NONCE_TOO_LOW for a sender past its first tx);
+                //   * gasPrice 0    -> zero the block base fee (a dry run is never
+                //                       charged, so the fee-cap check must not
+                //                       reject it and the sender must not have to
+                //                       fund gas*fee — geth's NoBaseFee for eth_call).
+                // An explicitly supplied gas / nonce / gasPrice is left alone and
+                // validated normally (too-low gas still fails, an explicit nonce
+                // still has to be the current one, etc.), matching geth.
+                if (m_evmTx.gas_limit == 0)
+                {
+                    m_evmTx.gas_limit = m_blockInfo.gas_limit;
+                }
+                if (transaction.get().nonce().empty())
+                {
+                    auto senderAcc = m_stateView.get_account(m_evmTx.sender);
+                    m_evmTx.nonce = senderAcc ? senderAcc->nonce : 0;
+                }
+                if (m_evmTx.max_gas_price == 0)
+                {
+                    m_blockInfo.base_fee = 0;
+                }
+            }
+
             auto validationResult =
                 evmone::state::validate_transaction(m_stateView, m_blockInfo, m_evmTx, m_rev,
                     m_blockInfo.gas_limit /*block_gas_left*/, m_blobGasLeft /*blob_gas_left*/);
@@ -303,6 +337,14 @@ public:
         /// execute(); this phase only converts the evmone receipt. The one
         /// exception is a transaction that failed validation in execute(): it
         /// gets a failure receipt and no state was written for it.
+        ///
+        /// Known limitation: the produced receipt carries no contract return
+        /// data. evmone's TransactionReceipt does not store output (return data
+        /// is consumed during execution), so under executor_version=2 an
+        /// eth_call on a contract read returns empty data — the call executes
+        /// (status/gasUsed are correct) but the return value is not surfaced.
+        /// This is a documented limitation of the v2 executor; see the PR
+        /// description's "Known limitations".
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
             if (m_validationError.has_value())

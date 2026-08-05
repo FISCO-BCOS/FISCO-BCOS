@@ -662,5 +662,117 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
     }());
 }
 
+// Regression for the eth_call / eth_estimateGas dry-run path (review finding 1):
+// ExecuteContext::call was stored but never read, so a call-style executeTransaction
+// (call=true) ran the SAME validate_transaction as a real tx. The standard RPC call
+// shape — empty nonce, omitted gas, no gasPrice — from a sender whose nonce is no
+// longer 0 was therefore rejected with NONCE_TOO_LOW / INTRINSIC_GAS_TOO_LOW.
+// The dry-run is normalized to Ethereum RPC semantics instead (nonce = sender's
+// current nonce, gas = block gas limit, base fee zeroed) and must succeed.
+BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto sender = EEMakeAddress(71);
+        auto recipient = EEMakeAddress(81);
+
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        // Sender is past its first transaction (nonce 3): a call with an empty nonce
+        // would be NONCE_TOO_LOW if the executor validated it like a real tx.
+        {
+            using namespace bcos::ledger::account;
+            EVMAccount<EEBackendStorage> acc(backendStorage, sender, false);
+            co_await acc.setNonce("3");
+        }
+        co_await EEFundAccount(backendStorage, recipient, 0);
+
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setNumber(1);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        ledger::LedgerConfig ledgerConfig;
+        ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
+
+        // Call-shaped tx: empty nonce, gas limit 0, no gasPrice — exactly what
+        // CallRequest::takeToTransaction produces for an eth_call that omits them.
+        auto toHexStr = bcos::toHexStringWithPrefix(
+            bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
+        auto tx = transactionFactory.createTransaction(1 /* V1 */, toHexStr, {},
+            "" /*nonce*/, 1000 /*blockLimit*/, "0x1" /*chainId*/, "" /*groupId*/,
+            0 /*importTime*/, {} /*abi*/, EEQuantity(100) /*value*/, "0x0" /*gasPrice*/,
+            0 /*gasLimit*/);
+        tx->forceSender(bcos::bytes(std::begin(sender.bytes), std::end(sender.bytes)));
+        tx->calculateHash(*cryptoSuite->hashImpl());
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        auto receipt = co_await executor->executeTransaction(
+            view, blockHeader, *tx, 0, ledgerConfig, /*call=*/true);
+
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+        // The dry-run executed the value transfer on the throwaway view.
+        auto balance = co_await EEReadBalance(view, recipient);
+        BOOST_CHECK_EQUAL(balance, u256(100));
+    }());
+}
+
+// Unit-level coverage for bcosTransactionToEvmone's `to` decoding (BCOS2Evmone.cpp,
+// review comment): only a well-formed 20-byte address — hex-string form or raw bytes —
+// sets evmTx.to. A short or malformed value leaves `to` unset (contract creation),
+// never a transfer to a left-aligned or all-zero fabricated address. This also covers
+// the raw-bytes fallback branch, which otherwise has no production caller.
+BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto recipient = EEMakeAddress(91);
+        auto toHexStr = bcos::toHexStringWithPrefix(
+            bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
+
+        auto mkTx = [&](std::string const& toField) {
+            auto tx = transactionFactory.createTransaction(1 /* V1 */, toField, {}, "0", 1000,
+                "0x1", "", 0, {}, EEQuantity(1), "0x0", 21000);
+            tx->forceSender(bcos::bytes(20, 0));
+            tx->calculateHash(*cryptoSuite->hashImpl());
+            return tx;
+        };
+
+        // Well-formed "0x"-prefixed hex -> the exact recipient address.
+        {
+            auto evmTx = bcosTransactionToEvmone(*mkTx(toHexStr));
+            BOOST_REQUIRE(evmTx.to.has_value());
+            BOOST_CHECK_EQUAL(
+                std::memcmp(evmTx.to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+        }
+
+        // Raw 20 bytes (defensive fallback branch) -> the exact recipient address.
+        {
+            bcos::bytes raw(std::begin(recipient.bytes), std::end(recipient.bytes));
+            auto evmTx = bcosTransactionToEvmone(*mkTx(std::string(raw.begin(), raw.end())));
+            BOOST_REQUIRE(evmTx.to.has_value());
+            BOOST_CHECK_EQUAL(
+                std::memcmp(evmTx.to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+        }
+
+        // Short hex "0x1234" -> unset (contract creation), never 0x1234000...0.
+        {
+            auto evmTx = bcosTransactionToEvmone(*mkTx("0x1234"));
+            BOOST_CHECK(!evmTx.to.has_value());
+        }
+
+        // Bare "0x" -> unset (contract creation), never a transfer to address(0).
+        {
+            auto evmTx = bcosTransactionToEvmone(*mkTx("0x"));
+            BOOST_CHECK(!evmTx.to.has_value());
+        }
+
+        // Malformed hex "0xzz" -> unset (contract creation).
+        {
+            auto evmTx = bcosTransactionToEvmone(*mkTx("0xzz"));
+            BOOST_CHECK(!evmTx.to.has_value());
+        }
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace

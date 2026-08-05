@@ -259,6 +259,12 @@ private:
 /// EVMC revision applied from genesis when no evmc_revision config is present.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 
+/// Executor version selecting the pure-Ethereum EthereumExecutor (ethereum-executor).
+/// Canonical value kept here so lower layers (bcos-ledger, bcos-tool) can gate on it
+/// without depending on libinitializer; libinitializer/MultiVersionScheduler.h keeps a
+/// scheduler_v1-scoped alias for the same value.
+inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
+
 /// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an
 /// EVMC revision. Returns nullopt for unknown names so callers can fall back to a default.
 inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
@@ -302,6 +308,10 @@ inline std::optional<evmc_revision> evmcRevisionFromName(std::string_view name)
 
 /// Canonical (space-free) fork name for an EVMC revision, used when serializing the
 /// evmc_revision system config value.
+///
+/// The switch is deliberately total (no `default:`): every evmc_revision enumerator is
+/// listed, so a future evmc bump that adds a revision becomes a compile error pointing
+/// right here instead of silently mislabelling it (e.g. as "osaka") on-chain.
 inline std::string_view evmcRevisionName(evmc_revision rev)
 {
     switch (rev)
@@ -334,9 +344,13 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
         return "cancun";
     case EVMC_PRAGUE:
         return "prague";
-    default:
+    case EVMC_OSAKA:
         return "osaka";
+    case EVMC_EXPERIMENTAL:
+        return "experimental";
     }
+    // Unreachable: the switch above is exhaustive over evmc_revision.
+    return {};
 }
 
 /// Serialize an EVMC revision config (explicit revision + fork transitions) to the
@@ -431,6 +445,14 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         // Expose the block-0 base (or the earliest fork) through the explicit slot so
         // evmcRevisionForBlock has a fallback for blocks before the first fork.
         ledgerConfig.setEVMCRevision(*base);
+    }
+    else
+    {
+        // Nothing parsed (empty value, or every entry failed from_chars /
+        // evmcRevisionFromName). Fail safe — mirror the missing-config path by
+        // defaulting to EVMC_REVISION_DEFAULT, so the chain keeps producing
+        // blocks instead of EvmcRevisionNotConfigured on every transaction.
+        ledgerConfig.setEVMCRevision(EVMC_REVISION_DEFAULT);
     }
 }
 }  // namespace bcos::ledger

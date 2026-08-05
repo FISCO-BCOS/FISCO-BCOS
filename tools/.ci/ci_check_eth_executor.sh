@@ -21,13 +21,26 @@ RPC_URL="http://127.0.0.1:8545"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[eth-executor-ci]${NC} $*"; }
-fail() { echo -e "${RED}[eth-executor-ci] FAIL: $*${NC}" >&2; exit 1; }
+fail() {
+    # Dump the node log so a CI failure is diagnosable: the node is started with
+    # output to /dev/null, so without this a failure produces one FAIL: line and
+    # nothing from the node.
+    echo -e "${RED}[eth-executor-ci] FAIL: $*${NC}" >&2
+    echo -e "${YELLOW}[eth-executor-ci] last node log lines:${NC}" >&2
+    tail -n 200 "${WORK_DIR}"/log/*.log 2>/dev/null || true
+    exit 1
+}
 
+# PID of the node we started (captured after start.sh), so the EXIT trap stops
+# exactly this process instead of every fisco-bcos on the machine.
+NODE_PID=""
 stop_node() {
+    if [ -n "${NODE_PID}" ] && kill -0 "${NODE_PID}" 2>/dev/null; then
+        kill -9 "${NODE_PID}" 2>/dev/null || true
+    fi
     if [ -f "${WORK_DIR}/stop.sh" ]; then
         (cd "$(dirname "${WORK_DIR}")" && bash stop_all.sh 2>/dev/null) || true
     fi
-    pkill -9 -f "fisco-bcos" 2>/dev/null || true
     sleep 1
 }
 trap stop_node EXIT
@@ -38,7 +51,11 @@ trap stop_node EXIT
 log "building single-node chain via build_chain.sh"
 cd "${REPO_ROOT}/tools"
 rm -rf nodes config
-bash "${BUILDER}" -l "127.0.0.1:1" -e "${BINARY}" "" >/dev/null 2>&1 \
+# -v 3.18.0 pins compatibility_version (build_chain.sh defaults to v3.16.0). Without it
+# Ledger::buildGenesisBlock gates the evmc_revision write on >= V3_18_0 and the config
+# set below would never reach on-chain state — the test would silently run the binary's
+# default revision instead of cancun while still passing.
+bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" "" >/dev/null 2>&1 \
     || fail "build_chain.sh failed"
 [ -f "${WORK_DIR}/config.genesis" ] || fail "config.genesis not generated"
 
@@ -76,6 +93,9 @@ perl -p -i -e 'if (/\[web3_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/en
 # ---- 3. start node and wait for RPC ----
 log "starting node"
 bash start.sh >/dev/null 2>&1 || fail "start.sh failed"
+# Capture the node PID (scoped to a fisco-bcos launched with config.ini) for the
+# EXIT trap; on an isolated CI runner this is the only match.
+NODE_PID=$(pgrep -f "fisco-bcos.*-c config.ini" || true)
 for i in $(seq 1 30); do
     sleep 2
     if curl -s -X POST "${RPC_URL}" -H 'Content-Type: application/json' \
@@ -88,12 +108,31 @@ done
 
 # ---- 4. run the RPC simple-transfer test (reusing an EEST fixture) ----
 log "running RPC value-transfer test"
+# --require-fixture: in CI the "Download EEST fixtures" step runs first, so a
+# missing fixture is a real failure (the test's EEST-reuse claim must not
+# silently disappear). Local runs without fixtures omit the flag.
 python3 "${REPO_ROOT}/tools/.ci/eth_executor_rpc_test.py" \
     --rpc "${RPC_URL}" \
     --fixture-dir "${FIXTURE_DIR}" \
+    --require-fixture \
     --secret "0xa4e7ea6dc542e6de38bf1229c3ea744aa6b9f501386aa167ad42f49e3787066f" \
     --to "0xc3ea744aa6b9f501386aa167ad42f49e3787066f" \
     --sender "0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0" \
     || fail "eth_executor_rpc_test.py failed"
+
+# ---- 5. pin the effective EVMC revision ----
+# Without this the test can never go red on a revision-config regression: the transfer
+# executes under whatever revision the binary defaults to, so an evm_revision that never
+# reached on-chain state would still pass. getLedgerConfig logs evmcRevision=<config>
+# (e.g. "0:cancun") for executor_version=2; assert it is cancun after block production.
+log "pinning EVMC revision (expect cancun)"
+for i in $(seq 1 15); do
+    if grep -qE "evmcRevision=.*cancun" "${WORK_DIR}"/log/*.log 2>/dev/null; then
+        log "EVMC revision pinned to cancun"
+        break
+    fi
+    sleep 2
+    [ "$i" -eq 15 ] && fail "node log does not show evmc_revision=cancun (effective revision not pinned)"
+done
 
 log "PASS: executor_version=2 integration test"
