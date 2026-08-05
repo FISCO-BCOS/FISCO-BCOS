@@ -58,7 +58,9 @@
     {
       "name": "tarscpp",
       "version>=": "3.0.3-3"
-    }
+    },
+    "gtest",
+    "nlohmann-json"
   ],
   "features": {
     "fullnode": {

@@ -1,6 +1,7 @@
+#include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <bcos-evm/eth/EthTransition.h>
 
-namespace bcos::evmref::eth
+namespace bcos::evm::eth
 {
 Result runTransaction(const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
     const evmone::state::BlockHashes& hashes, const evmone::state::Transaction& tx,
@@ -10,8 +11,10 @@ Result runTransaction(const evmone::state::StateView& view, const evmone::state:
         evmone::state::validate_transaction(view, block, tx, rev, blockGasLeft, blobGasLeft);
     if (const auto* err = std::get_if<std::error_code>(&validated))
         return *err;
-    return evmone::state::transition(view, block, hashes, tx, rev, vm,
+    auto receipt = evmone::state::transition(view, block, hashes, tx, rev, vm,
         std::get<evmone::state::TransactionProperties>(validated));
+    receipt.state_diff = bcos::evm::sanitizeStateDiff(view, std::move(receipt.state_diff));
+    return receipt;
 }
 
 evmone::state::StateDiff runBlockFinalize(const evmone::state::StateView& view, evmc_revision rev,
@@ -19,6 +22,7 @@ evmone::state::StateDiff runBlockFinalize(const evmone::state::StateView& view, 
     std::span<const evmone::state::Ommer> ommers,
     std::span<const evmone::state::Withdrawal> withdrawals)
 {
-    return evmone::state::finalize(view, rev, coinbase, blockReward, ommers, withdrawals);
+    return bcos::evm::sanitizeStateDiff(
+        view, evmone::state::finalize(view, rev, coinbase, blockReward, ommers, withdrawals));
 }
-}  // namespace bcos::evmref::eth
+}  // namespace bcos::evm::eth

@@ -103,7 +103,7 @@ BOOST_AUTO_TEST_CASE(SimpleTransfer21000)
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
-    const auto res = bcos::evmref::eth::runTransaction(
+    const auto res = bcos::evm::eth::runTransaction(
         state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, 786432);
 
     if (const auto* err = std::get_if<std::error_code>(&res))
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(InvalidTxRejectedWithoutSideEffect)
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
-    const auto res = bcos::evmref::eth::runTransaction(
+    const auto res = bcos::evm::eth::runTransaction(
         state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, 786432);
 
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(res));
@@ -175,7 +175,7 @@ BOOST_AUTO_TEST_CASE(BlobTxRejectedWhenNoBlobGasLeft)
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
-    const auto res = bcos::evmref::eth::runTransaction(
+    const auto res = bcos::evm::eth::runTransaction(
         state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, /*blobGasLeft=*/0);
 
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(res));
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(FinalizeAppliesWithdrawalGweiToWei)
 
     const state::Withdrawal w{
         .index = 0, .validator_index = 0, .recipient = payee, .amount_in_gwei = 5};
-    const auto diff = bcos::evmref::eth::runBlockFinalize(state, EVMC_CANCUN,
+    const auto diff = bcos::evm::eth::runBlockFinalize(state, EVMC_CANCUN,
         0x00000000000000000000000000000000c014ba5e_address, std::nullopt, {}, std::span{&w, 1});
 
     const auto* entry = findModified(diff, payee);
