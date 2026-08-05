@@ -41,9 +41,10 @@
 #include "bcos-utilities/FixedBytes.h"
 // bcos-codec is already a (transitive, PUBLIC) dependency of the `engine` target via `ledger`
 // (bcos-ledger/CMakeLists.txt:27 links `codec` PUBLIC), so this adds no new library edge -- and
-// notably it is NOT a bcos-evm dependency: `EthBlockHeader` deliberately lives in bcos-codec
-// (Task 3) precisely so that both the engine and the OP execution side can reach it.
-#include <bcos-codec/rlp/EthBlockHeader.h>
+// notably it is NOT a bcos-evm dependency: the OP header codec lives in bcos-codec
+// (`OpHeaderCodec`, replacing the retired `EthBlockHeader`) precisely so that both the engine and
+// the OP execution side can reach it.
+#include <bcos-codec/rlp/OpHeaderCodec.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
 #include <functional>
@@ -125,7 +126,7 @@ std::optional<std::string> validateExecutionPayload(
 std::optional<std::uint64_t> narrowU256ToU64(const u256& value);
 
 /// `Bloom` (std::array<byte,256>, the ExecutionPayload representation) -> `h2048` (the
-/// EthBlockHeader representation).
+/// protocol::BlockHeader::logsBloom representation).
 bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 
 /// OP static validation (design §6.1 step 2, everything except the blockHash comparison, which
@@ -138,14 +139,24 @@ std::optional<std::string> validateOpNewPayloadRequest(
 /// Mirrors op-geth consensus/misc/eip1559/eip1559.go:CalcBaseFee, including Holocene extraData
 /// elasticity/denominator, Jovian blobGasUsed substitution, and Jovian minBaseFee floor.
 /// `parentIsJovian`/`parentIsIsthmus` derive from the parent's own timestamp — matching op-geth's
-/// `config.IsJovian(parent.Time)` / `config.IsOptimismHolocene(parent.Time)`.
+/// `config.IsJovian(parent.Time)` / `config.IsOptimismHolocene(parent.Time)`. Reads the parent
+/// header's accessors: `extraData()` (Holocene/Jovian params), `gasLimit()`, `gasUsed()`,
+/// `blobGasUsed()`, `baseFee()` (审查修正:不读 timestamp;optional 字段须 `.value()`)。
 bcos::u256 calcOpBaseFee(
-    const bcos::codec::rlp::EthBlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus);
+    const bcos::protocol::BlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus);
 
-/// Reconstructs the 21-field ETH/OP header from the payload (design §6.1 step 2 / §5.1); its
-/// `hash()` is what the payload's `blockHash` is checked against, and its `encode()` is what the
-/// block registration stores. Precondition: `validateOpNewPayloadRequest` accepted the request.
-bcos::codec::rlp::EthBlockHeader rebuildOpEthHeader(const ExecutionPayload& payload,
+/// The OP header's 3 post-merge constants (ommersHash/difficulty/nonce) — the values live in
+/// EngineServiceImpl.cpp's anonymous namespace; this accessor lets the engine's step-2 blockHash
+/// check and the test seal helpers share one source.
+bcos::codec::rlp::OpHeaderConst opHeaderConst();
+
+/// Reconstructs the 21-field ETH/OP header from the payload (design §6.1 step 2 / §5.1) as a
+/// FISCO `protocol::BlockHeader` (tars) with 18 fields filled; the 3 post-merge constants are
+/// supplied separately via `opHeaderConst()` when encoding/hashing. `opHeaderHash` (codec) is what
+/// the payload's `blockHash` is checked against, and `header->encode()` (tars) is what the block
+/// registration stores. Precondition: `validateOpNewPayloadRequest` accepted the request.
+bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
 }  // namespace detail
 
@@ -784,9 +795,13 @@ private:
         // `OpEngineSeam.h`'s `computeOpTxRoot`), which is what lets the blockHash check stay
         // genuinely static (before parentKnown and before execution, as §6.1 orders it).
         const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
-        const auto ethHeader =
-            detail::rebuildOpEthHeader(payload, transactionsRoot, *request.parentBeaconBlockRoot);
-        if (ethHeader.hash() != payload.blockHash)
+        const auto ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
+            payload, transactionsRoot, *request.parentBeaconBlockRoot);
+        // OP hash = keccak(RLP(21 字段)),经 codec(opHeaderConst 注入 3 个 post-merge 常量)。
+        // 不得用 BlockHeader::hash()——tars dataHash 为空会抛 EmptyBlockHeaderHash,且若工厂
+        // 回填则会是 TARS 序 hash(spec §6 已知坑)。
+        if (bcos::codec::rlp::opHeaderHash(*ethHeader, detail::opHeaderConst()) !=
+            payload.blockHash)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("blockHash does not match the reconstructed block header"));
@@ -881,24 +896,43 @@ private:
         // accept its own first block. Every block registered BY this loop does store its header,
         // so the check is live for every subsequent block.
         const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
+        // 迁移后父头从标准表 s_number_2_header 以 tars BlockHeader 读取(spec D3),取代退役的
+        // s_eth_block_header RLP 读路。Entry::get() 返回 string_view(Entry.h:332),createBlockHeader
+        // 无 string_view 重载——显式拷进 bytes(审查 B2)。
         if (auto parentHeaderEntry = co_await storage2::readOne(view,
-                executor_v1::StateKeyView{SchedulerType::c_ethBlockHeaderTable, parentNumberStr});
+                executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
             parentHeaderEntry.has_value())
         {
-            const auto storedHeader = parentHeaderEntry->get();
-            bcos::bytes headerBytes(storedHeader.begin(), storedHeader.end());
-            bcos::codec::rlp::EthBlockHeader parentHeader;
-            if (auto decodeError =
-                    parentHeader.decode(bcos::bytesRef(headerBytes.data(), headerBytes.size())))
+            const auto storedHeader = parentHeaderEntry->get();  // string_view
+            bcos::protocol::BlockHeader::Ptr parentHeader;
+            try
+            {
+                bcos::bytes parentHeaderBytes(storedHeader.begin(), storedHeader.end());
+                parentHeader =
+                    m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
+            }
+            catch (const std::exception& e)
             {
                 // Our own stored bytes failed to parse: a local storage/consistency fault, not a
                 // verdict on the incoming payload (design §4.3's rule cuts both ways).
                 BOOST_THROW_EXCEPTION(
                     OpExecutionInternalError{} << bcos::errinfo_comment{
-                        std::string("stored parent block header is undecodable: ") +
-                        decodeError->errorMessage()});
+                        std::string("stored parent block header is undecodable: ") + e.what()});
             }
-            if (payload.timestamp <= parentHeader.timestamp)
+            // tars
+            // 解码宽松:截断流可能静默填默认值。本表按高度为键且由本循环写入,高度失配即本地故障。
+            if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
+            {
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "stored parent block header height mismatch"});
+            }
+            // 注意:createBlockHeader(bytesConstRef) 在 dataHash 为空时会用 TARS 序 hasher 自动
+            // 回填(BlockHeaderFactoryImpl.cpp:21-37)——该值不是 OP hash。本步只读
+            // timestamp/baseFee/extraData/gasLimit/gasUsed/blobGasUsed,不读 hash(),故不受影响;
+            // 这是 D6 dataHash 推迟(spec §6)的已知后果,任何未来读 OP 头的消费者不得调用 hash()。
+            // 单调性:payload 秒→毫秒,与父头(毫秒)同单位比较(spec §7)。
+            if (static_cast<uint64_t>(payload.timestamp) * 1000 <=
+                static_cast<uint64_t>(parentHeader->timestamp()))
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                     std::string("timestamp must be strictly greater than the parent's"));
@@ -910,11 +944,14 @@ private:
             // from the timestamp check above, and fork membership is determined from
             // the parent's own timestamp — matching op-geth's
             // config.IsJovian(parent.Time) / config.IsOptimismHolocene(parent.Time).
-            // See §6.4 D-3.
+            // See §6.4 D-3. fork 判定转回秒(与 payload 秒、配置阈值一致;与上面的毫秒比较方向相反,
+            // spec §7 陷阱)。
             {
-                auto expectedBaseFee = detail::calcOpBaseFee(parentHeader,
-                    m_scheduler.get().isJovianActiveAt(parentHeader.timestamp),
-                    m_scheduler.get().isIsthmusActiveAt(parentHeader.timestamp));
+                auto expectedBaseFee = detail::calcOpBaseFee(*parentHeader,
+                    m_scheduler.get().isJovianActiveAt(
+                        static_cast<uint64_t>(parentHeader->timestamp()) / 1000),
+                    m_scheduler.get().isIsthmusActiveAt(
+                        static_cast<uint64_t>(parentHeader->timestamp()) / 1000));
                 if (payload.baseFeePerGas != expectedBaseFee)
                 {
                     co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
@@ -999,28 +1036,13 @@ private:
 
         // ---- Step 4: execute ----
         view.newMutable();
-        auto fiscoHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        fiscoHeader->setNumber(payload.blockNumber);
-        fiscoHeader->setTimestamp(static_cast<int64_t>(payload.timestamp));
-        // Aggregate init of a dependent type: `BlockEnv`'s member names are resolved at
-        // instantiation. `fiscoHeader` outlives the call below (it is bound by reference).
-        // Both narrowings are total here -- step 2's validation rejected out-of-range values.
-        typename SchedulerType::BlockEnv blockEnv{
-            .fiscoHeader = *fiscoHeader,
-            .parentHash = payload.parentHash,
-            .prevRandao = payload.prevRandao,
-            .baseFeePerGas = payload.baseFeePerGas,
-            .feeRecipient = payload.feeRecipient,
-            .parentBeaconBlockRoot = *request.parentBeaconBlockRoot,
-            .gasLimit = detail::narrowU256ToU64(payload.gasLimit).value(),
-            .extraData = payload.extraData,
-            .blobGasUsed = detail::narrowU256ToU64(*payload.blobGasUsed).value(),
-        };
+        // 复用 step 2 重建的同一枚头(spec:一个 header 贯穿校验/执行/落盘)。ethHeader 是
+        // shared_ptr,跨越下方 co_await 安全。BlockEnv 现在就是 protocol::BlockHeader。
         std::optional<typename SchedulerType::ExecuteResult> executeResult;
         try
         {
             executeResult.emplace(co_await m_scheduler.get().executeOpBlock(
-                view, blockEnv, *payload.rawTransactions));
+                view, *ethHeader, *payload.rawTransactions));
         }
         // Error classification table (design §4.3/§6.1 step 4). The two catch bodies contain no
         // `co_await` -- an await-expression may not appear inside a handler ([expr.await]/2).
@@ -1118,7 +1140,7 @@ private:
             mismatchedField = "blobGasUsed";
         }
         else if (commitments.requestsHash.has_value() &&
-                 *commitments.requestsHash != ethHeader.requestsHash)
+                 *commitments.requestsHash != ethHeader->requestsHash().value())
         {
             // Catches drift between this library's copy of the OP empty-requests constant (used
             // to reconstruct the header above) and the OP side's own `OP_EMPTY_REQUESTS_HASH`.
@@ -1131,7 +1153,7 @@ private:
         }
 
         // ---- Step 6: block registration, then publish the view ----
-        co_await registerOpBlock(view, payload, ethHeader, *executeResult);
+        co_await registerOpBlock(view, payload, *ethHeader, *executeResult);
         // `pushView` alone is enough for the forkchoice path to see this block: it reads through
         // `fork()`, and MultiLayerStorage makes pushed layers visible to subsequent forks without
         // a `mergeBackStorage()` (design §6.1 step 6 "merge 时机"). No chain-head progress table
@@ -1172,7 +1194,7 @@ private:
     /// dependent OP names are all inside `handleOpNewPayload`'s body and were already fine.
     template <class OpExecuteResult>
     bcos::task::Task<void> registerOpBlock(ViewType& view, const ExecutionPayload& payload,
-        const bcos::codec::rlp::EthBlockHeader& ethHeader, const OpExecuteResult& executeResult)
+        const bcos::protocol::BlockHeader& header, const OpExecuteResult& executeResult)
     {
         const auto blockNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
 
@@ -1189,14 +1211,17 @@ private:
                 ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(payload.blockHash)},
             std::move(hashToNumberEntry));
 
-        // ETH/OP header RLP, in the OP-only table whose name the OP seam publishes (裁定 B5: the
-        // constant lives in bcos-evm/bcos-evm/engine/, not in bcos-framework's LedgerTypeDef.h).
-        // Key convention = SYS_NUMBER_2_HASH's, value = the 21-field RLP whose keccak is the
-        // block hash just verified in step 2.
+        // OP 头以 tars BlockHeader 落盘标准表 s_number_2_header(spec D3:一等公民,与 FISCO 正常块
+        // Ledger.cpp:234 同表同格式)。dataHash 为空(spec D6 推迟:FISCO hash 方案落地前不写),
+        // BlockHeader::hash() 在 OP 头上是 EmptyBlockHeaderHash——本路径不调用它,OP hash 经 codec。
+        // protocol::BlockHeader::encode() 是 void encode(bytes&) 的 out-param(BlockHeader.h:50,
+        // 审查 B1),不是 bytes encode()——先建 buffer 再取。
         storage::Entry headerEntry;
-        headerEntry.set(ethHeader.encode());
+        bcos::bytes headerBuffer;
+        header.encode(headerBuffer);  // tars 字节(原为 21 字段 RLP)
+        headerEntry.set(std::move(headerBuffer));
         co_await storage2::writeOne(view,
-            executor_v1::StateKey{SchedulerType::c_ethBlockHeaderTable, blockNumberStr},
+            executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
             std::move(headerEntry));
 
         // Receipts through the existing receipt channel: same table, same key (tx hash) and same

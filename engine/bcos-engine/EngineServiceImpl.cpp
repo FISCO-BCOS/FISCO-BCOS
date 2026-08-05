@@ -29,8 +29,8 @@ constexpr std::size_t c_payloadIdBytes = 8;
 //
 // These three header fields have no carrier in `ExecutionPayload` because they are fixed by the
 // protocol on post-merge OP chains; the header reconstruction below must still emit them (they
-// are real RLP fields, see `bcos-codec/rlp/EthBlockHeader.h`'s own "Real field, not hardcoded"
-// notes -- the struct carries them, the *caller* supplies the constant).
+// are real RLP fields, see `bcos-codec/rlp/OpHeaderCodec.h`'s `OpHeaderConst` (spec §11 D5: the
+// codec never hardcodes a value -- the caller supplies the constant).
 //
 // Values are byte-identical to the two other places in this repo that pin them:
 // `bcos-evm/test/opstack/EthBlockHeaderTest.cpp`'s `kEmptyOmmersHash`/`kPosNonce` (Task 3's
@@ -47,6 +47,12 @@ const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
 const bcos::h256 c_opEmptyRequestsHash{
     std::string{"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}};
 }  // namespace
+
+bcos::codec::rlp::OpHeaderConst bcos::engine::detail::opHeaderConst()
+{
+    return bcos::codec::rlp::OpHeaderConst{
+        .ommersHash = c_emptyOmmersHash, .difficulty = bcos::u256(0), .nonce = c_posNonce};
+}
 
 std::string bcos::engine::detail::encodePayloadSequence(std::uint64_t value)
 {
@@ -175,15 +181,15 @@ std::optional<std::uint64_t> bcos::engine::detail::narrowU256ToU64(const u256& v
 
 bcos::h2048 bcos::engine::detail::toEthLogsBloom(const Bloom& logsBloom)
 {
-    // `Bloom` is `std::array<byte, 256>` (bcos-utilities/Bloom.h); `EthBlockHeader::logsBloom` is
-    // `h2048` -- same 256 bytes, same order, so this is a plain byte copy through
-    // `FixedBytes(byte const*, size_t)`.
-    // Explicit constructor -- `return {...}` (copy-list-initialization) would not compile.
+    // `Bloom` is `std::array<byte, 256>` (bcos-utilities/Bloom.h);
+    // `protocol::BlockHeader::logsBloom` is `h2048` -- same 256 bytes, same order, so this is a
+    // plain byte copy through `FixedBytes(byte const*, size_t)`. Explicit constructor -- `return
+    // {...}` (copy-list-initialization) would not compile.
     return bcos::h2048(logsBloom.data(), logsBloom.size());
 }
 
 bcos::u256 bcos::engine::detail::calcOpBaseFee(
-    const bcos::codec::rlp::EthBlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus)
+    const bcos::protocol::BlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus)
 {
     // Default EIP-1559 parameters (pre-Holocene / pre-London).
     uint64_t elasticity = 2;
@@ -194,7 +200,7 @@ bcos::u256 bcos::engine::detail::calcOpBaseFee(
     {
         // Holocene+ extraData: version byte + denominator (uint32 BE) + elasticity (uint32 BE).
         // Zero-value rejection is guaranteed by the parent's own validateOpNewPayloadRequest.
-        const auto& extra = parent.extraData;
+        const auto extra = parent.extraData();  // bytesConstRef,operator[] 同 bytes
         auto readU32BE = [&extra](std::size_t off) -> uint64_t {
             return (static_cast<uint64_t>(extra[off]) << 24) |
                    (static_cast<uint64_t>(extra[off + 1]) << 16) |
@@ -221,23 +227,25 @@ bcos::u256 bcos::engine::detail::calcOpBaseFee(
         }
     }
 
-    const uint64_t parentGasTarget = parent.gasLimit / elasticity;
+    const uint64_t parentGasTarget =
+        detail::narrowU256ToU64(parent.gasLimit()).value() / elasticity;
 
     // Jovian: baseFee is based on max(total gas used, DA footprint) rather than plain gasUsed
     // (op-geth consensus/misc/eip1559/eip1559.go:99-107).
-    uint64_t parentGasMetered = parent.gasUsed;
-    if (parentIsJovian && parent.blobGasUsed > parent.gasUsed)
+    uint64_t parentGasMetered = detail::narrowU256ToU64(parent.gasUsed()).value();
+    if (parentIsJovian &&
+        detail::narrowU256ToU64(parent.blobGasUsed().value()).value() > parentGasMetered)
     {
-        parentGasMetered = parent.blobGasUsed;
+        parentGasMetered = detail::narrowU256ToU64(parent.blobGasUsed().value()).value();
     }
 
     // EIP-1559 base fee computation (mirrors op-geth eip1559.go:calcBaseFeeInner).
     if (parentGasMetered == parentGasTarget)
     {
-        return parent.baseFeePerGas;
+        return parent.baseFee().value();
     }
 
-    const bcos::u256 parentBaseFee = parent.baseFeePerGas;
+    const bcos::u256 parentBaseFee = parent.baseFee().value();
     bcos::u256 result;
 
     if (parentGasMetered > parentGasTarget)
@@ -453,42 +461,41 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     return std::nullopt;
 }
 
-bcos::codec::rlp::EthBlockHeader bcos::engine::detail::rebuildOpEthHeader(
-    const ExecutionPayload& payload, const h256& transactionsRoot,
-    const h256& parentBeaconBlockRoot)
+bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const h256& transactionsRoot, const h256& parentBeaconBlockRoot)
 {
-    // Design §6.1 step 2 / §5.1: 21 fields, in `EthBlockHeader`'s declared order. 17 come from
-    // the payload verbatim (extraData included -- "原样", never re-derived or shape-checked, see
-    // §6.4's extraData 欠账), 1 is the caller-derived transactionsRoot (the payload has no such
-    // field -- op-geth's `ExecutableDataToBlock` likewise derives it from the transaction list),
-    // and 3 are the protocol constants pinned at the top of this file.
+    // Design §6.1 step 2 / §5.1: 21 字段,其中 18 个住进 FISCO BlockHeader(tars,PR #5385),3 个
+    // post-merge 常量(ommersHash/difficulty/nonce)经 codec 的 OpHeaderConst 注入(见
+    // opHeaderConst)。 字段来源:17 个来自 payload 逐字(extraData "原样",never re-derived),1
+    // 个为调用方派生的 transactionsRoot(payload 无此字段),常量见本文件顶部。timestamp 按 FISCO
+    // 惯例存毫秒 (spec §7:blockHash/RLP/执行面永远秒,tars 存储用毫秒)。
     //
     // Precondition: `validateOpNewPayloadRequest` returned nullopt for this request -- that is
-    // what guarantees the optionals below are engaged and the u256 -> uint64 narrowings are in
-    // range. A violated precondition surfaces as a thrown `std::bad_optional_access`, i.e. loudly,
-    // rather than as a quietly wrong block hash.
-    return bcos::codec::rlp::EthBlockHeader{
-        .parentHash = payload.parentHash,
-        .ommersHash = c_emptyOmmersHash,
-        .feeRecipient = payload.feeRecipient,
-        .stateRoot = payload.stateRoot,
-        .transactionsRoot = transactionsRoot,
-        .receiptsRoot = payload.receiptsRoot,
-        .logsBloom = toEthLogsBloom(payload.logsBloom),
-        .difficulty = 0,
-        .number = static_cast<std::uint64_t>(payload.blockNumber),
-        .gasLimit = narrowU256ToU64(payload.gasLimit).value(),
-        .gasUsed = narrowU256ToU64(payload.gasUsed).value(),
-        .timestamp = payload.timestamp,
-        .extraData = payload.extraData,
-        .prevRandao = payload.prevRandao,
-        .nonce = c_posNonce,
-        .baseFeePerGas = payload.baseFeePerGas,
-        .withdrawalsRoot = payload.withdrawalsRoot.value(),
-        .blobGasUsed = narrowU256ToU64(payload.blobGasUsed.value()).value(),
-        // excessBlobGas is pinned to 0 by validation above; narrowing it would be a no-op.
-        .excessBlobGas = 0,
-        .parentBeaconBlockRoot = parentBeaconBlockRoot,
-        .requestsHash = c_opEmptyRequestsHash,
-    };
+    // what guarantees the optionals below are engaged. A violated precondition surfaces as a
+    // thrown `std::bad_optional_access`, i.e. loudly, rather than as a quietly wrong block hash.
+    auto header = factory->createBlockHeader();
+    const auto number = static_cast<bcos::protocol::BlockNumber>(payload.blockNumber);
+    header->setNumber(number);
+    header->setTimestamp(static_cast<int64_t>(payload.timestamp) * 1000);
+    header->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
+    header->setCoinbase(payload.feeRecipient);
+    header->setStateRoot(payload.stateRoot);
+    header->setTxsRoot(transactionsRoot);
+    header->setReceiptsRoot(payload.receiptsRoot);
+    const auto bloom = toEthLogsBloom(payload.logsBloom);
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    header->setGasLimit(payload.gasLimit);
+    header->setGasUsed(payload.gasUsed);
+    header->setExtraData(payload.extraData);
+    header->setPrevRandao(payload.prevRandao);
+    header->setBaseFee(payload.baseFeePerGas);
+    header->setWithdrawalsRoot(payload.withdrawalsRoot.value());
+    header->setBlobGasUsed(payload.blobGasUsed.value());
+    // excessBlobGas is pinned to 0 by validation above (与退役 EthBlockHeader 一致)。
+    header->setExcessBlobGas(bcos::u256(0));
+    header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
+    header->setRequestsHash(c_opEmptyRequestsHash);
+    return header;
 }

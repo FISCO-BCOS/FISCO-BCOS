@@ -87,27 +87,11 @@ struct OpStorageError : std::runtime_error
     using std::runtime_error::runtime_error;
 };
 
-/// OP block execution environment (design §4.2). Field types mirror
-/// bcos-framework/engine/Types.h's ExecutionPayload (bcos::h256/Address/u256/bytes) — this is
-/// the adapter boundary between the engine-side payload representation and the opstack-side
-/// (evmc::/intx::) execution primitives; OpSchedulerImpl converts internally (see
-/// detail::toBlockInfo below), the same bridging role Storage2Ledger plays on the storage side.
-struct OpBlockEnv
-{
-    const bcos::protocol::BlockHeader& fiscoHeader;
-    bcos::h256 parentHash;
-    bcos::h256 prevRandao;
-    bcos::u256 baseFeePerGas;
-    bcos::Address feeRecipient;
-    /// OP semantics: the L1 origin's parent beacon root (EIP-4788 system-call input;
-    /// participates in blockHash — design §4.2).
-    bcos::h256 parentBeaconBlockRoot;
-    /// FISCO's own header carries no gas-limit field; the payload is the sole source (execution
-    /// gas-pool ceiling is otherwise unconstrained — design §4.2).
-    uint64_t gasLimit;
-    bcos::bytes extraData;
-    uint64_t blobGasUsed;
-};
+/// OP block execution environment (design §4.2) was folded into `protocol::BlockHeader` when
+/// PR #5385 gave the FISCO header tars slots for all 8 former OpBlockEnv fields (prevRandao/baseFee
+/// -> coinbase/baseFee/prevRandao/parentBeaconBlockRoot/gasLimit/extraData/blobGasUsed/parentHash
+/// -> parentInfo). The engine now fills one header object and `executeOpBlock`/`toBlockInfo` read
+/// the accessors directly (spec 2026-08-05-opstack-blockheader-fisco-adaptation-design.md §4.2).
 
 /// Six-way comparison surface (design §4.1 "六项比对面"): `seal`'s
 /// receiptsRoot/logsBloom/withdrawalsRoot (bcos::evm::opstack::OpBlockSeal, unchanged structure)
@@ -215,18 +199,19 @@ inline void requireLowSSignature(const intx::uint256& r, const intx::uint256& s)
             "secp256k1n/2 — EIP-2 malleable signature)");
 }
 
-inline evmone::state::BlockInfo toBlockInfo(const OpBlockEnv& env)
+inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& env)
 {
     evmone::state::BlockInfo blk;
-    blk.number = env.fiscoHeader.number();
-    blk.timestamp = env.fiscoHeader.timestamp();
-    blk.gas_limit = static_cast<int64_t>(env.gasLimit);
-    blk.base_fee = narrowU256ToU64(env.baseFeePerGas, "OpBlockEnv::baseFeePerGas");
-    blk.coinbase = toEvmcAddress(env.feeRecipient);
-    blk.prev_randao = toEvmcBytes32(env.prevRandao);
-    blk.parent_beacon_block_root = toEvmcBytes32(env.parentBeaconBlockRoot);
-    blk.extra_data = evmc::bytes(env.extraData.begin(), env.extraData.end());
-    blk.blob_gas_used = env.blobGasUsed;
+    blk.number = static_cast<int64_t>(env.number());
+    // FISCO tars 存毫秒,evmone 要秒(spec §7:blockHash/执行面永远秒)。
+    blk.timestamp = static_cast<uint64_t>(env.timestamp()) / 1000;
+    blk.gas_limit = narrowU256ToU64(env.gasLimit(), "BlockInfo::gasLimit");
+    blk.base_fee = narrowU256ToU64(env.baseFee().value(), "BlockInfo::baseFee");
+    blk.coinbase = toEvmcAddress(env.coinbase());
+    blk.prev_randao = toEvmcBytes32(env.prevRandao());
+    blk.parent_beacon_block_root = toEvmcBytes32(env.parentBeaconBlockRoot().value());
+    blk.extra_data = evmc::bytes(env.extraData().begin(), env.extraData().end());
+    blk.blob_gas_used = narrowU256ToU64(env.blobGasUsed().value(), "BlockInfo::blobGasUsed");
     return blk;
 }
 
@@ -928,16 +913,16 @@ public:
     // header. See `OpEngineSeam.h`'s file comment for the full rationale; the definitions live
     // there, this block only re-publishes them under the class scope the engine can reach.
 
-    /// The block-execution environment the engine fills in from the payload (design §4.2).
-    using BlockEnv = OpBlockEnv;
+    /// The block-execution environment the engine fills in from the payload (design §4.2) — the
+    /// FISCO `protocol::BlockHeader` itself (PR #5385 gave every former OpBlockEnv field a tars
+    /// slot; spec 2026-08-05-opstack-blockheader-fisco-adaptation-design.md §4.2).
+    using BlockEnv = bcos::protocol::BlockHeader;
     /// What `executeOpBlock` returns (design §4.1).
     using ExecuteResult = OpExecuteBlockResult;
     /// Consensus-level rejection -> engine maps to INVALID (design §4.3 error table).
     using ConsensusError = OpConsensusError;
     /// Storage-layer failure -> engine maps to JSON-RPC -32603, never INVALID (design §4.3).
     using StorageError = OpStorageError;
-    /// Table for the ETH/OP header RLP written on VALID (design §6.1 step 6, 裁定 B5).
-    static constexpr std::string_view c_ethBlockHeaderTable = SYS_ETH_BLOCK_HEADER;
     /// Table for the raw EIP-2718 transaction envelopes written on VALID (batch 6, decision (B)).
     static constexpr std::string_view c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX;
 
@@ -1029,7 +1014,7 @@ public:
     ///      interpretation — txRoot commits to the exact wire bytes) + gasUsed, folded into the
     ///      six-way comparison surface (OpExecuteBlockResult, design §4.1).
     task::Task<OpExecuteBlockResult> executeOpBlock(
-        Storage& storage, OpBlockEnv const& env, ::ranges::input_range auto const& rawTxBytes)
+        Storage& storage, BlockEnv const& env, ::ranges::input_range auto const& rawTxBytes)
     {
         // Step 1: sort/decode. m_chainId is passed as a plain uint64_t argument (not a new
         // parameter on this method, and not an OP-specific type) — see decodeOneRawTx's comment
@@ -1048,10 +1033,11 @@ public:
         // hashErr 是本块毒旗通道 (storage 故障 -> OpStorageError, 非 INVALID, G2)。
         std::optional<std::string> hashErr;
         detail::RecentBlockHashes<Storage> hashes(
-            storage, blk.number, detail::toEvmcBytes32(env.parentHash), &hashErr);
+            storage, blk.number, detail::toEvmcBytes32(env.parentInfo().blockHash), &hashErr);
 
+        // tars 存毫秒,fork 配置吃秒(spec §7:blockHash/执行面永远秒)。
         const auto& cfg = bcos::evm::opstack::configAt(
-            static_cast<uint64_t>(env.fiscoHeader.timestamp()), m_forkTimestamps);
+            static_cast<uint64_t>(env.timestamp()) / 1000, m_forkTimestamps);
 
         const auto applyDiff = [&bridge](const evmone::state::StateDiff& diff) {
             bridge.applyDiff(diff);

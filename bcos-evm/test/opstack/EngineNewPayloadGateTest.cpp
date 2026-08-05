@@ -79,7 +79,7 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-codec/rlp/EthBlockHeader.h>
+#include <bcos-codec/rlp/OpHeaderCodec.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/Sha256.h>
@@ -555,20 +555,25 @@ bcos::engine::NewPayloadRequest makeGoldenRequest(GoldenSample const& sample)
 }
 
 /// The header the production mapping reconstructs for this request — the object under test.
-bcos::codec::rlp::EthBlockHeader productionHeaderOf(bcos::engine::NewPayloadRequest const& request)
+bcos::protocol::BlockHeader::Ptr productionHeaderOf(
+    bcos::protocol::BlockFactory::Ptr const& blockFactory,
+    bcos::engine::NewPayloadRequest const& request)
 {
     auto const& payload = request.executionPayload;
     const auto transactionsRoot = OpScheduler::computeTxRoot(*payload.rawTransactions);
-    return bcos::engine::detail::rebuildOpEthHeader(
-        payload, transactionsRoot, *request.parentBeaconBlockRoot);
+    return bcos::engine::detail::rebuildOpEthHeader(blockFactory->blockHeaderFactory(), payload,
+        transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
 /// Mutation-only (see the file header's scoped exception): recomputes `blockHash` so a mutated
 /// payload survives the static blockHash check and reaches the branch actually under test.
-/// NEVER called for an unmutated vector or for the chained pair.
-void resealBlockHash(bcos::engine::NewPayloadRequest& request)
+/// NEVER called for an unmutated vector or for the chained pair. OP hash = keccak(RLP(21 字段)),
+/// 经 codec(不得用 BlockHeader::hash()——dataHash 空/工厂 TARS 序回填)。
+void resealBlockHash(
+    bcos::protocol::BlockFactory::Ptr const& blockFactory, bcos::engine::NewPayloadRequest& request)
 {
-    request.executionPayload.blockHash = productionHeaderOf(request).hash();
+    request.executionPayload.blockHash = bcos::codec::rlp::opHeaderHash(
+        *productionHeaderOf(blockFactory, request), bcos::engine::detail::opHeaderConst());
 }
 
 std::string hexOfBytes(bcos::bytes const& data)
@@ -616,37 +621,49 @@ std::string recordKey(std::string const& id, std::string_view suffix)
 }
 
 /// Dumps all 21 reconstructed header fields so a failing `encode()` comparison can be localised
-/// to a field rather than to "the hash differs" (裁定 C3's stated purpose).
-void recordHeaderFields(std::string const& id, bcos::codec::rlp::EthBlockHeader const& header)
+/// to a field rather than to "the hash differs" (裁定 C3's stated purpose). 18 fields read the
+/// FISCO header accessors; the 3 post-merge constants (ommersHash/difficulty/nonce) have no tars
+/// carrier and come from `c`. timestamp recorded in SECONDS (÷1000) to match the golden corpus.
+void recordHeaderFields(std::string const& id, bcos::protocol::BlockHeader const& header,
+    bcos::codec::rlp::OpHeaderConst const& c)
 {
     using ::testing::Test;
-    Test::RecordProperty(recordKey(id, "hdr_01_parentHash"), header.parentHash.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_02_ommersHash"), header.ommersHash.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_03_feeRecipient"), header.feeRecipient.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_04_stateRoot"), header.stateRoot.hexPrefixed());
+    auto const logsBloomBytes = header.logsBloom();
+    auto const extraDataBytes = header.extraData();
     Test::RecordProperty(
-        recordKey(id, "hdr_05_transactionsRoot"), header.transactionsRoot.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_06_receiptsRoot"), header.receiptsRoot.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_07_logsBloom"), header.logsBloom.hexPrefixed());
+        recordKey(id, "hdr_01_parentHash"), header.parentInfo().blockHash.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_02_ommersHash"), c.ommersHash.hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_03_feeRecipient"), header.coinbase().hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_04_stateRoot"), header.stateRoot().hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_05_transactionsRoot"), header.txsRoot().hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_06_receiptsRoot"), header.receiptsRoot().hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_07_logsBloom"),
+        bcos::toHexStringWithPrefix(bcos::bytes(logsBloomBytes.begin(), logsBloomBytes.end())));
     Test::RecordProperty(
-        recordKey(id, "hdr_08_difficulty"), boost::lexical_cast<std::string>(header.difficulty));
-    Test::RecordProperty(recordKey(id, "hdr_09_number"), std::to_string(header.number));
-    Test::RecordProperty(recordKey(id, "hdr_10_gasLimit"), std::to_string(header.gasLimit));
-    Test::RecordProperty(recordKey(id, "hdr_11_gasUsed"), std::to_string(header.gasUsed));
-    Test::RecordProperty(recordKey(id, "hdr_12_timestamp"), std::to_string(header.timestamp));
-    Test::RecordProperty(recordKey(id, "hdr_13_extraData"), hexOfBytes(header.extraData));
-    Test::RecordProperty(recordKey(id, "hdr_14_prevRandao"), header.prevRandao.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_15_nonce"), header.nonce.hexPrefixed());
+        recordKey(id, "hdr_08_difficulty"), boost::lexical_cast<std::string>(c.difficulty));
+    Test::RecordProperty(recordKey(id, "hdr_09_number"), std::to_string(header.number()));
+    Test::RecordProperty(
+        recordKey(id, "hdr_10_gasLimit"), boost::lexical_cast<std::string>(header.gasLimit()));
+    Test::RecordProperty(
+        recordKey(id, "hdr_11_gasUsed"), boost::lexical_cast<std::string>(header.gasUsed()));
+    Test::RecordProperty(recordKey(id, "hdr_12_timestamp"),
+        std::to_string(static_cast<uint64_t>(header.timestamp()) / 1000));
+    Test::RecordProperty(recordKey(id, "hdr_13_extraData"),
+        hexOfBytes(bcos::bytes(extraDataBytes.begin(), extraDataBytes.end())));
+    Test::RecordProperty(recordKey(id, "hdr_14_prevRandao"), header.prevRandao().hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_15_nonce"), c.nonce.hexPrefixed());
     Test::RecordProperty(recordKey(id, "hdr_16_baseFeePerGas"),
-        boost::lexical_cast<std::string>(header.baseFeePerGas));
+        boost::lexical_cast<std::string>(header.baseFee().value()));
     Test::RecordProperty(
-        recordKey(id, "hdr_17_withdrawalsRoot"), header.withdrawalsRoot.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_18_blobGasUsed"), std::to_string(header.blobGasUsed));
+        recordKey(id, "hdr_17_withdrawalsRoot"), header.withdrawalsRoot().value().hexPrefixed());
+    Test::RecordProperty(recordKey(id, "hdr_18_blobGasUsed"),
+        boost::lexical_cast<std::string>(header.blobGasUsed().value()));
+    Test::RecordProperty(recordKey(id, "hdr_19_excessBlobGas"),
+        boost::lexical_cast<std::string>(header.excessBlobGas().value()));
+    Test::RecordProperty(recordKey(id, "hdr_20_parentBeaconBlockRoot"),
+        header.parentBeaconBlockRoot().value().hexPrefixed());
     Test::RecordProperty(
-        recordKey(id, "hdr_19_excessBlobGas"), std::to_string(header.excessBlobGas));
-    Test::RecordProperty(
-        recordKey(id, "hdr_20_parentBeaconBlockRoot"), header.parentBeaconBlockRoot.hexPrefixed());
-    Test::RecordProperty(recordKey(id, "hdr_21_requestsHash"), header.requestsHash.hexPrefixed());
+        recordKey(id, "hdr_21_requestsHash"), header.requestsHash().value().hexPrefixed());
 }
 
 // ─────────────────── golden-corpus provenance (final review B3-5) ───────────────────
@@ -790,7 +807,6 @@ public:
     using ExecuteResult = OpScheduler::ExecuteResult;
     using ConsensusError = OpScheduler::ConsensusError;
     using StorageError = OpScheduler::StorageError;
-    static constexpr std::string_view c_ethBlockHeaderTable = OpScheduler::c_ethBlockHeaderTable;
     static constexpr std::string_view c_ethRawTxTable = OpScheduler::c_ethRawTxTable;
 
     static bcos::evm::engine::OpBlockCommitments commitmentsOf(const ExecuteResult& result)
@@ -885,18 +901,19 @@ void runGoldenVector(std::string const& id)
 
     // (2) Field-level RLP assertion BEFORE the hash-level one (裁定 C3). This is what localises a
     //     wrong payload-field -> header-field mapping; the 21-field dump makes it actionable.
-    const auto header = productionHeaderOf(scenario.request);
-    const auto encoded = header.encode();
+    const auto header = productionHeaderOf(scenario.fixture->blockFactory, scenario.request);
+    const auto encoded =
+        bcos::codec::rlp::encodeOpHeader(*header, bcos::engine::detail::opHeaderConst());
     const auto goldenEncoded = asBytes(golden.at("encodedHeaderHex"));
     if (encoded != goldenEncoded)
     {
-        recordHeaderFields(id, header);
+        recordHeaderFields(id, *header, bcos::engine::detail::opHeaderConst());
         ::testing::Test::RecordProperty(recordKey(id, "hdr_encoded_actual"), hexOfBytes(encoded));
         ::testing::Test::RecordProperty(
             recordKey(id, "hdr_encoded_golden"), hexOfBytes(goldenEncoded));
     }
     EXPECT_EQ(encoded, goldenEncoded) << id
-                                      << ": rebuildOpEthHeader().encode() != "
+                                      << ": encodeOpHeader != "
                                          "golden.encodedHeaderHex (21 fields dumped via "
                                          "RecordProperty)";
 
@@ -925,14 +942,23 @@ void runGoldenVector(std::string const& id)
     EXPECT_FALSE(status.validationError.has_value());
 
     // (5) The accepted block is registered, so it is a legal parent for the next one — the
-    //     property the chained test below turns into a causal chain.
+    //     property the chained test below turns into a causal chain. The stored value is now the
+    //     tars-encoded BlockHeader (spec D3), not the RLP — decode it and re-encode via the codec
+    //     to pin the RLP bytes to op-geth's golden (the blockHash assertion below already pins the
+    //     hash; this re-encode pins the byte-for-byte field encoding).
     EXPECT_TRUE(isBlockRegistered(scenario.fixture->storage, goldenBlockHash));
-    auto headerEntry = readEntry(scenario.fixture->storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER,
+    auto headerEntry = readEntry(scenario.fixture->storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER,
         boost::lexical_cast<std::string>(payload.blockNumber));
-    ASSERT_TRUE(headerEntry.has_value()) << id << ": ETH header RLP was not registered";
-    EXPECT_EQ(headerEntry->get(),
-        std::string_view(reinterpret_cast<const char*>(goldenEncoded.data()), goldenEncoded.size()))
-        << id << ": the registered header RLP must be op-geth's encodedHeaderHex byte for byte";
+    ASSERT_TRUE(headerEntry.has_value()) << id << ": ETH header was not registered";
+    {
+        bcos::bytes storedHeaderBytes(headerEntry->get().begin(), headerEntry->get().end());
+        auto storedHeader = scenario.fixture->blockFactory->blockHeaderFactory()->createBlockHeader(
+            storedHeaderBytes);
+        const auto reEncoded =
+            bcos::codec::rlp::encodeOpHeader(*storedHeader, bcos::engine::detail::opHeaderConst());
+        EXPECT_EQ(reEncoded, goldenEncoded)
+            << id << ": stored header re-encoded must be op-geth's encodedHeaderHex byte for byte";
+    }
 
     // (6) The receipt index, per transaction (final review B3-2).
     //
@@ -1154,13 +1180,17 @@ TEST(EngineNewPayloadGate, ChainedPairParentKnownThroughBlockRegistration)
     // to skip/split this test "for stability") silently took all three fields' only coverage with
     // it. Here they are evaluated before anything can abort the test, and they name themselves.
     {
-        const auto headerB = productionHeaderOf(requestB);
+        const auto headerB = productionHeaderOf(fixture.blockFactory, requestB);
         auto const& envB = chainB.vector.at("env");
-        EXPECT_EQ(headerB.number, asU64(envB.at("currentNumber")))
+        // Ptr 访问 + timestamp 毫秒→秒(/1000,审查 B6):headerB->timestamp() 是 tars 毫秒,
+        // envB.currentTimestamp 是秒。
+        EXPECT_EQ(headerB->number(),
+            static_cast<bcos::protocol::BlockNumber>(asU64(envB.at("currentNumber"))))
             << "sole non-constant `number` assertion in the suite (B3-4)";
-        EXPECT_EQ(headerB.timestamp, asU64(envB.at("currentTimestamp")))
+        EXPECT_EQ(
+            static_cast<uint64_t>(headerB->timestamp()) / 1000, asU64(envB.at("currentTimestamp")))
             << "sole non-constant `timestamp` assertion in the suite (B3-4)";
-        EXPECT_EQ(headerB.baseFeePerGas, asU256(envB.at("currentBaseFee")))
+        EXPECT_EQ(headerB->baseFee().value(), asU256(envB.at("currentBaseFee")))
             << "sole non-constant `baseFeePerGas` assertion in the suite (B3-4)";
 
         // And they really are a second data point: each differs from block A's value, so a
@@ -1213,9 +1243,9 @@ TEST(EngineNewPayloadGate, ChainedPairParentKnownThroughBlockRegistration)
     // Both blocks' header RLPs are registered under their own heights (1 and 2) — the chain index
     // really grew by one block, rather than block B overwriting block A's entries.
     EXPECT_TRUE(
-        readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, "1").has_value());
+        readEntry(fixture.storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, "1").has_value());
     EXPECT_TRUE(
-        readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, "2").has_value());
+        readEntry(fixture.storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, "2").has_value());
 }
 
 // ══════ Step 2b: re-delivery of an accepted block, with REAL execution (B3-7) ══════
@@ -1252,7 +1282,7 @@ TEST(EngineNewPayloadGate, GoldenVectorRedeliveryIsValidWithoutReExecution)
         ASSERT_EQ(first.status, bcos::engine::PayloadValidationStatus::Valid)
             << "first delivery: " << first.validationError.value_or("<none>");
         auto headerAfterFirst = readEntry(
-            scenario.fixture->storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, blockNumberStr);
+            scenario.fixture->storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr);
         ASSERT_TRUE(headerAfterFirst.has_value());
         const std::string registeredHeader{headerAfterFirst->get()};
 
@@ -1270,7 +1300,7 @@ TEST(EngineNewPayloadGate, GoldenVectorRedeliveryIsValidWithoutReExecution)
         // The registry is untouched by the second delivery — no second layer of writes for the
         // same height, and the stored header is still the one the first delivery wrote.
         auto headerAfterSecond = readEntry(
-            scenario.fixture->storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, blockNumberStr);
+            scenario.fixture->storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr);
         ASSERT_TRUE(headerAfterSecond.has_value());
         EXPECT_EQ(std::string{headerAfterSecond->get()}, registeredHeader);
     }
@@ -1309,7 +1339,7 @@ TEST(EngineNewPayloadGate, ConsensusErrorViaCatchAllReclassificationIsInvalid)
     ASSERT_EQ(rawTransactions[0][0], 0x7e) << "element 0 must be the deposit envelope to drop";
 
     rawTransactions.erase(rawTransactions.begin());
-    resealBlockHash(scenario.request);
+    resealBlockHash(scenario.fixture->blockFactory, scenario.request);
 
     auto status = bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
 
@@ -1580,7 +1610,7 @@ void expectComparisonSurfaceMismatch(
     SCOPED_TRACE(fieldName);
     auto scenario = prepareScenario("isthmus_transfer_basic");
     perturb(scenario.request.executionPayload);
-    resealBlockHash(scenario.request);
+    resealBlockHash(scenario.fixture->blockFactory, scenario.request);
 
     auto status = bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
 
@@ -1797,4 +1827,31 @@ TEST(EngineNewPayloadMutation, StorageLayoutFaultIsInternalErrorNotInvalid)
     // A storage fault leaves no trace of the block: not registered, not published.
     EXPECT_FALSE(
         isBlockRegistered(scenario.fixture->storage, scenario.request.executionPayload.blockHash));
+}
+
+// (审查 B5 / spec §12 待办 7) 迁移后 OP 头经标准表 s_number_2_header 落盘,可被通用读者
+// (createBlockHeader(bytes))解码——行为从迁移前"表里无行、RPC 干净 null"变为"行存在、读得到"。
+// 刻意只校验"行在 + 可解码 + number 正确",**不校验 decoded->hash()**:工厂会在 dataHash 空时
+// 回填 TARS 序 hash(spec §10 风险 4 / §6 已知坑),那正是 B5 暴露的行为,不属于本任务修复范围。
+TEST(EngineNewPayloadGate, OpHeaderRegisteredInStandardHeaderTable)
+{
+    auto scenario = prepareScenario("isthmus_transfer_basic");
+    auto const& payload = scenario.request.executionPayload;
+    const auto blockNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
+
+    auto status = bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
+    ASSERT_EQ(status.status, bcos::engine::PayloadValidationStatus::Valid);
+
+    auto headerEntry = readEntry(
+        scenario.fixture->storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr);
+    ASSERT_TRUE(headerEntry.has_value()) << "OP header must land in s_number_2_header (spec D3)";
+
+    bcos::bytes headerBytes(headerEntry->get().begin(), headerEntry->get().end());
+    auto decoded =
+        scenario.fixture->blockFactory->blockHeaderFactory()->createBlockHeader(headerBytes);
+    EXPECT_EQ(decoded->number(), payload.blockNumber);
+    // 注意:不得断言 decoded->hash() == payload.blockHash ——工厂已把 dataHash 回填为 TARS 序
+    // hash(spec §6 已知坑)。OP hash 只能经 codec 的 opHeaderHash 得到。
+    EXPECT_EQ(bcos::codec::rlp::opHeaderHash(*decoded, bcos::engine::detail::opHeaderConst()),
+        payload.blockHash);
 }

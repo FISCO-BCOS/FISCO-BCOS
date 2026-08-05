@@ -202,36 +202,42 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
 }
 
-/// env (8 required fields, per T8nReplayHarness.h's own comment) -> OpBlockEnv. `extraData`
-/// comes from the golden file (原样发射, not the vector — see golden/engine/README.md);
-/// `blobGasUsed` is 0 for every Isthmus vector in this corpus (T8nReplayHarness.h's own
-/// blobGasUsed handling note).
-bcos::evm::engine::OpBlockEnv buildEnv(
-    Json const& vec, Json const& golden, bcos::protocol::BlockHeader const& header)
+/// 2026-08-05: OpBlockEnv folded into `protocol::BlockHeader` (PR #5385); the engine passes the
+/// same tars header object straight to `executeOpBlock`. `buildHeaderForVector` now fills the 18
+/// tars-carried fields the OP path reads: the 15 vector-env/_op_expected.header fields plus
+/// extraData/transactionsRoot from the golden file (the 3 post-merge constants are codec-injected
+/// and not needed here — executeOpBlock never hashes the header). timestamp is stored in
+/// MILLISECONDS (FISCO convention); toBlockInfo/configAt /1000 back to seconds (spec §7).
+std::unique_ptr<bcostars::protocol::BlockHeaderImpl> buildHeaderForVector(
+    Json const& vec, Json const& golden)
 {
     auto const& env = vec.at("env");
-    return bcos::evm::engine::OpBlockEnv{
-        .fiscoHeader = header,
-        .parentHash = asH256(env.at("parentHash").get<std::string>()),
-        .prevRandao = asH256(env.at("currentRandom").get<std::string>()),
-        .baseFeePerGas = asU256(env.at("currentBaseFee").get<std::string>()),
-        .feeRecipient = asAddress(env.at("currentCoinbase").get<std::string>()),
-        .parentBeaconBlockRoot = asH256(env.at("parentBeaconBlockRoot").get<std::string>()),
-        .gasLimit = asU64(env.at("currentGasLimit").get<std::string>()),
-        .extraData = asBytes(golden.at("extraData").get<std::string>()),
-        .blobGasUsed = 0,
-    };
-}
+    auto const& header = vec.at("_op_expected").at("header");
 
-std::unique_ptr<bcostars::protocol::BlockHeaderImpl> buildHeaderForVector(Json const& vec)
-{
-    auto const& env = vec.at("env");
-    auto header = std::make_unique<bcostars::protocol::BlockHeaderImpl>();
-    header->setNumber(static_cast<bcos::protocol::BlockNumber>(
+    auto h = std::make_unique<bcostars::protocol::BlockHeaderImpl>();
+    h->setNumber(static_cast<bcos::protocol::BlockNumber>(
         asU64(env.at("currentNumber").get<std::string>())));
-    header->setTimestamp(
-        static_cast<int64_t>(asU64(env.at("currentTimestamp").get<std::string>())));
-    return header;
+    h->setTimestamp(
+        static_cast<int64_t>(asU64(env.at("currentTimestamp").get<std::string>())) * 1000);
+    h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = h->number() - 1,
+        .blockHash = asH256(env.at("parentHash").get<std::string>())});
+    h->setCoinbase(asAddress(env.at("currentCoinbase").get<std::string>()));
+    h->setStateRoot(asH256(header.at("stateRoot").get<std::string>()));
+    h->setTxsRoot(asH256(golden.at("transactionsRoot").get<std::string>()));
+    h->setReceiptsRoot(asH256(header.at("receiptsRoot").get<std::string>()));
+    const auto bloom = bcos::h2048{asBytes(header.at("logsBloom").get<std::string>())};
+    h->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    h->setGasLimit(asU256(env.at("currentGasLimit").get<std::string>()));
+    h->setGasUsed(asU256(header.at("gasUsed").get<std::string>()));
+    h->setExtraData(asBytes(golden.at("extraData").get<std::string>()));
+    h->setPrevRandao(asH256(env.at("currentRandom").get<std::string>()));
+    h->setBaseFee(asU256(env.at("currentBaseFee").get<std::string>()));
+    h->setWithdrawalsRoot(asH256(header.at("withdrawalsRoot").get<std::string>()));
+    h->setBlobGasUsed(asU256(header.at("blobGasUsed").get<std::string>()));
+    h->setExcessBlobGas(asU256(golden.at("excessBlobGas").get<std::string>()));
+    h->setParentBeaconBlockRoot(asH256(env.at("parentBeaconBlockRoot").get<std::string>()));
+    h->setRequestsHash(asH256(header.at("requestsHash").get<std::string>()));
+    return h;
 }
 
 std::vector<bcos::bytes> rawTxBytesOf(Json const& golden)
@@ -414,23 +420,10 @@ bcos::bytes leadingL1AttributesDeposit()
     return buildDepositRawTx(1'000'000);
 }
 
-/// A minimal, self-consistent OpBlockEnv for the decode-only failure tests below — field values
-/// beyond `fiscoHeader` are never read (decode throws before `executeOpBlock` reaches
-/// `detail::toBlockInfo`), so zero/empty defaults are sufficient.
-bcos::evm::engine::OpBlockEnv minimalEnv(const bcos::protocol::BlockHeader& header)
-{
-    return bcos::evm::engine::OpBlockEnv{
-        .fiscoHeader = header,
-        .parentHash = {},
-        .prevRandao = {},
-        .baseFeePerGas = 0,
-        .feeRecipient = {},
-        .parentBeaconBlockRoot = {},
-        .gasLimit = 30000000,
-        .extraData = {},
-        .blobGasUsed = 0,
-    };
-}
+// (2026-08-05) `minimalEnv` was removed with `OpBlockEnv` (folded into protocol::BlockHeader);
+// the decode-only failure tests below pass their local `BlockHeaderImpl` header straight to
+// `executeOpBlock` — decode throws before `detail::toBlockInfo` reads any field, so only `number`/
+// `timestamp` (and the failing decode inputs) matter.
 
 /// ---- hand-rolled RLP writers for the NON-canonical encodings B4-2 must reject ----
 ///
@@ -630,15 +623,14 @@ TEST(OpSchedulerImpl, ExecuteOpBlockSixWayComparisonSurface)
     StorageFixture fixture;
     seedFromVectorPre(fixture.view, vec.at("pre"));
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     auto receiptFactory = makeReceiptFactory();
     bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
         bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
 
-    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes));
 
     auto const& expectedHeader = vec.at("_op_expected").at("header");
 
@@ -685,15 +677,14 @@ TEST(OpSchedulerImpl, ExecuteOpBlockCarriesReceiptMetaToRpcLayer)
     StorageFixture fixture;
     seedFromVectorPre(fixture.view, vec.at("pre"));
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     auto receiptFactory = makeReceiptFactory();
     bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
         bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
 
-    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes));
 
     ASSERT_EQ(result.receipts.size(), rawTxBytes.size());
     ASSERT_EQ(rawTxBytes.size(), 2u) << "vector: attributes deposit + one EIP-1559 transfer";
@@ -701,7 +692,7 @@ TEST(OpSchedulerImpl, ExecuteOpBlockCarriesReceiptMetaToRpcLayer)
     for (auto const& receipt : result.receipts)
     {
         ASSERT_NE(receipt, nullptr);
-        EXPECT_EQ(receipt->blockNumber(), env.fiscoHeader.number());
+        EXPECT_EQ(receipt->blockNumber(), header->number());
     }
 
     // Tx 0 is the L1 attributes deposit: its meta carries depositNonce/depositReceiptVersion, no
@@ -751,8 +742,7 @@ TEST(OpSchedulerImpl, FirstTxNotAttributesDepositIsConsensusError)
     StorageFixture fixture;
     seedFromVectorPre(fixture.view, vec.at("pre"));
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
 
     // golden.rawTransactions[1] is the eip1559 transfer (a well-formed, independently decodable
     // envelope) — feeding it alone (skipping index 0, the deposit) violates processOpBlock's
@@ -766,7 +756,7 @@ TEST(OpSchedulerImpl, FirstTxNotAttributesDepositIsConsensusError)
     bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
         bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
 
-    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes)),
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes)),
         bcos::evm::engine::OpConsensusError);
 }
 
@@ -778,8 +768,7 @@ TEST(OpSchedulerImpl, ThrowingStorageIsStorageError)
     Json const& vec = vectorBody(loaded.vectors, kVectorId);
     Json const& golden = loaded.golden;
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     MutableStorage rawStorage;  // deliberately unseeded: ThrowingStorage rejects every read
@@ -792,7 +781,7 @@ TEST(OpSchedulerImpl, ThrowingStorageIsStorageError)
     bcos::evm::engine::OpSchedulerImpl<decltype(throwing)> scheduler(receiptFactory, kChainId,
         bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
 
-    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(throwing, env, rawTxBytes)),
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(throwing, *header, rawTxBytes)),
         bcos::evm::engine::OpStorageError);
 }
 
@@ -823,8 +812,7 @@ TEST(OpSchedulerImpl, ApplyDiffWriteFailureIsStorageErrorNotInvalid)
     // 路径,免得把"种子是否落全"这一变量也搅进来。
     seedFromVectorPre(fixture.view, vec.at("pre"));
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     bcos::evm::test::WriteFailingStorage<ViewType> writeFailing(fixture.view);
@@ -837,7 +825,7 @@ TEST(OpSchedulerImpl, ApplyDiffWriteFailureIsStorageErrorNotInvalid)
     // poison() → firstError() → OpStorageError 这一条通道传到这里(executeOpBlock 的
     // catch(...) 兜底拿不到 what(),会换成自己那句固定诊断串)。反例标识见 helper 注释。
     expectOpStorageErrorWithMessage(
-        [&] { bcos::task::syncWait(scheduler.executeOpBlock(writeFailing, env, rawTxBytes)); },
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(writeFailing, *header, rawTxBytes)); },
         "injected write failure");
 }
 
@@ -866,8 +854,7 @@ TEST(OpSchedulerImpl, SystemCallHistoryStorageRevertIsStorageError)
     };
     seedFromVectorPre(fixture.view, pre);
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     auto receiptFactory = makeReceiptFactory();
@@ -879,7 +866,7 @@ TEST(OpSchedulerImpl, SystemCallHistoryStorageRevertIsStorageError)
     // branch (OpStorageError); the catch(...) fallback's fixed diagnostic string never contains
     // it, and the OpConsensusError branch is asserted-failed by the helper if misclassified.
     expectOpStorageErrorWithMessage(
-        [&] { bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes)); },
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes)); },
         "system contract call failed");
 }
 
@@ -900,8 +887,7 @@ TEST(OpSchedulerImpl, SystemCallBeaconRootsRevertIsIgnored)
     };
     seedFromVectorPre(fixture.view, pre);
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     auto receiptFactory = makeReceiptFactory();
@@ -909,7 +895,7 @@ TEST(OpSchedulerImpl, SystemCallBeaconRootsRevertIsIgnored)
         bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
 
     // No throw — the block executes exactly as if the beacon-roots call had succeeded.
-    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes));
     EXPECT_EQ(result.receipts.size(), rawTxBytes.size());
 
     // And the rollback worked: the write-then-revert contract left NO storage behind (the old
@@ -947,8 +933,8 @@ TEST(OpSchedulerImpl, ConfigAtThresholds)
 
 // ---- final-batch1 coordinator review: C2/C3/C4 + yParity test-gap regression tests ----
 // All six below use a bare MutableStorage with no seeding — decode failures happen in Step 1,
-// strictly before the Storage2Ledger bridge is ever touched (see the builder-helpers comment
-// above `minimalEnv`).
+// strictly before the Storage2Ledger bridge is ever touched (see the local-header note where
+// `minimalEnv` used to be).
 
 // (f) C4: a canonical 8-byte deposit gas scalar 0xFFFFFFFFFFFFFFFF must not silently become a
 // negative int64_t (the coordinator-traced blockGasLeft-inflation / gasUsed-wraparound chain).
@@ -962,11 +948,10 @@ TEST(OpSchedulerImpl, DepositGasLimitOverflowIsConsensusError)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
 
     std::vector<bcos::bytes> rawTxBytes{buildDepositRawTx(std::numeric_limits<uint64_t>::max())};
 
-    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)),
         bcos::evm::engine::OpConsensusError);
 }
 
@@ -981,7 +966,6 @@ TEST(OpSchedulerImpl, TypedTxGasLimitOverflowIsConsensusError)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
     const auto hugeGas = std::numeric_limits<uint64_t>::max();
 
     {
@@ -992,7 +976,7 @@ TEST(OpSchedulerImpl, TypedTxGasLimitOverflowIsConsensusError)
         std::vector<bcos::bytes> rawTxBytes{
             leadingL1AttributesDeposit(), buildEip1559RawTx(kChainId, hugeGas, intx::uint256{0},
                                               intx::uint256{1}, intx::uint256{1})};
-        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)),
             bcos::evm::engine::OpConsensusError)
             << "eip1559";
     }
@@ -1012,7 +996,7 @@ TEST(OpSchedulerImpl, TypedTxGasLimitOverflowIsConsensusError)
             leadingL1AttributesDeposit(), buildSetCodeRawTx(kChainId, hugeGas, intx::uint256{0},
                                               intx::uint256{1}, intx::uint256{1})};
         expectOpConsensusErrorWithMessage(
-            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)); },
             "gas limit exceeds int64_t range: setcode.gasLimit");
     }
 }
@@ -1026,7 +1010,6 @@ TEST(OpSchedulerImpl, TypedTxChainIdMismatchIsConsensusError)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
     constexpr uint64_t kWrongChainId = kChainId + 1;
 
     {
@@ -1037,7 +1020,7 @@ TEST(OpSchedulerImpl, TypedTxChainIdMismatchIsConsensusError)
         std::vector<bcos::bytes> rawTxBytes{
             leadingL1AttributesDeposit(), buildEip1559RawTx(kWrongChainId, 21000, intx::uint256{0},
                                               intx::uint256{1}, intx::uint256{1})};
-        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)),
             bcos::evm::engine::OpConsensusError)
             << "eip1559";
     }
@@ -1054,7 +1037,7 @@ TEST(OpSchedulerImpl, TypedTxChainIdMismatchIsConsensusError)
             leadingL1AttributesDeposit(), buildSetCodeRawTx(kWrongChainId, 21000, intx::uint256{0},
                                               intx::uint256{1}, intx::uint256{1})};
         expectOpConsensusErrorWithMessage(
-            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)); },
             "chain id mismatch (setcode)");
     }
 }
@@ -1075,14 +1058,13 @@ TEST(OpSchedulerImpl, HighSSignatureIsConsensusError)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
 
     constexpr auto kSecpOrder = evmmax::secp256k1::Curve::ORDER;
     const intx::uint256 highS = kSecpOrder - 1;  // > n/2 for this curve's n.
     std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
         buildEip1559RawTx(kChainId, 21000, intx::uint256{0}, intx::uint256{1}, highS)};
 
-    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)),
         bcos::evm::engine::OpConsensusError);
 }
 
@@ -1109,7 +1091,6 @@ TEST(OpSchedulerImpl, YParityEquals2IsConsensusError)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
 
     {
         MutableStorage storage;
@@ -1119,7 +1100,7 @@ TEST(OpSchedulerImpl, YParityEquals2IsConsensusError)
         std::vector<bcos::bytes> rawTxBytes{
             leadingL1AttributesDeposit(), buildEip1559RawTx(kChainId, 21000, intx::uint256{2},
                                               intx::uint256{1}, intx::uint256{1})};
-        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)),
             bcos::evm::engine::OpConsensusError)
             << "eip1559";
     }
@@ -1139,7 +1120,7 @@ TEST(OpSchedulerImpl, YParityEquals2IsConsensusError)
         // generic message, same OpConsensusError type. Only the guard's own message text
         // ("invalid y parity (setcode)") distinguishes "my check fired" from "something else did".
         expectOpConsensusErrorWithMessage(
-            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)); },
             "invalid y parity (setcode)");
     }
 }
@@ -1149,7 +1130,6 @@ TEST(OpSchedulerImpl, YParityEquals256IsConsensusError)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
 
     {
         MutableStorage storage;
@@ -1159,7 +1139,7 @@ TEST(OpSchedulerImpl, YParityEquals256IsConsensusError)
         std::vector<bcos::bytes> rawTxBytes{
             leadingL1AttributesDeposit(), buildEip1559RawTx(kChainId, 21000, intx::uint256{256},
                                               intx::uint256{1}, intx::uint256{1})};
-        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)),
             bcos::evm::engine::OpConsensusError)
             << "eip1559";
     }
@@ -1174,7 +1154,7 @@ TEST(OpSchedulerImpl, YParityEquals256IsConsensusError)
         // setcode sub-case: same message-assertion rationale as YParityEquals2's setcode
         // sub-case above.
         expectOpConsensusErrorWithMessage(
-            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)); },
             "invalid y parity (setcode)");
     }
 }
@@ -1283,14 +1263,13 @@ TEST(OpSchedulerImpl, AuthorizationYParityOverWideIsBlockInvalid)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
 
     std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
         buildSetCodeRawTxWithAuth(kChainId, 200000, intx::uint256{256}, intx::uint256{0},
             intx::uint256{1}, intx::uint256{1})};
 
     expectOpConsensusErrorWithMessage(
-        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)); },
         "too wide for authorization yParity");
 }
 
@@ -1670,12 +1649,11 @@ void expectDepositFieldRejected(
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
 
     std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(), fields.envelope()};
 
     expectOpConsensusErrorWithMessage(
-        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)); },
         expectedSubstring);
 }
 }  // namespace
@@ -1790,13 +1768,12 @@ TEST(OpSchedulerImpl, NonCanonicalOuterFramingIsRejectedAtDecode)
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
-    auto env = minimalEnv(header);
 
     std::vector<bcos::bytes> rawTxBytes{
         leadingL1AttributesDeposit(), nonCanonicalOuterFramedDeposit()};
 
     expectOpConsensusErrorWithMessage(
-        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, header, rawTxBytes)); },
         "leading zero");
 }
 
@@ -1810,15 +1787,14 @@ TEST(OpSchedulerImpl, RecentBlockHashesWiringKeepsVectorGreen)
 
     StorageFixture fixture;
     seedFromVectorPre(fixture.view, vec.at("pre"));
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     auto receiptFactory = makeReceiptFactory();
     bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
         bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
 
-    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes));
     // 接线正确: 执行完成、无毒旗、六项承诺齐备。
     EXPECT_EQ(result.receipts.size(), 2u);
 }
@@ -1884,8 +1860,7 @@ TEST(OpSchedulerImpl, HashErrPoisonClassifiedAsStorageErrorNotInvalid)
     auto pre = vec.at("pre");
     seedD1TransferToContract(fixture.view, pre);
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     // 只对 SYS_NUMBER_2_HASH 的 readOne 抛错, 其余直通 —— 不能用 ThrowingStorage (全表抛会让
@@ -1898,7 +1873,7 @@ TEST(OpSchedulerImpl, HashErrPoisonClassifiedAsStorageErrorNotInvalid)
     // BLOCKHASH(N-2=5) → RecentBlockHashes::get_block_hash(5) → SYS_NUMBER_2_HASH 读抛 →
     // hashErr 置位 → executeOpBlock 正常返回后查 (bridge.poisoned() || hashErr) → OpStorageError。
     expectOpStorageErrorWithMessage(
-        [&] { bcos::task::syncWait(scheduler.executeOpBlock(throwing, env, rawTxBytes)); },
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(throwing, *header, rawTxBytes)); },
         "RecentBlockHashes");
 }
 
@@ -1920,8 +1895,7 @@ TEST(OpSchedulerImpl, BadLengthNumberToHashEntryPoisons)
     bcos::task::syncWait(bcos::storage2::writeOne(fixture.view,
         bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_HASH, "5"}, std::move(bad)));
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     auto receiptFactory = makeReceiptFactory();
@@ -1930,7 +1904,7 @@ TEST(OpSchedulerImpl, BadLengthNumberToHashEntryPoisons)
 
     // BLOCKHASH(5) 读到 16 字节坏值 → G3 守卫记毒旗 ("length != 32") → OpStorageError。
     expectOpStorageErrorWithMessage(
-        [&] { bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes)); },
+        [&] { bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes)); },
         "length != 32");
 }
 
@@ -1954,15 +1928,14 @@ TEST(OpSchedulerImpl, BlockHashAncestorWritesRealHashToState)
     bcos::task::syncWait(bcos::storage2::writeOne(fixture.view,
         bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_HASH, "5"}, std::move(e)));
 
-    auto header = buildHeaderForVector(vec);
-    auto env = buildEnv(vec, golden, *header);
+    auto header = buildHeaderForVector(vec, golden);
     auto rawTxBytes = rawTxBytesOf(golden);
 
     auto receiptFactory = makeReceiptFactory();
     bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(receiptFactory, kChainId,
         bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 0});
 
-    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, env, rawTxBytes));
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(fixture.view, *header, rawTxBytes));
     EXPECT_EQ(result.receipts.size(), rawTxBytes.size());
 
     // 执行后从视图读回 kTransferTo 的 storage slot 0, 断言 == 0xdd..dd (32 字节种子 hash)。

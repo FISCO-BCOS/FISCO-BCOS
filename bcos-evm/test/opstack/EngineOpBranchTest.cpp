@@ -62,7 +62,7 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-codec/rlp/EthBlockHeader.h>
+#include <bcos-codec/rlp/OpHeaderCodec.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -445,18 +445,23 @@ bcos::engine::NewPayloadRequest makeOpRequest(
 /// parentBeaconBlockRoot: both sides move together and the comparison still passes). Task 6's
 /// gate MUST therefore feed op-geth golden `blockHash` values into `newPayload` and assert VALID
 /// — that is the only place the mapping itself is pinned externally.
-bcos::codec::rlp::EthBlockHeader rebuiltHeader(bcos::engine::NewPayloadRequest const& request)
+bcos::protocol::BlockHeader::Ptr rebuiltHeader(
+    bcos::protocol::BlockHeaderFactory::Ptr const& factory,
+    bcos::engine::NewPayloadRequest const& request)
 {
     auto const& payload = request.executionPayload;
     const auto transactionsRoot = bcos::evm::engine::computeOpTxRoot(*payload.rawTransactions);
     return bcos::engine::detail::rebuildOpEthHeader(
-        payload, transactionsRoot, *request.parentBeaconBlockRoot);
+        factory, payload, transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
-/// Sets `blockHash` to the hash the OP branch will recompute for this payload.
-void sealWithBlockHash(bcos::engine::NewPayloadRequest& request)
+/// Sets `blockHash` to the hash the OP branch will recompute for this payload. OP hash =
+/// keccak(RLP(21 字段)),经 codec(不得用 BlockHeader::hash()——dataHash 空/工厂 TARS 序回填)。
+void sealWithBlockHash(bcos::protocol::BlockHeaderFactory::Ptr const& factory,
+    bcos::engine::NewPayloadRequest& request)
 {
-    request.executionPayload.blockHash = rebuiltHeader(request).hash();
+    request.executionPayload.blockHash = bcos::codec::rlp::opHeaderHash(
+        *rebuiltHeader(factory, request), bcos::engine::detail::opHeaderConst());
 }
 
 // ---- StubOpScheduler: the seam driven by a scriptable stand-in ----
@@ -487,20 +492,10 @@ struct StubCommitments
 
 struct StubOpScheduler
 {
-    /// Field names and order must match `bcos::evm::engine::OpBlockEnv` — the engine
-    /// aggregate-initializes this type with designated initializers.
-    struct BlockEnv
-    {
-        const bcos::protocol::BlockHeader& fiscoHeader;
-        bcos::h256 parentHash;
-        bcos::h256 prevRandao;
-        bcos::u256 baseFeePerGas;
-        bcos::Address feeRecipient;
-        bcos::h256 parentBeaconBlockRoot;
-        uint64_t gasLimit;
-        bcos::bytes extraData;
-        uint64_t blobGasUsed;
-    };
+    /// The engine's OP branch now passes the FISCO `protocol::BlockHeader` directly (OpBlockEnv
+    /// folded, PR #5385) — the stub mirrors `bcos::evm::engine::OpSchedulerImpl`'s
+    /// `using BlockEnv = bcos::protocol::BlockHeader`.
+    using BlockEnv = bcos::protocol::BlockHeader;
 
     /// Carries the commitments inline because `commitmentsOf` is called *statically* by the
     /// engine (`SchedulerType::commitmentsOf(result)`) and so cannot read instance state.
@@ -524,8 +519,6 @@ struct StubOpScheduler
         using std::runtime_error::runtime_error;
     };
 
-    static constexpr std::string_view c_ethBlockHeaderTable =
-        bcos::evm::engine::SYS_ETH_BLOCK_HEADER;
     static constexpr std::string_view c_ethRawTxTable = bcos::evm::engine::SYS_ETH_HASH_2_RAWTX;
 
     // ---- script ----
@@ -644,7 +637,7 @@ struct ThrowingEncodeReceipt : public bcostars::protocol::TransactionReceiptImpl
 /// comparison-surface fields equal to what the payload claims, plus the §5.1 `requestsHash`
 /// (engaged, so the VALID path exercises that comparison too) and no `blobGasUsed` (pre-Jovian).
 StubCommitments matchingCommitments(
-    bcos::engine::NewPayloadRequest const& request, bcos::codec::rlp::EthBlockHeader const& header)
+    bcos::engine::NewPayloadRequest const& request, bcos::protocol::BlockHeader const& header)
 {
     auto const& payload = request.executionPayload;
     return StubCommitments{
@@ -655,7 +648,7 @@ StubCommitments matchingCommitments(
         .gasUsed = payload.gasUsed,
         .txRoot = bcos::evm::engine::computeOpTxRoot(*payload.rawTransactions),
         .blobGasUsed = std::nullopt,
-        .requestsHash = header.requestsHash,
+        .requestsHash = header.requestsHash().value(),
     };
 }
 
@@ -677,7 +670,7 @@ struct StubFixture
 struct ValidScenario
 {
     bcos::engine::NewPayloadRequest request;
-    bcos::codec::rlp::EthBlockHeader header;
+    bcos::protocol::BlockHeader::Ptr header;
     bcos::bytes rawTransaction;
     bcos::protocol::TransactionReceipt::Ptr receipt;
 };
@@ -698,12 +691,12 @@ ValidScenario prepareValidScenario(StubFixture& fixture, bcos::h256 const& paren
     // MissingParentHeaderSkipsTimestampCheck)。对单块测试无影响:它们要么无父头(校验跳过),
     // 要么在更早的检查(版本闸/形状/timestamp)处即被拒。
     scenario.request.executionPayload.gasUsed = scenario.request.executionPayload.gasLimit / 2;
-    sealWithBlockHash(scenario.request);
-    scenario.header = rebuiltHeader(scenario.request);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), scenario.request);
+    scenario.header = rebuiltHeader(fixture.blockFactory->blockHeaderFactory(), scenario.request);
     scenario.receipt = makeReceipt(fixture.receiptFactory, 21000);
 
     fixture.scheduler.result.receipts = {scenario.receipt};
-    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, scenario.header);
+    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, *scenario.header);
     return scenario;
 }
 
@@ -726,11 +719,11 @@ ValidScenario prepareFollowOnScenario(StubFixture& fixture, ValidScenario const&
         acceptedParent.request.executionPayload.blockNumber + 1;
     if (baseFeeOverride.has_value())
         scenario.request.executionPayload.baseFeePerGas = *baseFeeOverride;
-    sealWithBlockHash(scenario.request);
-    scenario.header = rebuiltHeader(scenario.request);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), scenario.request);
+    scenario.header = rebuiltHeader(fixture.blockFactory->blockHeaderFactory(), scenario.request);
     scenario.receipt = makeReceipt(fixture.receiptFactory, 21000);
     fixture.scheduler.result.receipts = {scenario.receipt};
-    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, scenario.header);
+    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, *scenario.header);
     return scenario;
 }
 
@@ -773,7 +766,7 @@ TEST(EngineOpBranch, TimestampVersionGateRejectsMismatch)
     // Control: the matching combination passes the gate (it is rejected later, for an unrelated
     // reason — parent is unknown — which is exactly what proves the gate itself let it through).
     auto isthmusOnV4 = makeOpRequest({}, kIsthmusTimestamp, hashOf("parent"));
-    sealWithBlockHash(isthmusOnV4);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), isthmusOnV4);
     auto status = bcos::task::syncWait(fixture.service.newPayload(isthmusOnV4, 4));
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Syncing);
 }
@@ -786,7 +779,7 @@ TEST(EngineOpBranch, BlockHashMismatchIsInvalidWithNullLatestValidHash)
     OpFixture fixture;
 
     auto request = makeOpRequest({}, kIsthmusTimestamp, hashOf("parent"));
-    sealWithBlockHash(request);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), request);
     const auto honestBlockHash = request.executionPayload.blockHash;
     request.executionPayload.blockHash = hashOf("tampered-block-hash");
     ASSERT_NE(request.executionPayload.blockHash, honestBlockHash);
@@ -808,7 +801,7 @@ TEST(EngineOpBranch, UnknownParentIsSyncingAndWritesNothing)
     OpFixture fixture;
 
     auto request = makeOpRequest({}, kIsthmusTimestamp, hashOf("unknown-parent"));
-    sealWithBlockHash(request);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), request);
 
     auto status = bcos::task::syncWait(fixture.service.newPayload(request, 4));
 
@@ -896,7 +889,7 @@ TEST(EngineOpBranch, ConsensusErrorFromExecutionMapsToInvalid)
     registerVerifiedBlock(fixture.storage, parentHash, 0);
 
     auto request = makeOpRequest({bcos::bytes{0xff}}, kIsthmusTimestamp, parentHash);
-    sealWithBlockHash(request);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), request);
 
     auto status = bcos::task::syncWait(fixture.service.newPayload(request, 4));
 
@@ -929,7 +922,8 @@ TEST(EngineOpBranch, NonZeroBlobGasUsedIsInvalidUnderIsthmus)
 
     auto request = makeOpRequest({}, kIsthmusTimestamp, parentHash);
     request.executionPayload.blobGasUsed = bcos::u256(1);
-    sealWithBlockHash(request);  // blockHash consistent, so only the OP constraint can reject it
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(),
+        request);  // blockHash consistent, so only the OP constraint can reject it
 
     auto status = bcos::task::syncWait(fixture.service.newPayload(request, 4));
 
@@ -994,15 +988,20 @@ TEST(EngineOpBranch, ValidPayloadRegistersAllFourTables)
     ASSERT_TRUE(numberToHash.has_value());
     EXPECT_EQ(numberToHash->get(), asStringView(payload.blockHash.asBytes()));
 
-    // 3. s_eth_block_header (the new OP-only table) — key = number, value = the 21-field RLP.
+    // 3. s_number_2_header (the standard FISCO header table, spec D3) — key = number, value =
+    //    the tars-encoded BlockHeader.
     auto headerEntry =
-        readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, blockNumberStr);
+        readEntry(fixture.storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr);
     ASSERT_TRUE(headerEntry.has_value());
-    const auto encodedHeader = scenario.header.encode();
+    // protocol::BlockHeader::encode() is a void out-param (审查 B1) — build the buffer first.
+    bcos::bytes encodedHeader;
+    scenario.header->encode(encodedHeader);
     EXPECT_EQ(headerEntry->get(), asStringView(encodedHeader));
     // The stored header is the one whose keccak is the accepted blockHash — i.e. the registry is
     // self-consistent with the verdict.
-    EXPECT_EQ(scenario.header.hash(), payload.blockHash);
+    EXPECT_EQ(
+        bcos::codec::rlp::opHeaderHash(*scenario.header, bcos::engine::detail::opHeaderConst()),
+        payload.blockHash);
 
     // 4. s_hash_2_receipt — key = keccak(raw EIP-2718 envelope), value = encoded receipt.
     const auto txHash =
@@ -1111,9 +1110,10 @@ TEST(EngineOpBranch, NonConsecutiveBlockNumberIsInvalid)
     auto scenario = prepareValidScenario(fixture, parentHash);  // parent registered at number 0
 
     scenario.request.executionPayload.blockNumber = 7;  // parent is 0, so the only valid one is 1
-    sealWithBlockHash(scenario.request);                // keep the blockHash self-consistent
-    fixture.scheduler.result.commitments =
-        matchingCommitments(scenario.request, rebuiltHeader(scenario.request));
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(),
+        scenario.request);  // keep the blockHash self-consistent
+    fixture.scheduler.result.commitments = matchingCommitments(scenario.request,
+        *rebuiltHeader(fixture.blockFactory->blockHeaderFactory(), scenario.request));
 
     auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
 
@@ -1207,9 +1207,10 @@ TEST(EngineOpBranch, NonTipParentIsRefusedExplicitly)
     // different blockHash, so the known-block short-circuit does not apply).
     auto sibling =
         makeOpRequest({bcos::bytes{0x7e, 0x09, 0x09, 0x09}}, kIsthmusTimestamp, parentHash);
-    sealWithBlockHash(sibling);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), sibling);
     ASSERT_NE(sibling.executionPayload.blockHash, accepted.request.executionPayload.blockHash);
-    fixture.scheduler.result.commitments = matchingCommitments(sibling, rebuiltHeader(sibling));
+    fixture.scheduler.result.commitments = matchingCommitments(
+        sibling, *rebuiltHeader(fixture.blockFactory->blockHeaderFactory(), sibling));
 
     EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(sibling, 4)),
         bcos::engine::OpExecutionInternalError);
@@ -1232,7 +1233,8 @@ TEST(EngineOpBranch, GasLimitAboveInt64MaxIsInvalid)
     auto scenario = prepareValidScenario(fixture, parentHash);
 
     scenario.request.executionPayload.gasLimit = bcos::u256(1) << 63;  // 2^63, one past the bound
-    sealWithBlockHash(scenario.request);  // self-consistent hash: only the bound can reject it
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(),
+        scenario.request);  // self-consistent hash: only the bound can reject it
 
     auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
 
@@ -1256,7 +1258,8 @@ TEST(EngineOpBranch, ExtraDataShapeIsValidatedIsthmus)
         StubFixture fixture;
         auto scenario = prepareValidScenario(fixture, parentHash);
         scenario.request.executionPayload.extraData = extra;
-        sealWithBlockHash(scenario.request);  // self-consistent hash: only the shape can reject it
+        sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(),
+            scenario.request);  // self-consistent hash: only the shape can reject it
         auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
         EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid) << message;
         EXPECT_FALSE(status.latestValidHash.has_value()) << message;  // static-validation bucket
@@ -1495,10 +1498,12 @@ TEST(EngineOpBranch, IncreasingTimestampIsAcceptedAndRegisters)
     EXPECT_EQ(*status.latestValidHash, child.request.executionPayload.blockHash);
     // The child's own header is now readable, i.e. the read path this test exercises is fed by
     // the write path under test.
-    auto childHeaderEntry = readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER,
+    auto childHeaderEntry = readEntry(fixture.storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER,
         boost::lexical_cast<std::string>(child.request.executionPayload.blockNumber));
     ASSERT_TRUE(childHeaderEntry.has_value());
-    EXPECT_EQ(childHeaderEntry->get(), asStringView(child.header.encode()));
+    bcos::bytes childHeaderBytes;
+    child.header->encode(childHeaderBytes);  // void out-param (审查 B1)
+    EXPECT_EQ(childHeaderEntry->get(), asStringView(childHeaderBytes));
 }
 
 // (w2) 终审批 D-3 red witness: the engine-side baseFee consistency check (Step 3a-2,
@@ -1543,12 +1548,12 @@ TEST(EngineOpBranch, MissingParentHeaderSkipsTimestampCheck)
     // with any default parent timestamp of 0 or above, this is where it would misfire.
     auto scenario = prepareValidScenario(fixture, parentHash);
     scenario.request.executionPayload.timestamp = kIsthmusTime;
-    sealWithBlockHash(scenario.request);
-    scenario.header = rebuiltHeader(scenario.request);
-    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, scenario.header);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), scenario.request);
+    scenario.header = rebuiltHeader(fixture.blockFactory->blockHeaderFactory(), scenario.request);
+    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, *scenario.header);
 
     ASSERT_FALSE(
-        readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, "0").has_value());
+        readEntry(fixture.storage, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, "0").has_value());
     EXPECT_EQ(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)).status,
         bcos::engine::PayloadValidationStatus::Valid);
 }
@@ -1606,7 +1611,7 @@ TEST(EngineOpBranch, DriftedOpModeProbeRefusesV4InsteadOfRubberStamping)
     // A payload shaped exactly like the one op-node sends: present-and-empty withdrawals, blob gas
     // fields present — i.e. one that the GENERIC static validation accepts.
     auto request = makeOpRequest({bcos::bytes{0x7e, 0x01}}, kIsthmusTimestamp, hashOf("parent"));
-    sealWithBlockHash(request);
+    sealWithBlockHash(blockFactory->blockHeaderFactory(), request);
 
     EXPECT_THROW(bcos::task::syncWait(service.newPayload(request, 4)),
         bcos::engine::UnsupportedEngineApiVersion);
@@ -1685,9 +1690,9 @@ TEST(EngineOpBranch, RawTransactionEnvelopesAreRegisteredUnderEthTxHash)
         makeDepositEnvelope(), makeEip1559Envelope(), makeSetCodeEnvelope()};
 
     auto request = makeOpRequest(envelopes, kIsthmusTimestamp, parentHash);
-    sealWithBlockHash(request);
-    const auto header = rebuiltHeader(request);
-    fixture.scheduler.result.commitments = matchingCommitments(request, header);
+    sealWithBlockHash(fixture.blockFactory->blockHeaderFactory(), request);
+    const auto header = rebuiltHeader(fixture.blockFactory->blockHeaderFactory(), request);
+    fixture.scheduler.result.commitments = matchingCommitments(request, *header);
     fixture.scheduler.result.receipts = {makeReceipt(fixture.receiptFactory, 21000),
         makeReceipt(fixture.receiptFactory, 22000), makeReceipt(fixture.receiptFactory, 23000)};
 

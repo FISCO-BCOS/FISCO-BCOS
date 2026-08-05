@@ -34,10 +34,11 @@ bcos::bytes encodeDepositEnvelope(OpDepositFields const& fields)
     //
     // Fully qualified (bcos::codec::rlp::encode, not unqualified encode(...)): this function's
     // own name (`encodeDepositEnvelope`) doesn't collide with the free RLP `encode` overload
-    // set, so unqualified lookup would in fact resolve correctly here — but EthBlockHeader.cpp
-    // hit exactly this class of bug the other way (a member function literally named `encode`
-    // shadowing the RLPEncode.h free functions, "too many arguments" at compile time, see its
-    // comment), so this call is qualified defensively to rule the same failure mode out here.
+    // set, so unqualified lookup would in fact resolve correctly here — but the retired
+    // `EthBlockHeader.cpp` (now OpHeaderCodec.cpp) hit exactly this class of bug the other way (a
+    // member/struct function literally named `encode` shadowing the RLPEncode.h free functions,
+    // "too many arguments" at compile time), so this call is qualified defensively to rule the
+    // same failure mode out here.
     //
     // uint32_t, not uint8_t: RLPEncode.h's generic scalar encode(bytes&, UnsignedByte auto)
     // calls bcos::toCompactBigEndian(b) — for T == bcos::byte (== uint8_t) that odr-uses

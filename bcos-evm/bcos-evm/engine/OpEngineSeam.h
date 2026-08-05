@@ -39,16 +39,10 @@
 namespace bcos::evm::engine
 {
 
-/// Table holding the ETH/OP block header RLP written by the newPayload OP branch on VALID
-/// (design §6.1 step 6 "块登记", 裁定 B5): the constant lives HERE, in `bcos-evm/bcos-evm/engine/`,
-/// and explicitly NOT in `bcos-framework/.../LedgerTypeDef.h` — this is an OP-validator-mode-only
-/// table, not part of the FISCO ledger schema every node ships.
-///
-/// Key/value encoding follows the two ledger tables it is written alongside (encoding copied from
-/// the `BaselineScheduler.h:207-220` production precedent): key = block number as a *decimal
-/// string* (identical to `SYS_NUMBER_2_HASH`'s key), value = `EthBlockHeader::encode()` — the
-/// 21-field RLP whose keccak is the block hash, stored as raw bytes.
-inline constexpr std::string_view SYS_ETH_BLOCK_HEADER{"s_eth_block_header"};
+/// (REMOVED 2026-08-05) `SYS_ETH_BLOCK_HEADER`/"s_eth_block_header" was retired: OP headers now
+/// land in the standard `bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER` ("s_number_2_header") as tars
+/// `protocol::BlockHeader` (spec 2026-08-05-opstack-blockheader-fisco-adaptation-design.md §4.4,
+/// 裁定 D3).
 
 /// Table holding each accepted OP block's transactions as their **raw EIP-2718 envelopes**, keyed
 /// by `keccak(envelope)` — i.e. the Ethereum transaction hash, and the same key
