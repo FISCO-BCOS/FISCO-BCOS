@@ -26,6 +26,43 @@
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
+namespace
+{
+// Local hex helpers for the opStackMeta tars fields. All 13 fields are hex strings so that
+// explicit zeros ("0x0") survive tars serialization (tars optional scalars have no presence
+// semantics). boost::lexical_cast has no base-argument overload, so the u64 path formats via a
+// fixed-width multiprecision number::str(digits, base). (boost::multiprecision::uint64_t does
+// not exist -- 64-bit is native range -- so uint256_t is used; str() emits minimal digits.)
+
+std::string u256ToHex(bcos::u256 const& v)
+{
+    // 0 encodes as "0x0" (non-empty), preserving field presence
+    return "0x" + v.str(0, std::ios_base::hex);
+}
+std::string u64ToHex(uint64_t v)
+{
+    return "0x" + boost::multiprecision::uint256_t(v).str(0, std::ios_base::hex);
+}
+std::optional<bcos::u256> hexToU256(std::string const& s)
+{
+    if (s.empty())
+    {
+        return std::nullopt;
+    }
+    // unified bcos::fromHex + fromBigEndian path, same as ReceiptResponse.cpp; not a bare u256(s)
+    return bcos::fromBigEndian<bcos::u256>(bcos::fromHex(s));
+}
+std::optional<uint64_t> hexToU64(std::string const& s)
+{
+    if (s.empty())
+    {
+        return std::nullopt;
+    }
+    // same fromBigEndian path as ReceiptResponse.cpp; std::stoull would throw on malformed input
+    return bcos::fromBigEndian<uint64_t>(bcos::fromHex(s));
+}
+}  // namespace
+
 bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl()
   : m_inner([m_receipt = bcostars::TransactionReceipt()]() mutable {
         return std::addressof(m_receipt);
@@ -125,13 +162,71 @@ void bcostars::protocol::TransactionReceiptImpl::setEffectiveGasPrice(std::strin
 {
     m_inner()->data.effectiveGasPrice = std::move(effectiveGasPrice);
 }
-std::string_view bcostars::protocol::TransactionReceiptImpl::opReceiptMeta() const
+std::optional<bcos::protocol::OpStackReceiptMeta>
+bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
 {
-    return m_inner()->opReceiptMeta;
+    auto const& s = m_inner()->opStackMeta;
+    bcos::protocol::OpStackReceiptMeta out;
+    // all 13 fields are hex strings; a tars optional string uses != "" to mean "present"
+    // (0 values are stored "0x0", non-empty, so explicit zeros keep their presence)
+    if (s.l1_gas_price != "")
+        out.l1_gas_price = hexToU256(s.l1_gas_price);
+    if (s.l1_fee != "")
+        out.l1_fee = hexToU256(s.l1_fee);
+    if (s.l1_blob_base_fee != "")
+        out.l1_blob_base_fee = hexToU256(s.l1_blob_base_fee);
+    if (s.l1_base_fee_scalar != "")
+        out.l1_base_fee_scalar = hexToU64(s.l1_base_fee_scalar);
+    if (s.l1_blob_base_fee_scalar != "")
+        out.l1_blob_base_fee_scalar = hexToU64(s.l1_blob_base_fee_scalar);
+    if (s.operator_fee_scalar != "")
+        out.operator_fee_scalar = hexToU64(s.operator_fee_scalar);
+    if (s.operator_fee_constant != "")
+        out.operator_fee_constant = hexToU64(s.operator_fee_constant);
+    if (s.da_footprint_gas_scalar != "")
+        out.da_footprint_gas_scalar = hexToU64(s.da_footprint_gas_scalar);
+    if (s.da_footprint != "")
+        out.da_footprint = hexToU64(s.da_footprint);
+    if (s.deposit_nonce != "")
+        out.deposit_nonce = hexToU64(s.deposit_nonce);
+    if (s.deposit_receipt_version != "")
+        out.deposit_receipt_version = hexToU64(s.deposit_receipt_version);
+    if (s.l1_gas_used != "")
+        out.l1_gas_used = hexToU64(s.l1_gas_used);
+    if (s.operator_fee != "")
+        out.operator_fee = hexToU256(s.operator_fee);
+    return out;
 }
-void bcostars::protocol::TransactionReceiptImpl::setOpReceiptMeta(std::string opReceiptMeta)
+void bcostars::protocol::TransactionReceiptImpl::setOpStackMeta(
+    bcos::protocol::OpStackReceiptMeta meta)
 {
-    m_inner()->opReceiptMeta = std::move(opReceiptMeta);
+    auto& s = m_inner()->opStackMeta;
+    if (meta.l1_gas_price)
+        s.l1_gas_price = u256ToHex(*meta.l1_gas_price);
+    if (meta.l1_fee)
+        s.l1_fee = u256ToHex(*meta.l1_fee);
+    if (meta.l1_blob_base_fee)
+        s.l1_blob_base_fee = u256ToHex(*meta.l1_blob_base_fee);
+    if (meta.l1_base_fee_scalar)
+        s.l1_base_fee_scalar = u64ToHex(*meta.l1_base_fee_scalar);
+    if (meta.l1_blob_base_fee_scalar)
+        s.l1_blob_base_fee_scalar = u64ToHex(*meta.l1_blob_base_fee_scalar);
+    if (meta.operator_fee_scalar)
+        s.operator_fee_scalar = u64ToHex(*meta.operator_fee_scalar);
+    if (meta.operator_fee_constant)
+        s.operator_fee_constant = u64ToHex(*meta.operator_fee_constant);
+    if (meta.da_footprint_gas_scalar)
+        s.da_footprint_gas_scalar = u64ToHex(*meta.da_footprint_gas_scalar);
+    if (meta.da_footprint)
+        s.da_footprint = u64ToHex(*meta.da_footprint);
+    if (meta.deposit_nonce)
+        s.deposit_nonce = u64ToHex(*meta.deposit_nonce);
+    if (meta.deposit_receipt_version)
+        s.deposit_receipt_version = u64ToHex(*meta.deposit_receipt_version);
+    if (meta.l1_gas_used)
+        s.l1_gas_used = u64ToHex(*meta.l1_gas_used);
+    if (meta.operator_fee)
+        s.operator_fee = u256ToHex(*meta.operator_fee);
 }
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {
@@ -189,7 +284,12 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
         }
     }
     size += m_inner()->message.size();
-    size += m_inner()->opReceiptMeta.size();
+    // opStackMeta is now a tars struct: report its serialized size (tars tags + payload),
+    // consistent with the encode() path used for storage. No tars_size() is generated, so
+    // serialize via bcos::concepts::serialize::encode and measure the byte buffer.
+    bcos::bytes encodedOpStackMeta;
+    bcos::concepts::serialize::encode(m_inner()->opStackMeta, encodedOpStackMeta);
+    size += encodedOpStackMeta.size();
     return size;
 }
 
