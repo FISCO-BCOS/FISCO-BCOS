@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "bcos-evm/engine/OpReceiptMap.h"
 #include "bcos-evm/opstack/OpBlockFinalize.h"
 #include "bcos-evm/opstack/OpDepositTx.h"
 #include "bcos-evm/opstack/OpFeeParams.h"
@@ -206,9 +207,11 @@ public:
         co_await eth::applyStateDiff(storage, opDep.receipt.state_diff, rev, *m_hashImpl);
 
         auto out = eth::evmoneReceiptToBcos(opDep.receipt, m_receiptFactory, blockHeader.number());
-        auto metaBytes =
-            op::encodeOpDepositMeta(opDep.deposit_nonce, opDep.deposit_receipt_version);
-        out->setOpReceiptMeta(std::string(metaBytes.begin(), metaBytes.end()));
+        // deposit: 只填 nonce/version
+        bcos::protocol::OpStackReceiptMeta meta;
+        meta.deposit_nonce = opDep.deposit_nonce;
+        meta.deposit_receipt_version = opDep.deposit_receipt_version;
+        out->setOpStackMeta(std::move(meta));
         co_return out;
     }
 
@@ -311,14 +314,14 @@ private:
     }
 
     // Stage 3 — writeback + receipt: apply the transition's state diff to storage, convert the
-    // evmone receipt to a BCOS receipt, and attach the opReceiptMeta byte string. rev is re-read
-    // from the ledger config (the prepare stage already verified the fork/evmc revision match).
+    // evmone receipt to a BCOS receipt, and attach the typed OpStackReceiptMeta struct (all
+    // derived fields via toOpStackMeta). rev is re-read from the ledger config (the prepare stage
+    // already verified the fork/evmc revision match).
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> m_finish(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpTxReceipt const& opReceipt)
     {
-        namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
 
         (void)transaction;
@@ -338,9 +341,8 @@ private:
             out->setEffectiveGasPrice(
                 "0x" + intx::to_string(*opReceipt.meta.effective_gas_price, 16));
         }
-        auto metaBytes = op::encodeOpReceiptMeta(opReceipt.meta);
-        if (!metaBytes.empty())
-            out->setOpReceiptMeta(std::string(metaBytes.begin(), metaBytes.end()));
+        // normal tx: 全部派生字段经 toOpStackMeta 映射后写入 struct
+        out->setOpStackMeta(bcos::evm::engine::toOpStackMeta(opReceipt.meta));
         co_return out;
     }
 

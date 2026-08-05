@@ -1156,22 +1156,27 @@ public:
             // The variant carries the OP-specific extras alongside the common evmone receipt:
             // OpTxReceipt.meta (l1/operator/DA fee fields, computed by deriveOpReceiptMeta) and
             // OpDepositReceipt.deposit_nonce/receipt_version. mapOpReceipt only receives the
-            // common receipt, so serialize the extras here and hand them through opReceiptMeta —
-            // otherwise the RPC layer would have no data for op-geth's OP extension fields.
+            // common receipt, so carry the extras here as a typed OpStackReceiptMeta struct and
+            // hand it through setOpStackMeta — otherwise the RPC layer would have no data for
+            // op-geth's OP extension fields. Normal txs map all derived fields via toOpStackMeta;
+            // deposits fill only the deposit_nonce/deposit_receipt_version pair.
             const auto& innerReceipt = std::visit(
                 [](const auto& r) -> const evmone::state::TransactionReceipt& { return r.receipt; },
                 receiptVariant);
-            bcos::bytes meta = std::visit(
-                [](const auto& r) -> bcos::bytes {
+            std::optional<bcos::protocol::OpStackReceiptMeta> meta = std::visit(
+                [](const auto& r) -> std::optional<bcos::protocol::OpStackReceiptMeta> {
                     using R = std::decay_t<decltype(r)>;
                     if constexpr (std::is_same_v<R, bcos::evm::opstack::OpTxReceipt>)
                     {
-                        return bcos::evm::opstack::encodeOpReceiptMeta(r.meta);
+                        return bcos::evm::engine::toOpStackMeta(r.meta);
                     }
                     else
                     {
-                        return bcos::evm::opstack::encodeOpDepositMeta(
-                            r.deposit_nonce, r.deposit_receipt_version);
+                        // deposit: 只填 nonce/version
+                        bcos::protocol::OpStackReceiptMeta m;
+                        m.deposit_nonce = r.deposit_nonce;
+                        m.deposit_receipt_version = r.deposit_receipt_version;
+                        return m;
                     }
                 },
                 receiptVariant);
