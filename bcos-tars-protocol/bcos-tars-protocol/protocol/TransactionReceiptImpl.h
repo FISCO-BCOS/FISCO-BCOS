@@ -66,6 +66,9 @@ public:
     std::string_view effectiveGasPrice() const override;
     void setEffectiveGasPrice(std::string effectiveGasPrice) override;
 
+    std::optional<bcos::protocol::OpStackReceiptMeta> opStackMeta() const override;
+    void setOpStackMeta(bcos::protocol::OpStackReceiptMeta meta) override;
+
     std::string_view cumulativeGasUsed() const override;
     void setCumulativeGasUsed(std::string cumulativeGasUsed) override;
     bcos::bytesConstRef logsBloom() const override;
