@@ -25,7 +25,6 @@
 // protocol; see task-4-report.md for the static walkthrough / API-precedent cross-check that
 // substitutes for it.
 
-#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -672,11 +671,11 @@ TEST(OpSchedulerImpl, ExecuteOpBlockSixWayComparisonSurface)
         EXPECT_NE(receipt, nullptr);
 }
 
-// The receipt's opReceiptMeta must reach the RPC layer. kVectorId is an Isthmus vector, so the
+// The receipt's opStackMeta must reach the RPC layer. kVectorId is an Isthmus vector, so the
 // execution layer's deriveOpReceiptMeta records operator fees (Isthmus+) but no DA footprint
 // (Jovian-only). This pins the full path: OpTransition computes the meta → OpSchedulerImpl's
-// mapOpReceipt serializes it into the bcos receipt → the RPC layer can decode it back into the
-// op-geth field names.
+// mapOpReceipt stores the OpStackReceiptMeta struct on the bcos receipt → the RPC layer can read
+// it back into the op-geth field names.
 TEST(OpSchedulerImpl, ExecuteOpBlockCarriesReceiptMetaToRpcLayer)
 {
     auto loaded = LoadedVector::load();
@@ -708,38 +707,28 @@ TEST(OpSchedulerImpl, ExecuteOpBlockCarriesReceiptMetaToRpcLayer)
     // Tx 0 is the L1 attributes deposit: its meta carries depositNonce/depositReceiptVersion, no
     // L1/operator fees (deposits have no L1 cost — runDeposit, OpBlockExecute.cpp:113).
     {
-        auto metaView = result.receipts[0]->opReceiptMeta();
-        ASSERT_FALSE(metaView.empty());
-        bcos::codec::rlp::OpReceiptMetaFields fields;
-        ASSERT_EQ(
-            bcos::codec::rlp::decodeOpReceiptMeta(
-                bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
-            nullptr);
-        EXPECT_FALSE(fields.l1_gas_price.has_value());
-        ASSERT_TRUE(fields.deposit_nonce.has_value());
-        EXPECT_EQ(*fields.deposit_nonce, 0u);
-        ASSERT_TRUE(fields.deposit_receipt_version.has_value());
-        EXPECT_EQ(*fields.deposit_receipt_version, 1u);  // Canyon+
+        auto meta = result.receipts[0]->opStackMeta();
+        ASSERT_TRUE(meta.has_value());
+        EXPECT_FALSE(meta->l1_gas_price.has_value());
+        ASSERT_TRUE(meta->deposit_nonce.has_value());
+        EXPECT_EQ(*meta->deposit_nonce, 0u);
+        ASSERT_TRUE(meta->deposit_receipt_version.has_value());
+        EXPECT_EQ(*meta->deposit_receipt_version, 1u);  // Canyon+
     }
 
     // Tx 1 is the user EIP-1559 transfer: full L1 passthrough + operator scalars (Isthmus), no
     // DA footprint (Jovian-only). This is the data the RPC layer turns into op-geth's
     // l1GasPrice/l1Fee/operatorFeeScalar/... fields.
     {
-        auto metaView = result.receipts[1]->opReceiptMeta();
-        ASSERT_FALSE(metaView.empty());
-        bcos::codec::rlp::OpReceiptMetaFields fields;
-        ASSERT_EQ(
-            bcos::codec::rlp::decodeOpReceiptMeta(
-                bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
-            nullptr);
+        auto meta = result.receipts[1]->opStackMeta();
+        ASSERT_TRUE(meta.has_value());
         // This vector seeds L1 fee params (slot1/3/7) but not slot8 (operator fee), so the user
         // tx carries L1 passthrough but no operator scalars — assert exactly that shape.
-        ASSERT_TRUE(fields.l1_gas_price.has_value());
-        ASSERT_TRUE(fields.l1_fee.has_value());
-        EXPECT_FALSE(fields.operator_fee_scalar.has_value());
-        EXPECT_FALSE(fields.deposit_nonce.has_value()) << "normal txs are not deposits";
-        EXPECT_FALSE(fields.da_footprint.has_value()) << "DA footprint is Jovian-only";
+        ASSERT_TRUE(meta->l1_gas_price.has_value());
+        ASSERT_TRUE(meta->l1_fee.has_value());
+        EXPECT_FALSE(meta->operator_fee_scalar.has_value());
+        EXPECT_FALSE(meta->deposit_nonce.has_value()) << "normal txs are not deposits";
+        EXPECT_FALSE(meta->da_footprint.has_value()) << "DA footprint is Jovian-only";
 
         // G3: effective gas price lands on the user tx receipt (was empty -> RPC "0x0"), never on
         // the deposit receipt (deposits have no fee market; op-geth deposit effectiveGasPrice = 0).

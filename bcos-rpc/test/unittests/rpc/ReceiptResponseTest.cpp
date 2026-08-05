@@ -1,15 +1,15 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 // ReceiptResponseTest.cpp — op-geth parity for the receipt JSON emitted by
-// combineReceiptResponseFromWeb3: the OP extension fields decoded from opReceiptMeta (l1GasUsed,
-// operatorFee) and the effectiveGasPrice verbatim passthrough. The tx envelope is a real EIP-2930
-// signed tx, decoded exactly as EthEndpoint's OP fallback path does (tryResolveOpReceipt).
+// combineReceiptResponseFromWeb3: the OP extension fields read from the opStackMeta struct
+// (l1GasUsed, operatorFee) and the effectiveGasPrice verbatim passthrough. The tx envelope is a
+// real EIP-2930 signed tx, decoded exactly as EthEndpoint's OP fallback path does
+// (tryResolveOpReceipt).
 //
 // Boost.Test style — test-bcos-rpc is a Boost unit_test_framework binary (unittests/main/main.cpp
 // defines BOOST_TEST_MAIN); gtest is not available in this target.
 
 #include "bcos-rpc/web3jsonrpc/model/ReceiptResponse.h"
-#include "bcos-codec/rlp/OpReceiptMetaCodec.h"
 #include "bcos-codec/rlp/RLPDecode.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
@@ -44,19 +44,18 @@ constexpr std::string_view kRawEip2930Tx =
 
 BOOST_AUTO_TEST_CASE(EmitsOpExtensionFieldsFromOpReceiptMeta)
 {
-    // 1. Blob carrying the two fields this branch adds.
-    codec::rlp::OpReceiptMetaFields fields;
-    fields.l1_gas_used = 100;
-    fields.operator_fee = bytes{0x03, 0xe8};  // 0x3e8 = 1000
-    auto blob = codec::rlp::encodeOpReceiptMeta(fields);
+    // 1. Meta carrying the two fields this branch adds.
+    protocol::OpStackReceiptMeta meta;
+    meta.l1_gas_used = 100;
+    meta.operator_fee = u256{0x3e8};  // 0x3e8 = 1000
 
-    // 2. Receipt: basic fields via the factory, then the blob + a non-empty effectiveGasPrice.
+    // 2. Receipt: basic fields via the factory, then the meta + a non-empty effectiveGasPrice.
     auto cryptoSuite = std::make_shared<crypto::CryptoSuite>(
         std::make_shared<crypto::Keccak256>(), nullptr, nullptr);
     bcostars::protocol::TransactionReceiptFactoryImpl factory{cryptoSuite};
     auto receipt = factory.createReceipt(
         u256{21000}, std::string{}, protocol::LogEntries{}, 1, bytesConstRef{}, 1);
-    receipt->setOpReceiptMeta(std::string(blob.begin(), blob.end()));
+    receipt->setOpStackMeta(std::move(meta));
     receipt->setCumulativeGasUsed("0x1");
     receipt->setTransactionIndex(0);
     receipt->setLogIndex(0);
@@ -91,7 +90,7 @@ BOOST_AUTO_TEST_CASE(EmitsOpExtensionFieldsFromOpReceiptMeta)
 
 BOOST_AUTO_TEST_CASE(MissingMetaEmitsNoOpFields)
 {
-    // A receipt with empty opReceiptMeta (legacy path) must not emit l1GasUsed/operatorFee.
+    // A receipt with no opStackMeta (legacy path) must not emit l1GasUsed/operatorFee.
     auto cryptoSuite = std::make_shared<crypto::CryptoSuite>(
         std::make_shared<crypto::Keccak256>(), nullptr, nullptr);
     bcostars::protocol::TransactionReceiptFactoryImpl factory{cryptoSuite};

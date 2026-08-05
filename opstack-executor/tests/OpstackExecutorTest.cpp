@@ -13,7 +13,6 @@
 #include "bcos-evm/opstack/OpPredeploys.h"
 #include "bcos-evm/opstack/OpReceiptMeta.h"
 #include <bcos-codec/rlp/Common.h>
-#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/ledger/EVMAccount.h>
@@ -154,7 +153,7 @@ TEST_F(Fixture, ExecutesNormalTransferEndToEnd)
     EXPECT_EQ(receipt->status(), 0);
     EXPECT_GE(receipt->gasUsed(), 21000u);
     EXPECT_EQ(receipt->blockNumber(), 1);
-    EXPECT_FALSE(receipt->opReceiptMeta().empty());
+    EXPECT_TRUE(receipt->opStackMeta().has_value());
 }
 
 TEST_F(Fixture, RejectsForkRevisionMismatch)
@@ -204,7 +203,7 @@ TEST_F(Fixture, ChargesL1AndOperatorFees)
 {
     // The injected fee (L1 base fee + scalars, Jovian operator fee) must be routed through
     // opValidate (pre-charge) -> opTransition (deriveOpReceiptMeta) and surface in the receipt's
-    // opReceiptMeta byte string, decodable back into the L1/operator fields.
+    // opStackMeta struct, readable back into the L1/operator fields.
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
@@ -247,26 +246,22 @@ TEST_F(Fixture, ChargesL1AndOperatorFees)
     // ExecutesNormalTransferEndToEnd); the Ethereum RPC 0↔1 flip happens at a later layer.
     EXPECT_EQ(receipt->status(), 0);
 
-    // Decode the meta and assert the L1/operator fields are present.
-    auto metaView = receipt->opReceiptMeta();
-    ASSERT_FALSE(metaView.empty());
-    bcos::codec::rlp::OpReceiptMetaFields fields;
-    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
-                  bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
-        nullptr);
+    // Read the meta and assert the L1/operator fields are present.
+    auto meta = receipt->opStackMeta();
+    ASSERT_TRUE(meta.has_value());
     // Jovian derives these unconditionally: l1_gas_price = fee.l1_base_fee, l1_fee = l1_cost.
-    EXPECT_TRUE(fields.l1_fee.has_value());
-    EXPECT_TRUE(fields.l1_gas_price.has_value());
+    EXPECT_TRUE(meta->l1_fee.has_value());
+    EXPECT_TRUE(meta->l1_gas_price.has_value());
     // operator_fee_scalar is filled when has_operator_fee && (scalar != 0 || constant != 0) — both
     // non-zero here, so the Jovian operator scalar routes through end-to-end.
-    EXPECT_TRUE(fields.operator_fee_scalar.has_value());
-    EXPECT_EQ(*fields.operator_fee_scalar, 11u);
+    EXPECT_TRUE(meta->operator_fee_scalar.has_value());
+    EXPECT_EQ(*meta->operator_fee_scalar, 11u);
 }
 
 TEST_F(Fixture, ReceiptMetaSurvives)
 {
-    // Verify opReceiptMeta round-trips: derive + encode + setOpReceiptMeta (in the executor's
-    // finish stage) -> decode here restores the field values.
+    // Verify the receipt meta round-trips: derive (in the executor's finish stage) ->
+    // setOpStackMeta -> opStackMeta() here restores the field values.
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
@@ -297,20 +292,16 @@ TEST_F(Fixture, ReceiptMetaSurvives)
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
         /*chainId=*/10));
     ASSERT_NE(receipt, nullptr);
-    auto metaView = receipt->opReceiptMeta();
-    ASSERT_FALSE(metaView.empty());
-    bcos::codec::rlp::OpReceiptMetaFields fields;
-    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
-                  bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
-        nullptr);
-    ASSERT_TRUE(fields.l1_gas_price.has_value());
-    // l1_gas_price = 1000 -> trimmed big-endian 0x03e8.
-    EXPECT_EQ(*fields.l1_gas_price, (bcos::bytes{0x03, 0xe8}));
+    auto meta = receipt->opStackMeta();
+    ASSERT_TRUE(meta.has_value());
+    ASSERT_TRUE(meta->l1_gas_price.has_value());
+    // l1_gas_price = 1000 -> bcos::u256(1000) (0x03e8).
+    EXPECT_EQ(*meta->l1_gas_price, bcos::u256(1000));
 
-    // G1/G2: Jovian derive fills l1_gas_used and operator_fee (Task 2's new wire fields end-to-end
-    // visible on the decoded receipt meta).
-    EXPECT_TRUE(fields.l1_gas_used.has_value());
-    EXPECT_TRUE(fields.operator_fee.has_value());
+    // G1/G2: Jovian derive fills l1_gas_used and operator_fee (Task 2's new fields end-to-end
+    // visible on the receipt meta).
+    EXPECT_TRUE(meta->l1_gas_used.has_value());
+    EXPECT_TRUE(meta->operator_fee.has_value());
 
     // G3: effective_gas_price = base_fee(0 in buildOpBlockInfo for this test) + min(maxPriority,
     // maxFee - 0). For this EIP-2930 fixture BCOS2Evmone.h:110-113 maps max_gas_price =
@@ -359,16 +350,12 @@ TEST_F(Fixture, ExecutesDepositMint)
     auto bal = task::syncWait(acc.balance());
     EXPECT_EQ(bal, 5u);
     // STRONG meta assertion: deposit_nonce == 0, version == 1 (Canyon+) — not just has_value.
-    auto metaView = receipt->opReceiptMeta();
-    ASSERT_FALSE(metaView.empty());
-    bcos::codec::rlp::OpReceiptMetaFields fields;
-    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
-                  bcos::bytesConstRef{(bcos::byte const*)metaView.data(), metaView.size()}, fields),
-        nullptr);
-    ASSERT_TRUE(fields.deposit_nonce.has_value());
-    EXPECT_EQ(*fields.deposit_nonce, 0u);
-    ASSERT_TRUE(fields.deposit_receipt_version.has_value());
-    EXPECT_EQ(*fields.deposit_receipt_version, 1u);  // Canyon+
+    auto meta = receipt->opStackMeta();
+    ASSERT_TRUE(meta.has_value());
+    ASSERT_TRUE(meta->deposit_nonce.has_value());
+    EXPECT_EQ(*meta->deposit_nonce, 0u);
+    ASSERT_TRUE(meta->deposit_receipt_version.has_value());
+    EXPECT_EQ(*meta->deposit_receipt_version, 1u);  // Canyon+
 }
 
 TEST_F(Fixture, DepositGasLimitReachedIsBlockError)
@@ -398,7 +385,7 @@ TEST_F(Fixture, FinalizeOpBlockNoReward)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
-    blockHeader.setCoinbase(bcos::bytes(20, 0x11));
+    blockHeader.setCoinbase(bcos::Address(bcos::bytes(20, 0x11)));
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     constexpr auto kCoinbase = 0x1111111111111111111111111111111111111111_address;

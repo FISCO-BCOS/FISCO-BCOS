@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // OpReceiptMap — maps an OP-executed evmone receipt into a bcos::protocol::TransactionReceipt.
 // These tests pin the two fields mapOpReceipt carries beyond the evmone receipt itself: the
-// blockNumber (which the execution layer supplies) and the serialized opReceiptMeta (which the
-// RPC layer decodes into op-geth's OP extension fields).
+// blockNumber (which the execution layer supplies) and the opStackMeta struct (which the RPC
+// layer reads directly into op-geth's OP extension fields).
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-evm/engine/OpReceiptMap.h>
@@ -59,38 +59,44 @@ TEST(OpReceiptMap, FailureStatusMapsToOne)
 TEST(OpReceiptMap, SerializedMetaSurvivesMap)
 {
     auto factory = makeReceiptFactory();
-    OpReceiptMeta meta;
-    meta.l1_gas_price = 1000_u256;
-    meta.l1_fee = 999_u256;
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.l1_gas_price = bcos::u256(1000);
+    meta.l1_fee = bcos::u256(999);
     meta.da_footprint = 42;
-    auto metaBytes = encodeOpReceiptMeta(meta);
 
-    auto mapped = mapOpReceipt(minimalReceipt(), factory, 7, metaBytes);
+    auto mapped = mapOpReceipt(minimalReceipt(), factory, 7, meta);
     ASSERT_NE(mapped, nullptr);
-    // The RPC layer sees the same serialized bytes it will decode for l1GasPrice/l1Fee/...
-    EXPECT_EQ(mapped->opReceiptMeta(), std::string(metaBytes.begin(), metaBytes.end()));
+    // The RPC layer reads back the same struct it will emit as l1GasPrice/l1Fee/...
+    auto got = mapped->opStackMeta();
+    ASSERT_TRUE(got.has_value());
+    ASSERT_TRUE(got->l1_gas_price.has_value());
+    EXPECT_EQ(*got->l1_gas_price, bcos::u256(1000));
+    ASSERT_TRUE(got->l1_fee.has_value());
+    EXPECT_EQ(*got->l1_fee, bcos::u256(999));
+    ASSERT_TRUE(got->da_footprint.has_value());
+    EXPECT_EQ(*got->da_footprint, 42u);
 }
 
 TEST(OpReceiptMap, EmptyMetaStaysEmpty)
 {
     auto factory = makeReceiptFactory();
     auto mapped = mapOpReceipt(minimalReceipt(), factory, 3, {});
-    EXPECT_TRUE(mapped->opReceiptMeta().empty());
+    EXPECT_FALSE(mapped->opStackMeta().has_value());
 }
 
 TEST(OpReceiptMap, DepositMetaRoundTripsThroughReceipt)
 {
     auto factory = makeReceiptFactory();
-    auto depositMeta = encodeOpDepositMeta(77, 1);
+    bcos::protocol::OpStackReceiptMeta depositMeta;
+    depositMeta.deposit_nonce = 77;
+    depositMeta.deposit_receipt_version = 1;
     auto mapped = mapOpReceipt(minimalReceipt(), factory, 5, depositMeta);
+    ASSERT_NE(mapped, nullptr);
 
-    auto view = mapped->opReceiptMeta();
-    bcos::codec::rlp::OpReceiptMetaFields fields;
-    ASSERT_EQ(bcos::codec::rlp::decodeOpReceiptMeta(
-                  bcos::bytesConstRef{(bcos::byte const*)view.data(), view.size()}, fields),
-        nullptr);
-    ASSERT_TRUE(fields.deposit_nonce);
-    EXPECT_EQ(*fields.deposit_nonce, 77u);
-    ASSERT_TRUE(fields.deposit_receipt_version);
-    EXPECT_EQ(*fields.deposit_receipt_version, 1u);
+    auto got = mapped->opStackMeta();
+    ASSERT_TRUE(got.has_value());
+    ASSERT_TRUE(got->deposit_nonce.has_value());
+    EXPECT_EQ(*got->deposit_nonce, 77u);
+    ASSERT_TRUE(got->deposit_receipt_version.has_value());
+    EXPECT_EQ(*got->deposit_receipt_version, 1u);
 }

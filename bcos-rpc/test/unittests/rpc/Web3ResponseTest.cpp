@@ -9,7 +9,6 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-codec/rlp/OpReceiptMetaCodec.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
@@ -147,9 +146,9 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
     BOOST_CHECK(result["logs"].isArray());
 }
 
-// An OP receipt's serialized meta (written by the OP execution layer) must surface as op-geth's
-// OP extension fields in the receipt JSON. combineReceiptResponse appends them regardless of which
-// transaction shape produced the receipt — the legacy overload here stands in for the OP path.
+// An OP receipt's meta (written by the OP execution layer) must surface as op-geth's OP extension
+// fields in the receipt JSON. combineReceiptResponse appends them regardless of which transaction
+// shape produced the receipt — the legacy overload here stands in for the OP path.
 BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
 {
     auto txFactory = m_blockFactory->transactionFactory();
@@ -167,16 +166,15 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
 
     // Meta mirroring what deriveOpReceiptMeta records on Isthmus+Jovian: L1 passthrough +
     // operator scalars (Isthmus) + DA footprint (Jovian).
-    bcos::codec::rlp::OpReceiptMetaFields meta;
-    meta.l1_gas_price = bcos::bytes{0x03, 0xe8};  // 1000
-    meta.l1_fee = bcos::bytes{0x01, 0xe2, 0x40};  // 123456
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.l1_gas_price = bcos::u256(1000);
+    meta.l1_fee = bcos::u256(123456);
     meta.l1_base_fee_scalar = 7;
     meta.operator_fee_scalar = 11;
     meta.operator_fee_constant = 13;
     meta.da_footprint_gas_scalar = 2;
     meta.da_footprint = 100;
-    auto encoded = bcos::codec::rlp::encodeOpReceiptMeta(meta);
-    receipt->setOpReceiptMeta(std::string(encoded.begin(), encoded.end()));
+    receipt->setOpStackMeta(std::move(meta));
 
     bcos::crypto::HashType blockHash;
     blockHash[0] = 0x88;
@@ -212,11 +210,10 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsDepositFieldsFromMeta)
     BOOST_REQUIRE(receipt);
     receipt->setTransactionIndex(0);
 
-    bcos::codec::rlp::OpReceiptMetaFields meta;
+    bcos::protocol::OpStackReceiptMeta meta;
     meta.deposit_nonce = 5;
     meta.deposit_receipt_version = 1;
-    auto encoded = bcos::codec::rlp::encodeOpReceiptMeta(meta);
-    receipt->setOpReceiptMeta(std::string(encoded.begin(), encoded.end()));
+    receipt->setOpStackMeta(std::move(meta));
 
     bcos::crypto::HashType blockHash;
     blockHash[0] = 0x99;

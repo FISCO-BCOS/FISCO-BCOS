@@ -33,7 +33,7 @@ void combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& r
 
 /// Receipt response for an OP-block transaction, built from a decoded Web3Transaction (OP blocks
 /// carry raw EIP-2718 envelopes, not tars Transaction objects). Also emits the OP extension
-/// fields (l1Fee/operatorFee/daFootprint/... from receipt.opReceiptMeta()) that
+/// fields (l1Fee/operatorFee/daFootprint/... from receipt.opStackMeta()) that
 /// combineReceiptResponse's legacy caller does not carry.
 void combineReceiptResponseFromWeb3(Json::Value& result, const Web3Transaction& tx,
     protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash);
