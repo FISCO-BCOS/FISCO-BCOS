@@ -44,6 +44,7 @@
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include "EthereumBlockHashLookup.h"
 #include <boost/test/unit_test.hpp>
 #include <cstring>
 #include <memory>
@@ -178,34 +179,13 @@ public:
 
     TestEthereumExecutorSchedulerFixture()
     {
-        // The 256-ancestor window is bounded by the executing block's height,
-        // which the executor's host passes in (no storage read for it here);
-        // the only storage access is the getBlockHash read.
+        // Point the fixture at the real production provider (shared header
+        // EthereumBlockHashLookup.h), so the test exercises the exact logic the
+        // node wires — not a parallel copy that can drift.
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            constexpr int64_t kMaxLookback = 256;
-            if (blockNumber < 0 || currentHeight < 0 || blockNumber > currentHeight ||
-                currentHeight - blockNumber > kMaxLookback - 1)
-            {
-                return {};
-            }
-            try
-            {
-                auto hashOpt =
-                    task::tbb::syncWait(ledger::getBlockHash(backend, blockNumber, ledger::fromStorage));
-                evmc::bytes32 result{};
-                if (hashOpt.has_value())
-                {
-                    auto const& hash = *hashOpt;
-                    std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
-                        result.bytes);
-                }
-                return result;
-            }
-            catch (...)
-            {
-                return {};
-            }
+            return initializer::ethBlockHashLookupFromStorage(
+                backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
     }
@@ -656,11 +636,12 @@ BOOST_AUTO_TEST_CASE(parallelSameNonceSecondRejected)
 }
 
 // The block-hash lookup only resolves the last 256 ancestor block hashes (Ethereum
-// BLOCKHASH semantics). With a current height of 300, block 50 is reachable
-// (300-50=250) but block 5 is not (300-5=295 > 255) — even though its hash IS
-// present in SYS_NUMBER_2_HASH, the provider must report it as unknown. The
-// current height is passed in by the caller (the executor's host); here we invoke
-// the provider directly with 300 to match the seeded state.
+// BLOCKHASH semantics). With the executing block at height 300, the visible
+// ancestors are [44, 299]: block 50 resolves and the oldest reachable one, 44,
+// resolves too, while block 5 (300-5=295 > 256) and the executing block 300
+// itself are unknown — even though their hashes are present in SYS_NUMBER_2_HASH,
+// the provider must report them as zero. The current height is passed in by the
+// caller (the executor's host); here we invoke the provider directly with 300.
 BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
 {
     task::syncWait([&, this]() -> task::Task<void> {
@@ -669,6 +650,10 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
             backendStorage, 50, cryptoSuite->hashImpl()->hash(std::string("block-50")));
         co_await EEWriteBlockHash(
             backendStorage, 5, cryptoSuite->hashImpl()->hash(std::string("block-5")));
+        co_await EEWriteBlockHash(
+            backendStorage, 44, cryptoSuite->hashImpl()->hash(std::string("block-44")));
+        co_await EEWriteBlockHash(
+            backendStorage, 300, cryptoSuite->hashImpl()->hash(std::string("block-300")));
 
         // Within the last 256 ancestors — resolved straight from storage.
         auto h50 =
@@ -678,10 +663,23 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
         BOOST_CHECK_EQUAL(
             std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
 
+        // The oldest reachable ancestor (current - 256) — must resolve.
+        auto h44 =
+            task::tbb::syncWait(ledger::getBlockHash(backendStorage, 44, ledger::fromStorage));
+        BOOST_CHECK(h44.has_value());
+        auto resolved44 = blockHashLookup(44, 300);
+        BOOST_CHECK_EQUAL(
+            std::memcmp(resolved44.bytes, h44->data(), sizeof(evmc_bytes32)), 0);
+
         // Older than 256 ancestors — unknown (zero hash), despite the hash being stored.
         evmc::bytes32 zero{};
         auto resolved5 = blockHashLookup(5, 300);
         BOOST_CHECK_EQUAL(std::memcmp(resolved5.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
+
+        // The executing block itself (height == current) is not an ancestor:
+        // unknown, even though its hash is stored.
+        auto resolved300 = blockHashLookup(300, 300);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved300.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
 
         // A future height (> current) is never an ancestor — unknown.
         auto resolved301 = blockHashLookup(301, 300);

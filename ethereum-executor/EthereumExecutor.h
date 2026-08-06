@@ -123,8 +123,8 @@ public:
         Rollbackable<Storage> rollable(storage);
         EthereumState<Rollbackable<Storage>> state(rollable);
         const auto savepoint = rollable.current();
-        // co_await is not permitted inside an exception handler (GCC), so the
-        // failure is captured here and the rollback runs after it.
+        // co_await is not permitted inside an exception handler ([expr.await]/2),
+        // so the failure is captured here and the rollback runs after it.
         std::exception_ptr failure;
 
         try
@@ -144,7 +144,14 @@ public:
         }
         if (failure)
         {
-            co_await rollable.rollback(savepoint);
+            try
+            {
+                co_await rollable.rollback(savepoint);
+            }
+            catch (...)
+            {
+                // Ignore the cleanup error; the original failure wins.
+            }
             std::rethrow_exception(failure);
         }
     }
@@ -318,8 +325,8 @@ public:
             Rollbackable<Storage> rollable(storage.get());
             EthereumState<Rollbackable<Storage>> state(rollable);
             const auto savepoint = rollable.current();
-            // co_await is not permitted inside an exception handler (GCC), so
-            // the failure is captured here and the rollback runs after it.
+            // co_await is not permitted inside an exception handler ([expr.await]/2),
+            // so the failure is captured here and the rollback runs after it.
             std::exception_ptr failure;
 
             try
@@ -365,7 +372,17 @@ public:
             {
                 // Undo every write this transaction applied to the underlying
                 // storage, restoring the pre-transaction state, then rethrow.
-                co_await rollable.rollback(savepoint);
+                // If the rollback itself fails, keep the original failure — it
+                // is the real cause worth reporting (a failed rollback leaves
+                // partial writes, which is no worse than today).
+                try
+                {
+                    co_await rollable.rollback(savepoint);
+                }
+                catch (...)
+                {
+                    // Ignore the cleanup error; the original failure wins.
+                }
                 std::rethrow_exception(failure);
             }
             co_return;

@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include "EthereumBlockHashLookup.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -167,58 +168,6 @@ std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
 {
     return m_engineServiceInitializer ? m_engineServiceInitializer->engineService() : nullptr;
 }
-
-namespace
-{
-/// Resolve a committed block hash for the EthereumExecutor (executor_version=2)
-/// BLOCKHASH opcode. Reads straight from the committed SYS_NUMBER_2_HASH table
-/// via the ledger::getBlockHash LedgerMethod — one storage read, no cache.
-///
-/// @param currentHeight the height of the block being executed, passed in from
-///        the executor's execution context (EthereumHost knows it as
-///        m_block.number), so no storage read for the current height is needed
-///        here; it bounds BLOCKHASH to the last 256 ancestors (Yellow Paper H.4).
-///        Fails closed: a broken backend or an out-of-window request reports an
-///        unknown block (zero hash).
-template <class Backend>
-evmc::bytes32 ethBlockHashLookupFromStorage(
-    Backend& backend, int64_t blockNumber, int64_t currentHeight)
-{
-    constexpr int64_t kMaxBlockHashLookback = 256;
-    if (blockNumber < 0)
-    {
-        // ledger::getBlockHash rejects negative heights; a BLOCKHASH of a
-        // negative number is "unknown" anyway.
-        return {};
-    }
-    // Bound BLOCKHASH to the last 256 ancestors (Yellow Paper H.4).
-    if (currentHeight < 0 || blockNumber > currentHeight ||
-        currentHeight - blockNumber > kMaxBlockHashLookback - 1)
-    {
-        // Not among the last 256 ancestors — unknown block.
-        return {};
-    }
-
-    try
-    {
-        auto hashOpt =
-            task::tbb::syncWait(ledger::getBlockHash(backend, blockNumber, ledger::fromStorage));
-        evmc::bytes32 result{};
-        if (hashOpt.has_value())
-        {
-            auto const& hash = *hashOpt;
-            std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
-                result.bytes);
-        }
-        return result;
-    }
-    catch (...)
-    {
-        // Never let a lookup failure cross the noexcept boundary.
-        return {};
-    }
-}
-}  // namespace
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
@@ -371,7 +320,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // m_block.number), so no storage read for the current height is needed.
     auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
                                        int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-        // The body lives in ethBlockHashLookupFromStorage (file-local above).
+        // The body lives in EthereumBlockHashLookup.h (shared with the
+        // scheduler integration test so they exercise the same provider).
         return ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
     };
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
