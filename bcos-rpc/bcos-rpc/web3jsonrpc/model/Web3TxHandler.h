@@ -30,8 +30,6 @@ struct Web3TxHandler
     // ⚠️ 返回 Error::UniquePtr(而非 void):解码错误必须传播,不能被静默吞掉(校验发现)。
     virtual bcos::Error::UniquePtr decode(
         bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
-    // RPC JSON 输出(仅类型相关字段)
-    virtual void toJson(const Web3Transaction&, Json::Value&) const = 0;
 };
 
 // 按类型查表分派。未知类型返回 Legacy handler(防御)。

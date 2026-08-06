@@ -73,8 +73,14 @@ std::optional<bcos::u256> hexToU256(std::string const& s)
     {
         return std::nullopt;
     }
-    // unified bcos::fromHex + fromBigEndian path, same as ReceiptResponse.cpp; not a bare u256(s)
-    return bcos::fromBigEndian<bcos::u256>(bcos::fromHex(s));
+    // 用 safeFromHex(内部 try/catch):corrupt data(bit rot/外部写入)的非法 hex 返回
+    // nullopt 而非抛 BadHexCharacter 穿过 const getter,避免 RPC 查回执时 crash。
+    auto bytes = bcos::safeFromHex(s);
+    if (!bytes)
+    {
+        return std::nullopt;
+    }
+    return bcos::fromBigEndian<bcos::u256>(*bytes);
 }
 std::optional<uint64_t> hexToU64(std::string const& s)
 {
@@ -82,8 +88,13 @@ std::optional<uint64_t> hexToU64(std::string const& s)
     {
         return std::nullopt;
     }
-    // same fromBigEndian path as ReceiptResponse.cpp; std::stoull would throw on malformed input
-    return bcos::fromBigEndian<uint64_t>(bcos::fromHex(s));
+    // 同上:safeFromHex 兜底 corrupt 输入。
+    auto bytes = bcos::safeFromHex(s);
+    if (!bytes)
+    {
+        return std::nullopt;
+    }
+    return bcos::fromBigEndian<uint64_t>(*bytes);
 }
 }  // namespace
 
@@ -241,6 +252,9 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
 void bcostars::protocol::TransactionReceiptImpl::setOpStackMeta(
     bcos::protocol::OpStackReceiptMeta meta)
 {
+    // 语义为"替换"而非"合并":先清空,避免二次调用残留上一次的非空字段
+    // (review 指出:merge 语义下对同一 receipt 调两次会残留旧值)。
+    m_inner()->opStackMeta = {};
     auto& s = m_inner()->opStackMeta;
     if (meta.l1_gas_price)
         s.l1_gas_price = u256ToHex(*meta.l1_gas_price);
