@@ -2,6 +2,7 @@
 #include "Web3TxHandler.h"
 #include "Web3Transaction.h"
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Log.h>
 #include <cstdint>
 
 namespace bcos::rpc
@@ -919,7 +920,10 @@ Web3TxHandler& handlerFor(TransactionType type)
     case TransactionType::Deposit:
         return deposit;
     }
-    // Unknown types revert to legacy handler; assert in debug builds to catch missing cases.
+    // Unknown types revert to legacy handler. Log a warning so missing cases are
+    // visible in production; assert in debug builds to catch them during development.
+    BCOS_LOG(WARNING) << "handlerFor: unhandled TransactionType " << static_cast<int>(type)
+                      << ", falling back to legacy";
     assert(false && "handlerFor: unhandled TransactionType enum value");
     return legacy;
 }
