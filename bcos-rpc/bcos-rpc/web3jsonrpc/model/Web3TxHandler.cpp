@@ -1,5 +1,5 @@
-// bcos-rpc/bcos-rpc/web3jsonrpc/model/TxHandler.cpp
-#include "TxHandler.h"
+// bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3TxHandler.cpp
+#include "Web3TxHandler.h"
 #include "Web3Transaction.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <cstdint>
@@ -81,7 +81,7 @@ void outputCommonFields(Json::Value& result, const Web3Transaction& tx)
 // 对应分支。分派方(Web3Transaction::decode 成员)应先根据首字节判定类型、设置 out.type,然后
 // 调用 handlerFor(type).decode(in, out, withSig),且不要预先消费 type byte。
 
-struct LegacyTxHandler : TxHandler
+struct LegacyTxHandler : Web3TxHandler
 {
     static codec::rlp::Header headerTxBase(const Web3Transaction& tx) noexcept
     {
@@ -276,7 +276,7 @@ struct LegacyTxHandler : TxHandler
     }
 };
 
-struct EIP2930TxHandler : TxHandler
+struct EIP2930TxHandler : Web3TxHandler
 {
     static codec::rlp::Header headerTxBase(const Web3Transaction& tx) noexcept
     {
@@ -442,7 +442,7 @@ struct EIP2930TxHandler : TxHandler
     }
 };
 
-struct EIP1559TxHandler : TxHandler
+struct EIP1559TxHandler : Web3TxHandler
 {
     static codec::rlp::Header headerTxBase(const Web3Transaction& tx) noexcept
     {
@@ -614,7 +614,7 @@ struct EIP1559TxHandler : TxHandler
     }
 };
 
-struct DepositTxHandler : TxHandler
+struct DepositTxHandler : Web3TxHandler
 {
     // 完整 RLP: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
     // —— 自包含内联(与同文件其它 typed handler 一致),8 字段无签名布局的字段顺序/类型已对
@@ -759,7 +759,7 @@ struct DepositTxHandler : TxHandler
     }
 };
 
-struct EIP4844TxHandler : TxHandler
+struct EIP4844TxHandler : Web3TxHandler
 {
     static codec::rlp::Header headerTxBase(const Web3Transaction& tx) noexcept
     {
@@ -945,7 +945,7 @@ struct EIP4844TxHandler : TxHandler
 };
 }  // namespace
 
-TxHandler& handlerFor(TransactionType type)
+Web3TxHandler& handlerFor(TransactionType type)
 {
     static LegacyTxHandler legacy;
     static EIP2930TxHandler eip2930;
