@@ -77,9 +77,9 @@ public:
 
     // encode for sign, rlp(tx_payload)
     bcos::bytes encodeForSign() const;
-    // full RLP(含 type byte) — 委托 handlerFor(type).encode
+    // full RLP (with type byte) — delegates to handlerFor(type).encode
     bcos::bytes encode() const;
-    // 解码 — 委托 handlerFor(type).decode,传播解码错误
+    // Decode — delegates to handlerFor(type).decode, propagating decode errors
     bcos::Error::UniquePtr decode(bcos::bytesRef& in, bool withSig = true);
     // tx hash = keccak256(rlp(tx_payload,v,r,s))
     bcos::crypto::HashType txHash() const;

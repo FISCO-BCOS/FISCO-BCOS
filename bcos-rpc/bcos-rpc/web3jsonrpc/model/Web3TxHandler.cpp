@@ -8,9 +8,9 @@ namespace bcos::rpc
 {
 namespace
 {
-// 去掉签名数据(R/S)的前导零,保证 RLP 编码规范(canonical)。
-// 注意:不能命名为 getSignatureRef —— 与 Web3Transaction.cpp 的同名 static 函数在 unity build
-// (同一 TU)下会冲突;本函数逻辑与之完全等价。
+// Strip leading zero bytes from signature data (R/S) to keep RLP encoding canonical.
+// Note: cannot be named getSignatureRef — it would collide with the same-named static
+// function in Web3Transaction.cpp under unity build (same TU); the logic is fully equivalent.
 bcos::bytesConstRef trimLeadingZeroBytes(bcos::bytesConstRef input) noexcept
 {
     size_t i = 0;
@@ -21,7 +21,7 @@ bcos::bytesConstRef trimLeadingZeroBytes(bcos::bytesConstRef input) noexcept
     return {input.data() + i, input.size() - i};
 }
 
-// 与 decodeTransaction 末尾一致的签名长度补齐(R/S 各 32 字节)。
+// Signature length padding matching the end of decodeTransaction (32 bytes each for R/S).
 void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
 {
     if (signatureR.size() < bcos::crypto::SECP256K1_SIGNATURE_R_LEN)
@@ -36,10 +36,11 @@ void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
     }
 }
 
-// ⚠️ decode 契约:每个 handler 的 decode 自包含(自行消费 envelope —— Legacy 为 RLP list header,
-// typed 为 type byte + RLP list header),逐字段照抄 Web3Transaction.cpp decodeTransaction 的
-// 对应分支。分派方(Web3Transaction::decode 成员)应先根据首字节判定类型、设置 out.type,然后
-// 调用 handlerFor(type).decode(in, out, withSig),且不要预先消费 type byte。
+// ⚠️ decode contract: each handler's decode is self-contained (consumes the envelope itself —
+// Legacy: RLP list header; typed: type byte + RLP list header), copied field-by-field from the
+// corresponding branch of Web3Transaction.cpp decodeTransaction. The dispatcher
+// (Web3Transaction::decode member) should determine the type from the first byte, set out.type,
+// then call handlerFor(type).decode(in, out, withSig), and must not consume the type byte first.
 
 struct LegacyTxHandler : Web3TxHandler
 {
@@ -56,14 +57,14 @@ struct LegacyTxHandler : Web3TxHandler
         return h;
     }
 
-    // 签名预映像: rlp([nonce, gasPrice, gasLimit, to, value, data]) + EIP-155 chainId 尾巴
+    // Signing preimage: rlp([nonce, gasPrice, gasLimit, to, value, data]) + EIP-155 chainId tail
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
         auto head = headerTxBase(tx);
         if (tx.chainId)
         {
-            // EIP-155: chainId 及其后两个 0 占位
+            // EIP-155: chainId and the two trailing 0 placeholders
             head.payloadLength += codec::rlp::length(tx.chainId.value()) + 2;
         }
         codec::rlp::encodeHeader(out, head);
@@ -91,7 +92,7 @@ struct LegacyTxHandler : Web3TxHandler
         return out;
     }
 
-    // 完整 RLP(无 type byte): rlp([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
+    // Full RLP (no type byte): rlp([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
@@ -116,7 +117,8 @@ struct LegacyTxHandler : Web3TxHandler
         return out;
     }
 
-    // RLP header(长度计算): 基础字段 + 签名长度(Legacy 特殊: signatureV 用 getSignatureV())
+    // RLP header (length computation): base fields + signature length (Legacy special: signatureV
+    // uses getSignatureV())
     codec::rlp::Header header(const Web3Transaction& tx) const override
     {
         auto h = headerTxBase(tx);
@@ -126,7 +128,7 @@ struct LegacyTxHandler : Web3TxHandler
         return h;
     }
 
-    // 解码: rlp([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
+    // Decode: rlp([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
     bcos::Error::UniquePtr decode(
         bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
     {
@@ -174,8 +176,9 @@ struct LegacyTxHandler : Web3TxHandler
             out.to.emplace(addr);
         }
 
-        // ⚠️ 立即检查 value/data 解码错误:若延迟到 withSig 分支再赋值,
-        // 后续签名解码成功会覆盖 decodeError,把畸形输入误判为成功。
+        // ⚠️ Check value/data decode errors immediately: if deferred to the withSig branch,
+        // a later successful signature decode would overwrite decodeError and misjudge
+        // malformed input as valid.
         if (auto err = codec::rlp::decodeItems(in, out.value, out.data); err != nullptr)
         {
             return err;
@@ -198,8 +201,9 @@ struct LegacyTxHandler : Web3TxHandler
             }
             else if (v == 0 || v == 1)
             {
-                // pre-EIP-155 v 应为 27/28,v=0/1 是非法签名(与 v<35 同判)。
-                // 原实现返回 decodeError(nullptr) 被调用方当成功——改为显式报错。
+                // pre-EIP-155 v must be 27/28; v=0/1 is an invalid signature (treated the same as
+                // v<35). The original implementation returned decodeError(nullptr), which callers
+                // treated as success — changed to report an explicit error.
                 out.chainId = std::nullopt;
                 return BCOS_ERROR_UNIQUE_PTR(
                     codec::rlp::DecodingError::InvalidVInSignature, "Invalid V in signature");
@@ -235,7 +239,6 @@ struct LegacyTxHandler : Web3TxHandler
         }
         return decodeError;
     }
-
 };
 
 struct EIP2930TxHandler : Web3TxHandler
@@ -245,7 +248,7 @@ struct EIP2930TxHandler : Web3TxHandler
         codec::rlp::Header h{.isList = true};
         h.payloadLength += codec::rlp::length(tx.chainId.value_or(0));
         h.payloadLength += codec::rlp::length(tx.nonce);
-        // EIP2930 不编码 maxPriorityFeePerGas,gasPrice 由 maxFeePerGas 承载
+        // EIP2930 does not encode maxPriorityFeePerGas; gasPrice is carried by maxFeePerGas
         h.payloadLength += codec::rlp::length(tx.maxFeePerGas);
         h.payloadLength += codec::rlp::length(tx.gasLimit);
         h.payloadLength += (tx.to.has_value()) ? (Address::SIZE + 1) : 1;
@@ -255,7 +258,8 @@ struct EIP2930TxHandler : Web3TxHandler
         return h;
     }
 
-    // 签名预映像: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value, data, accessList])
+    // Signing preimage: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value, data,
+    // accessList])
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
@@ -280,7 +284,7 @@ struct EIP2930TxHandler : Web3TxHandler
         return out;
     }
 
-    // 完整 RLP: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value, data, accessList,
+    // Full RLP: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value, data, accessList,
     // signatureYParity, signatureR, signatureS])
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
@@ -309,7 +313,8 @@ struct EIP2930TxHandler : Web3TxHandler
         return out;
     }
 
-    // RLP header(长度计算): 基础字段 + 1(type byte 之后的 signatureV y-parity)+ 签名长度
+    // RLP header (length computation): base fields + 1 (signatureV y-parity after the type byte) +
+    // signature length
     codec::rlp::Header header(const Web3Transaction& tx) const override
     {
         auto h = headerTxBase(tx);
@@ -319,8 +324,8 @@ struct EIP2930TxHandler : Web3TxHandler
         return h;
     }
 
-    // 解码: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value, data, accessList, yParity,
-    // r, s])
+    // Decode: 0x01 || rlp([chainId, nonce, gasPrice, gasLimit, to, value, data, accessList,
+    // yParity, r, s])
     bcos::Error::UniquePtr decode(
         bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
     {
@@ -353,7 +358,7 @@ struct EIP2930TxHandler : Web3TxHandler
             return error;
         }
         out.chainId.emplace(chainId);
-        // EIP2930: gasPrice 承载在 maxFeePerGas
+        // EIP2930: gasPrice is carried in maxFeePerGas
         out.maxFeePerGas = out.maxPriorityFeePerGas;
 
         if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
@@ -387,8 +392,9 @@ struct EIP2930TxHandler : Web3TxHandler
         {
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
-            // EIP-2718 typed tx 的 v 字段是 y_parity(0 或 1):signatureV > 1 是非法输入
-            // (EIP-2930/1559/4844 相同),静默接受会掩盖坏交易。
+            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
+            // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
+            // transactions.
             if (decodeError == nullptr && out.signatureV > 1)
             {
                 return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
@@ -402,8 +408,6 @@ struct EIP2930TxHandler : Web3TxHandler
         }
         return decodeError;
     }
-
-    // RPC JSON 输出: 公共字段 + accessList
 };
 
 struct EIP1559TxHandler : Web3TxHandler
@@ -423,7 +427,7 @@ struct EIP1559TxHandler : Web3TxHandler
         return h;
     }
 
-    // 签名预映像: 0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+    // Signing preimage: 0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
     // gas_limit, destination, amount, data, access_list])
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
@@ -449,7 +453,7 @@ struct EIP1559TxHandler : Web3TxHandler
         return out;
     }
 
-    // 完整 RLP: 0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+    // Full RLP: 0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
     // gas_limit, destination, amount, data, access_list, signature_y_parity, signature_r,
     // signature_s])
     bcos::bytes encode(const Web3Transaction& tx) const override
@@ -479,7 +483,7 @@ struct EIP1559TxHandler : Web3TxHandler
         return out;
     }
 
-    // RLP header(长度计算)
+    // RLP header (length computation)
     codec::rlp::Header header(const Web3Transaction& tx) const override
     {
         auto h = headerTxBase(tx);
@@ -489,7 +493,7 @@ struct EIP1559TxHandler : Web3TxHandler
         return h;
     }
 
-    // 解码: 0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit,
+    // Decode: 0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit,
     // destination, amount, data, access_list, yParity, r, s])
     bcos::Error::UniquePtr decode(
         bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
@@ -559,8 +563,9 @@ struct EIP1559TxHandler : Web3TxHandler
         {
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
-            // EIP-2718 typed tx 的 v 字段是 y_parity(0 或 1):signatureV > 1 是非法输入
-            // (EIP-2930/1559/4844 相同),静默接受会掩盖坏交易。
+            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
+            // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
+            // transactions.
             if (decodeError == nullptr && out.signatureV > 1)
             {
                 return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
@@ -574,25 +579,25 @@ struct EIP1559TxHandler : Web3TxHandler
         }
         return decodeError;
     }
-
-    // RPC JSON 输出: 公共字段 + accessList + maxPriorityFeePerGas/maxFeePerGas
 };
 
 struct DepositTxHandler : Web3TxHandler
 {
-    // 完整 RLP: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
-    // —— 自包含内联(与同文件其它 typed handler 一致),8 字段无签名布局的字段顺序/类型已对
-    // op-geth DepositTx 校验;字节级金值由 bcos-rpc 的 OpDepositEncodeTest 对 op-geth
-    // golden rawTransactions 逐字节比对。`to` nilability 改变 RLP 形状(空串 vs 20 字节地址),
-    // contract-creation 分支须独立编码。
+    // Full RLP: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
+    // — self-contained inline (consistent with the other typed handlers in this file); the 8-field
+    // unsigned layout's field order/types verified against op-geth DepositTx; byte-level golden
+    // values compared byte-by-byte by bcos-rpc's OpDepositEncodeTest against op-geth golden
+    // rawTransactions. `to` nilability changes the RLP shape (empty string vs 20-byte address),
+    // so the contract-creation branch must be encoded separately.
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
         out.push_back(static_cast<bcos::byte>(TransactionType::Deposit));
-        // isSystemTransaction 用 uint32_t(非 uint8_t):RLPEncode.h 的 uint8_t 泛型标量编码
-        // odr-使用非模板 toCompactBigEndian(byte, unsigned) 重载,其唯一定义在
-        // DataConvertUtility.cpp 而非头文件(既有 bcos-utilities 头/库边界缺陷);
-        // uint32_t 只匹配头内模板,输出字节一致。
+        // isSystemTransaction uses uint32_t (not uint8_t): RLPEncode.h's uint8_t generic scalar
+        // encoding odr-uses the non-template toCompactBigEndian(byte, unsigned) overload, whose
+        // only definition lives in DataConvertUtility.cpp rather than a header (a pre-existing
+        // bcos-utilities header/library boundary defect); uint32_t only matches in-header
+        // templates and produces identical bytes.
         const uint32_t isSystemTransactionByte = tx.isSystemTx ? 1 : 0;
         if (tx.to.has_value())
         {
@@ -607,29 +612,31 @@ struct DepositTxHandler : Web3TxHandler
         return out;
     }
 
-    // deposit 无签名:签名预映像即完整 envelope(对齐 op-geth DepositTx.SigningHash,
-    // 用于 extraTransactionBytes)。
+    // deposit has no signature: the signing preimage is the full envelope (aligned with
+    // op-geth DepositTx.SigningHash, used for extraTransactionBytes).
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override { return encode(tx); }
 
-    // RLP header(长度计算): 8 字段长度之和(不含 type byte —— 与其它 typed handler 一致)。
+    // RLP header (length computation): sum of the 8 field lengths (excluding the type byte —
+    // consistent with the other typed handlers).
     codec::rlp::Header header(const Web3Transaction& tx) const override
     {
         codec::rlp::Header h{.isList = true};
         h.payloadLength += codec::rlp::length(tx.sourceHash);  // h256
         h.payloadLength += codec::rlp::length(tx.from);        // Address
-        // to(optional Address): 空串 0x80 占 1 字节,或 20 字节地址 + 1 字节长度头
+        // to (optional Address): empty string 0x80 takes 1 byte, or 20-byte address + 1-byte length
+        // header
         h.payloadLength += (tx.to.has_value()) ? (Address::SIZE + 1) : 1;
         h.payloadLength += codec::rlp::length(tx.mint);      // u256
         h.payloadLength += codec::rlp::length(tx.value);     // u256
         h.payloadLength += codec::rlp::length(tx.gasLimit);  // uint64
-        h.payloadLength += 1;  // isSystemTransaction(0x80 空串 或 0x01)
+        h.payloadLength += 1;  // isSystemTransaction (0x80 empty string or 0x01)
         h.payloadLength += codec::rlp::length(tx.data);  // bytes
         return h;
     }
 
-    // 解码: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
-    // ⚠️ decode 契约: typed handler 自包含(自行消费 type byte + list header);分派方
-    // (Web3Transaction::decode)不预先裁剪 type byte。
+    // Decode: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
+    // ⚠️ decode contract: typed handler is self-contained (consumes the type byte + list header
+    // itself); the dispatcher (Web3Transaction::decode) does not trim the type byte first.
     bcos::Error::UniquePtr decode(
         bcos::bytesRef& in, Web3Transaction& out, bool /*withSig*/) const override
     {
@@ -655,12 +662,12 @@ struct DepositTxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "deposit: expected RLP list");
         }
-        // 每个字段解码都检查错误并传播(不得静默吞掉)
+        // Check and propagate errors on every field decode (must not swallow silently)
         if (auto err = codec::rlp::decode(in, out.sourceHash); err != nullptr)
             return err;  // h256
         if (auto err = codec::rlp::decode(in, out.from); err != nullptr)
             return err;  // Address
-        // to(optional Address;空串 0x80 = nullopt 合约创建)
+        // to (optional Address; empty string 0x80 = nullopt contract creation)
         if (in[0] == codec::rlp::BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;
@@ -679,9 +686,10 @@ struct DepositTxHandler : Web3TxHandler
             return err;  // u256
         if (auto err = codec::rlp::decode(in, out.gasLimit); err != nullptr)
             return err;  // uint64
-        // ⚠️ isSystemTransaction 不能用 codec::rlp::decode(bool)(RLPDecode.h:200-217 要求
-        // payloadLength==1,对 golden 的 0x80 空串报 UnexpectedLength)。必须字节语义:
-        // 空串 0x80 → false(op-geth RLP nil);单字节 0x01 → true;其它报错。
+        // ⚠️ isSystemTransaction cannot use codec::rlp::decode(bool) (RLPDecode.h:200-217
+        // requires payloadLength==1 and would report UnexpectedLength for the golden 0x80 empty
+        // string). Byte semantics are required: empty string 0x80 → false (op-geth RLP nil);
+        // single byte 0x01 → true; anything else is an error.
         {
             bcos::bytes raw{};
             if (auto err = codec::rlp::decode(in, raw); err != nullptr)
@@ -702,7 +710,7 @@ struct DepositTxHandler : Web3TxHandler
         }
         if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
             return err;  // bytes
-        out.nonce = 0;   // deposit nonce 恒 0
+        out.nonce = 0;   // deposit nonce is always 0
         return nullptr;
     }
 };
@@ -726,7 +734,7 @@ struct EIP4844TxHandler : Web3TxHandler
         return h;
     }
 
-    // 签名预映像: 0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+    // Signing preimage: 0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
     // gas_limit, to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes])
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
@@ -754,7 +762,7 @@ struct EIP4844TxHandler : Web3TxHandler
         return out;
     }
 
-    // 完整 RLP: 0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+    // Full RLP: 0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
     // gas_limit, to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes,
     // signature_y_parity, signature_r, signature_s])
     bcos::bytes encode(const Web3Transaction& tx) const override
@@ -786,7 +794,7 @@ struct EIP4844TxHandler : Web3TxHandler
         return out;
     }
 
-    // RLP header(长度计算)
+    // RLP header (length computation)
     codec::rlp::Header header(const Web3Transaction& tx) const override
     {
         auto h = headerTxBase(tx);
@@ -796,7 +804,7 @@ struct EIP4844TxHandler : Web3TxHandler
         return h;
     }
 
-    // 解码: 0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit,
+    // Decode: 0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit,
     // to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes, yParity, r, s])
     bcos::Error::UniquePtr decode(
         bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
@@ -872,8 +880,9 @@ struct EIP4844TxHandler : Web3TxHandler
         {
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
-            // EIP-2718 typed tx 的 v 字段是 y_parity(0 或 1):signatureV > 1 是非法输入
-            // (EIP-2930/1559/4844 相同),静默接受会掩盖坏交易。
+            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
+            // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
+            // transactions.
             if (decodeError == nullptr && out.signatureV > 1)
             {
                 return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
@@ -887,8 +896,6 @@ struct EIP4844TxHandler : Web3TxHandler
         }
         return decodeError;
     }
-
-    // RPC JSON 输出: 公共字段 + accessList + maxPriorityFeePerGas/maxFeePerGas + blob 字段
 };
 }  // namespace
 

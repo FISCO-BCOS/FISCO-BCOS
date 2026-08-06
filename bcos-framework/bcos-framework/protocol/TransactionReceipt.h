@@ -100,12 +100,13 @@ public:
 
     friend std::ostream& operator<<(std::ostream& output, const TransactionReceipt& receipt)
     {
-        output << "TransactionReceipt{" << "hash=" << receipt.hash() << ", "
+        output << "TransactionReceipt{"
+               << "hash=" << receipt.hash() << ", "
                << "version=" << receipt.version() << ", "
                << "gasUsed=" << receipt.gasUsed() << ", "
                << "contractAddress=" << receipt.contractAddress() << ", "
-               << "status=" << receipt.status() << ", " << "output=" << toHex(receipt.output())
-               << ", "
+               << "status=" << receipt.status() << ", "
+               << "output=" << toHex(receipt.output()) << ", "
                << "logEntries=" << receipt.logEntries().size() << ", "
                << "blockNumber=" << receipt.blockNumber() << ", "
                << "effectiveGasPrice=" << receipt.effectiveGasPrice() << ", "
@@ -117,7 +118,7 @@ using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;
 using ReceiptsConstPtr = std::shared_ptr<const Receipts>;
 using AnyTransactionReceipt =
-    AnyHolder<TransactionReceipt, 104>;  // 多平台TransactionReceiptImpl的最大尺寸 (Maximum size of
+    AnyHolder<TransactionReceipt, 104>;  // (Maximum size of
                                          // TransactionReceiptImpl across platforms)
 
 }  // namespace bcos::protocol
