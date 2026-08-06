@@ -429,16 +429,23 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
     {
         return 0;
     }
-    // Stored as "0x"+hex (see Web3Transaction::takeToTarsTransaction), so the prefixed string
-    // parses directly (bcos::u256 handles the 0x prefix). Invalid hex from corrupt data (bit rot /
-    // external writes) must not throw through the const getter — try/catch falls back to 0,
-    // consistent with the empty-string case.
+    // Written as "0x"+hex by takeToTarsTransaction, but corrupted data or external writes
+    // may lack the prefix. bcos::u256("100") without 0x-parses as decimal 100, not 0x100=256
+    // (a silent value error for a value-bearing field). Always force a 0x prefix so the
+    // identity "mint stored = mint parsed" holds regardless of input form.
+    // Invalid hex from corrupt data must not throw through the const getter — try/catch falls
+    // back to 0, consistent with the empty-string case.
     // IMPORTANT: the tars mirror is display-only and unauthenticated — the signature binds
     // only extraTransactionBytes; execution MUST re-derive mint from the envelope, never
     // trust this value from an untrusted peer (see Transaction.tars field 14).
     try
     {
-        return bcos::u256(m_inner()->mint);
+        auto const& s = m_inner()->mint;
+        if (s.empty())
+        {
+            return 0;
+        }
+        return bcos::u256(s.starts_with("0x") || s.starts_with("0X") ? s : ("0x" + s));
     }
     catch (std::exception const&)
     {
