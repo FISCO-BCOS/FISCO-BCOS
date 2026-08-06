@@ -21,9 +21,9 @@
  *        benchmark does for TransactionExecutorImpl, but with the pure-Ethereum
  *        executor.
  *
- * blockHashes is injected into the executor's constructor from a
- * StorageBlockHashes provider that resolves hashes out of the storage through
- * the ledger::getBlockHash LedgerMethod.
+ * blockHashes is injected into the executor's constructor from a storage-backed
+ * block-hash lookup that resolves hashes out of the storage through the
+ * ledger::getBlockHash LedgerMethod.
  */
 
 #include "TrivialCheckpointStorage.h"
@@ -44,7 +44,6 @@
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
-#include "ethereum-executor/StorageBlockHashes.h"
 #include <boost/test/unit_test.hpp>
 #include <cstring>
 #include <memory>
@@ -150,7 +149,7 @@ task::Task<void> EEWriteBlockHash(
 }
 
 /// Persist the committed current block height into SYS_CURRENT_STATE/current_number —
-/// the row ledger::getCurrentBlockNumber reads. StorageBlockHashes uses it to bound
+/// the row ledger::getCurrentBlockNumber reads. The block-hash lookup uses it to bound
 /// BLOCKHASH lookups to the last 256 ancestors.
 task::Task<void> EEWriteCurrentNumber(EEBackendStorage& storage, int64_t number)
 {
@@ -167,20 +166,59 @@ public:
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
     bcostars::protocol::TransactionFactoryImpl transactionFactory{cryptoSuite};
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
-    crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     EEBackendStorage backendStorage;
     EECheckpointBackend checkpointBackend{backendStorage};
     EEMultiLayerStorage multiLayerStorage{checkpointBackend};
 
-    // Storage-backed BlockHashes injected into the executor. It reads hashes
-    // from `backendStorage` through the ledger::getBlockHash LedgerMethod.
-    std::shared_ptr<StorageBlockHashes<EEBackendStorage>> blockHashes;
+    // Storage-backed block-hash lookup injected into the executor. It reads
+    // hashes from `backendStorage` through the ledger::getBlockHash LedgerMethod
+    // and bounds BLOCKHASH to the last 256 ancestors.
+    eth::BlockHashLookup blockHashLookup;
     std::shared_ptr<EthereumExecutor> executor;
 
     TestEthereumExecutorSchedulerFixture()
     {
-        blockHashes = std::make_shared<StorageBlockHashes<EEBackendStorage>>(backendStorage);
-        executor = std::make_shared<EthereumExecutor>(receiptFactory, hashImpl, blockHashes);
+        blockHashLookup = [&backend = backendStorage](int64_t blockNumber) -> evmc::bytes32 {
+            constexpr int64_t kMaxLookback = 256;
+            if (blockNumber < 0)
+            {
+                return {};
+            }
+            std::optional<int64_t> currentHeight;
+            try
+            {
+                currentHeight = task::tbb::syncWait(
+                    ledger::getCurrentBlockNumber(backend, ledger::fromStorage));
+            }
+            catch (...)
+            {
+                return {};
+            }
+            if (currentHeight.has_value() && *currentHeight >= 0 &&
+                (blockNumber > *currentHeight ||
+                    *currentHeight - blockNumber > kMaxLookback - 1))
+            {
+                return {};
+            }
+            try
+            {
+                auto hashOpt =
+                    task::tbb::syncWait(ledger::getBlockHash(backend, blockNumber, ledger::fromStorage));
+                evmc::bytes32 result{};
+                if (hashOpt.has_value())
+                {
+                    auto const& hash = *hashOpt;
+                    std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
+                        result.bytes);
+                }
+                return result;
+            }
+            catch (...)
+            {
+                return {};
+            }
+        };
+        executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
     }
 };
 
@@ -200,7 +238,7 @@ task::Task<void> EERunTransfers(Scheduler& scheduler, EthereumExecutor& executor
     co_await EEWriteBlockHash(
         backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
     // Committed height = 0 (the parent of the block being executed, number 1),
-    // so the StorageBlockHashes 256-ancestor bound is exercised and block 0
+    // so the block-hash lookup's 256-ancestor bound is exercised and block 0
     // (the parent) stays resolvable.
     co_await EEWriteCurrentNumber(backendStorage, 0);
 
@@ -263,11 +301,11 @@ BOOST_AUTO_TEST_CASE(serialExecuteBlock)
             {{sender0, EEFunding - 100}, {sender1, EEFunding - 200}, {recipient0, 100},
                 {recipient1, 200}});
 
-        // The storage-backed BlockHashes resolves committed hashes via LedgerMethod.
+        // The storage-backed block-hash lookup resolves committed hashes via LedgerMethod.
         auto h0 = task::tbb::syncWait(
             ledger::getBlockHash(backendStorage, 0, ledger::fromStorage));
         BOOST_CHECK(h0.has_value());
-        auto resolved = blockHashes->get_block_hash(0);
+        auto resolved = blockHashLookup(0);
         BOOST_CHECK_EQUAL(
             std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
     }());
@@ -626,7 +664,7 @@ BOOST_AUTO_TEST_CASE(parallelSameNonceSecondRejected)
     }());
 }
 
-// StorageBlockHashes only resolves the last 256 ancestor block hashes (Ethereum
+// The block-hash lookup only resolves the last 256 ancestor block hashes (Ethereum
 // BLOCKHASH semantics). With a committed height of 300, block 50 is reachable
 // (300-50=250) but block 5 is not (300-5=295 > 255) — even though its hash IS
 // present in SYS_NUMBER_2_HASH, the provider must report it as unknown.
@@ -643,17 +681,17 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
         auto h50 =
             task::tbb::syncWait(ledger::getBlockHash(backendStorage, 50, ledger::fromStorage));
         BOOST_CHECK(h50.has_value());
-        auto resolved50 = blockHashes->get_block_hash(50);
+        auto resolved50 = blockHashLookup(50);
         BOOST_CHECK_EQUAL(
             std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
 
         // Older than 256 ancestors — unknown (zero hash), despite the hash being stored.
         evmc::bytes32 zero{};
-        auto resolved5 = blockHashes->get_block_hash(5);
+        auto resolved5 = blockHashLookup(5);
         BOOST_CHECK_EQUAL(std::memcmp(resolved5.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
 
         // A future height (> current) is never an ancestor — unknown.
-        auto resolved301 = blockHashes->get_block_hash(301);
+        auto resolved301 = blockHashLookup(301);
         BOOST_CHECK_EQUAL(std::memcmp(resolved301.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
     }());
 }
@@ -717,11 +755,12 @@ BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
     }());
 }
 
-// Unit-level coverage for bcosTransactionToEvmone's `to` decoding (BCOS2Evmone.cpp,
-// review comment): only a well-formed 20-byte address — hex-string form or raw bytes —
-// sets evmTx.to. A short or malformed value leaves `to` unset (contract creation),
-// never a transfer to a left-aligned or all-zero fabricated address. This also covers
-// the raw-bytes fallback branch, which otherwise has no production caller.
+// Unit-level coverage for ethToAddress's `to` decoding (EthereumTransition.h,
+// the direct-Transaction port of the old bcosTransactionToEvmone logic): only a
+// well-formed 20-byte address — hex-string form or raw bytes — sets the
+// recipient. A short or malformed value leaves `to` unset (contract creation),
+// never a transfer to a left-aligned or all-zero fabricated address. This also
+// covers the raw-bytes fallback branch, which otherwise has no production caller.
 BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
 {
     task::syncWait([&, this]() -> task::Task<void> {
@@ -739,37 +778,37 @@ BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
 
         // Well-formed "0x"-prefixed hex -> the exact recipient address.
         {
-            auto evmTx = bcosTransactionToEvmone(*mkTx(toHexStr));
-            BOOST_REQUIRE(evmTx.to.has_value());
+            auto to = ethToAddress(*mkTx(toHexStr));
+            BOOST_REQUIRE(to.has_value());
             BOOST_CHECK_EQUAL(
-                std::memcmp(evmTx.to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+                std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
         }
 
         // Raw 20 bytes (defensive fallback branch) -> the exact recipient address.
         {
             bcos::bytes raw(std::begin(recipient.bytes), std::end(recipient.bytes));
-            auto evmTx = bcosTransactionToEvmone(*mkTx(std::string(raw.begin(), raw.end())));
-            BOOST_REQUIRE(evmTx.to.has_value());
+            auto to = ethToAddress(*mkTx(std::string(raw.begin(), raw.end())));
+            BOOST_REQUIRE(to.has_value());
             BOOST_CHECK_EQUAL(
-                std::memcmp(evmTx.to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+                std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
         }
 
         // Short hex "0x1234" -> unset (contract creation), never 0x1234000...0.
         {
-            auto evmTx = bcosTransactionToEvmone(*mkTx("0x1234"));
-            BOOST_CHECK(!evmTx.to.has_value());
+            auto to = ethToAddress(*mkTx("0x1234"));
+            BOOST_CHECK(!to.has_value());
         }
 
         // Bare "0x" -> unset (contract creation), never a transfer to address(0).
         {
-            auto evmTx = bcosTransactionToEvmone(*mkTx("0x"));
-            BOOST_CHECK(!evmTx.to.has_value());
+            auto to = ethToAddress(*mkTx("0x"));
+            BOOST_CHECK(!to.has_value());
         }
 
         // Malformed hex "0xzz" -> unset (contract creation).
         {
-            auto evmTx = bcosTransactionToEvmone(*mkTx("0xzz"));
-            BOOST_CHECK(!evmTx.to.has_value());
+            auto to = ethToAddress(*mkTx("0xzz"));
+            BOOST_CHECK(!to.has_value());
         }
         co_return;
     }());

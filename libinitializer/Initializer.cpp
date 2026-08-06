@@ -44,7 +44,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "ethereum-executor/EthereumExecutor.h"
-#include "ethereum-executor/StorageBlockHashes.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
@@ -309,15 +308,60 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // EthereumExecutor (executor_version=2): pure-Ethereum execution layer driven through the
     // same scheduler prepare()/execute()/finish() pipeline as TransactionExecutorImpl.
-    // The injected StorageBlockHashes provider resolves BLOCKHASH against the committed
-    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash LedgerMethod), so
-    // it outlives any single block's execute view — matching the semantics documented in
-    // EthereumExecutor.h.
+    // The injected block-hash lookup resolves BLOCKHASH against the committed
+    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash
+    // LedgerMethod), so it outlives any single block's execute view — matching the
+    // semantics documented in EthereumExecutor.h. The lookup fails closed: a broken
+    // backend or an out-of-window request reports an unknown block (zero hash).
+    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
+                                       int64_t blockNumber) -> evmc::bytes32 {
+        constexpr int64_t kMaxBlockHashLookback = 256;
+        if (blockNumber < 0)
+        {
+            // ledger::getBlockHash rejects negative heights; a BLOCKHASH of a
+            // negative number is "unknown" anyway.
+            return {};
+        }
+
+        // Bound BLOCKHASH to the last 256 ancestors (Yellow Paper H.4).
+        std::optional<int64_t> currentHeight;
+        try
+        {
+            currentHeight = task::tbb::syncWait(
+                ledger::getCurrentBlockNumber(backend, ledger::fromStorage));
+        }
+        catch (...)
+        {
+            return {};
+        }
+        if (currentHeight.has_value() && *currentHeight >= 0 &&
+            (blockNumber > *currentHeight ||
+                *currentHeight - blockNumber > kMaxBlockHashLookback - 1))
+        {
+            // Not among the last 256 ancestors — unknown block.
+            return {};
+        }
+
+        try
+        {
+            auto hashOpt =
+                task::tbb::syncWait(ledger::getBlockHash(backend, blockNumber, ledger::fromStorage));
+            evmc::bytes32 result{};
+            if (hashOpt.has_value())
+            {
+                auto const& hash = *hashOpt;
+                std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
+                    result.bytes);
+            }
+            return result;
+        }
+        catch (...)
+        {
+            return {};
+        }
+    };
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
-        *m_protocolInitializer->blockFactory()->receiptFactory(),
-        m_protocolInitializer->cryptoSuite()->hashImpl(),
-        std::make_shared<executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
-            m_globalStateStorageInitializer->storage().latestBackend()));
+        *m_protocolInitializer->blockFactory()->receiptFactory(), std::move(ethereumBlockHashLookup));
 
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
