@@ -42,9 +42,10 @@ std::string u256ToHex(bcos::u256 const& v)
 }
 std::string u64ToHex(uint64_t v)
 {
-    // 手写 hex:避免构造 boost::multiprecision::uint256_t(大整数中间转换,10 个 u64 字段
-    // 每次 getter 都走)。0 编码为 "0x0"(非空,保留字段存在性)——与 u256ToHex 一致。
-    // std::to_chars 无分配、保证 nul 终止,比手写栈缓冲安全。
+    // Hand-written hex: avoids constructing boost::multiprecision::uint256_t (a big-integer
+    // intermediate conversion on every getter across the 10 u64 fields). 0 encodes as "0x0"
+    // (non-empty, preserving field presence) — consistent with u256ToHex. std::to_chars is
+    // allocation-free and guarantees nul termination, safer than a hand-rolled stack buffer.
     if (v == 0)
     {
         return "0x0";
@@ -57,8 +58,9 @@ std::string u64ToHex(uint64_t v)
     return std::string(buf, static_cast<std::size_t>(ptr - buf));
 }
 
-/// 判断 opStackMeta 是否全空(遗留 receipt 未写 field 8)。tars optional string 用
-/// != "" 表示存在(0 值存 "0x0" 非空),全空 = legacy receipt。
+/// True when opStackMeta is entirely empty (a legacy receipt never wrote field 8). A tars
+/// optional string uses != "" to mean "present" (0 values are stored "0x0", non-empty), so
+/// all-empty means legacy receipt.
 bool opStackMetaEmpty(bcostars::OpStackReceiptMeta const& s)
 {
     return s.l1_gas_price == "" && s.l1_fee == "" && s.l1_blob_base_fee == "" &&
@@ -73,8 +75,9 @@ std::optional<bcos::u256> hexToU256(std::string const& s)
     {
         return std::nullopt;
     }
-    // 用 safeFromHex(内部 try/catch):corrupt data(bit rot/外部写入)的非法 hex 返回
-    // nullopt 而非抛 BadHexCharacter 穿过 const getter,避免 RPC 查回执时 crash。
+    // Use safeFromHex (internal try/catch): invalid hex from corrupt data (bit rot / external
+    // writes) returns nullopt instead of throwing BadHexCharacter through the const getter,
+    // avoiding a crash when RPC queries the receipt.
     auto bytes = bcos::safeFromHex(s);
     if (!bytes)
     {
@@ -88,7 +91,7 @@ std::optional<uint64_t> hexToU64(std::string const& s)
     {
         return std::nullopt;
     }
-    // 同上:safeFromHex 兜底 corrupt 输入。
+    // Same as above: safeFromHex guards against corrupt input.
     auto bytes = bcos::safeFromHex(s);
     if (!bytes)
     {
@@ -201,7 +204,8 @@ std::optional<bcos::protocol::OpStackReceiptMeta>
 bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
 {
     auto const& s = m_inner()->opStackMeta;
-    // 遗留 receipt(field 8 未写)解出全空 opStackMeta:直接短路返回,避免构建整个 struct。
+    // A legacy receipt (field 8 never set) decodes to an all-empty opStackMeta: short-circuit
+    // here to avoid building the whole struct.
     if (opStackMetaEmpty(s))
     {
         return std::nullopt;
@@ -252,8 +256,9 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
 void bcostars::protocol::TransactionReceiptImpl::setOpStackMeta(
     bcos::protocol::OpStackReceiptMeta meta)
 {
-    // 语义为"替换"而非"合并":先清空,避免二次调用残留上一次的非空字段
-    // (review 指出:merge 语义下对同一 receipt 调两次会残留旧值)。
+    // Semantics are "replace", not "merge": clear first so a second call cannot leave stale
+    // non-empty fields from a previous invocation (a review noted that merge semantics would
+    // retain old values when setOpStackMeta is called twice on the same receipt).
     m_inner()->opStackMeta = {};
     auto& s = m_inner()->opStackMeta;
     if (meta.l1_gas_price)
@@ -342,7 +347,8 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
     // opStackMeta is now a tars struct: report its serialized size (tars tags + payload),
     // consistent with the encode() path used for storage. No tars_size() is generated, so
     // serialize via bcos::concepts::serialize::encode and measure the byte buffer.
-    // 短路:99% receipt 无 OP metadata(遗留 receipt 全空),跳过序列化避免每次分配+编码。
+    // Short-circuit: 99% of receipts carry no OP metadata (legacy receipts are all-empty), so
+    // skip serialization to avoid allocating + encoding every time.
     if (!opStackMetaEmpty(m_inner()->opStackMeta))
     {
         bcos::bytes encodedOpStackMeta;

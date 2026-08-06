@@ -23,7 +23,7 @@ module bcostars {
         0 optional string l1_gas_price;          // uint256 hex
         1 optional string l1_fee;                // uint256 hex
         2 optional string l1_blob_base_fee;      // uint256 hex
-        3 optional string l1_base_fee_scalar;    // hex(值 0 存 "0x0")
+        3 optional string l1_base_fee_scalar;    // hex (0 value stored as "0x0")
         4 optional string l1_blob_base_fee_scalar;
         5 optional string operator_fee_scalar;
         6 optional string operator_fee_constant;
@@ -32,7 +32,7 @@ module bcostars {
         9 optional string deposit_nonce;
         10 optional string deposit_receipt_version;
         11 optional string l1_gas_used;
-        12 optional string operator_fee;          // uint256 hex(FISCO 扩展)
+        12 optional string operator_fee;          // uint256 hex (FISCO extension)
     };
 
     struct TransactionReceipt {

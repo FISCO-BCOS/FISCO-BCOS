@@ -417,8 +417,9 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
 
 std::string_view bcostars::protocol::TransactionImpl::sourceHash() const
 {
-    // 无 0x 前缀的 hex(与 mint() 的 "0x"+hex 不对称是设计使然:sourceHash 是 hash
-    // 字符串、mint 是数值)。消费者直接输出或 fromHex 解析,勿假设前缀。
+    // Unprefixed hex (the asymmetry with mint()'s "0x"+hex is by design: sourceHash is a hash
+    // string, mint is a numeric value). Consumers output it directly or parse with fromHex; do
+    // not assume a prefix.
     return m_inner()->sourceHash;
 }
 
@@ -429,8 +430,9 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
         return 0;
     }
     // Stored as "0x"+hex (see Web3Transaction::takeToTarsTransaction), so the prefixed string
-    // parses directly (bcos::u256 handles the 0x prefix). corrupt data(bit rot/外部写入)
-    // 的非法 hex 不能抛异常穿过 const getter——try/catch 兜底返回 0(与空串一致)。
+    // parses directly (bcos::u256 handles the 0x prefix). Invalid hex from corrupt data (bit rot /
+    // external writes) must not throw through the const getter — try/catch falls back to 0,
+    // consistent with the empty-string case.
     try
     {
         return bcos::u256(m_inner()->mint);

@@ -45,13 +45,13 @@ using codec::rlp::length;
 
 bcos::bytes Web3Transaction::encodeForSign() const
 {
-    // 委托 handler:签名预映像(RLP 无 type byte、无签名)
+    // Delegate to handler: signing preimage (RLP without type byte, without signature)
     return handlerFor(type).encodeForSign(*this);
 }
 
 bcos::bytes Web3Transaction::encode() const
 {
-    // 完整 RLP(含 type byte,typed 交易)
+    // Full RLP (with type byte, typed transaction)
     return handlerFor(type).encode(*this);
 }
 
@@ -62,12 +62,13 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
         return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InputTooShort, "Input too short");
     }
     const auto firstByte = in[0];
-    // 合法交易体必是 RLP list(≥0xC0)。用 >= LIST_HEAD_BASE 而非 >= BYTES_HEAD_BASE:
-    // 后者会把 0x80-0xBF 的短字符串头误判为 Legacy。typed tx 的 type byte(0x01-0x04)
-    // 低于 0xC0,走下方 enum_cast 分派。
+    // A valid transaction body is always an RLP list (≥0xC0). Use >= LIST_HEAD_BASE rather than
+    // >= BYTES_HEAD_BASE: the latter would misclassify 0x80-0xBF short-string headers as Legacy.
+    // A typed tx's type byte (0x01-0x04) is below 0xC0 and goes through the enum_cast dispatch
+    // below.
     if (firstByte >= codec::rlp::LIST_HEAD_BASE)
     {
-        // Legacy: 无 type byte
+        // Legacy: no type byte
         type = TransactionType::Legacy;
         return handlerFor(type).decode(in, *this, withSig);
     }
@@ -78,8 +79,9 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
             codec::rlp::DecodingError::UnsupportedTransactionType, "Unsupported transaction type");
     }
     type = txType.value();
-    // ⚠️ 不预先裁剪 type byte:typed handler 自行消费 envelope(Web3TxHandler.h decode 契约),
-    // 这里再裁剪会二次跳过列表头,导致所有 typed 交易解码失败。
+    // ⚠️ Do not pre-strip the type byte: the typed handler consumes the envelope itself (see the
+    // Web3TxHandler.h decode contract); stripping it again here would skip the list header a second
+    // time and fail every typed tx decode.
     return handlerFor(type).decode(in, *this, withSig);
 }
 
@@ -106,20 +108,21 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
             static_cast<tars::Char>(static_cast<uint8_t>(TransactionType::Deposit));
         tarsTx.sourceHash = sourceHash.hex();
         tarsTx.sender.assign(from.begin(), from.end());
-        // 带 0x 前缀,与读取端 u256(...) 匹配(TransactionImpl.cpp mint() 解析)
+        // 0x-prefixed, matching the read side u256(...) (parsed in TransactionImpl.cpp mint())
         tarsTx.mint = "0x" + mint.str(0, std::ios_base::hex);
         tarsTx.isSystemTransaction = isSystemTx ? 1 : 0;
-        // 完整 0x7E envelope(encode());calculateHash 对 web3TypedTxKind==0x7e 直接
-        // keccak256(extraTransactionBytes) 得到 extraTransactionHash,无需在此填充
+        // Full 0x7E envelope (encode()); for web3TypedTxKind==0x7e calculateHash directly
+        // keccak256s extraTransactionBytes to obtain extraTransactionHash, so no need to fill it
+        // here
         auto encoded = encode();
         tarsTx.extraTransactionBytes.reserve(encoded.size());
         ::ranges::move(encoded, std::back_inserter(tarsTx.extraTransactionBytes));
-        // 通用字段(避免走 tars 通用读路径的消费者读到空值)
+        // Generic fields (so consumers on the tars generic read path don't see empty values)
         tarsTx.data.to = to.has_value() ? to->hexPrefixed() : "";
         tarsTx.data.input.assign(data.begin(), data.end());
         tarsTx.data.value = "0x" + value.str(0, std::ios_base::hex);
         tarsTx.data.gasLimit = gasLimit;
-        tarsTx.data.nonce = "0x0";  // deposit nonce 恒 0
+        tarsTx.data.nonce = "0x0";  // deposit nonce is always 0
         tarsTx.data.chainID = "0";
         return tarsTx;
     }
@@ -232,7 +235,7 @@ uint64_t Web3Transaction::getSignatureV() const
 }
 std::string Web3Transaction::sender() const
 {
-    // deposit(0x7e):无签名,sender 直接取 from 字段
+    // deposit (0x7e): unsigned, so sender is taken directly from the from field
     if (type == TransactionType::Deposit)
         return toHexStringWithPrefix(from);
     bcos::bytes sign{};
@@ -295,7 +298,8 @@ void encode(bcos::bytes& out, const AccessListEntry& entry) noexcept
 }
 void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 {
-    // 委托 handler 保持兼容(EthEndpoint.cpp:561、测试均调此自由函数)
+    // Delegate to the handler for compatibility (EthEndpoint.cpp:561 and tests both call this free
+    // function)
     auto encoded = handlerFor(tx.type).encode(tx);
     out.insert(out.end(), encoded.begin(), encoded.end());
 }
@@ -362,8 +366,9 @@ bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transactio
 bcos::Error::UniquePtr decodeTransaction(
     bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature) noexcept
 {
-    // 保留为入口(decodeOpEnvelope/decodeOpEnvelopeWithSig 的调用目标,EthEndpoint.cpp:73),
-    // 内部改调成员委托,确保走新的 handler 分派路径。
+    // Kept as the entry point (the call target of decodeOpEnvelope/decodeOpEnvelopeWithSig,
+    // EthEndpoint.cpp:73); it now delegates to the member function so the new handler dispatch
+    // path is used.
     return out.decode(in, withSignature);
 }
 }  // namespace codec::rlp

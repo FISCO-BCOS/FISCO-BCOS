@@ -13,25 +13,27 @@ class Web3Transaction;
 // TransactionType is defined in Web3Transaction.h (enum class : uint8_t); forward-declare the
 // underlying type so handlerFor can be declared without pulling in the whole header.
 enum class TransactionType : uint8_t;
-// NOTE: Header 真实类型是 bcos::codec::rlp::Header(Common.h:45),需 include 而非前向声明。
-// 注意该 include 必须放在 namespace 之外:若在 namespace bcos::rpc 内展开 Common.h,
-// 其 `namespace bcos::codec::rlp` 会被解析为嵌套的 bcos::rpc::bcos::codec::rlp,导致命名空间污染。
+// NOTE: Header is actually bcos::codec::rlp::Header (Common.h:45), so it must be included, not
+// forward-declared. The include must stay OUTSIDE the namespace: expanding Common.h inside
+// namespace bcos::rpc would resolve `namespace bcos::codec::rlp` as a nested
+// bcos::rpc::bcos::codec::rlp, polluting the namespace.
 
 struct Web3TxHandler
 {
     virtual ~Web3TxHandler() = default;
-    // 签名预映像(RLP 无 type byte、无签名)
+    // Signing preimage (RLP without type byte or signature)
     virtual bcos::bytes encodeForSign(const Web3Transaction&) const = 0;
-    // 完整 RLP(含 type byte, typed 交易)
+    // Full RLP (with type byte for typed transactions)
     virtual bcos::bytes encode(const Web3Transaction&) const = 0;
-    // RLP header(长度计算)
+    // RLP header (length computation)
     virtual bcos::codec::rlp::Header header(const Web3Transaction&) const = 0;
-    // 解码(填充 Web3Transaction; withSig 控制是否解析签名)。
-    // ⚠️ 返回 Error::UniquePtr(而非 void):解码错误必须传播,不能被静默吞掉(校验发现)。
+    // Decode (populates Web3Transaction; withSig controls whether the signature is parsed).
+    // ⚠️ Returns Error::UniquePtr (not void): decode errors must propagate, not be silently
+    // swallowed (found by review).
     virtual bcos::Error::UniquePtr decode(
         bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
 };
 
-// 按类型查表分派。未知类型返回 Legacy handler(防御)。
+// Dispatch by type via a lookup table. Unknown types fall back to the Legacy handler (defensive).
 Web3TxHandler& handlerFor(TransactionType type);
 }  // namespace bcos::rpc
