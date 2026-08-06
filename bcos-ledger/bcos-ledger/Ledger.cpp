@@ -139,7 +139,18 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
+    // System-contract addresses (0x1000 range, etc.) are stored under the
+    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
+    // right prefix here keeps eth_getBalance / eth_getStorageAt /
+    // eth_getTransactionCount consistent with both the genesis alloc import and
+    // the v2 executor (which both go through EVMAccount). Without this, reads
+    // for system-range accounts hit the wrong table and return empty (e.g.
+    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
+    auto const tablePrefix =
+        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
+            SYS_DIRECTORY::SYS_APPS :
+            SYS_DIRECTORY::USER_APPS;
+    auto const contractTableName = getContractTableName(tablePrefix, _address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
@@ -2117,7 +2128,8 @@ bool Ledger::buildGenesisBlock(
         if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
         {
             Entry gasPriceEntry;
-            gasPriceEntry.set(bcos::storage::serialize::encode(SystemConfigEntry("0x0", 0)));
+            gasPriceEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry(genesis.m_txGasPrice, 0)));
             sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
         }
 

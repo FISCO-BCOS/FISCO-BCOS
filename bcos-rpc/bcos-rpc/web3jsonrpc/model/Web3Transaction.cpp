@@ -108,6 +108,10 @@ bcos::bytes Web3Transaction::encodeForSign() const
             codec::rlp::encode(out, maxFeePerBlobGas);
             codec::rlp::encode(out, blobVersionedHashes);
         }
+        if (type == TransactionType::EIP7702)
+        {
+            codec::rlp::encode(out, authorizationList);
+        }
     }
     return out;
 }
@@ -158,6 +162,35 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
                 tarsEntry.storageKeys.emplace_back(key.begin(), key.end());
             }
             tarsTx.data.accessList.emplace_back(std::move(tarsEntry));
+        }
+    }
+
+    // EIP-4844 blob fields: without these the executor sees a type-3 tx with 0
+    // blobs, so no blob gas is charged (EEST test_blob_gas_subtraction fails).
+    if (this->maxFeePerBlobGas > 0)
+    {
+        tarsTx.data.maxFeePerBlobGas = "0x" + this->maxFeePerBlobGas.str(0, std::ios_base::hex);
+    }
+    for (auto const& h : this->blobVersionedHashes)
+    {
+        tarsTx.data.blobVersionedHashes.emplace_back(h.begin(), h.end());
+    }
+
+    // EIP-7702 authorization list (set_code tx, Prague+). The executor
+    // (bcosTransactionToEvmone) reads tx.authorizationList() from these entries.
+    if (!this->authorizationList.empty())
+    {
+        tarsTx.data.authorizationList.reserve(this->authorizationList.size());
+        for (auto const& entry : this->authorizationList)
+        {
+            bcostars::AuthorizationEntry tarsEntry;
+            tarsEntry.chainID = static_cast<int64_t>(entry.chainId);
+            tarsEntry.address = entry.address.hex();  // 40-char hex, no 0x prefix
+            tarsEntry.nonce = static_cast<int64_t>(entry.nonce);
+            tarsEntry.v = static_cast<tars::Char>(entry.yParity);
+            tarsEntry.r = "0x" + entry.r.str(0, std::ios_base::hex);
+            tarsEntry.s = "0x" + entry.s.str(0, std::ios_base::hex);
+            tarsTx.data.authorizationList.emplace_back(std::move(tarsEntry));
         }
     }
 
@@ -239,6 +272,32 @@ size_t length(AccessListEntry const& entry) noexcept
     auto head = header(entry);
     return lengthOfLength(head.payloadLength) + head.payloadLength;
 }
+
+Header header(const AuthorizationListEntry& entry) noexcept
+{
+    auto len = codec::rlp::length(entry.chainId) + Address::SIZE + 1 +
+               codec::rlp::length(entry.nonce) +
+               codec::rlp::length(static_cast<uint64_t>(entry.yParity)) +
+               codec::rlp::length(entry.r) + codec::rlp::length(entry.s);
+    return {.isList = true, .payloadLength = len};
+}
+
+size_t length(AuthorizationListEntry const& entry) noexcept
+{
+    auto head = header(entry);
+    return lengthOfLength(head.payloadLength) + head.payloadLength;
+}
+
+void encode(bcos::bytes& out, const AuthorizationListEntry& entry) noexcept
+{
+    encodeHeader(out, header(entry));
+    encode(out, entry.chainId);
+    encode(out, entry.address.ref());
+    encode(out, entry.nonce);
+    encode(out, static_cast<uint64_t>(entry.yParity));
+    encode(out, entry.r);
+    encode(out, entry.s);
+}
 Header headerTxBase(const Web3Transaction& tx) noexcept
 {
     Header h{.isList = true};
@@ -249,7 +308,8 @@ Header headerTxBase(const Web3Transaction& tx) noexcept
     }
 
     h.payloadLength += length(tx.nonce);
-    if (tx.type == TransactionType::EIP1559 || tx.type == TransactionType::EIP4844)
+    if (tx.type == TransactionType::EIP1559 || tx.type == TransactionType::EIP4844 ||
+        tx.type == TransactionType::EIP7702)
     {
         h.payloadLength += length(tx.maxPriorityFeePerGas);
     }
@@ -266,6 +326,10 @@ Header headerTxBase(const Web3Transaction& tx) noexcept
         {
             h.payloadLength += length(tx.maxFeePerBlobGas);
             h.payloadLength += length(tx.blobVersionedHashes);
+        }
+        if (tx.type == TransactionType::EIP7702)
+        {
+            h.payloadLength += codec::rlp::length(tx.authorizationList);
         }
     }
 
@@ -364,6 +428,10 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
             encode(out, tx.maxFeePerBlobGas);
             encode(out, tx.blobVersionedHashes);
         }
+        if (tx.type == TransactionType::EIP7702)
+        {
+            encode(out, tx.authorizationList);
+        }
         encode(out, tx.signatureV);
         encode(out, getSignatureRef(ref(tx.signatureR)));
         encode(out, getSignatureRef(ref(tx.signatureS)));
@@ -372,6 +440,52 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry& out) noexcept
 {
     return decode(in, out.account, out.storageKeys);
+}
+
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) noexcept
+{
+    // Each authorization entry is itself an RLP list:
+    // [chain_id, address, nonce, y_parity, r, s]
+    auto&& [error, header] = decodeHeader(in);
+    if (error != nullptr)
+    {
+        return std::move(error);
+    }
+    if (!header.isList)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
+    }
+    const uint64_t leftover{in.size() - header.payloadLength};
+    uint64_t chainId = 0;
+    if (auto e = decodeItems(in, chainId, out.address); e != nullptr)
+    {
+        return e;
+    }
+    uint64_t nonce = 0;
+    if (auto e = decode(in, nonce); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.yParity); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.r); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.s); e != nullptr)
+    {
+        return e;
+    }
+    if (in.size() != leftover)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::UnexpectedListElements, "Unexpected list elements");
+    }
+    out.chainId = chainId;
+    out.nonce = nonce;
+    return nullptr;
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
 {
@@ -467,6 +581,13 @@ bcos::Error::UniquePtr decodeTransaction(
         {
             if (auto error = decodeItems(in, out.maxFeePerBlobGas, out.blobVersionedHashes);
                 error != nullptr)
+            {
+                return error;
+            }
+        }
+        if (out.type == TransactionType::EIP7702)
+        {
+            if (auto error = decode(in, out.authorizationList); error != nullptr)
             {
                 return error;
             }

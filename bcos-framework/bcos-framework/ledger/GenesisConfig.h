@@ -75,6 +75,9 @@ public:
 
     // tx config
     uint64_t m_txGasLimit = 3000000000;
+    // tx gas price (base fee per gas); consumed by the v2 Ethereum executor as base_fee
+    // (BCOS2Evmone::blockHeaderToBlockInfo). Seeded into SYS_CONFIG/tx_gas_price at genesis.
+    std::string m_txGasPrice = "0x0";
     // executorConfig
     // WASM support was removed; this field is retained and permanently false because
     // generateGenesisData() serializes it into the genesis string. Dropping it would

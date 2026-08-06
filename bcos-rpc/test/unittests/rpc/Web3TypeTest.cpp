@@ -254,6 +254,53 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
 }
 
+BOOST_AUTO_TEST_CASE(testEIP7702Transaction)
+{
+    // clang-format off
+    constexpr std::string_view rawTx = "0x04f8fd824ee88080078401000001947050718520e6e10e77224126e185e63a87e88af68080f838f7947050718520e6e10e77224126e185e63a87e88af6e1a00000000000000000000000000000000000000000000000000000000000000000f85cf85a809400000000000000000000000000000000000000008080a05817035c2e62f46823f5385b1d8b81d119ba4c6233929476f4fccbeaef0333e1a058434bf27df5285158b805967729a7a200891c29d2385ee324f481de9a4758f801a0f446323d6852d7c33ae025557ddc82fad0a466d932d59055dad01a9c9962aa4aa055cf0699636222c56fc0ad8695c8edef3af0b881616b7811b403755f0ea463eb";
+    // clang-format on
+    auto bytes = fromHexWithPrefix(rawTx);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    auto e = codec::rlp::decode(bRef, tx);
+    if (e != nullptr)
+    {
+        std::cerr << "[EIP7702] decode error: " << e->errorMessage() << std::endl;
+    }
+    BOOST_CHECK(e == nullptr);
+    BOOST_CHECK(tx.type == rpc::TransactionType::EIP7702);
+    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_CHECK_EQUAL(tx.chainId.value(), 20200);
+    BOOST_CHECK_EQUAL(tx.maxFeePerGas, 7);
+    BOOST_CHECK_EQUAL(tx.authorizationList.size(), 1);
+    if (!tx.authorizationList.empty())
+    {
+        auto const& a = tx.authorizationList[0];
+        BOOST_CHECK_EQUAL(a.chainId, 0);
+        BOOST_CHECK_EQUAL(a.nonce, 0);
+        BOOST_CHECK_EQUAL(a.yParity, 0);
+        BOOST_CHECK_EQUAL(a.r.str(0, std::ios_base::hex),
+            "5817035c2e62f46823f5385b1d8b81d119ba4c6233929476f4fccbeaef0333e1");
+        BOOST_CHECK_EQUAL(a.s.str(0, std::ios_base::hex),
+            "58434bf27df5285158b805967729a7a200891c29d2385ee324f481de9a4758f8");
+    }
+    // round-trip
+    bcos::bytes encoded{};
+    codec::rlp::encode(encoded, tx);
+    auto rawTx2 = toHexStringWithPrefix(encoded);
+    BOOST_CHECK_EQUAL(rawTx, rawTx2);
+
+    // encodeForSign must include the authorization list (it is part of the
+    // EIP-7702 signing payload); otherwise signature recovery fails.
+    auto signPayload = tx.encodeForSign();
+    BOOST_CHECK(signPayload.size() > 0);
+    auto signHash = bcos::crypto::keccak256Hash(bcos::ref(signPayload)).hexPrefixed();
+    // keccak256 of the type||rlp([...fields...]) preimage — recompute via rlp
+    // and compare the recovered sender to the fixture's sender below.
+    BOOST_CHECK_EQUAL(signHash.size(), 66);
+    BOOST_CHECK_EQUAL(tx.sender(), "0x1a2e20b2fb1346f5751ec4d05f1964042f06c072");
+}
+
 BOOST_AUTO_TEST_CASE(recoverAddress)
 {
     // clang-format off

@@ -203,6 +203,8 @@ public:
     bool singleNodeConsensusProduceEmptyBlocks() const;
     int32_t singleNodeConsensusApiVersion() const;
     const std::string& singleNodeConsensusFeeRecipient() const;
+    const std::string& singleNodeConsensusPrevRandao() const;
+    std::uint64_t singleNodeConsensusFixedTimestamp() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -502,6 +504,10 @@ private:
     int32_t m_singleNodeConsensusApiVersion = 3;
     std::string m_singleNodeConsensusFeeRecipient =
         "0x0000000000000000000000000000000000000000";
+    // 32-byte hex prevRandao; empty means derive deterministically from a seed.
+    std::string m_singleNodeConsensusPrevRandao;
+    // fixed block timestamp in seconds; 0 = wall clock.
+    std::uint64_t m_singleNodeConsensusFixedTimestamp = 0;
 
     // config for gateway
     std::string m_p2pListenIP;

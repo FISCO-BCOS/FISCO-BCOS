@@ -1107,6 +1107,10 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
     m_singleNodeConsensusApiVersion = _pt.get<int32_t>("consensus.block_api_version", 3);
     m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
         "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
+    m_singleNodeConsensusPrevRandao =
+        _pt.get<std::string>("consensus.prev_randao", "");
+    m_singleNodeConsensusFixedTimestamp =
+        _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
     NodeConfig_LOG(INFO) << LOG_DESC("loadSingleNodeConsensusConfig")
                          << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
                          << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
@@ -1402,6 +1406,10 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                 "Please set tx.gas_limit to more than " + std::to_string(TX_GAS_LIMIT_MIN) + " !"));
     }
     m_genesisConfig.m_txGasLimit = txGasLimit;
+    // txGasPrice (base fee per gas; consumed by the v2 Ethereum executor as base_fee).
+    // Seeded into SYS_CONFIG/tx_gas_price at genesis so EEST fixtures can reproduce their
+    // environment's currentBaseFee.
+    m_genesisConfig.m_txGasPrice = _genesisConfig.get<std::string>("tx.gas_price", "0x0");
     // the compatibility version
     auto compatibilityVersion = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
@@ -2174,6 +2182,16 @@ int32_t NodeConfig::singleNodeConsensusApiVersion() const
 const std::string& NodeConfig::singleNodeConsensusFeeRecipient() const
 {
     return m_singleNodeConsensusFeeRecipient;
+}
+
+const std::string& NodeConfig::singleNodeConsensusPrevRandao() const
+{
+    return m_singleNodeConsensusPrevRandao;
+}
+
+std::uint64_t NodeConfig::singleNodeConsensusFixedTimestamp() const
+{
+    return m_singleNodeConsensusFixedTimestamp;
 }
 
 const std::string& NodeConfig::opEngineRpcListenIP() const

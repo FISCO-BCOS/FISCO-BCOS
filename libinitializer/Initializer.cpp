@@ -50,6 +50,7 @@
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
 #include <TxPool.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -638,12 +639,26 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (Lodestar/op-node) testing.
     if (m_nodeConfig->enableSingleNodeConsensus())
     {
+        // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
+        // deterministic hash of a fixed seed (for EEST the harness pins it to the fixture's
+        // currentRandom so block.prevrandao matches).
+        auto const& prevRandaoCfg = m_nodeConfig->singleNodeConsensusPrevRandao();
+        auto prevRandao = [&]() -> bcos::crypto::HashType {
+            if (!prevRandaoCfg.empty())
+            {
+                return bcos::crypto::HashType(prevRandaoCfg);
+            }
+            constexpr std::string_view seed = "single-node-consensus";
+            return bcos::crypto::keccak256Hash(bytesConstRef(
+                reinterpret_cast<byte const*>(seed.data()), seed.size()));
+        }();
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             scheduler(), m_protocolInitializer->blockFactory(), m_memPoolInitializer->memPool(),
             m_ledger, m_nodeConfig->compatibilityVersion(),
             m_nodeConfig->singleNodeConsensusBlockInterval(),
-            m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), "single-node-consensus",
-            m_nodeConfig->singleNodeConsensusFeeRecipient());
+            m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
+            m_nodeConfig->singleNodeConsensusFeeRecipient(),
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(), m_nodeConfig->txGasLimit());
     }
 
 #ifdef TOOLS

@@ -42,6 +42,7 @@ enum class TransactionType : uint8_t
     EIP2930 = 1,  // https://eips.ethereum.org/EIPS/eip-2930
     EIP1559 = 2,  // https://eips.ethereum.org/EIPS/eip-1559
     EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
+    EIP7702 = 4,  // https://eips.ethereum.org/EIPS/eip-7702
 };
 
 constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
@@ -61,6 +62,23 @@ struct AccessListEntry
     friend bool operator==(const AccessListEntry& lhs, const AccessListEntry& rhs) noexcept
     {
         return lhs.account == rhs.account && lhs.storageKeys == rhs.storageKeys;
+    }
+};
+
+// EIP-7702: authorization entry (set_code transactions, Prague+).
+struct AuthorizationListEntry
+{
+    uint64_t chainId{0};
+    Address address;  // delegation target
+    uint64_t nonce{0};
+    uint8_t yParity{0};
+    u256 r{0};
+    u256 s{0};
+    friend bool operator==(const AuthorizationListEntry& lhs, const AuthorizationListEntry& rhs) noexcept
+    {
+        return lhs.chainId == rhs.chainId && lhs.address == rhs.address &&
+               lhs.nonce == rhs.nonce && lhs.yParity == rhs.yParity && lhs.r == rhs.r &&
+               lhs.s == rhs.s;
     }
 };
 
@@ -101,6 +119,8 @@ public:
     u256 maxFeePerBlobGas{0};
     h256s blobVersionedHashes;
     // TODO)) blob
+    // EIP-7702: Set Code Transactions (Prague+)
+    std::vector<AuthorizationListEntry> authorizationList;
     bcos::bytes signatureR;
     bcos::bytes signatureS;
     uint64_t signatureV{0};
@@ -112,12 +132,17 @@ Header header(const rpc::AccessListEntry& entry) noexcept;
 void encode(bcos::bytes& out, const rpc::AccessListEntry&) noexcept;
 size_t length(const rpc::AccessListEntry&) noexcept;
 
+Header header(const rpc::AuthorizationListEntry& entry) noexcept;
+void encode(bcos::bytes& out, const rpc::AuthorizationListEntry&) noexcept;
+size_t length(const rpc::AuthorizationListEntry&) noexcept;
+
 size_t length(const rpc::Web3Transaction&) noexcept;
 Header headerForSign(const rpc::Web3Transaction& tx) noexcept;
 Header headerTxBase(const rpc::Web3Transaction& tx) noexcept;
 Header header(const rpc::Web3Transaction& tx) noexcept;
 void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AuthorizationListEntry&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decodeTransaction(
