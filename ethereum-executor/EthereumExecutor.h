@@ -299,8 +299,14 @@ public:
         {
             // The per-transaction state is local to this phase: it reads the
             // current storage (earlier same-chunk transactions' writes already
-            // landed) through a journaling Rollbackable wrapper, and its
-            // write-back is skipped for dry-runs so eth_call leaves no trace.
+            // landed) through a journaling Rollbackable wrapper.
+            //
+            // NOTE (dry-run): runTransaction() unconditionally writes the state
+            // back via applyToStorage(), including for call=true. A dry-run
+            // (eth_call / eth_estimateGas) therefore leaves no trace ONLY
+            // because every call=true call site executes against a throwaway
+            // forked view (coCallLatest / callAtBlock); do not add a call=true
+            // path that runs against the live storage.
             //
             // Transaction atomicity (all-or-nothing): take a savepoint up front
             // so that if anything below throws — e.g. a storage write inside

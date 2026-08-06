@@ -283,6 +283,16 @@ class EthereumState
 
     /// Check whether the account table contains any storage slot (a key that
     /// is not one of the fixed account field names).
+    ///
+    /// Known limitation (inherited from the old StorageStateView adapter): this
+    /// scans the account's table via storage2::range(), and ReadWriteSetStorage
+    /// does NOT record range reads in the read-write set. Under
+    /// SchedulerParallelImpl, a chunk that only WRITES storage slots of an
+    /// account may therefore be scheduled in parallel with — and race against —
+    /// a chunk that reads that account's has_storage here (the writer's slots
+    /// are not in the reader's read set, so the two chunks are not ordered).
+    /// Revisit if parallel execution of v2 chunks becomes dependent on
+    /// cross-chunk has_storage ordering.
     task::Task<bool> hasStorageImpl(bcos::ledger::account::EVMAccount<Storage>& evmAccount) const
     {
         using namespace bcos::ledger;
