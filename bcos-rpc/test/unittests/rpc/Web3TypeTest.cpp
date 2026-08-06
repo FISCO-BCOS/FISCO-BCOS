@@ -23,6 +23,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3TxHandler.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
@@ -447,6 +448,64 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     BOOST_CHECK(re);
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xc1b634853cb333d3ad8663715b08f41a3aec47cc");
+}
+
+// Deposit encode→decode roundtrip locks the uint32_t isSystemTransaction workaround
+// (see Web3TxHandler.h header comment) — when the underlying ODR defect is fixed and
+// the field switches back to uint8_t, this test ensures the encoded byte does not
+// silently regress.
+BOOST_AUTO_TEST_CASE(depositRoundtrip)
+{
+    Web3Transaction deposit;
+    deposit.type = TransactionType::Deposit;
+    deposit.sourceHash = h256("6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    deposit.from = Address("0xdead000000000000000000000000000000000011");
+    deposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+    deposit.mint = u256("0x16345785d8a0000");
+    deposit.value = u256(0);
+    deposit.gasLimit = 1000000;
+    deposit.isSystemTx = true;
+    deposit.data = bcos::bytes{};
+
+    // Encode → decode roundtrip
+    auto encoded = deposit.encode();
+    bcos::bytesRef ref(encoded);
+    Web3Transaction decoded;
+    auto err = decoded.decode(ref, false);  // withSig=false, deposit has no signature
+    BOOST_REQUIRE(err == nullptr);
+
+    BOOST_CHECK(decoded.type == TransactionType::Deposit);
+    BOOST_CHECK(decoded.isSystemTx);
+    BOOST_CHECK_EQUAL(decoded.sourceHash.hex(), deposit.sourceHash.hex());
+    BOOST_CHECK_EQUAL(decoded.from.hexPrefixed(), deposit.from.hexPrefixed());
+    BOOST_CHECK(decoded.to.has_value());
+    BOOST_CHECK_EQUAL(decoded.to->hexPrefixed(), deposit.to->hexPrefixed());
+    BOOST_CHECK_EQUAL(decoded.mint, deposit.mint);
+    BOOST_CHECK_EQUAL(decoded.value, deposit.value);
+    BOOST_CHECK_EQUAL(decoded.gasLimit, deposit.gasLimit);
+
+    // Also round-trip the system-tx=false case
+    Web3Transaction nonSysDeposit;
+    nonSysDeposit.type = TransactionType::Deposit;
+    nonSysDeposit.sourceHash =
+        h256("7bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8");
+    nonSysDeposit.from = Address("0xdead000000000000000000000000000000000011");
+    nonSysDeposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+    nonSysDeposit.mint = u256(100);
+    nonSysDeposit.value = u256(0);
+    nonSysDeposit.gasLimit = 500000;
+    nonSysDeposit.isSystemTx = false;
+    nonSysDeposit.data = bcos::bytes{};
+
+    auto encoded2 = nonSysDeposit.encode();
+    bcos::bytesRef ref2(encoded2);
+    Web3Transaction decoded2;
+    err = decoded2.decode(ref2, false);
+    BOOST_REQUIRE(err == nullptr);
+
+    BOOST_CHECK(decoded2.type == TransactionType::Deposit);
+    BOOST_CHECK(!decoded2.isSystemTx);
+    BOOST_CHECK_EQUAL(decoded2.mint, nonSysDeposit.mint);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
