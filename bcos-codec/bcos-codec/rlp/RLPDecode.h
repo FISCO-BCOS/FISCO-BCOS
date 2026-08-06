@@ -21,9 +21,11 @@
 #pragma once
 #include "Common.h"
 #include "bcos-utilities/Error.h"
+#include <algorithm>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <range/v3/view/any_view.hpp>
+#include <cstring>
+#include <optional>
 #include <utility>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
@@ -158,9 +160,17 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
     }
     else if constexpr (std::same_as<std::decay_t<decltype(to)>, std::array<bcos::byte, 256>>)
     {
-        to = std::array<bcos::byte, 256>{}; 
-        auto copyLen = std::min<size_t>(header.payloadLength, to.size());
-        std::memcpy(to.data(), from.data(), copyLen);  
+        // Ethereum's logsBloom is exactly 256 bytes; anything shorter or longer is rejected
+        // rather than silently padded/truncated (a padded bloom would re-encode differently
+        // and change the keccak hash). Fixed-size byte blobs are left-aligned here, unlike the
+        // big-endian scalar FixedBytes branches above which right-align.
+        if (header.payloadLength != to.size())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                DecodingError::UnexpectedLength, "Unexpected bloom length");
+        }
+        auto payload = from.getCroppedData(0, header.payloadLength);
+        std::memcpy(to.data(), payload.data(), payload.size());
     }
     else
     {
@@ -256,7 +266,7 @@ template <typename... Args>
 inline bcos::Error::UniquePtr decodeItems(
     bytesRef& from, Args&... args) noexcept
 {
-    bcos::Error::UniquePtr decodeError; 
+    bcos::Error::UniquePtr decodeError;
     ((decodeError = decode(from, args)) || ...);
     if (decodeError != nullptr)
     {
@@ -278,18 +288,21 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, Args&... args) noexcept
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
     }
-    const uint64_t leftOver{from.size() - header.payloadLength};
-
-    if (auto decodeError = decodeItems(from, args...); decodeError != nullptr)
+    // Crop to this list's payload before decoding the items: decode(std::optional) decides
+    // presence by "the view is exhausted", which must mean "this list is exhausted" — not
+    // "the whole buffer is consumed". Without the crop, a header nested inside a block RLP
+    // would try to decode the trailing transactions as optional fields.
+    auto payloadView = from.getCroppedData(0, header.payloadLength);
+    if (auto decodeError = decodeItems(payloadView, args...); decodeError != nullptr)
     {
-        return std::move(decodeError);
+        return decodeError;
     }
-
-    if (from.size() != leftOver)
+    if (!payloadView.empty())
     {
         return BCOS_ERROR_UNIQUE_PTR(
             DecodingError::UnexpectedListElements, "Unexpected list elements");
     }
+    from = from.getCroppedData(header.payloadLength);
     return {};
 }
 

@@ -24,6 +24,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <concepts/bcos-concepts/Basic.h>
+#include <optional>
 #include <vector>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
@@ -130,7 +131,8 @@ inline void encode(bcos::bytes& to, const std::vector<T>& v) noexcept
 template <typename T>
 inline void encode(bcos::bytes& to, const std::optional<T>& v) noexcept
 {
-    if (v.has_value()) {
+    if (v.has_value())
+    {
         encode(to, *v);
     }
 }

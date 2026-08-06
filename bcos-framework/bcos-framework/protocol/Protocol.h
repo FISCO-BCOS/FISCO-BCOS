@@ -164,9 +164,11 @@ enum class BlockVersion : uint32_t
 
 // Version marker for Ethereum-standard block headers. FISCO-BCOS versions encode as
 // 0xMMmmpp00 with major starting at 3, so the 0xFF major prefix can never collide with
-// any real FISCO version. Callers must compare with == (not >=) when distinguishing Eth
-// headers, and the FISCO version-bound checks (maxSupportedVersion, feature thresholds)
-// special-case this marker to skip Eth headers.
+// any real FISCO version.
+// NOTE: this marker is NOT a real block version — it compares >= true against every
+// BlockVersion, so callers must distinguish Eth headers with == and never with >=. Today
+// only the version gates in SchedulerImpl and ShardingTransactionExecutor special-case it;
+// any new version-comparison site must add the same != ETH_BLOCK_HEADER_VERSION guard.
 constexpr uint32_t ETH_BLOCK_HEADER_VERSION = 0xFF000001;
 
 enum class TransactionVersion : uint32_t

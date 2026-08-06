@@ -84,7 +84,7 @@ class EthBlockHeader
 public:
     EthBlockHeader() = default;
 
-    explicit EthBlockHeader(const bcostars::BlockHeader& tarsHeader) noexcept;
+    explicit EthBlockHeader(const bcostars::BlockHeader& tarsHeader);
 
     void rlpEncode(bcos::bytes& out) const;
     bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);

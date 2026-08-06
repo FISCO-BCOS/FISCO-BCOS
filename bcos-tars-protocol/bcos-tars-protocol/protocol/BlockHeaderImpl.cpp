@@ -76,11 +76,13 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
         }
         return;
     }
-
-    // FISCO-BCOS block — original Tars hash
-    bcos::crypto::HashType hashResult;
-    bcos::concepts::hash::calculate(*m_inner, hashImpl.hasher(), hashResult);
-    m_inner->dataHash.assign(hashResult.begin(), hashResult.end());
+    else
+    {
+        // FISCO-BCOS block — original Tars hash
+        bcos::crypto::HashType hashResult;
+        bcos::concepts::hash::calculate(*m_inner, hashImpl.hasher(), hashResult);
+        m_inner->dataHash.assign(hashResult.begin(), hashResult.end());
+    }
 }
 
 void bcostars::protocol::BlockHeaderImpl::clear()

@@ -622,6 +622,7 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHash)
     impl->setTimestamp(1700000000);
     impl->setGasLimit(bcos::u256(30000000));
     impl->setGasUsed(bcos::u256(21000));
+    impl->setBaseFee(bcos::u256(1000000000));
     impl->setCoinbase(bcos::Address(std::string_view(
         "0xdead000000000000000000000000000000000000"), bcos::Address::FromHex));
     bcos::h256 stateRoot(std::string_view(

@@ -22,6 +22,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <concepts/bcos-concepts/Basic.h>
+#include <optional>
 #include <vector>
 
 // Note:https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/

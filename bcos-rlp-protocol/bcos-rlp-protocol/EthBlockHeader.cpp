@@ -27,6 +27,15 @@
 using namespace bcos;
 using namespace bcos::codec::rlp;
 
+namespace
+{
+// keccak256 of the empty ommers list (RLP 0xc0). EIP-3675 (post-merge) hardcodes the
+// uncleHash header field to this value.
+const bcos::h256 c_emptyOmmersHash{
+    std::string_view("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
+    bcos::h256::FromHex};
+}  // namespace
+
 namespace bcos::protocol
 {
 void EthBlockHeader::calculateRLPHash(
@@ -93,47 +102,40 @@ bcos::protocol::BlockHeader::Ptr EthBlockHeader::toTarsHeader(
 
     tarsData.logsBloom.assign(ethHeader.data().logsBloom.begin(), ethHeader.data().logsBloom.end());
 
-    // London fork fields
     if (ethHeader.data().baseFee.has_value())
     {
         tarsData.baseFee = boost::lexical_cast<std::string>(*ethHeader.data().baseFee);
-        // Shanghai fork fields
-        if (ethHeader.data().withdrawalsHash.has_value())
-        {
-            tarsData.withdrawalsHash.assign(
-                ethHeader.data().withdrawalsHash->begin(), ethHeader.data().withdrawalsHash->end());
-            // Cancun fork fields
-            if (ethHeader.data().blobGasUsed.has_value())
-            {
-                tarsData.blobGasUsed =
-                    boost::lexical_cast<std::string>(*ethHeader.data().blobGasUsed);
-                tarsData.excessBlobGas =
-                    boost::lexical_cast<std::string>(*ethHeader.data().excessBlobGas);
-                tarsData.parentBeaconRoot.assign(
-                    ethHeader.data().parentBeaconRoot->begin(), ethHeader.data().parentBeaconRoot->end());
-
-                // Prague fork fields
-                if (ethHeader.data().requestsHash.has_value())
-                {
-                    tarsData.requestsHash.assign(
-                        ethHeader.data().requestsHash->begin(), ethHeader.data().requestsHash->end());
-                    // Osaka fork fields
-                    if (ethHeader.data().blockAccessListHash.has_value())
-                    {
-                        tarsData.blockAccessListHash.assign(
-                            ethHeader.data().blockAccessListHash->begin(), 
-                                ethHeader.data().blockAccessListHash->end());
-                        tarsData.slotNumber = static_cast<long>(*ethHeader.data().slotNumber);
-                    }
-                }
-            }
-        }
+    }
+    if (ethHeader.data().withdrawalsHash.has_value())
+    {
+        tarsData.withdrawalsHash.assign(
+            ethHeader.data().withdrawalsHash->begin(), ethHeader.data().withdrawalsHash->end());
+    }
+    if (ethHeader.data().blobGasUsed.has_value())
+    {
+        tarsData.blobGasUsed = boost::lexical_cast<std::string>(*ethHeader.data().blobGasUsed);
+    }
+    if (ethHeader.data().excessBlobGas.has_value())
+    {
+        tarsData.excessBlobGas =
+            boost::lexical_cast<std::string>(*ethHeader.data().excessBlobGas);
+    }
+    if (ethHeader.data().parentBeaconRoot.has_value())
+    {
+        tarsData.parentBeaconRoot.assign(
+            ethHeader.data().parentBeaconRoot->begin(), ethHeader.data().parentBeaconRoot->end());
+    }
+    if (ethHeader.data().requestsHash.has_value())
+    {
+        tarsData.requestsHash.assign(
+            ethHeader.data().requestsHash->begin(), ethHeader.data().requestsHash->end());
     }
     
     // Wrap in a BlockHeaderImpl so the caller holds a base-class pointer whose
     // concrete type is bcostars::protocol::BlockHeaderImpl.
     auto impl = std::make_shared<bcostars::protocol::BlockHeaderImpl>(result);
     impl->setVersion(bcos::protocol::ETH_BLOCK_HEADER_VERSION);
+    impl->setRLPHash(bcos::crypto::keccak256Hash(_data));
     return impl;
 }
 
@@ -167,30 +169,36 @@ bool EthBlockHeader::validateTarsHeader(
         return false;
     };
 
-    // Required hash/address fields (20 or 32 bytes)
-    if (_data.parentInfo.empty() || _data.parentInfo.front().blockHash.size() < crypto::HashType::SIZE)
+    // Required fixed-size fields: exact length so that "validated" means "complete"
+    // (a longer-than-spec value would otherwise be silently truncated by the constructor).
+    if (_data.parentInfo.empty() ||
+        _data.parentInfo.front().blockHash.size() != crypto::HashType::SIZE)
     {
-        return invalid("EthBlockHeader: missing or short parentInfo.blockHash");
+        return invalid("EthBlockHeader: missing or bad parentInfo.blockHash");
     }
-    if (_data.coinbase.size() < Address::SIZE)
+    if (_data.coinbase.size() != Address::SIZE)
     {
-        return invalid("EthBlockHeader: missing or short coinbase");
+        return invalid("EthBlockHeader: missing or bad coinbase");
     }
-    if (_data.stateRoot.size() < crypto::HashType::SIZE)
+    if (_data.stateRoot.size() != crypto::HashType::SIZE)
     {
-        return invalid("EthBlockHeader: missing or short stateRoot");
+        return invalid("EthBlockHeader: missing or bad stateRoot");
     }
-    if (_data.txsRoot.size() < crypto::HashType::SIZE)
+    if (_data.txsRoot.size() != crypto::HashType::SIZE)
     {
-        return invalid("EthBlockHeader: missing or short txsRoot");
+        return invalid("EthBlockHeader: missing or bad txsRoot");
     }
-    if (_data.receiptRoot.size() < crypto::HashType::SIZE)
+    if (_data.receiptRoot.size() != crypto::HashType::SIZE)
     {
-        return invalid("EthBlockHeader: missing or short receiptRoot");
+        return invalid("EthBlockHeader: missing or bad receiptRoot");
     }
-    if (_data.prevRandao.size() < h256::SIZE)
+    if (_data.prevRandao.size() != h256::SIZE)
     {
-        return invalid("EthBlockHeader: missing or short prevRandao");
+        return invalid("EthBlockHeader: missing or bad prevRandao");
+    }
+    if (_data.logsBloom.size() != bcos::Bloom{}.size())
+    {
+        return invalid("EthBlockHeader: missing or bad logsBloom");
     }
 
     // Required scalar/string fields
@@ -202,18 +210,95 @@ bool EthBlockHeader::validateTarsHeader(
     {
         return invalid("EthBlockHeader: missing gasUsed");
     }
-    if (_data.logsBloom.size() < bcos::Bloom{}.size())
-    {
-        return invalid("EthBlockHeader: missing or short logsBloom");
-    }
-    if (_data.timestamp == 0)
+    if (_data.timestamp < 0)
     {
         return invalid("EthBlockHeader: missing timestamp");
     }
+    if (_data.blockNumber < 0)
+    {
+        return invalid("EthBlockHeader: negative blockNumber");
+    }
+
+    // baseFee is mandatory on every post-London Ethereum block.
+    if (_data.baseFee.empty())
+    {
+        return invalid("EthBlockHeader: missing baseFee");
+    }
+
+    // Optional fork fields must satisfy the cascade-stop invariant: they are appended
+    // cumulatively at the tail of the header, so a later field cannot be present while an
+    // earlier one is absent. Otherwise the encode side would silently drop fields and the
+    // computed RLP hash would diverge from the original header.
+    auto cascade = [&](const std::string& _absent, const std::string& _present) {
+        return invalid(
+            "EthBlockHeader: " + _present + " is set but " + _absent + " is missing");
+    };
+    if (!_data.withdrawalsHash.empty() && _data.baseFee.empty())
+    {
+        return cascade("baseFee", "withdrawalsHash");
+    }
+    if (!_data.blobGasUsed.empty() && _data.withdrawalsHash.empty())
+    {
+        return cascade("withdrawalsHash", "blobGasUsed");
+    }
+    if (!_data.excessBlobGas.empty() && _data.blobGasUsed.empty())
+    {
+        return cascade("blobGasUsed", "excessBlobGas");
+    }
+    if (!_data.parentBeaconRoot.empty() && _data.excessBlobGas.empty())
+    {
+        return cascade("excessBlobGas", "parentBeaconRoot");
+    }
+    if (!_data.requestsHash.empty() && _data.parentBeaconRoot.empty())
+    {
+        return cascade("parentBeaconRoot", "requestsHash");
+    }
+    if (!_data.blockAccessListHash.empty() && _data.requestsHash.empty())
+    {
+        return cascade("requestsHash", "blockAccessListHash");
+    }
+
+    // Numeric string fields must parse as u256, otherwise the constructor's lexical_cast
+    // would throw on malformed (non-numeric) input.
+    auto checkNumeric = [&](const std::string& _fieldName, const std::string& _value) {
+        try
+        {
+            boost::lexical_cast<u256>(_value);
+            return true;
+        }
+        catch (const boost::bad_lexical_cast&)
+        {
+            error = BCOS_ERROR_UNIQUE_PTR(
+                static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader),
+                "EthBlockHeader: " + _fieldName + " is not a valid number");
+            return false;
+        }
+    };
+    if (!checkNumeric("gasLimit", _data.gasLimit))
+    {
+        return false;
+    }
+    if (!checkNumeric("gasUsed", _data.gasUsed))
+    {
+        return false;
+    }
+    if (!checkNumeric("baseFee", _data.baseFee))
+    {
+        return false;
+    }
+    if (!_data.blobGasUsed.empty() && !checkNumeric("blobGasUsed", _data.blobGasUsed))
+    {
+        return false;
+    }
+    if (!_data.excessBlobGas.empty() && !checkNumeric("excessBlobGas", _data.excessBlobGas))
+    {
+        return false;
+    }
+
     return true;
 }
 
-EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader) noexcept
+EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
 {
     const auto& _data = _tarsHeader.data;
 
@@ -225,25 +310,30 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader) noexcep
         tarsParentInfo.front().blockHash.size() >= crypto::HashType::SIZE)
     {
         m_data.parentInfo.blockNumber = tarsParentInfo.front().blockNumber;
-        m_data.parentInfo.blockHash = *reinterpret_cast<const crypto::HashType*>(
-            tarsParentInfo.front().blockHash.data());
+        m_data.parentInfo.blockHash = crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(tarsParentInfo.front().blockHash.data()),
+            tarsParentInfo.front().blockHash.size());
     }
 
     if (_data.coinbase.size() >= Address::SIZE)
     {
-        m_data.coinbase = *reinterpret_cast<const Address*>(_data.coinbase.data());
+        m_data.coinbase = Address(
+            reinterpret_cast<const bcos::byte*>(_data.coinbase.data()), _data.coinbase.size());
     }
     if (_data.stateRoot.size() >= crypto::HashType::SIZE)
     {
-        m_data.stateRoot = *reinterpret_cast<const crypto::HashType*>(_data.stateRoot.data());
+        m_data.stateRoot = crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(_data.stateRoot.data()), _data.stateRoot.size());
     }
     if (_data.txsRoot.size() >= crypto::HashType::SIZE)
     {
-        m_data.txsRoot = *reinterpret_cast<const crypto::HashType*>(_data.txsRoot.data());
+        m_data.txsRoot = crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(_data.txsRoot.data()), _data.txsRoot.size());
     }
     if (_data.receiptRoot.size() >= crypto::HashType::SIZE)
     {
-        m_data.receiptsRoot = *reinterpret_cast<const crypto::HashType*>(_data.receiptRoot.data());
+        m_data.receiptsRoot = crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(_data.receiptRoot.data()), _data.receiptRoot.size());
     }
 
     if (!_data.gasLimit.empty())
@@ -260,7 +350,8 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader) noexcep
 
     if (_data.prevRandao.size() >= h256::SIZE)
     {
-        m_data.prevRandao = *reinterpret_cast<const h256*>(_data.prevRandao.data());
+        m_data.prevRandao =
+            h256(reinterpret_cast<const bcos::byte*>(_data.prevRandao.data()), _data.prevRandao.size());
     }
 
     m_data.extraData.assign(
@@ -281,7 +372,8 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader) noexcep
         // Shanghai fork fields
         if (!_data.withdrawalsHash.empty())
         {
-            m_data.withdrawalsHash = *reinterpret_cast<const h256*>(_data.withdrawalsHash.data());
+            m_data.withdrawalsHash = h256(reinterpret_cast<const bcos::byte*>(_data.withdrawalsHash.data()),
+                _data.withdrawalsHash.size());
             // Cancun fork fields
             if (!_data.blobGasUsed.empty())
             {
@@ -289,18 +381,21 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader) noexcep
                 m_data.excessBlobGas = boost::lexical_cast<u256>(_data.excessBlobGas);
                 if (!_data.parentBeaconRoot.empty())
                 {
-                    m_data.parentBeaconRoot =
-                        *reinterpret_cast<const h256*>(_data.parentBeaconRoot.data());
+                    m_data.parentBeaconRoot = h256(
+                        reinterpret_cast<const bcos::byte*>(_data.parentBeaconRoot.data()),
+                        _data.parentBeaconRoot.size());
                     // Prague fork fields
                     if (!_data.requestsHash.empty())
                     {
-                        m_data.requestsHash =
-                            *reinterpret_cast<const h256*>(_data.requestsHash.data());
+                        m_data.requestsHash = h256(
+                            reinterpret_cast<const bcos::byte*>(_data.requestsHash.data()),
+                            _data.requestsHash.size());
                         // Osaka fork fields
                         if (!_data.blockAccessListHash.empty())
                         {
-                            m_data.blockAccessListHash = *reinterpret_cast<const h256*>(
-                                _data.blockAccessListHash.data());
+                            m_data.blockAccessListHash = h256(
+                                reinterpret_cast<const bcos::byte*>(_data.blockAccessListHash.data()),
+                                _data.blockAccessListHash.size());
                             if (_data.slotNumber != -1)  // -1 is the Tars unset sentinel
                             {
                                 m_data.slotNumber = static_cast<uint64_t>(_data.slotNumber);
@@ -317,30 +412,26 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 {
     codec::rlp::encode(out,
         m_data.parentInfo.blockHash,
-        bcos::h256{std::string_view(
-            "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
-            bcos::h256::FromHex},       // uncleHash, fixed (hardcoded)
+        c_emptyOmmersHash,  // uncleHash, fixed for post-merge blocks
         m_data.coinbase,
         m_data.stateRoot,
         m_data.txsRoot,
         m_data.receiptsRoot,
         bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()),
-        bcos::u256{0},                      // difficulty, fixed to 0
+        bcos::u256{0},  // difficulty, fixed to 0 (post-merge)
         static_cast<uint64_t>(m_data.number),
         m_data.gasLimit,
         m_data.gasUsed,
         static_cast<uint64_t>(m_data.timestamp),
         m_data.extraData,
         m_data.prevRandao,
-        bcos::h64{0},              // nonce, fixed to 0
+        bcos::h64{0},  // nonce, fixed to 0 (post-merge)
         m_data.baseFee,
         m_data.withdrawalsHash,
         m_data.blobGasUsed,
         m_data.excessBlobGas,
         m_data.parentBeaconRoot,
-        m_data.requestsHash,
-        m_data.blockAccessListHash,
-        m_data.slotNumber);
+        m_data.requestsHash);
 }
 
 
@@ -378,9 +469,8 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
         m_data.blobGasUsed,
         m_data.excessBlobGas,
         m_data.parentBeaconRoot,
-        m_data.requestsHash,
-        m_data.blockAccessListHash,
-        m_data.slotNumber);
+        m_data.requestsHash
+    );
     if (error)
     {
         return error;
