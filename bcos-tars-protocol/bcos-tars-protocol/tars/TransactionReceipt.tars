@@ -45,11 +45,6 @@ module bcostars {
         6 optional unsigned int           transactionIndex;
         7 optional unsigned int           logIndex;
 
-        // 2026-08-05: field 8 replaced `string opReceiptMeta` (RLP) with this struct.
-        // Optional so receipts that NEVER wrote field 8 (pre-OP legacy) decode to nullopt.
-        // ⚠️ NOT backward-compatible with persisted string@tag8 OP receipts: decoding one
-        // throws TarsDecodeException (tars type mismatch) — accepted because dev stage has no
-        // persisted OP receipts; wire migration needed if old-format data ever appears.
         8 optional OpStackReceiptMeta      opStackMeta;
     };
 };
