@@ -374,5 +374,107 @@ BOOST_AUTO_TEST_CASE(validateTarsHeaderRejectsNonNumeric)
         error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader));
 }
 
+// Real mainnet golden vector: Ethereum block #19800000 (Cancun era, 20-item header).
+// Fields are the actual on-chain values; the expected hash is the block hash published on
+// the chain (0x95d7f597…), independently verified to equal keccak256(rlp(header)). This is
+// a true interoperability oracle against geth/op-node — not a self-consistent fixture.
+BOOST_AUTO_TEST_CASE(goldenMainnetCancunHeader)
+{
+    auto tars = std::make_shared<bcostars::BlockHeader>();
+    auto& data = tars->data;
+    data.blockNumber = 19800000;
+    data.timestamp = 1714865051;
+    data.gasLimit = "30000000";
+    data.gasUsed = "8020412";
+    data.baseFee = "5007423601";
+    data.blobGasUsed = "786432";
+    data.excessBlobGas = "0";
+    data.coinbase.assign(20, 0x00);
+    bcos::Address coinbase(
+        std::string_view("0x95222290dd7278aa3ddd389cc1e1d165cc4bafe5"), bcos::Address::FromHex);
+    data.coinbase.assign(coinbase.begin(), coinbase.end());
+    data.stateRoot.assign(32, 0x00);
+    auto stateRoot = bcos::crypto::HashType(
+        std::string_view("0xe08eb6a130d0ab2b301b63ebb512ba47cd55662d3fe403341ea42dc79665613c"),
+        bcos::crypto::HashType::FromHex);
+    data.stateRoot.assign(stateRoot.begin(), stateRoot.end());
+    data.txsRoot.assign(32, 0x00);
+    auto txsRoot = bcos::crypto::HashType(
+        std::string_view("0xb710f4a7c9917d3e81f0cfdbbe9ea5854db0e745d37194d2342d3ea0585d285f"),
+        bcos::crypto::HashType::FromHex);
+    data.txsRoot.assign(txsRoot.begin(), txsRoot.end());
+    data.receiptRoot.assign(32, 0x00);
+    auto receiptsRoot = bcos::crypto::HashType(
+        std::string_view("0x27bfbe21bcb21d27ff8f5d442b4e5110080b3df4e1d1f0b6314d77605e9f7e6e"),
+        bcos::crypto::HashType::FromHex);
+    data.receiptRoot.assign(receiptsRoot.begin(), receiptsRoot.end());
+    data.prevRandao.assign(32, 0x00);
+    auto mixHash = bcos::h256(
+        std::string_view("0xb50774a2180b910c41018b5651e87200c3d10c7b7cd0443b20e346b3f289b66a"),
+        bcos::h256::FromHex);
+    data.prevRandao.assign(mixHash.begin(), mixHash.end());
+    data.withdrawalsHash.assign(32, 0x00);
+    auto withdrawalsRoot = bcos::h256(
+        std::string_view("0x1a470d20b701c3a7f5272198de31ac4a769ffc4dd0637e0c9718c0adf5c346f5"),
+        bcos::h256::FromHex);
+    data.withdrawalsHash.assign(withdrawalsRoot.begin(), withdrawalsRoot.end());
+    data.parentBeaconRoot.assign(32, 0x00);
+    auto beaconRoot = bcos::h256(
+        std::string_view("0x81fcf3a2ae3a5543a467906ebc642cc9fc7d18fd094a253ea5349323b87494a2"),
+        bcos::h256::FromHex);
+    data.parentBeaconRoot.assign(beaconRoot.begin(), beaconRoot.end());
+    auto parentHash = bcos::crypto::HashType(
+        std::string_view("0x4c0f381da82f7c5232f921308b040f2f51475040db7b1ada1970960872182b44"),
+        bcos::crypto::HashType::FromHex);
+    data.parentInfo.emplace_back();
+    data.parentInfo.front().blockNumber = 19799999;
+    data.parentInfo.front().blockHash.assign(parentHash.begin(), parentHash.end());
+    // extraData "beaverbuild.org"
+    std::string extraDataHex = "6265617665726275696c642e6f7267";
+    auto extraDataBytes = bcos::fromHex(extraDataHex);
+    data.extraData.assign(extraDataBytes.begin(), extraDataBytes.end());
+    // logsBloom: the actual 256-byte on-chain bloom of block #19800000
+    auto logsBloomBytes = bcos::fromHex(
+        "2723022003b74129109181308d241b0014a9489122d42100820822154c6c5b1881111186300"
+        "1a228625c1ae2c81c418b4aa5880fae43b80054b8182a00fa20025002300d4c081aad49cad"
+        "24b8830c0b794c5805003427cd4b114154582695007c0c829012631b70205c8441510a3ed5"
+        "d020e10390c400e01a8c50495046862206a328e505070a1044001c642c9382106882104810d"
+        "c8e208662300dc6e74448e4fb20042748a28244d0cc6e61909842466618640d89d58000a72"
+        "6d0821c80140113031176cc24cc810018e35590bfc4e28c0a03e462220504a6654222240a0"
+        "c2913bb40510030dd0941c16c3ba0688458528d2c89db43440a20cf410160854c7");
+    data.logsBloom.assign(logsBloomBytes.begin(), logsBloomBytes.end());
+
+    EthBlockHeader ethHeader(*tars);
+    bytes rlp;
+    ethHeader.rlpEncode(rlp);
+
+    // The keccak of our RLP encoding must equal the on-chain block hash of #19800000.
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex(),
+        "95d7f597b43f97bb4dcb0f1d9a74f13d6d6236592cd01d122945d04b5a2aabad");
+
+    // Golden RLP bytes: the exact RLP encoding of the real mainnet header, independently
+    // verified to hash to the on-chain block hash.
+    BOOST_CHECK_EQUAL(bcos::toHex(rlp),
+        "f90258a04c0f381da82f7c5232f921308b040f2f51475040db7b1ada19709608"
+        "72182b44a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142"
+        "fd40d493479495222290dd7278aa3ddd389cc1e1d165cc4bafe5a0e08eb6a130"
+        "d0ab2b301b63ebb512ba47cd55662d3fe403341ea42dc79665613ca0b710f4a7"
+        "c9917d3e81f0cfdbbe9ea5854db0e745d37194d2342d3ea0585d285fa027bfbe"
+        "21bcb21d27ff8f5d442b4e5110080b3df4e1d1f0b6314d77605e9f7e6eb90100"
+        "2723022003b74129109181308d241b0014a9489122d42100820822154c6c5b18"
+        "811111863001a228625c1ae2c81c418b4aa5880fae43b80054b8182a00fa2002"
+        "5002300d4c081aad49cad24b8830c0b794c5805003427cd4b114154582695007"
+        "c0c829012631b70205c8441510a3ed5d020e10390c400e01a8c5049504686220"
+        "6a328e505070a1044001c642c9382106882104810dc8e208662300dc6e74448e"
+        "4fb20042748a28244d0cc6e61909842466618640d89d58000a726d0821c80140"
+        "113031176cc24cc810018e35590bfc4e28c0a03e462220504a6654222240a0c2"
+        "913bb40510030dd0941c16c3ba0688458528d2c89db43440a20cf410160854c7"
+        "8084012e1fc08401c9c380837a61bc846636c39b8f6265617665726275696c64"
+        "2e6f7267a0b50774a2180b910c41018b5651e87200c3d10c7b7cd0443b20e346"
+        "b3f289b66a88000000000000000085012a773871a01a470d20b701c3a7f52721"
+        "98de31ac4a769ffc4dd0637e0c9718c0adf5c346f5830c000080a081fcf3a2ae"
+        "3a5543a467906ebc642cc9fc7d18fd094a253ea5349323b87494a2");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
