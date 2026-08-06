@@ -23,6 +23,7 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
+#include <algorithm>
 #include <charconv>
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
@@ -45,7 +46,8 @@ std::string u64ToHex(uint64_t v)
     // Hand-written hex: avoids constructing boost::multiprecision::uint256_t (a big-integer
     // intermediate conversion on every getter across the 10 u64 fields). 0 encodes as "0x0"
     // (non-empty, preserving field presence) — consistent with u256ToHex. std::to_chars is
-    // allocation-free and guarantees nul termination, safer than a hand-rolled stack buffer.
+    // allocation-free; note it does NOT NUL-terminate (we construct the string from the
+    // returned length ptr - buf, not from a strlen), unlike a hand-rolled buffer would.
     if (v == 0)
     {
         return "0x0";
@@ -83,6 +85,15 @@ std::optional<bcos::u256> hexToU256(std::string const& s)
     {
         return std::nullopt;
     }
+    // fromBigEndian<u256> silently truncates inputs wider than 32 bytes (high bytes shifted out).
+    // Strip leading 0x00 first (canonical), then reject if any nonzero byte remains beyond 32 —
+    // a corrupt oversized value must not be silently folded into the low 256 bits.
+    auto it = std::find_if(bytes->begin(), bytes->end(), [](bcos::byte b) { return b != 0; });
+    std::size_t const significant = bytes->end() - it;
+    if (significant > 32)
+    {
+        return std::nullopt;
+    }
     return bcos::fromBigEndian<bcos::u256>(*bytes);
 }
 std::optional<uint64_t> hexToU64(std::string const& s)
@@ -94,6 +105,14 @@ std::optional<uint64_t> hexToU64(std::string const& s)
     // Same as above: safeFromHex guards against corrupt input.
     auto bytes = bcos::safeFromHex(s);
     if (!bytes)
+    {
+        return std::nullopt;
+    }
+    // fromBigEndian<uint64_t> silently truncates inputs wider than 8 bytes. Same guard as
+    // hexToU256: strip leading zeros, reject nonzero bytes beyond 8.
+    auto it = std::find_if(bytes->begin(), bytes->end(), [](bcos::byte b) { return b != 0; });
+    std::size_t const significant = bytes->end() - it;
+    if (significant > 8)
     {
         return std::nullopt;
     }

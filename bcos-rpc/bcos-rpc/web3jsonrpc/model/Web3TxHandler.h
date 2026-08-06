@@ -1,4 +1,4 @@
-// bcos-rpc/bcos-rpc/web3jsonrpc/model/TxHandler.h
+// bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3TxHandler.h
 #pragma once
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-utilities/Common.h>
