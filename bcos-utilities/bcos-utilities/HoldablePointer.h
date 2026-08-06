@@ -21,7 +21,6 @@
 
 #include <cassert>
 #include <cstddef>
-#include <cstdint>
 
 namespace bcos
 {
@@ -31,77 +30,77 @@ struct isOwner
 };
 
 template <typename T>
-    requires(alignof(T) >= 2)
 class HoldablePointer
 {
 public:
     HoldablePointer() noexcept = default;
 
     explicit HoldablePointer([[maybe_unused]] isOwner<false> owner, T* ptr) noexcept
-      : m_ptr(reinterpret_cast<uintptr_t>(ptr))
-    {
-        assert(reinterpret_cast<uintptr_t>(ptr) % alignof(T) == 0 && "ptr is not aligned");
-    }
+      : m_ptr(ptr) {}
     explicit HoldablePointer([[maybe_unused]] isOwner<true> owner, T* ptr) noexcept
-      : m_ptr(reinterpret_cast<uintptr_t>(ptr) | 1)
+      : m_ptr(ptr), m_isOwner(true)
     {
-        assert(reinterpret_cast<uintptr_t>(ptr) % alignof(T) == 0 && "ptr is not aligned");
+        assert(ptr != nullptr && "ptr is nullptr");
     }
 
     HoldablePointer(const HoldablePointer&) = delete;
     HoldablePointer& operator=(const HoldablePointer&) = delete;
-    HoldablePointer(HoldablePointer&& other) noexcept : m_ptr(other.m_ptr)
+    HoldablePointer(HoldablePointer&& other) noexcept 
+        : m_ptr(other.m_ptr), m_isOwner(other.m_isOwner)
     {
-        other.m_ptr = 0;
+        other.m_ptr = nullptr;
+        other.m_isOwner = false;
     }
     HoldablePointer& operator=(HoldablePointer&& other) noexcept
     {
         if (this != &other)
         {
-            if (m_ptr & 1)
+            if (m_isOwner)
             {
-                delete reinterpret_cast<T*>(m_ptr & ~1);
+                delete m_ptr;
             }
             m_ptr = other.m_ptr;
-            other.m_ptr = 0;
+            m_isOwner = other.m_isOwner;
+            other.m_ptr = nullptr;
+            other.m_isOwner = false;
         }
         return *this;
     }
     ~HoldablePointer() noexcept
     {
-        if (m_ptr & 1)
+        if (m_isOwner)
         {
-            delete reinterpret_cast<T*>(m_ptr & ~1);
+            delete m_ptr;
         }
     }
 
     T* operator->() noexcept
     {
-        assert(m_ptr != 0 && "invoke operator-> on a nullptr");
-        return reinterpret_cast<T*>(m_ptr & ~1);
+        assert(m_ptr != nullptr && "invoke operator-> on a nullptr");
+        return m_ptr;
     }
     const T* operator->() const noexcept
     {
-        assert(m_ptr != 0 && "invoke operator-> on a nullptr");
-        return reinterpret_cast<const T*>(m_ptr & ~1);
+        assert(m_ptr != nullptr && "invoke operator-> on a nullptr");
+        return m_ptr;
     }
     T& operator*() noexcept
     {
-        assert(m_ptr != 0 && "invoke operator* on a nullptr");
-        return *reinterpret_cast<T*>(m_ptr & ~1);
+        assert(m_ptr != nullptr && "invoke operator* on a nullptr");
+        return *m_ptr;
     }
     const T& operator*() const noexcept
     {
-        assert(m_ptr != 0 && "invoke operator* on a nullptr");
-        return *reinterpret_cast<const T*>(m_ptr & ~1);
+        assert(m_ptr != nullptr && "invoke operator* on a nullptr");
+        return *m_ptr;
     }
 
     // raw pointer access
-    T* get() noexcept { return reinterpret_cast<T*>(m_ptr & ~1); }
-    const T* get() const noexcept { return reinterpret_cast<const T*>(m_ptr & ~1); }
+    T* get() noexcept { return m_ptr; }
+    const T* get() const noexcept { return m_ptr; }
 
     // contextual conversion: non-null when holding (borrowed or owned) data
-    explicit operator bool() const noexcept { return m_ptr != 0; }
+    explicit operator bool() const noexcept { return m_ptr != nullptr; }
 
     friend bool operator==(const HoldablePointer& lhs, const HoldablePointer& rhs) noexcept
     {
@@ -129,6 +128,7 @@ public:
     }
 
 private:
-    uintptr_t m_ptr{0};
+    T* m_ptr{nullptr};
+    bool m_isOwner{false};
 };
 }  // namespace bcos
