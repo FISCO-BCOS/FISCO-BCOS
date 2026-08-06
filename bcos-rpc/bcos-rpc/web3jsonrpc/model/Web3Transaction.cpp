@@ -69,7 +69,13 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     {
         // Legacy: no type byte
         type = TransactionType::Legacy;
-        return handlerFor(type).decode(in, *this, withSig);
+        auto err = handlerFor(type).decode(in, *this, withSig);
+        if (err == nullptr && !in.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooLong, "Trailing bytes after RLP list");
+        }
+        return err;
     }
     auto txType = magic_enum::enum_cast<TransactionType>(firstByte);
     if (!txType.has_value())
@@ -81,7 +87,13 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     // ⚠️ Do not pre-strip the type byte: the typed handler consumes the envelope itself (see the
     // Web3TxHandler.h decode contract); stripping it again here would skip the list header a second
     // time and fail every typed tx decode.
-    return handlerFor(type).decode(in, *this, withSig);
+    auto err = handlerFor(type).decode(in, *this, withSig);
+    if (err == nullptr && !in.empty())
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            codec::rlp::DecodingError::InputTooLong, "Trailing bytes after RLP list");
+    }
+    return err;
 }
 
 bcos::crypto::HashType Web3Transaction::txHash() const
@@ -231,17 +243,6 @@ std::string Web3Transaction::toString() const noexcept
 namespace codec::rlp
 {
 using namespace bcos::rpc;
-Header header(const AccessListEntry& entry) noexcept
-{
-    auto len = length(entry.storageKeys);
-    return {.isList = true, .payloadLength = Address::SIZE + 1 + len};
-}
-
-size_t length(AccessListEntry const& entry) noexcept
-{
-    auto head = header(entry);
-    return lengthOfLength(head.payloadLength) + head.payloadLength;
-}
 size_t length(Web3Transaction const& tx) noexcept
 {
     auto head = handlerFor(tx.type).header(tx);
@@ -249,22 +250,13 @@ size_t length(Web3Transaction const& tx) noexcept
     len = (tx.type == TransactionType::Legacy) ? len : lengthOfLength(len + 1) + len + 1;
     return len;
 }
-void encode(bcos::bytes& out, const AccessListEntry& entry) noexcept
-{
-    encodeHeader(out, header(entry));
-    encode(out, entry.account.ref());
-    encode(out, entry.storageKeys);
-}
 void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 {
-    // Delegate to the handler for compatibility (EthEndpoint.cpp:561 and tests both call this free
-    // function)
-    auto encoded = handlerFor(tx.type).encode(tx);
-    out.insert(out.end(), encoded.begin(), encoded.end());
-}
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry& out) noexcept
-{
-    return decode(in, out.account, out.storageKeys);
+    // Delegate to the handler. Move the returned vector into `out` to avoid a double allocation:
+    // the handler already reserves internally and returns a complete buffer; copying it into out
+    // would allocate a second time. Callers pass an empty `out` (the previous append semantics
+    // matched move for the empty case), so move-assign preserves compatibility.
+    out = handlerFor(tx.type).encode(tx);
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
 {

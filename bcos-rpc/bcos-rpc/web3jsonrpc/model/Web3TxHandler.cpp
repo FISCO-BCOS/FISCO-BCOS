@@ -5,6 +5,17 @@
 #include <bcos-utilities/Log.h>
 #include <cstdint>
 
+// These using-declarations are NOT dead: they are the ADL bridge that lets the generic codec
+// templates (RLPEncode.h encodeItems / Common.h lengthOfItems / RLPDecode.h decodeItems) find the
+// AccessListEntry overloads defined at the bottom of this file. Those overloads live in namespace
+// codec::rlp, which is not an associated namespace of bcos::rpc::AccessListEntry; without the
+// using-declaration a standalone TU (or a unity-batch reorder) fails with "neither visible in the
+// template definition nor found by argument-dependent lookup". Keep the three in sync with the
+// overloads.
+using bcos::codec::rlp::decode;
+using bcos::codec::rlp::encode;
+using bcos::codec::rlp::length;
+
 namespace bcos::rpc
 {
 namespace
@@ -945,11 +956,58 @@ Web3TxHandler& handlerFor(TransactionType type)
     case TransactionType::Deposit:
         return deposit;
     }
-    // Unknown types revert to legacy handler. Log a warning so missing cases are
-    // visible in production; assert in debug builds to catch them during development.
-    BCOS_LOG(WARNING) << "handlerFor: unhandled TransactionType " << static_cast<int>(type)
-                      << ", falling back to legacy";
-    assert(false && "handlerFor: unhandled TransactionType enum value");
-    return legacy;
+    // Unknown TransactionType: this is a programming error — a new enum value was added
+    // without updating this switch. Return a no-op sentinel handler instead of falling back
+    // to Legacy (which would silently decode/encode as wrong transaction format producing
+    // garbage fields). encode/encodeForSign return empty bytes (fail-safe), and decode
+    // returns UnsupportedTransactionType error.
+    BCOS_LOG(FATAL) << "handlerFor: unhandled TransactionType " << static_cast<int>(type)
+                    << " — update the switch to handle the new type";
+    static struct : Web3TxHandler
+    {
+        bcos::bytes encodeForSign(const Web3Transaction&) const override { return {}; }
+        bcos::bytes encode(const Web3Transaction&) const override { return {}; }
+        codec::rlp::Header header(const Web3Transaction&) const override
+        {
+            return {.isList = true, .payloadLength = 0};
+        }
+        bcos::Error::UniquePtr decode(bcos::bytesRef&, Web3Transaction&, bool) const override
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::UnsupportedTransactionType, "Unknown transaction type");
+        }
+    } sentinel;
+    return sentinel;
 }
 }  // namespace bcos::rpc
+
+// AccessListEntry RLP codec overloads — defined here (not in Web3Transaction.cpp) because the
+// handlers are the primary consumer: they encode/decode tx.accessList. The three using-declarations
+// above make these visible at the template POI so the generic codec can find them.
+namespace bcos::codec::rlp
+{
+using namespace bcos::rpc;
+Header header(const AccessListEntry& entry) noexcept
+{
+    auto len = length(entry.storageKeys);
+    return {.isList = true, .payloadLength = Address::SIZE + 1 + len};
+}
+
+size_t length(AccessListEntry const& entry) noexcept
+{
+    auto head = header(entry);
+    return lengthOfLength(head.payloadLength) + head.payloadLength;
+}
+
+void encode(bcos::bytes& out, const AccessListEntry& entry) noexcept
+{
+    encodeHeader(out, header(entry));
+    encode(out, entry.account.ref());
+    encode(out, entry.storageKeys);
+}
+
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry& out) noexcept
+{
+    return decode(in, out.account, out.storageKeys);
+}
+}  // namespace bcos::codec::rlp

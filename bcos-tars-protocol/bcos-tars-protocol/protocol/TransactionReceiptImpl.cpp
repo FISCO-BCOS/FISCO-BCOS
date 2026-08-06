@@ -71,11 +71,11 @@ std::string u64ToHex(uint64_t v)
 /// all-empty means legacy receipt.
 bool opStackMetaEmpty(bcostars::OpStackReceiptMeta const& s)
 {
-    return s.l1_gas_price == "" && s.l1_fee == "" && s.l1_blob_base_fee == "" &&
-           s.l1_base_fee_scalar == "" && s.l1_blob_base_fee_scalar == "" &&
-           s.operator_fee_scalar == "" && s.operator_fee_constant == "" &&
-           s.da_footprint_gas_scalar == "" && s.da_footprint == "" && s.deposit_nonce == "" &&
-           s.deposit_receipt_version == "" && s.l1_gas_used == "" && s.operator_fee == "";
+    return s.l1_gas_price.empty() && s.l1_fee.empty() && s.l1_blob_base_fee.empty() &&
+           s.l1_base_fee_scalar.empty() && s.l1_blob_base_fee_scalar.empty() &&
+           s.operator_fee_scalar.empty() && s.operator_fee_constant.empty() &&
+           s.da_footprint_gas_scalar.empty() && s.da_footprint.empty() && s.deposit_nonce.empty() &&
+           s.deposit_receipt_version.empty() && s.l1_gas_used.empty() && s.operator_fee.empty();
 }
 std::optional<bcos::u256> hexToU256(std::string const& s)
 {
@@ -238,31 +238,31 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
     bcos::protocol::OpStackReceiptMeta out;
     // all 13 fields are hex strings; a tars optional string uses != "" to mean "present"
     // (0 values are stored "0x0", non-empty, so explicit zeros keep their presence)
-    if (s.l1_gas_price != "")
+    if (!s.l1_gas_price.empty())
         out.l1_gas_price = hexToU256(s.l1_gas_price);
-    if (s.l1_fee != "")
+    if (!s.l1_fee.empty())
         out.l1_fee = hexToU256(s.l1_fee);
-    if (s.l1_blob_base_fee != "")
+    if (!s.l1_blob_base_fee.empty())
         out.l1_blob_base_fee = hexToU256(s.l1_blob_base_fee);
-    if (s.l1_base_fee_scalar != "")
+    if (!s.l1_base_fee_scalar.empty())
         out.l1_base_fee_scalar = hexToU64(s.l1_base_fee_scalar);
-    if (s.l1_blob_base_fee_scalar != "")
+    if (!s.l1_blob_base_fee_scalar.empty())
         out.l1_blob_base_fee_scalar = hexToU64(s.l1_blob_base_fee_scalar);
-    if (s.operator_fee_scalar != "")
+    if (!s.operator_fee_scalar.empty())
         out.operator_fee_scalar = hexToU64(s.operator_fee_scalar);
-    if (s.operator_fee_constant != "")
+    if (!s.operator_fee_constant.empty())
         out.operator_fee_constant = hexToU64(s.operator_fee_constant);
-    if (s.da_footprint_gas_scalar != "")
+    if (!s.da_footprint_gas_scalar.empty())
         out.da_footprint_gas_scalar = hexToU64(s.da_footprint_gas_scalar);
-    if (s.da_footprint != "")
+    if (!s.da_footprint.empty())
         out.da_footprint = hexToU64(s.da_footprint);
-    if (s.deposit_nonce != "")
+    if (!s.deposit_nonce.empty())
         out.deposit_nonce = hexToU64(s.deposit_nonce);
-    if (s.deposit_receipt_version != "")
+    if (!s.deposit_receipt_version.empty())
         out.deposit_receipt_version = hexToU64(s.deposit_receipt_version);
-    if (s.l1_gas_used != "")
+    if (!s.l1_gas_used.empty())
         out.l1_gas_used = hexToU64(s.l1_gas_used);
-    if (s.operator_fee != "")
+    if (!s.operator_fee.empty())
         out.operator_fee = hexToU256(s.operator_fee);
     // A legacy receipt (field 8 never set) decodes to an all-empty opStackMeta. Report nullopt so
     // downstream `if (auto m = r.opStackMeta())` does not mistake it for an OP receipt.
