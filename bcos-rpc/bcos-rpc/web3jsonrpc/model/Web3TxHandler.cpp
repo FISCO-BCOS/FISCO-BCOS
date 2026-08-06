@@ -40,13 +40,11 @@ void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
 void outputAccessList(Json::Value& result, const Web3Transaction& tx)
 {
     result["accessList"] = Json::arrayValue;
-    result["accessList"].resize(tx.accessList.size());
     for (const auto& accessList : tx.accessList)
     {
         Json::Value access = Json::objectValue;
         access["address"] = accessList.account.hexPrefixed();
         access["storageKeys"] = Json::arrayValue;
-        access["storageKeys"].resize(accessList.storageKeys.size());
         for (const auto& j : accessList.storageKeys)
         {
             access["storageKeys"].append(j.hexPrefixed());
@@ -60,7 +58,6 @@ void outputBlobFields(Json::Value& result, const Web3Transaction& tx)
 {
     result["maxFeePerBlobGas"] = tx.maxFeePerBlobGas.str();
     result["blobVersionedHashes"] = Json::arrayValue;
-    result["blobVersionedHashes"].resize(tx.blobVersionedHashes.size());
     for (const auto& blobVersionedHashe : tx.blobVersionedHashes)
     {
         result["blobVersionedHashes"].append(blobVersionedHashe.hexPrefixed());
