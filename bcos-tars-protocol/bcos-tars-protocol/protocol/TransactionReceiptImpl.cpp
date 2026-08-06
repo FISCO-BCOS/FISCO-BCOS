@@ -23,6 +23,7 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
+#include <charconv>
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
@@ -41,7 +42,30 @@ std::string u256ToHex(bcos::u256 const& v)
 }
 std::string u64ToHex(uint64_t v)
 {
-    return "0x" + boost::multiprecision::uint256_t(v).str(0, std::ios_base::hex);
+    // 手写 hex:避免构造 boost::multiprecision::uint256_t(大整数中间转换,10 个 u64 字段
+    // 每次 getter 都走)。0 编码为 "0x0"(非空,保留字段存在性)——与 u256ToHex 一致。
+    // std::to_chars 无分配、保证 nul 终止,比手写栈缓冲安全。
+    if (v == 0)
+    {
+        return "0x0";
+    }
+    char buf[2 + 16 + 1];
+    auto const [ptr, ec] = std::to_chars(buf + 2, std::end(buf), v, 16);
+    (void)ec;
+    buf[0] = '0';
+    buf[1] = 'x';
+    return std::string(buf, static_cast<std::size_t>(ptr - buf));
+}
+
+/// 判断 opStackMeta 是否全空(遗留 receipt 未写 field 8)。tars optional string 用
+/// != "" 表示存在(0 值存 "0x0" 非空),全空 = legacy receipt。
+bool opStackMetaEmpty(bcostars::OpStackReceiptMeta const& s)
+{
+    return s.l1_gas_price == "" && s.l1_fee == "" && s.l1_blob_base_fee == "" &&
+           s.l1_base_fee_scalar == "" && s.l1_blob_base_fee_scalar == "" &&
+           s.operator_fee_scalar == "" && s.operator_fee_constant == "" &&
+           s.da_footprint_gas_scalar == "" && s.da_footprint == "" && s.deposit_nonce == "" &&
+           s.deposit_receipt_version == "" && s.l1_gas_used == "" && s.operator_fee == "";
 }
 std::optional<bcos::u256> hexToU256(std::string const& s)
 {
@@ -166,6 +190,11 @@ std::optional<bcos::protocol::OpStackReceiptMeta>
 bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
 {
     auto const& s = m_inner()->opStackMeta;
+    // 遗留 receipt(field 8 未写)解出全空 opStackMeta:直接短路返回,避免构建整个 struct。
+    if (opStackMetaEmpty(s))
+    {
+        return std::nullopt;
+    }
     bcos::protocol::OpStackReceiptMeta out;
     // all 13 fields are hex strings; a tars optional string uses != "" to mean "present"
     // (0 values are stored "0x0", non-empty, so explicit zeros keep their presence)
@@ -299,9 +328,13 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
     // opStackMeta is now a tars struct: report its serialized size (tars tags + payload),
     // consistent with the encode() path used for storage. No tars_size() is generated, so
     // serialize via bcos::concepts::serialize::encode and measure the byte buffer.
-    bcos::bytes encodedOpStackMeta;
-    bcos::concepts::serialize::encode(m_inner()->opStackMeta, encodedOpStackMeta);
-    size += encodedOpStackMeta.size();
+    // 短路:99% receipt 无 OP metadata(遗留 receipt 全空),跳过序列化避免每次分配+编码。
+    if (!opStackMetaEmpty(m_inner()->opStackMeta))
+    {
+        bcos::bytes encodedOpStackMeta;
+        bcos::concepts::serialize::encode(m_inner()->opStackMeta, encodedOpStackMeta);
+        size += encodedOpStackMeta.size();
+    }
     return size;
 }
 
