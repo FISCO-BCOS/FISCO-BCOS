@@ -21,9 +21,9 @@
 #pragma once
 #include "Common.h"
 #include "bcos-utilities/Error.h"
-#include <algorithm>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <algorithm>
 #include <cstring>
 #include <optional>
 #include <utility>
@@ -244,6 +244,11 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcep
     return nullptr;
 }
 
+// Decodes an optional element. Presence is decided by "the view is exhausted" — i.e.
+// from.empty() — so this overload is only meaningful on a bytesRef already cropped to the
+// current list's payload (the variadic list decode does this). Calling it on a raw buffer
+// that still holds trailing data will silently treat the remaining fields as absent rather
+// than reporting malformed input; keep the list-context invariant in mind.
 template <typename T>
 inline bcos::Error::UniquePtr decode(bytesRef& from, std::optional<T>& to) noexcept
 {
@@ -263,8 +268,7 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::optional<T>& to) noexc
 
 template <typename... Args>
     requires(sizeof...(Args) > 1)
-inline bcos::Error::UniquePtr decodeItems(
-    bytesRef& from, Args&... args) noexcept
+inline bcos::Error::UniquePtr decodeItems(bytesRef& from, Args&... args) noexcept
 {
     bcos::Error::UniquePtr decodeError;
     ((decodeError = decode(from, args)) || ...);

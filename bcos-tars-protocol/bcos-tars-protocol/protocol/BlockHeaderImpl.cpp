@@ -38,9 +38,6 @@ void bcostars::protocol::BlockHeaderImpl::decode(bcos::bytesConstRef _data)
     input.setBuffer((const char*)_data.data(), _data.size());
 
     m_inner->readFrom(input);
-    // Decoded content carries whatever dataHash was serialized, not a freshly injected RLP
-    // hash; treat any previously injected hash as invalid.
-    m_rlpHashInjected = false;
 }
 
 void bcostars::protocol::BlockHeaderImpl::encode(bcos::bytes& _encodeData) const
@@ -68,17 +65,13 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
 {
     if (isEthBlockHeader())
     {
-        // Eth header: the RLP hash must have been injected via setRLPHash. We key on the
-        // m_rlpHashInjected flag (not on dataHash emptiness) so that a hash computed by the
-        // FISCO Tars path, or one cleared by a setter, is not mistaken for a valid RLP hash.
-        if (!m_rlpHashInjected)
-        {
-            BOOST_THROW_EXCEPTION(
-                EmptyBlockHeaderHash{}
-                << bcos::errinfo_comment(
-                       "Eth block header hash is empty: setRLPHash must be called before "
-                       "calculateHash on an Ethereum-standard header"));
-        }
+        // Eth header: the RLP hash is injected via setRLPHash (by the rlp-protocol layer) and
+        // is authoritative. calculateHash() is idempotent here — it keeps the injected
+        // dataHash and returns without recomputing a FISCO Tars hash (which would not match
+        // keccak256(rlp(header)) anyway). If no hash was injected yet, hash() will report an
+        // empty dataHash to the caller; we deliberately do NOT throw here, because
+        // calculateHash() runs on consensus/sync paths that must reject an Eth header cleanly
+        // rather than crash (see BlockFactoryImpl / PBFTEngine).
         return;
     }
     else
@@ -93,7 +86,6 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
 void bcostars::protocol::BlockHeaderImpl::clear()
 {
     m_inner->resetDefautlt();
-    m_rlpHashInjected = false;
 }
 
 bcos::protocol::ParentInfo bcostars::protocol::BlockHeaderImpl::parentInfo() const
@@ -104,10 +96,9 @@ bcos::protocol::ParentInfo bcostars::protocol::BlockHeaderImpl::parentInfo() con
         return {};
     }
     const auto& first = parentInfos.front();
-    return bcos::protocol::ParentInfo{
-        .blockNumber = first.blockNumber,
-        .blockHash = bcos::crypto::HashType(reinterpret_cast<const bcos::byte*>(first.blockHash.data()),
-            first.blockHash.size())};
+    return bcos::protocol::ParentInfo{.blockNumber = first.blockNumber,
+        .blockHash = bcos::crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(first.blockHash.data()), first.blockHash.size())};
 }
 
 bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::txsRoot() const
@@ -132,8 +123,7 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::receiptsRoot() const
 {
     if (m_inner->data.receiptRoot.size() >= bcos::crypto::HashType::SIZE)
     {
-        return *(
-            reinterpret_cast<const bcos::crypto::HashType*>(m_inner->data.receiptRoot.data()));
+        return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner->data.receiptRoot.data()));
     }
     return {};
 }
@@ -147,8 +137,7 @@ bcos::u256 bcostars::protocol::BlockHeaderImpl::gasUsed() const
     return {};
 }
 
-void bcostars::protocol::BlockHeaderImpl::setParentInfo(
-    bcos::protocol::ParentInfo parentInfo)
+void bcostars::protocol::BlockHeaderImpl::setParentInfo(bcos::protocol::ParentInfo parentInfo)
 {
     auto& parentInfos = m_inner->data.parentInfo;
     parentInfos.clear();
@@ -283,12 +272,10 @@ bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::inner()
 void bcostars::protocol::BlockHeaderImpl::setInner(bcostars::BlockHeader blockHeader)
 {
     *m_inner = std::move(blockHeader);
-    m_rlpHashInjected = false;
 }
 void bcostars::protocol::BlockHeaderImpl::clearDataHash()
 {
     m_inner->dataHash.clear();
-    m_rlpHashInjected = false;
 }
 
 size_t bcostars::protocol::BlockHeaderImpl::size() const
@@ -524,5 +511,4 @@ void bcostars::protocol::BlockHeaderImpl::setSlotNumber(uint64_t _val)
 void bcostars::protocol::BlockHeaderImpl::setRLPHash(bcos::crypto::HashType _hash)
 {
     m_inner->dataHash.assign(_hash.begin(), _hash.end());
-    m_rlpHashInjected = true;
 }

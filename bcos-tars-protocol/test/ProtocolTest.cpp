@@ -1,5 +1,4 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -9,6 +8,7 @@
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
@@ -487,8 +487,8 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
-    BOOST_CHECK_EQUAL(
-        bcos::toString(header->parentInfo().blockHash), bcos::toString(decodedHeader->parentInfo().blockHash));
+    BOOST_CHECK_EQUAL(bcos::toString(header->parentInfo().blockHash),
+        bcos::toString(decodedHeader->parentInfo().blockHash));
     BOOST_CHECK_EQUAL(header->parentInfo().blockNumber, decodedHeader->parentInfo().blockNumber);
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));
@@ -520,15 +520,20 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
 
     // prevRandao / withdrawalsRoot / parentBeaconBlockRoot / requestsHash /
     // blockAccessListHash (32-byte hashes)
-    bcos::h256 prevRandao(std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
+    bcos::h256 prevRandao(
+        std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
         bcos::h256::FromHex);
-    bcos::h256 withdrawalsHash(std::string_view("0x2222222222222222222222222222222222222222222222222222222222222222"),
+    bcos::h256 withdrawalsHash(
+        std::string_view("0x2222222222222222222222222222222222222222222222222222222222222222"),
         bcos::h256::FromHex);
-    bcos::h256 beaconRoot(std::string_view("0x3333333333333333333333333333333333333333333333333333333333333333"),
+    bcos::h256 beaconRoot(
+        std::string_view("0x3333333333333333333333333333333333333333333333333333333333333333"),
         bcos::h256::FromHex);
-    bcos::h256 requestsHash(std::string_view("0x4444444444444444444444444444444444444444444444444444444444444444"),
+    bcos::h256 requestsHash(
+        std::string_view("0x4444444444444444444444444444444444444444444444444444444444444444"),
         bcos::h256::FromHex);
-    bcos::h256 accessListHash(std::string_view("0x5555555555555555555555555555555555555555555555555555555555555555"),
+    bcos::h256 accessListHash(
+        std::string_view("0x5555555555555555555555555555555555555555555555555555555555555555"),
         bcos::h256::FromHex);
     header->setPrevRandao(prevRandao);
     header->setWithdrawalsRoot(withdrawalsHash);
@@ -623,28 +628,27 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHash)
     impl->setGasLimit(bcos::u256(30000000));
     impl->setGasUsed(bcos::u256(21000));
     impl->setBaseFee(bcos::u256(1000000000));
-    impl->setCoinbase(bcos::Address(std::string_view(
-        "0xdead000000000000000000000000000000000000"), bcos::Address::FromHex));
-    bcos::h256 stateRoot(std::string_view(
-        "0x1111111111111111111111111111111111111111111111111111111111111111"),
+    impl->setCoinbase(bcos::Address(
+        std::string_view("0xdead000000000000000000000000000000000000"), bcos::Address::FromHex));
+    bcos::h256 stateRoot(
+        std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
         bcos::h256::FromHex);
     impl->setStateRoot(stateRoot);
-    impl->setTxsRoot(bcos::crypto::HashType(std::string_view(
-        "0x4444444444444444444444444444444444444444444444444444444444444444"),
+    impl->setTxsRoot(bcos::crypto::HashType(
+        std::string_view("0x4444444444444444444444444444444444444444444444444444444444444444"),
         bcos::crypto::HashType::FromHex));
-    impl->setReceiptsRoot(bcos::crypto::HashType(std::string_view(
-        "0x5555555555555555555555555555555555555555555555555555555555555555"),
+    impl->setReceiptsRoot(bcos::crypto::HashType(
+        std::string_view("0x5555555555555555555555555555555555555555555555555555555555555555"),
         bcos::crypto::HashType::FromHex));
     bcos::Bloom bloom{};
     std::fill(bloom.begin(), bloom.end(), 0xcd);
     impl->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-    impl->setPrevRandao(bcos::h256(std::string_view(
-        "0x2222222222222222222222222222222222222222222222222222222222222222"),
+    impl->setPrevRandao(bcos::h256(
+        std::string_view("0x2222222222222222222222222222222222222222222222222222222222222222"),
         bcos::h256::FromHex));
-    bcos::protocol::ParentInfo parentInfo{
-        .blockNumber = 0,
-        .blockHash = bcos::crypto::HashType(std::string_view(
-            "0x3333333333333333333333333333333333333333333333333333333333333333"),
+    bcos::protocol::ParentInfo parentInfo{.blockNumber = 0,
+        .blockHash = bcos::crypto::HashType(
+            std::string_view("0x3333333333333333333333333333333333333333333333333333333333333333"),
             bcos::crypto::HashType::FromHex)};
     impl->setParentInfo(parentInfo);
 
@@ -666,14 +670,19 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHash)
     BOOST_CHECK(ethHash != fiscoHash);
 }
 
-// Eth header without an injected RLP hash must fail calculateHash with a clear error
+// Eth header without an injected RLP hash: calculateHash() is idempotent (keeps whatever
+// dataHash holds, never throws for an Eth header — consensus/sync paths rely on this), but
+// hash() still reports the missing hash by throwing.
 BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHashMissing)
 {
     auto header = blockHeaderFactory->createBlockHeader();
     auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
     impl->setIsEthBlockHeader(true);
 
-    BOOST_CHECK_THROW(impl->calculateHash(*cryptoSuite->hashImpl()), std::exception);
+    // calculateHash on an Eth header with no injected hash must not throw (idempotent).
+    BOOST_CHECK_NO_THROW(impl->calculateHash(*cryptoSuite->hashImpl()));
+    // hash() still reports the empty dataHash.
+    BOOST_CHECK_THROW(impl->hash(), std::exception);
 }
 
 

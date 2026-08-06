@@ -130,9 +130,6 @@ public:
     // Inject a pre-computed Ethereum RLP hash (set by the rlp-protocol layer via
     // EthBlockHeader::calculateHash). For Eth headers (isEthBlockHeader() == true)
     // calculateHash() keeps this value instead of recomputing the FISCO Tars hash.
-    // The m_rlpHashInjected flag records that dataHash currently holds a valid RLP hash:
-    // any setter that clears the hash (clearDataHash) also resets the flag, so
-    // calculateHash() can distinguish "hash never injected" from "hash cleared by mutation".
     void setRLPHash(bcos::crypto::HashType _hash);
 
     const bcostars::BlockHeader& inner() const;
@@ -146,8 +143,5 @@ private:
     void clearDataHash();
 
     std::shared_ptr<bcostars::BlockHeader> m_inner;
-    // Whether dataHash holds a hash injected via setRLPHash (as opposed to a hash computed
-    // by the FISCO Tars path or cleared by a setter).
-    bool m_rlpHashInjected{false};
 };
 }  // namespace bcostars::protocol

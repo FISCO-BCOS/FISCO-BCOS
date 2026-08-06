@@ -281,7 +281,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
         _callback)
 {
     if (block->blockHeader()->version() >
-            (uint32_t)bcos::protocol::g_BCOSConfig.maxSupportedVersion())
+        (uint32_t)bcos::protocol::g_BCOSConfig.maxSupportedVersion())
     {
         auto errorMessage = "The block version is larger than maxSupportedVersion";
         SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeader()->number()) << errorMessage
@@ -1187,7 +1187,8 @@ void SchedulerImpl::tryExecuteBlock(
         {
             return;
         }
-        bcos::protocol::ParentInfo parentInfo{.blockNumber = number, .blockHash = std::move(parentHash)};
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = number, .blockHash = std::move(parentHash)};
         block->blockHeader()->setParentInfo(parentInfo);
         block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 

@@ -18,7 +18,6 @@
  * @date 2024/4/7
  */
 
-
 #pragma once
 #include "Common.h"
 #include <bcos-utilities/Common.h>
@@ -139,8 +138,7 @@ inline void encode(bcos::bytes& to, const std::optional<T>& v) noexcept
 
 template <typename... Args>
     requires(sizeof...(Args) > 1)
-inline void encode(
-    bcos::bytes& to, const Args&... args) noexcept
+inline void encode(bcos::bytes& to, const Args&... args) noexcept
 {
     const Header h{.isList = true, .payloadLength = lengthOfItems(args...)};
     to.reserve(to.size() + lengthOfLength(h.payloadLength) + h.payloadLength);

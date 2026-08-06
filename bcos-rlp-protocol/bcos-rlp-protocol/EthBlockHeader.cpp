@@ -19,10 +19,10 @@
  */
 #include "EthBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
-#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;
@@ -41,8 +41,7 @@ namespace bcos::protocol
 void EthBlockHeader::calculateRLPHash(
     bcos::protocol::BlockHeader::Ptr header, bcos::Error::UniquePtr& error)
 {
-    auto* tarsHeader =
-        dynamic_cast<bcostars::protocol::BlockHeaderImpl*>(header.get());
+    auto* tarsHeader = dynamic_cast<bcostars::protocol::BlockHeaderImpl*>(header.get());
     if (tarsHeader == nullptr)
     {
         error = BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeaderType),
@@ -121,8 +120,7 @@ bcos::protocol::BlockHeader::Ptr EthBlockHeader::toTarsHeader(
     }
     if (ethHeader.data().excessBlobGas.has_value())
     {
-        tarsData.excessBlobGas =
-            boost::lexical_cast<std::string>(*ethHeader.data().excessBlobGas);
+        tarsData.excessBlobGas = boost::lexical_cast<std::string>(*ethHeader.data().excessBlobGas);
     }
     if (ethHeader.data().parentBeaconRoot.has_value())
     {
@@ -163,14 +161,12 @@ EthBlockHeader EthBlockHeader::toEthBlockHeader(
     auto err = ethHeader.rlpDecode(_data);
     if (err)
     {
-        error = BCOS_ERROR_UNIQUE_PTR(
-            static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
+        error = BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
             "EthBlockHeader: rlpDecode failed: " + err->errorMessage());
         return EthBlockHeader{};
     }
     return ethHeader;
 }
-
 
 
 // Validate that the Tars header carries every Ethereum-required field.
@@ -247,8 +243,7 @@ bool EthBlockHeader::validateTarsHeader(
     // earlier one is absent. Otherwise the encode side would silently drop fields and the
     // computed RLP hash would diverge from the original header.
     auto cascade = [&](const std::string& _absent, const std::string& _present) {
-        return invalid(
-            "EthBlockHeader: " + _present + " is set but " + _absent + " is missing");
+        return invalid("EthBlockHeader: " + _present + " is set but " + _absent + " is missing");
     };
     if (!_data.withdrawalsHash.empty() && _data.baseFee.empty())
     {
@@ -261,6 +256,14 @@ bool EthBlockHeader::validateTarsHeader(
     if (!_data.excessBlobGas.empty() && _data.blobGasUsed.empty())
     {
         return cascade("blobGasUsed", "excessBlobGas");
+    }
+    // The constructor reads blobGasUsed and excessBlobGas as a pair (both must be set or both
+    // are dropped), so enforce the same invariant here: blobGasUsed present without
+    // excessBlobGas would otherwise pass validation yet lose both fields on encode, silently
+    // diverging the RLP hash from the Tars data.
+    if (!_data.blobGasUsed.empty() && _data.excessBlobGas.empty())
+    {
+        return cascade("excessBlobGas", "blobGasUsed");
     }
     if (!_data.parentBeaconRoot.empty() && _data.excessBlobGas.empty())
     {
@@ -285,9 +288,9 @@ bool EthBlockHeader::validateTarsHeader(
         }
         catch (const boost::bad_lexical_cast&)
         {
-            error = BCOS_ERROR_UNIQUE_PTR(
-                static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader),
-                "EthBlockHeader: " + _fieldName + " is not a valid number");
+            error =
+                BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader),
+                    "EthBlockHeader: " + _fieldName + " is not a valid number");
             return false;
         }
     };
@@ -349,8 +352,9 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
     }
     if (_data.receiptRoot.size() >= crypto::HashType::SIZE)
     {
-        m_data.receiptsRoot = crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(_data.receiptRoot.data()), _data.receiptRoot.size());
+        m_data.receiptsRoot =
+            crypto::HashType(reinterpret_cast<const bcos::byte*>(_data.receiptRoot.data()),
+                _data.receiptRoot.size());
     }
 
     if (!_data.gasLimit.empty())
@@ -367,12 +371,11 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
 
     if (_data.prevRandao.size() >= h256::SIZE)
     {
-        m_data.prevRandao =
-            h256(reinterpret_cast<const bcos::byte*>(_data.prevRandao.data()), _data.prevRandao.size());
+        m_data.prevRandao = h256(
+            reinterpret_cast<const bcos::byte*>(_data.prevRandao.data()), _data.prevRandao.size());
     }
 
-    m_data.extraData.assign(
-        _data.extraData.begin(), _data.extraData.end());
+    m_data.extraData.assign(_data.extraData.begin(), _data.extraData.end());
 
     if (_data.logsBloom.size() >= m_data.logsBloom.size())
     {
@@ -389,8 +392,9 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
         // Shanghai fork fields
         if (!_data.withdrawalsHash.empty())
         {
-            m_data.withdrawalsHash = h256(reinterpret_cast<const bcos::byte*>(_data.withdrawalsHash.data()),
-                _data.withdrawalsHash.size());
+            m_data.withdrawalsHash =
+                h256(reinterpret_cast<const bcos::byte*>(_data.withdrawalsHash.data()),
+                    _data.withdrawalsHash.size());
             // Cancun fork fields
             if (!_data.blobGasUsed.empty() && !_data.excessBlobGas.empty())
             {
@@ -398,20 +402,20 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
                 m_data.excessBlobGas = boost::lexical_cast<u256>(_data.excessBlobGas);
                 if (!_data.parentBeaconRoot.empty())
                 {
-                    m_data.parentBeaconRoot = h256(
-                        reinterpret_cast<const bcos::byte*>(_data.parentBeaconRoot.data()),
-                        _data.parentBeaconRoot.size());
+                    m_data.parentBeaconRoot =
+                        h256(reinterpret_cast<const bcos::byte*>(_data.parentBeaconRoot.data()),
+                            _data.parentBeaconRoot.size());
                     // Prague fork fields
                     if (!_data.requestsHash.empty())
                     {
-                        m_data.requestsHash = h256(
-                            reinterpret_cast<const bcos::byte*>(_data.requestsHash.data()),
-                            _data.requestsHash.size());
+                        m_data.requestsHash =
+                            h256(reinterpret_cast<const bcos::byte*>(_data.requestsHash.data()),
+                                _data.requestsHash.size());
                         // Osaka fork fields
                         if (!_data.blockAccessListHash.empty())
                         {
-                            m_data.blockAccessListHash = h256(
-                                reinterpret_cast<const bcos::byte*>(_data.blockAccessListHash.data()),
+                            m_data.blockAccessListHash = h256(reinterpret_cast<const bcos::byte*>(
+                                                                  _data.blockAccessListHash.data()),
                                 _data.blockAccessListHash.size());
                             if (_data.slotNumber != -1)  // -1 is the Tars unset sentinel
                             {
@@ -427,28 +431,16 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
 
 void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 {
-    codec::rlp::encode(out,
-        m_data.parentInfo.blockHash,
+    codec::rlp::encode(out, m_data.parentInfo.blockHash,
         c_emptyOmmersHash,  // uncleHash, fixed for post-merge blocks
-        m_data.coinbase,
-        m_data.stateRoot,
-        m_data.txsRoot,
-        m_data.receiptsRoot,
+        m_data.coinbase, m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot,
         bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()),
         bcos::u256{0},  // difficulty, fixed to 0 (post-merge)
-        static_cast<uint64_t>(m_data.number),
-        m_data.gasLimit,
-        m_data.gasUsed,
-        static_cast<uint64_t>(m_data.timestamp),
-        m_data.extraData,
-        m_data.prevRandao,
+        static_cast<uint64_t>(m_data.number), m_data.gasLimit, m_data.gasUsed,
+        static_cast<uint64_t>(m_data.timestamp), m_data.extraData, m_data.prevRandao,
         bcos::h64{0},  // nonce, fixed to 0 (post-merge)
-        m_data.baseFee,
-        m_data.withdrawalsHash,
-        m_data.blobGasUsed,
-        m_data.excessBlobGas,
-        m_data.parentBeaconRoot,
-        m_data.requestsHash);
+        m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed, m_data.excessBlobGas,
+        m_data.parentBeaconRoot, m_data.requestsHash);
 }
 
 
@@ -465,29 +457,11 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     u256 _difficulty;
     h64 _nonce;
 
-    auto error = codec::rlp::decode(ref,
-        m_data.parentInfo.blockHash,
-        _uncleHash,
-        m_data.coinbase,
-        m_data.stateRoot,
-        m_data.txsRoot,
-        m_data.receiptsRoot,
-        m_data.logsBloom,
-        _difficulty,
-        _number,
-        m_data.gasLimit,
-        m_data.gasUsed,
-        _timestamp,
-        m_data.extraData,
-        m_data.prevRandao,
-        _nonce,
-        m_data.baseFee,
-        m_data.withdrawalsHash,
-        m_data.blobGasUsed,
-        m_data.excessBlobGas,
-        m_data.parentBeaconRoot,
-        m_data.requestsHash
-    );
+    auto error = codec::rlp::decode(ref, m_data.parentInfo.blockHash, _uncleHash, m_data.coinbase,
+        m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot, m_data.logsBloom, _difficulty,
+        _number, m_data.gasLimit, m_data.gasUsed, _timestamp, m_data.extraData, m_data.prevRandao,
+        _nonce, m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed, m_data.excessBlobGas,
+        m_data.parentBeaconRoot, m_data.requestsHash);
     if (error)
     {
         return error;

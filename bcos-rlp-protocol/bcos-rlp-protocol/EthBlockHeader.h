@@ -19,14 +19,14 @@
  */
 #pragma once
 
+#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/protocol/BlockHeader.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>

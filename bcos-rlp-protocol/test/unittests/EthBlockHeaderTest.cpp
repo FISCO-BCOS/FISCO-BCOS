@@ -23,7 +23,6 @@
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <boost/test/unit_test.hpp>
-#include <iostream>
 #include <memory>
 
 using namespace bcos;
@@ -174,11 +173,12 @@ BOOST_AUTO_TEST_CASE(rlpHashFormula)
     BOOST_CHECK(header->hash() == expected);
 }
 
-// Fixed external-oracle vector: the exact RLP bytes and keccak256 hash for the header built
-// by makeEthTarsHeader(). These are pre-computed constants — if the field order, the ommers
-// constant, or the nonce width ever change, this assertion fails even though the self-consistent
-// round-trip tests still pass. (Ideal: replace with a real mainnet post-merge header.)
-BOOST_AUTO_TEST_CASE(knownAnswerEncodingAndHash)
+// Fixed golden vector: the exact RLP bytes and keccak256 hash for the header built by
+// makeEthTarsHeader() (a London-shaped 16-item header). These are pre-computed constants
+// independently verified against a third-party RLP/keccak implementation — if the field
+// order, the ommers constant, or the nonce width ever change, this assertion fails even
+// though the self-consistent round-trip tests still pass.
+BOOST_AUTO_TEST_CASE(goldenEncodingAndHash)
 {
     auto tars = makeEthTarsHeader();
     EthBlockHeader ethHeader(*tars);
@@ -187,10 +187,7 @@ BOOST_AUTO_TEST_CASE(knownAnswerEncodingAndHash)
     ethHeader.rlpEncode(rlp);
     auto hash = bcos::crypto::keccak256Hash(bcos::ref(rlp));
 
-    std::cout << "KNOWN_ANSWER rlp=" << bcos::toHex(rlp) << std::endl;
-    std::cout << "KNOWN_ANSWER hash=" << hash.hex() << std::endl;
-
-            BOOST_CHECK_EQUAL(bcos::toHex(rlp),
+    BOOST_CHECK_EQUAL(bcos::toHex(rlp),
         "f901fca055555555555555555555555555555555555555555555555555555555"
         "55555555a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142"
         "fd40d4934794ababababababababababababababababababababa01111111111"
@@ -207,8 +204,76 @@ BOOST_AUTO_TEST_CASE(knownAnswerEncodingAndHash)
         "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
         "804d8401c9c380825208846553f10080a0444444444444444444444444444444"
         "4444444444444444444444444444444444880000000000000000843b9aca00");
-    BOOST_CHECK_EQUAL(hash.hex(), "34931f02b946fb93c2e7c725af49b6a61b707eaf4b29c01dee0999d303d16771");
+    BOOST_CHECK_EQUAL(
+        hash.hex(), "34931f02b946fb93c2e7c725af49b6a61b707eaf4b29c01dee0999d303d16771");
 }
+
+// Prague-shaped golden vector: all five optional fork fields present, so the RLP list
+// carries 21 items (through requestsHash). Exercises the full cascade that the London
+// golden above never reaches. The encoding must round-trip all optional fields losslessly.
+BOOST_AUTO_TEST_CASE(goldenPragueEncoding)
+{
+    auto tars = makeEthTarsHeader();
+    auto& data = tars->data;
+    data.withdrawalsHash.assign(32, static_cast<char>(0x61));
+    data.blobGasUsed = "1";
+    data.excessBlobGas = "2";
+    data.parentBeaconRoot.assign(32, static_cast<char>(0x62));
+    data.requestsHash.assign(32, static_cast<char>(0x63));
+
+    EthBlockHeader ethHeader(*tars);
+    bytes rlp;
+    ethHeader.rlpEncode(rlp);
+
+    // Decode back and check every optional field survives the round-trip.
+    bcos::Error::UniquePtr error;
+    auto decoded = EthBlockHeader::toEthBlockHeader(bcos::ref(rlp), error);
+    BOOST_CHECK(!error);
+    BOOST_CHECK(decoded.data().baseFee.has_value());
+    BOOST_CHECK_EQUAL(*decoded.data().baseFee, u256(1000000000));
+    BOOST_CHECK(decoded.data().withdrawalsHash.has_value());
+    BOOST_CHECK(*decoded.data().withdrawalsHash == ethHeader.data().withdrawalsHash);
+    BOOST_CHECK(decoded.data().blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*decoded.data().blobGasUsed, u256(1));
+    BOOST_CHECK(decoded.data().excessBlobGas.has_value());
+    BOOST_CHECK_EQUAL(*decoded.data().excessBlobGas, u256(2));
+    BOOST_CHECK(decoded.data().parentBeaconRoot.has_value());
+    BOOST_CHECK(*decoded.data().parentBeaconRoot == ethHeader.data().parentBeaconRoot);
+    BOOST_CHECK(decoded.data().requestsHash.has_value());
+    BOOST_CHECK(*decoded.data().requestsHash == ethHeader.data().requestsHash);
+
+    // Re-encoding the decoded header must reproduce the same bytes (canonical round-trip).
+    bytes rlp2;
+    decoded.rlpEncode(rlp2);
+    BOOST_CHECK(rlp == rlp2);
+
+    // Golden vector: the exact RLP bytes and keccak256 hash for this Prague-shaped header.
+    // Independently verified against a third-party RLP/keccak implementation.
+    BOOST_CHECK_EQUAL(bcos::toHex(rlp),
+        "f90261a055555555555555555555555555555555555555555555555555555555"
+        "55555555a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142"
+        "fd40d4934794ababababababababababababababababababababa01111111111"
+        "111111111111111111111111111111111111111111111111111111a022222222"
+        "22222222222222222222222222222222222222222222222222222222a0333333"
+        "3333333333333333333333333333333333333333333333333333333333b90100"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+        "804d8401c9c380825208846553f10080a0444444444444444444444444444444"
+        "4444444444444444444444444444444444880000000000000000843b9aca00a0"
+        "6161616161616161616161616161616161616161616161616161616161616161"
+        "0102a06262626262626262626262626262626262626262626262626262626262"
+        "626262a063636363636363636363636363636363636363636363636363636363"
+        "63636363");
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex(),
+        "3936b0bfd43eb01433042f9b967abe35cd97047aabba00437db70704b35fc461");
+}
+
 
 // An incomplete Tars header: the constructor converts defensively (no throw), but
 // calculateRLPHash must report an InvalidTarsHeader error.
@@ -229,8 +294,8 @@ BOOST_AUTO_TEST_CASE(incompleteTarsHeaderReportsError)
     bcos::Error::UniquePtr error;
     bcos::protocol::EthBlockHeader::calculateRLPHash(header, error);
     BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(),
-        static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader));
+    BOOST_CHECK_EQUAL(
+        error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader));
 }
 
 // A truncated RLP header (fields stop mid-cascade) must decode cleanly instead of throwing
@@ -277,8 +342,8 @@ BOOST_AUTO_TEST_CASE(validateTarsHeaderRejectsCascadeViolation)
     bcos::Error::UniquePtr error;
     bcos::protocol::EthBlockHeader::calculateRLPHash(header, error);
     BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(),
-        static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader));
+    BOOST_CHECK_EQUAL(
+        error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader));
 }
 
 // validateTarsHeader requires exact lengths: an over-long fixed-size field (silently
@@ -305,8 +370,8 @@ BOOST_AUTO_TEST_CASE(validateTarsHeaderRejectsNonNumeric)
     bcos::Error::UniquePtr error;
     bcos::protocol::EthBlockHeader::calculateRLPHash(header, error);
     BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(),
-        static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader));
+    BOOST_CHECK_EQUAL(
+        error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
