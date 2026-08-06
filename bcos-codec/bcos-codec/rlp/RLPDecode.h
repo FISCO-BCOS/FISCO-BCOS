@@ -146,17 +146,20 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
         to =
             from.getCroppedData(0, header.payloadLength).toStringLike<std::decay_t<decltype(to)>>();
     }
-    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<32>>)
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<32>> ||
+                       std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<20>> ||
+                       std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<8>>)
     {
-        to = FixedBytes<32>{from.getCroppedData(0, header.payloadLength)};
-    }
-    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<20>>)
-    {
-        to = FixedBytes<20>{from.getCroppedData(0, header.payloadLength)};
-    }
-    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<8>>)
-    {
-        to = FixedBytes<8>{from.getCroppedData(0, header.payloadLength)};
+        // Fixed-size hashes/addresses must be exactly their declared size. A short or long
+        // payload is malformed input — silently right-aligning (zero-padding) or truncating
+        // would re-encode differently and change the keccak hash on hash-sensitive bridges.
+        using FixedT = std::decay_t<decltype(to)>;
+        if (header.payloadLength != FixedT::SIZE)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                DecodingError::UnexpectedLength, "Unexpected fixed-bytes length");
+        }
+        to = FixedT{from.getCroppedData(0, header.payloadLength)};
     }
     else if constexpr (std::same_as<std::decay_t<decltype(to)>, std::array<bcos::byte, 256>>)
     {
