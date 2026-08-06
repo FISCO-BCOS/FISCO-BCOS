@@ -171,6 +171,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadOpEngineRpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
+    loadSingleNodeConsensusConfig(_pt);
     loadTxPoolConfig(_pt);
     // loadSecurityConfig before loadStorageSecurityConfig for deciding whether to use HSM
     loadSecurityConfig(_pt);
@@ -1086,6 +1087,32 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
                                   "Please set consensus.min_seal_time between 1 and 600000!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadSealerConfig") << LOG_KV("minSealTime", m_minSealTime);
+}
+
+void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [consensus]
+        enable_single_node_consensus=false
+        block_interval=1000
+        produce_empty_blocks=true
+        block_api_version=3
+        fee_recipient=0x0
+    */
+    m_enableSingleNodeConsensus =
+        _pt.get<bool>("consensus.enable_single_node_consensus", false);
+    m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
+    m_singleNodeConsensusProduceEmptyBlocks =
+        _pt.get<bool>("consensus.produce_empty_blocks", true);
+    m_singleNodeConsensusApiVersion = _pt.get<int32_t>("consensus.block_api_version", 3);
+    m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
+        "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
+    NodeConfig_LOG(INFO) << LOG_DESC("loadSingleNodeConsensusConfig")
+                         << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
+                         << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
+                         << LOG_KV("produceEmptyBlocks", m_singleNodeConsensusProduceEmptyBlocks)
+                         << LOG_KV("apiVersion", m_singleNodeConsensusApiVersion)
+                         << LOG_KV("feeRecipient", m_singleNodeConsensusFeeRecipient);
 }
 
 void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _pt)
@@ -2122,6 +2149,31 @@ bool NodeConfig::web3SyncTransaction() const
 bool NodeConfig::enableOpEngineRpc() const
 {
     return m_enableOpEngineRpc;
+}
+
+bool NodeConfig::enableSingleNodeConsensus() const
+{
+    return m_enableSingleNodeConsensus;
+}
+
+uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
+{
+    return m_singleNodeConsensusBlockInterval;
+}
+
+bool NodeConfig::singleNodeConsensusProduceEmptyBlocks() const
+{
+    return m_singleNodeConsensusProduceEmptyBlocks;
+}
+
+int32_t NodeConfig::singleNodeConsensusApiVersion() const
+{
+    return m_singleNodeConsensusApiVersion;
+}
+
+const std::string& NodeConfig::singleNodeConsensusFeeRecipient() const
+{
+    return m_singleNodeConsensusFeeRecipient;
 }
 
 const std::string& NodeConfig::opEngineRpcListenIP() const

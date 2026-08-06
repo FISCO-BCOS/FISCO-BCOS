@@ -197,6 +197,13 @@ public:
     const std::string& opEngineJwtSecretFile() const;
     int32_t opEngineClockSkewSecs() const;
 
+    // single-node consensus configurations
+    bool enableSingleNodeConsensus() const;
+    uint64_t singleNodeConsensusBlockInterval() const;
+    bool singleNodeConsensusProduceEmptyBlocks() const;
+    int32_t singleNodeConsensusApiVersion() const;
+    const std::string& singleNodeConsensusFeeRecipient() const;
+
     // the gateway configurations
     const std::string& p2pListenIP() const;
     uint16_t p2pListenPort() const;
@@ -306,6 +313,7 @@ protected:
     virtual void loadTxPoolConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSealerConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadSingleNodeConsensusConfig(boost::property_tree::ptree const& _pt);
     virtual void loadStorageSecurityConfig(boost::property_tree::ptree const& _pt);
     virtual void loadSyncConfig(boost::property_tree::ptree const& _pt);
 
@@ -486,6 +494,14 @@ private:
     uint32_t m_opEngineBatchRequestSizeLimit{};
     std::string m_opEngineJwtSecretFile;
     int32_t m_opEngineClockSkewSecs{60};
+
+    // config for single-node consensus
+    bool m_enableSingleNodeConsensus = false;
+    uint64_t m_singleNodeConsensusBlockInterval = 1000;
+    bool m_singleNodeConsensusProduceEmptyBlocks = true;
+    int32_t m_singleNodeConsensusApiVersion = 3;
+    std::string m_singleNodeConsensusFeeRecipient =
+        "0x0000000000000000000000000000000000000000";
 
     // config for gateway
     std::string m_p2pListenIP;

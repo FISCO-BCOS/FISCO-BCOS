@@ -21,6 +21,7 @@
 #include "EthEndpoint.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/rlp/Common.h>
@@ -420,12 +421,6 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
 {
     // params: signedTransaction(DATA)
     // result: transactionHash(DATA)
-    auto txpool = m_nodeService->txpool();
-    if (!txpool) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(JsonRpcError::InternalError, "TXPool not available!"));
-    }
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
@@ -458,6 +453,40 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
+    }
+
+    // Single-node consensus mode: route directly to the in-process mempool, bypassing
+    // txpool and P2P broadcast. EngineService seals these txs into blocks on a timer.
+    if (auto* memPool = m_nodeService->memPool()) [[unlikely]]
+    {
+        // The mempool rejects tainted transactions (MemPoolImpl::add throws
+        // InvalidTaintedTransaction), so recover the sender / verify the signature the same
+        // way TxValidator does for the txpool path before adding.
+        try
+        {
+            auto cryptoSuite = m_nodeService->blockFactory()->cryptoSuite();
+            tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
+        }
+        catch (std::exception const& e)
+        {
+            WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction mempool verify failed")
+                              << LOG_KV("reason", boost::diagnostic_information(e));
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "invalid transaction signature"));
+        }
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.push_back(std::move(tx));
+        memPool->add(txs);
+        Json::Value result = encodeTxHash.hexPrefixed();
+        buildJsonContent(result, response);
+        co_return;
+    }
+
+    auto txpool = m_nodeService->txpool();
+    if (!txpool) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InternalError, "TXPool not available!"));
     }
     co_await txpool->broadcastTransaction(*tx);
     auto const txResult = co_await txpool->submitTransaction(std::move(tx), m_syncTransaction);

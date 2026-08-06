@@ -259,6 +259,24 @@ public:
         }
         return transactions;
     }
+
+    /// Drain all pending transactions from the pool (in (sender, nonce) order) and clear it.
+    /// Used by the single-node consensus driver to assemble the next block proposal — the
+    /// driver hands the txs directly to the scheduler, so no external state view is needed
+    /// here (unlike seal(), which validates nonces against a state view).
+    std::vector<protocol::Transaction::Ptr> takeAll()
+    {
+        std::vector<protocol::Transaction::Ptr> transactions;
+        std::unique_lock lock(m_mutex);
+        auto& senderNonceIndex = m_transactions.get<0>();
+        transactions.reserve(m_transactions.size());
+        for (auto it = senderNonceIndex.begin(); it != senderNonceIndex.end();)
+        {
+            transactions.push_back(it->m_transaction);
+            it = senderNonceIndex.erase(it);
+        }
+        return transactions;
+    }
 };
 
 }  // namespace bcos::txpool
