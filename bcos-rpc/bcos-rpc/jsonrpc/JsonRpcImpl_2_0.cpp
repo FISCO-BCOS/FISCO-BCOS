@@ -88,7 +88,8 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
     auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp, boost::beast::http::status) {
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](
+                          bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
         auto end = std::chrono::high_resolution_clock::now();
@@ -258,7 +259,9 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
-        if (web3Tx.type >= TransactionType::EIP1559)
+        // Use explicit range check rather than `>=` so that Deposit (0x7e), which is numerically
+        // larger than all EIP types, is excluded from EIP-1559 field output.
+        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP4844)
         {
             jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
             jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();
