@@ -585,9 +585,9 @@ struct DepositTxHandler : Web3TxHandler
 {
     // Full RLP: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])
     // — self-contained inline (consistent with the other typed handlers in this file); the 8-field
-    // unsigned layout's field order/types verified against op-geth DepositTx; byte-level golden
-    // values compared byte-by-byte by bcos-rpc's OpDepositEncodeTest against op-geth golden
-    // rawTransactions. `to` nilability changes the RLP shape (empty string vs 20-byte address),
+    // unsigned layout's field order/types verified against op-geth DepositTx; field-by-field
+    // layout and to-nilability behaviour cross-checked against op-geth's deposit encoding.
+    // `to` nilability changes the RLP shape (empty string vs 20-byte address),
     // so the contract-creation branch must be encoded separately.
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
@@ -919,6 +919,8 @@ Web3TxHandler& handlerFor(TransactionType type)
     case TransactionType::Deposit:
         return deposit;
     }
+    // Unknown types revert to legacy handler; assert in debug builds to catch missing cases.
+    assert(false && "handlerFor: unhandled TransactionType enum value");
     return legacy;
 }
 }  // namespace bcos::rpc

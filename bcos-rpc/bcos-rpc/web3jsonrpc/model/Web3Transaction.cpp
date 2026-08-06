@@ -132,7 +132,9 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
 
     tarsTx.data.value = "0x" + this->value.str(0, std::ios_base::hex);
     tarsTx.data.gasLimit = this->gasLimit;
-    if (static_cast<uint8_t>(this->type) >= static_cast<uint8_t>(TransactionType::EIP1559))
+    // Use explicit range check rather than `>=` so that Deposit (0x7e) is excluded
+    if (static_cast<uint8_t>(this->type) >= static_cast<uint8_t>(TransactionType::EIP1559) &&
+        static_cast<uint8_t>(this->type) <= static_cast<uint8_t>(TransactionType::EIP4844))
     {
         tarsTx.data.maxFeePerGas = "0x" + this->maxFeePerGas.str(0, std::ios_base::hex);
         tarsTx.data.maxPriorityFeePerGas =

@@ -363,16 +363,26 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
         }
     }
     size += m_inner()->message.size();
-    // opStackMeta is now a tars struct: report its serialized size (tars tags + payload),
-    // consistent with the encode() path used for storage. No tars_size() is generated, so
-    // serialize via bcos::concepts::serialize::encode and measure the byte buffer.
-    // Short-circuit: 99% of receipts carry no OP metadata (legacy receipts are all-empty), so
-    // skip serialization to avoid allocating + encoding every time.
+    // opStackMeta: count raw string payloads (like output/message above), NOT the
+    // tars-encoded byte size. Each field is an optional string; a field present but
+    // empty ("" = absent) contributes 0, matching tars optional semantics.
+    // Short-circuit: 99% of receipts carry no OP metadata.
     if (!opStackMetaEmpty(m_inner()->opStackMeta))
     {
-        bcos::bytes encodedOpStackMeta;
-        bcos::concepts::serialize::encode(m_inner()->opStackMeta, encodedOpStackMeta);
-        size += encodedOpStackMeta.size();
+        auto const& s = m_inner()->opStackMeta;
+        size += s.l1_gas_price.size();
+        size += s.l1_fee.size();
+        size += s.l1_blob_base_fee.size();
+        size += s.l1_base_fee_scalar.size();
+        size += s.l1_blob_base_fee_scalar.size();
+        size += s.operator_fee_scalar.size();
+        size += s.operator_fee_constant.size();
+        size += s.da_footprint_gas_scalar.size();
+        size += s.da_footprint.size();
+        size += s.deposit_nonce.size();
+        size += s.deposit_receipt_version.size();
+        size += s.l1_gas_used.size();
+        size += s.operator_fee.size();
     }
     return size;
 }

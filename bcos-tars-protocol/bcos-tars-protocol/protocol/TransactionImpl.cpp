@@ -600,5 +600,7 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraTransactionHash.size();
     size += m_inner()->sourceHash.size();
     size += m_inner()->mint.size();
+    // isSystemTransaction (optional byte) is a fixed-length scalar — excluded from
+    // size() like other fixed scalars (type, version, blockLimit).
     return size;
 }
