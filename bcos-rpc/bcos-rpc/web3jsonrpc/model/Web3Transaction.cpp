@@ -19,7 +19,7 @@
  */
 
 #include "Web3Transaction.h"
-#include "TxHandler.h"
+#include "Web3TxHandler.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -75,7 +75,7 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
             codec::rlp::DecodingError::UnsupportedTransactionType, "Unsupported transaction type");
     }
     type = txType.value();
-    // ⚠️ 不预先裁剪 type byte:typed handler 自行消费 envelope(TxHandler.h decode 契约),
+    // ⚠️ 不预先裁剪 type byte:typed handler 自行消费 envelope(Web3TxHandler.h decode 契约),
     // 这里再裁剪会二次跳过列表头,导致所有 typed 交易解码失败。
     return handlerFor(type).decode(in, *this, withSig);
 }

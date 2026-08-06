@@ -17,9 +17,9 @@ enum class TransactionType : uint8_t;
 // 注意该 include 必须放在 namespace 之外:若在 namespace bcos::rpc 内展开 Common.h,
 // 其 `namespace bcos::codec::rlp` 会被解析为嵌套的 bcos::rpc::bcos::codec::rlp,导致命名空间污染。
 
-struct TxHandler
+struct Web3TxHandler
 {
-    virtual ~TxHandler() = default;
+    virtual ~Web3TxHandler() = default;
     // 签名预映像(RLP 无 type byte、无签名)
     virtual bcos::bytes encodeForSign(const Web3Transaction&) const = 0;
     // 完整 RLP(含 type byte, typed 交易)
@@ -35,5 +35,5 @@ struct TxHandler
 };
 
 // 按类型查表分派。未知类型返回 Legacy handler(防御)。
-TxHandler& handlerFor(TransactionType type);
+Web3TxHandler& handlerFor(TransactionType type);
 }  // namespace bcos::rpc
