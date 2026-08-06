@@ -36,43 +36,6 @@ void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
     }
 }
 
-// RPC JSON 输出共用的 accessList 序列化(仅 EIP2930+ 输出)。
-void outputAccessList(Json::Value& result, const Web3Transaction& tx)
-{
-    result["accessList"] = Json::arrayValue;
-    for (const auto& accessList : tx.accessList)
-    {
-        Json::Value access = Json::objectValue;
-        access["address"] = accessList.account.hexPrefixed();
-        access["storageKeys"] = Json::arrayValue;
-        for (const auto& j : accessList.storageKeys)
-        {
-            access["storageKeys"].append(j.hexPrefixed());
-        }
-        result["accessList"].append(std::move(access));
-    }
-}
-
-// RPC JSON 输出共用的 blob 字段序列化(仅 EIP4844 输出)。
-void outputBlobFields(Json::Value& result, const Web3Transaction& tx)
-{
-    result["maxFeePerBlobGas"] = tx.maxFeePerBlobGas.str();
-    result["blobVersionedHashes"] = Json::arrayValue;
-    for (const auto& blobVersionedHashe : tx.blobVersionedHashes)
-    {
-        result["blobVersionedHashes"].append(blobVersionedHashe.hexPrefixed());
-    }
-}
-
-// RPC JSON 输出的公共字段(nonce/type/value/chainId,全部类型)。
-void outputCommonFields(Json::Value& result, const Web3Transaction& tx)
-{
-    result["nonce"] = toQuantity(tx.nonce);
-    result["type"] = toQuantity(static_cast<uint8_t>(tx.type));
-    result["value"] = toQuantity(tx.value);
-    result["chainId"] = toQuantity(tx.chainId.value_or(0));
-}
-
 // ⚠️ decode 契约:每个 handler 的 decode 自包含(自行消费 envelope —— Legacy 为 RLP list header,
 // typed 为 type byte + RLP list header),逐字段照抄 Web3Transaction.cpp decodeTransaction 的
 // 对应分支。分派方(Web3Transaction::decode 成员)应先根据首字节判定类型、设置 out.type,然后
@@ -235,8 +198,11 @@ struct LegacyTxHandler : Web3TxHandler
             }
             else if (v == 0 || v == 1)
             {
+                // pre-EIP-155 v 应为 27/28,v=0/1 是非法签名(与 v<35 同判)。
+                // 原实现返回 decodeError(nullptr) 被调用方当成功——改为显式报错。
                 out.chainId = std::nullopt;
-                return decodeError;
+                return BCOS_ERROR_UNIQUE_PTR(
+                    codec::rlp::DecodingError::InvalidVInSignature, "Invalid V in signature");
             }
             else if (v < 35)
             {
@@ -256,6 +222,10 @@ struct LegacyTxHandler : Web3TxHandler
         {
             uint64_t chainId = 0;
             decodeError = codec::rlp::decode(in, chainId);
+            if (decodeError != nullptr)
+            {
+                return decodeError;
+            }
             out.chainId.emplace(chainId);
         }
         if (withSig)
@@ -266,11 +236,6 @@ struct LegacyTxHandler : Web3TxHandler
         return decodeError;
     }
 
-    // RPC JSON 输出(类型相关字段): 仅公共字段
-    void toJson(const Web3Transaction& tx, Json::Value& result) const override
-    {
-        outputCommonFields(result, tx);
-    }
 };
 
 struct EIP2930TxHandler : Web3TxHandler
@@ -422,6 +387,13 @@ struct EIP2930TxHandler : Web3TxHandler
         {
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // EIP-2718 typed tx 的 v 字段是 y_parity(0 或 1):signatureV > 1 是非法输入
+            // (EIP-2930/1559/4844 相同),静默接受会掩盖坏交易。
+            if (decodeError == nullptr && out.signatureV > 1)
+            {
+                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+                    "typed tx y_parity must be 0 or 1");
+            }
         }
         if (withSig)
         {
@@ -432,11 +404,6 @@ struct EIP2930TxHandler : Web3TxHandler
     }
 
     // RPC JSON 输出: 公共字段 + accessList
-    void toJson(const Web3Transaction& tx, Json::Value& result) const override
-    {
-        outputCommonFields(result, tx);
-        outputAccessList(result, tx);
-    }
 };
 
 struct EIP1559TxHandler : Web3TxHandler
@@ -592,6 +559,13 @@ struct EIP1559TxHandler : Web3TxHandler
         {
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // EIP-2718 typed tx 的 v 字段是 y_parity(0 或 1):signatureV > 1 是非法输入
+            // (EIP-2930/1559/4844 相同),静默接受会掩盖坏交易。
+            if (decodeError == nullptr && out.signatureV > 1)
+            {
+                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+                    "typed tx y_parity must be 0 or 1");
+            }
         }
         if (withSig)
         {
@@ -602,13 +576,6 @@ struct EIP1559TxHandler : Web3TxHandler
     }
 
     // RPC JSON 输出: 公共字段 + accessList + maxPriorityFeePerGas/maxFeePerGas
-    void toJson(const Web3Transaction& tx, Json::Value& result) const override
-    {
-        outputCommonFields(result, tx);
-        outputAccessList(result, tx);
-        result["maxPriorityFeePerGas"] = toQuantity(tx.maxPriorityFeePerGas);
-        result["maxFeePerGas"] = toQuantity(tx.maxFeePerGas);
-    }
 };
 
 struct DepositTxHandler : Web3TxHandler
@@ -737,22 +704,6 @@ struct DepositTxHandler : Web3TxHandler
             return err;  // bytes
         out.nonce = 0;   // deposit nonce 恒 0
         return nullptr;
-    }
-
-    // RPC JSON 输出(类型相关字段): 公共字段 nonce/type/value/chainId + deposit 专属
-    // sourceHash/mint/isSystemTx。
-    // ⚠️ 职责边界: from/to/gas/gasPrice/hash/input/r/s/v 由 combineTxResponseFromWeb3 的通用块
-    // 输出,但 nonce/type/value/chainId 也委托 handler —— 这里必须输出,否则 deposit 响应缺这 4
-    // 个字段(Task 5/7 审查移交;被删的旧占位曾输出 nonce/value="0x0")。对齐 op-geth DepositTx:
-    // nonce()=0、chainID()=Big0、value()=真实 value(outputCommonFields 对 nullopt chainId 输出
-    // "0x0",与其它类型的 pre-EIP-155 分支一致)。
-    void toJson(const Web3Transaction& tx, Json::Value& result) const override
-    {
-        outputCommonFields(result, tx);
-        result["sourceHash"] = tx.sourceHash.hexPrefixed();
-        // mint 带 0x 前缀,对齐 op-geth hexutil.Big
-        result["mint"] = "0x" + tx.mint.str(0, std::ios_base::hex);
-        result["isSystemTx"] = tx.isSystemTx;
     }
 };
 
@@ -921,6 +872,13 @@ struct EIP4844TxHandler : Web3TxHandler
         {
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // EIP-2718 typed tx 的 v 字段是 y_parity(0 或 1):signatureV > 1 是非法输入
+            // (EIP-2930/1559/4844 相同),静默接受会掩盖坏交易。
+            if (decodeError == nullptr && out.signatureV > 1)
+            {
+                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+                    "typed tx y_parity must be 0 or 1");
+            }
         }
         if (withSig)
         {
@@ -931,14 +889,6 @@ struct EIP4844TxHandler : Web3TxHandler
     }
 
     // RPC JSON 输出: 公共字段 + accessList + maxPriorityFeePerGas/maxFeePerGas + blob 字段
-    void toJson(const Web3Transaction& tx, Json::Value& result) const override
-    {
-        outputCommonFields(result, tx);
-        outputAccessList(result, tx);
-        result["maxPriorityFeePerGas"] = toQuantity(tx.maxPriorityFeePerGas);
-        result["maxFeePerGas"] = toQuantity(tx.maxFeePerGas);
-        outputBlobFields(result, tx);
-    }
 };
 }  // namespace
 

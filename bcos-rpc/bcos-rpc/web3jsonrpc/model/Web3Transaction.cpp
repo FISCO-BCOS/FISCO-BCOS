@@ -62,7 +62,10 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
         return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InputTooShort, "Input too short");
     }
     const auto firstByte = in[0];
-    if (firstByte >= codec::rlp::BYTES_HEAD_BASE)
+    // 合法交易体必是 RLP list(≥0xC0)。用 >= LIST_HEAD_BASE 而非 >= BYTES_HEAD_BASE:
+    // 后者会把 0x80-0xBF 的短字符串头误判为 Legacy。typed tx 的 type byte(0x01-0x04)
+    // 低于 0xC0,走下方 enum_cast 分派。
+    if (firstByte >= codec::rlp::LIST_HEAD_BASE)
     {
         // Legacy: 无 type byte
         type = TransactionType::Legacy;
