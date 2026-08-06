@@ -104,27 +104,27 @@ public:
 
     friend bool operator==(const HoldablePointer& lhs, const HoldablePointer& rhs) noexcept
     {
-        return lhs.get() == rhs.get();
+        return lhs.m_ptr == rhs.m_ptr;
     }
     friend bool operator!=(const HoldablePointer& lhs, const HoldablePointer& rhs) noexcept
     {
-        return !(lhs == rhs);
+        return lhs.m_ptr != rhs.m_ptr;
     }
     friend bool operator==(const HoldablePointer& ptr, std::nullptr_t) noexcept
     {
-        return ptr.m_ptr == 0;
+        return ptr.m_ptr == nullptr;
     }
     friend bool operator==(std::nullptr_t, const HoldablePointer& ptr) noexcept
     {
-        return ptr.m_ptr == 0;
+        return ptr.m_ptr == nullptr;
     }
     friend bool operator!=(const HoldablePointer& ptr, std::nullptr_t) noexcept
     {
-        return ptr.m_ptr != 0;
+        return ptr.m_ptr != nullptr;
     }
     friend bool operator!=(std::nullptr_t, const HoldablePointer& ptr) noexcept
     {
-        return ptr.m_ptr != 0;
+        return ptr.m_ptr != nullptr;
     }
 
 private:
