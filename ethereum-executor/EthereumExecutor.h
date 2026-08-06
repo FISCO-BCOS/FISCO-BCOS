@@ -39,6 +39,7 @@
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
 #include <algorithm>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -112,17 +113,36 @@ public:
         ledger::LedgerConfig const& ledgerConfig, evmc_revision rev,
         std::optional<uint64_t> blockReward, std::vector<EthWithdrawal> const& withdrawals = {})
     {
+        // Same all-or-nothing guarantee as execute(): if finalizeState throws
+        // part-way (a reward/withdrawal storage write fails), roll the journal
+        // back so the block's rewards are not left half-applied, then rethrow.
         Rollbackable<Storage> rollable(storage);
         EthereumState<Rollbackable<Storage>> state(rollable);
+        const auto savepoint = rollable.current();
+        // co_await is not permitted inside an exception handler (GCC), so the
+        // failure is captured here and the rollback runs after it.
+        std::exception_ptr failure;
 
-        evmc_address coinbase{};
-        auto const& coinbaseBytes = blockHeader.coinbase();
-        if (coinbaseBytes.size() == sizeof(evmc_address))
+        try
         {
-            std::copy_n(coinbaseBytes.begin(), sizeof(evmc_address), coinbase.bytes);
-        }
+            evmc_address coinbase{};
+            auto const& coinbaseBytes = blockHeader.coinbase();
+            if (coinbaseBytes.size() == sizeof(evmc_address))
+            {
+                std::copy_n(coinbaseBytes.begin(), sizeof(evmc_address), coinbase.bytes);
+            }
 
-        co_await finalizeState(state, rev, coinbase, blockReward, withdrawals);
+            co_await finalizeState(state, rev, coinbase, blockReward, withdrawals);
+        }
+        catch (...)
+        {
+            failure = std::current_exception();
+        }
+        if (failure)
+        {
+            co_await rollable.rollback(savepoint);
+            std::rethrow_exception(failure);
+        }
     }
 
     // TransactionExecutor concept support: ExecuteContext
@@ -277,38 +297,66 @@ public:
             // current storage (earlier same-chunk transactions' writes already
             // landed) through a journaling Rollbackable wrapper, and its
             // write-back is skipped for dry-runs so eth_call leaves no trace.
+            //
+            // Transaction atomicity (all-or-nothing): take a savepoint up front
+            // so that if anything below throws — e.g. a storage write inside
+            // runTransaction()->applyToStorage() fails part-way — the journal
+            // can undo every write this transaction applied to the underlying
+            // storage, instead of leaving partial writes behind. The receipt is
+            // only produced in finish(), so no receipt leaks for a rolled-back
+            // transaction; the exception is rethrown for the caller to handle.
             Rollbackable<Storage> rollable(storage.get());
             EthereumState<Rollbackable<Storage>> state(rollable);
+            const auto savepoint = rollable.current();
+            // co_await is not permitted inside an exception handler (GCC), so
+            // the failure is captured here and the rollback runs after it.
+            std::exception_ptr failure;
 
-            if (call && transaction.get().nonce().empty())
+            try
             {
-                // Resolve the sender's current nonce for the eth_call shape
-                // (0 would fail NONCE_TOO_LOW for a sender past its first tx).
-                auto senderAcc = state.find(ethSender(transaction.get()));
-                m_callParams.nonce = senderAcc ? senderAcc->nonce : 0;
-            }
+                if (call && transaction.get().nonce().empty())
+                {
+                    // Resolve the sender's current nonce for the eth_call shape
+                    // (0 would fail NONCE_TOO_LOW for a sender past its first tx).
+                    auto senderAcc = state.find(ethSender(transaction.get()));
+                    m_callParams.nonce = senderAcc ? senderAcc->nonce : 0;
+                }
 
-            auto validationResult = validateTransaction(state, m_blockInfo, transaction.get(),
-                m_rev, m_blockInfo.gas_limit /*block_gas_left*/,
-                m_blobGasLeft /*blob_gas_left*/, m_callParams);
-            if (auto* props = std::get_if<EthTxProperties>(&validationResult))
-            {
-                // Valid against the current state — use the computed properties.
-                // NOTE: we do not special-case SENDER_NOT_EOA here. EIP-3607
-                // requires rejecting transactions whose sender has non-delegating
-                // code; only accounts with empty code or a 0xef0100 delegation
-                // designator may be senders, which validate_transaction already
-                // accepts.
-                m_receipt = co_await runTransaction(state, m_blockInfo,
-                    executor.get().m_blockHashLookup, transaction.get(), m_rev, executor.get().m_vm,
-                    *props, nodeChainId(), m_callParams, executor.get().m_receiptFactory,
-                    blockHeader.get().number());
+                auto validationResult = validateTransaction(state, m_blockInfo, transaction.get(),
+                    m_rev, m_blockInfo.gas_limit /*block_gas_left*/,
+                    m_blobGasLeft /*blob_gas_left*/, m_callParams);
+                if (auto* props = std::get_if<EthTxProperties>(&validationResult))
+                {
+                    // Valid against the current state — use the computed properties.
+                    // NOTE: we do not special-case SENDER_NOT_EOA here. EIP-3607
+                    // requires rejecting transactions whose sender has non-delegating
+                    // code; only accounts with empty code or a 0xef0100 delegation
+                    // designator may be senders, which validate_transaction already
+                    // accepts.
+                    m_receipt = co_await runTransaction(state, m_blockInfo,
+                        executor.get().m_blockHashLookup, transaction.get(), m_rev,
+                        executor.get().m_vm, *props, nodeChainId(), m_callParams,
+                        executor.get().m_receiptFactory, blockHeader.get().number());
+                }
+                else
+                {
+                    // Genuinely invalid — skip execution; finish() produces a
+                    // failure receipt and nothing is written for this transaction.
+                    m_validationError = std::get<std::error_code>(validationResult);
+                }
             }
-            else
+            catch (...)
             {
-                // Genuinely invalid — skip execution; finish() produces a
-                // failure receipt and nothing is written for this transaction.
-                m_validationError = std::get<std::error_code>(validationResult);
+                // Record the failure (any writes already applied to the
+                // underlying storage are undone below).
+                failure = std::current_exception();
+            }
+            if (failure)
+            {
+                // Undo every write this transaction applied to the underlying
+                // storage, restoring the pre-transaction state, then rethrow.
+                co_await rollable.rollback(savepoint);
+                std::rethrow_exception(failure);
             }
             co_return;
         }

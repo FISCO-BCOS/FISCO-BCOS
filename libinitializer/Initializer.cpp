@@ -81,7 +81,9 @@
 #include <util/tc_clientsocket.h>
 #include <boost/filesystem.hpp>
 #include <cstddef>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <toml++/toml.hpp>
 #include <vector>
@@ -313,7 +315,20 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // LedgerMethod), so it outlives any single block's execute view — matching the
     // semantics documented in EthereumExecutor.h. The lookup fails closed: a broken
     // backend or an out-of-window request reports an unknown block (zero hash).
-    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
+    // BLOCKHASH lookups hit the same recent ancestors repeatedly across the
+    // transactions of a block (and consecutive blocks share the same window).
+    // Committed block hashes (SYS_NUMBER_2_HASH) are immutable once written, so
+    // a cache keyed by height is safe for the node's lifetime. It is bounded to
+    // the 256-ancestor window BLOCKHASH may observe, and mutex-guarded because
+    // the scheduler may drive BLOCKHASH lookups of different transactions
+    // concurrently (SchedulerParallelImpl). The per-call current-height read is
+    // deliberately kept (not cached across calls) so the 256-window bound stays
+    // correct across block boundaries.
+    auto blockHashCache = std::make_shared<std::map<int64_t, evmc::bytes32>>();
+    std::mutex blockHashCacheMutex;
+    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend(),
+                                       blockHashCache = std::move(blockHashCache),
+                                       &blockHashCacheMutex](
                                        int64_t blockNumber) -> evmc::bytes32 {
         constexpr int64_t kMaxBlockHashLookback = 256;
         if (blockNumber < 0)
@@ -321,6 +336,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             // ledger::getBlockHash rejects negative heights; a BLOCKHASH of a
             // negative number is "unknown" anyway.
             return {};
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(blockHashCacheMutex);
+            if (auto it = blockHashCache->find(blockNumber); it != blockHashCache->end())
+            {
+                return it->second;
+            }
         }
 
         // Bound BLOCKHASH to the last 256 ancestors (Yellow Paper H.4).
@@ -352,6 +375,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 auto const& hash = *hashOpt;
                 std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
                     result.bytes);
+                std::lock_guard<std::mutex> lock(blockHashCacheMutex);
+                (*blockHashCache)[blockNumber] = result;
+                while (blockHashCache->size() > kMaxBlockHashLookback)
+                    blockHashCache->erase(blockHashCache->begin());
             }
             return result;
         }

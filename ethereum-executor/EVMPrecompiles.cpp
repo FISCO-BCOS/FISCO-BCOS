@@ -5,6 +5,14 @@
 ///        except for the namespace and the removal of the libsecp256k1/GMP
 ///        build-time alternatives (this build always uses the evmone
 ///        implementations).
+///
+/// SYNC CONTRACT: this file is a port of
+/// bcos-evm/bcos-evm/eth/state/precompiles.cpp (itself the vendored evmone
+/// test/state/precompiles.cpp). Keep the two implementations in step: when the
+/// upstream precompiles change (fork gas repricing, new precompiles), mirror
+/// the change here. The only intended differences are the namespace, the
+/// removed libsecp256k1/GMP build-time alternatives, the `namespace crypto`
+/// alias and the local to_underlying helper.
 
 #include "EVMPrecompiles.h"
 

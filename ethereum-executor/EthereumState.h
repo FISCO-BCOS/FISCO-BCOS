@@ -18,6 +18,15 @@
 /// port never collides with the unchanged bcos-evm library's
 /// evmone::state::{Account, StorageValue, State} (both may be linked into the
 /// same binary — bcos-evm keeps serving the opstack layer and its tests).
+///
+/// Known limitation — code hash algorithm:
+/// applyToStorage() keys the SYS_CODE_BINARY table by the code hash, and the
+/// host always computes keccak256(code) (Ethereum consensus hashing). BCOS's
+/// v0/v1 execution layers key that table by the chain's global hash algorithm
+/// (SM3 on 国密 chains). executor_version=2 therefore targets keccak256
+/// (Ethereum-standard) chains only — it must not run on an SM3 chain, nor
+/// share a code-binary table with a v0/v1 layer using a different hash
+/// algorithm (see the note at the setCode call in applyToStorage()).
 
 #pragma once
 
@@ -644,7 +653,12 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         if (acc.code_changed)
         {
             bcos::bytes code(acc.code.begin(), acc.code.end());
-            // The host already computed keccak256(code) into acc.code_hash.
+            // The host already computed keccak256(code) into acc.code_hash
+            // (Ethereum consensus hashing). This keys SYS_CODE_BINARY by
+            // keccak256 — see the "Known limitation — code hash algorithm"
+            // note in the file header: executor_version=2 targets keccak256
+            // chains only, and must not share the code-binary table with a
+            // v0/v1 layer using the chain's global (e.g. SM3) hash algorithm.
             bcos::bytes codeHash(acc.code_hash.bytes, acc.code_hash.bytes + sizeof(evmc_bytes32));
             co_await bcosAcc.setCode(std::move(code), std::string{}, bcos::h256(codeHash));
         }
