@@ -4,12 +4,34 @@
  */
 
 #include "bcos-rpc/web3jsonrpc/model/CallRequest.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+namespace
+{
+/// Scheduler stub that answers getPendingStorageAt("nonce", ...) with a fixed raw
+/// value, simulating the FISCO account-table row (a DECIMAL nonce string).
+class NonceStubScheduler : public bcos::test::FakeScheduler
+{
+public:
+    using bcos::test::FakeScheduler::FakeScheduler;
+    std::string nonceValue;
+
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
+    {
+        co_return bcos::storage::Entry(nonceValue);
+    }
+};
+}  // namespace
 
 BOOST_AUTO_TEST_SUITE(testCallRequest)
 
@@ -164,6 +186,54 @@ BOOST_AUTO_TEST_CASE(decode_invalid_fee_fields_pass_through)
     BOOST_CHECK_EQUAL(req.maxPriorityFeePerGas.value(), "abc");
     BOOST_TEST(req.maxFeePerGas.has_value());
     BOOST_CHECK_EQUAL(req.maxFeePerGas.value(), "\t");
+}
+
+BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
+{
+    // FISCO stores account nonces as DECIMAL strings, and the transaction nonce is
+    // parsed as HEX downstream (bcosTransactionToEvmone via safeFromQuantity, and
+    // TransactionExecutorImpl via hex2u). A deployment eth_estimateGas must therefore
+    // convert the stored decimal "12" to the hex quantity "0xc" — reading it as hex
+    // would yield 0x12 = 18 and fail NONCE_TOO_HIGH in the executor.
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
+    nonceScheduler->nonceValue = "12";
+
+    CallRequest req;
+    req.from = "0x1234567890abcdef1234567890abcdef12345678";
+    req.to = "";  // deployment (no `to`)
+
+    auto tx = req.takeToTransaction(txFactory, nonceScheduler);
+    // Decimal 12, not hex 0x12 = 18.
+    BOOST_CHECK_EQUAL(tx->nonce(), "0xc");
+}
+
+BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
+{
+    // A stored nonce that is empty or non-numeric must not abort the RPC (this
+    // function is noexcept) — the nonce is left unset and the executor's dry-run
+    // falls back to the sender's state nonce.
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    for (auto const& corrupt : {std::string{}, std::string{"12a"}, std::string{"abc"}})
+    {
+        auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
+        nonceScheduler->nonceValue = corrupt;
+
+        CallRequest req;
+        req.from = "0x1234567890abcdef1234567890abcdef12345678";
+        req.to = "";
+
+        auto tx = req.takeToTransaction(txFactory, nonceScheduler);
+        BOOST_CHECK(tx->nonce().empty());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

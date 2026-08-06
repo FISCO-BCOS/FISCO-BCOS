@@ -1,14 +1,29 @@
 #pragma once
 
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-utilities/Exceptions.h"
 
 namespace bcos::scheduler_v1
 {
 
+/// Thrown when setVersion() is asked to select a negative executor version.
+DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
+
+/// The executor version that selects the pure-Ethereum EthereumExecutor
+/// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
+/// Versions >= this all select the v2 executor (setVersion saturates), leaving
+/// room above 2 for a future executor without a schema change.
+/// The canonical value lives in bcos-framework/ledger (so lower layers can gate on
+/// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
+constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
+
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:
-    std::array<scheduler::SchedulerInterface::Ptr, 2> m_schedulers;
+    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 3;
+
+    std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;
 
     bcos::scheduler::SchedulerInterface& getScheduler();
@@ -16,7 +31,8 @@ private:
 public:
     bcos::scheduler::SchedulerInterface& scheduler(int version);
 
-    MultiVersionScheduler(std::array<scheduler::SchedulerInterface::Ptr, 2> schedulers);
+    MultiVersionScheduler(std::array<scheduler::SchedulerInterface::Ptr,
+        SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers);
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>

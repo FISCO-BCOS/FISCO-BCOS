@@ -18,6 +18,9 @@
 
 #include "DataConvertUtility.h"
 #include <boost/regex.hpp>
+#include <limits>
+#include <optional>
+#include <stdexcept>
 
 using namespace std;
 using namespace bcos;
@@ -102,9 +105,53 @@ bcos::bytes bcos::toCompactBigEndian(byte _val, unsigned _min)
 {
     return (_min || _val) ? bytes{_val} : bytes{};
 }
+namespace
+{
+// Shared strict hex-quantity core: optional 0x/0X prefix, hex digits only, no
+// leading sign, no trailing garbage, must fit in uint64. Returns nullopt on any
+// failure. Used by both fromQuantity (throwing) and safeFromQuantity (optional).
+std::optional<uint64_t> parseStrictQuantity(std::string_view quantity)
+{
+    auto s = quantity;
+    if (s.size() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+    {
+        s.remove_prefix(2);
+    }
+    if (s.empty())
+    {
+        return std::nullopt;  // empty, or a bare "0x"
+    }
+    uint64_t result = 0;
+    for (char c : s)
+    {
+        int digit = convertCharToHexNumber(c);
+        if (digit < 0)
+        {
+            // sign ('+', '-'), whitespace, or trailing garbage — reject, don't truncate.
+            return std::nullopt;
+        }
+        if (result > (std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(digit)) / 16)
+        {
+            return std::nullopt;  // overflow
+        }
+        result = result * 16 + static_cast<uint64_t>(digit);
+    }
+    return result;
+}
+}  // namespace
+
+std::optional<uint64_t> bcos::safeFromQuantity(std::string_view quantity)
+{
+    return parseStrictQuantity(quantity);
+}
+
 uint64_t bcos::fromQuantity(std::string const& quantity)
 {
-    return std::stoull(quantity, nullptr, 16);
+    if (auto value = parseStrictQuantity(quantity); value)
+    {
+        return *value;
+    }
+    BOOST_THROW_EXCEPTION(std::invalid_argument("invalid quantity: " + quantity));
 }
 bcos::u256 bcos::fromBigQuantity(std::string_view quantity)
 {

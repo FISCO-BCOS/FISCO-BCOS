@@ -35,6 +35,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -272,6 +273,53 @@ public:
         /// view are synchronously bridged with task::tbb::syncWait.
         task::Task<void> execute()
         {
+            if (call)
+            {
+                // Dry-run (eth_call / eth_estimateGas): the request is a read-only
+                // probe against a throwaway view (coCallLatest forks it, so nothing
+                // here persists), not a transaction to be admitted to the chain.
+                // Normalize it to Ethereum RPC semantics before validation so the
+                // standard MetaMask / ethers.js call shape — no gas, no nonce, no
+                // gasPrice — is not rejected by consensus-level admission checks:
+                //   * omitted gas -> the block gas limit, capped to the per-tx limit
+                //     on Osaka+ (EIP-7825: MAX_TX_GAS_LIMIT = 2^24). FISCO's block
+                //     ceiling is DEFAULT_GAS_LIMIT = 3e9, far above that cap, so a
+                //     bare assignment would fail MAX_GAS_LIMIT_EXCEEDED on any chain
+                //     at revision >= Osaka — which includes EVMC_REVISION_DEFAULT.
+                //     geth likewise never assigns the block ceiling to a call; it
+                //     uses a separate RPC gas cap.
+                //   * omitted nonce -> the sender's current nonce (0 would fail
+                //     NONCE_TOO_LOW for a sender past its first tx);
+                //   * price: a dry run is never charged, so clear gas price, tip and
+                //     the block base fee unconditionally (geth's NoBaseFee for
+                //     eth_call). This closes both the fee-cap check and the
+                //     balance-for-gas*fee check in one move — otherwise a call that
+                //     carries a gasPrice (eth_estimateGas frequently does) would
+                //     require the sender to hold gas_limit*gasPrice (e.g. 3e9 wei at
+                //     gasPrice 1). estimateGas is not meant to simulate affordability
+                //     at a given price, and geth does not either.
+                // An explicitly supplied gas / nonce is still validated normally
+                // (too-low gas still fails, an explicit nonce still has to be the
+                // current one), matching geth.
+                if (m_evmTx.gas_limit == 0)
+                {
+                    auto gasCap = m_blockInfo.gas_limit;
+                    if (m_rev >= EVMC_OSAKA)
+                    {
+                        gasCap = std::min<int64_t>(gasCap, evmone::state::MAX_TX_GAS_LIMIT);
+                    }
+                    m_evmTx.gas_limit = gasCap;
+                }
+                if (transaction.get().nonce().empty())
+                {
+                    auto senderAcc = m_stateView.get_account(m_evmTx.sender);
+                    m_evmTx.nonce = senderAcc ? senderAcc->nonce : 0;
+                }
+                m_evmTx.max_gas_price = 0;
+                m_evmTx.max_priority_gas_price = 0;
+                m_blockInfo.base_fee = 0;
+            }
+
             auto validationResult =
                 evmone::state::validate_transaction(m_stateView, m_blockInfo, m_evmTx, m_rev,
                     m_blockInfo.gas_limit /*block_gas_left*/, m_blobGasLeft /*blob_gas_left*/);
@@ -312,6 +360,14 @@ public:
         /// execute(); this phase only converts the evmone receipt. The one
         /// exception is a transaction that failed validation in execute(): it
         /// gets a failure receipt and no state was written for it.
+        ///
+        /// Known limitation: the produced receipt carries no contract return
+        /// data. evmone's TransactionReceipt does not store output (return data
+        /// is consumed during execution), so under executor_version=2 an
+        /// eth_call on a contract read returns empty data — the call executes
+        /// (status/gasUsed are correct) but the return value is not surfaced.
+        /// This is a documented limitation of the v2 executor; see the PR
+        /// description's "Known limitations".
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
             if (m_validationError.has_value())

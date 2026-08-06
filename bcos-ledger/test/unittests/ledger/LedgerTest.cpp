@@ -1652,6 +1652,70 @@ BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(genesisEVMCRevision)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        GenesisConfig genesisConfig;
+        genesisConfig.m_evmcRevision = EVMC_CANCUN;
+        genesisConfig.m_evmcRevisionForks[100000] = EVMC_OSAKA;
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        auto value = co_await storage2::readOne(*storage,
+            executor_v1::StateKeyView(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_EVMC_REVISION));
+        BOOST_REQUIRE(value);
+
+        auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(value->get());
+        using namespace std::string_view_literals;
+        // The block-0 base (Cancun) is emitted first, followed by the 100000 Osaka transition.
+        BOOST_CHECK_EQUAL(std::get<0>(entry), "0:cancun,100000:osaka"sv);
+
+        // Round-trip through the LedgerConfig population used by getLedgerConfig.
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, std::get<0>(entry));
+        BOOST_CHECK(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(0), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(99999), EVMC_CANCUN);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100000), EVMC_OSAKA);
+        BOOST_CHECK_EQUAL(*parsed.evmcRevisionForBlock(100001), EVMC_OSAKA);
+    }());
+}
+
+// Every evmc_revision enumerator must round-trip encode -> decode (finding 6):
+// evmcRevisionName and evmcRevisionFromName are two hand-maintained tables, and a
+// name one emits must be accepted by the other. This pins the invariant and would
+// catch a future evmc bump that adds a revision handled in only one direction.
+BOOST_AUTO_TEST_CASE(evmcRevisionNameRoundTrip)
+{
+    for (int rev = static_cast<int>(EVMC_FRONTIER); rev <= static_cast<int>(EVMC_MAX_REVISION);
+         ++rev)
+    {
+        auto r = static_cast<evmc_revision>(rev);
+        auto name = ledger::evmcRevisionName(r);
+        // evmcRevisionName is a total switch, so it must always yield a non-empty name.
+        BOOST_REQUIRE(!name.empty());
+        auto decoded = ledger::evmcRevisionFromName(name);
+        BOOST_REQUIRE_MESSAGE(decoded.has_value(),
+            "evmcRevisionName(" << rev << ") = \"" << name
+                                << "\" is not accepted by evmcRevisionFromName");
+        BOOST_CHECK_EQUAL(static_cast<int>(*decoded), rev);
+
+        // Full encode -> apply round-trip through the same path getLedgerConfig uses.
+        std::map<bcos::protocol::BlockNumber, evmc_revision> forks;
+        auto encoded = ledger::encodeEVMCRevisionConfig(r, forks);
+        LedgerConfig parsed;
+        ledger::applyEVMCRevisionConfig(parsed, encoded);
+        BOOST_REQUIRE(parsed.evmcRevisionForBlock(0).has_value());
+        BOOST_CHECK_EQUAL(static_cast<int>(*parsed.evmcRevisionForBlock(0)), rev);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(replaceBinary)
 {
     task::syncWait([this]() -> task::Task<void> {

@@ -12,10 +12,14 @@
 #include "bcos-evm/eth/state/transaction.hpp"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
 #include <system_error>
+
+#define BCOS2EVMONE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BCOS2EVMONE")
 
 namespace bcos::executor_v1::eth
 {
@@ -68,8 +72,8 @@ evmone::state::BlockInfo blockHeaderToBlockInfo(
     if (rev >= EVMC_CANCUN)
     {
         const auto excess = config.excessBlobGas().value_or(0);
-        info.blob_base_fee = evmone::state::compute_blob_gas_price(
-            blobParamsForRevision(rev), excess);
+        info.blob_base_fee =
+            evmone::state::compute_blob_gas_price(blobParamsForRevision(rev), excess);
     }
     else
     {
@@ -124,11 +128,52 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
     if (sb.size() >= sizeof(evmc_address))
         std::copy_n(sb.begin(), sizeof(evmc_address), evmTx.sender.bytes);
     auto const& tb = tx.to();
-    if (!tb.empty() && tb.size() >= sizeof(evmc_address))
+    if (!tb.empty())
     {
-        evmc_address ta{};
-        std::copy_n(tb.begin(), sizeof(evmc_address), ta.bytes);
-        evmTx.to = ta;
+        // `to` is uniformly an ASCII hex address string ("0x..." / 40 hex chars)
+        // on every tx path: Web3Transaction::takeToTarsTransaction() writes
+        // hexPrefixed(), RPC/txpool treat it as hex (TxValidator::isValidToField
+        // requires exactly 40 hex chars), and the test helpers use the same
+        // "0x..." encoding. The raw 20-byte branch below is kept only as a
+        // defensive fallback.
+        const bool has0x = tb.size() >= 2 && tb[0] == '0' && (tb[1] == 'x' || tb[1] == 'X');
+        const bool is40Hex =
+            tb.size() == sizeof(evmc_address) * 2 && std::all_of(tb.begin(), tb.end(), [](char c) {
+                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            });
+        if (has0x || is40Hex)
+        {
+            // Hex-string form. Only a well-formed 20-byte address decodes to a
+            // valid recipient: a short decode (e.g. "0x1234" -> 2 bytes) or a
+            // malformed one (e.g. "0x" or "0xzz") must NOT be left-aligned into
+            // a 20-byte address — Ethereum addresses are big-endian and
+            // right-aligned, and copying a short value to the front would
+            // produce a wrong (or all-zero) address. Such input leaves `to`
+            // unset, i.e. contract creation, matching base behaviour for
+            // anything that is not a well-formed address.
+            if (auto decoded = safeFromHex(tb); decoded && decoded->size() == sizeof(evmc_address))
+            {
+                evmc_address ta{};
+                std::copy(decoded->begin(), decoded->end(), ta.bytes);
+                evmTx.to = ta;
+            }
+        }
+        else if (tb.size() == sizeof(evmc_address))
+        {
+            // Defensive fallback for raw 20-byte addresses. No production tx path uses this
+            // encoding today (EEMakeTransferTx and every RPC/txpool path write hex), but if it
+            // ever appears it must be a full 20-byte value — a shorter copy would silently
+            // fabricate an address out of the first bytes. Log a warning so an unexpected
+            // input encoding that reaches this branch surfaces instead of passing silently.
+            BCOS2EVMONE_LOG(WARNING)
+                << "to field uses raw 20-byte encoding (fallback branch); not expected "
+                   "from any production tx path";
+            evmc_address ta{};
+            std::copy_n(tb.begin(), sizeof(evmc_address), ta.bytes);
+            evmTx.to = ta;
+        }
+        // Anything else (short raw bytes, malformed hex) leaves `to` unset —
+        // contract creation, never a transfer to address(0).
     }
     evmTx.value = toIntxU256(tx.value());
     for (auto const& entry : tx.web3AccessList())
@@ -151,25 +196,23 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
         evmTx.blob_hashes.push_back(hash);
     }
     // chainId and nonce from BCOS tx may or may not have 0x prefix.
-    // RPC/Web3 decoding stores values with 0x prefix (toQuantity).
-    // Guard against double 0x (e.g. "0x0x1a") which would throw.
-    auto cid = tx.chainId();
-    if (!cid.empty())
-    {
-        auto cidStr = std::string(cid);
-        if (cidStr.size() >= 2 && cidStr[0] == '0' && cidStr[1] == 'x')
-            evmTx.chain_id = static_cast<uint64_t>(bcos::u256(cidStr));
-        else
-            evmTx.chain_id = static_cast<uint64_t>(bcos::u256("0x" + cidStr));
-    }
-    auto nonceStr = std::string(tx.nonce());
-    if (!nonceStr.empty())
-    {
-        if (nonceStr.size() >= 2 && nonceStr[0] == '0' && nonceStr[1] == 'x')
-            evmTx.nonce = static_cast<uint64_t>(bcos::u256(nonceStr));
-        else
-            evmTx.nonce = static_cast<uint64_t>(bcos::u256("0x" + nonceStr));
-    }
+    // RPC/Web3 decoding stores values with 0x prefix (toQuantity). Parse strictly and
+    // non-throwing via the shared helper (fromQuantity / safeFromQuantity), so a
+    // double 0x (e.g. "0x0x1a"), a non-numeric value (e.g. a FISCO chain_id like
+    // "chain0"), a sign, trailing garbage, or a value above uint64 all fall through to 0.
+    // A value that cannot be parsed is left at 0. Note that 0 is NOT a
+    // guaranteed rejection:
+    //   * chain_id 0 never matches a real chain id (and evmone's
+    //     validate_transaction does not check chain_id — the signature binds it
+    //     upstream, so a malformed chain_id implies an invalid signature that
+    //     admission rejects before this executor sees it);
+    //   * nonce 0 IS a valid nonce for a fresh account, so a malformed nonce
+    //     can only be accepted when the sender's nonce is 0. Like chain_id, the
+    //     nonce is part of the signed payload, so a malformed nonce means the
+    //     signature check failed upstream — this fallback only ever matters for
+    //     byzantine/unsigned inputs.
+    evmTx.chain_id = bcos::safeFromQuantity(tx.chainId()).value_or(0);
+    evmTx.nonce = bcos::safeFromQuantity(tx.nonce()).value_or(0);
     for (auto const& auth : tx.authorizationList())
     {
         evmone::state::Authorization ea{};
@@ -280,8 +323,8 @@ protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& 
         }
     }();
     bcos::bytes output;
-    return rf.createReceipt(bcos::u256(0), std::string{}, {}, status, bcos::ref(output),
-        blockNumber);
+    return rf.createReceipt(
+        bcos::u256(0), std::string{}, {}, status, bcos::ref(output), blockNumber);
 }
 
 }  // namespace bcos::executor_v1::eth

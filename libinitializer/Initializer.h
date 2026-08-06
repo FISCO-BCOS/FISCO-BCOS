@@ -173,6 +173,16 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setBaselineSchedulerBlockNumberNotifier;
+    /// EthereumExecutor (executor_version=2) baseline scheduler holder + notifier setter. Kept
+    /// as members so the holder lambda (which captures the EthereumExecutor shared_ptr) stays
+    /// alive for the whole Initializer lifetime.
+    std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setEthereumSchedulerBlockNumberNotifier;
+    /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
+    /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
+    /// FISCO system-contract deployment block applies (it does not for the ethereum executor).
+    int m_executorVersion = 0;
 
     protocol::BlockNumber getCurrentBlockNumber(
         bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr);
