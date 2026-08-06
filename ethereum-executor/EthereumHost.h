@@ -133,7 +133,16 @@ inline uint64_t effectiveNonce(protocol::Transaction const& tx, EthCallParams co
 /// evmone::state::BlockHashes interface: the executor injects a storage-backed
 /// lambda (production) or an in-memory map (EEST), and the host guarantees it is
 /// never invoked past a noexcept boundary without a fail-safe.
-using BlockHashLookup = std::function<evmc::bytes32(int64_t blockNumber)>;
+/// Resolves the hash of a past block for the BLOCKHASH opcode.
+///
+/// @param blockNumber    the height being queried (an ancestor of the executing
+///                       block).
+/// @param currentHeight  the height of the block currently being executed,
+///                       supplied by the host (m_block.number — already in the
+///                       execution context) so the provider can bound BLOCKHASH
+///                       to the last 256 ancestors without an extra storage read
+///                       for the current height.
+using BlockHashLookup = std::function<evmc::bytes32(int64_t blockNumber, int64_t currentHeight)>;
 
 /// Ported evmone::state::Host over EthereumState.
 ///
@@ -629,7 +638,10 @@ bytes32 EthereumHost<Storage>::get_block_hash(int64_t block_number) const noexce
     {
         try
         {
-            return m_blockHashLookup(block_number);
+            // m_block.number is the executing block's height (from the execution
+            // context); pass it so the provider can bound the 256-ancestor window
+            // without reading the current height from storage.
+            return m_blockHashLookup(block_number, m_block.number);
         }
         catch (...)
         {

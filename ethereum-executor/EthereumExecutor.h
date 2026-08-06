@@ -68,11 +68,15 @@ class EthereumExecutor
 {
 public:
     /// @param blockHashLookup Optional BLOCKHASH provider used for BLOCKHASH
-    ///                        lookups during execution. When omitted, all
-    ///                        BLOCKHASH reads return zero (Ethereum "unknown
-    ///                        block" semantics). In production a storage-backed
-    ///                        lambda resolving ledger::getBlockHash is injected
-    ///                        (see libinitializer); EEST injects an in-memory map.
+    ///                        lookups during execution. It is called with the
+    ///                        queried height and the executing block's height
+    ///                        (from the execution context, so a storage-backed
+    ///                        provider need not read the current height itself).
+    ///                        When omitted, all BLOCKHASH reads return zero
+    ///                        (Ethereum "unknown block" semantics). In production
+    ///                        a storage-backed provider resolving
+    ///                        ledger::getBlockHash is injected (see libinitializer);
+    ///                        EEST injects an in-memory map.
     ///
     /// The injected provider is deliberately bound to the storage handed to
     /// the *constructor* (the committed/global storage), not to the per-chunk

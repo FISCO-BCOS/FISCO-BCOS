@@ -81,9 +81,7 @@
 #include <util/tc_clientsocket.h>
 #include <boost/filesystem.hpp>
 #include <cstddef>
-#include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <toml++/toml.hpp>
 #include <vector>
@@ -169,6 +167,58 @@ std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
 {
     return m_engineServiceInitializer ? m_engineServiceInitializer->engineService() : nullptr;
 }
+
+namespace
+{
+/// Resolve a committed block hash for the EthereumExecutor (executor_version=2)
+/// BLOCKHASH opcode. Reads straight from the committed SYS_NUMBER_2_HASH table
+/// via the ledger::getBlockHash LedgerMethod — one storage read, no cache.
+///
+/// @param currentHeight the height of the block being executed, passed in from
+///        the executor's execution context (EthereumHost knows it as
+///        m_block.number), so no storage read for the current height is needed
+///        here; it bounds BLOCKHASH to the last 256 ancestors (Yellow Paper H.4).
+///        Fails closed: a broken backend or an out-of-window request reports an
+///        unknown block (zero hash).
+template <class Backend>
+evmc::bytes32 ethBlockHashLookupFromStorage(
+    Backend& backend, int64_t blockNumber, int64_t currentHeight)
+{
+    constexpr int64_t kMaxBlockHashLookback = 256;
+    if (blockNumber < 0)
+    {
+        // ledger::getBlockHash rejects negative heights; a BLOCKHASH of a
+        // negative number is "unknown" anyway.
+        return {};
+    }
+    // Bound BLOCKHASH to the last 256 ancestors (Yellow Paper H.4).
+    if (currentHeight < 0 || blockNumber > currentHeight ||
+        currentHeight - blockNumber > kMaxBlockHashLookback - 1)
+    {
+        // Not among the last 256 ancestors — unknown block.
+        return {};
+    }
+
+    try
+    {
+        auto hashOpt =
+            task::tbb::syncWait(ledger::getBlockHash(backend, blockNumber, ledger::fromStorage));
+        evmc::bytes32 result{};
+        if (hashOpt.has_value())
+        {
+            auto const& hash = *hashOpt;
+            std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
+                result.bytes);
+        }
+        return result;
+    }
+    catch (...)
+    {
+        // Never let a lookup failure cross the noexcept boundary.
+        return {};
+    }
+}
+}  // namespace
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
@@ -315,77 +365,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // LedgerMethod), so it outlives any single block's execute view — matching the
     // semantics documented in EthereumExecutor.h. The lookup fails closed: a broken
     // backend or an out-of-window request reports an unknown block (zero hash).
-    // BLOCKHASH lookups hit the same recent ancestors repeatedly across the
-    // transactions of a block (and consecutive blocks share the same window).
-    // Committed block hashes (SYS_NUMBER_2_HASH) are immutable once written, so
-    // a cache keyed by height is safe for the node's lifetime. It is bounded to
-    // the 256-ancestor window BLOCKHASH may observe, and mutex-guarded because
-    // the scheduler may drive BLOCKHASH lookups of different transactions
-    // concurrently (SchedulerParallelImpl). The per-call current-height read is
-    // deliberately kept (not cached across calls) so the 256-window bound stays
-    // correct across block boundaries.
-    auto blockHashCache = std::make_shared<std::map<int64_t, evmc::bytes32>>();
-    std::mutex blockHashCacheMutex;
-    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend(),
-                                       blockHashCache = std::move(blockHashCache),
-                                       &blockHashCacheMutex](
-                                       int64_t blockNumber) -> evmc::bytes32 {
-        constexpr int64_t kMaxBlockHashLookback = 256;
-        if (blockNumber < 0)
-        {
-            // ledger::getBlockHash rejects negative heights; a BLOCKHASH of a
-            // negative number is "unknown" anyway.
-            return {};
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(blockHashCacheMutex);
-            if (auto it = blockHashCache->find(blockNumber); it != blockHashCache->end())
-            {
-                return it->second;
-            }
-        }
-
-        // Bound BLOCKHASH to the last 256 ancestors (Yellow Paper H.4).
-        std::optional<int64_t> currentHeight;
-        try
-        {
-            currentHeight = task::tbb::syncWait(
-                ledger::getCurrentBlockNumber(backend, ledger::fromStorage));
-        }
-        catch (...)
-        {
-            return {};
-        }
-        if (currentHeight.has_value() && *currentHeight >= 0 &&
-            (blockNumber > *currentHeight ||
-                *currentHeight - blockNumber > kMaxBlockHashLookback - 1))
-        {
-            // Not among the last 256 ancestors — unknown block.
-            return {};
-        }
-
-        try
-        {
-            auto hashOpt =
-                task::tbb::syncWait(ledger::getBlockHash(backend, blockNumber, ledger::fromStorage));
-            evmc::bytes32 result{};
-            if (hashOpt.has_value())
-            {
-                auto const& hash = *hashOpt;
-                std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
-                    result.bytes);
-                std::lock_guard<std::mutex> lock(blockHashCacheMutex);
-                (*blockHashCache)[blockNumber] = result;
-                while (blockHashCache->size() > kMaxBlockHashLookback)
-                    blockHashCache->erase(blockHashCache->begin());
-            }
-            return result;
-        }
-        catch (...)
-        {
-            return {};
-        }
+    // It reads storage directly (no cache): one getBlockHash read per BLOCKHASH.
+    // The 256-ancestor window is bounded by the current block height, which the
+    // executor's execution context already knows (EthereumHost passes
+    // m_block.number), so no storage read for the current height is needed.
+    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
+                                       int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
+        // The body lives in ethBlockHashLookupFromStorage (file-local above).
+        return ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
     };
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
         *m_protocolInitializer->blockFactory()->receiptFactory(), std::move(ethereumBlockHashLookup));

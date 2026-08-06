@@ -797,7 +797,8 @@ public:
         transactionFactory(cryptoSuite),
         receiptFactory(cryptoSuite),
         executor(receiptFactory,
-            [blockHashes = m_blockHashes](int64_t blockNumber) -> evmc::bytes32 {
+            [blockHashes = m_blockHashes](
+                int64_t blockNumber, int64_t /*currentHeight*/) -> evmc::bytes32 {
                 return blockHashes->get_block_hash(blockNumber);
             })
     {}
