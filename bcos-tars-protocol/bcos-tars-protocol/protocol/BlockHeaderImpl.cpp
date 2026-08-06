@@ -38,6 +38,9 @@ void bcostars::protocol::BlockHeaderImpl::decode(bcos::bytesConstRef _data)
     input.setBuffer((const char*)_data.data(), _data.size());
 
     m_inner->readFrom(input);
+    // Decoded content carries whatever dataHash was serialized, not a freshly injected RLP
+    // hash; treat any previously injected hash as invalid.
+    m_rlpHashInjected = false;
 }
 
 void bcostars::protocol::BlockHeaderImpl::encode(bcos::bytes& _encodeData) const
@@ -65,8 +68,10 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
 {
     if (isEthBlockHeader())
     {
-        // Eth header: the RLP hash must have been injected via setRLPHash.
-        if (m_inner->dataHash.empty())
+        // Eth header: the RLP hash must have been injected via setRLPHash. We key on the
+        // m_rlpHashInjected flag (not on dataHash emptiness) so that a hash computed by the
+        // FISCO Tars path, or one cleared by a setter, is not mistaken for a valid RLP hash.
+        if (!m_rlpHashInjected)
         {
             BOOST_THROW_EXCEPTION(
                 EmptyBlockHeaderHash{}
@@ -88,6 +93,7 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
 void bcostars::protocol::BlockHeaderImpl::clear()
 {
     m_inner->resetDefautlt();
+    m_rlpHashInjected = false;
 }
 
 bcos::protocol::ParentInfo bcostars::protocol::BlockHeaderImpl::parentInfo() const
@@ -277,10 +283,12 @@ bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::inner()
 void bcostars::protocol::BlockHeaderImpl::setInner(bcostars::BlockHeader blockHeader)
 {
     *m_inner = std::move(blockHeader);
+    m_rlpHashInjected = false;
 }
 void bcostars::protocol::BlockHeaderImpl::clearDataHash()
 {
     m_inner->dataHash.clear();
+    m_rlpHashInjected = false;
 }
 
 size_t bcostars::protocol::BlockHeaderImpl::size() const
@@ -516,4 +524,5 @@ void bcostars::protocol::BlockHeaderImpl::setSlotNumber(uint64_t _val)
 void bcostars::protocol::BlockHeaderImpl::setRLPHash(bcos::crypto::HashType _hash)
 {
     m_inner->dataHash.assign(_hash.begin(), _hash.end());
+    m_rlpHashInjected = true;
 }

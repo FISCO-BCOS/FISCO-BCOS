@@ -67,6 +67,10 @@ struct EthBlockHeaderData
     std::optional<bcos::u256> excessBlobGas;
     std::optional<bcos::h256> parentBeaconRoot;
     std::optional<bcos::h256> requestsHash;
+    // blockAccessListHash / slotNumber are FISCO-internal fields: they do NOT belong to the
+    // Ethereum-standard header schema, so rlpEncode/rlpDecode/toTarsHeader never touch them.
+    // They are read from Tars into EthBlockHeaderData purely for introspection; a
+    // Tars→RLP→Tars round-trip will drop them by design.
     std::optional<bcos::h256> blockAccessListHash;
     std::optional<uint64_t> slotNumber;
 };

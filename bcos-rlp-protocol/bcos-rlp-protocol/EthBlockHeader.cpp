@@ -102,6 +102,10 @@ bcos::protocol::BlockHeader::Ptr EthBlockHeader::toTarsHeader(
 
     tarsData.logsBloom.assign(ethHeader.data().logsBloom.begin(), ethHeader.data().logsBloom.end());
 
+    // Optional fork fields: every field is guarded independently by its own has_value(), so a
+    // truncated RLP list can never dereference an empty optional. The Ethereum-standard RLP list
+    // carries at most the Prague fields (through requestsHash); blockAccessListHash / slotNumber
+    // are FISCO-internal, never part of the encoding, and therefore never produced here.
     if (ethHeader.data().baseFee.has_value())
     {
         tarsData.baseFee = boost::lexical_cast<std::string>(*ethHeader.data().baseFee);
@@ -130,12 +134,25 @@ bcos::protocol::BlockHeader::Ptr EthBlockHeader::toTarsHeader(
         tarsData.requestsHash.assign(
             ethHeader.data().requestsHash->begin(), ethHeader.data().requestsHash->end());
     }
-    
+
+    // Unified post-merge-only admission: the RLP-to-Tars path requires the same mandatory
+    // fields as the Tars-to-hash path (baseFee included), so both directions agree on what
+    // constitutes a valid Ethereum-standard header.
+    if (!validateTarsHeader(*result, error))
+    {
+        return nullptr;
+    }
+
     // Wrap in a BlockHeaderImpl so the caller holds a base-class pointer whose
     // concrete type is bcostars::protocol::BlockHeaderImpl.
     auto impl = std::make_shared<bcostars::protocol::BlockHeaderImpl>(result);
     impl->setIsEthBlockHeader(true);
-    impl->setRLPHash(bcos::crypto::keccak256Hash(_data));
+    // Inject keccak256 of the canonical re-encoding (not of the raw input bytes): this is
+    // exactly what calculateRLPHash does, so both paths agree even if the caller passed
+    // trailing data after the header RLP list.
+    bcos::bytes reencoded;
+    ethHeader.rlpEncode(reencoded);
+    impl->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(reencoded)));
     return impl;
 }
 
@@ -253,10 +270,10 @@ bool EthBlockHeader::validateTarsHeader(
     {
         return cascade("parentBeaconRoot", "requestsHash");
     }
-    if (!_data.blockAccessListHash.empty() && _data.requestsHash.empty())
-    {
-        return cascade("requestsHash", "blockAccessListHash");
-    }
+
+    // blockAccessListHash / slotNumber are FISCO-internal fields (not part of the Ethereum
+    // header schema) and are never encoded to RLP, so they are intentionally excluded from
+    // the cascade validation above.
 
     // Numeric string fields must parse as u256, otherwise the constructor's lexical_cast
     // would throw on malformed (non-numeric) input.

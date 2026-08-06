@@ -104,6 +104,36 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     BOOST_CHECK(impl->isEthBlockHeader());
 }
 
+// toTarsHeader must inject keccak256 of the canonical re-encoding, not of the raw input:
+// trailing data after the header RLP list must not pollute the hash.
+BOOST_AUTO_TEST_CASE(toTarsHeaderIgnoresTrailingData)
+{
+    auto tars = makeEthTarsHeader();
+    EthBlockHeader ethHeader(*tars);
+
+    bytes rlp;
+    ethHeader.rlpEncode(rlp);
+
+    // Append garbage after the header list; rlpDecode only consumes the header list.
+    bytes withTrailing = rlp;
+    withTrailing.push_back(static_cast<byte>(0xde));
+    withTrailing.push_back(static_cast<byte>(0xad));
+
+    bcos::Error::UniquePtr error;
+    auto tarsPtr = EthBlockHeader::toTarsHeader(bcos::ref(withTrailing), error);
+    BOOST_CHECK(!error);
+    BOOST_CHECK(tarsPtr != nullptr);
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(tarsPtr);
+    BOOST_CHECK(impl != nullptr);
+
+    // The injected hash equals keccak256(rlp(header)) — not keccak256(withTrailing).
+    bytes canonicalRlp;
+    ethHeader.rlpEncode(canonicalRlp);
+    auto expected = bcos::crypto::keccak256Hash(bcos::ref(canonicalRlp));
+    BOOST_CHECK(impl->hash() == expected);
+    BOOST_CHECK(impl->hash() != bcos::crypto::keccak256Hash(bcos::ref(withTrailing)));
+}
+
 // calculateRLPHash injects the RLP hash into a BlockHeaderImpl
 BOOST_AUTO_TEST_CASE(calculateRLPHashInjectsHash)
 {
