@@ -375,7 +375,7 @@ EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
             m_data.withdrawalsHash = h256(reinterpret_cast<const bcos::byte*>(_data.withdrawalsHash.data()),
                 _data.withdrawalsHash.size());
             // Cancun fork fields
-            if (!_data.blobGasUsed.empty())
+            if (!_data.blobGasUsed.empty() && !_data.excessBlobGas.empty())
             {
                 m_data.blobGasUsed = boost::lexical_cast<u256>(_data.blobGasUsed);
                 m_data.excessBlobGas = boost::lexical_cast<u256>(_data.excessBlobGas);
