@@ -110,9 +110,9 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         // 0x-prefixed, matching the read side u256(...) (parsed in TransactionImpl.cpp mint())
         tarsTx.mint = "0x" + mint.str(0, std::ios_base::hex);
         tarsTx.isSystemTransaction = isSystemTx ? 1 : 0;
-        // Full 0x7E envelope (encode()); for web3TypedTxKind==0x7e calculateHash directly
-        // keccak256s extraTransactionBytes to obtain extraTransactionHash, so no need to fill it
-        // here
+        // Full 0x7E envelope (encode()). extraTransactionHash is NOT filled here — the
+        // canonical txHash path (TransactionImpl::calculateHash) does not yet handle 0x7e;
+        // deposits are unsigned and rejected at eth_sendRawTransaction (see EthEndpoint.cpp).
         auto encoded = encode();
         tarsTx.extraTransactionBytes.reserve(encoded.size());
         ::ranges::move(encoded, std::back_inserter(tarsTx.extraTransactionBytes));

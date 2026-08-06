@@ -162,6 +162,11 @@ struct LegacyTxHandler : Web3TxHandler
             return decodeError;
         }
 
+        if (in.empty()) [[unlikely]]
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
         if (in[0] == codec::rlp::BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;
@@ -367,6 +372,11 @@ struct EIP2930TxHandler : Web3TxHandler
             return error;
         }
 
+        if (in.empty()) [[unlikely]]
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
         if (in[0] == codec::rlp::BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;
@@ -538,6 +548,11 @@ struct EIP1559TxHandler : Web3TxHandler
             return error;
         }
 
+        if (in.empty()) [[unlikely]]
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
         if (in[0] == codec::rlp::BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;
@@ -669,6 +684,11 @@ struct DepositTxHandler : Web3TxHandler
         if (auto err = codec::rlp::decode(in, out.from); err != nullptr)
             return err;  // Address
         // to (optional Address; empty string 0x80 = nullopt contract creation)
+        if (in.empty()) [[unlikely]]
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
         if (in[0] == codec::rlp::BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;
@@ -849,6 +869,11 @@ struct EIP4844TxHandler : Web3TxHandler
             return error;
         }
 
+        if (in.empty()) [[unlikely]]
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
         if (in[0] == codec::rlp::BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;

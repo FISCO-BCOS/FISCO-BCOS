@@ -433,6 +433,9 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
     // parses directly (bcos::u256 handles the 0x prefix). Invalid hex from corrupt data (bit rot /
     // external writes) must not throw through the const getter — try/catch falls back to 0,
     // consistent with the empty-string case.
+    // IMPORTANT: the tars mirror is display-only and unauthenticated — the signature binds
+    // only extraTransactionBytes; execution MUST re-derive mint from the envelope, never
+    // trust this value from an untrusted peer (see Transaction.tars field 14).
     try
     {
         return bcos::u256(m_inner()->mint);
