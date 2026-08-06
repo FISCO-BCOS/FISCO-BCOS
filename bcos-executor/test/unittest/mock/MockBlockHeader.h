@@ -20,6 +20,8 @@ public:
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
+    bool isEthBlockHeader() const override { return m_isEth; }
+    void setIsEthBlockHeader(bool _isEth) override { m_isEth = _isEth; }
     bcos::protocol::ParentInfo parentInfo() const override
     {
         return bcos::protocol::ParentInfo{};
@@ -82,5 +84,6 @@ public:
 
 private:
     protocol::BlockNumber m_blockNumber;
+    bool m_isEth{false};
 };
 }  // namespace bcos::test

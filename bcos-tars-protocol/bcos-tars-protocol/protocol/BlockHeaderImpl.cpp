@@ -63,7 +63,7 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::hash() const
 
 void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
-    if (version() == bcos::protocol::ETH_BLOCK_HEADER_VERSION)
+    if (isEthBlockHeader())
     {
         // Eth header: the RLP hash must have been injected via setRLPHash.
         if (m_inner->dataHash.empty())
@@ -301,6 +301,14 @@ bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl()
 uint32_t bcostars::protocol::BlockHeaderImpl::version() const
 {
     return m_inner->data.version;
+}
+bool bcostars::protocol::BlockHeaderImpl::isEthBlockHeader() const
+{
+    return m_inner->isEth;
+}
+void bcostars::protocol::BlockHeaderImpl::setIsEthBlockHeader(bool _isEth)
+{
+    m_inner->isEth = _isEth;
 }
 bcos::protocol::BlockNumber bcostars::protocol::BlockHeaderImpl::number() const
 {

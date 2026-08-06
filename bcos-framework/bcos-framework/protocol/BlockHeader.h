@@ -97,6 +97,12 @@ public:
 
     // ---- FISCO-BCOS specific methods ----
     virtual uint32_t version() const = 0;
+    // isEthBlockHeader returns whether this header is an Ethereum-standard header
+    // (as opposed to a native FISCO-BCOS header). This is a first-class flag carried in the
+    // Tars representation, not a version marker, so it never participates in ordered
+    // version comparisons.
+    virtual bool isEthBlockHeader() const = 0;
+    virtual void setIsEthBlockHeader(bool _isEth) = 0;
     // sealer returns the sealer that generate this block
     virtual int64_t sealer() const = 0;
     // sealerList returns the current sealer list

@@ -671,7 +671,7 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHashMissing)
 {
     auto header = blockHeaderFactory->createBlockHeader();
     auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
-    impl->setVersion(bcos::protocol::ETH_BLOCK_HEADER_VERSION);
+    impl->setIsEthBlockHeader(true);
 
     BOOST_CHECK_THROW(impl->calculateHash(*cryptoSuite->hashImpl()), std::exception);
 }

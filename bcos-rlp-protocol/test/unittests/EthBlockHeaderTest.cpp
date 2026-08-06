@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     BOOST_CHECK_EQUAL(impl->gasLimit(), u256(30000000));
     BOOST_CHECK_EQUAL(impl->gasUsed(), u256(21000));
     // The converted header must be marked as an Eth header
-    BOOST_CHECK_EQUAL(impl->version(), bcos::protocol::ETH_BLOCK_HEADER_VERSION);
+    BOOST_CHECK(impl->isEthBlockHeader());
 }
 
 // calculateRLPHash injects the RLP hash into a BlockHeaderImpl

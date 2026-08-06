@@ -58,7 +58,7 @@ void EthBlockHeader::calculateRLPHash(
     auto ethHeader = EthBlockHeader(tarsHeader->inner());
     bcos::bytes encoded;
     ethHeader.rlpEncode(encoded);
-    tarsHeader->setVersion(bcos::protocol::ETH_BLOCK_HEADER_VERSION);
+    tarsHeader->setIsEthBlockHeader(true);
     tarsHeader->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(encoded)));
 }
 
@@ -134,7 +134,7 @@ bcos::protocol::BlockHeader::Ptr EthBlockHeader::toTarsHeader(
     // Wrap in a BlockHeaderImpl so the caller holds a base-class pointer whose
     // concrete type is bcostars::protocol::BlockHeaderImpl.
     auto impl = std::make_shared<bcostars::protocol::BlockHeaderImpl>(result);
-    impl->setVersion(bcos::protocol::ETH_BLOCK_HEADER_VERSION);
+    impl->setIsEthBlockHeader(true);
     impl->setRLPHash(bcos::crypto::keccak256Hash(_data));
     return impl;
 }

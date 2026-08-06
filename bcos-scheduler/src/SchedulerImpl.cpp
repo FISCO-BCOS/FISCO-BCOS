@@ -280,8 +280,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
     std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
         _callback)
 {
-    if (block->blockHeader()->version() != bcos::protocol::ETH_BLOCK_HEADER_VERSION &&
-        block->blockHeader()->version() >
+    if (block->blockHeader()->version() >
             (uint32_t)bcos::protocol::g_BCOSConfig.maxSupportedVersion())
     {
         auto errorMessage = "The block version is larger than maxSupportedVersion";

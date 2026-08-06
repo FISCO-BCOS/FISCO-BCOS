@@ -99,7 +99,7 @@ public:
     // output parameter: on success it is left null and a valid value is returned; on failure
     // it is filled with an error describing the problem and an empty result is returned.
     //  - toTarsHeader: decode an RLP header into a base-class BlockHeader::Ptr
-    //    (concrete type bcostars::protocol::BlockHeaderImpl, marked ETH_BLOCK_HEADER_VERSION).
+    //    (concrete type bcostars::protocol::BlockHeaderImpl, marked as an Eth header).
     //  - toEthBlockHeader: decode an RLP header into an EthBlockHeader value.
     //  - calculateRLPHash: compute keccak256(rlp(header)) and inject it into the
     //    Tars-backed BlockHeaderImpl via setRLPHash.

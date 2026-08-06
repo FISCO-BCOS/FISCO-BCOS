@@ -55,6 +55,8 @@ public:
     void clear() override;
 
     uint32_t version() const override;
+    bool isEthBlockHeader() const override;
+    void setIsEthBlockHeader(bool _isEth) override;
     bcos::protocol::ParentInfo parentInfo() const override;
 
     bcos::crypto::HashType txsRoot() const override;
@@ -126,7 +128,7 @@ public:
     void setSlotNumber(uint64_t _val) override;
 
     // Inject a pre-computed Ethereum RLP hash (set by the rlp-protocol layer via
-    // EthBlockHeader::calculateHash). For Eth headers (version == ETH_BLOCK_HEADER_VERSION)
+    // EthBlockHeader::calculateHash). For Eth headers (isEthBlockHeader() == true)
     // calculateHash() keeps this value instead of recomputing the FISCO Tars hash.
     void setRLPHash(bcos::crypto::HashType _hash);
 
