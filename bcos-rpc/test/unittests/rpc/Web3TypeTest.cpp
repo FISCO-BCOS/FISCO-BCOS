@@ -508,6 +508,47 @@ BOOST_AUTO_TEST_CASE(depositRoundtrip)
     BOOST_CHECK_EQUAL(decoded2.mint, nonSysDeposit.mint);
 }
 
+// Deposit with to = nullopt (contract creation): the RLP shape differs from the to=Some golden
+// (0x80 empty string instead of a 0x94+20-byte address). This branch is deliberately tested
+// separately because the codec comment marks it "must be encoded separately".
+BOOST_AUTO_TEST_CASE(depositToNilContractCreation)
+{
+    Web3Transaction deposit;
+    deposit.type = rpc::TransactionType::Deposit;
+    deposit.sourceHash = h256("7bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8");
+    deposit.from = Address("0xdead000000000000000000000000000000000011");
+    // to deliberately left empty → contract creation (RLP 0x80)
+    deposit.mint = u256(100);
+    deposit.value = u256(0);
+    deposit.gasLimit = 500000;
+    deposit.isSystemTx = false;
+    deposit.data = bcos::bytes{};
+
+    auto encoded = deposit.encode();
+    // Byte-level golden: 0x7e || rlp([sourceHash, from, to=0x80, mint, value, gas, isSystemTx,
+    // data]). Derived from the to=Some golden by replacing the 20-byte to field (0x94+20) with
+    // 0x80; payload shrinks 83 → 63 = 0x3f, so the list header drops from 0xf853 to 0xf83f.
+    BOOST_CHECK_EQUAL(toHex(encoded),
+        "7ef83fa07bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8"
+        "94dead000000000000000000000000000000000011"
+        "80"
+        "64"
+        "80"
+        "8307a120"
+        "80"
+        "80");
+
+    // Round-trip: decode restores to == nullopt and re-encode reproduces the bytes exactly.
+    auto ref = bcos::ref(encoded);
+    Web3Transaction decoded;
+    auto err = decoded.decode(ref, false);
+    BOOST_REQUIRE(err == nullptr);
+    BOOST_CHECK(decoded.type == rpc::TransactionType::Deposit);
+    BOOST_CHECK(!decoded.to.has_value());
+    BOOST_CHECK_EQUAL(decoded.mint, deposit.mint);
+    BOOST_CHECK(decoded.encode() == encoded);
+}
+
 // The sendRawTransaction guard in EthEndpoint.cpp checks web3Tx.type == Deposit after decoding the
 // raw bytes. The guard itself is a simple `if` + throw; the decode → type-detection path is the
 // test that verifies a valid 0x7E envelope is correctly identified. An RPC-level test would need
@@ -606,6 +647,91 @@ BOOST_AUTO_TEST_CASE(depositGoldenEncoding)
             "8307a120"
             "80"
             "80");
+    }
+}
+
+// Negative tests for the validation guards introduced by this PR: each malformed input must be
+// rejected with the documented error code, never silently accepted.
+BOOST_AUTO_TEST_CASE(guardRejectsMalformedInput)
+{
+    using codec::rlp::DecodingError;
+
+    // 1. Legacy v=0 → InvalidVInSignature (EIP-155 preimage tail is chainId,0,0; v=0/1 is invalid)
+    {
+        bcos::bytes raw;
+        codec::rlp::encode(raw, uint64_t{0}, uint64_t{0}, uint64_t{21000},
+            Address("0x0000000000000000000000000000000000000001"), u256{0}, bcos::bytes{},
+            uint64_t{0}, bcos::bytes(32, 0), bcos::bytes(32, 0));
+        auto ref = bcos::ref(raw);
+        Web3Transaction tx;
+        auto err = tx.decode(ref, true);
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK_EQUAL(
+            err->errorCode(), static_cast<int32_t>(DecodingError::InvalidVInSignature));
+    }
+
+    // 2. Typed (EIP-2930) y_parity=2 → InvalidVInSignature
+    {
+        // Build the envelope manually: the codec::rlp variadic encode cannot take
+        // AccessListEntry in this standalone TU (the overloads need the ADL bridge that only
+        // lives in Web3TxHandler.cpp), so the empty accessList is inserted as the raw RLP
+        // empty-list byte 0xc0.
+        bcos::bytes payload;
+        codec::rlp::encode(payload, uint64_t{1});           // chainId
+        codec::rlp::encode(payload, uint64_t{0});           // nonce
+        codec::rlp::encode(payload, uint64_t{1000000000});  // maxFeePerGas (gasPrice)
+        codec::rlp::encode(payload, uint64_t{21000});       // gasLimit
+        codec::rlp::encode(payload, Address("0x0000000000000000000000000000000000000001"));
+        codec::rlp::encode(payload, u256{0});             // value
+        codec::rlp::encode(payload, bcos::bytes{});       // data
+        payload.push_back(0xc0);                          // empty accessList (RLP 0xc0)
+        codec::rlp::encode(payload, uint64_t{2});         // y_parity = 2 → InvalidVInSignature
+        codec::rlp::encode(payload, bcos::bytes(32, 0));  // r
+        codec::rlp::encode(payload, bcos::bytes(32, 0));  // s
+
+        bcos::bytes raw{0x01};  // EIP-2930 type byte
+        codec::rlp::encodeHeader(
+            raw, codec::rlp::Header{.isList = true, .payloadLength = payload.size()});
+        raw.insert(raw.end(), payload.begin(), payload.end());
+
+        auto ref = bcos::ref(raw);
+        Web3Transaction tx;
+        auto err = tx.decode(ref, true);
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK_EQUAL(
+            err->errorCode(), static_cast<int32_t>(DecodingError::InvalidVInSignature));
+    }
+
+    // 3. Deposit isSystemTransaction = 0x02 (not 0x80/0x01) → UnexpectedLength
+    {
+        bcos::bytes raw{0x7e};
+        codec::rlp::encode(raw,
+            h256("7bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8"),
+            Address("0xdead000000000000000000000000000000000011"),
+            Address("0x4200000000000000000000000000000000000022"), u256{100}, u256{0},
+            uint64_t{500000}, bcos::bytes{0x02}, bcos::bytes{});
+        auto ref = bcos::ref(raw);
+        Web3Transaction tx;
+        auto err = tx.decode(ref, false);
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK_EQUAL(err->errorCode(), static_cast<int32_t>(DecodingError::UnexpectedLength));
+    }
+
+    // 4. EIP-155 unsigned preimage with a non-zero placeholder → NonCanonicalSize
+    //    (preimage tail must be chainId, 0, 0; a non-zero placeholder would be silently
+    //    rewritten to 0 on re-encode if accepted)
+    {
+        bcos::bytes raw;
+        codec::rlp::encode(raw, uint64_t{0}, uint64_t{0}, uint64_t{21000},
+            Address("0x0000000000000000000000000000000000000001"), u256{0}, bcos::bytes{},
+            uint64_t{1},   // chainId
+            uint64_t{5},   // first placeholder must be 0
+            uint64_t{0});  // second placeholder
+        auto ref = bcos::ref(raw);
+        Web3Transaction tx;
+        auto err = tx.decode(ref, false);  // withSig=false → EIP-155 preimage path
+        BOOST_REQUIRE(err != nullptr);
+        BOOST_CHECK_EQUAL(err->errorCode(), static_cast<int32_t>(DecodingError::NonCanonicalSize));
     }
 }
 

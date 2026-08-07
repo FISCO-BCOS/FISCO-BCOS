@@ -85,9 +85,9 @@ std::optional<bcos::u256> hexToU256(std::string const& s)
     // writes) returns nullopt instead of throwing BadHexCharacter through the const getter,
     // avoiding a crash when RPC queries the receipt.
     auto bytes = bcos::safeFromHex(s);
-    if (!bytes)
+    if (!bytes || bytes->empty())
     {
-        return std::nullopt;
+        return std::nullopt;  // bare "0x" (empty payload): missing, not present-with-0
     }
     // fromBigEndian<u256> silently truncates inputs wider than 32 bytes (high bytes shifted out).
     // Strip leading 0x00 first (canonical), then reject if any nonzero byte remains beyond 32 —
@@ -108,9 +108,9 @@ std::optional<uint64_t> hexToU64(std::string const& s)
     }
     // Same as above: safeFromHex guards against corrupt input.
     auto bytes = bcos::safeFromHex(s);
-    if (!bytes)
+    if (!bytes || bytes->empty())
     {
-        return std::nullopt;
+        return std::nullopt;  // bare "0x" (empty payload): missing, not present-with-0
     }
     // fromBigEndian<uint64_t> silently truncates inputs wider than 8 bytes. Same guard as
     // hexToU256: strip leading zeros, reject nonzero bytes beyond 8.

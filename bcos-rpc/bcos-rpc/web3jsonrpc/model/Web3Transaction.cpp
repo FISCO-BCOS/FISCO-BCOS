@@ -295,9 +295,10 @@ size_t length(Web3Transaction const& tx) noexcept
 }
 void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 {
-    // Delegate to the handler. Move the returned vector into `out` to avoid a double allocation:
-    // the handler already reserves internally and returns a complete buffer; copying it into out
-    // would allocate a second time.
+    // Delegate to the handler. Move the returned vector into `out` to avoid a double allocation.
+    // Note: the handlers currently do NOT reserve internally (they grow the buffer geometrically);
+    // adding reserve() in the handlers' encode/encodeForSign is a tracked perf follow-up. This
+    // move-assign is what avoids a second allocation at this call site.
     //
     // ⚠️ Contract: this is the ONLY encode() overload that assigns (overwrites) `out` rather than
     // appending. Every other overload in codec::rlp appends. The assert documents this invariant;
