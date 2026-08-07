@@ -39,9 +39,8 @@ namespace
 {
 // Local hex helpers for the opStackMeta tars fields. All 13 fields are hex strings so that
 // explicit zeros ("0x0") survive tars serialization (tars optional scalars have no presence
-// semantics). boost::lexical_cast has no base-argument overload, so the u64 path formats via a
-// fixed-width multiprecision number::str(digits, base). (boost::multiprecision::uint64_t does
-// not exist -- 64-bit is native range -- so uint256_t is used; str() emits minimal digits.)
+// semantics). u256 formats via number::str(digits, base); the u64 path uses std::to_chars to
+// avoid constructing a big-integer intermediate on every getter.
 
 std::string u256ToHex(bcos::u256 const& v)
 {
