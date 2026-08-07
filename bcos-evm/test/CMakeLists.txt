@@ -58,6 +58,14 @@ if(TARGET bcos-framework)
     target_include_directories(bcos-evm-opstack-tests PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-ledger)
+    # W6 Task 2: SeedPreStateTest uses jsoncpp (Json::Value/Json::Reader) for the
+    # vector-pre -> StateDiff seeder. The target did not link jsoncpp before; without
+    # this, Task 2's standalone build of bcos-evm-opstack-tests fails to link.
+    find_package(jsoncpp CONFIG REQUIRED)
+    target_sources(bcos-evm-opstack-tests PRIVATE
+        opstack/support/SeedPreStateTest.cpp
+    )
+    target_link_libraries(bcos-evm-opstack-tests PRIVATE jsoncpp_static)
 endif()
 target_compile_definitions(bcos-evm-opstack-tests PRIVATE
     OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/vectors"
