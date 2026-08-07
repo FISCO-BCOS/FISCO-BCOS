@@ -29,6 +29,7 @@
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
 #include "GlobalStateStorageInitializer.h"
+#include <bcos-evm/engine/OpSchedulerImpl.h>
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
 #include "SchedulerInitializer.h"
@@ -409,6 +410,39 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor);
+    }
+
+    // OP composition root (spec 2026-08-07-op-composition-root-design.md §4): executor_version >=
+    // 3 enters OP mode. EngineService is assembled with OpSchedulerImpl so the engine's c_opMode
+    // SFINAE probe (EngineServiceImpl.h:200-201) activates the OP branch (executeOpBlock drives OP
+    // blocks via engine API). engineApiForV1Only (<2) and opStackMode (>=3) are mutually exclusive;
+    // version 2 (pure EthereumExecutor) still has no Engine API. PBFT double-execution is gated
+    // separately (W3); MultiVersionScheduler is untouched.
+    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
+    if (opStackMode)
+    {
+        auto forkTimestamps = bcos::evm::opstack::OpForkTimestamps{
+            .isthmusTime = m_nodeConfig->isthmusTime(),
+            .jovianTime = m_nodeConfig->jovianTime(),
+        };
+        // chainId: NodeConfig::chainId() 返回经 isalNumStr 校验的数字串，按 base-0 解析
+        // （0x 前缀→hex，否则 decimal）；OP 模式下应为数字字符串。
+        auto opScheduler =
+            std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
+                m_protocolInitializer->blockFactory()->receiptFactory(),
+                std::stoull(m_nodeConfig->chainId(), nullptr, 0), forkTimestamps);
+        m_engineServiceInitializer = EngineServiceInitializer::build(
+            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
+            transactionExecutor, m_memPoolInitializer->memPool());
+        // Compile-time proof that this production composition root activates the OP engine branch.
+        // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerImpl<...>&（左值引用），若作
+        // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），
+        // static_assert 编译失败。用 remove_reference_t 取裸类型，与 build 实际推导一致。
+        using OpEngineServiceT = bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl,
+            GlobalStateStorage, executor_v1::TransactionExecutorImpl,
+            std::remove_reference_t<decltype(*opScheduler)>>;
+        static_assert(OpEngineServiceT::c_opMode,
+            "OP composition root must activate c_opMode (executeOpBlock SFINAE probe)");
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
