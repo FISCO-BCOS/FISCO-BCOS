@@ -23,7 +23,6 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
-#include <bcos-utilities/BoostLog.h>
 #include <algorithm>
 #include <cassert>
 #include <charconv>
@@ -32,8 +31,6 @@
 #include <system_error>
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
-
-#define TRANSACTIONRECEIPT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_RECEIPT")
 
 namespace
 {
@@ -286,8 +283,9 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
         out.operator_fee = hexToU256(s.operator_fee);
     // Reached only when every field that was WRITTEN failed to parse (corrupt hex, oversized, or
     // a bare "0x"). The legacy all-empty case already returned above via opStackMetaEmpty(s).
-    // Report nullopt rather than an OP receipt with 13 absent fields, and log so the corruption
-    // is not invisible.
+    // Report nullopt rather than an OP receipt with 13 absent fields. (No log here: this path is
+    // only reachable on corrupt data, and opStackMeta() has no production caller yet — the wiring
+    // PR decides whether/at what level to log once real callers exist.)
     if (out.l1_gas_price == std::nullopt && out.l1_fee == std::nullopt &&
         out.l1_blob_base_fee == std::nullopt && out.l1_base_fee_scalar == std::nullopt &&
         out.l1_blob_base_fee_scalar == std::nullopt && out.operator_fee_scalar == std::nullopt &&
@@ -296,7 +294,6 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
         out.deposit_receipt_version == std::nullopt && out.l1_gas_used == std::nullopt &&
         out.operator_fee == std::nullopt)
     {
-        TRANSACTIONRECEIPT_LOG(WARNING) << LOG_DESC("opStackMeta present but entirely unparseable");
         return std::nullopt;
     }
     return out;
