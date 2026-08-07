@@ -68,10 +68,22 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     if (ep.isMember("transactions") && !ep["transactions"].isNull())
     {
         payload.transactions.reserve(ep["transactions"].size());
+        payload.rawTransactions.emplace();  // OP 路径唯一交易载体：原始 EIP-2718 字节
+        payload.rawTransactions->reserve(ep["transactions"].size());
         for (auto const& tx : ep["transactions"])
         {
             auto txData = fromHex(tx.asString());
-            payload.transactions.push_back(transactionFactory.decodeTransaction(ref(txData)));
+            payload.rawTransactions->push_back(txData);  // 无条件保留，OP 载体与 decode 解耦
+            try
+            {
+                payload.transactions.push_back(transactionFactory.decodeTransaction(ref(txData)));
+            }
+            catch (std::exception const&)
+            {
+                // decodeTransaction 对 EIP-2718/0x7E 抛 TarsDecodeMismatch（TransactionImpl::decode
+                // = tars serialize::decode，把 RLP 当 tars 线格式解析即抛）。OP 路径不需要
+                // decoded transactions，跳过失败笔；rawTransactions 已无条件保留。
+            }
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
@@ -95,6 +107,10 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     if (ep.isMember("excessBlobGas"))
     {
         payload.excessBlobGas = fromBigQuantity(ep["excessBlobGas"].asString());
+    }
+    if (ep.isMember("withdrawalsRoot"))
+    {
+        payload.withdrawalsRoot = parseH256(ep["withdrawalsRoot"].asString());
     }
 
     bcos::engine::NewPayloadRequest request{
