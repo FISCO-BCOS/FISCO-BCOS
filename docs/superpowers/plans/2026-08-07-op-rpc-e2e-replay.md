@@ -20,7 +20,7 @@
 - `kChainId = 0x2105`；fork 阈值按向量 `_info.hardfork`（`isJovianVector`）：isthmus → `.isthmusTime=0, .jovianTime=max`；jovian → `.isthmusTime=0, .jovianTime=0`
 - **timestamp 单位**：`decodeOpHeader` 读 OP 秒存 FISCO 毫秒（×1000）；params 的 `timestamp` 必须是 OP 秒（÷1000）
 - 所有 commit 用 `--no-verify`（pre-commit clang-format hook 在既有违规上失败）；语料文件用 `git checkout feat-op-validator-loop -- <path>` 拷贝（本分支跟踪）
-- 新增源文件后需重跑 `cmake -S . -B build`（`GLOB_RECURSE` 无 `CONFIGURE_DEPENDS`）
+- 新增源文件后需重跑 `cmake -S . -B build`（本目标 add_executable 是显式列文件非 GLOB，但 CMakeLists.txt 改动本身需重配）
 
 ---
 
@@ -191,16 +191,25 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
 BOOST_AUTO_TEST_SUITE_END()
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [ ] **Step 2: 立即把测试源加进 CMake（TDD 红阶段的前提）**
+
+在 `bcos-evm/test/CMakeLists.txt` 的 `if(TARGET bcos-framework)` 段的 `target_sources(bcos-evm-opstack-tests PRIVATE ...)` 里追加（必须在 Step 2 构建**之前**，否则新源不进目标、红阶段为空）：
+
+```cmake
+        opstack/support/SeedPreStateTest.cpp
+```
+
+- [ ] **Step 3: 运行测试确认失败（红阶段）**
 
 ```bash
+cmake -S . -B build
 cmake --build build --target bcos-evm-opstack-tests
 ./build/bcos-evm/test/bcos-evm-opstack-tests --run_test=SeedPreStateSuite
 ```
 
-Expected: 编译失败（`SeedPreState.h` 不存在）→ 该测试被 skip 或编译错误。**若想先看到"测试存在但函数未定义"，先建空 `SeedPreState.h` 再编译。**
+Expected: 编译失败——`SeedPreStateTest.cpp` 的 `#include "SeedPreState.h"` 找不到（头未实现），即 TDD 红阶段真实生效。**若想先看到"测试存在但函数未定义"的链接错误，先建空 `SeedPreState.h` 再编译。**
 
-- [ ] **Step 3: 实现 `SeedPreState.h`**
+- [ ] **Step 4: 实现 `SeedPreState.h`**
 
 ```cpp
 // bcos-evm/test/opstack/support/SeedPreState.h
@@ -301,14 +310,6 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
 }
 
 }  // namespace w6test
-```
-
-- [ ] **Step 4: CMake 加测试源**
-
-在 `bcos-evm/test/CMakeLists.txt` 的 `if(TARGET bcos-framework)` 段的 `target_sources(bcos-evm-opstack-tests PRIVATE ...)` 里追加：
-
-```cmake
-        opstack/support/SeedPreStateTest.cpp
 ```
 
 - [ ] **Step 5: 重配 + 构建 + 跑测试**
@@ -602,7 +603,7 @@ git commit --no-verify -m "test(w6): golden sample loading + OP header decode + 
 
 **Interfaces:**
 - Consumes: `w6test::seedPreState`（Task 2）；`w6test::loadVectorSample/loadChainedSample/decodeGoldenHeader/makeParamsJson`（Task 3）；`bcos::rpc::parseNewPayloadRequest`（`bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.h:68`，W1 修复所在）；`OpScheduler`/`OpEngineService`（fixture 组合，val-loop GateFixture 模式）
-- Produces: 35 用例（33 向量 + chainA/B 2）全绿；L2 对拍报告输入（RecordProperty 式逐向量七字段记录）
+- Produces: 34 用例（33 向量 + 1 链式对 chainA+B）全绿；L2 对拍报告输入（逐向量七字段记录）
 
 - [ ] **Step 1: 写 harness `OpNewPayloadRpcE2eTest.cpp`（先跑通 1 个向量，再展开全量）**
 
@@ -821,11 +822,59 @@ void runGoldenVector(std::string const& id)
         << id << ": expected VALID, got " << static_cast<int>(status.status)
         << (status.validationError ? " : " + *status.validationError : "");
 
-    // produced header（生产映射重构）+ golden header（decodeGoldenHeader）
+    // produced header（生产映射重构）+ golden header（复用上面 parent 预登记时已解码的 goldenHeader，
+    // 勿重复声明——同一函数块重定义 goldenHeader 是编译错误，R2-A 捕获）
     auto produced = productionHeaderOf(fixture->blockFactory, request);
-    auto goldenHeader = w6test::decodeGoldenHeader(sample);
     const auto goldenBlockHash = bcos::h256(std::string(sample.golden["blockHash"].asString()));
     assertSevenFields(id, produced, goldenHeader, goldenBlockHash);
+}
+
+/// 链式双块（chainA/B，R2-C 核实流程）：只播 A 的 pre → 登记 A 的 parent(0) →
+/// 先投 B(SYNCING) → 投 A(VALID) → 再投 B(VALID)。FCU 刻意省略（见实现提示 #4）。
+void runChainedPair(std::string const& aId, std::string const& bId)
+{
+    auto sampleA = w6test::loadChainedSample(aId);
+    auto sampleB = w6test::loadChainedSample(bId);
+    BOOST_REQUIRE(!sampleA.jovian && !sampleB.jovian);  // 链式双块同为 isthmus
+    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(/*jovian=*/false));
+
+    // 只播 A 的 pre（B 的 pre 即 A 的 postState，绝不重播）
+    w6test::seedPreState(fixture->multiLayerStorage, sampleA.vector["pre"]);
+    const auto goldenHeaderA = w6test::decodeGoldenHeader(sampleA);
+    // 登记 A 的 parent（受信创世 height 0）
+    registerVerifiedBlock(fixture->multiLayerStorage, goldenHeaderA->parentInfo().blockHash, 0);
+
+    auto requestA = bcos::rpc::parseNewPayloadRequest(w6test::makeParamsJson(sampleA),
+        *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto requestB = bcos::rpc::parseNewPayloadRequest(w6test::makeParamsJson(sampleB),
+        *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+
+    // 先投 B：parent(A) 未登记 → SYNCING
+    auto earlyB = bcos::task::syncWait(fixture->service.newPayload(requestB, 4));
+    BOOST_CHECK_EQUAL(static_cast<int>(earlyB.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing))
+        << bId << ": first B should be SYNCING (parent A unknown)";
+
+    // 投 A：VALID（registerOpBlock 写 SYS_HASH_2_NUMBER[hashA]=1）
+    auto statusA = bcos::task::syncWait(fixture->service.newPayload(requestA, 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(statusA.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid))
+        << aId << ": A expected VALID, got " << static_cast<int>(statusA.status);
+
+    // 再投 B：parentKnown 命中 A → VALID
+    auto statusB = bcos::task::syncWait(fixture->service.newPayload(requestB, 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(statusB.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid))
+        << bId << ": B expected VALID after A, got " << static_cast<int>(statusB.status);
+
+    // 各自七项断言（productionHeaderOf 从 request 重构，独立于执行）
+    auto producedA = productionHeaderOf(fixture->blockFactory, requestA);
+    const auto goldenBlockHashA = bcos::h256(std::string(sampleA.golden["blockHash"].asString()));
+    assertSevenFields(aId, producedA, goldenHeaderA, goldenBlockHashA);
+    auto producedB = productionHeaderOf(fixture->blockFactory, requestB);
+    auto goldenHeaderB = w6test::decodeGoldenHeader(sampleB);
+    const auto goldenBlockHashB = bcos::h256(std::string(sampleB.golden["blockHash"].asString()));
+    assertSevenFields(bId, producedB, goldenHeaderB, goldenBlockHashB);
 }
 
 }  // namespace
@@ -889,8 +938,11 @@ BOOST_AUTO_TEST_CASE(JovianTxReverted) { runGoldenVector("jovian_tx_reverted"); 
 // 样例 case（9）：JovianDepositOnly/JovianTransferMulti/JovianDaMix/JovianFirstBlock/
 //   IsthmusDepositOnly/IsthmusTransferMulti/IsthmusSetcode7702/IsthmusTxReverted/IsthmusBigBlock130tx
 // 补全 case（24）：其余全部。⚠️ 命名冲突注意：BOOST_AUTO_TEST_CASE 名不可重复——
-// 上面前 9 个样例 case 名已在补全段出现，补全段的 case 名已全部避开重复。
-// 最终校验：35 用例 = 33 向量 + chainA + chainB。
+// 补全段的 24 个 case 名已刻意避开前 9 个样例 case 名（R2-D 实测：与既有 107 个 case 名、
+// 计划内 33 个 case 名均零冲突）。
+// 链式双块：一个 case（runChainedPair）同流执行 chainA+chainB（先 B SYNCING → A VALID → B VALID）。
+BOOST_AUTO_TEST_CASE(ChainedAB) { runChainedPair("chainA", "chainB"); }
+// 最终校验：34 用例 = 33 向量 + 1 链式对（覆盖 chainA+chainB 两个样本）。
 
 BOOST_AUTO_TEST_SUITE_END()
 ```
@@ -898,7 +950,8 @@ BOOST_AUTO_TEST_SUITE_END()
 > **实现提示（关键）**：
 > 1. **取 produced header**：`newPayload` 返回 `PayloadStatus`，不直接给 header。用 val-loop gate 测试的 `productionHeaderOf(blockFactory, request)` 模式——重构 FISCO header（`OpScheduler::computeTxRoot(*rawTransactions)` + 逐字段填），或从 `runOpNewPayloadSteps` 的中间结果取。**若本分支 `EngineServiceImpl` 无公开的 produced-header 出口**，则用 gate 测试的 `productionHeaderOf` 重构法（读 `engine/bcos-engine/EngineServiceImpl.cpp` 的字段映射：17 字段来自 payload 逐字 + 3 常量 + txRoot，:470 附近注释）。
 > 2. **全量 33 向量**：用 bash 列出 `bcos-evm/test/opstack/t8n/vectors/*.json` 的 basename，在测试文件里为每个生成一个 `BOOST_AUTO_TEST_CASE`。不要手工复制——脚本生成后粘贴。
-> 3. **链式双块（chainA/B）**：参照 val-loop gate 测试 chained 场景（`EngineNewPayloadGateTest.cpp` ~:1126-1260 的「newPayload(B)→SYNCING → newPayload(A)→VALID → newPayload(B)→VALID」流程）。chainA=块1（扁平文档，自含 pre），chainB=块2（parentHash=chainA 的 blockHash）。链式 case 用 `loadChainedSample`，**只播 chainA 的 pre**（gate 测试 :1131-1134 明言「B is never re-seeded: its `pre` IS A's `postState`」——B 在 A 的 pushView post-state 上直接执行，**绝不播 chainB.pre，会双计**），并登记 chainA 的 parent（gate 测试 :1203）。先投 B（预期 SYNCING，parent 未知）→ 投 A（VALID）→ 再投 B（VALID），各自七项断言。
+> 3. **链式双块（chainA/B）**：参照 val-loop gate 测试 chained 场景（`EngineNewPayloadGateTest.cpp` ~:1126-1260 的「newPayload(B)→SYNCING → newPayload(A)→VALID → newPayload(B)→VALID」流程）。chainA=块1（扁平文档，自含 pre），chainB=块2（parentHash=chainA 的 blockHash）。链式 case 用 `loadChainedSample`，**只播 chainA 的 pre**（gate 测试 :1131-1134 明言「B is never re-seeded: its `pre` IS A's `postState`」——B 在 A 的 pushView post-state 上直接执行，**绝不播 chainB.pre**：播了会让 A 的执行跑在已含 B 预期 post 账户的错误基底上，A 的 stateRoot 不匹配 golden），并登记 chainA 的 parent（gate 测试 :1203）。先投 B（预期 SYNCING，parent 未知）→ 投 A（VALID）→ 再投 B（VALID），各自七项断言。
+> 4. **刻意省略 FCU（R2-C 核实）**：gate 测试在「投 A(VALID)→再投 B」之间还有 `updateForkchoice({head=safe=finalized=hashA}, nullptr, /*version=*/3)`（`EngineNewPayloadGateTest.cpp:1223-1231`）。**本 Task 刻意省略它**——经 `EngineServiceImpl.h:815-827`（parentKnown 查 `SYS_HASH_2_NUMBER`）/`:981`（already-known）/`:1206`（registerOpBlock 写 `SYS_HASH_2_NUMBER[hashA]=1`）核实，B 的 SYNCING→VALID 翻转由 A 的 block registration 驱动，与 FCU 状态无关；FCU 是另一 Engine API（V3），超出本 Task 的 newPayload V4 RPC 路径范围。省略不导致链式 case 失败。
 > 4. **expectedBlobVersionedHashes**：向量无 blob 交易，params[1] 保持空数组（parse 层 V3+ 读 params[1]）。
 > 5. **blockHash 断言**：`produced->opHeaderHash(c)`（keccak256(encodeOpHeader)）应与 `golden.blockHash` 相等（op-geth 的 block.Hash() 定义）；这是七项里 blockHash 的显式断言。
 
@@ -940,13 +993,13 @@ Expected: PASS（VALID + 七项全等）。若 VALID 未达成，看 `status.val
 
 - [ ] **Step 5: 展开全量 33 向量 + 链式双块**
 
-用脚本列出所有向量名，为每个生成 `BOOST_AUTO_TEST_CASE`（Task 4 Step 1 提示 2/3）。补链式 case。跑全量：
+Step 1 代码已显式列出全部 33 个向量 case + `ChainedAB` 链式 case（勿漏删）。跑全量：
 
 ```bash
 ./build/bcos-evm/test/bcos-evm-opstack-tests --run_test=OpNewPayloadRpcE2eSuite
 ```
 
-Expected: 33 + 2 = 35 用例全 PASS。
+Expected: 33 向量 + 1 链式对 = 34 用例全 PASS。
 
 - [ ] **Step 6: 全量 OP 测试回归**
 
@@ -954,7 +1007,7 @@ Expected: 33 + 2 = 35 用例全 PASS。
 ./build/bcos-evm/test/bcos-evm-opstack-tests
 ```
 
-Expected: 既有 18 个 OP 测试文件 + 新增全部 PASS。
+Expected: 既有 17 个 OP 测试文件（18 个 .cpp 含 TestMain.cpp）+ 新增全部 PASS。
 
 - [ ] **Step 7: Commit**
 
@@ -1025,6 +1078,6 @@ Task 1 (语料 vendored) → Task 2 (pre 播种) → Task 3 (golden 解码+param
 → Task 4 (L2 harness 全量) → Task 5 (报告)
 ```
 
-- 每任务独立可测：Task 1 靠 SHA256SUMS；Task 2 靠 SeedPreStateSuite；Task 3 靠 GoldenSampleSuite；Task 4 靠 OpNewPayloadRpcE2eSuite（35 用例）；Task 5 靠文档审查
-- 验收（spec §8）：35 用例全绿，七项全等，报告含结果表 + 待办
+- 每任务独立可测：Task 1 靠 SHA256SUMS；Task 2 靠 SeedPreStateSuite；Task 3 靠 GoldenSampleSuite；Task 4 靠 OpNewPayloadRpcE2eSuite（34 用例）；Task 5 靠文档审查
+- 验收（spec §8）：34 用例全绿（33 向量 + 1 链式对），七项全等，报告含结果表 + 待办
 - 构建命令：`cmake -S . -B build`（新源后必跑）+ `cmake --build build --target bcos-evm-opstack-tests` + `./build/bcos-evm/test/bcos-evm-opstack-tests [--run_test=<suite>]`

@@ -98,7 +98,7 @@ W1 修复的 `EngineHelper::parseNewPayloadRequest`（rawTransactions/withdrawal
 
 ## 7. 测试与 CMake
 
-- **用例**：33 个向量各 1 个 `BOOST_AUTO_TEST_CASE`（jovian_deposit_only、isthmus_transfer_multi、jovian_da_mix、isthmus_setcode_7702、isthmus_tx_reverted … 全量）；链式双块 chainA/chainB 各 1 个 case（共 2）；合计 35 个用例
+- **用例**：33 个向量各 1 个 `BOOST_AUTO_TEST_CASE`（jovian_deposit_only、isthmus_transfer_multi、jovian_da_mix、isthmus_setcode_7702、isthmus_tx_reverted … 全量）；链式双块 1 个 case（`runChainedPair("chainA","chainB")` 同流执行 A+B，覆盖 2 个样本）；合计 34 个用例
 - **CMake**（`bcos-evm/test/CMakeLists.txt`，沿用 val-loop 组合模式，见 §3）：
   - harness 源加入 `bcos-evm-opstack-tests`
   - `EngineHelper.cpp`（bcos-rpc）直编入测试二进制（与 `EngineServiceImpl.cpp` 同模式，避免拖 bcos-rpc 依赖闭包）
@@ -108,8 +108,8 @@ W1 修复的 `EngineHelper::parseNewPayloadRequest`（rawTransactions/withdrawal
 
 ## 8. 验收标准
 
-- 33 向量 + chainA/B（35 用例）全部走「真实 JSON params → parseNewPayloadRequest(V4) → newPayload(4) → executeOpBlock」路径
-- 35 用例七项断言全等（blockHash/stateRoot/receiptsRoot/withdrawalsRoot/gasUsed/txRoot/logsBloom）
+- 33 向量 + 链式双块（34 用例 = 33 + 1 链式对）全部走「真实 JSON params → parseNewPayloadRequest(V4) → newPayload(4) → executeOpBlock」路径
+- 34 用例七项断言全等（blockHash/stateRoot/receiptsRoot/withdrawalsRoot/gasUsed/txRoot/logsBloom）
 - 链式双块跨块 state 延续正确（A→B 顺序投递均 VALID）
 - `docs/opstack-opgeth-e2e-comparison.md` 追加 L2 对拍报告（逐向量结果表 + 差异归因 + 待办清单）
 - 现有 OP 测试不回归
