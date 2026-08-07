@@ -184,7 +184,7 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         for (auto const& entry : this->authorizationList)
         {
             bcostars::AuthorizationEntry tarsEntry;
-            tarsEntry.chainID = static_cast<int64_t>(entry.chainId);
+            tarsEntry.chainID = static_cast<int64_t>(static_cast<uint64_t>(entry.chainId));
             tarsEntry.address = entry.address.hex();  // 40-char hex, no 0x prefix
             tarsEntry.nonce = static_cast<int64_t>(entry.nonce);
             tarsEntry.v = static_cast<tars::Char>(entry.yParity);
@@ -456,7 +456,7 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
     }
     const uint64_t leftover{in.size() - header.payloadLength};
-    uint64_t chainId = 0;
+    u256 chainId = 0;
     if (auto e = decodeItems(in, chainId, out.address); e != nullptr)
     {
         return e;

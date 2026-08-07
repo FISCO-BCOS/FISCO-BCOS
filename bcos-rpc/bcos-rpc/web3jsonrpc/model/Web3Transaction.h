@@ -68,7 +68,11 @@ struct AccessListEntry
 // EIP-7702: authorization entry (set_code transactions, Prague+).
 struct AuthorizationListEntry
 {
-    uint64_t chainId{0};
+    // chainId is a 256-bit value (EIP-7702). It is part of the signed payload
+    // (encodeForSign) and of the canonical tx hash, so it must NOT be narrowed:
+    // EEST tests chain id 2**256-1 and a truncated uint64 changes the signing
+    // hash -> wrong sender recovery.
+    u256 chainId{0};
     Address address;  // delegation target
     uint64_t nonce{0};
     uint8_t yParity{0};

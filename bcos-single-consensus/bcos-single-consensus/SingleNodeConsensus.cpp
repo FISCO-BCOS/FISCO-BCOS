@@ -76,9 +76,10 @@ void SingleNodeConsensus::loop()
 {
     while (m_running)
     {
+        bool sealedTxBlock = false;
         try
         {
-            produceBlock();
+            sealedTxBlock = produceBlock();
         }
         catch (std::exception const& e)
         {
@@ -89,11 +90,18 @@ void SingleNodeConsensus::loop()
         {
             SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("produceBlock iteration threw (unknown)");
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(m_blockIntervalMs));
+        // Drain the mempool as fast as possible when transactions are available (a tx is
+        // sealed immediately after submission instead of waiting for the next interval
+        // tick — the EEST harness runs one tx per unit, so this removes ~1s/unit of
+        // latency). Only pace the loop when nothing was sealed (empty block or skipped).
+        if (!sealedTxBlock)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(m_blockIntervalMs));
+        }
     }
 }
 
-void SingleNodeConsensus::produceBlock()
+bool SingleNodeConsensus::produceBlock()
 {
     // Resolve the current head (block number + hash) from the ledger — commitBlock keeps
     // SYS_CURRENT_STATE / SYS_NUMBER_2_HASH current, so the next block always extends the
@@ -108,19 +116,20 @@ void SingleNodeConsensus::produceBlock()
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("resolve head block number failed")
                                     << LOG_KV("msg", headError ? headError->errorMessage() : "");
-        return;
+        return false;
     }
     auto headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
 
     // Take pending transactions from the mempool.
     auto txs = m_memPool.takeAll();
+    bool const sealedTxBlock = !txs.empty();
 
     // produceEmptyBlocks=false: only produce a block that carries at least one transaction
     // (used by EEST fixture runs so the produced block environment matches the fixture).
     if (txs.empty() && !m_produceEmptyBlocks)
     {
         SINGLE_CONSENSUS_LOG(DEBUG) << LOG_DESC("Skip empty block (produceEmptyBlocks=false)");
-        return;
+        return false;
     }
 
     // Assemble the block proposal.
@@ -163,7 +172,7 @@ void SingleNodeConsensus::produceBlock()
         SINGLE_CONSENSUS_LOG(ERROR)
             << LOG_DESC("executeBlock failed")
             << LOG_KV("msg", executeError ? executeError->errorMessage() : "null header");
-        return;
+        return false;
     }
 
     // Commit the block through the scheduler + storage: BaselineScheduler persists via
@@ -179,7 +188,7 @@ void SingleNodeConsensus::produceBlock()
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("commitBlock failed")
                                     << LOG_KV("msg", commitError->errorMessage());
-        return;
+        return false;
     }
 
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Committed block")
@@ -188,4 +197,5 @@ void SingleNodeConsensus::produceBlock()
                                << LOG_KV("txs", txs.size())
                                << LOG_KV("gasUsed", executedHeader->gasUsed().str())
                                << LOG_KV("stateRoot", executedHeader->stateRoot().hexPrefixed());
+    return sealedTxBlock;
 }

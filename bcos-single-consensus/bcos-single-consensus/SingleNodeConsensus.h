@@ -68,7 +68,10 @@ public:
 
 private:
     void loop();
-    void produceBlock();
+    /// Produce one block. Returns true if a block carrying at least one transaction was
+    /// sealed (the caller then immediately checks for more work), false otherwise (empty
+    /// block or skipped — the caller sleeps @p m_blockIntervalMs before the next tick).
+    bool produceBlock();
 
     std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

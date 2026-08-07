@@ -149,13 +149,21 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
                 allocs.append(f"    {pad32(k)} = {pad32(v)}\n")
         idx += 1
 
+    # EEST fixtures sign authorizations / EIP-155 payloads with their own
+    # configured chain id (config.chainid, usually 0x01). The node's [web3]
+    # chain_id MUST match: processAuthorizationList (EIP-7702) compares each
+    # authorization's chain_id against the node's chain id, and a mismatch
+    # silently skips the authorization (observed: 7702 delegation code never
+    # written for chainid=0x01 fixtures against the old hardcoded 20200).
+    web3_chain_id = int(fixture.config.get("chainid"), 16) if fixture.config.get("chainid") else 20200
+
     genesis = f"""[chain]
     sm_crypto=false
     group_id=group0
     chain_id=chain0
 
 [web3]
-    chain_id=20200
+    chain_id={web3_chain_id}
 
 [consensus]
     consensus_type=pbft
@@ -372,14 +380,128 @@ def sign_and_submit(node, tx, indexes, chain_id):
         acct = Account.from_key(secret)
         if sender and acct.address.lower() != sender.lower():
             raise RuntimeError("secretKey/sender mismatch")
-        t = build_tx(tx, indexes, chain_id)
-        signed = Account.sign_transaction(t, secret)
-        raw = signed.raw_transaction.hex()
+        try:
+            t = build_tx(tx, indexes, chain_id)
+            signed = Account.sign_transaction(t, secret)
+            raw = signed.raw_transaction.hex()
+        except Exception:
+            # eth_account rejects authorizations with invalid signature fields
+            # (r=0, s=0, yParity not 0/1, r/s at the u256 extremes — EEST
+            # "valid_tx_invalid_auth_signature" vectors). Those txs are still
+            # valid outer txs: the invalid auth is skipped by EIP-7702, so we
+            # must craft the raw type-4 bytes manually with the raw auth values.
+            if "authorizationList" not in tx:
+                raise
+            raw = build_type4_raw(tx, indexes, chain_id, secret)
+        return node.rpc("eth_sendRawTransaction", [raw])
     else:
         # v/r/s supplied directly: reconstruct the raw tx bytes from txbytes? For now the
         # harness supports secretKey-signed fixtures (the bulk of state_tests).
         raise RuntimeError("fixture tx has no secretKey (unsupported by harness yet)")
-    return node.rpc("eth_sendRawTransaction", [raw])
+
+
+def _rlp_int(n):
+    if n == 0:
+        return b"\x80"
+    b = n.to_bytes((n.bit_length() + 7) // 8, "big")
+    if len(b) == 1 and b[0] < 0x80:
+        return b
+    return bytes([0x80 + len(b)]) + b
+
+
+def _rlp_bytes(b):
+    if len(b) == 1 and b[0] < 0x80:
+        return b
+    if len(b) < 56:
+        return bytes([0x80 + len(b)]) + b
+    ln = len(b).to_bytes((len(b).bit_length() + 7) // 8, "big")
+    return bytes([0xB7 + len(ln)]) + ln + b
+
+
+def _rlp_list(items):
+    body = b"".join(items)
+    if len(body) < 56:
+        return bytes([0xC0 + len(body)]) + body
+    ln = len(body).to_bytes((len(body).bit_length() + 7) // 8, "big")
+    return bytes([0xF7 + len(ln)]) + ln + body
+
+
+def build_type4_raw(tx, indexes, chain_id, secret):
+    """Manually construct + sign an EIP-7702 (type-4) raw tx.
+
+    Used when eth_account refuses to sign because an authorization carries an
+    invalid signature field (r/s/yParity). The outer tx signature is real; the
+    invalid authorization is skipped by the node's EIP-7702 processing, which is
+    exactly what the EEST "valid_tx_invalid_auth_signature" vectors expect.
+    """
+    gas = tx.get("gasLimit", "0x5208")
+    value = tx.get("value", "0x0")
+    data = tx.get("data", "0x")
+    if isinstance(gas, list):
+        gas = gas[indexes.get("gas", 0)]
+    if isinstance(value, list):
+        value = value[indexes.get("value", 0)]
+    if isinstance(data, list):
+        data = data[indexes.get("data", 0)]
+    to = tx.get("to", "")
+
+    # Access list (same resolution as build_tx).
+    access_list = []
+    acl = tx.get("accessLists")
+    if acl:
+        variant = acl[indexes.get("accessLists", 0)] if isinstance(acl[0], list) else acl
+        access_list = [bytes.fromhex(a["address"][2:]) for a in variant] if variant else []
+        # EEST access entries may have storageKeys too; the harness only needs
+        # them for gas (cold/warm), which matches the address-only form below.
+        access_list = [
+            _rlp_list([
+                _rlp_bytes(bytes.fromhex(a["address"][2:])),
+                _rlp_list([_rlp_bytes(bytes.fromhex(k[2:])) for k in a.get("storageKeys", [])]),
+            ]) for a in variant] if variant else []
+
+    # Raw authorization entries (unvalidated).
+    al = tx.get("authorizationList")
+    auths = al if isinstance(al, list) else [al]
+    if auths and isinstance(auths[0], list):
+        auths = auths[indexes.get("authorizationList", 0)]
+    auths = auths if isinstance(auths, list) else [auths]
+    auth_enc = []
+    for a in auths:
+        if not isinstance(a, dict):
+            continue
+        v_raw = a.get("v", a.get("yParity", "0x0"))
+        yp = int(v_raw, 16) if isinstance(v_raw, str) else int(v_raw)
+        addr_hex = a.get("address", "0x" + "00" * 20)
+        addr_bytes = bytes.fromhex(addr_hex[2:]) if addr_hex.startswith("0x") else bytes.fromhex(addr_hex)
+        auth_enc.append(_rlp_list([
+            _rlp_int(hex_int(a.get("chainId", "0x0"))),
+            _rlp_bytes(addr_bytes),
+            _rlp_int(hex_int(a.get("nonce", "0x0"))),
+            _rlp_int(yp),
+            _rlp_int(hex_int(a.get("r", "0x0"))),
+            _rlp_int(hex_int(a.get("s", "0x0"))),
+        ]))
+
+    def fields(auth_list):
+        return [
+            _rlp_int(chain_id),
+            _rlp_int(hex_int(tx.get("nonce", "0x0"))),
+            _rlp_int(hex_int(tx.get("maxPriorityFeePerGas", "0x0"))),
+            _rlp_int(hex_int(tx.get("maxFeePerGas", "0x0"))),
+            _rlp_int(hex_int(gas)),
+            _rlp_bytes(bytes.fromhex(to[2:])) if to else _rlp_bytes(b""),
+            _rlp_int(hex_int(value)),
+            _rlp_bytes(bytes.fromhex(data[2:]) if data.startswith("0x") else bytes()),
+            _rlp_list(access_list),
+            _rlp_list(auth_list),
+        ]
+
+    payload = b"\x04" + _rlp_list(fields(auth_enc))
+    h = eth_utils.keccak(payload)
+    from eth_keys import keys  # noqa: PLC0415 (used only on the fallback path)
+    sig = keys.PrivateKey(bytes.fromhex(secret[2:])).sign_msg_hash(h)
+    final = fields(auth_enc) + [_rlp_int(sig.v), _rlp_int(sig.r), _rlp_int(sig.s)]
+    return (b"\x04" + _rlp_list(final)).hex()
 
 
 # ----------------------------------------------------------------------------- compare
@@ -461,8 +583,10 @@ def run_one_fixture(args, fixture, fork_key, post_entry, workdir, idx):
             if ok:
                 return ("PASS", "submit failed; post-state matches", workdir.name)
             return ("FAIL", f"submit error: {exc}", workdir.name)
-        # Accepted into mempool → wait for a receipt (driver seals within ~1-2s).
-        for _ in range(15):
+        # Accepted into mempool → wait for a receipt (driver seals within ~1-2s,
+        # but EIP-7702 txs with thousands of authorizations can take ~50s to
+        # execute — e.g. test_many_delegations has 4798 auths).
+        for _ in range(120):
             time.sleep(1)
             try:
                 rc = node.rpc("eth_getTransactionReceipt", [h])
