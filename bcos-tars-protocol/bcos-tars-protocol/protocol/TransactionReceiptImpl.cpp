@@ -54,14 +54,18 @@ std::string u64ToHex(uint64_t v)
         return "0x0";
     }
     char buf[2 + 16 + 1];
-    auto const [ptr, ec] = std::to_chars(buf + 2, std::end(buf), v, 16);
-    (void)ec;
+    auto const res = std::to_chars(buf + 2, std::end(buf), v, 16);
+    // `ec` is only read by the assert below, which compiles out under NDEBUG; [[maybe_unused]]
+    // keeps that intent explicit in the language instead of a bare (void)ec cast. (Applied to a
+    // plain variable, not a structured binding, because Clang rejects attributes on the
+    // identifier-list of a structured binding declaration.)
+    [[maybe_unused]] auto const& ec = res.ec;
     // buf is 19 bytes; uint64_t max needs 16 hex digits, so to_chars cannot fail here.
     // This assert documents that invariant — it is not a guard (it vanishes under NDEBUG).
     assert(ec == std::errc{});
     buf[0] = '0';
     buf[1] = 'x';
-    return std::string(buf, static_cast<std::size_t>(ptr - buf));
+    return std::string(buf, static_cast<std::size_t>(res.ptr - buf));
 }
 
 /// True when opStackMeta is entirely empty (a legacy receipt never wrote field 8). A tars
