@@ -7,17 +7,19 @@
 
 // These using-declarations are NOT dead: they are the ADL bridge that lets the generic codec
 // templates (RLPEncode.h encodeItems / Common.h lengthOfItems / RLPDecode.h decodeItems) find the
-// AccessListEntry overloads defined at the bottom of this file. Those overloads live in namespace
-// codec::rlp, which is not an associated namespace of bcos::rpc::AccessListEntry; without the
-// using-declaration a standalone TU (or a unity-batch reorder) fails with "neither visible in the
+// AccessListEntry overloads defined at the bottom of this file. They must live INSIDE namespace
+// bcos::rpc (not at global scope): bcos::rpc is an associated namespace of
+// bcos::rpc::AccessListEntry, so ADL finds the declarations there; placed at global scope they are
+// not searched and a standalone TU (or a unity-batch reorder) fails with "neither visible in the
 // template definition nor found by argument-dependent lookup". Keep the three in sync with the
 // overloads.
-using bcos::codec::rlp::decode;
-using bcos::codec::rlp::encode;
-using bcos::codec::rlp::length;
-
 namespace bcos::rpc
 {
+// ADL bridge — same placement as Web3Transaction.cpp.
+using codec::rlp::decode;
+using codec::rlp::encode;
+using codec::rlp::length;
+
 namespace
 {
 // Strip leading zero bytes from signature data (R/S) to keep RLP encoding canonical.
@@ -250,14 +252,26 @@ struct LegacyTxHandler : Web3TxHandler
             out.chainId.emplace(chainId);
             // EIP-155: encodeForSign appends two uint64_t(0) placeholders after chainId
             // (the unsigned preimage's v=0, r=0, s=0). Consume them so the trailing-bytes
-            // check in Web3Transaction::decode does not reject this as InputTooLong.
+            // check in Web3Transaction::decode does not reject this as InputTooLong. The
+            // placeholders are part of the EIP-155 preimage shape (chainId, 0, 0): a nonzero
+            // value is malformed and rejected, not silently rewritten to 0 on re-encode.
             if (!in.empty())
             {
                 uint64_t dummy = 0;
                 decodeError = codec::rlp::decode(in, dummy);
+                if (decodeError == nullptr && dummy != 0)
+                {
+                    return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::NonCanonicalSize,
+                        "Non-zero EIP-155 preimage placeholder (expected 0)");
+                }
                 if (decodeError == nullptr && !in.empty())
                 {
                     decodeError = codec::rlp::decode(in, dummy);
+                    if (decodeError == nullptr && dummy != 0)
+                    {
+                        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::NonCanonicalSize,
+                            "Non-zero EIP-155 preimage placeholder (expected 0)");
+                    }
                 }
             }
         }

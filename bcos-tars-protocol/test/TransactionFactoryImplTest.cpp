@@ -279,10 +279,13 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     inner.isSystemTransaction = 1;
 
     BOOST_CHECK(tx->isDepositTx());
-    BOOST_CHECK_EQUAL(tx->sourceHash(), "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    BOOST_CHECK_EQUAL(
+        tx->sourceHash(), "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
     BOOST_CHECK_EQUAL(tx->mint(), u256("0x16345785d8a0000"));
-    // size() accounts for the deposit metadata
-    BOOST_CHECK(tx->size() >= inner.sourceHash.size() + inner.mint.size());
+    // size() accounts for the deposit metadata: all other variable-length fields are empty on
+    // this default-constructed tx, so the exact size is sourceHash + mint (isSystemTransaction is
+    // a fixed-length scalar and excluded, like type/version/blockLimit).
+    BOOST_CHECK_EQUAL(tx->size(), inner.sourceHash.size() + inner.mint.size());
 
     // A non-system deposit (isSystemTx=false) must still be a deposit: isDepositTx() keys off
     // web3TypedTxKind(), never off the per-transaction isSystemTransaction flag.
@@ -301,6 +304,16 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK(noMint->isDepositTx());
     BOOST_CHECK_EQUAL(noMint->mint(), u256(0));
     BOOST_CHECK(noMint->sourceHash().empty());
+
+    // Corrupt hex in the tars mint slot must decode to zero, not throw (mint() is defensive:
+    // try/catch around the u256 parse, so a corrupt mirror value never escapes as an exception).
+    auto corruptMint = std::make_shared<TransactionImpl>();
+    corruptMint->mutableInner().type =
+        static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    corruptMint->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    corruptMint->mutableInner().mint = "0xzz";  // not valid hex
+    BOOST_CHECK(corruptMint->isDepositTx());
+    BOOST_CHECK_EQUAL(corruptMint->mint(), u256(0));
 
     // A regular typed tx (EIP-1559) is not a deposit.
     auto eip1559 = std::make_shared<TransactionImpl>();

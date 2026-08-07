@@ -45,6 +45,10 @@ enum class TransactionType : uint8_t
     Deposit = 0x7e,  // deposit-only system tx (OP Stack)
 };
 
+// ⚠️ Deposit (0x7e) has no size ordering with the EIP typed kinds (Legacy..EIP4844 are 0..3, but
+// Deposit is 0x7e = 126). Do NOT use range comparisons like `type >= EIP1559 && type <= EIP4844`
+// that would silently admit Deposit; compare explicitly (`type >= EIP1559 && type < Deposit`, or
+// `==` for a specific kind) instead.
 constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
     requires std::same_as<decltype(rtype), TransactionType> ||
              std::unsigned_integral<decltype(rtype)>
