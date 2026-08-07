@@ -158,8 +158,11 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     pre["0x4200000000000000000000000000000000000015"]["balance"] = "0x0";
     pre["0x4200000000000000000000000000000000000015"]["nonce"] = "0x1";
     pre["0x4200000000000000000000000000000000000015"]["code"] = "0x";
+    // ⚠️ storage 值必须是满 32 字节（66 hex）——jsonBytes32 对短值抛 runtime_error
+    //（R2-B 捕获：真实向量全部 66 字符，此处测试字面量曾用 "0x1234" 导致 Step 5 必红）。
     pre["0x4200000000000000000000000000000000000015"]["storage"]
-        ["0x0000000000000000000000000000000000000000000000000000000000000001"] = "0x1234";
+        ["0x0000000000000000000000000000000000000000000000000000000000000001"] =
+        "0x0000000000000000000000000000000000000000000000000000000000001234";
     // 0x7e5f... — 普通 EOA，带 balance
     pre["0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"]["balance"] = "0x56bc75e2d63100000";
     pre["0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"]["nonce"] = "0x0";
@@ -184,19 +187,24 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     BOOST_REQUIRE(l1Acct.has_value());
     const auto slot = w6test::jsonBytes32(
         "0x0000000000000000000000000000000000000000000000000000000000000001");
-    BOOST_CHECK(bridge.get_storage(l1, slot) == w6test::jsonBytes32("0x1234"));
+    BOOST_CHECK(bridge.get_storage(l1, slot) ==
+        w6test::jsonBytes32("0x0000000000000000000000000000000000000000000000000000000000001234"));
     BOOST_CHECK(!bridge.poisoned()) << "seeding poisoned: " << bridge.firstError();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 ```
 
-- [ ] **Step 2: 立即把测试源加进 CMake（TDD 红阶段的前提）**
+- [ ] **Step 2: 立即把测试源 + jsoncpp 加进 CMake（TDD 红阶段的前提）**
 
-在 `bcos-evm/test/CMakeLists.txt` 的 `if(TARGET bcos-framework)` 段的 `target_sources(bcos-evm-opstack-tests PRIVATE ...)` 里追加（必须在 Step 2 构建**之前**，否则新源不进目标、红阶段为空）：
+在 `bcos-evm/test/CMakeLists.txt` 的 `if(TARGET bcos-framework)` 段（必须在 Step 2 构建**之前**，否则新源不进目标、红阶段为空）。⚠️ **SeedPreStateTest.cpp 用 `Json::Value/Json::Reader`（`<json/json.h>` + 运行时符号），本 target 现不链 jsoncpp——必须同一步补 `find_package(jsoncpp CONFIG REQUIRED)` + `jsoncpp_static`（R2-B 捕获：若只在 Task 4 才加，Task 2 独立构建会链接失败）：
 
 ```cmake
+    find_package(jsoncpp CONFIG REQUIRED)
+    target_sources(bcos-evm-opstack-tests PRIVATE
         opstack/support/SeedPreStateTest.cpp
+    )
+    target_link_libraries(bcos-evm-opstack-tests PRIVATE jsoncpp_static)
 ```
 
 - [ ] **Step 3: 运行测试确认失败（红阶段）**
@@ -281,9 +289,15 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
         entry.addr = jsonAddress(addrKey);
         entry.nonce = jsonU64(acct["nonce"].asString());
         entry.balance = jsonU256(acct["balance"].asString());
+        // 空 code（"0x" → 空字节）留 nullopt，与 LedgerSeed.h 契约③逐字对齐（R2-B：has_value 空 vector
+        // 会多写 CODE_BINARY/ABI 三行但 stateRoot 不可观察，此处仍按契约写）
         if (acct.isMember("code"))
         {
-            entry.code = jsonBytes(acct["code"].asString());
+            auto const codeStr = acct["code"].asString();
+            if (!codeStr.empty() && codeStr != "0x")
+            {
+                entry.code = jsonBytes(codeStr);
+            }
         }
         if (acct.isMember("storage"))
         {
