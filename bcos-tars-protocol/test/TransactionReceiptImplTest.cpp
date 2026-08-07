@@ -315,6 +315,33 @@ BOOST_AUTO_TEST_CASE(opStackMetaLegacyStringTag8Throws)
     BOOST_CHECK_THROW(receipt.decode(bcos::ref(wire)), tars::TarsDecodeException);
 }
 
+// The three scalar fields are uint32_t (aligned with the OpReceiptMeta producer). A stored
+// value wider than 4 bytes is corrupt or externally written; hexToU32 must reject that single
+// field (→ nullopt) rather than narrow silently — the widened read-back would be a silent value
+// error. Mix one good field with the oversized scalar so the good field keeps the receipt an
+// OP receipt (a scalar-only corrupt meta would trip the all-unparseable fallback instead).
+BOOST_AUTO_TEST_CASE(opStackMetaScalarOversizedRejected)
+{
+    auto suite = makeSuite();
+    TransactionReceiptFactoryImpl factory(suite);
+    std::vector<bcos::protocol::LogEntry> logs;
+    bcos::bytes output;
+    auto receipt = factory.createReceipt(bcos::u256(0), "", logs, 0, bcos::ref(output), 1);
+    auto impl = std::dynamic_pointer_cast<TransactionReceiptImpl>(receipt);
+    BOOST_REQUIRE(impl);
+
+    // 0x0100000000 = 2^32, one past uint32_t max — 5 significant bytes. Written directly to the
+    // tars hex-string slot (setOpStackMeta would refuse it at compile time via uint32_t).
+    impl->inner().opStackMeta.l1_base_fee_scalar = "0x100000000";
+    impl->inner().opStackMeta.deposit_nonce = "0x2a";  // good field keeps it an OP receipt
+    auto got = impl->opStackMeta();
+    BOOST_REQUIRE(got.has_value());
+    BOOST_REQUIRE(got->deposit_nonce.has_value());
+    BOOST_CHECK_EQUAL(*got->deposit_nonce, 42u);
+    // The oversized scalar is rejected (nullopt), not narrowed to the low 32 bits.
+    BOOST_CHECK(!got->l1_base_fee_scalar.has_value());
+}
+
 // A normal legacy receipt never wrote field 8 at all. tars read(opStackMeta, 8, false)
 // leaves the struct default (all empty strings) and opStackMeta() reports nullopt -- the
 // backward-compatible path for the huge majority of existing receipts.

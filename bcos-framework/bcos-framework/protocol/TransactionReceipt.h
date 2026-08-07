@@ -34,14 +34,32 @@ namespace bcos::protocol
 // (opStackMeta, an OpStackReceiptMeta tars struct). The C++ struct is the typed view over the
 // tars hex-string fields. Presence is per-field (std::optional): a field the execution layer did
 // not record stays nullopt. The tars layer stores 0 values as "0x0" so explicit zeros survive.
+//
+// Mirror of bcos::evm::opstack::OpReceiptMeta (bcos-evm/bcos-evm/opstack/OpReceipt.h) plus the
+// deposit-receipt consensus pair. Producer → mirror mapping (the only writer is the execution
+// layer's deriveOpReceiptMeta):
+//   OpReceiptMeta.l1_gas_price / l1_blob_base_fee / l1_fee / operator_fee → the four u256 fields
+//   OpReceiptMeta.{l1_base_fee_scalar, l1_blob_base_fee_scalar, operator_fee_scalar} → the three
+//   uint32_t fields (widths match the producer — do not widen, or a read-back narrows silently)
+//   OpReceiptMeta.{operator_fee_constant, da_footprint_gas_scalar, da_footprint} → the three
+//   remaining uint64_t fields
+//   OpDepositReceipt.{deposit_nonce, deposit_receipt_version} → the two deposit fields below
+//   l1_gas_used → RESERVED (no producer in this repo yet; op-geth's receipt has L1GasUsed, and
+//   the field is kept so the mirror can carry it when the execution layer starts emitting it)
+//
+// ⚠️ None of these fields is committed to the receipt hash or the receipts root. FISCO's receipt
+// hash covers only receipt.data (TarsHashable.h), and field 8 lives on the outer TransactionReceipt
+// outside that. In OP, deposit_nonce / deposit_receipt_version are consensus data (they go into
+// the receipts-root leaf, 0x7E || rlp([..., depositNonce, depositReceiptVersion])); here they are
+// carried outside the root, so the wiring PR must handle their consensus commitment explicitly.
 struct OpStackReceiptMeta
 {
     std::optional<bcos::u256> l1_gas_price;
     std::optional<bcos::u256> l1_fee;
     std::optional<bcos::u256> l1_blob_base_fee;
-    std::optional<uint64_t> l1_base_fee_scalar;
-    std::optional<uint64_t> l1_blob_base_fee_scalar;
-    std::optional<uint64_t> operator_fee_scalar;
+    std::optional<uint32_t> l1_base_fee_scalar;
+    std::optional<uint32_t> l1_blob_base_fee_scalar;
+    std::optional<uint32_t> operator_fee_scalar;
     std::optional<uint64_t> operator_fee_constant;
     std::optional<uint64_t> da_footprint_gas_scalar;
     std::optional<uint64_t> da_footprint;
@@ -80,7 +98,8 @@ public:
     // empty opStackMeta (tars optional field). The tars layer stores every value as a hex string,
     // including explicit zeros ("0x0"), so per-field presence survives serialization.
     virtual std::optional<OpStackReceiptMeta> opStackMeta() const = 0;
-    virtual void setOpStackMeta(OpStackReceiptMeta meta) = 0;
+    // By-value would copy 400 bytes for no benefit (the impl reads every field, never moves).
+    virtual void setOpStackMeta(OpStackReceiptMeta const& meta) = 0;
 
     // additional information on transaction execution, no need to be involved in the hash
     // calculation

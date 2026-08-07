@@ -475,6 +475,18 @@ bool bcostars::protocol::TransactionImpl::isDepositTx() const
     return web3TypedTxKind() == kDepositTxType;
 }
 
+bool bcostars::protocol::TransactionImpl::isSystemTransaction() const
+{
+    // The flag is deposit-only metadata (Transaction.h: "Empty/false when not a deposit").
+    // Guard against non-deposit txs with a populated tars field (corrupt/wire data), matching
+    // sourceHash()/mint().
+    if (!isDepositTx())
+    {
+        return false;
+    }
+    return m_inner()->isSystemTransaction == 1;
+}
+
 bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))

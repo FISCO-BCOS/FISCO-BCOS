@@ -67,7 +67,7 @@ public:
     void setEffectiveGasPrice(std::string effectiveGasPrice) override;
 
     std::optional<bcos::protocol::OpStackReceiptMeta> opStackMeta() const override;
-    void setOpStackMeta(bcos::protocol::OpStackReceiptMeta meta) override;
+    void setOpStackMeta(bcos::protocol::OpStackReceiptMeta const& meta) override;
 
     std::string_view cumulativeGasUsed() const override;
     void setCumulativeGasUsed(std::string cumulativeGasUsed) override;
@@ -97,7 +97,8 @@ private:
 
 // Guard: TransactionReceiptImpl must fit inside the AnyTransactionReceipt fixed-size buffer.
 // If this assertion fires, update the size constant in
-// bcos-framework/bcos-framework/protocol/TransactionReceipt.h  (using AnyTransactionReceipt = AnyHolder<..., 104>).
+// bcos-framework/bcos-framework/protocol/TransactionReceipt.h (using AnyTransactionReceipt =
+// AnyHolder<..., 104>).
 static_assert(sizeof(TransactionReceiptImpl) <= 104,
     "TransactionReceiptImpl exceeds AnyTransactionReceipt buffer (104 bytes); "
     "update the size constant in bcos-framework/protocol/TransactionReceipt.h");

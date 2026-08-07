@@ -23,11 +23,17 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
+#include <bcos-utilities/BoostLog.h>
 #include <algorithm>
 #include <cassert>
 #include <charconv>
+#include <iterator>
+#include <limits>
+#include <system_error>
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
+
+#define TRANSACTIONRECEIPT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TRANSACTION_RECEIPT")
 
 namespace
 {
@@ -125,6 +131,19 @@ std::optional<uint64_t> hexToU64(std::string const& s)
         return std::nullopt;
     }
     return bcos::fromBigEndian<uint64_t>(*bytes);
+}
+std::optional<uint32_t> hexToU32(std::string const& s)
+{
+    // The three scalar fields (l1_base_fee_scalar / l1_blob_base_fee_scalar / operator_fee_scalar)
+    // are uint32_t in the producer (OpReceiptMeta). A stored value wider than 4 bytes is corrupt
+    // (or externally written); reject rather than narrow silently — the widened read-back is the
+    // exact hazard the width alignment prevents.
+    auto value = hexToU64(s);
+    if (!value || *value > std::numeric_limits<uint32_t>::max())
+    {
+        return std::nullopt;
+    }
+    return static_cast<uint32_t>(*value);
 }
 }  // namespace
 
@@ -247,11 +266,11 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
     if (!s.l1_blob_base_fee.empty())
         out.l1_blob_base_fee = hexToU256(s.l1_blob_base_fee);
     if (!s.l1_base_fee_scalar.empty())
-        out.l1_base_fee_scalar = hexToU64(s.l1_base_fee_scalar);
+        out.l1_base_fee_scalar = hexToU32(s.l1_base_fee_scalar);
     if (!s.l1_blob_base_fee_scalar.empty())
-        out.l1_blob_base_fee_scalar = hexToU64(s.l1_blob_base_fee_scalar);
+        out.l1_blob_base_fee_scalar = hexToU32(s.l1_blob_base_fee_scalar);
     if (!s.operator_fee_scalar.empty())
-        out.operator_fee_scalar = hexToU64(s.operator_fee_scalar);
+        out.operator_fee_scalar = hexToU32(s.operator_fee_scalar);
     if (!s.operator_fee_constant.empty())
         out.operator_fee_constant = hexToU64(s.operator_fee_constant);
     if (!s.da_footprint_gas_scalar.empty())
@@ -266,8 +285,10 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
         out.l1_gas_used = hexToU64(s.l1_gas_used);
     if (!s.operator_fee.empty())
         out.operator_fee = hexToU256(s.operator_fee);
-    // A legacy receipt (field 8 never set) decodes to an all-empty opStackMeta. Report nullopt so
-    // downstream `if (auto m = r.opStackMeta())` does not mistake it for an OP receipt.
+    // Reached only when every field that was WRITTEN failed to parse (corrupt hex, oversized, or
+    // a bare "0x"). The legacy all-empty case already returned above via opStackMetaEmpty(s).
+    // Report nullopt rather than an OP receipt with 13 absent fields, and log so the corruption
+    // is not invisible.
     if (out.l1_gas_price == std::nullopt && out.l1_fee == std::nullopt &&
         out.l1_blob_base_fee == std::nullopt && out.l1_base_fee_scalar == std::nullopt &&
         out.l1_blob_base_fee_scalar == std::nullopt && out.operator_fee_scalar == std::nullopt &&
@@ -276,12 +297,13 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
         out.deposit_receipt_version == std::nullopt && out.l1_gas_used == std::nullopt &&
         out.operator_fee == std::nullopt)
     {
+        TRANSACTIONRECEIPT_LOG(WARNING) << LOG_DESC("opStackMeta present but entirely unparseable");
         return std::nullopt;
     }
     return out;
 }
 void bcostars::protocol::TransactionReceiptImpl::setOpStackMeta(
-    bcos::protocol::OpStackReceiptMeta meta)
+    bcos::protocol::OpStackReceiptMeta const& meta)
 {
     // Semantics are "replace", not "merge": clear first so a second call cannot leave stale
     // non-empty fields from a previous invocation (a review noted that merge semantics would

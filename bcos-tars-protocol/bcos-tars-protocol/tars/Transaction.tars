@@ -59,6 +59,8 @@ module bcostars {
         /// WARNING: these mirrors are display-only and unauthenticated — the signature binds
         /// only extraTransactionBytes; execution MUST re-derive sourceHash/mint/isSystemTx
         /// from the envelope, never trust the tars mirrors from an untrusted peer.
+        /// The C++ accessors are sourceHash() / mint() / isSystemTransaction() (Transaction.h),
+        /// each gated on isDepositTx() and returning the base-class default for non-deposits.
         13 optional string          sourceHash;          // deposit source hash(hex)
         14 optional string          mint;                // deposit mint(hex string)
         15 optional byte            isSystemTransaction; // bool flag
