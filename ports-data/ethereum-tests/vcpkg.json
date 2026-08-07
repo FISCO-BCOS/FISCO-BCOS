@@ -1,0 +1,7 @@
+{
+  "name": "ethereum-tests",
+  "version": "17.2",
+  "description": "Official Ethereum cross-client consensus test vectors (github.com/ethereum/tests), pinned at tag v17.2. Data-only port: the module-level vector directories (TrieTests, RLPTests, TransactionTests, ABITests, GenesisTests; two 20 MB calldata stress vectors excluded) are installed under share/ethereum-tests for unit tests to read at runtime.",
+  "homepage": "https://github.com/ethereum/tests",
+  "license": "MIT"
+}
