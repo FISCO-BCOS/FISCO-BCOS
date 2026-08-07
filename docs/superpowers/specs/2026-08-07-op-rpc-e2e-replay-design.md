@@ -23,7 +23,7 @@ W1 修复的 `EngineHelper::parseNewPayloadRequest`（rawTransactions/withdrawal
 | **D1** | 形态 = **进程内 RPC 对拍**：真实 JSON-RPC params → `parseNewPayloadRequest(V4)` → `EngineService.newPayload(4)` → `executeOpBlock`。无网络、无端点分派 | 用户选定；对比方案 §3 L2 原文形态 |
 | **D2** | **两债留在 W6 外**：PBFT retry loop、V4 生产互通（capability 协商）不阻塞对拍 harness，记入对拍报告待办 | 用户选定；进程内 harness 不走共识也不走端点协商 |
 | **D3** | **V4 端点折中**：绕开端点桩（`newPayloadV4` 是 `-38005` 硬桩），直接调 `parseNewPayloadRequest(params, factory, V4)` + `EngineService.newPayload(request, 4)`。`EngineHelper.h:68` 公开 API 接受 V4（W1 `EngineHelperTest` 已用 V4 通过） | 用户选定；OP 引擎分支强制 version==V4（`EngineServiceImpl.h:72` `c_opIsthmusPayloadVersion=4`，"Isthmus+ 禁 V3"），而 RPC 端点 V4 未实现 |
-| **D4** | **语料 vendored 进 e2e**：`t8n/golden/engine/`（41 文件含 chainA/B + SHA256SUMS + manifest）+ `t8n/generator/` 从 `feat-op-validator-loop` 拷入，成为 e2e 跟踪文件 | 用户选定；语料是 op-geth v1.101702.2 确定性生成的纯数据，与代码解耦 |
+| **D4** | **语料 vendored 进 e2e**：`t8n/vectors/`（33 文件，含 `env`/`pre`/`_op_expected.header`）+ `t8n/golden/engine/`（41 文件含 chainA/B + SHA256SUMS + manifest）+ `t8n/generator/` 从 `feat-op-validator-loop` 拷入，成为 e2e 跟踪文件。⚠️ **pre-state 修正**：区块执行前的账户状态（`pre`）在 `vectors/*.json` 里，golden 文件**没有**——golden-only 无法播种，必须连带 vendor vectors | 用户选定；语料是 op-geth v1.101702.2 确定性生成的纯数据，与代码解耦 |
 | **D5** | 成功标准 = **全量 33 向量 + chainA/B 链式双块**，每条走真实解析→引擎全链路，七项断言全等，产出对拍报告 | 用户选定 |
 | **D6** | **方案 A：独立新测试** `OpNewPayloadRpcE2eTest.cpp`（自包含），不移植 val-loop 的 `EngineNewPayloadGateTest` | 用户选定；干净聚焦 L2 增量，不背 mutation matrix 等无关基建 |
 | **D7** | **断言框架 = Boost.Test**（本分支 `bcos-evm/test/opstack` 惯例，`BOOST_TEST_MODULE BcosEvmOpstackTests`）；val-loop gate 测试的 GTest 不沿用 | 探查确认 |
@@ -32,6 +32,7 @@ W1 修复的 `EngineHelper::parseNewPayloadRequest`（rawTransactions/withdrawal
 
 | 文件 | 变更 |
 |---|---|
+| `bcos-evm/test/opstack/t8n/vectors/`（33 文件） | **新增（vendored）**：从 `feat-op-validator-loop` 拷入，含 `env`/`pre`/`_op_expected.header`（pre-state 播种来源） |
 | `bcos-evm/test/opstack/t8n/golden/engine/`（41 文件） | **新增（vendored）**：从 `feat-op-validator-loop` 拷入，含 `chained/chainA·B.golden.json` + `SHA256SUMS` + `manifest.txt` |
 | `bcos-evm/test/opstack/t8n/generator/`（main.go/cases.go/regen.sh） | **新增（vendored）**：从 `feat-op-validator-loop` 拷入，未来再生成用 |
 | `bcos-evm/test/opstack/OpNewPayloadRpcE2eTest.cpp` | **新增**：W6 harness（Boost.Test），33 + 2 个用例 |
@@ -41,7 +42,12 @@ W1 修复的 `EngineHelper::parseNewPayloadRequest`（rawTransactions/withdrawal
 ## 4. 数据流
 
 ```
-[golden JSON]  bcos-evm/test/opstack/t8n/golden/engine/*.golden.json
+[vectors JSON]  bcos-evm/test/opstack/t8n/vectors/<id>.json
+   └─ pre        账户状态（区块执行前）→ 播种进 MLS
+        ↓ harness：自研 JSON→StateDiff 装载器
+        │   (nlohmann 解析 pre → evmone::state::StateDiff →
+        │    Storage2Ledger<ViewType>::applyDiff(diff, seeding=true) → pushView)
+[golden JSON]  bcos-evm/test/opstack/t8n/golden/engine/<id>.golden.json
    ├─ rawTransactions       真实 EIP-2718 字节（deposit + 普通 tx 混合）
    ├─ encodedHeaderHex      op-geth 完整 RLP header
    └─ blockHash / transactionsRoot   交叉断言用
@@ -86,6 +92,8 @@ W1 修复的 `EngineHelper::parseNewPayloadRequest`（rawTransactions/withdrawal
 - **链式双块（chainA/B）**：顺序投递 A → B（B parentHash=A），跨块 state 延续；复用 gate 测试双块语义（B parent-known 后 VALID）。断言 A、B 各自七项
 - **落库隔离**：`executeOpBlock` 落库后从 block header 断言；用 StorageFixture/MemoryLedger 隔离测试态
 - **Assertion 框架**：Boost.Test（D7），`BOOST_REQUIRE`/`BOOST_CHECK_EQUAL`
+- **pre-state 播种**：自研 JSON→StateDiff 装载器（本分支无 evmone `test/utils/test_state.hpp`，`LedgerSeed.h` 的 `seedFromTestState` 依赖它）。直接用 `evmone::state::StateDiff` + `Storage2Ledger::applyDiff(diff, seeding=true)`（`Storage2Ledger.h:275` 签名确认）
+- **jsoncpp**：`parseNewPayloadRequest` 吃 `Json::Value`（jsoncpp）；bcos-evm 测试 target 需 `find_package(jsoncpp CONFIG REQUIRED)` + link `jsoncpp_static`（bcos-rpc 同款）
 - **语料信任度**：vendored 语料 + `SHA256SUMS` 锚定（generator 重新生成属 W6 外待办）
 
 ## 7. 测试与 CMake
