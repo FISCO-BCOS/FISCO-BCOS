@@ -1405,11 +1405,26 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
             InvalidConfig() << errinfo_comment(
                 "Please set tx.gas_limit to more than " + std::to_string(TX_GAS_LIMIT_MIN) + " !"));
     }
+    else if (txGasLimit < 100000)
+    {
+        // Small block gas limits (>= MIN, < 100000) are accepted for Ethereum
+        // compatibility (EEST lowGasLimit fixtures use 80000), but flag them so an
+        // operator setting a tiny limit by accident sees it in the boot log.
+        NodeConfig_LOG(WARNING) << LOG_DESC("low tx.gas_limit") << LOG_KV("gasLimit", txGasLimit);
+    }
     m_genesisConfig.m_txGasLimit = txGasLimit;
     // txGasPrice (base fee per gas; consumed by the v2 Ethereum executor as base_fee).
     // Seeded into SYS_CONFIG/tx_gas_price at genesis so EEST fixtures can reproduce their
     // environment's currentBaseFee.
     m_genesisConfig.m_txGasPrice = _genesisConfig.get<std::string>("tx.gas_price", "0x0");
+    // txExcessBlobGas (EIP-4844 blob base-fee state; consumed by the v2 Ethereum executor).
+    // Seeded into SYS_CONFIG/excess_blob_gas at genesis so EEST fixtures can reproduce their
+    // environment's currentExcessBlobGas.
+    auto excessBlobGasStr = _genesisConfig.get<std::string>("tx.excess_blob_gas", "");
+    if (!excessBlobGasStr.empty())
+    {
+        m_genesisConfig.m_excessBlobGas = boost::lexical_cast<uint64_t>(excessBlobGasStr);
+    }
     // the compatibility version
     auto compatibilityVersion = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);

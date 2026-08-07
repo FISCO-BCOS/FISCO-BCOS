@@ -124,6 +124,9 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     # tx.gas_limit is parsed as a decimal number by NodeConfig (checkAndGetValue), while
     # fixtures carry it as hex; convert here.
     gas_limit = int(env.get("currentGasLimit", "0x0"), 16)
+    # excess_blob_gas (EIP-4844) is parsed as a decimal number by NodeConfig; fixtures
+    # carry currentExcessBlobGas as hex. When absent (pre-Cancun forks) default 0.
+    excess_blob_gas = int(env.get("currentExcessBlobGas", "0x0"), 16)
     coinbase = env.get("currentCoinbase", "0x0000000000000000000000000000000000000000")
     prev_randao = env.get("currentRandom", "0x0000000000000000000000000000000000000000")
     timestamp = env.get("currentTimestamp", "0x0")
@@ -180,6 +183,7 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
 [tx]
     gas_limit={gas_limit}
     gas_price={base_fee}
+    excess_blob_gas={excess_blob_gas}
 
 [executor]
     is_auth_check=false
@@ -205,13 +209,13 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     ini = tmpl_ini.read_text()
 
     def patch_section(text, section, key, value):
-        """Replace `key=<anything>` with `key=value` inside the given [section] block."""
+        """Replace `key=<anything>` (whitespace-tolerant) with `key=value` inside [section]."""
         out, in_sec = [], False
         for line in text.splitlines():
             s = line.strip()
             if s.startswith("[") and s.endswith("]"):
                 in_sec = (s[1:-1].strip() == section)
-            elif in_sec and s.startswith(key + "="):
+            elif in_sec and re.match(rf"{re.escape(key)}\s*=", s):
                 line = re.sub(rf"^\s*{re.escape(key)}\s*=.*", f"{key}={value}", line)
             out.append(line)
         return "\n".join(out)
@@ -689,6 +693,10 @@ def main():
             shutil.copy(nodes_json, wd / "nodes.json")
         rpc_port = 20000 + (idx % 40) + args.port_offset
         p2p_port = 21000 + (idx % 40) + args.port_offset
+        # Record which fixture this workdir belongs to (idx -> fixture mapping is
+        # deterministic but expensive to rebuild; a stamp in the workdir makes the
+        # FAILED-unit set directly inspectable after a run).
+        (wd / "fixture.info").write_text(f"{fx.path}\n{fx.name}\n{fork_key}\n")
         res, msg, wname = run_one_fixture(args, fx, fork_key, post_entry, wd, idx)
         # Each node's storage `data/` dir is ~150MB; drop it so a full 2681-fixture
         # run doesn't fill the disk. Keep the small workdir (genesis/ini/log) for
@@ -713,6 +721,10 @@ def main():
             elif res == "FAIL":
                 results["FAIL"] += 1
                 failures.append((path, name, fork_key, msg))
+                # Log every failure to a file (the console only shows the first 20)
+                # so a large failure set is fully diagnosable afterwards.
+                with open(base_dir / "failures.txt", "a") as fh:
+                    fh.write(f"{path} :: {name} [{fork_key}] {msg}\n")
                 if len(failures) <= 20:
                     print(f"  FAIL {name[:70]} [{fork_key}] {msg}", flush=True)
             else:

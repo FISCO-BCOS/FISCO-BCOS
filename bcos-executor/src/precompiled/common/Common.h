@@ -79,7 +79,8 @@ const int CODE_TABLE_DUPLICATE_FIELD = -50007;
 const int CODE_TABLE_INVALIDATE_FIELD = -50008;
 
 const int TX_COUNT_LIMIT_MIN = 1;
-const int TX_GAS_LIMIT_MIN = 100000;
+// Matches ledger::TX_GAS_LIMIT_MIN (go-ethereum MinGasLimit 5000).
+const int TX_GAS_LIMIT_MIN = 5000;
 
 enum PrecompiledErrorCode : int
 {

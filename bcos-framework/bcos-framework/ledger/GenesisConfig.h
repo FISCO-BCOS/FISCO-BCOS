@@ -78,6 +78,9 @@ public:
     // tx gas price (base fee per gas); consumed by the v2 Ethereum executor as base_fee
     // (BCOS2Evmone::blockHeaderToBlockInfo). Seeded into SYS_CONFIG/tx_gas_price at genesis.
     std::string m_txGasPrice = "0x0";
+    // excess blob gas (EIP-4844); consumed by the v2 Ethereum executor to derive the blob
+    // base fee. Seeded into SYS_CONFIG/excess_blob_gas at genesis when set.
+    std::optional<uint64_t> m_excessBlobGas;
     // executorConfig
     // WASM support was removed; this field is retained and permanently false because
     // generateGenesisData() serializes it into the genesis string. Dropping it would

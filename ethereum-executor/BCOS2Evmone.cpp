@@ -37,8 +37,15 @@ evmone::state::BlockInfo blockHeaderToBlockInfo(
     // evmone's Host::get_tx_context() maps block_prev_randao <- m_block.prev_randao
     // (there is no separate difficulty field in evmc_tx_context), so for pre-Paris
     // forks we must place the DIFFICULTY value into prev_randao for 0x44 to work.
+    //
+    // The prev_randao value comes from the block header (set by the consensus engine,
+    // e.g. SingleNodeConsensus from [consensus] prev_randao) rather than
+    // config.prevRandao(), which the production getLedgerConfig paths never populate.
     if (rev >= EVMC_PARIS)
-        info.prev_randao = config.prevRandao();
+    {
+        auto const& pr = header.prevRandao();
+        std::copy_n(pr.data(), sizeof(evmc::bytes32), info.prev_randao.bytes);
+    }
     else
         info.prev_randao =
             intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(info.difficulty)));

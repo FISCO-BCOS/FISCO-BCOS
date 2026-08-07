@@ -2249,6 +2249,19 @@ bool Ledger::buildGenesisBlock(
                 executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EVMC_REVISION), evmcRevisionEntry);
         }
 
+        // Write excess blob gas config (consumed by ethereum-executor, executor_version=2,
+        // for EIP-4844 blob base fee). Only written when explicitly configured in the genesis
+        // config; otherwise getLedgerConfig leaves excessBlobGas unset (executor uses 0).
+        if (versionNumber >= BlockVersion::V3_18_0_VERSION && genesis.m_excessBlobGas.has_value())
+        {
+            Entry excessBlobGasEntry;
+            excessBlobGasEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{
+                std::to_string(*genesis.m_excessBlobGas), 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS),
+                excessBlobGasEntry);
+        }
+
         // write consensus node list
         // update some node type to CONSENSUS_CANDIDATE_SEALER
         if (versionNumber >= (uint32_t)protocol::BlockVersion::V3_5_VERSION &&
