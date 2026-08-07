@@ -44,9 +44,9 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
     bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-    bcos::IOServicePool::Ptr _ioServicePool)
+    bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode)
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
-        _storage, _frontService, _nodeTimeMaintenance, _ioServicePool)
+        _storage, _frontService, _nodeTimeMaintenance, _ioServicePool, opStackMode)
 {
     m_timer = std::make_shared<Timer>(*_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
 

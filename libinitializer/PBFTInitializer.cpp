@@ -458,7 +458,7 @@ void PBFTInitializer::createPBFT()
         auto rpbftFactory = std::make_shared<RPBFTFactory>(*m_ioServicePool->getIOService(),
             m_protocolInitializer->cryptoSuite(), m_protocolInitializer->keyPair(), m_frontService,
             kvStorage, m_ledger, m_scheduler, m_txpool, m_protocolInitializer->blockFactory(),
-            m_protocolInitializer->txResultFactory(), m_ioServicePool);
+            m_protocolInitializer->txResultFactory(), m_ioServicePool, m_opStackMode);
         m_pbft = rpbftFactory->createRPBFT();
     }
 

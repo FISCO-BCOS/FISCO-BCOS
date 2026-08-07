@@ -615,10 +615,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else
     {
-        m_pbftInitializer =
-            std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
-                m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
-                m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
+        m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
+            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
+            m_ioServicePool, opStackMode);
     }
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
