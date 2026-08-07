@@ -309,6 +309,9 @@ void bcostars::protocol::BlockHeaderImpl::setEthBlockVersion(
     bcos::protocol::EthBlockVersion _version)
 {
     m_inner->ethBlockVersion = static_cast<uint8_t>(_version);
+    // Changing the Eth marker invalidates any previously computed hash (a FISCO Tars hash
+    // must not be returned for a header now marked as Ethereum).
+    clearDataHash();
 }
 bcos::protocol::BlockNumber bcostars::protocol::BlockHeaderImpl::number() const
 {

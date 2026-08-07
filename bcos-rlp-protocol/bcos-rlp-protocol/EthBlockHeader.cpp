@@ -111,6 +111,10 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     bcos::Error::UniquePtr validationError;
     if (!validateHeader(*header, validationError))
     {
+        // Leave the destination header in a defined state on failure: the fields written
+        // above are rolled back so the caller cannot mistake a half-populated header for a
+        // valid one.
+        header->clear();
         return validationError;
     }
 
@@ -308,10 +312,12 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     m_data.extraData.assign(extra.begin(), extra.end());
 
     auto bloom = _header.logsBloom();
-    if (bloom.size() >= m_data.logsBloom.size())
-    {
-        std::memcpy(m_data.logsBloom.data(), bloom.data(), m_data.logsBloom.size());
-    }
+    // logsBloom is a fixed 256-byte array. A shorter input (e.g. a header built without
+    // going through validateHeader) is copied up to 256 bytes and the remainder stays zero —
+    // this is a defensive default, not a silent guarantee of fidelity. validateHeader rejects
+    // any bloom whose size != 256 on the hash path.
+    std::memcpy(
+        m_data.logsBloom.data(), bloom.data(), (std::min)(bloom.size(), m_data.logsBloom.size()));
 
     // Optional fork fields.
     if (_header.baseFee().has_value())
@@ -355,6 +361,11 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 
 bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesRef out)
 {
+    // The scalar codec accepts non-canonical integer encodings (leading zeros) and over-long
+    // payloads (truncated mod 2^64). This bridge therefore hashes the canonical re-encoding
+    // (rlpEncode) rather than the raw input bytes, so a non-canonical input is normalised
+    // before hashing. geth would reject such input as malformed; rejecting it here is tracked
+    // as a shared-codec change (see RLP scalar decode), out of scope for this bridge.
     uint64_t _number = 0;
     uint64_t _timestamp = 0;
 
