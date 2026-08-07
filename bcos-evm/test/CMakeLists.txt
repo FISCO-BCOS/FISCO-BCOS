@@ -59,4 +59,8 @@ if(TARGET bcos-framework)
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-ledger)
 endif()
+target_compile_definitions(bcos-evm-opstack-tests PRIVATE
+    OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/vectors"
+    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/golden/engine"
+)
 add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)
