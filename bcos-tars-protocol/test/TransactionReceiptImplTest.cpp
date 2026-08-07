@@ -328,8 +328,10 @@ BOOST_AUTO_TEST_CASE(opStackMetaScalarOversizedRejected)
     auto impl = std::dynamic_pointer_cast<TransactionReceiptImpl>(receipt);
     BOOST_REQUIRE(impl);
 
-    // 0x0100000000 = 2^32, one past uint32_t max — 5 significant bytes. Written directly to the
-    // tars hex-string slot (setOpStackMeta would refuse it at compile time via uint32_t).
+    // 0x0100000000 = 2^32, one past uint32_t max — 5 significant bytes. Written straight into the
+    // tars hex slot: going through setOpStackMeta would silently truncate at the
+    // optional<uint32_t> assignment (no -Wconversion in this build), so the tars slot is the only
+    // way to construct the corrupt state the decoder has to reject.
     impl->inner().opStackMeta.l1_base_fee_scalar = "0x100000000";
     impl->inner().opStackMeta.deposit_nonce = "0x2a";  // good field keeps it an OP receipt
     auto got = impl->opStackMeta();

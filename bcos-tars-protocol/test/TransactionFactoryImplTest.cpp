@@ -282,7 +282,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK_EQUAL(
         tx->sourceHash(), "6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
     BOOST_CHECK_EQUAL(tx->mint(), u256("0x16345785d8a0000"));
-    BOOST_CHECK(tx->isSystemTransaction());
+    BOOST_CHECK(tx->isDepositSystemTx());
     // size() accounts for the deposit metadata: all other variable-length fields are empty on
     // this default-constructed tx, so the exact size is sourceHash + mint (isSystemTransaction is
     // a fixed-length scalar and excluded, like type/version/blockLimit).
@@ -296,7 +296,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     nonSystemDeposit->mutableInner().web3TypedTxKind = static_cast<tars::Char>(0x7e);
     nonSystemDeposit->mutableInner().isSystemTransaction = 0;
     BOOST_CHECK(nonSystemDeposit->isDepositTx());
-    BOOST_CHECK(!nonSystemDeposit->isSystemTransaction());
+    BOOST_CHECK(!nonSystemDeposit->isDepositSystemTx());
 
     // Empty mint reads back as zero.
     auto noMint = std::make_shared<TransactionImpl>();
@@ -326,7 +326,7 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK(!eip1559->isDepositTx());
     BOOST_CHECK(eip1559->sourceHash().empty());
     BOOST_CHECK_EQUAL(eip1559->mint(), u256(0));
-    BOOST_CHECK(!eip1559->isSystemTransaction());  // guard: non-deposit ignores the tars flag
+    BOOST_CHECK(!eip1559->isDepositSystemTx());  // guard: non-deposit ignores the tars flag
 
     // A forged BCOS tx (type=0, kind=0x7e) is never a deposit: web3TypedTxKind() gates on
     // type()==Web3Transaction.

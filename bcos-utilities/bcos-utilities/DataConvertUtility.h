@@ -205,6 +205,14 @@ std::optional<uint64_t> safeFromQuantity(std::string_view quantity);
 
 u256 fromBigQuantity(std::string_view quantity);
 
+/// Non-throwing strict hex parser for a 256-bit quantity. Declared here next to its siblings;
+/// defined after fromBigEndian (which it uses). Returns nullopt on any parse failure: empty,
+/// bare "0x", invalid hex, or a value wider than 32 significant bytes. Unlike fromBigQuantity
+/// (which wraps through the unchecked u256 backend and silently folds oversized input into the
+/// low 256 bits), this rejects oversized values so corrupt data is never conflated with an
+/// explicit zero.
+inline std::optional<u256> safeFromBigQuantity(std::string_view quantity);
+
 /**
  * @brief convert the bytes into hex string with 0x prefixed
  *
@@ -293,6 +301,27 @@ inline T fromBigEndian(_In const& _bytes)
     for (auto i : _bytes)
         ret = (T)((ret << 8) | (byte)(typename std::make_unsigned<decltype(i)>::type)i);
     return ret;
+}
+
+inline std::optional<u256> safeFromBigQuantity(std::string_view quantity)
+{
+    if (quantity.empty())
+    {
+        return std::nullopt;
+    }
+    auto bytes = safeFromHex(quantity);
+    if (!bytes || bytes->empty())
+    {
+        return std::nullopt;  // bare "0x" (empty payload): missing, not present-with-0
+    }
+    // Strip leading 0x00 (canonical), then reject if any nonzero byte remains beyond 32 — a
+    // corrupt oversized value must not be silently folded into the low 256 bits.
+    auto it = std::find_if(bytes->begin(), bytes->end(), [](byte b) { return b != 0; });
+    if (std::size_t(std::distance(it, bytes->end())) > 32)
+    {
+        return std::nullopt;
+    }
+    return fromBigEndian<u256>(*bytes);
 }
 
 bytes toBigEndian(u256 _val);

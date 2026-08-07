@@ -23,52 +23,17 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
-#include <algorithm>
-#include <cassert>
-#include <charconv>
-#include <iterator>
 #include <limits>
-#include <system_error>
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
 namespace
 {
-// Local hex helpers for the opStackMeta tars fields. All 13 fields are hex strings so that
-// explicit zeros ("0x0") survive tars serialization (tars optional scalars have no presence
-// semantics). u256 formats via number::str(digits, base); the u64 path uses std::to_chars to
-// avoid constructing a big-integer intermediate on every getter.
-
-std::string u256ToHex(bcos::u256 const& v)
-{
-    // 0 encodes as "0x0" (non-empty), preserving field presence
-    return "0x" + v.str(0, std::ios_base::hex);
-}
-std::string u64ToHex(uint64_t v)
-{
-    // Hand-written hex: avoids constructing boost::multiprecision::uint256_t (a big-integer
-    // intermediate conversion on every getter across the 10 u64 fields). 0 encodes as "0x0"
-    // (non-empty, preserving field presence) — consistent with u256ToHex. std::to_chars is
-    // allocation-free; note it does NOT NUL-terminate (we construct the string from the
-    // returned length ptr - buf, not from a strlen), unlike a hand-rolled buffer would.
-    if (v == 0)
-    {
-        return "0x0";
-    }
-    char buf[2 + 16 + 1];
-    auto const res = std::to_chars(buf + 2, std::end(buf), v, 16);
-    // `ec` is only read by the assert below, which compiles out under NDEBUG; [[maybe_unused]]
-    // keeps that intent explicit in the language instead of a bare (void)ec cast. (Applied to a
-    // plain variable, not a structured binding, because Clang rejects attributes on the
-    // identifier-list of a structured binding declaration.)
-    [[maybe_unused]] auto const& ec = res.ec;
-    // buf is 19 bytes; uint64_t max needs 16 hex digits, so to_chars cannot fail here.
-    // This assert documents that invariant — it is not a guard (it vanishes under NDEBUG).
-    assert(ec == std::errc{});
-    buf[0] = '0';
-    buf[1] = 'x';
-    return std::string(buf, static_cast<std::size_t>(res.ptr - buf));
-}
+// Local helper for the opStackMeta tars fields. The 13 fields are hex strings so that explicit
+// zeros ("0x0") survive tars serialization (tars optional scalars have no presence semantics).
+// Read/write conversions delegate to the shared bcos-utilities quantity parsers
+// (toQuantity / safeFromQuantity / safeFromBigQuantity); the only local logic is the u32
+// width bound for the three scalar fields.
 
 /// True when opStackMeta is entirely empty (a legacy receipt never wrote field 8). A tars
 /// optional string uses != "" to mean "present" (0 values are stored "0x0", non-empty), so
@@ -81,60 +46,13 @@ bool opStackMetaEmpty(bcostars::OpStackReceiptMeta const& s)
            s.da_footprint_gas_scalar.empty() && s.da_footprint.empty() && s.deposit_nonce.empty() &&
            s.deposit_receipt_version.empty() && s.l1_gas_used.empty() && s.operator_fee.empty();
 }
-std::optional<bcos::u256> hexToU256(std::string const& s)
-{
-    if (s.empty())
-    {
-        return std::nullopt;
-    }
-    // Use safeFromHex (internal try/catch): invalid hex from corrupt data (bit rot / external
-    // writes) returns nullopt instead of throwing BadHexCharacter through the const getter,
-    // avoiding a crash when RPC queries the receipt.
-    auto bytes = bcos::safeFromHex(s);
-    if (!bytes || bytes->empty())
-    {
-        return std::nullopt;  // bare "0x" (empty payload): missing, not present-with-0
-    }
-    // fromBigEndian<u256> silently truncates inputs wider than 32 bytes (high bytes shifted out).
-    // Strip leading 0x00 first (canonical), then reject if any nonzero byte remains beyond 32 —
-    // a corrupt oversized value must not be silently folded into the low 256 bits.
-    auto it = std::find_if(bytes->begin(), bytes->end(), [](bcos::byte b) { return b != 0; });
-    std::size_t const significant = bytes->end() - it;
-    if (significant > 32)
-    {
-        return std::nullopt;
-    }
-    return bcos::fromBigEndian<bcos::u256>(*bytes);
-}
-std::optional<uint64_t> hexToU64(std::string const& s)
-{
-    if (s.empty())
-    {
-        return std::nullopt;
-    }
-    // Same as above: safeFromHex guards against corrupt input.
-    auto bytes = bcos::safeFromHex(s);
-    if (!bytes || bytes->empty())
-    {
-        return std::nullopt;  // bare "0x" (empty payload): missing, not present-with-0
-    }
-    // fromBigEndian<uint64_t> silently truncates inputs wider than 8 bytes. Same guard as
-    // hexToU256: strip leading zeros, reject nonzero bytes beyond 8.
-    auto it = std::find_if(bytes->begin(), bytes->end(), [](bcos::byte b) { return b != 0; });
-    std::size_t const significant = bytes->end() - it;
-    if (significant > 8)
-    {
-        return std::nullopt;
-    }
-    return bcos::fromBigEndian<uint64_t>(*bytes);
-}
 std::optional<uint32_t> hexToU32(std::string const& s)
 {
     // The three scalar fields (l1_base_fee_scalar / l1_blob_base_fee_scalar / operator_fee_scalar)
     // are uint32_t in the producer (OpReceiptMeta). A stored value wider than 4 bytes is corrupt
     // (or externally written); reject rather than narrow silently — the widened read-back is the
     // exact hazard the width alignment prevents.
-    auto value = hexToU64(s);
+    auto value = bcos::safeFromQuantity(s);
     if (!value || *value > std::numeric_limits<uint32_t>::max())
     {
         return std::nullopt;
@@ -256,11 +174,11 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
     // all 13 fields are hex strings; a tars optional string uses != "" to mean "present"
     // (0 values are stored "0x0", non-empty, so explicit zeros keep their presence)
     if (!s.l1_gas_price.empty())
-        out.l1_gas_price = hexToU256(s.l1_gas_price);
+        out.l1_gas_price = bcos::safeFromBigQuantity(s.l1_gas_price);
     if (!s.l1_fee.empty())
-        out.l1_fee = hexToU256(s.l1_fee);
+        out.l1_fee = bcos::safeFromBigQuantity(s.l1_fee);
     if (!s.l1_blob_base_fee.empty())
-        out.l1_blob_base_fee = hexToU256(s.l1_blob_base_fee);
+        out.l1_blob_base_fee = bcos::safeFromBigQuantity(s.l1_blob_base_fee);
     if (!s.l1_base_fee_scalar.empty())
         out.l1_base_fee_scalar = hexToU32(s.l1_base_fee_scalar);
     if (!s.l1_blob_base_fee_scalar.empty())
@@ -268,19 +186,19 @@ bcostars::protocol::TransactionReceiptImpl::opStackMeta() const
     if (!s.operator_fee_scalar.empty())
         out.operator_fee_scalar = hexToU32(s.operator_fee_scalar);
     if (!s.operator_fee_constant.empty())
-        out.operator_fee_constant = hexToU64(s.operator_fee_constant);
+        out.operator_fee_constant = bcos::safeFromQuantity(s.operator_fee_constant);
     if (!s.da_footprint_gas_scalar.empty())
-        out.da_footprint_gas_scalar = hexToU64(s.da_footprint_gas_scalar);
+        out.da_footprint_gas_scalar = bcos::safeFromQuantity(s.da_footprint_gas_scalar);
     if (!s.da_footprint.empty())
-        out.da_footprint = hexToU64(s.da_footprint);
+        out.da_footprint = bcos::safeFromQuantity(s.da_footprint);
     if (!s.deposit_nonce.empty())
-        out.deposit_nonce = hexToU64(s.deposit_nonce);
+        out.deposit_nonce = bcos::safeFromQuantity(s.deposit_nonce);
     if (!s.deposit_receipt_version.empty())
-        out.deposit_receipt_version = hexToU64(s.deposit_receipt_version);
+        out.deposit_receipt_version = bcos::safeFromQuantity(s.deposit_receipt_version);
     if (!s.l1_gas_used.empty())
-        out.l1_gas_used = hexToU64(s.l1_gas_used);
+        out.l1_gas_used = bcos::safeFromQuantity(s.l1_gas_used);
     if (!s.operator_fee.empty())
-        out.operator_fee = hexToU256(s.operator_fee);
+        out.operator_fee = bcos::safeFromBigQuantity(s.operator_fee);
     // Reached only when every field that was WRITTEN failed to parse (corrupt hex, oversized, or
     // a bare "0x"). The legacy all-empty case already returned above via opStackMetaEmpty(s).
     // Report nullopt rather than an OP receipt with 13 absent fields. (No log here: this path is
@@ -307,31 +225,31 @@ void bcostars::protocol::TransactionReceiptImpl::setOpStackMeta(
     m_inner()->opStackMeta = {};
     auto& s = m_inner()->opStackMeta;
     if (meta.l1_gas_price)
-        s.l1_gas_price = u256ToHex(*meta.l1_gas_price);
+        s.l1_gas_price = bcos::toQuantity(*meta.l1_gas_price);
     if (meta.l1_fee)
-        s.l1_fee = u256ToHex(*meta.l1_fee);
+        s.l1_fee = bcos::toQuantity(*meta.l1_fee);
     if (meta.l1_blob_base_fee)
-        s.l1_blob_base_fee = u256ToHex(*meta.l1_blob_base_fee);
+        s.l1_blob_base_fee = bcos::toQuantity(*meta.l1_blob_base_fee);
     if (meta.l1_base_fee_scalar)
-        s.l1_base_fee_scalar = u64ToHex(*meta.l1_base_fee_scalar);
+        s.l1_base_fee_scalar = bcos::toQuantity(*meta.l1_base_fee_scalar);
     if (meta.l1_blob_base_fee_scalar)
-        s.l1_blob_base_fee_scalar = u64ToHex(*meta.l1_blob_base_fee_scalar);
+        s.l1_blob_base_fee_scalar = bcos::toQuantity(*meta.l1_blob_base_fee_scalar);
     if (meta.operator_fee_scalar)
-        s.operator_fee_scalar = u64ToHex(*meta.operator_fee_scalar);
+        s.operator_fee_scalar = bcos::toQuantity(*meta.operator_fee_scalar);
     if (meta.operator_fee_constant)
-        s.operator_fee_constant = u64ToHex(*meta.operator_fee_constant);
+        s.operator_fee_constant = bcos::toQuantity(*meta.operator_fee_constant);
     if (meta.da_footprint_gas_scalar)
-        s.da_footprint_gas_scalar = u64ToHex(*meta.da_footprint_gas_scalar);
+        s.da_footprint_gas_scalar = bcos::toQuantity(*meta.da_footprint_gas_scalar);
     if (meta.da_footprint)
-        s.da_footprint = u64ToHex(*meta.da_footprint);
+        s.da_footprint = bcos::toQuantity(*meta.da_footprint);
     if (meta.deposit_nonce)
-        s.deposit_nonce = u64ToHex(*meta.deposit_nonce);
+        s.deposit_nonce = bcos::toQuantity(*meta.deposit_nonce);
     if (meta.deposit_receipt_version)
-        s.deposit_receipt_version = u64ToHex(*meta.deposit_receipt_version);
+        s.deposit_receipt_version = bcos::toQuantity(*meta.deposit_receipt_version);
     if (meta.l1_gas_used)
-        s.l1_gas_used = u64ToHex(*meta.l1_gas_used);
+        s.l1_gas_used = bcos::toQuantity(*meta.l1_gas_used);
     if (meta.operator_fee)
-        s.operator_fee = u256ToHex(*meta.operator_fee);
+        s.operator_fee = bcos::toQuantity(*meta.operator_fee);
 }
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {

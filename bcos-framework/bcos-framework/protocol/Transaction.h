@@ -94,9 +94,11 @@ public:
     /// deposit-only (0x7e) tx metadata (OP Stack). Empty/false when not a deposit.
     virtual std::string_view sourceHash() const { return {}; }
     virtual u256 mint() const { return {}; }
-    /// The deposit envelope's isSystemTransaction flag (tars tag 15). Defaults to false; a
-    /// deposit that is not a system tx (e.g. a user-initiated deposit) reports false.
-    virtual bool isSystemTransaction() const { return false; }
+    /// The deposit envelope's isSystemTransaction flag (tars tag 15). false for every
+    /// non-deposit (and for a deposit whose flag byte is unset). Named isDepositSystemTx,
+    /// NOT isSystemTransaction — the latter is TxValidator::isSystemTransaction, a different
+    /// notion (whether tx.to is a precompiled system-tx address) that decides txpool bucketing.
+    virtual bool isDepositSystemTx() const { return false; }
     virtual bool isDepositTx() const { return false; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
     virtual Web3AccessList web3AccessList() const;

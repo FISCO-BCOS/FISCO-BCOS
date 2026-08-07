@@ -95,7 +95,7 @@ public:
     uint8_t web3TypedTxKind() const override;
     std::string_view sourceHash() const override;
     bcos::u256 mint() const override;
-    bool isSystemTransaction() const override;
+    bool isDepositSystemTx() const override;
     bool isDepositTx() const override;
     bcos::protocol::Web3AccessList web3AccessList() const override;
     bcos::protocol::AuthorizationList authorizationList() const override;
