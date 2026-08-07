@@ -71,7 +71,7 @@ public:
         bcos::storage::StorageInterface::Ptr _storage,
         bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-        bcos::IOServicePool::Ptr _ioServicePool);
+        bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode = false);
 
     virtual ~PBFTInitializer() { stop(); }
 
@@ -132,6 +132,8 @@ protected:
     bcos::election::LeaderElectionInterface::Ptr m_leaderElection;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    /// OP 模式（executor_version>=3）：PBFT 不得执行区块（Engine API executeOpBlock 是唯一驱动）。
+    bool m_opStackMode = false;
 };
 }  // namespace initializer
 }  // namespace bcos

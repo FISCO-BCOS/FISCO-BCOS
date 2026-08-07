@@ -588,10 +588,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // build and init the pbft related modules
     if (_nodeArchType == protocol::NodeArchitectureType::AIR)
     {
-        m_pbftInitializer =
-            std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
-                m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
-                m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
+        m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
+            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
+            m_ioServicePool, opStackMode);
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
         auto groupID = m_nodeConfig->groupId();

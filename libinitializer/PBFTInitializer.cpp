@@ -64,7 +64,7 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
     bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-    bcos::IOServicePool::Ptr _ioServicePool)
+    bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode)
   : m_nodeArchType(_nodeArchType),
     m_nodeConfig(std::move(_nodeConfig)),
     m_protocolInitializer(std::move(_protocolInitializer)),
@@ -74,7 +74,8 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     m_storage(std::move(_storage)),
     m_frontService(std::move(_frontService)),
     m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
-    m_ioServicePool(std::move(_ioServicePool))
+    m_ioServicePool(std::move(_ioServicePool)),
+    m_opStackMode(opStackMode)
 {
     m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     g_BCOSConfig.setIsWasm(false);
@@ -449,7 +450,7 @@ void PBFTInitializer::createPBFT()
         auto pbftFactory = std::make_shared<PBFTFactory>(*m_ioServicePool->getIOService(),
             m_protocolInitializer->cryptoSuite(), m_protocolInitializer->keyPair(), m_frontService,
             kvStorage, m_ledger, m_scheduler, m_txpool, m_protocolInitializer->blockFactory(),
-            m_protocolInitializer->txResultFactory(), m_ioServicePool);
+            m_protocolInitializer->txResultFactory(), m_ioServicePool, m_opStackMode);
         m_pbft = pbftFactory->createPBFT();
     }
     else if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)

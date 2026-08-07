@@ -40,7 +40,7 @@ PBFTFactory::PBFTFactory(boost::asio::io_context& _ioService,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-    bcos::IOServicePool::Ptr _ioServicePool)
+    bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode)
   : m_ioService(_ioService),
     m_cryptoSuite(std::move(_cryptoSuite)),
     m_keyPair(std::move(_keyPair)),
@@ -51,7 +51,8 @@ PBFTFactory::PBFTFactory(boost::asio::io_context& _ioService,
     m_txpool(std::move(_txpool)),
     m_blockFactory(std::move(_blockFactory)),
     m_txResultFactory(std::move(_txResultFactory)),
-    m_ioServicePool(std::move(_ioServicePool))
+    m_ioServicePool(std::move(_ioServicePool)),
+    m_opStackMode(opStackMode)
 {}
 
 PBFTImpl::Ptr PBFTFactory::createPBFT()
@@ -64,7 +65,8 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto validator = std::make_shared<TxsValidator>(m_txpool, m_blockFactory, m_txResultFactory);
 
     PBFT_LOG(DEBUG) << LOG_DESC("create StateMachine");
-    auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
+    auto stateMachine =
+        std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool, m_opStackMode);
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftStorage");
     auto pbftStorage =

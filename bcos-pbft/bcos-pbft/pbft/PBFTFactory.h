@@ -42,7 +42,7 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-        bcos::IOServicePool::Ptr _ioServicePool);
+        bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode = false);
 
     virtual ~PBFTFactory() = default;
     virtual PBFTImpl::Ptr createPBFT();
@@ -59,5 +59,7 @@ protected:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    /// OP 模式（executor_version>=3）：PBFT 不得执行区块（Engine API executeOpBlock 是唯一驱动）。
+    bool m_opStackMode = false;
 };
 }  // namespace bcos::consensus
