@@ -12,7 +12,7 @@
 
 - 分支 `feat-op-executor-e2e`；in-tree 构建（`bcos-evm-opstack-tests` 只在 `if(TARGET bcos-framework)` 段追加源）
 - 断言框架 **Boost.Test**（`bcos-evm/test/opstack/TestMain.cpp` 已定义 `BOOST_TEST_MODULE BcosEvmOpstackTests`）
-- **所有 JSON 用 jsoncpp**（`Json::Value`）——nlohmann 不在 vcpkg_installed（仅 evmone）；golden/vectors 解析与 params 构造统一 jsoncpp
+- **所有 JSON 用 jsoncpp**（`Json::Value`）——nlohmann 不在 vcpkg_installed（仅 evmone）；golden/vectors 解析与 params 构造统一 jsoncpp。⚠️ `test/utils/test_state.hpp` 声明层在 vcpkg 存在，但 `from_json<TestState>` 装载层（依赖 nlohmann）缺失——故自研 jsoncpp→StateDiff 播种正确
 - `parseNewPayloadRequest` 需要 `jsoncpp_static`：`find_package(jsoncpp CONFIG REQUIRED)`（bcos-rpc 同款）
 - 编译定义：`OP_T8N_VECTORS_DIR` / `OP_T8N_GOLDEN_ENGINE_DIR`（`${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/...`）
 - 链接 `codec protocol-tars ledger engine jsoncpp_static` + `bcosevm::opstack` + `Boost::unit_test_framework`；include `${CMAKE_SOURCE_DIR}`、`${CMAKE_SOURCE_DIR}/bcos-ledger`、`${CMAKE_SOURCE_DIR}/bcos-rpc`（EngineHelper.h 需要）
@@ -46,7 +46,7 @@ git checkout feat-op-validator-loop -- \
 git status   # 确认 77+ 个语料文件 staged
 ```
 
-Expected: `vectors/` 33 个 `.json`；`golden/engine/` 33 个 `*.golden.json` + `chained/chainA·B.*` + `SHA256SUMS` + `manifest.txt`；`generator/` 3 文件。
+Expected: `vectors/` 33 个 `.json` + `manifest.txt`（共 34）；`golden/engine/` 33 个 `*.golden.json` + `chained/chainA·B.*`（6）+ `SHA256SUMS` + `manifest.txt`（共 41）；`generator/` 3 文件。总计 78 文件。
 
 - [ ] **Step 2: 校验语料完整性（SHA256SUMS）**
 
@@ -395,6 +395,10 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
     BOOST_CHECK(ep.isMember("transactions"));
     BOOST_CHECK(ep.isMember("blockHash"));
     BOOST_CHECK(ep.isMember("withdrawalsRoot"));
+    // OP 路径 withdrawals 必须 present-and-empty（validateOpNewPayloadRequest 硬要求）
+    BOOST_CHECK(ep.isMember("withdrawals"));
+    BOOST_CHECK(ep["withdrawals"].isArray());
+    BOOST_CHECK_EQUAL(ep["withdrawals"].size(), 0);
     BOOST_CHECK(ep["timestamp"].asString().size() >= 3);  // "0x..."
     // rawTransactions 原样进 transactions（parse 层 decode 容错跳过，raw 无条件保留）
     BOOST_CHECK_EQUAL(ep["transactions"].size(), 1);  // jovian_deposit_only 1 笔 deposit
@@ -499,7 +503,9 @@ inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample 
 
 inline std::string quantityOf(bcos::u256 const& v)
 {
-    return "0x" + v.str(16);
+    // ⚠️ 不得用 v.str(16)——Boost multiprecision 的 str(streamsize, fmtflags) 首参是数字位数
+    // 而非进制，fmtflags(0)=十进制。bcos::toQuantity 是正确 helper（DataConvertUtility.h:468）。
+    return bcos::toQuantity(v);
 }
 
 inline std::string hexOfBytes(bcos::bytes const& b)
@@ -523,7 +529,7 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
 
     Json::Value ep(Json::objectValue);
     ep["parentHash"] = hexPrefixedH256(header->parentInfo().blockHash);
-    ep["feeRecipient"] = "0x" + bcos::toHex(header->coinbase().data(), header->coinbase().data() + 20);
+    ep["feeRecipient"] = "0x" + bcos::toHex(header->coinbase());  // Address 是 contiguous range
     ep["stateRoot"] = hexPrefixedH256(header->stateRoot());
     ep["receiptsRoot"] = hexPrefixedH256(header->receiptsRoot());
     ep["logsBloom"] = hexOfBytes(bcos::bytes(header->logsBloom().begin(), header->logsBloom().end()));
@@ -533,16 +539,18 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     ep["gasUsed"] = quantityOf(header->gasUsed());
     // timestamp：OP 秒（decodeOpHeader 存的是毫秒，÷1000）
     ep["timestamp"] = quantityOf(bcos::u256(header->timestamp() / 1000));
-    ep["extraData"] = hexOfBytes(header->extraData());
-    ep["baseFeePerGas"] = quantityOf(header->baseFee());
+    ep["extraData"] = hexOfBytes(header->extraData().toBytes());  // extraData() 返回 bytesConstRef
+    ep["baseFeePerGas"] = quantityOf(*header->baseFee());  // baseFee() 返回 optional<u256>
     ep["blockHash"] = golden["blockHash"].asString();
+    // OP 路径必须 present-and-empty（validateOpNewPayloadRequest EngineServiceImpl.cpp:301-303）
+    ep["withdrawals"] = Json::Value(Json::arrayValue);
     Json::Value txs(Json::arrayValue);
     for (auto const& raw : golden["rawTransactions"]) txs.append(raw.asString());
     ep["transactions"] = txs;
     if (header->withdrawalsRoot())
         ep["withdrawalsRoot"] = hexPrefixedH256(*header->withdrawalsRoot());
-    ep["blobGasUsed"] = quantityOf(header->blobGasUsed());
-    ep["excessBlobGas"] = quantityOf(header->excessBlobGas());
+    ep["blobGasUsed"] = quantityOf(*header->blobGasUsed());      // optional<u256>，decodeOpHeader 恒填
+    ep["excessBlobGas"] = quantityOf(*header->excessBlobGas());  // optional<u256>，decodeOpHeader 恒填
 
     Json::Value params(Json::arrayValue);
     params.append(ep);
@@ -557,7 +565,7 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
 }  // namespace w6test
 ```
 
-> **实现提示**：`parentInfo().blockHash`、`coinbase()`、`prevRandao()`、`withdrawalsRoot()`、`blobGasUsed()`、`excessBlobGas()`、`parentBeaconBlockRoot()` 的 exact 返回类型以 `bcostars::protocol::BlockHeaderImpl.h` 为准（部分为 `std::optional<h256>`，用 `*optional` 解引用）。`parentInfo()` 返回 `ParentInfo{blockNumber, blockHash}`（`BlockHeaderImpl.h`）。若某 accessor 名称不同，以头文件为准修正，测试会暴露。
+> **实现提示（R2 审查已核实）**：accessor 返回类型——`parentInfo().blockHash`/`stateRoot()`/`receiptsRoot()`/`prevRandao()` → `h256`（直接用）；`gasLimit()`/`gasUsed()` → `u256`（直接用）；`baseFee()`/`blobGasUsed()`/`excessBlobGas()` → `std::optional<u256>`（必须 `*` 解引用，decodeOpHeader 恒填）；`withdrawalsRoot()`/`parentBeaconBlockRoot()` → `std::optional<h256>`（`*` 解引用）；`extraData()` → `bytesConstRef`（必须 `.toBytes()`）；`coinbase()` → `Address`（contiguous range，直接 `bcos::toHex(addr)`）；`timestamp()` → `int64_t`（毫秒）。`quantityOf` 必须用 `bcos::toQuantity`（`str(16)` 是十进制位数非 base）。
 
 - [ ] **Step 4: CMake 加测试源**
 
@@ -606,9 +614,12 @@ git commit --no-verify -m "test(w6): golden sample loading + OP header decode + 
 // storage→memPool→executor→receiptFactory→scheduler→blockFactory→service）。
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-evm/engine/OpEngineSeam.h>
 #include <bcos-evm/engine/OpSchedulerImpl.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -622,6 +633,7 @@ git commit --no-verify -m "test(w6): golden sample loading + OP header decode + 
 #include <bcos-utilities/IOServicePool.h>
 #include <engine/bcos-engine/EngineServiceImpl.h>
 #include <json/json.h>
+#include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <string>
 #include <vector>
@@ -750,6 +762,22 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
         transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
+/// Parent 预登记（R3/R5 致命缺口 A 修复）：OP 路径 step-3 parentKnown（EngineServiceImpl.h:821-827）
+/// 查 SYS_HASH_2_NUMBER 判 parent-known。33 个孤立向量都是 block 1，parent 必须以「受信创世」
+/// 预登记，否则 newPayload 返回 SYNCING。写入编码必须是生产同款：key=hash 原始 32 字节，
+/// value=number 十进制字符串（gate 测试 registerVerifiedBlock，EngineNewPayloadGateTest.cpp:188-198）。
+void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, int64_t number)
+{
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    bcos::storage::Entry entry;
+    entry.set(boost::lexical_cast<std::string>(number));
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
+        std::move(entry)));
+    multiLayerStorage.pushView(std::move(view));
+}
+
 // ── 七项断言 ──
 void assertSevenFields(std::string const& id,
     bcos::protocol::BlockHeader::Ptr const& produced,
@@ -770,19 +798,26 @@ void assertSevenFields(std::string const& id,
     BOOST_CHECK(produced->encodeOpHeader(c) == goldenHeader->encodeOpHeader(c)) << id << ": encodeOpHeader";
 }
 
-/// 一个向量端到端：seed pre → makeParamsJson → parseNewPayloadRequest(V4) → newPayload(4) → 断言。
+/// 一个向量端到端：seed pre → register parent → makeParamsJson → parseNewPayloadRequest(V4)
+/// → newPayload(4) → 断言。
 void runGoldenVector(std::string const& id)
 {
     auto sample = w6test::loadVectorSample(id);
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
     w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    // ⚠️ parent 预登记（缺口 A）：不登记 → SYNCING 而非 VALID。parentHash 从 golden header 解码
+    const auto goldenHeader = w6test::decodeGoldenHeader(sample);
+    registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
 
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(
         params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
 
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-    BOOST_REQUIRE_EQUAL(status.status, bcos::engine::PayloadValidationStatus::Valid)
+    // ⚠️ PayloadValidationStatus 是 enum class，无 operator<<；必须 static_cast<int> 比较
+    // （全代码库既有 engine 测试同款，EngineServiceTest.cpp:312 等）。
+    BOOST_REQUIRE_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid))
         << id << ": expected VALID, got " << static_cast<int>(status.status)
         << (status.validationError ? " : " + *status.validationError : "");
 
@@ -863,7 +898,7 @@ BOOST_AUTO_TEST_SUITE_END()
 > **实现提示（关键）**：
 > 1. **取 produced header**：`newPayload` 返回 `PayloadStatus`，不直接给 header。用 val-loop gate 测试的 `productionHeaderOf(blockFactory, request)` 模式——重构 FISCO header（`OpScheduler::computeTxRoot(*rawTransactions)` + 逐字段填），或从 `runOpNewPayloadSteps` 的中间结果取。**若本分支 `EngineServiceImpl` 无公开的 produced-header 出口**，则用 gate 测试的 `productionHeaderOf` 重构法（读 `engine/bcos-engine/EngineServiceImpl.cpp` 的字段映射：17 字段来自 payload 逐字 + 3 常量 + txRoot，:470 附近注释）。
 > 2. **全量 33 向量**：用 bash 列出 `bcos-evm/test/opstack/t8n/vectors/*.json` 的 basename，在测试文件里为每个生成一个 `BOOST_AUTO_TEST_CASE`。不要手工复制——脚本生成后粘贴。
-> 3. **链式双块（chainA/B）**：参照 val-loop gate 测试 chained 场景（`EngineNewPayloadGateTest.cpp` ~:1126-1260 的「newPayload(B)→SYNCING → newPayload(A)→VALID → newPayload(B)→VALID」流程）。chainA=块1（扁平文档，自含 pre），chainB=块2（parentHash=chainA 的 blockHash）。链式 case 用 `loadChainedSample`，播 chainA 的 pre，先投 B（预期 SYNCING）再投 A（VALID）再投 B（VALID），各自七项断言。注意 chainB 的 pre 可能需要用 chainA 的 postState——以 gate 测试实际实现为准。
+> 3. **链式双块（chainA/B）**：参照 val-loop gate 测试 chained 场景（`EngineNewPayloadGateTest.cpp` ~:1126-1260 的「newPayload(B)→SYNCING → newPayload(A)→VALID → newPayload(B)→VALID」流程）。chainA=块1（扁平文档，自含 pre），chainB=块2（parentHash=chainA 的 blockHash）。链式 case 用 `loadChainedSample`，**只播 chainA 的 pre**（gate 测试 :1131-1134 明言「B is never re-seeded: its `pre` IS A's `postState`」——B 在 A 的 pushView post-state 上直接执行，**绝不播 chainB.pre，会双计**），并登记 chainA 的 parent（gate 测试 :1203）。先投 B（预期 SYNCING，parent 未知）→ 投 A（VALID）→ 再投 B（VALID），各自七项断言。
 > 4. **expectedBlobVersionedHashes**：向量无 blob 交易，params[1] 保持空数组（parse 层 V3+ 读 params[1]）。
 > 5. **blockHash 断言**：`produced->opHeaderHash(c)`（keccak256(encodeOpHeader)）应与 `golden.blockHash` 相等（op-geth 的 block.Hash() 定义）；这是七项里 blockHash 的显式断言。
 
@@ -879,7 +914,7 @@ BOOST_AUTO_TEST_SUITE_END()
         ${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp
     )
     target_link_libraries(bcos-evm-opstack-tests PRIVATE
-        codec protocol-tars ledger engine jsoncpp_static)
+        codec protocol-tars ledger engine bcos-utilities jsoncpp_static)
     target_include_directories(bcos-evm-opstack-tests PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-ledger
