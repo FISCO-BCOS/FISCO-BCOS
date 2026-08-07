@@ -24,6 +24,7 @@
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 #include <algorithm>
+#include <cassert>
 #include <charconv>
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
@@ -55,11 +56,8 @@ std::string u64ToHex(uint64_t v)
     char buf[2 + 16 + 1];
     auto const [ptr, ec] = std::to_chars(buf + 2, std::end(buf), v, 16);
     (void)ec;
-    // buf is 19 bytes (2 prefix + 16 hex + 1 sentinel), ample for uint64_t max=0xffffffffffffffff
-    // (16 hex chars). If future code widens the type or shrinks the buffer and
-    // ec==std::errc::value_too_large, the unsigned-integer to_chars guarantee that the output isn't
-    // truncated (the standard says the function always succeeds for unsigned integer types when the
-    // buffer is large enough), so ec is always std::errc{} here by construction.
+    // buf is 19 bytes; uint64_t max needs 16 hex digits, so to_chars cannot fail here.
+    // This assert documents that invariant — it is not a guard (it vanishes under NDEBUG).
     assert(ec == std::errc{});
     buf[0] = '0';
     buf[1] = 'x';
