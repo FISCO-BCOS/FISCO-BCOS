@@ -23,7 +23,8 @@ bcos::protocol::Block::Ptr bcostars::protocol::BlockFactoryImpl::createBlock(
     // rlp-protocol layer (EthBlockHeader::setRLPHash) — a FISCO Tars hash computed here would
     // be wrong and would silently overwrite nothing (calculateHash is idempotent for Eth
     // headers). Skip the recompute so the injected RLP hash survives deserialization.
-    if (!block->blockHeader()->isEthBlockHeader() && block->inner().blockHeader.dataHash.empty())
+    if (block->blockHeader()->ethBlockVersion() == bcos::protocol::EthBlockVersion::NON_ETH &&
+        block->inner().blockHeader.dataHash.empty())
     {
         block->blockHeader()->calculateHash(*m_cryptoSuite->hashImpl());
     }

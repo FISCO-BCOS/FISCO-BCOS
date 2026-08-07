@@ -7,11 +7,9 @@ add_library(rlp-protocol STATIC ${ALL_SRCS} ${HEADERS})
 target_include_directories(rlp-protocol PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/bcos-tars-protocol>
-    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-rlp-protocol>
 )
-target_link_libraries(rlp-protocol PUBLIC bcos-crypto codec protocol-tars)
+target_link_libraries(rlp-protocol PUBLIC bcos-crypto codec bcos-framework)
 set_target_properties(rlp-protocol PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)

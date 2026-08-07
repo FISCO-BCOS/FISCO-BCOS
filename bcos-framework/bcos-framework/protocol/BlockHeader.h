@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "Exceptions.h"
+#include "Protocol.h"
 #include "ProtocolTypeDef.h"
 #include "bcos-utilities/AnyHolder.h"
 #include "bcos-utilities/Bloom.h"
@@ -52,8 +53,8 @@ public:
     virtual bcos::crypto::HashType hash() const = 0;
     virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
 
-    virtual void populateFromParents(const crypto::Hash& hashImpl,
-        const BlockHeader& _parent, BlockNumber _number)
+    virtual void populateFromParents(
+        const crypto::Hash& hashImpl, const BlockHeader& _parent, BlockNumber _number)
     {
         setParentInfo(ParentInfo{.blockNumber = _parent.number(), .blockHash = _parent.hash()});
         setNumber(_number);
@@ -97,12 +98,14 @@ public:
 
     // ---- FISCO-BCOS specific methods ----
     virtual uint32_t version() const = 0;
-    // isEthBlockHeader returns whether this header is an Ethereum-standard header
-    // (as opposed to a native FISCO-BCOS header). This is a first-class flag carried in the
-    // Tars representation, not a version marker, so it never participates in ordered
-    // version comparisons.
-    virtual bool isEthBlockHeader() const = 0;
-    virtual void setIsEthBlockHeader(bool _isEth) = 0;
+    // ethBlockVersion marks the Ethereum fork era of this header (see EthBlockVersion in
+    // Protocol.h). NON_ETH means the header is a native FISCO-BCOS header; 
+    virtual bcos::protocol::EthBlockVersion ethBlockVersion() const = 0;
+    virtual void setEthBlockVersion(bcos::protocol::EthBlockVersion _version) = 0;
+    // Inject a pre-computed Ethereum RLP hash (set by the rlp-protocol layer via
+    // EthBlockHeader::calculateRLPHash). For Eth headers (ethBlockVersion() != NON_ETH)
+    // calculateHash() keeps this value instead of recomputing the FISCO Tars hash.
+    virtual void setRLPHash(bcos::crypto::HashType _hash) = 0;
     // sealer returns the sealer that generate this block
     virtual int64_t sealer() const = 0;
     // sealerList returns the current sealer list
@@ -154,6 +157,13 @@ public:
     virtual bcos::h256 prevRandao() const = 0;
     virtual void setPrevRandao(bcos::h256 _digest) = 0;
 
+    virtual bcos::crypto::HashType uncleHash() const = 0;
+    virtual void setUncleHash(bcos::crypto::HashType _hash) = 0;
+    virtual bcos::u256 difficulty() const = 0;
+    virtual void setDifficulty(bcos::u256 _difficulty) = 0;
+    virtual bcos::h64 nonce() const = 0;
+    virtual void setNonce(bcos::h64 _nonce) = 0;
+
     // Eth optional fields
     virtual std::optional<u256> baseFee() const = 0;
     virtual void setBaseFee(u256 _fee) = 0;
@@ -172,12 +182,6 @@ public:
 
     virtual std::optional<bcos::h256> requestsHash() const = 0;
     virtual void setRequestsHash(bcos::h256 _hash) = 0;
-
-    virtual std::optional<bcos::h256> blockAccessListHash() const = 0;
-    virtual void setBlockAccessListHash(bcos::h256 _hash) = 0;
-
-    virtual std::optional<uint64_t> slotNumber() const = 0;
-    virtual void setSlotNumber(uint64_t _val) = 0;
 };
 
 using AnyBlockHeader = AnyHolder<BlockHeader, 72>;  // 多平台BlockHeaderImpl的最大尺寸 (Maximum size

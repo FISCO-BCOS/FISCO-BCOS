@@ -518,8 +518,8 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
     header->setBlobGasUsed(bcos::u256(131072));
     header->setExcessBlobGas(bcos::u256(0));
 
-    // prevRandao / withdrawalsRoot / parentBeaconBlockRoot / requestsHash /
-    // blockAccessListHash (32-byte hashes)
+    // prevRandao / uncleHash / withdrawalsRoot / parentBeaconBlockRoot / requestsHash
+    // (32-byte hashes)
     bcos::h256 prevRandao(
         std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
         bcos::h256::FromHex);
@@ -532,17 +532,19 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
     bcos::h256 requestsHash(
         std::string_view("0x4444444444444444444444444444444444444444444444444444444444444444"),
         bcos::h256::FromHex);
-    bcos::h256 accessListHash(
-        std::string_view("0x5555555555555555555555555555555555555555555555555555555555555555"),
-        bcos::h256::FromHex);
+    auto uncleHash = bcos::crypto::HashType(
+        std::string_view("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
+        bcos::crypto::HashType::FromHex);
     header->setPrevRandao(prevRandao);
+    header->setUncleHash(uncleHash);
     header->setWithdrawalsRoot(withdrawalsHash);
     header->setParentBeaconBlockRoot(beaconRoot);
     header->setRequestsHash(requestsHash);
-    header->setBlockAccessListHash(accessListHash);
 
-    // slotNumber
-    header->setSlotNumber(42);
+    // difficulty / nonce (pre-merge scalars)
+    header->setDifficulty(bcos::u256(12345));
+    bcos::byte nonceBytes[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    header->setNonce(bcos::h64(nonceBytes, 8));
 
     bcos::bytes buffer;
     header->encode(buffer);
@@ -565,31 +567,16 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
     BOOST_CHECK_EQUAL(*decodedHeader->excessBlobGas(), bcos::u256(0));
     // h256 fields
     BOOST_CHECK(decodedHeader->prevRandao() == prevRandao);
+    BOOST_CHECK(decodedHeader->uncleHash() == uncleHash);
     BOOST_CHECK(decodedHeader->withdrawalsRoot().has_value());
     BOOST_CHECK(*decodedHeader->withdrawalsRoot() == withdrawalsHash);
     BOOST_CHECK(decodedHeader->parentBeaconBlockRoot().has_value());
     BOOST_CHECK(*decodedHeader->parentBeaconBlockRoot() == beaconRoot);
     BOOST_CHECK(decodedHeader->requestsHash().has_value());
     BOOST_CHECK(*decodedHeader->requestsHash() == requestsHash);
-    BOOST_CHECK(decodedHeader->blockAccessListHash().has_value());
-    BOOST_CHECK(*decodedHeader->blockAccessListHash() == accessListHash);
-    // slotNumber
-    BOOST_CHECK(decodedHeader->slotNumber().has_value());
-    BOOST_CHECK_EQUAL(*decodedHeader->slotNumber(), 42);
-
-    // ---- slotNumber: unset (default -1) vs slot 0 ----
-    // Fresh header: slotNumber unset -> nullopt
-    auto freshHeader = blockHeaderFactory->createBlockHeader();
-    BOOST_CHECK(!freshHeader->slotNumber().has_value());
-
-    // slot 0 is a legal Ethereum slot and must round-trip as 0, not nullopt
-    auto zeroSlotHeader = blockHeaderFactory->createBlockHeader();
-    zeroSlotHeader->setSlotNumber(0);
-    bcos::bytes zeroSlotBuffer;
-    zeroSlotHeader->encode(zeroSlotBuffer);
-    auto decodedZeroSlot = blockHeaderFactory->createBlockHeader(zeroSlotBuffer);
-    BOOST_CHECK(decodedZeroSlot->slotNumber().has_value());
-    BOOST_CHECK_EQUAL(*decodedZeroSlot->slotNumber(), 0);
+    // difficulty / nonce
+    BOOST_CHECK_EQUAL(decodedHeader->difficulty(), bcos::u256(12345));
+    BOOST_CHECK(decodedHeader->nonce() == bcos::h64(nonceBytes, 8));
 
     // ---- short-field overread guard ----
     // Feed a 1-byte prevRandao straight into the Tars struct, then re-encode/decode.
@@ -598,7 +585,7 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
     shortImpl->inner().data.withdrawalsHash = {0x01};
     shortImpl->inner().data.parentBeaconRoot = {0x01};
     shortImpl->inner().data.requestsHash = {0x01};
-    shortImpl->inner().data.blockAccessListHash = {0x01};
+    shortImpl->inner().data.uncleHash = {0x01};
     shortImpl->inner().data.stateRoot = {0x01};
     shortImpl->inner().data.txsRoot = {0x01};
     shortImpl->inner().data.receiptRoot = {0x01};
@@ -608,7 +595,7 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
     BOOST_CHECK(!shortImpl->withdrawalsRoot().has_value());
     BOOST_CHECK(!shortImpl->parentBeaconBlockRoot().has_value());
     BOOST_CHECK(!shortImpl->requestsHash().has_value());
-    BOOST_CHECK(!shortImpl->blockAccessListHash().has_value());
+    BOOST_CHECK(shortImpl->uncleHash() == bcos::crypto::HashType{});
     BOOST_CHECK(shortImpl->stateRoot() == bcos::crypto::HashType{});
     BOOST_CHECK(shortImpl->txsRoot() == bcos::crypto::HashType{});
     BOOST_CHECK(shortImpl->receiptsRoot() == bcos::crypto::HashType{});
@@ -651,15 +638,23 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHash)
             std::string_view("0x3333333333333333333333333333333333333333333333333333333333333333"),
             bcos::crypto::HashType::FromHex)};
     impl->setParentInfo(parentInfo);
+    // Pre-merge fields required by validateHeader.
+    impl->setUncleHash(bcos::crypto::HashType(
+        std::string_view("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
+        bcos::crypto::HashType::FromHex));
+    impl->setDifficulty(bcos::u256(0));
+    impl->setNonce(bcos::h64{});
 
     // FISCO path: default version -> Tars hash
     impl->calculateHash(*cryptoSuite->hashImpl());
     auto fiscoHash = impl->hash();
     BOOST_CHECK(fiscoHash != bcos::crypto::HashType{});
 
-    // Eth path: calculateRLPHash computes keccak256(rlp(header)) and injects it
+    // Eth path: mark as London, then calculateRLPHash computes keccak256(rlp(header)) and
+    // injects it
+    impl->setEthBlockVersion(bcos::protocol::EthBlockVersion::LONDON);
     bcos::Error::UniquePtr error;
-    bcos::protocol::EthBlockHeader::calculateRLPHash(header, error);
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
     BOOST_CHECK(!error);
     auto ethHash = impl->hash();
 
@@ -677,7 +672,7 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHashMissing)
 {
     auto header = blockHeaderFactory->createBlockHeader();
     auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
-    impl->setIsEthBlockHeader(true);
+    impl->setEthBlockVersion(bcos::protocol::EthBlockVersion::LONDON);
 
     // calculateHash on an Eth header with no injected hash must not throw (idempotent).
     BOOST_CHECK_NO_THROW(impl->calculateHash(*cryptoSuite->hashImpl()));

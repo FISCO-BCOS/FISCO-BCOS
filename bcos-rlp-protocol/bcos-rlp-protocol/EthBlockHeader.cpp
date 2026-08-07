@@ -19,298 +19,223 @@
  */
 #include "EthBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
-#include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;
 
-namespace
-{
-// keccak256 of the empty ommers list (RLP 0xc0). EIP-3675 (post-merge) hardcodes the
-// uncleHash header field to this value.
-const bcos::h256 c_emptyOmmersHash{
-    std::string_view("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
-    bcos::h256::FromHex};
-}  // namespace
-
 namespace bcos::protocol
 {
-void EthBlockHeader::calculateRLPHash(
-    bcos::protocol::BlockHeader::Ptr header, bcos::Error::UniquePtr& error)
+bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHeader& header)
 {
-    auto* tarsHeader = dynamic_cast<bcostars::protocol::BlockHeaderImpl*>(header.get());
-    if (tarsHeader == nullptr)
+    bcos::Error::UniquePtr error;
+    if (!validateHeader(header, error))
     {
-        error = BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeaderType),
-            "EthBlockHeader: header is not a BlockHeaderImpl");
-        return;
+        return error;
     }
 
-    if (!validateTarsHeader(tarsHeader->inner(), error))
-    {
-        return;
-    }
-
-    auto ethHeader = EthBlockHeader(tarsHeader->inner());
+    EthBlockHeader ethHeader(header);
     bcos::bytes encoded;
     ethHeader.rlpEncode(encoded);
-    tarsHeader->setIsEthBlockHeader(true);
-    tarsHeader->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(encoded)));
+    header.setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(encoded)));
+    return nullptr;
 }
 
-bcos::protocol::BlockHeader::Ptr EthBlockHeader::toTarsHeader(
-    bcos::bytesConstRef _data, bcos::Error::UniquePtr& error)
+bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
+    bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
 {
-    auto ethHeader = toEthBlockHeader(_data, error);
-    if (error)
+    if (header == nullptr)
     {
-        return nullptr;
+        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeaderType),
+            "EthBlockHeader: header is null");
     }
 
-    auto result = std::make_shared<bcostars::BlockHeader>();
-    auto& tarsData = result->data;
+    EthBlockHeader ethHeader;
+    if (auto err = toEthBlockHeader(ethHeader, _data))
+    {
+        return err;
+    }
 
-    // parentInfo (Tars keeps it as a vector)
-    auto& tarsParentInfo = tarsData.parentInfo;
-    tarsParentInfo.clear();
-    auto& tarsParentInfoItem = tarsParentInfo.emplace_back();
-    tarsParentInfoItem.blockNumber = ethHeader.data().parentInfo.blockNumber;
-    tarsParentInfoItem.blockHash.assign(
-        ethHeader.data().parentInfo.blockHash.begin(), ethHeader.data().parentInfo.blockHash.end());
-
-    tarsData.coinbase.assign(ethHeader.data().coinbase.begin(), ethHeader.data().coinbase.end());
-
-    tarsData.stateRoot.assign(ethHeader.data().stateRoot.begin(), ethHeader.data().stateRoot.end());
-    tarsData.txsRoot.assign(ethHeader.data().txsRoot.begin(), ethHeader.data().txsRoot.end());
-    tarsData.receiptRoot.assign(
-        ethHeader.data().receiptsRoot.begin(), ethHeader.data().receiptsRoot.end());
-
-    tarsData.gasLimit = boost::lexical_cast<std::string>(ethHeader.data().gasLimit);
-    tarsData.gasUsed = boost::lexical_cast<std::string>(ethHeader.data().gasUsed);
-
-    tarsData.blockNumber = ethHeader.data().number;
-    tarsData.timestamp = ethHeader.data().timestamp;
-
-    tarsData.prevRandao.assign(
-        ethHeader.data().prevRandao.begin(), ethHeader.data().prevRandao.end());
-
-    tarsData.extraData.assign(ethHeader.data().extraData.begin(), ethHeader.data().extraData.end());
-
-    tarsData.logsBloom.assign(ethHeader.data().logsBloom.begin(), ethHeader.data().logsBloom.end());
+    header->setParentInfo(ethHeader.data().parentInfo);
+    header->setCoinbase(ethHeader.data().coinbase);
+    header->setUncleHash(ethHeader.data().uncleHash);
+    header->setStateRoot(ethHeader.data().stateRoot);
+    header->setTxsRoot(ethHeader.data().txsRoot);
+    header->setReceiptsRoot(ethHeader.data().receiptsRoot);
+    header->setDifficulty(ethHeader.data().difficulty);
+    header->setGasLimit(ethHeader.data().gasLimit);
+    header->setGasUsed(ethHeader.data().gasUsed);
+    header->setNumber(ethHeader.data().number);
+    header->setTimestamp(ethHeader.data().timestamp);
+    header->setPrevRandao(ethHeader.data().prevRandao);
+    header->setNonce(ethHeader.data().nonce);
+    header->setExtraData(ethHeader.data().extraData);
+    header->setLogsBloom(
+        bcos::bytesConstRef(ethHeader.data().logsBloom.data(), ethHeader.data().logsBloom.size()));
 
     // Optional fork fields: every field is guarded independently by its own has_value(), so a
-    // truncated RLP list can never dereference an empty optional. The Ethereum-standard RLP list
-    // carries at most the Prague fields (through requestsHash); blockAccessListHash / slotNumber
-    // are FISCO-internal, never part of the encoding, and therefore never produced here.
+    // truncated RLP list can never dereference an empty optional.
     if (ethHeader.data().baseFee.has_value())
     {
-        tarsData.baseFee = boost::lexical_cast<std::string>(*ethHeader.data().baseFee);
+        header->setBaseFee(*ethHeader.data().baseFee);
     }
     if (ethHeader.data().withdrawalsHash.has_value())
     {
-        tarsData.withdrawalsHash.assign(
-            ethHeader.data().withdrawalsHash->begin(), ethHeader.data().withdrawalsHash->end());
+        header->setWithdrawalsRoot(*ethHeader.data().withdrawalsHash);
     }
     if (ethHeader.data().blobGasUsed.has_value())
     {
-        tarsData.blobGasUsed = boost::lexical_cast<std::string>(*ethHeader.data().blobGasUsed);
+        header->setBlobGasUsed(*ethHeader.data().blobGasUsed);
     }
     if (ethHeader.data().excessBlobGas.has_value())
     {
-        tarsData.excessBlobGas = boost::lexical_cast<std::string>(*ethHeader.data().excessBlobGas);
+        header->setExcessBlobGas(*ethHeader.data().excessBlobGas);
     }
     if (ethHeader.data().parentBeaconRoot.has_value())
     {
-        tarsData.parentBeaconRoot.assign(
-            ethHeader.data().parentBeaconRoot->begin(), ethHeader.data().parentBeaconRoot->end());
+        header->setParentBeaconBlockRoot(*ethHeader.data().parentBeaconRoot);
     }
     if (ethHeader.data().requestsHash.has_value())
     {
-        tarsData.requestsHash.assign(
-            ethHeader.data().requestsHash->begin(), ethHeader.data().requestsHash->end());
+        header->setRequestsHash(*ethHeader.data().requestsHash);
     }
 
-    // Unified post-merge-only admission: the RLP-to-Tars path requires the same mandatory
-    // fields as the Tars-to-hash path (baseFee included), so both directions agree on what
-    // constitutes a valid Ethereum-standard header.
-    if (!validateTarsHeader(*result, error))
+    // Set the fork version first, then validate: validateHeader checks the header's fields
+    // against its EthBlockVersion, so the version must be in place before the check.
+    header->setEthBlockVersion(ethHeader.version());
+
+    // The RLP-to-header path requires the same fields the header-to-hash path requires for
+    // the decoded fork version, so both directions agree on what constitutes a valid header.
+    bcos::Error::UniquePtr validationError;
+    if (!validateHeader(*header, validationError))
     {
-        return nullptr;
+        return validationError;
     }
 
-    // Wrap in a BlockHeaderImpl so the caller holds a base-class pointer whose
-    // concrete type is bcostars::protocol::BlockHeaderImpl.
-    auto impl = std::make_shared<bcostars::protocol::BlockHeaderImpl>(result);
-    impl->setIsEthBlockHeader(true);
     // Inject keccak256 of the canonical re-encoding (not of the raw input bytes): this is
     // exactly what calculateRLPHash does, so both paths agree even if the caller passed
     // trailing data after the header RLP list.
     bcos::bytes reencoded;
     ethHeader.rlpEncode(reencoded);
-    impl->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(reencoded)));
-    return impl;
+    header->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(reencoded)));
+    return nullptr;
 }
 
-EthBlockHeader EthBlockHeader::toEthBlockHeader(
-    bcos::bytesConstRef _data, bcos::Error::UniquePtr& error)
+bcos::Error::UniquePtr EthBlockHeader::toEthBlockHeader(
+    EthBlockHeader& ethHeader, bcos::bytesConstRef _data)
 {
-    EthBlockHeader ethHeader;
     auto err = ethHeader.rlpDecode(_data);
     if (err)
     {
-        error = BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
+        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
             "EthBlockHeader: rlpDecode failed: " + err->errorMessage());
-        return EthBlockHeader{};
     }
-    return ethHeader;
+    return nullptr;
 }
 
-
-// Validate that the Tars header carries every Ethereum-required field.
-// can be removed if we can guarantee the Tars header is always valid.
-bool EthBlockHeader::validateTarsHeader(
-    const bcostars::BlockHeader& _tarsHeader, bcos::Error::UniquePtr& error)
+// Validate that the header carries every field its EthBlockVersion requires.
+// can be removed if we can guarantee the header is always valid.
+bool EthBlockHeader::validateHeader(
+    const bcos::protocol::BlockHeader& _header, bcos::Error::UniquePtr& error)
 {
-    const auto& _data = _tarsHeader.data;
-
     auto invalid = [&error](const std::string& msg) {
-        error = BCOS_ERROR_UNIQUE_PTR(
-            static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader), msg);
+        error =
+            BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), msg);
         return false;
     };
 
-    // Required fixed-size fields: exact length so that "validated" means "complete"
-    // (a longer-than-spec value would otherwise be silently truncated by the constructor).
-    if (_data.parentInfo.empty() ||
-        _data.parentInfo.front().blockHash.size() != crypto::HashType::SIZE)
+    auto version = _header.ethBlockVersion();
+    if (version == EthBlockVersion::NON_ETH)
+    {
+        return invalid("EthBlockHeader: not an Ethereum header (EthBlockVersion == NON_ETH)");
+    }
+
+    // Mandatory fields, required by every Eth version.
+    auto parent = _header.parentInfo();
+    if (parent.blockHash.size() != crypto::HashType::SIZE)
     {
         return invalid("EthBlockHeader: missing or bad parentInfo.blockHash");
     }
-    if (_data.coinbase.size() != Address::SIZE)
+    // The base-class accessors return fixed-size FixedBytes: a "not set" field surfaces as
+    // all-zero bytes. Check for all-zero rather than size.
+    if (_header.coinbase() == bcos::Address{})
     {
         return invalid("EthBlockHeader: missing or bad coinbase");
     }
-    if (_data.stateRoot.size() != crypto::HashType::SIZE)
+    if (_header.uncleHash() == bcos::crypto::HashType{})
+    {
+        return invalid("EthBlockHeader: missing or bad uncleHash");
+    }
+    if (_header.stateRoot() == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad stateRoot");
     }
-    if (_data.txsRoot.size() != crypto::HashType::SIZE)
+    if (_header.txsRoot() == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad txsRoot");
     }
-    if (_data.receiptRoot.size() != crypto::HashType::SIZE)
+    if (_header.receiptsRoot() == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad receiptRoot");
     }
-    if (_data.prevRandao.size() != h256::SIZE)
+    if (_header.prevRandao() == bcos::h256{})
     {
         return invalid("EthBlockHeader: missing or bad prevRandao");
     }
-    if (_data.logsBloom.size() != bcos::Bloom{}.size())
+    if (_header.logsBloom().size() != bcos::Bloom{}.size())
     {
         return invalid("EthBlockHeader: missing or bad logsBloom");
     }
 
-    // Required scalar/string fields
-    if (_data.gasLimit.empty())
-    {
-        return invalid("EthBlockHeader: missing gasLimit");
-    }
-    if (_data.gasUsed.empty())
-    {
-        return invalid("EthBlockHeader: missing gasUsed");
-    }
-    if (_data.timestamp < 0)
-    {
-        return invalid("EthBlockHeader: missing timestamp");
-    }
-    if (_data.blockNumber < 0)
+    // Required scalar fields.
+    if (_header.number() < 0)
     {
         return invalid("EthBlockHeader: negative blockNumber");
     }
-
-    // baseFee is mandatory on every post-London Ethereum block.
-    if (_data.baseFee.empty())
+    if (_header.timestamp() < 0)
     {
-        return invalid("EthBlockHeader: missing baseFee");
+        return invalid("EthBlockHeader: invalid timestamp");
     }
 
-    // Optional fork fields must satisfy the cascade-stop invariant: they are appended
-    // cumulatively at the tail of the header, so a later field cannot be present while an
-    // earlier one is absent. Otherwise the encode side would silently drop fields and the
-    // computed RLP hash would diverge from the original header.
-    auto cascade = [&](const std::string& _absent, const std::string& _present) {
-        return invalid("EthBlockHeader: " + _present + " is set but " + _absent + " is missing");
-    };
-    if (!_data.withdrawalsHash.empty() && _data.baseFee.empty())
-    {
-        return cascade("baseFee", "withdrawalsHash");
-    }
-    if (!_data.blobGasUsed.empty() && _data.withdrawalsHash.empty())
-    {
-        return cascade("withdrawalsHash", "blobGasUsed");
-    }
-    if (!_data.excessBlobGas.empty() && _data.blobGasUsed.empty())
-    {
-        return cascade("blobGasUsed", "excessBlobGas");
-    }
-    // The constructor reads blobGasUsed and excessBlobGas as a pair (both must be set or both
-    // are dropped), so enforce the same invariant here: blobGasUsed present without
-    // excessBlobGas would otherwise pass validation yet lose both fields on encode, silently
-    // diverging the RLP hash from the Tars data.
-    if (!_data.blobGasUsed.empty() && _data.excessBlobGas.empty())
-    {
-        return cascade("excessBlobGas", "blobGasUsed");
-    }
-    if (!_data.parentBeaconRoot.empty() && _data.excessBlobGas.empty())
-    {
-        return cascade("excessBlobGas", "parentBeaconRoot");
-    }
-    if (!_data.requestsHash.empty() && _data.parentBeaconRoot.empty())
-    {
-        return cascade("parentBeaconRoot", "requestsHash");
-    }
-
-    // blockAccessListHash / slotNumber are FISCO-internal fields (not part of the Ethereum
-    // header schema) and are never encoded to RLP, so they are intentionally excluded from
-    // the cascade validation above.
-
-    // Numeric string fields must parse as u256, otherwise the constructor's lexical_cast
-    // would throw on malformed (non-numeric) input.
-    auto checkNumeric = [&](const std::string& _fieldName, const std::string& _value) {
-        try
+    // Fork-gated optional fields: a version N header must carry every field introduced by
+    // version N and all earlier fork-gated fields.
+    auto requireForkField = [&](EthBlockVersion _minVersion, const std::string& _field,
+                               bool _present) {
+        if (static_cast<uint8_t>(version) >= static_cast<uint8_t>(_minVersion) && !_present)
         {
-            boost::lexical_cast<u256>(_value);
-            return true;
+            return invalid("EthBlockHeader: missing " + _field + " for EthBlockVersion " +
+                           std::to_string(static_cast<int>(version)));
         }
-        catch (const boost::bad_lexical_cast&)
-        {
-            error =
-                BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidTarsHeader),
-                    "EthBlockHeader: " + _fieldName + " is not a valid number");
-            return false;
-        }
+        return true;
     };
-    if (!checkNumeric("gasLimit", _data.gasLimit))
+
+    if (!requireForkField(EthBlockVersion::LONDON, "baseFee", _header.baseFee().has_value()))
     {
         return false;
     }
-    if (!checkNumeric("gasUsed", _data.gasUsed))
+    if (!requireForkField(EthBlockVersion::SHANGHAI, "withdrawalsRoot",
+            _header.withdrawalsRoot().has_value()))
     {
         return false;
     }
-    if (!checkNumeric("baseFee", _data.baseFee))
+    if (!requireForkField(
+            EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value()))
     {
         return false;
     }
-    if (!_data.blobGasUsed.empty() && !checkNumeric("blobGasUsed", _data.blobGasUsed))
+    if (!requireForkField(
+            EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value()))
     {
         return false;
     }
-    if (!_data.excessBlobGas.empty() && !checkNumeric("excessBlobGas", _data.excessBlobGas))
+    if (!requireForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
+            _header.parentBeaconBlockRoot().has_value()))
+    {
+        return false;
+    }
+    if (!requireForkField(
+            EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value()))
     {
         return false;
     }
@@ -318,131 +243,77 @@ bool EthBlockHeader::validateTarsHeader(
     return true;
 }
 
-EthBlockHeader::EthBlockHeader(const bcostars::BlockHeader& _tarsHeader)
+EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
 {
-    const auto& _data = _tarsHeader.data;
-
-    // Required fields — converted directly, with defensive zero-fill for empty fields so
+    // Required fields — converted directly, with defensive defaults for empty fields so
     // constructing from an incomplete header never crashes (validation is the caller's job,
-    // e.g. via calculateRLPHash -> validateTarsHeader).
-    auto const& tarsParentInfo = _data.parentInfo;
-    if (!tarsParentInfo.empty() &&
-        tarsParentInfo.front().blockHash.size() >= crypto::HashType::SIZE)
+    // e.g. via calculateRLPHash -> validateHeader).
+    auto parent = _header.parentInfo();
+    m_data.parentInfo.blockNumber = parent.blockNumber;
+    m_data.parentInfo.blockHash = parent.blockHash;
+
+    m_data.coinbase = _header.coinbase();
+    m_data.uncleHash = _header.uncleHash();
+    m_data.stateRoot = _header.stateRoot();
+    m_data.txsRoot = _header.txsRoot();
+    m_data.receiptsRoot = _header.receiptsRoot();
+    m_data.difficulty = _header.difficulty();
+    m_data.gasLimit = _header.gasLimit();
+    m_data.gasUsed = _header.gasUsed();
+    m_data.number = _header.number();
+    m_data.timestamp = _header.timestamp();
+    m_data.prevRandao = _header.prevRandao();
+    m_data.nonce = _header.nonce();
+
+    auto extra = _header.extraData();
+    m_data.extraData.assign(extra.begin(), extra.end());
+
+    auto bloom = _header.logsBloom();
+    if (bloom.size() >= m_data.logsBloom.size())
     {
-        m_data.parentInfo.blockNumber = tarsParentInfo.front().blockNumber;
-        m_data.parentInfo.blockHash = crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(tarsParentInfo.front().blockHash.data()),
-            tarsParentInfo.front().blockHash.size());
+        std::memcpy(m_data.logsBloom.data(), bloom.data(), m_data.logsBloom.size());
     }
 
-    if (_data.coinbase.size() >= Address::SIZE)
+    // Optional fork fields.
+    if (_header.baseFee().has_value())
     {
-        m_data.coinbase = Address(
-            reinterpret_cast<const bcos::byte*>(_data.coinbase.data()), _data.coinbase.size());
+        m_data.baseFee = _header.baseFee();
     }
-    if (_data.stateRoot.size() >= crypto::HashType::SIZE)
+    if (_header.withdrawalsRoot().has_value())
     {
-        m_data.stateRoot = crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(_data.stateRoot.data()), _data.stateRoot.size());
+        m_data.withdrawalsHash = _header.withdrawalsRoot();
     }
-    if (_data.txsRoot.size() >= crypto::HashType::SIZE)
+    if (_header.blobGasUsed().has_value())
     {
-        m_data.txsRoot = crypto::HashType(
-            reinterpret_cast<const bcos::byte*>(_data.txsRoot.data()), _data.txsRoot.size());
+        m_data.blobGasUsed = _header.blobGasUsed();
     }
-    if (_data.receiptRoot.size() >= crypto::HashType::SIZE)
+    if (_header.excessBlobGas().has_value())
     {
-        m_data.receiptsRoot =
-            crypto::HashType(reinterpret_cast<const bcos::byte*>(_data.receiptRoot.data()),
-                _data.receiptRoot.size());
+        m_data.excessBlobGas = _header.excessBlobGas();
     }
-
-    if (!_data.gasLimit.empty())
+    if (_header.parentBeaconBlockRoot().has_value())
     {
-        m_data.gasLimit = boost::lexical_cast<u256>(_data.gasLimit);
+        m_data.parentBeaconRoot = _header.parentBeaconBlockRoot();
     }
-    if (!_data.gasUsed.empty())
+    if (_header.requestsHash().has_value())
     {
-        m_data.gasUsed = boost::lexical_cast<u256>(_data.gasUsed);
+        m_data.requestsHash = _header.requestsHash();
     }
 
-    m_data.number = _data.blockNumber;
-    m_data.timestamp = _data.timestamp;
-
-    if (_data.prevRandao.size() >= h256::SIZE)
-    {
-        m_data.prevRandao = h256(
-            reinterpret_cast<const bcos::byte*>(_data.prevRandao.data()), _data.prevRandao.size());
-    }
-
-    m_data.extraData.assign(_data.extraData.begin(), _data.extraData.end());
-
-    if (_data.logsBloom.size() >= m_data.logsBloom.size())
-    {
-        std::memcpy(m_data.logsBloom.data(), _data.logsBloom.data(), m_data.logsBloom.size());
-    }
-
-    // Optional fields — cascade-stop logic (nested if, matching toTarsHeader).
-    // Ethereum hard-fork fields are appended cumulatively at the tail of the header:
-    // if a field is absent (Tars unset), no later optional field can be present either.
-    // London fork fields
-    if (!_data.baseFee.empty())
-    {
-        m_data.baseFee = boost::lexical_cast<u256>(_data.baseFee);
-        // Shanghai fork fields
-        if (!_data.withdrawalsHash.empty())
-        {
-            m_data.withdrawalsHash =
-                h256(reinterpret_cast<const bcos::byte*>(_data.withdrawalsHash.data()),
-                    _data.withdrawalsHash.size());
-            // Cancun fork fields
-            if (!_data.blobGasUsed.empty() && !_data.excessBlobGas.empty())
-            {
-                m_data.blobGasUsed = boost::lexical_cast<u256>(_data.blobGasUsed);
-                m_data.excessBlobGas = boost::lexical_cast<u256>(_data.excessBlobGas);
-                if (!_data.parentBeaconRoot.empty())
-                {
-                    m_data.parentBeaconRoot =
-                        h256(reinterpret_cast<const bcos::byte*>(_data.parentBeaconRoot.data()),
-                            _data.parentBeaconRoot.size());
-                    // Prague fork fields
-                    if (!_data.requestsHash.empty())
-                    {
-                        m_data.requestsHash =
-                            h256(reinterpret_cast<const bcos::byte*>(_data.requestsHash.data()),
-                                _data.requestsHash.size());
-                        // Osaka fork fields
-                        if (!_data.blockAccessListHash.empty())
-                        {
-                            m_data.blockAccessListHash = h256(reinterpret_cast<const bcos::byte*>(
-                                                                  _data.blockAccessListHash.data()),
-                                _data.blockAccessListHash.size());
-                            if (_data.slotNumber != -1)  // -1 is the Tars unset sentinel
-                            {
-                                m_data.slotNumber = static_cast<uint64_t>(_data.slotNumber);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    m_version = _header.ethBlockVersion();
 }
 
 void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 {
     codec::rlp::encode(out, m_data.parentInfo.blockHash,
-        c_emptyOmmersHash,  // uncleHash, fixed for post-merge blocks
+        m_data.uncleHash,  
         m_data.coinbase, m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot,
         bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()),
-        bcos::u256{0},  // difficulty, fixed to 0 (post-merge)
-        static_cast<uint64_t>(m_data.number), m_data.gasLimit, m_data.gasUsed,
-        static_cast<uint64_t>(m_data.timestamp), m_data.extraData, m_data.prevRandao,
-        bcos::h64{0},  // nonce, fixed to 0 (post-merge)
+        m_data.difficulty, static_cast<uint64_t>(m_data.number), m_data.gasLimit, m_data.gasUsed,
+        static_cast<uint64_t>(m_data.timestamp), m_data.extraData, m_data.prevRandao, m_data.nonce,
         m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed, m_data.excessBlobGas,
         m_data.parentBeaconRoot, m_data.requestsHash);
 }
-
 
 bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
 {
@@ -452,16 +323,11 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     uint64_t _number = 0;
     uint64_t _timestamp = 0;
 
-    // Deprecated fields — read and discard
-    h256 _uncleHash;
-    u256 _difficulty;
-    h64 _nonce;
-
-    auto error = codec::rlp::decode(ref, m_data.parentInfo.blockHash, _uncleHash, m_data.coinbase,
-        m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot, m_data.logsBloom, _difficulty,
-        _number, m_data.gasLimit, m_data.gasUsed, _timestamp, m_data.extraData, m_data.prevRandao,
-        _nonce, m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed, m_data.excessBlobGas,
-        m_data.parentBeaconRoot, m_data.requestsHash);
+    auto error = codec::rlp::decode(ref, m_data.parentInfo.blockHash, m_data.uncleHash,
+        m_data.coinbase, m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot, m_data.logsBloom,
+        m_data.difficulty, _number, m_data.gasLimit, m_data.gasUsed, _timestamp, m_data.extraData,
+        m_data.prevRandao, m_data.nonce, m_data.baseFee, m_data.withdrawalsHash,
+        m_data.blobGasUsed, m_data.excessBlobGas, m_data.parentBeaconRoot, m_data.requestsHash);
     if (error)
     {
         return error;
@@ -469,6 +335,28 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
 
     m_data.number = static_cast<int64_t>(_number);
     m_data.timestamp = static_cast<int64_t>(_timestamp);
+
+    // Derive the fork version from the presence of optional fields.
+    if (m_data.requestsHash.has_value())
+    {
+        m_version = EthBlockVersion::PRAGUE;
+    }
+    else if (m_data.parentBeaconRoot.has_value())
+    {
+        m_version = EthBlockVersion::CANCUN;
+    }
+    else if (m_data.withdrawalsHash.has_value())
+    {
+        m_version = EthBlockVersion::SHANGHAI;
+    }
+    else if (m_data.baseFee.has_value())
+    {
+        m_version = EthBlockVersion::LONDON;
+    }
+    else
+    {
+        m_version = EthBlockVersion::PRE_LONDON;
+    }
 
     return nullptr;
 }

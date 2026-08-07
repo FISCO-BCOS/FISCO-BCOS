@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file EthBlockHeader.h
- * @brief Pure RLP bridge — converts between bcostars::BlockHeader and Ethereum RLP
+ * @brief Pure RLP bridge — converts between bcos::protocol::BlockHeader and Ethereum RLP
  * @date 2026/6/24
  */
 #pragma once
@@ -34,31 +34,27 @@
 #include <memory>
 #include <optional>
 
-namespace bcostars
-{
-struct BlockHeader;
-}
-
 namespace bcos::protocol
 {
 
 struct EthBlockHeaderData
 {
-    // Non-optional fields (1–15)
+    // Non-optional fields (1–15), present in every Eth header version.
     bcos::Bloom logsBloom{};
     ParentInfo parentInfo;
+    bcos::crypto::HashType uncleHash;
     bcos::crypto::HashType stateRoot;
     bcos::crypto::HashType txsRoot;
     bcos::crypto::HashType receiptsRoot;
+    bcos::u256 difficulty{0};
     bcos::u256 gasLimit{0};
     bcos::u256 gasUsed{0};
     bcos::h256 prevRandao;
     bcos::bytes extraData;
     bcos::Address coinbase;
+    bcos::h64 nonce;
     int64_t number{0};
     int64_t timestamp{0};
-    // the following fields are discarded
-    // uncleHash, difficulty, nonce
 
     // Optional fields (16–23)
     std::optional<bcos::u256> baseFee;
@@ -67,20 +63,14 @@ struct EthBlockHeaderData
     std::optional<bcos::u256> excessBlobGas;
     std::optional<bcos::h256> parentBeaconRoot;
     std::optional<bcos::h256> requestsHash;
-    // blockAccessListHash / slotNumber are FISCO-internal fields: they do NOT belong to the
-    // Ethereum-standard header schema, so rlpEncode/rlpDecode/toTarsHeader never touch them.
-    // They are read from Tars into EthBlockHeaderData purely for introspection; a
-    // Tars→RLP→Tars round-trip will drop them by design.
-    std::optional<bcos::h256> blockAccessListHash;
-    std::optional<uint64_t> slotNumber;
 };
 
 // Error codes for EthBlockHeader conversion failures.
 enum class EthBlockHeaderError : int32_t
 {
-    InvalidTarsHeader = 1,  // Tars header misses a required Eth field
-    RlpDecodeFailed = 2,    // RLP decoding failed
-    InvalidHeaderType = 3,  // header is not a bcostars::protocol::BlockHeaderImpl
+    InvalidHeader = 1,     // header misses a required Eth field
+    RlpDecodeFailed = 2,   // RLP decoding failed
+    InvalidHeaderType = 3, // header type mismatch
 };
 
 class EthBlockHeader
@@ -88,36 +78,40 @@ class EthBlockHeader
 public:
     EthBlockHeader() = default;
 
-    explicit EthBlockHeader(const bcostars::BlockHeader& tarsHeader);
+    explicit EthBlockHeader(const bcos::protocol::BlockHeader& header);
 
     void rlpEncode(bcos::bytes& out) const;
     bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
 
-    // Validate that the Tars header carries every Ethereum-required field. On the first
-    // missing/short field, fills `error` with an InvalidTarsHeader error and returns false.
-    // Returns true if the header is complete.
-    static bool validateTarsHeader(
-        const bcostars::BlockHeader& _tarsHeader, bcos::Error::UniquePtr& error);
+    // The fork version this header's fields correspond to (derived from the presence of
+    // optional fields after rlpDecode). 0/NON_ETH means no Eth fields were decoded.
+    EthBlockVersion version() const { return m_version; }
+    void setVersion(EthBlockVersion _version) { m_version = _version; }
 
-    // Static helpers for the common upper-layer flows. Each takes a bcos::Error::UniquePtr&
-    // output parameter: on success it is left null and a valid value is returned; on failure
-    // it is filled with an error describing the problem and an empty result is returned.
-    //  - toTarsHeader: decode an RLP header into a base-class BlockHeader::Ptr
-    //    (concrete type bcostars::protocol::BlockHeaderImpl, marked as an Eth header).
-    //  - toEthBlockHeader: decode an RLP header into an EthBlockHeader value.
+    // Validate that the header carries every field its EthBlockVersion requires. On the
+    // first missing field, fills `error` with an InvalidHeader error and returns false.
+    // Returns true if the header is complete for its version.
+    static bool validateHeader(
+        const bcos::protocol::BlockHeader& _header, bcos::Error::UniquePtr& error);
+
+    // Static helpers for the common upper-layer flows. Each returns a bcos::Error::UniquePtr
+    // (null on success) and takes the destination object as an in/out parameter:
+    //  - toTarsHeader: decode an RLP header into the caller-provided base-class header
+    //    (writes all fields via the setter interface, sets its EthBlockVersion).
+    //  - toEthBlockHeader: decode an RLP header into the caller-provided EthBlockHeader.
     //  - calculateRLPHash: compute keccak256(rlp(header)) and inject it into the
-    //    Tars-backed BlockHeaderImpl via setRLPHash.
-    static bcos::protocol::BlockHeader::Ptr toTarsHeader(
-        bcos::bytesConstRef _data, bcos::Error::UniquePtr& error);
-    static EthBlockHeader toEthBlockHeader(
-        bcos::bytesConstRef _data, bcos::Error::UniquePtr& error);
-    static void calculateRLPHash(
-        bcos::protocol::BlockHeader::Ptr header, bcos::Error::UniquePtr& error);
+    //    base-class header via setRLPHash.
+    static bcos::Error::UniquePtr toTarsHeader(
+        bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
+    static bcos::Error::UniquePtr toEthBlockHeader(
+        EthBlockHeader& ethHeader, bcos::bytesConstRef _data);
+    static bcos::Error::UniquePtr calculateRLPHash(bcos::protocol::BlockHeader& header);
 
     const EthBlockHeaderData& data() const { return m_data; }
 
 private:
     EthBlockHeaderData m_data;
+    EthBlockVersion m_version{EthBlockVersion::NON_ETH};
 };
 
 }  // namespace bcos::protocol
