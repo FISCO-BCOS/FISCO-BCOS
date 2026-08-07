@@ -29,7 +29,8 @@ public:
             receipt.data.status = 100;
             receipt.data.blockNumber = 10086;
             auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                [receipt = std::move(receipt)]() mutable { return &receipt; });
+                bcos::HoldablePointer<bcostars::TransactionReceipt>(bcos::isOwner<true>{},
+                    new bcostars::TransactionReceipt(std::move(receipt))));
             result->setTransactionReceipt(receiptObj);
             co_return result;
         }

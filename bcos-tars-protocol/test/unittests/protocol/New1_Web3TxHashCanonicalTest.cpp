@@ -111,7 +111,8 @@ bcostars::Transaction buildTars(const Vector& v, bool prewriteCanonicalHash)
 std::shared_ptr<bcostars::protocol::TransactionImpl> wrap(bcostars::Transaction&& t)
 {
     return std::make_shared<bcostars::protocol::TransactionImpl>(
-        [inner = std::move(t)]() mutable { return std::addressof(inner); });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(std::move(t))));
 }
 
 HashType expectedHash(const Vector& v)

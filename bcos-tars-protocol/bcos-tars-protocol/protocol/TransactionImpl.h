@@ -31,6 +31,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
+#include "bcos-utilities/HoldablePointer.h"
 #include "bcos-utilities/Common.h"
 #include <memory>
 
@@ -40,7 +41,7 @@ namespace bcostars::protocol
 class TransactionImpl : public bcos::protocol::Transaction
 {
 public:
-    explicit TransactionImpl(std::function<bcostars::Transaction*()> inner);
+    explicit TransactionImpl(bcos::HoldablePointer<bcostars::Transaction> inner);
     TransactionImpl();
     ~TransactionImpl() override = default;
     TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
@@ -105,14 +106,14 @@ public:
     size_t size() const override;
 
 private:
-    std::function<bcostars::Transaction*()> m_inner;
+    bcos::HoldablePointer<bcostars::Transaction> m_inner;
 };
 
 // Guard: TransactionImpl must fit inside the AnyTransaction fixed-size buffer.
 // If this assertion fires, update the size constant in
 // bcos-framework/bcos-framework/protocol/Transaction.h  (using AnyTransaction = AnyHolder<..., N>).
-static_assert(sizeof(TransactionImpl) <= 224,
-    "TransactionImpl exceeds AnyTransaction buffer (224 bytes); "
+static_assert(sizeof(TransactionImpl) <= 208,
+    "TransactionImpl exceeds AnyTransaction buffer (208 bytes); "
     "update the size constant in bcos-framework/protocol/Transaction.h");
 
 }  // namespace bcostars::protocol
