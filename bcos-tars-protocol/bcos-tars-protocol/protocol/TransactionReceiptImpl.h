@@ -94,4 +94,12 @@ private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
     mutable std::vector<bcos::protocol::LogEntry> m_logEntries;
 };
+
+// Guard: TransactionReceiptImpl must fit inside the AnyTransactionReceipt fixed-size buffer.
+// If this assertion fires, update the size constant in
+// bcos-framework/bcos-framework/protocol/TransactionReceipt.h  (using AnyTransactionReceipt = AnyHolder<..., 104>).
+static_assert(sizeof(TransactionReceiptImpl) <= 104,
+    "TransactionReceiptImpl exceeds AnyTransactionReceipt buffer (104 bytes); "
+    "update the size constant in bcos-framework/protocol/TransactionReceipt.h");
+
 }  // namespace bcostars::protocol
