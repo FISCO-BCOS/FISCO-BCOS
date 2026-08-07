@@ -64,6 +64,7 @@ if(TARGET bcos-framework)
     find_package(jsoncpp CONFIG REQUIRED)
     target_sources(bcos-evm-opstack-tests PRIVATE
         opstack/support/SeedPreStateTest.cpp
+        opstack/support/GoldenSampleTest.cpp
     )
     target_link_libraries(bcos-evm-opstack-tests PRIVATE jsoncpp_static)
 endif()
