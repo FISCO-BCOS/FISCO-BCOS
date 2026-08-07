@@ -426,11 +426,28 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             .jovianTime = m_nodeConfig->jovianTime(),
         };
         // chainId: NodeConfig::chainId() 返回经 isalNumStr 校验的数字串，按 base-0 解析
-        // （0x 前缀→hex，否则 decimal）；OP 模式下应为数字字符串。
+        // （0x 前缀→hex，否则 decimal）；OP 模式下应为数字字符串。默认 genesis 值是 "chain"，
+        // stoull 对非数字串抛裸 STL 异常 → 转成带 FISCO 上下文的 InvalidConfig。
+        uint64_t opChainId = 0;
+        try
+        {
+            opChainId = std::stoull(m_nodeConfig->chainId(), nullptr, 0);
+        }
+        catch (const std::invalid_argument&)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version>=3) requires a numeric chain_id "
+                                      "(decimal or 0x-prefixed hex)"));
+        }
+        catch (const std::out_of_range&)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version>=3) requires a numeric chain_id "
+                                      "(decimal or 0x-prefixed hex)"));
+        }
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
-                m_protocolInitializer->blockFactory()->receiptFactory(),
-                std::stoull(m_nodeConfig->chainId(), nullptr, 0), forkTimestamps);
+                m_protocolInitializer->blockFactory()->receiptFactory(), opChainId, forkTimestamps);
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             transactionExecutor, m_memPoolInitializer->memPool());
