@@ -1003,7 +1003,11 @@ Expected: 编译链接成功。若 EngineHelper.cpp 有未解析 include，补 i
 ./build/bcos-evm/test/bcos-evm-opstack-tests --run_test=OpNewPayloadRpcE2eSuite/JovianDepositOnly
 ```
 
-Expected: PASS（VALID + 七项全等）。若 VALID 未达成，看 `status.validationError` + 对拍报告定位；若七项不等，用 assertSevenFields 的逐字段输出定位。
+Expected: PASS（VALID + 七项全等）。若 VALID 未达成，按 R2-E 诊断定位：
+- `status.validationError` 含 "blockHash does not match"（step-2 失败）→ **txRoot 问题**：`computeOpTxRoot(rawTransactions) != golden.transactionsRoot`（⚠️-1，本分支无既有测试钉死；与 receiptsRoot 共用 `computeTrieRootVarKey`，依据充分，若失败 33 向量全挂 step-2，可诊断）
+- 报 INVALID 但非 blockHash → **pre-state 播种等价问题**（⚠️-2：自研 jsoncpp→StateDiff vs evmone gold loader；Task 2 只测微型 pre，真实向量 pre 在此暴露）——对照 `status.validationError` + 该向量 golden stateRoot
+- 七项不等 → assertSevenFields 逐字段输出定位
+若单个向量失败，先确认是否为 `isthmus/jovian_empty_account_cleanup`（pre 含完全空账户，seeding=true 必须）。
 
 - [ ] **Step 5: 展开全量 33 向量 + 链式双块**
 
