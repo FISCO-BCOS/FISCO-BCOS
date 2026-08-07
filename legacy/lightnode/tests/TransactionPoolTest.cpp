@@ -49,7 +49,8 @@ public:
         bcostars::TransactionReceipt receipt;
         receipt.data.status = 79;
         auto receiptObj = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-            [receipt = std::move(receipt)]() mutable { return &receipt; });
+            bcos::HoldablePointer<bcostars::TransactionReceipt>(bcos::isOwner<true>{},
+                new bcostars::TransactionReceipt(std::move(receipt))));
         result->setTransactionReceipt(receiptObj);
         std::cout << "resume ended " << std::this_thread::get_id() << std::endl;
 
