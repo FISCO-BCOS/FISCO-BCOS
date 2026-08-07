@@ -922,6 +922,26 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                                   "Please set chain.block_limit to positive and less than " +
                                   std::to_string(MAX_BLOCK_LIMIT) + " !"));
     }
+    // OP-Stack fork activation timestamps (spec D3). get_optional: a missing key in the genesis
+    // pass must NOT reset a value already loaded from config.ini (loadChainConfig is called from
+    // both loadConfig and loadGenesisConfig).
+    if (auto t = _pt.get_optional<uint64_t>("chain.isthmus_time"))
+    {
+        m_isthmusTime = *t;
+    }
+    if (auto t = _pt.get_optional<uint64_t>("chain.jovian_time"))
+    {
+        m_jovianTime = *t;
+    }
+    if (m_isthmusTime > m_jovianTime)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "chain.isthmus_time must be <= chain.jovian_time (OP-Stack fork order)"));
+    }
+    NodeConfig_LOG(INFO) << LOG_DESC("loadChainConfig op-fork")
+                         << LOG_KV("isthmusTime", m_isthmusTime)
+                         << LOG_KV("jovianTime", m_jovianTime);
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadChainConfig")
                          << LOG_KV("smCrypto", m_genesisConfig.m_smCrypto)
                          << LOG_KV("chainId", m_genesisConfig.m_chainID)

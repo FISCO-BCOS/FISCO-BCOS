@@ -235,5 +235,42 @@ BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
     BOOST_CHECK_NO_THROW(cfg.pdAddrs());
 }
 
+// OP-Stack fork timestamps: parsed from [chain].isthmus_time / jovian_time (spec D3).
+BOOST_AUTO_TEST_CASE(chainConfigParsesOpForkTimestamps)
+{
+    LoaderProbe p;
+    p.loadChainConfig(
+        fromIni("[chain]\nchain_id=1\nisthmus_time=1703203200\njovian_time=1720000000\n"), true);
+    BOOST_CHECK_EQUAL(p.isthmusTime(), 1703203200u);
+    BOOST_CHECK_EQUAL(p.jovianTime(), 1720000000u);
+}
+
+// Absent fork keys default to 0 (both forks active at genesis) and do not reset a
+// previously-loaded value on the genesis pass.
+BOOST_AUTO_TEST_CASE(chainConfigDefaultsOpForkTimestamps)
+{
+    LoaderProbe p;
+    p.loadChainConfig(fromIni("[chain]\nchain_id=1\n"), true);
+    BOOST_CHECK_EQUAL(p.isthmusTime(), 0u);
+    BOOST_CHECK_EQUAL(p.jovianTime(), 0u);
+    // A later genesis pass (no fork keys) must not reset the config.ini values.
+    LoaderProbe q;
+    q.loadChainConfig(
+        fromIni("[chain]\nchain_id=1\nisthmus_time=1703203200\njovian_time=1720000000\n"), true);
+    q.loadChainConfig(fromIni("[chain]\nchain_id=1\n"), true);
+    BOOST_CHECK_EQUAL(q.isthmusTime(), 1703203200u);
+    BOOST_CHECK_EQUAL(q.jovianTime(), 1720000000u);
+}
+
+// isthmus_time > jovian_time violates the OP-Stack fork order and must be rejected.
+BOOST_AUTO_TEST_CASE(chainConfigRejectsReversedForkTimestamps)
+{
+    LoaderProbe p;
+    BOOST_CHECK_THROW(p.loadChainConfig(fromIni("[chain]\nchain_id=1\nisthmus_time=1720000000\n"
+                                                "jovian_time=1703203200\n"),
+                          true),
+        bcos::tool::InvalidConfig);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

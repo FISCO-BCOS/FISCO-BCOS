@@ -92,6 +92,11 @@ public:
     std::string const& groupId() const;
     size_t blockLimit() const;
 
+    /// OP-Stack fork activation timestamps (seconds, UTC epoch), from [chain] section.
+    /// Default 0 = both forks active at genesis (dev default); spec D3.
+    uint64_t isthmusTime() const { return m_isthmusTime; }
+    uint64_t jovianTime() const { return m_jovianTime; }
+
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
     int const& keyIndex() const;
@@ -401,6 +406,10 @@ private:
 
     // Genesis config
     ledger::GenesisConfig m_genesisConfig;
+
+    // OP-Stack fork activation timestamps (seconds, UTC epoch); 0 = active at genesis.
+    uint64_t m_isthmusTime = 0;
+    uint64_t m_jovianTime = 0;
 
     // storage configuration
     std::string m_storagePath;
