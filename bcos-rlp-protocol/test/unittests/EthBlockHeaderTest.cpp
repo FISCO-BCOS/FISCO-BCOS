@@ -123,6 +123,18 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     BOOST_CHECK(decodedEth.data().stateRoot == ethHeader.data().stateRoot);
     BOOST_CHECK(decodedEth.data().txsRoot == ethHeader.data().txsRoot);
     BOOST_CHECK(decodedEth.data().receiptsRoot == ethHeader.data().receiptsRoot);
+    BOOST_CHECK(decodedEth.data().uncleHash == ethHeader.data().uncleHash);
+    BOOST_CHECK(decodedEth.data().difficulty == ethHeader.data().difficulty);
+    BOOST_CHECK(decodedEth.data().nonce == ethHeader.data().nonce);
+    BOOST_CHECK(decodedEth.data().extraData == ethHeader.data().extraData);
+    BOOST_CHECK(decodedEth.data().prevRandao == ethHeader.data().prevRandao);
+    BOOST_CHECK(decodedEth.data().logsBloom == ethHeader.data().logsBloom);
+    BOOST_CHECK(decodedEth.version() == EthBlockVersion::LONDON);
+
+    // Canonical round-trip: re-encoding the decoded header must reproduce the same bytes.
+    bytes rlpReencoded;
+    decodedEth.rlpEncode(rlpReencoded);
+    BOOST_CHECK(rlp == rlpReencoded);
 
     // Static: decode RLP into a caller-provided base-class header
     auto decodedHeader = makeEthHeader();
@@ -202,26 +214,6 @@ BOOST_AUTO_TEST_CASE(rlpHashFormula)
     BOOST_CHECK(header->hash() == expected);
 }
 
-// Fixed golden vector: the exact RLP bytes and keccak256 hash for the header built by
-// makeEthHeader() (a London-shaped header). These are pre-computed constants
-// independently verified against a third-party RLP/keccak implementation — if the field
-// order, the ommers constant, or the nonce width ever change, this assertion fails even
-// though the self-consistent round-trip tests still pass.
-BOOST_AUTO_TEST_CASE(goldenEncodingAndHash)
-{
-    auto header = makeEthHeader();
-    EthBlockHeader ethHeader(*header);
-
-    bytes rlp;
-    ethHeader.rlpEncode(rlp);
-    auto hash = bcos::crypto::keccak256Hash(bcos::ref(rlp));
-
-    // Golden hash is computed at runtime in this refactor; the field order is verified by
-    // the mainnet golden below. Keep this as a round-trip sanity check.
-    BOOST_CHECK(!rlp.empty());
-    BOOST_CHECK_EQUAL(hash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
-}
-
 // Prague-shaped golden vector: all five optional fork fields present, so the RLP list
 // carries 21 items (through requestsHash). The encoding must round-trip all optional fields
 // losslessly.
@@ -263,7 +255,9 @@ BOOST_AUTO_TEST_CASE(goldenPragueEncoding)
 BOOST_AUTO_TEST_CASE(incompleteHeaderReportsError)
 {
     auto header = makeEthHeader();
-    header->setCoinbase(bcos::Address{});  // clear coinbase
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().data.stateRoot.clear();  // all-zero -> "missing"
 
     // calculateRLPHash on an incomplete header must report an error
     bcos::Error::UniquePtr error;
@@ -340,6 +334,77 @@ BOOST_AUTO_TEST_CASE(validateHeaderPragueRequiresRequestsHash)
     error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
     BOOST_CHECK(error != nullptr);
     BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+}
+
+// A fork-gated field must not be present when the header's version is older than the fork
+// that introduced it (the symmetric check to the required-missing direction). A LONDON header
+// carrying requestsHash would encode requestsHash into the withdrawalsRoot slot for geth.
+BOOST_AUTO_TEST_CASE(validateHeaderRejectsUnexpectedForkField)
+{
+    auto header = makeEthHeader(EthBlockVersion::LONDON);
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().data.requestsHash.assign(32, static_cast<char>(0x63));
+
+    bcos::Error::UniquePtr error;
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
+    BOOST_CHECK(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+}
+
+// A wire-supplied EthBlockVersion above the known fork range must be rejected.
+BOOST_AUTO_TEST_CASE(validateHeaderRejectsUnknownVersion)
+{
+    auto header = makeEthHeader(EthBlockVersion::LONDON);
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().ethBlockVersion = static_cast<tars::Char>(200);  // not a named EthBlockVersion
+
+    bcos::Error::UniquePtr error;
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
+    BOOST_CHECK(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+}
+
+// Each fork version must round-trip to its own derived version (encode -> decode -> version).
+BOOST_AUTO_TEST_CASE(versionDerivationRoundTrip)
+{
+    for (auto v : {EthBlockVersion::PRE_LONDON, EthBlockVersion::LONDON, EthBlockVersion::SHANGHAI,
+             EthBlockVersion::CANCUN, EthBlockVersion::PRAGUE})
+    {
+        auto header = makeEthHeader(v);
+        EthBlockHeader ethHeader(*header);
+        bytes rlp;
+        ethHeader.rlpEncode(rlp);
+
+        bcos::Error::UniquePtr error;
+        EthBlockHeader decoded;
+        error = EthBlockHeader::toEthBlockHeader(decoded, bcos::ref(rlp));
+        BOOST_CHECK(!error);
+        BOOST_CHECK_EQUAL(static_cast<uint8_t>(decoded.version()), static_cast<uint8_t>(v));
+    }
+}
+
+// Negative number/timestamp must be rejected by validateHeader (they would otherwise wrap
+// into a huge u64 on RLP encode).
+BOOST_AUTO_TEST_CASE(validateHeaderRejectsNegativeScalars)
+{
+    auto header = makeEthHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().data.blockNumber = -5;
+
+    bcos::Error::UniquePtr error;
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
+    BOOST_CHECK(error != nullptr);
+
+    // timestamp negative
+    auto header2 = makeEthHeader();
+    auto impl2 = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header2);
+    BOOST_REQUIRE(impl2 != nullptr);
+    impl2->inner().data.timestamp = -1;
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header2);
+    BOOST_CHECK(error != nullptr);
 }
 
 // Real mainnet golden vector: Ethereum block #19800000 (Cancun era, 20-item header).

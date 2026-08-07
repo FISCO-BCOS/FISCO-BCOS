@@ -19,10 +19,10 @@ bcos::protocol::Block::Ptr bcostars::protocol::BlockFactoryImpl::createBlock(
     auto block = std::make_shared<BlockImpl>();
     block->decode(_data, _calculateHash, _checkSig);
 
-    // For an Ethereum-standard header the hash is keccak256(rlp(header)), injected by the
-    // rlp-protocol layer (EthBlockHeader::setRLPHash) — a FISCO Tars hash computed here would
-    // be wrong and would silently overwrite nothing (calculateHash is idempotent for Eth
-    // headers). Skip the recompute so the injected RLP hash survives deserialization.
+    // For an Ethereum-standard header the hash is keccak256(rlp(header)), which
+    // BlockHeaderImpl::calculateHash computes on demand via the rlp-protocol bridge — a
+    // FISCO Tars hash computed here would be wrong for an Eth header. Only recompute for
+    // non-Eth headers whose hash is missing (e.g. block sync).
     if (block->blockHeader()->ethBlockVersion() == bcos::protocol::EthBlockVersion::NON_ETH &&
         block->inner().blockHeader.dataHash.empty())
     {

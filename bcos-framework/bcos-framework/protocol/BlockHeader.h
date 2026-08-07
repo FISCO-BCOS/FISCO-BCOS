@@ -99,7 +99,8 @@ public:
     // ---- FISCO-BCOS specific methods ----
     virtual uint32_t version() const = 0;
     // ethBlockVersion marks the Ethereum fork era of this header (see EthBlockVersion in
-    // Protocol.h). NON_ETH means the header is a native FISCO-BCOS header; 
+    // Protocol.h). NON_ETH means the header is a native FISCO-BCOS header; values 1..5 select
+    // the mandatory optional fields for the corresponding Ethereum fork.
     virtual bcos::protocol::EthBlockVersion ethBlockVersion() const = 0;
     virtual void setEthBlockVersion(bcos::protocol::EthBlockVersion _version) = 0;
     // Inject a pre-computed Ethereum RLP hash (set by the rlp-protocol layer via

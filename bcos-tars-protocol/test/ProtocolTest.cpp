@@ -658,25 +658,29 @@ BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHash)
     BOOST_CHECK(!error);
     auto ethHash = impl->hash();
 
-    // calculateHash on an Eth-versioned header keeps the injected RLP hash
+    // calculateHash on an Eth-versioned header recomputes keccak256(rlp(header)); since the
+    // fields did not change, the recomputed hash equals the previously injected one.
     impl->calculateHash(*cryptoSuite->hashImpl());
     BOOST_CHECK(impl->hash() == ethHash);
     // And it differs from the FISCO hash computed on the same fields
     BOOST_CHECK(ethHash != fiscoHash);
 }
 
-// Eth header without an injected RLP hash: calculateHash() is idempotent (keeps whatever
-// dataHash holds, never throws for an Eth header — consensus/sync paths rely on this), but
-// hash() still reports the missing hash by throwing.
+// A forged hash arriving on the wire on an invalid Eth header must not survive
+// calculateHash() — otherwise FIB-130's recompute-then-compare is a self-comparison.
+// This header is incomplete (LONDON but no fields), so calculateRLPHash fails and the
+// wire-supplied dataHash must be cleared rather than kept.
 BOOST_AUTO_TEST_CASE(blockHeaderEthCalculateHashMissing)
 {
     auto header = blockHeaderFactory->createBlockHeader();
     auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
     impl->setEthBlockVersion(bcos::protocol::EthBlockVersion::LONDON);
 
-    // calculateHash on an Eth header with no injected hash must not throw (idempotent).
+    // Forge a wire-supplied hash; it must not survive calculateHash.
+    impl->inner().dataHash.assign(32, static_cast<char>(0xaa));
     BOOST_CHECK_NO_THROW(impl->calculateHash(*cryptoSuite->hashImpl()));
-    // hash() still reports the empty dataHash.
+    // The header is invalid for LONDON (missing mandatory fields): hash() must throw because
+    // the forged value was cleared.
     BOOST_CHECK_THROW(impl->hash(), std::exception);
 }
 

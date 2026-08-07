@@ -68,9 +68,9 @@ struct EthBlockHeaderData
 // Error codes for EthBlockHeader conversion failures.
 enum class EthBlockHeaderError : int32_t
 {
-    InvalidHeader = 1,     // header misses a required Eth field
-    RlpDecodeFailed = 2,   // RLP decoding failed
-    InvalidHeaderType = 3, // header type mismatch
+    InvalidHeader = 1,      // header misses a required Eth field
+    RlpDecodeFailed = 2,    // RLP decoding failed
+    InvalidHeaderType = 3,  // header type mismatch
 };
 
 class EthBlockHeader
@@ -81,7 +81,7 @@ public:
     explicit EthBlockHeader(const bcos::protocol::BlockHeader& header);
 
     void rlpEncode(bcos::bytes& out) const;
-    bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
+    bcos::Error::UniquePtr rlpDecode(bcos::bytesRef data);
 
     // The fork version this header's fields correspond to (derived from the presence of
     // optional fields after rlpDecode). 0/NON_ETH means no Eth fields were decoded.
@@ -102,9 +102,9 @@ public:
     //  - calculateRLPHash: compute keccak256(rlp(header)) and inject it into the
     //    base-class header via setRLPHash.
     static bcos::Error::UniquePtr toTarsHeader(
-        bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
+        bcos::protocol::BlockHeader::Ptr header, bcos::bytesRef _data);
     static bcos::Error::UniquePtr toEthBlockHeader(
-        EthBlockHeader& ethHeader, bcos::bytesConstRef _data);
+        EthBlockHeader& ethHeader, bcos::bytesRef _data);
     static bcos::Error::UniquePtr calculateRLPHash(bcos::protocol::BlockHeader& header);
 
     const EthBlockHeaderData& data() const { return m_data; }

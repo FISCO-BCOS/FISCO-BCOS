@@ -21,6 +21,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
+#include <cstring>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;
@@ -43,7 +44,7 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
 }
 
 bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
-    bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
+    bcos::protocol::BlockHeader::Ptr header, bcos::bytesRef _data)
 {
     if (header == nullptr)
     {
@@ -123,7 +124,7 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
 }
 
 bcos::Error::UniquePtr EthBlockHeader::toEthBlockHeader(
-    EthBlockHeader& ethHeader, bcos::bytesConstRef _data)
+    EthBlockHeader& ethHeader, bcos::bytesRef _data)
 {
     auto err = ethHeader.rlpDecode(_data);
     if (err)
@@ -150,23 +151,22 @@ bool EthBlockHeader::validateHeader(
     {
         return invalid("EthBlockHeader: not an Ethereum header (EthBlockVersion == NON_ETH)");
     }
+    // Reject wire-supplied versions outside the known fork range: an unknown value would
+    // behave like PRAGUE (demanding every fork field) without being a named enum value.
+    if (static_cast<uint8_t>(version) > static_cast<uint8_t>(EthBlockVersion::PRAGUE))
+    {
+        return invalid("EthBlockHeader: unsupported EthBlockVersion " +
+                       std::to_string(static_cast<int>(version)));
+    }
 
     // Mandatory fields, required by every Eth version.
     auto parent = _header.parentInfo();
-    if (parent.blockHash.size() != crypto::HashType::SIZE)
+    if (parent.blockNumber == 0 && parent.blockHash == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad parentInfo.blockHash");
     }
     // The base-class accessors return fixed-size FixedBytes: a "not set" field surfaces as
     // all-zero bytes. Check for all-zero rather than size.
-    if (_header.coinbase() == bcos::Address{})
-    {
-        return invalid("EthBlockHeader: missing or bad coinbase");
-    }
-    if (_header.uncleHash() == bcos::crypto::HashType{})
-    {
-        return invalid("EthBlockHeader: missing or bad uncleHash");
-    }
     if (_header.stateRoot() == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad stateRoot");
@@ -178,10 +178,6 @@ bool EthBlockHeader::validateHeader(
     if (_header.receiptsRoot() == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad receiptRoot");
-    }
-    if (_header.prevRandao() == bcos::h256{})
-    {
-        return invalid("EthBlockHeader: missing or bad prevRandao");
     }
     if (_header.logsBloom().size() != bcos::Bloom{}.size())
     {
@@ -201,7 +197,7 @@ bool EthBlockHeader::validateHeader(
     // Fork-gated optional fields: a version N header must carry every field introduced by
     // version N and all earlier fork-gated fields.
     auto requireForkField = [&](EthBlockVersion _minVersion, const std::string& _field,
-                               bool _present) {
+                                bool _present) {
         if (static_cast<uint8_t>(version) >= static_cast<uint8_t>(_minVersion) && !_present)
         {
             return invalid("EthBlockHeader: missing " + _field + " for EthBlockVersion " +
@@ -214,8 +210,8 @@ bool EthBlockHeader::validateHeader(
     {
         return false;
     }
-    if (!requireForkField(EthBlockVersion::SHANGHAI, "withdrawalsRoot",
-            _header.withdrawalsRoot().has_value()))
+    if (!requireForkField(
+            EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value()))
     {
         return false;
     }
@@ -235,6 +231,49 @@ bool EthBlockHeader::validateHeader(
         return false;
     }
     if (!requireForkField(
+            EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value()))
+    {
+        return false;
+    }
+
+    // Symmetric check: a fork-gated field must not be present when the header's version is
+    // older than the fork that introduced it. RLP lists are positional — a field above the
+    // declared version would shift every later field down one slot on re-encode, so a header
+    // that passes this check is guaranteed to be a canonical Ethereum header for its version.
+    auto forbidForkField = [&](EthBlockVersion _minVersion, const std::string& _field,
+                               bool _present) {
+        if (static_cast<uint8_t>(version) < static_cast<uint8_t>(_minVersion) && _present)
+        {
+            return invalid("EthBlockHeader: unexpected " + _field + " for EthBlockVersion " +
+                           std::to_string(static_cast<int>(version)));
+        }
+        return true;
+    };
+
+    if (!forbidForkField(EthBlockVersion::LONDON, "baseFee", _header.baseFee().has_value()))
+    {
+        return false;
+    }
+    if (!forbidForkField(
+            EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value()))
+    {
+        return false;
+    }
+    if (!forbidForkField(EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value()))
+    {
+        return false;
+    }
+    if (!forbidForkField(
+            EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value()))
+    {
+        return false;
+    }
+    if (!forbidForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
+            _header.parentBeaconBlockRoot().has_value()))
+    {
+        return false;
+    }
+    if (!forbidForkField(
             EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value()))
     {
         return false;
@@ -305,29 +344,25 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
 
 void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 {
-    codec::rlp::encode(out, m_data.parentInfo.blockHash,
-        m_data.uncleHash,  
-        m_data.coinbase, m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot,
-        bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()),
-        m_data.difficulty, static_cast<uint64_t>(m_data.number), m_data.gasLimit, m_data.gasUsed,
+    codec::rlp::encode(out, m_data.parentInfo.blockHash, m_data.uncleHash, m_data.coinbase,
+        m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot,
+        bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()), m_data.difficulty,
+        static_cast<uint64_t>(m_data.number), m_data.gasLimit, m_data.gasUsed,
         static_cast<uint64_t>(m_data.timestamp), m_data.extraData, m_data.prevRandao, m_data.nonce,
         m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed, m_data.excessBlobGas,
         m_data.parentBeaconRoot, m_data.requestsHash);
 }
 
-bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
+bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesRef out)
 {
-    auto mutableData = data.toBytes();
-    bytesRef ref(mutableData.data(), mutableData.size());
-
     uint64_t _number = 0;
     uint64_t _timestamp = 0;
 
-    auto error = codec::rlp::decode(ref, m_data.parentInfo.blockHash, m_data.uncleHash,
+    auto error = codec::rlp::decode(out, m_data.parentInfo.blockHash, m_data.uncleHash,
         m_data.coinbase, m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot, m_data.logsBloom,
         m_data.difficulty, _number, m_data.gasLimit, m_data.gasUsed, _timestamp, m_data.extraData,
-        m_data.prevRandao, m_data.nonce, m_data.baseFee, m_data.withdrawalsHash,
-        m_data.blobGasUsed, m_data.excessBlobGas, m_data.parentBeaconRoot, m_data.requestsHash);
+        m_data.prevRandao, m_data.nonce, m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed,
+        m_data.excessBlobGas, m_data.parentBeaconRoot, m_data.requestsHash);
     if (error)
     {
         return error;

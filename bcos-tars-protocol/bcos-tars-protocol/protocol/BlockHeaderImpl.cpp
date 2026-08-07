@@ -73,6 +73,7 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
         auto err = bcos::protocol::EthBlockHeader::calculateRLPHash(*this);
         if (err)
         {
+            clearDataHash();
             BCOS_LOG(WARNING) << LOG_DESC("calculateHash: Eth header validation failed")
                               << LOG_KV("error", err->errorMessage());
         }
@@ -302,12 +303,12 @@ uint32_t bcostars::protocol::BlockHeaderImpl::version() const
 }
 bcos::protocol::EthBlockVersion bcostars::protocol::BlockHeaderImpl::ethBlockVersion() const
 {
-    return static_cast<bcos::protocol::EthBlockVersion>(m_inner->EthBlockVersion);
+    return static_cast<bcos::protocol::EthBlockVersion>(m_inner->ethBlockVersion);
 }
 void bcostars::protocol::BlockHeaderImpl::setEthBlockVersion(
     bcos::protocol::EthBlockVersion _version)
 {
-    m_inner->EthBlockVersion = static_cast<uint8_t>(_version);
+    m_inner->ethBlockVersion = static_cast<uint8_t>(_version);
 }
 bcos::protocol::BlockNumber bcostars::protocol::BlockHeaderImpl::number() const
 {
