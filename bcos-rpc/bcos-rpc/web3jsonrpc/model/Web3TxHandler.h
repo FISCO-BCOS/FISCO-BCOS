@@ -43,6 +43,8 @@ struct Web3TxHandler
         bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
 };
 
-// Dispatch by type via a lookup table. Unknown types fall back to the Legacy handler (defensive).
+// Dispatch by type via a lookup table. Unknown types return a no-op sentinel that logs FATAL
+// and fails every operation (encode/encodeForSign return empty bytes, decode returns
+// UnsupportedTransactionType). There is no silent fallback to Legacy.
 Web3TxHandler& handlerFor(TransactionType type);
 }  // namespace bcos::rpc

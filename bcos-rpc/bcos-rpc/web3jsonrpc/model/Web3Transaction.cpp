@@ -254,9 +254,14 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 {
     // Delegate to the handler. Move the returned vector into `out` to avoid a double allocation:
     // the handler already reserves internally and returns a complete buffer; copying it into out
-    // would allocate a second time. Callers pass an empty `out` (the previous append semantics
-    // matched move for the empty case), so move-assign preserves compatibility.
-    out = handlerFor(tx.type).encode(tx);
+    // would allocate a second time.
+    //
+    // ⚠️ Contract: this is the ONLY encode() overload that assigns (overwrites) `out` rather than
+    // appending. Every other overload in codec::rlp appends. The assert documents this invariant;
+    // if a caller ever passes a non-empty buffer, change this to insert() or handle both paths.
+    auto encoded = handlerFor(tx.type).encode(tx);
+    assert(out.empty());
+    out = std::move(encoded);
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
 {
