@@ -29,14 +29,17 @@ namespace bcos
 {
 namespace consensus
 {
+/// OP 模式短路回调错误码：区别于 invalid proposal 的 -1。
+constexpr int64_t c_opModeExecutionDisabled = -2;
+
 class StateMachine : public StateMachineInterface, public std::enable_shared_from_this<StateMachine>
 {
 public:
     StateMachine(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::IOServicePool::Ptr _ioServicePool)
+        bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode = false)
       : m_scheduler(std::move(_scheduler)), m_blockFactory(std::move(_blockFactory)),
-        m_strand(std::move(_ioServicePool))
+        m_strand(std::move(_ioServicePool)), m_opStackMode(opStackMode)
     {}
 
     void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
@@ -57,6 +60,8 @@ protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::Strand m_strand;
+    /// OP 模式（executor_version>=3）：PBFT 不得执行区块（Engine API executeOpBlock 是唯一驱动）。
+    bool m_opStackMode = false;
 };
 }  // namespace consensus
 }  // namespace bcos

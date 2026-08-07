@@ -54,6 +54,17 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
     ProposalInterface::Ptr _proposal, ProposalInterface::Ptr _executedProposal,
     std::function<void(int64_t)> _onExecuteFinished)
 {
+    if (m_opStackMode)
+    {
+        // OP 模式：区块执行由 Engine API 的 executeOpBlock 驱动；PBFT 不得双执行。
+        CONSENSUS_LOG(INFO) << LOG_DESC("PBFT executeBlock gated in OP mode (W3)")
+                            << LOG_KV("proposalIndex", _proposal ? _proposal->index() : -1);
+        if (_onExecuteFinished)
+        {
+            _onExecuteFinished(c_opModeExecutionDisabled);
+        }
+        return;
+    }
     if (_proposal->index() <= _lastAppliedProposal->index())
     {
         CONSENSUS_LOG(WARNING) << LOG_DESC("asyncApply: the proposal has already been applied")
@@ -153,6 +164,15 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
 void StateMachine::preApply(
     ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished)
 {
+    if (m_opStackMode)
+    {
+        CONSENSUS_LOG(INFO) << LOG_DESC("PBFT preExecuteBlock gated in OP mode (W3)");
+        if (_onPreApplyFinished)
+        {
+            _onPreApplyFinished(false);
+        }
+        return;
+    }
     auto block = m_blockFactory->createBlock(_proposal->data());
 
     auto startT = utcTime();
