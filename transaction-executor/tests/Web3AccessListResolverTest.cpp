@@ -115,7 +115,8 @@ BOOST_AUTO_TEST_CASE(Web3AccessListResolver_end_to_end_warm)
     auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
-    bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });
+    bcostars::protocol::TransactionImpl txImpl(
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<false>{}, tarsHolder.get()));
 
     auto const resolved = bcos::executor::resolveWeb3AccessList(txImpl);
     BOOST_CHECK_EQUAL(
