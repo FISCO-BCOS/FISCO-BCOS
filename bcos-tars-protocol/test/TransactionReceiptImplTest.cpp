@@ -304,10 +304,8 @@ BOOST_AUTO_TEST_CASE(opStackMetaDepositRoundTrip)
     BOOST_CHECK_EQUAL(*got->deposit_receipt_version, 1u);
 }
 
-// OLD dev-stage data: tag 8 held `optional string opReceiptMeta` (RLP payload). Now that
-// tag 8 is an OpStackReceiptMeta struct, tars reports a type mismatch -- it does NOT decode
-// to an empty struct or garbage fields. Empirically confirms "direct replacement of tag 8"
-// is NOT backward compatible with persisted old-format OP receipts (dev stage: none exist).
+// Old-format tag 8 (`optional string opReceiptMeta`) decoding now reports a tars type
+// mismatch rather than decoding into the struct.
 BOOST_AUTO_TEST_CASE(opStackMetaLegacyStringTag8Throws)
 {
     auto wire = encodeReceiptWithStringTag8("0x0102deadbeef");
