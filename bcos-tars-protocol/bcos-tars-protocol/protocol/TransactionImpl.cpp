@@ -417,6 +417,12 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
 
 std::string_view bcostars::protocol::TransactionImpl::sourceHash() const
 {
+    // sourceHash is deposit-only metadata (Transaction.h: "Empty/false when not a deposit").
+    // Guard against non-deposit txs with a populated tars field (corrupt/wire data).
+    if (!isDepositTx())
+    {
+        return {};
+    }
     // Unprefixed hex (the asymmetry with mint()'s "0x"+hex is by design: sourceHash is a hash
     // string, mint is a numeric value). Consumers output it directly or parse with fromHex; do
     // not assume a prefix.
@@ -425,6 +431,12 @@ std::string_view bcostars::protocol::TransactionImpl::sourceHash() const
 
 bcos::u256 bcostars::protocol::TransactionImpl::mint() const
 {
+    // mint is deposit-only metadata (Transaction.h: "Empty/false when not a deposit").
+    // Guard against non-deposit txs with a populated tars field (corrupt/wire data).
+    if (!isDepositTx())
+    {
+        return 0;
+    }
     if (m_inner()->mint.empty())
     {
         return 0;

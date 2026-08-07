@@ -248,6 +248,18 @@ struct LegacyTxHandler : Web3TxHandler
                 return decodeError;
             }
             out.chainId.emplace(chainId);
+            // EIP-155: encodeForSign appends two uint64_t(0) placeholders after chainId
+            // (the unsigned preimage's v=0, r=0, s=0). Consume them so the trailing-bytes
+            // check in Web3Transaction::decode does not reject this as InputTooLong.
+            if (!in.empty())
+            {
+                uint64_t dummy = 0;
+                decodeError = codec::rlp::decode(in, dummy);
+                if (decodeError == nullptr && !in.empty())
+                {
+                    decodeError = codec::rlp::decode(in, dummy);
+                }
+            }
         }
         if (withSig)
         {
