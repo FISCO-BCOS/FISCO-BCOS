@@ -27,6 +27,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -109,16 +110,26 @@ def load_fixtures(fixture_dir, pattern="*.json"):
 
 
 # ----------------------------------------------------------------------------- config
+# Port stride per unit. A unit at idx and idx+STRIDE would share a port; the stride
+# must exceed the largest in-flight window (heavy units like many_delegations / memory
+# tests take ~60s while fast units take <1s, so with 8 workers ~150+ units can be
+# concurrent — a stride of 40 collided, querying the wrong node -> spurious
+# "code 0x"/"balance 0" failures). For parallel harness processes use port_offset
+# multiples of PORT_STRIDE (0, 4000, 8000, ...) so their port bands stay disjoint.
+PORT_STRIDE = 4000
+
+
 def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=0):
     """Write config.ini + config.genesis reproducing the fixture env/pre.
 
     idx selects this unit's ports (unique per concurrent node):
-      legacy jsonrpc = 30000+idx%40, web3_rpc = 20000+idx%40, p2p = 21000+idx%40,
-      plus port_offset (for running multiple harness processes in parallel).
+      legacy jsonrpc = 30000+idx%PORT_STRIDE, web3_rpc = 20000+idx%PORT_STRIDE,
+      p2p = 21000+idx%PORT_STRIDE, plus port_offset (parallel processes must use
+      offsets that are multiples of PORT_STRIDE).
     """
-    rpc_port = 20000 + (idx % 40) + port_offset
-    p2p_port = 21000 + (idx % 40) + port_offset
-    legacy_port = 30000 + (idx % 40) + port_offset
+    rpc_port = 20000 + (idx % PORT_STRIDE) + port_offset
+    p2p_port = 21000 + (idx % PORT_STRIDE) + port_offset
+    legacy_port = 30000 + (idx % PORT_STRIDE) + port_offset
     env = fixture.env
     base_fee = env.get("currentBaseFee", "0x0")
     # tx.gas_limit is parsed as a decimal number by NodeConfig (checkAndGetValue), while
@@ -254,8 +265,16 @@ class Node:
     def start(self):
         env = dict(os.environ)
         logf = open(self.workdir / "node.log", "w")
+        # Raise the main-thread stack (ulimit -s) before exec. Importing a very
+        # large genesis (e.g. EEST many_delegations non_empty_balance: 4800
+        # accounts) overflows the default 8MB stack in RocksDB's WAL/crc32c path
+        # (SIGSEGV in crc32c::gf_multiply_sw); 64MB is plenty. A bash wrapper is
+        # used instead of subprocess preexec_fn because the harness runs under a
+        # ThreadPoolExecutor (preexec_fn is unsafe in multi-threaded parents).
+        inner = [self.binary, "-c", "config.ini", "-g", "config.genesis"]
+        inner = " ".join(shlex.quote(a) for a in inner)
         self.proc = subprocess.Popen(
-            [self.binary, "-c", "config.ini", "-g", "config.genesis"],
+            ["bash", "-c", f"ulimit -s 65536 && exec {inner}"],
             cwd=str(self.workdir), stdout=logf, stderr=subprocess.STDOUT, env=env,
             start_new_session=True)
         for _ in range(60):
@@ -546,7 +565,7 @@ def run_one_fixture(args, fixture, fork_key, post_entry, workdir, idx):
     if not fork_rev:
         return None  # unsupported fork, skip
     gen_config(workdir, fixture, fork_rev, idx, port_offset=args.port_offset)
-    rpc_port = 20000 + (idx % 40) + args.port_offset
+    rpc_port = 20000 + (idx % PORT_STRIDE) + args.port_offset
     node = Node(args.binary, workdir, rpc_port)
     try:
         if not node.start():
@@ -691,8 +710,8 @@ def main():
         nodes_json = tmpl / "nodes.json"
         if nodes_json.exists():
             shutil.copy(nodes_json, wd / "nodes.json")
-        rpc_port = 20000 + (idx % 40) + args.port_offset
-        p2p_port = 21000 + (idx % 40) + args.port_offset
+        rpc_port = 20000 + (idx % PORT_STRIDE) + args.port_offset
+        p2p_port = 21000 + (idx % PORT_STRIDE) + args.port_offset
         # Record which fixture this workdir belongs to (idx -> fixture mapping is
         # deterministic but expensive to rebuild; a stamp in the workdir makes the
         # FAILED-unit set directly inspectable after a run).
