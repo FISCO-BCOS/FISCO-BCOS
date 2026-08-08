@@ -17,6 +17,7 @@
 #include "EESTRunner.h"
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-evm/eth/state/block.hpp"
 #include "bcos-evm/eth/state/system_contracts.hpp"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -27,6 +28,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/TBBWait.h"
+#include "TestStorageBridge.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <tbb/concurrent_vector.h>
@@ -794,7 +796,11 @@ public:
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         transactionFactory(cryptoSuite),
         receiptFactory(cryptoSuite),
-        executor(receiptFactory, cryptoSuite->hashImpl(), m_blockHashes)
+        executor(receiptFactory,
+            [blockHashes = m_blockHashes](
+                int64_t blockNumber, int64_t /*currentHeight*/) -> evmc::bytes32 {
+                return blockHashes->get_block_hash(blockNumber);
+            })
     {}
 
     void configureFork(std::string const& forkName)
@@ -1709,12 +1715,12 @@ public:
                 }
                 // blob_base_fee is left as nullopt — system contracts don't need it
 
-                eth::StorageStateView<MutableStorage> stateView(storage);
+                ::bcos::test::TestStorageStateView<MutableStorage> stateView(storage);
                 auto sysDiff = evmone::state::system_call_block_start(
                     stateView, bi, blockHashes, blockRev, executor.vm());
 
-                task::tbb::syncWait(
-                    eth::applyStateDiff(storage, sysDiff, blockRev, *cryptoSuite->hashImpl()));
+                task::tbb::syncWait(::bcos::test::testApplyStateDiff(
+                    storage, sysDiff, *cryptoSuite->hashImpl()));
             }
 
             for (auto const& tx : block.transactions)
@@ -1763,11 +1769,11 @@ public:
                 ++txIndex;
             }
 
-            // Convert withdrawals to evmone format
-            std::vector<evmone::state::Withdrawal> evmWithdrawals;
+            // Convert withdrawals to the executor's EthWithdrawal format
+            std::vector<eth::EthWithdrawal> evmWithdrawals;
             for (auto const& w : block.withdrawals)
             {
-                evmone::state::Withdrawal ew;
+                eth::EthWithdrawal ew;
                 ew.index = static_cast<uint64_t>(test::hexToInt64(w.index));
                 ew.validator_index = static_cast<uint64_t>(test::hexToInt64(w.validatorIndex));
                 auto addrBytes = test::hexToBytes(w.address);
@@ -1838,13 +1844,13 @@ public:
                     }
                 }
 
-                eth::StorageStateView<MutableStorage> stateViewEnd(storage);
+                ::bcos::test::TestStorageStateView<MutableStorage> stateViewEnd(storage);
                 auto endResult = evmone::state::system_call_block_end(
                     stateViewEnd, biEnd, blockHashes, blockRev, executor.vm());
                 if (endResult.has_value())
                 {
-                    task::tbb::syncWait(eth::applyStateDiff(
-                        storage, endResult->state_diff, blockRev, *cryptoSuite->hashImpl()));
+                    task::tbb::syncWait(::bcos::test::testApplyStateDiff(
+                        storage, endResult->state_diff, *cryptoSuite->hashImpl()));
                 }
             }
         }

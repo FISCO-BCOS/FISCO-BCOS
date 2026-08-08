@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include "EthereumBlockHashLookup.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -44,7 +45,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "ethereum-executor/EthereumExecutor.h"
-#include "ethereum-executor/StorageBlockHashes.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
@@ -309,15 +309,23 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // EthereumExecutor (executor_version=2): pure-Ethereum execution layer driven through the
     // same scheduler prepare()/execute()/finish() pipeline as TransactionExecutorImpl.
-    // The injected StorageBlockHashes provider resolves BLOCKHASH against the committed
-    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash LedgerMethod), so
-    // it outlives any single block's execute view — matching the semantics documented in
-    // EthereumExecutor.h.
+    // The injected block-hash lookup resolves BLOCKHASH against the committed
+    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash
+    // LedgerMethod), so it outlives any single block's execute view — matching the
+    // semantics documented in EthereumExecutor.h. The lookup fails closed: a broken
+    // backend or an out-of-window request reports an unknown block (zero hash).
+    // It reads storage directly (no cache): one getBlockHash read per BLOCKHASH.
+    // The 256-ancestor window is bounded by the current block height, which the
+    // executor's execution context already knows (EthereumHost passes
+    // m_block.number), so no storage read for the current height is needed.
+    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
+                                       int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
+        // The body lives in EthereumBlockHashLookup.h (shared with the
+        // scheduler integration test so they exercise the same provider).
+        return ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
+    };
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
-        *m_protocolInitializer->blockFactory()->receiptFactory(),
-        m_protocolInitializer->cryptoSuite()->hashImpl(),
-        std::make_shared<executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
-            m_globalStateStorageInitializer->storage().latestBackend()));
+        *m_protocolInitializer->blockFactory()->receiptFactory(), std::move(ethereumBlockHashLookup));
 
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
