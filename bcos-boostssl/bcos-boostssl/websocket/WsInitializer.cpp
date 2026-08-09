@@ -135,17 +135,22 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
-        httpServer->setWsUpgradeHandler(
-            [wsServiceWeakPtr](std::shared_ptr<HttpStream> _httpStream, HttpRequest&& _httpRequest,
-                std::shared_ptr<std::string> _nodeId) {
-                auto service = wsServiceWeakPtr.lock();
-                if (service)
-                {
-                    std::string nodeIdString = _nodeId == nullptr ? "" : *_nodeId;
-                    auto session = service->newSession(_httpStream->wsStream(), nodeIdString);
-                    session->startAsServer(std::move(_httpRequest));
-                }
-            });
+        if (_config->enableWebSocket())
+        {
+            httpServer->setWsUpgradeHandler(
+                [wsServiceWeakPtr](std::shared_ptr<HttpStream> _httpStream,
+                    HttpRequest&& _httpRequest, std::shared_ptr<std::string> _nodeId) {
+                    auto service = wsServiceWeakPtr.lock();
+                    if (service)
+                    {
+                        std::string nodeIdString = _nodeId == nullptr ? "" : *_nodeId;
+                        auto session = service->newSession(_httpStream->wsStream(), nodeIdString);
+                        session->startAsServer(std::move(_httpRequest));
+                    }
+                });
+        }
+        // else: WS upgrades are rejected by HttpSession (no wsUpgradeHandler registered),
+        // making this an HTTP-only port.
 
         _wsService->setHttpServer(httpServer);
         _wsService->setHostPort(_config->listenIP(), _config->listenPort());

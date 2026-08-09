@@ -90,11 +90,11 @@ struct CompatExecutorSmokeFixture
 
     void nextBlockHeader(executor::TransactionExecutor& exec, protocol::BlockNumber number)
     {
-        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-            [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
         blockHeader->setNumber(number);
-        std::vector<protocol::ParentInfo> parentInfos{{{number - 1, h256(number - 1)}}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = number - 1, .blockHash = h256(number - 1)};
+        blockHeader->setParentInfo(parentInfo);
         ledger->setBlockNumber(number - 1);
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;

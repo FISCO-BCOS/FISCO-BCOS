@@ -64,7 +64,7 @@ bcos::h256 syntheticHash(std::string_view seed);
 
 std::vector<std::string> supportedCapabilities();
 
-bool isGetPayloadVersionCompatible(EngineApiVersion requestVersion, std::uint32_t payloadVersion);
+bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
 
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
@@ -250,7 +250,7 @@ public:
             .shouldOverrideBuilder = false,
             .view = std::make_shared<ViewType>(std::move(view)),
         };
-        if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
+        if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
         }
@@ -307,8 +307,8 @@ private:
 
     static bool isVersionSupported(std::uint32_t version)
     {
-        return version >= static_cast<std::uint32_t>(EngineApiVersion::V1) &&
-               version <= static_cast<std::uint32_t>(EngineApiVersion::V3);
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V3);
     }
 
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -316,9 +316,9 @@ private:
         std::optional<std::string> validationError = std::nullopt)
     {
         return PayloadStatus{
-            .status = status,
             .latestValidHash = latestValidHash,
             .validationError = std::move(validationError),
+            .status = status,
         };
     }
 
@@ -337,19 +337,20 @@ private:
             BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
         }
         if (!detail::isGetPayloadVersionCompatible(
-                static_cast<EngineApiVersion>(version), it->second.version))
+                static_cast<ApiVersion>(version), it->second.version))
         {
             BOOST_THROW_EXCEPTION(
                 IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                     "Payload version is incompatible with requested method version"});
         }
 
-        return GetPayloadResult{
+        return std::make_unique<GetPayloadData>(GetPayloadData{
             .executionPayload = it->second.executionPayload,
             .blockValue = it->second.blockValue,
             .blobsBundle = it->second.blobsBundle,
             .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
-        };
+            .executionRequests = std::nullopt,
+        });
     }
 
     bcos::task::Task<PayloadStatus> handleNewPayload(
@@ -417,7 +418,7 @@ private:
             .shouldOverrideBuilder = false,
             .view = nullptr,
         };
-        if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
+        if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
         }
@@ -448,31 +449,33 @@ private:
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
         ExecutionPayload executionPayload{
+            .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
-            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .stateRoot = detail::syntheticHash(std::string("state") + payloadId),
             .receiptsRoot = detail::syntheticHash(std::string("receipts") + payloadId),
-            .logsBloom = Bloom{},
             .prevRandao = payloadAttributes.prevRandao,
-            .blockNumber = nextBlockNumber,
             .gasLimit = 0,
             .gasUsed = 0,
-            .timestamp = payloadAttributes.timestamp,
-            .extraData = {},
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(sealedTxs),
+            .extraData = {},
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .timestamp = payloadAttributes.timestamp,
+            .blockNumber = nextBlockNumber,
             .withdrawals = std::nullopt,
             .blobGasUsed = std::nullopt,
             .excessBlobGas = std::nullopt,
+            .blockAccessList = std::nullopt,
+            .slotNumber = std::nullopt,
         };
 
-        if (version >= static_cast<std::uint32_t>(EngineApiVersion::V2))
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
         {
             executionPayload.withdrawals =
                 payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{});
         }
-        if (version >= static_cast<std::uint32_t>(EngineApiVersion::V3))
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
@@ -492,9 +495,9 @@ private:
         if (executionPayload.transactions.empty())
         {
             auto emptyHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-            std::vector<bcos::protocol::ParentInfo> parentInfos{
-                {.blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash}};
-            emptyHeader->setParentInfo(parentInfos);
+            bcos::protocol::ParentInfo parentInfo{
+                .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash};
+            emptyHeader->setParentInfo(parentInfo);
             emptyHeader->setNumber(nextBlockNumber);
             emptyHeader->setVersion(blockVersion);
             emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
@@ -512,9 +515,9 @@ private:
 
         // Step 2b: Create BlockHeader for the new block
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {.blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash}};
-        blockHeader->setParentInfo(parentInfos);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash};
+        blockHeader->setParentInfo(parentInfo);
         blockHeader->setNumber(nextBlockNumber);
         blockHeader->setVersion(blockVersion);
         blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));

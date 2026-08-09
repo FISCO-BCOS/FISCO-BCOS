@@ -63,6 +63,42 @@ BOOST_AUTO_TEST_CASE(testHex)
     BOOST_CHECK(isHexString("000123123") == true);
 }
 
+/// Strict hex-quantity parsing (fromQuantity / safeFromQuantity): optional 0x prefix,
+/// hex digits only, no leading sign, no trailing garbage, must fit in uint64.
+BOOST_AUTO_TEST_CASE(testQuantity)
+{
+    // Valid forms.
+    BOOST_CHECK_EQUAL(fromQuantity("0x10"), 0x10u);
+    BOOST_CHECK_EQUAL(fromQuantity("0Xff"), 0xffu);
+    BOOST_CHECK_EQUAL(fromQuantity("10"), 0x10u);  // bare hex, not decimal
+    BOOST_CHECK_EQUAL(fromQuantity("0x7fffffffffffffff"),
+        static_cast<uint64_t>(0x7fffffffffffffffULL));
+    BOOST_CHECK_EQUAL(fromQuantity("ffffffffffffffff"), UINT64_MAX);
+
+    // Strict: trailing garbage / signs / empty are rejected (previously stoull silently
+    // truncated at the first non-hex character and accepted a leading '-').
+    BOOST_CHECK_THROW(fromQuantity("chain0"), std::invalid_argument);  // 'h' is not hex
+    BOOST_CHECK_THROW(fromQuantity("0x10zz"), std::invalid_argument);
+    BOOST_CHECK_THROW(fromQuantity("-1"), std::invalid_argument);
+    BOOST_CHECK_THROW(fromQuantity("+1"), std::invalid_argument);
+    BOOST_CHECK_THROW(fromQuantity("0x"), std::invalid_argument);
+    BOOST_CHECK_THROW(fromQuantity(""), std::invalid_argument);
+    BOOST_CHECK_THROW(fromQuantity("0x0x1a"), std::invalid_argument);
+    BOOST_CHECK_THROW(fromQuantity("10000000000000000"), std::invalid_argument);  // > uint64
+
+    // Non-throwing companion mirrors the above as nullopt.
+    BOOST_CHECK(safeFromQuantity("0x10") == 0x10u);
+    BOOST_CHECK(safeFromQuantity("10") == 0x10u);
+    BOOST_CHECK(!safeFromQuantity("chain0").has_value());
+    BOOST_CHECK(!safeFromQuantity("0x10zz").has_value());
+    BOOST_CHECK(!safeFromQuantity("-1").has_value());
+    BOOST_CHECK(!safeFromQuantity("+1").has_value());
+    BOOST_CHECK(!safeFromQuantity("0x").has_value());
+    BOOST_CHECK(!safeFromQuantity("").has_value());
+    BOOST_CHECK(!safeFromQuantity("0x0x1a").has_value());
+    BOOST_CHECK(!safeFromQuantity("10000000000000000").has_value());
+}
+
 /// test asString && asBytes
 BOOST_AUTO_TEST_CASE(testStringTrans)
 {

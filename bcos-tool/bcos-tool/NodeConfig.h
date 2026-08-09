@@ -60,6 +60,7 @@ public:
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
 
@@ -187,6 +188,15 @@ public:
     size_t ioThreadCount() const;
     size_t tbbThreadCount() const;
 
+    // op engine rpc configurations
+    bool enableOpEngineRpc() const;
+    const std::string& opEngineRpcListenIP() const;
+    uint16_t opEngineRpcListenPort() const;
+    uint32_t opEngineHttpBodySizeLimit() const;
+    uint32_t opEngineBatchRequestSizeLimit() const;
+    const std::string& opEngineJwtSecretFile() const;
+    int32_t opEngineClockSkewSecs() const;
+
     // the gateway configurations
     const std::string& p2pListenIP() const;
     uint16_t p2pListenPort() const;
@@ -281,6 +291,10 @@ public:
     bool preStoreBackpressureEnabled() const;
     size_t preStoreMaxInflight() const;
     int executorVersion() const;
+    /// EVMC revision config (ethereum-executor, executor_version=2): explicit single
+    /// revision applied to all blocks, plus block-height fork transitions.
+    std::optional<evmc_revision> evmcRevision() const;
+    std::map<protocol::BlockNumber, evmc_revision> const& evmcRevisionForks() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -463,6 +477,15 @@ private:
     // thread pool configuration
     size_t m_ioThreadCount{};
     size_t m_tbbThreadCount{};
+
+    // config for op engine rpc
+    bool m_enableOpEngineRpc = false;
+    std::string m_opEngineRpcListenIP = "127.0.0.1";
+    uint16_t m_opEngineRpcListenPort{};
+    uint32_t m_opEngineHttpBodySizeLimit{};
+    uint32_t m_opEngineBatchRequestSizeLimit{};
+    std::string m_opEngineJwtSecretFile;
+    int32_t m_opEngineClockSkewSecs{60};
 
     // config for gateway
     std::string m_p2pListenIP;

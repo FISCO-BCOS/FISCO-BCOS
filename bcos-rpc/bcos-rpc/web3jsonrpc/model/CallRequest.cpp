@@ -22,6 +22,7 @@
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-task/Wait.h"
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -30,7 +31,7 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     bcos::protocol::TransactionFactory::Ptr const& factory,
     bcos::scheduler::SchedulerInterface::Ptr const& scheduler) noexcept
 {
-    std::string nonce = "";
+    std::string nonce;
     if (to.empty() && scheduler) [[unlikely]]
     {
         // estimate gas deploy contract
@@ -39,7 +40,26 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
             if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
                     bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
             {
-                nonce = entry->get();
+                // FISCO stores account nonces as DECIMAL strings (EVMAccount writes
+                // convert_to<std::string>(); StorageStateView reads them unprefixed),
+                // and the transaction nonce is parsed as HEX downstream — both
+                // bcosTransactionToEvmone (safeFromQuantity) and TransactionExecutorImpl
+                // (hex2u) treat it as hex. So the stored decimal must be converted to a
+                // hex quantity here, otherwise a deployment eth_estimateGas at nonce >= 10
+                // gets its decimal "12" misread as hex 0x12 = 18 (NONCE_TOO_HIGH). 0-9
+                // coincide in both bases, which is why only the 11th+ deployment would break.
+                //
+                // The all-digits guard keeps this noexcept-safe: bcos::u256 throws on an
+                // unparseable string (std::terminate out of noexcept), and an empty or
+                // non-numeric stored nonce is left unset (empty nonce string) — a corrupt
+                // row falls back to the executor reading the sender's state nonce rather
+                // than aborting the RPC.
+                if (auto const raw = entry->get();
+                    !raw.empty() && std::all_of(raw.begin(), raw.end(),
+                                        [](char c) { return c >= '0' && c <= '9'; }))
+                {
+                    nonce = toQuantity(bcos::u256(raw));
+                }
             }
         }
     }

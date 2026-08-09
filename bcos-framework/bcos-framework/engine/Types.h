@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file Types.h
- * @brief Engine API type definitions (Engine API V1/V2/V3)
+ * @brief Engine API type definitions shared by Engine API versions
  */
 
 #pragma once
@@ -36,11 +36,12 @@ namespace bcos::engine
 /// Used as the fallback blockTxCountLimit in EngineServiceImpl and EngineServiceInitializer.
 inline constexpr int64_t c_defaultBlockTxCountLimit = 1000;
 
-enum class EngineApiVersion : std::uint8_t
+enum class ApiVersion : std::uint8_t
 {
     V1 = 1,
     V2 = 2,
     V3 = 3,
+    V4 = 4,
 };
 
 using PayloadID = std::string;
@@ -49,8 +50,8 @@ struct WithdrawalV1
 {
     u256 index = 0;
     u256 validatorIndex = 0;
-    Address address;
     u256 amount = 0;
+    Address address;
 };
 
 struct BlobsBundleV1
@@ -69,39 +70,63 @@ struct ForkchoiceState
 
 struct PayloadAttributes
 {
-    std::uint64_t timestamp = 0;
+    // Required by PayloadAttributesV1/V2/V3/V4.
     h256 prevRandao;
     Address suggestedFeeRecipient;
+    std::uint64_t timestamp = 0;
+
+    // Required by PayloadAttributesV2/V3/V4.
     std::optional<std::vector<WithdrawalV1>> withdrawals;
+
+    // Required by PayloadAttributesV3/V4.
     std::optional<h256> parentBeaconBlockRoot;
+
+    // Required by PayloadAttributesV4.
+    std::optional<std::uint64_t> slotNumber;
+    std::optional<std::uint64_t> targetGasLimit;
 };
 
 struct ExecutionPayload
 {
+    // Required by ExecutionPayloadV1/V2/V3/V4.
+    Bloom logsBloom{};
     h256 parentHash;
-    Address feeRecipient;
     h256 stateRoot;
     h256 receiptsRoot;
-    Bloom logsBloom{};
     h256 prevRandao;
-    bcos::protocol::BlockNumber blockNumber = 0;
     u256 gasLimit = 0;
     u256 gasUsed = 0;
-    std::uint64_t timestamp = 0;
-    bytes extraData;
     u256 baseFeePerGas = 0;
     h256 blockHash;
     bcos::protocol::Transactions transactions;
+    bytes extraData;
+    Address feeRecipient;
+    std::uint64_t timestamp = 0;
+    bcos::protocol::BlockNumber blockNumber = 0;
+
+    // Required by ExecutionPayloadV2/V3/V4.
     std::optional<std::vector<WithdrawalV1>> withdrawals;
+
+    // Required by ExecutionPayloadV3/V4.
     std::optional<u256> blobGasUsed;
     std::optional<u256> excessBlobGas;
+
+    // Required by ExecutionPayloadV4.
+    std::optional<bytes> blockAccessList;
+    std::optional<std::uint64_t> slotNumber;
 };
 
 struct NewPayloadRequest
 {
+    // Required by engine_newPayloadV1/V2/V3/V4/V5.
     ExecutionPayload executionPayload;
+
+    // Required by engine_newPayloadV3/V4/V5.
     std::vector<h256> expectedBlobVersionedHashes;
     std::optional<h256> parentBeaconBlockRoot;
+
+    // Required by engine_newPayloadV4/V5.
+    std::optional<std::vector<bytes>> executionRequests;
 };
 
 enum class PayloadValidationStatus : std::uint8_t
@@ -115,9 +140,9 @@ enum class PayloadValidationStatus : std::uint8_t
 
 struct PayloadStatus
 {
-    PayloadValidationStatus status = PayloadValidationStatus::Syncing;
     std::optional<h256> latestValidHash;
     std::optional<std::string> validationError;
+    PayloadValidationStatus status = PayloadValidationStatus::Syncing;
 };
 
 struct ForkchoiceUpdatedResult
@@ -126,12 +151,24 @@ struct ForkchoiceUpdatedResult
     std::optional<PayloadID> payloadId;
 };
 
-struct GetPayloadResult
+struct GetPayloadData
 {
+    // Required by engine_getPayloadV1/V2/V3/V4/V6.
     ExecutionPayload executionPayload;
+
+    // Required by engine_getPayloadV2/V3/V4/V6.
     u256 blockValue = 0;
+
+    // Required by engine_getPayloadV3/V4.
     std::optional<BlobsBundleV1> blobsBundle;
+
+    // Required by engine_getPayloadV3/V4/V6.
     bool shouldOverrideBuilder = false;
+
+    // Required by engine_getPayloadV4/V6.
+    std::optional<std::vector<bytes>> executionRequests;
 };
+
+using GetPayloadResult = std::unique_ptr<GetPayloadData>;
 
 }  // namespace bcos::engine

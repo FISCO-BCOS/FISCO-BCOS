@@ -273,13 +273,12 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{0, h256(0)};
+    blockHeader->setParentInfo(parentInfo);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::cout << "Block hash is: " << blockHeader->hash() << std::endl;
 
@@ -517,13 +516,12 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     NativeExecutionMessage paramsBak = *params;
 
-    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
-        [m_blockHeader = bcostars::BlockHeader()]() mutable { return &m_blockHeader; });
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     blockHeader->setNumber(1);
     blockHeader->setVersion((uint32_t)protocol::BlockVersion::MIN_VERSION);
 
-    std::vector<bcos::protocol::ParentInfo> parentInfos{{0, h256(0)}};
-    blockHeader->setParentInfo(parentInfos);
+    bcos::protocol::ParentInfo parentInfo{0, h256(0)};
+    blockHeader->setParentInfo(parentInfo);
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
 
     std::promise<void> nextPromise;

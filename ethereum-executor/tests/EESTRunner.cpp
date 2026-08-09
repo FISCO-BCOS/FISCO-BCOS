@@ -1,5 +1,5 @@
 /**
- * @file EESTStandalone.cpp
+ * @file EESTRunner.cpp
  * @brief Standalone Ethereum Execution Spec Tests (EEST) runner.
  *
  * A dedicated command-line tool for running EEST v5.4.0 JSON state test fixtures
@@ -14,7 +14,7 @@
  *   ./eest-runner --fixture-dir /path --jobs 8              # parallel
  */
 
-#include "EESTFixtureLoader.h"
+#include "EESTRunner.h"
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-evm/eth/state/system_contracts.hpp"
@@ -26,13 +26,12 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-task/TBBWait.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/log/core.hpp>
-#include <range/v3/algorithm/equal.hpp>
-#include "bcos-task/TBBWait.h"
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -43,6 +42,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <range/v3/algorithm/equal.hpp>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -51,6 +51,571 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 namespace fs = std::filesystem;
+
+// =============================================================================
+//  Fixture loader — out-of-line definitions of the functions declared in
+//  EESTRunner.h (moved out of the header so only the data structures stay
+//  in the header).
+// =============================================================================
+namespace bcos::test
+{
+std::string readHexField(Json::Value const& obj, std::string const& key)
+{
+    if (!obj.isMember(key) || obj[key].isNull())
+        return {};
+    auto const& val = obj[key];
+    if (val.isString())
+        return val.asString();
+    if (val.isInt64())
+    {
+        // Small integers: format as hex
+        std::ostringstream oss;
+        oss << "0x" << std::hex << val.asInt64();
+        return oss.str();
+    }
+    return {};
+}
+
+std::string readRequiredHex(Json::Value const& obj, std::string const& key)
+{
+    auto val = readHexField(obj, key);
+    if (val.empty() && !obj.isMember(key))
+        BOOST_THROW_EXCEPTION(std::runtime_error("Missing required field: " + key));
+    return val;
+}
+
+bcos::bytes hexToBytes(std::string const& hex)
+{
+    if (hex.empty() || hex == "0x")
+        return {};
+    std::string cleaned = hex;
+    if (cleaned.size() >= 2 && cleaned[0] == '0' && cleaned[1] == 'x')
+        cleaned = cleaned.substr(2);
+    bcos::bytes result;
+    boost::algorithm::unhex(cleaned, std::back_inserter(result));
+    return result;
+}
+
+bcos::u256 hexToU256(std::string const& hex)
+{
+    if (hex.empty() || hex == "0x")
+        return 0;
+    return bcos::u256(hex);
+}
+
+int64_t hexToInt64(std::string const& hex)
+{
+    if (hex.empty() || hex == "0x")
+        return 0;
+    return static_cast<int64_t>(hexToU256(hex));
+}
+
+int64_t hexToTimestamp(std::string const& hex)
+{
+    if (hex.empty() || hex == "0x")
+        return 0;
+    // Preserve the low 64 bits exactly, avoid sign-extension issues.
+    return static_cast<int64_t>(static_cast<uint64_t>(hexToU256(hex)));
+}
+
+std::string strip0x(std::string const& hex)
+{
+    if (hex.size() >= 2 && hex[0] == '0' && hex[1] == 'x')
+        return hex.substr(2);
+    return hex;
+}
+
+std::string detectFixtureFormat(Json::Value const& fixtureJson)
+{
+    if (fixtureJson.isMember("env") && fixtureJson["env"].isObject() &&
+        fixtureJson.isMember("post") && fixtureJson["post"].isObject())
+        return "state_test";
+    if (fixtureJson.isMember("blocks") && fixtureJson["blocks"].isArray())
+        return "blockchain_test";
+    return "unknown";
+}
+
+EESTEnvironment parseEnvironment(Json::Value const& envJson)
+{
+    EESTEnvironment env;
+    env.coinbase = readHexField(envJson, "currentCoinbase");
+    // currentGasLimit: use readHexField with default so that corner-case
+    // fixtures (e.g. blockchain_test_from_state_test) don't cause parse failures.
+    env.gasLimit = readHexField(envJson, "currentGasLimit");
+    if (env.gasLimit.empty())
+        env.gasLimit = "0x7fffffffffffffff";  // effectively unlimited
+    env.number = readRequiredHex(envJson, "currentNumber");
+    env.timestamp = readRequiredHex(envJson, "currentTimestamp");
+    env.difficulty = readHexField(envJson, "currentDifficulty");
+    env.baseFee = readHexField(envJson, "currentBaseFee");
+    env.random = readHexField(envJson, "currentRandom");
+    env.excessBlobGas = readHexField(envJson, "currentExcessBlobGas");
+    env.blobGasUsed = readHexField(envJson, "currentBlobGasUsed");
+    env.parentBeaconRoot = readHexField(envJson, "parentBeaconBlockRoot");
+    return env;
+}
+
+EESTBlockHeader parseBlockHeader(Json::Value const& headerJson)
+{
+    EESTBlockHeader h;
+    h.coinbase = readHexField(headerJson, "coinbase");
+    h.gasLimit = readHexField(headerJson, "gasLimit");
+    h.number = readHexField(headerJson, "number");
+    h.timestamp = readHexField(headerJson, "timestamp");
+    h.difficulty = readHexField(headerJson, "difficulty");
+    h.baseFee = readHexField(headerJson, "baseFeePerGas");
+    h.random = readHexField(headerJson, "mixHash");
+    h.excessBlobGas = readHexField(headerJson, "excessBlobGas");
+    h.blobGasUsed = readHexField(headerJson, "blobGasUsed");
+    h.parentBeaconRoot = readHexField(headerJson, "parentBeaconBlockRoot");
+    h.hash = readHexField(headerJson, "hash");
+    return h;
+}
+
+EESTAccount parseAccount(Json::Value const& accJson)
+{
+    EESTAccount acc;
+    acc.nonce = readHexField(accJson, "nonce");
+    acc.balance = readHexField(accJson, "balance");
+    acc.code = readHexField(accJson, "code");
+    if (accJson.isMember("storage") && !accJson["storage"].isNull())
+    {
+        auto const& storageJson = accJson["storage"];
+        for (auto it = storageJson.begin(); it != storageJson.end(); ++it)
+        {
+            acc.storage[it.key().asString()] = (*it).asString();
+        }
+    }
+    return acc;
+}
+}  // namespace bcos::test
+
+namespace bcos::test
+{
+EESTTransaction parseTransaction(Json::Value const& txJson)
+{
+    EESTTransaction tx;
+    tx.nonce = readHexField(txJson, "nonce");
+    tx.chainId = readHexField(txJson, "chainId");
+    tx.gasPrice = readHexField(txJson, "gasPrice");
+    tx.maxPriorityFeePerGas = readHexField(txJson, "maxPriorityFeePerGas");
+    tx.maxFeePerGas = readHexField(txJson, "maxFeePerGas");
+    tx.to = readHexField(txJson, "to");
+    tx.sender = readHexField(txJson, "sender");
+    tx.secretKey = readHexField(txJson, "secretKey");
+    tx.maxFeePerBlobGas = readHexField(txJson, "maxFeePerBlobGas");
+
+    // gasLimit array
+    if (txJson.isMember("gasLimit") && txJson["gasLimit"].isArray())
+    {
+        for (auto const& v : txJson["gasLimit"])
+            tx.gasLimit.push_back(v.asString());
+    }
+    // value array
+    if (txJson.isMember("value") && txJson["value"].isArray())
+    {
+        for (auto const& v : txJson["value"])
+            tx.value.push_back(v.asString());
+    }
+    // data array
+    if (txJson.isMember("data") && txJson["data"].isArray())
+    {
+        for (auto const& v : txJson["data"])
+            tx.data.push_back(v.asString());
+    }
+    // accessLists array
+    if (txJson.isMember("accessLists") && txJson["accessLists"].isArray())
+    {
+        for (auto const& al : txJson["accessLists"])
+        {
+            if (al.isNull())
+            {
+                tx.accessLists.push_back(std::nullopt);
+                continue;
+            }
+            std::vector<std::pair<std::string, std::vector<std::string>>> entries;
+            if (al.isArray())
+            {
+                for (auto const& entry : al)
+                {
+                    std::string addr = readHexField(entry, "address");
+                    std::vector<std::string> keys;
+                    if (entry.isMember("storageKeys") && entry["storageKeys"].isArray())
+                    {
+                        for (auto const& k : entry["storageKeys"])
+                            keys.push_back(k.asString());
+                    }
+                    entries.emplace_back(std::move(addr), std::move(keys));
+                }
+            }
+            tx.accessLists.push_back(std::move(entries));
+        }
+    }
+    // authorizationList
+    if (txJson.isMember("authorizationList") && !txJson["authorizationList"].isNull())
+    {
+        tx.authorizationList.emplace();
+        for (auto const& auth : txJson["authorizationList"])
+            tx.authorizationList->push_back(auth);
+    }
+    // blobVersionedHashes (EIP-4844)
+    if (txJson.isMember("blobVersionedHashes") && txJson["blobVersionedHashes"].isArray())
+    {
+        for (auto const& h : txJson["blobVersionedHashes"])
+            tx.blobVersionedHashes.push_back(h.asString());
+    }
+    return tx;
+}
+
+EESTForkPost parseForkPost(Json::Value const& postJson)
+{
+    EESTForkPost post;
+    if (postJson.isMember("indexes") && !postJson["indexes"].isNull())
+    {
+        auto const& idx = postJson["indexes"];
+        post.dataIndex = idx.isMember("data") ? idx["data"].asInt() : 0;
+        post.gasIndex = idx.isMember("gas") ? idx["gas"].asInt() : 0;
+        post.valueIndex = idx.isMember("value") ? idx["value"].asInt() : 0;
+    }
+    post.stateRoot = readHexField(postJson, "hash");
+    post.logsHash = readHexField(postJson, "logs");
+    post.txBytes = readHexField(postJson, "txbytes");
+    if (postJson.isMember("expectException") && !postJson["expectException"].isNull())
+    {
+        auto const& exc = postJson["expectException"];
+        if (exc.isObject() && exc.isMember("type"))
+            post.expectException = exc["type"].asString();
+        else if (exc.isString())
+            post.expectException = exc.asString();
+    }
+    if (postJson.isMember("state") && !postJson["state"].isNull())
+    {
+        auto const& stateJson = postJson["state"];
+        for (auto it = stateJson.begin(); it != stateJson.end(); ++it)
+            post.state[it.key().asString()] = parseAccount(*it);
+    }
+    return post;
+}
+
+EESTFixture parseFixture(std::string const& name, Json::Value const& fixtureJson)
+{
+    EESTFixture fixture;
+    fixture.name = name;
+    fixture.env = parseEnvironment(fixtureJson["env"]);
+
+    // Pre state
+    if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
+    {
+        auto const& preJson = fixtureJson["pre"];
+        for (auto it = preJson.begin(); it != preJson.end(); ++it)
+            fixture.pre[it.key().asString()] = parseAccount(*it);
+    }
+
+    // Transaction
+    fixture.transaction = parseTransaction(fixtureJson["transaction"]);
+
+    // Post state (per fork)
+    if (fixtureJson.isMember("post") && !fixtureJson["post"].isNull())
+    {
+        auto const& postJson = fixtureJson["post"];
+        for (auto it = postJson.begin(); it != postJson.end(); ++it)
+        {
+            std::vector<EESTForkPost> posts;
+            for (auto const& p : *it)
+                posts.push_back(parseForkPost(p));
+            fixture.post[it.key().asString()] = std::move(posts);
+        }
+    }
+
+    // Config
+    if (fixtureJson.isMember("config"))
+    {
+        auto chainIdHex = readHexField(fixtureJson["config"], "chainid");
+        fixture.chainId = hexToInt64(chainIdHex);
+        if (fixture.chainId == 0)
+            fixture.chainId = 1;
+    }
+
+    return fixture;
+}
+
+std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
+{
+    std::vector<EESTFixture> fixtures;
+
+    // Read file
+    std::ifstream file(filePath);
+    if (!file.is_open())
+        BOOST_THROW_EXCEPTION(std::runtime_error("Cannot open fixture file: " + filePath));
+
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    if (!Json::parseFromStream(builder, file, &root, &errors))
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("JSON parse error in " + filePath + ": " + errors));
+
+    // The root is a map of test_name → fixture_data
+    int skippedBlockchain = 0;
+    for (auto it = root.begin(); it != root.end(); ++it)
+    {
+        if (it.key().asString().rfind("//", 0) == 0 ||  // comment entry
+            it.key().asString().rfind("_", 0) == 0)     // meta entry like _info
+            continue;
+
+        // Skip non-object values (e.g. metadata files with string/bool/int entries)
+        if (!it->isObject())
+            continue;
+
+        // Per-fixture format check: some state_tests directories contain
+        // blockchain_test_from_state_test fixtures that lack currentGasLimit.
+        auto fmt = detectFixtureFormat(*it);
+        if (fmt == "blockchain_test")
+        {
+            ++skippedBlockchain;
+            continue;
+        }
+
+        try
+        {
+            fixtures.push_back(parseFixture(it.key().asString(), *it));
+        }
+        catch (std::exception const& e)
+        {
+            std::cerr << "Warning: Failed to parse fixture '" << it.key().asString()
+                      << "': " << e.what() << std::endl;
+        }
+    }
+
+    if (skippedBlockchain > 0 && fixtures.empty())
+    {
+        std::cerr << "Info: " << filePath << " contains " << skippedBlockchain
+                  << " blockchain_test fixture(s); use --fixture-dir with the"
+                  << " blockchain_tests directory or the individual file.\n";
+    }
+
+    return fixtures;
+}
+
+EESTTransaction parseBlockchainTransaction(Json::Value const& txJson)
+{
+    EESTTransaction tx;
+    tx.nonce = readHexField(txJson, "nonce");
+    tx.chainId = readHexField(txJson, "chainId");
+    tx.gasPrice = readHexField(txJson, "gasPrice");
+    tx.maxPriorityFeePerGas = readHexField(txJson, "maxPriorityFeePerGas");
+    tx.maxFeePerGas = readHexField(txJson, "maxFeePerGas");
+    // blockchain tests have scalar values, wrap in single-element arrays
+    auto gasLimit = readHexField(txJson, "gasLimit");
+    if (!gasLimit.empty())
+        tx.gasLimit.push_back(gasLimit);
+    else
+        tx.gasLimit.push_back("0x0");
+    tx.to = readHexField(txJson, "to");
+    auto value = readHexField(txJson, "value");
+    if (!value.empty())
+        tx.value.push_back(value);
+    else
+        tx.value.push_back("0x0");
+    auto data = readHexField(txJson, "data");
+    if (!data.empty())
+        tx.data.push_back(data);
+    else
+        tx.data.push_back("0x");
+    tx.sender = readHexField(txJson, "sender");
+    tx.secretKey = readHexField(txJson, "secretKey");
+    tx.maxFeePerBlobGas = readHexField(txJson, "maxFeePerBlobGas");
+
+    // accessList (optional, array format)
+    if (txJson.isMember("accessList") && txJson["accessList"].isArray())
+    {
+        std::vector<std::pair<std::string, std::vector<std::string>>> entries;
+        for (auto const& entry : txJson["accessList"])
+        {
+            std::string addr = readHexField(entry, "address");
+            std::vector<std::string> keys;
+            if (entry.isMember("storageKeys") && entry["storageKeys"].isArray())
+                for (auto const& k : entry["storageKeys"])
+                    keys.push_back(k.asString());
+            entries.emplace_back(std::move(addr), std::move(keys));
+        }
+        tx.accessLists.push_back(std::move(entries));
+    }
+
+    // authorizationList (EIP-7702)
+    if (txJson.isMember("authorizationList") && !txJson["authorizationList"].isNull())
+    {
+        tx.authorizationList.emplace();
+        for (auto const& auth : txJson["authorizationList"])
+            tx.authorizationList->push_back(auth);
+    }
+
+    // blobVersionedHashes
+    if (txJson.isMember("blobVersionedHashes") && txJson["blobVersionedHashes"].isArray())
+        for (auto const& h : txJson["blobVersionedHashes"])
+            tx.blobVersionedHashes.push_back(h.asString());
+
+    // Determine typed tx kind
+    auto type = readHexField(txJson, "type");
+    // type is stored separately from the web3TypedTxKind; we'll set it later
+
+    return tx;
+}
+
+EESTBlockchainFixture parseBlockchainFixture(
+    std::string const& name, Json::Value const& fixtureJson)
+{
+    EESTBlockchainFixture fixture;
+    fixture.name = name;
+
+    // genesisBlockHeader (optional: engine_x format lacks it)
+    if (fixtureJson.isMember("genesisBlockHeader") &&
+        fixtureJson["genesisBlockHeader"].isObject())
+        fixture.genesisBlockHeader =
+            parseBlockHeader(fixtureJson["genesisBlockHeader"]);
+
+    // pre state
+    if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
+        for (auto it = fixtureJson["pre"].begin(); it != fixtureJson["pre"].end(); ++it)
+            fixture.pre[it.key().asString()] = parseAccount(*it);
+
+    // blocks
+    if (fixtureJson.isMember("blocks") && fixtureJson["blocks"].isArray())
+    {
+        for (auto const& blockJson : fixtureJson["blocks"])
+        {
+            EESTBlock block;
+            block.blockHeader = parseBlockHeader(blockJson["blockHeader"]);
+
+            if (blockJson.isMember("transactions") && blockJson["transactions"].isArray())
+                for (auto const& txJson : blockJson["transactions"])
+                    block.transactions.push_back(parseBlockchainTransaction(txJson));
+
+            // Withdrawals (EIP-4895)
+            if (blockJson.isMember("withdrawals") && blockJson["withdrawals"].isArray())
+            {
+                for (auto const& wJson : blockJson["withdrawals"])
+                {
+                    EESTWithdrawal w;
+                    w.index = readHexField(wJson, "index");
+                    w.validatorIndex = readHexField(wJson, "validatorIndex");
+                    w.address = readRequiredHex(wJson, "address");
+                    w.amount = readRequiredHex(wJson, "amount");
+                    block.withdrawals.push_back(std::move(w));
+                }
+            }
+
+            fixture.blocks.push_back(std::move(block));
+        }
+    }
+
+    // postState
+    if (fixtureJson.isMember("postState") && !fixtureJson["postState"].isNull())
+        for (auto it = fixtureJson["postState"].begin();
+             it != fixtureJson["postState"].end(); ++it)
+            fixture.postState[it.key().asString()] = parseAccount(*it);
+
+    // config
+    if (fixtureJson.isMember("config"))
+    {
+        auto chainIdHex = readHexField(fixtureJson["config"], "chainid");
+        fixture.chainId = hexToInt64(chainIdHex);
+        if (fixture.chainId == 0)
+            fixture.chainId = 1;
+    }
+
+    return fixture;
+}
+
+std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const& filePath)
+{
+    std::vector<EESTBlockchainFixture> fixtures;
+
+    std::ifstream file(filePath);
+    if (!file.is_open())
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("Cannot open fixture file: " + filePath));
+
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    if (!Json::parseFromStream(builder, file, &root, &errors))
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("JSON parse error in " + filePath + ": " + errors));
+
+    for (auto it = root.begin(); it != root.end(); ++it)
+    {
+        if (it.key().asString().rfind("//", 0) == 0 ||
+            it.key().asString().rfind("_", 0) == 0)
+            continue;
+
+        // Skip non-object values
+        if (!it->isObject())
+            continue;
+
+        try
+        {
+            fixtures.push_back(
+                parseBlockchainFixture(it.key().asString(), *it));
+        }
+        catch (std::exception const& e)
+        {
+            std::cerr << "Warning: Failed to parse blockchain fixture '"
+                      << it.key().asString() << "': " << e.what() << std::endl;
+        }
+    }
+
+    return fixtures;
+}
+
+evmc_revision forkNameToRevision(std::string const& forkName)
+{
+    // Normalize: lowercase
+    auto lower = forkName;
+    boost::algorithm::to_lower(lower);
+
+    if (lower == "frontier")
+        return EVMC_FRONTIER;
+    if (lower == "homestead")
+        return EVMC_HOMESTEAD;
+    if (lower == "tangerine whistle" || lower == "tangerinewhistle" || lower == "eip150")
+        return EVMC_TANGERINE_WHISTLE;
+    if (lower == "spurious dragon" || lower == "spuriousdragon" || lower == "eip158")
+        return EVMC_SPURIOUS_DRAGON;
+    if (lower == "byzantium")
+        return EVMC_BYZANTIUM;
+    if (lower == "constantinople")
+        return EVMC_CONSTANTINOPLE;
+    if (lower == "constantinoplefix" || lower == "petersburg")
+        return EVMC_PETERSBURG;
+    if (lower == "istanbul")
+        return EVMC_ISTANBUL;
+    // Muir Glacier (EIP-2384) only delays the difficulty bomb; it changes no
+    // EVM semantics over Istanbul. Mapping it to Berlin would wrongly activate
+    // EIP-2929 access-list gas for MuirGlacier fixtures.
+    if (lower == "muir glacier" || lower == "muirglacier")
+        return EVMC_ISTANBUL;
+    if (lower == "berlin")
+        return EVMC_BERLIN;
+    if (lower == "london")
+        return EVMC_LONDON;
+    if (lower == "paris" || lower == "merge")
+        return EVMC_PARIS;
+    if (lower == "shanghai")
+        return EVMC_SHANGHAI;
+    if (lower == "cancun")
+        return EVMC_CANCUN;
+    if (lower == "prague")
+        return EVMC_PRAGUE;
+    if (lower == "osaka")
+        return EVMC_OSAKA;
+
+    // Unknown fork → default to the latest handled revision so a future fork
+    // is not silently mis-executed as Cancun (which would produce false
+    // pass/fail outcomes in the compliance suite).
+    return EVMC_OSAKA;
+}
+}  // namespace bcos::test
 
 // =============================================================================
 //  Command-line options (parsed early)
@@ -105,16 +670,16 @@ std::mutex g_printMutex;
 std::string timestamp()
 {
     auto now = std::chrono::system_clock::now();
-    auto t = std::chrono::system_clock::to_time_t(now);
+    auto nowTime = std::chrono::system_clock::to_time_t(now);
     std::ostringstream oss;
-    oss << std::put_time(std::localtime(&t), "%H:%M:%S");
+    oss << std::put_time(std::localtime(&nowTime), "%H:%M:%S");
     return oss.str();
 }
 
 void printLine(std::string const& msg)
 {
     std::lock_guard<std::mutex> lock(g_printMutex);
-    std::cout << msg << std::endl;
+    std::cout << msg << '\n';
 }
 
 // =============================================================================
@@ -130,7 +695,9 @@ struct FixtureBlockHashes : evmone::state::BlockHashes
     {
         auto it = hashes.find(blockNumber);
         if (it != hashes.end())
+        {
             return it->second;
+        }
         return {};
     }
 };
@@ -213,6 +780,9 @@ public:
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite;
     bcostars::protocol::TransactionFactoryImpl transactionFactory;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
+    // BlockHashes provider injected into the executor's constructor. The
+    // block-test path clears and repopulates it per fixture run.
+    std::shared_ptr<FixtureBlockHashes> m_blockHashes = std::make_shared<FixtureBlockHashes>();
     eth::EthereumExecutor executor;
     evmc_revision m_currentRevision = EVMC_CANCUN;
     ledger::LedgerConfig m_ledgerConfig;
@@ -224,7 +794,7 @@ public:
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         transactionFactory(cryptoSuite),
         receiptFactory(cryptoSuite),
-        executor(receiptFactory, cryptoSuite->hashImpl())
+        executor(receiptFactory, cryptoSuite->hashImpl(), m_blockHashes)
     {}
 
     void configureFork(std::string const& forkName)
@@ -254,11 +824,8 @@ public:
                 {
                     transitionTime = std::stoll(timeStr);
                 }
-                m_forkTransition = ForkTransition{
-                    test::forkNameToRevision(fromFork),
-                    test::forkNameToRevision(toFork),
-                    transitionTime
-                };
+                m_forkTransition = ForkTransition{test::forkNameToRevision(fromFork),
+                    test::forkNameToRevision(toFork), transitionTime};
             }
             catch (...)
             {
@@ -271,9 +838,12 @@ public:
     evmc_revision revisionForBlock(int64_t blockTimestampSec) const
     {
         if (!m_forkTransition.has_value())
+        {
             return m_currentRevision;
+        }
         return (blockTimestampSec >= m_forkTransition->transitionTimestamp) ?
-            m_forkTransition->toRev : m_forkTransition->fromRev;
+                   m_forkTransition->toRev :
+                   m_forkTransition->fromRev;
     }
 
     void configureEnvironment(test::EESTEnvironment const& env)
@@ -299,13 +869,17 @@ public:
         // "currentRandom" (the block mixHash).
         if (!env.random.empty())
         {
-            auto mh = test::hexToBytes(env.random);
+            auto mixHashBytes = test::hexToBytes(env.random);
             evmc::bytes32 prevRandao{};
-            if (mh.size() == sizeof(evmc_bytes32))
-                std::copy_n(mh.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
-            else if (mh.size() < sizeof(evmc_bytes32))
-                std::copy_n(mh.begin(), mh.size(),
-                    prevRandao.bytes + sizeof(evmc_bytes32) - mh.size());
+            if (mixHashBytes.size() == sizeof(evmc_bytes32))
+            {
+                std::copy_n(mixHashBytes.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
+            }
+            else if (mixHashBytes.size() < sizeof(evmc_bytes32))
+            {
+                std::copy_n(mixHashBytes.begin(), mixHashBytes.size(),
+                    prevRandao.bytes + sizeof(evmc_bytes32) - mixHashBytes.size());
+            }
             m_ledgerConfig.setPrevRandao(prevRandao);
         }
         else
@@ -314,14 +888,22 @@ public:
         }
         // EIP-4844 blob gas parameters (Cancun+).
         if (!env.excessBlobGas.empty())
+        {
             m_ledgerConfig.setExcessBlobGas(
                 static_cast<uint64_t>(test::hexToU256(env.excessBlobGas)));
+        }
         else
+        {
             m_ledgerConfig.setExcessBlobGas(std::nullopt);
+        }
         if (!env.blobGasUsed.empty())
+        {
             m_ledgerConfig.setBlobGasUsed(static_cast<uint64_t>(test::hexToU256(env.blobGasUsed)));
+        }
         else
+        {
             m_ledgerConfig.setBlobGasUsed(std::nullopt);
+        }
     }
 
     void setupPreState(MutableStorage& storage, std::map<std::string, test::EESTAccount> const& pre)
@@ -330,7 +912,9 @@ public:
         {
             auto addrBytes = test::hexToBytes(addrHex);
             if (addrBytes.size() != sizeof(evmc_address))
+            {
                 continue;
+            }
 
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
@@ -339,7 +923,9 @@ public:
 
             task::tbb::syncWait([&]() -> task::Task<void> {
                 if (!co_await evmAccount.exists())
+                {
                     co_await evmAccount.create();
+                }
             }());
 
             if (!acc.nonce.empty() && acc.nonce != "0x" && acc.nonce != "0x0")
@@ -398,11 +984,17 @@ public:
         bcostars::protocol::BlockHeaderImpl header;
         uint32_t blockVer;
         if (m_currentRevision >= EVMC_CANCUN)
+        {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        }
         else if (m_currentRevision >= EVMC_PARIS)
+        {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
+        }
         else
+        {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        }
         header.setVersion(blockVer);
         header.setNumber(test::hexToInt64(env.number));
 
@@ -413,7 +1005,12 @@ public:
         if (!env.coinbase.empty())
         {
             auto cbBytes = test::hexToBytes(env.coinbase);
-            header.setCoinbase(std::move(cbBytes));
+            bcos::Address coinbaseAddr;
+            if (cbBytes.size() >= bcos::Address::SIZE)
+            {
+                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
+            }
+            header.setCoinbase(coinbaseAddr);
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
@@ -424,15 +1021,21 @@ public:
     {
         std::string txData;
         if (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.data.size())
+        {
             txData = tx.data[dataIndex];
+        }
 
         std::string gasLimit = "0x0";
         if (gasIndex >= 0 && static_cast<size_t>(gasIndex) < tx.gasLimit.size())
+        {
             gasLimit = tx.gasLimit[gasIndex];
+        }
 
         std::string value = "0x0";
         if (valueIndex >= 0 && static_cast<size_t>(valueIndex) < tx.value.size())
+        {
             value = tx.value[valueIndex];
+        }
 
         auto tarsTx = std::make_shared<bcostars::Transaction>();
         auto& data = tarsTx->data;
@@ -453,11 +1056,17 @@ public:
         data.input.assign(inputBytes.begin(), inputBytes.end());
 
         if (!tx.gasPrice.empty())
+        {
             data.gasPrice = test::strip0x(tx.gasPrice);
+        }
         if (!tx.maxFeePerGas.empty())
+        {
             data.maxFeePerGas = test::strip0x(tx.maxFeePerGas);
+        }
         if (!tx.maxPriorityFeePerGas.empty())
+        {
             data.maxPriorityFeePerGas = test::strip0x(tx.maxPriorityFeePerGas);
+        }
 
         if (!tx.sender.empty())
         {
@@ -493,13 +1102,21 @@ public:
         // evmone's validate_transaction will reject empty lists for type 4.
         bool hasAuthList = tx.authorizationList.has_value();
         if (hasAuthList)
+        {
             tarsTx->web3TypedTxKind = 4;
+        }
         else if (!tx.maxFeePerGas.empty() || !tx.maxPriorityFeePerGas.empty())
+        {
             tarsTx->web3TypedTxKind = 2;
+        }
         else if (hasAccessList)
+        {
             tarsTx->web3TypedTxKind = 1;
+        }
         else
+        {
             tarsTx->web3TypedTxKind = 0;
+        }
 
         if (hasAuthList)
         {
@@ -508,8 +1125,7 @@ public:
             // >= 2^63, e.g. nonce=2**64-1 or 2**64-2 in EIP-7702 tests, which
             // hexToInt64 would otherwise saturate to INT64_MAX).
             auto hexToTarsLong = [](std::string const& hex) {
-                return static_cast<int64_t>(
-                    static_cast<uint64_t>(test::hexToU256(hex)));
+                return static_cast<int64_t>(static_cast<uint64_t>(test::hexToU256(hex)));
             };
             for (auto const& auth : *tx.authorizationList)
             {
@@ -529,8 +1145,7 @@ public:
         // or non-empty blobVersionedHashes.  EEST fixtures that test blob-tx
         // rejection (zero blobs, pre-fork) set maxFeePerBlobGas but leave
         // blobVersionedHashes empty.
-        bool isBlobTx = !tx.maxFeePerBlobGas.empty() ||
-                        !tx.blobVersionedHashes.empty();
+        bool isBlobTx = !tx.maxFeePerBlobGas.empty() || !tx.blobVersionedHashes.empty();
         if (isBlobTx)
         {
             tarsTx->web3TypedTxKind = 3;
@@ -558,7 +1173,9 @@ public:
         {
             auto addrBytes = test::hexToBytes(addrHex);
             if (addrBytes.size() != sizeof(evmc_address))
+            {
                 continue;
+            }
 
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
@@ -625,21 +1242,29 @@ public:
                     auto keyBytes = test::hexToBytes(key);
                     evmc_bytes32 storageKey{};
                     if (keyBytes.size() <= 32)
+                    {
                         std::copy(keyBytes.begin(), keyBytes.end(),
                             storageKey.bytes + 32 - keyBytes.size());
+                    }
                     else
+                    {
                         // Defensive: never copy more than 32 bytes into the
                         // 32-byte evmc_bytes32 (would overflow the stack).
                         std::copy_n(keyBytes.end() - 32, 32, storageKey.bytes);
+                    }
 
                     auto storedVal = co_await evmAccount.storage(storageKey);
                     auto expValBytes = test::hexToBytes(val);
                     evmc_bytes32 expVal{};
                     if (expValBytes.size() <= 32)
+                    {
                         std::copy(expValBytes.begin(), expValBytes.end(),
                             expVal.bytes + 32 - expValBytes.size());
+                    }
                     else
+                    {
                         std::copy_n(expValBytes.end() - 32, 32, expVal.bytes);
+                    }
 
                     if (!::ranges::equal(storedVal.bytes, expVal.bytes))
                     {
@@ -665,6 +1290,8 @@ public:
     {
         configureFork(forkName);
         m_chainId = fixture.chainId;
+        m_ledgerConfig.setChainId(
+            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
         configureEnvironment(fixture.env);
 
         MutableStorage storage;
@@ -718,9 +1345,10 @@ public:
         // via "successful_True"/"successful_False" parameters. The JSON
         // "expectException" field is absent for both cases.
         bool expectsSuccess = post.expectException.empty();
-        if (expectsSuccess &&
-            fixture.name.find("successful_False") != std::string::npos)
+        if (expectsSuccess && fixture.name.find("successful_False") != std::string::npos)
+        {
             expectsSuccess = false;
+        }
         bool gotSuccess =
             !executionThrew && receipt &&
             (receipt->status() == 0 ||
@@ -734,7 +1362,9 @@ public:
         {
             auto errStr = verifyPostState(storage, post.state);
             if (errStr.empty())
+            {
                 return true;  // State matches → test passes (tx reverted correctly)
+            }
 
             std::ostringstream oss;
             oss << "FAIL: " << fixture.name << " [" << forkName << "] expected success, got failure"
@@ -770,7 +1400,8 @@ public:
             {
                 std::ostringstream oss;
                 oss << "FAIL: " << fixture.name << " [" << forkName
-                    << "] expected failure, got failure but state mismatch\n" << errStr;
+                    << "] expected failure, got failure but state mismatch\n"
+                    << errStr;
                 printLine(oss.str());
                 g_failureDetails.push_back(
                     {fixture.name, forkName, "state mismatch (expected failure)"});
@@ -808,13 +1439,19 @@ public:
         // ("blocks_after_fork_257").
         auto pos = name.find("[fork_");
         if (pos == std::string::npos)
+        {
             return {};
+        }
         auto start = pos + 6;  // skip "[fork_"
         auto end = name.find('-', start);
         if (end == std::string::npos)
+        {
             end = name.find(']', start);
+        }
         if (end == std::string::npos)
+        {
             return {};
+        }
         return name.substr(start, end - start);
     }
 
@@ -824,11 +1461,17 @@ public:
         bcostars::protocol::BlockHeaderImpl header;
         uint32_t blockVer;
         if (m_currentRevision >= EVMC_CANCUN)
+        {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        }
         else if (m_currentRevision >= EVMC_PARIS)
+        {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
+        }
         else
+        {
             blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        }
         header.setVersion(blockVer);
 
         header.setNumber(test::hexToInt64(bh.number));
@@ -838,7 +1481,12 @@ public:
         if (!bh.coinbase.empty())
         {
             auto cbBytes = test::hexToBytes(bh.coinbase);
-            header.setCoinbase(std::move(cbBytes));
+            bcos::Address coinbaseAddr;
+            if (cbBytes.size() >= bcos::Address::SIZE)
+            {
+                std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
+            }
+            header.setCoinbase(coinbaseAddr);
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
@@ -877,13 +1525,17 @@ public:
         // Set prev_randao from mixHash (EIP-4399: PREVRANDAO opcode on Paris+)
         if (!bh.random.empty())
         {
-            auto mh = test::hexToBytes(bh.random);
+            auto mixHashBytes = test::hexToBytes(bh.random);
             evmc::bytes32 prevRandao{};
-            if (mh.size() == sizeof(evmc_bytes32))
-                std::copy_n(mh.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
-            else if (mh.size() < sizeof(evmc_bytes32))
-                std::copy_n(mh.begin(), mh.size(),
-                    prevRandao.bytes + sizeof(evmc_bytes32) - mh.size());
+            if (mixHashBytes.size() == sizeof(evmc_bytes32))
+            {
+                std::copy_n(mixHashBytes.begin(), sizeof(evmc_bytes32), prevRandao.bytes);
+            }
+            else if (mixHashBytes.size() < sizeof(evmc_bytes32))
+            {
+                std::copy_n(mixHashBytes.begin(), mixHashBytes.size(),
+                    prevRandao.bytes + sizeof(evmc_bytes32) - mixHashBytes.size());
+            }
             m_ledgerConfig.setPrevRandao(prevRandao);
         }
         else
@@ -892,14 +1544,22 @@ public:
         }
         // EIP-4844 blob gas parameters (Cancun+).
         if (!bh.excessBlobGas.empty())
+        {
             m_ledgerConfig.setExcessBlobGas(
                 static_cast<uint64_t>(test::hexToU256(bh.excessBlobGas)));
+        }
         else
+        {
             m_ledgerConfig.setExcessBlobGas(std::nullopt);
+        }
         if (!bh.blobGasUsed.empty())
+        {
             m_ledgerConfig.setBlobGasUsed(static_cast<uint64_t>(test::hexToU256(bh.blobGasUsed)));
+        }
         else
+        {
             m_ledgerConfig.setBlobGasUsed(std::nullopt);
+        }
     }
 
     /// Run a blockchain test fixture: execute blocks sequentially,
@@ -909,9 +1569,13 @@ public:
     {
         auto forkName = extractForkFromName(fixture.name);
         if (forkName.empty())
+        {
             forkName = "Cancun";  // default
+        }
         configureFork(forkName);
         m_chainId = fixture.chainId;
+        m_ledgerConfig.setChainId(
+            intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
 
         // Set up pre-state once
         MutableStorage storage;
@@ -920,11 +1584,18 @@ public:
         // Ensure sender accounts exist with correct initial nonce.
         // EEST fixtures may not include sender in "pre".
         for (auto const& block : fixture.blocks)
+        {
             for (auto const& tx : block.transactions)
             {
-                if (tx.sender.empty()) continue;
+                if (tx.sender.empty())
+                {
+                    continue;
+                }
                 auto senderBytes = test::hexToBytes(tx.sender);
-                if (senderBytes.size() != sizeof(evmc_address)) continue;
+                if (senderBytes.size() != sizeof(evmc_address))
+                {
+                    continue;
+                }
                 evmc_address senderAddr{};
                 std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
                 ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, false);
@@ -938,18 +1609,24 @@ public:
                     }
                 }());
             }
+        }
 
         // Configure initial environment from genesis header
         configureEnvironment(fixture.genesisBlockHeader);
 
-        // Set up BlockHashes with genesis hash for HISTORY_STORAGE system call
-        FixtureBlockHashes blockHashes;
+        // Set up BlockHashes with genesis hash for HISTORY_STORAGE system call.
+        // The provider was injected into the executor's constructor; start
+        // each fixture run from an empty mapping.
+        auto& blockHashes = *m_blockHashes;
+        blockHashes.hashes.clear();
         if (!fixture.genesisBlockHeader.hash.empty())
         {
-            auto gh = test::hexToBytes(fixture.genesisBlockHeader.hash);
-            if (gh.size() == sizeof(evmc_bytes32))
-                std::copy_n(gh.begin(), sizeof(evmc_bytes32),
-                    blockHashes.hashes[0].bytes);
+            auto genesisHashBytes = test::hexToBytes(fixture.genesisBlockHeader.hash);
+            if (genesisHashBytes.size() == sizeof(evmc_bytes32))
+            {
+                std::copy_n(
+                    genesisHashBytes.begin(), sizeof(evmc_bytes32), blockHashes.hashes[0].bytes);
+            }
         }
 
         // Populate fork transition mapping in LedgerConfig for dynamic revision switching.
@@ -962,7 +1639,8 @@ public:
             {
                 auto tsSec = test::hexToTimestamp(block.blockHeader.timestamp);
                 auto blockRev = (tsSec >= m_forkTransition->transitionTimestamp) ?
-                    m_forkTransition->toRev : m_forkTransition->fromRev;
+                                    m_forkTransition->toRev :
+                                    m_forkTransition->fromRev;
                 auto blockNum = test::hexToInt64(block.blockHeader.number);
                 m_ledgerConfig.addForkTransition(blockNum, blockRev);
             }
@@ -977,14 +1655,25 @@ public:
             auto blockRev = revisionForBlock(tsSec);
             m_ledgerConfig.setEVMCRevision(blockRev);
 
+            // Per-fork block rewards (wei).
+            constexpr static uint64_t BLOCK_REWARD_5_ETH = 5000000000000000000ULL;
+            constexpr static uint64_t BLOCK_REWARD_3_ETH = 3000000000000000000ULL;
+            constexpr static uint64_t BLOCK_REWARD_2_ETH = 2000000000000000000ULL;
+
             // Compute per-block reward (changes at fork boundaries)
             std::optional<uint64_t> blockReward;
             if (blockRev < EVMC_BYZANTIUM)
-                blockReward = 5000000000000000000ULL;  // 5 ETH
+            {
+                blockReward = BLOCK_REWARD_5_ETH;  // 5 ETH
+            }
             else if (blockRev < EVMC_PETERSBURG)
-                blockReward = 3000000000000000000ULL;  // 3 ETH
+            {
+                blockReward = BLOCK_REWARD_3_ETH;  // 3 ETH
+            }
             else if (blockRev < EVMC_PARIS)
-                blockReward = 2000000000000000000ULL;  // 2 ETH
+            {
+                blockReward = BLOCK_REWARD_2_ETH;  // 2 ETH
+            }
             // else: Paris+ → 0
 
             configureEnvironment(block.blockHeader);
@@ -1001,19 +1690,22 @@ public:
                 {
                     auto cbBytes = test::hexToBytes(block.blockHeader.coinbase);
                     if (cbBytes.size() == sizeof(evmc_address))
-                        std::copy_n(cbBytes.begin(), sizeof(evmc_address),
-                            bi.coinbase.bytes);
+                    {
+                        std::copy_n(cbBytes.begin(), sizeof(evmc_address), bi.coinbase.bytes);
+                    }
                 }
                 if (!block.blockHeader.baseFee.empty())
-                    bi.base_fee = static_cast<uint64_t>(
-                        test::hexToU256(block.blockHeader.baseFee));
+                {
+                    bi.base_fee = static_cast<uint64_t>(test::hexToU256(block.blockHeader.baseFee));
+                }
                 if (!block.blockHeader.parentBeaconRoot.empty())
                 {
-                    auto pbr = test::hexToBytes(
-                        block.blockHeader.parentBeaconRoot);
+                    auto pbr = test::hexToBytes(block.blockHeader.parentBeaconRoot);
                     if (pbr.size() == sizeof(evmc_bytes32))
-                        std::copy_n(pbr.begin(), sizeof(evmc_bytes32),
-                            bi.parent_beacon_block_root.bytes);
+                    {
+                        std::copy_n(
+                            pbr.begin(), sizeof(evmc_bytes32), bi.parent_beacon_block_root.bytes);
+                    }
                 }
                 // blob_base_fee is left as nullopt — system contracts don't need it
 
@@ -1021,8 +1713,8 @@ public:
                 auto sysDiff = evmone::state::system_call_block_start(
                     stateView, bi, blockHashes, blockRev, executor.vm());
 
-                task::tbb::syncWait(eth::applyStateDiff(
-                    storage, sysDiff, blockRev, *cryptoSuite->hashImpl()));
+                task::tbb::syncWait(
+                    eth::applyStateDiff(storage, sysDiff, blockRev, *cryptoSuite->hashImpl()));
             }
 
             for (auto const& tx : block.transactions)
@@ -1037,8 +1729,7 @@ public:
                 try
                 {
                     receipt = task::tbb::syncWait(executor.executeTransaction(
-                        storage, blockHdr, *bcosTx, txIndex, m_ledgerConfig, false,
-                        &blockHashes));
+                        storage, blockHdr, *bcosTx, txIndex, m_ledgerConfig, false));
                 }
                 catch (std::exception const& e)
                 {
@@ -1081,25 +1772,27 @@ public:
                 ew.validator_index = static_cast<uint64_t>(test::hexToInt64(w.validatorIndex));
                 auto addrBytes = test::hexToBytes(w.address);
                 if (addrBytes.size() == sizeof(evmc_address))
+                {
                     std::copy_n(addrBytes.begin(), sizeof(evmc_address), ew.recipient.bytes);
+                }
                 auto amountVal = test::hexToU256(w.amount);
                 ew.amount_in_gwei = static_cast<uint64_t>(amountVal);
                 evmWithdrawals.push_back(ew);
             }
 
             // Apply block reward via finalize() (uses bcos-evm's built-in logic)
-            task::tbb::syncWait(
-                executor.finalizeBlock(storage, blockHdr, m_ledgerConfig, blockRev, blockReward, evmWithdrawals));
+            task::tbb::syncWait(executor.finalizeBlock(
+                storage, blockHdr, m_ledgerConfig, blockRev, blockReward, evmWithdrawals));
 
             // Accumulate block hash BEFORE system_call_block_end so the current
             // block's hash is available for BLOCKHASH lookups within system contracts.
             if (!block.blockHeader.hash.empty())
             {
-                auto h = test::hexToBytes(block.blockHeader.hash);
-                if (h.size() == sizeof(evmc_bytes32))
+                auto hashBytes = test::hexToBytes(block.blockHeader.hash);
+                if (hashBytes.size() == sizeof(evmc_bytes32))
                 {
                     auto blockNum = test::hexToInt64(block.blockHeader.number);
-                    std::copy_n(h.begin(), sizeof(evmc_bytes32),
+                    std::copy_n(hashBytes.begin(), sizeof(evmc_bytes32),
                         blockHashes.hashes[blockNum].bytes);
                 }
             }
@@ -1117,26 +1810,32 @@ public:
                 {
                     auto cbBytes = test::hexToBytes(block.blockHeader.coinbase);
                     if (cbBytes.size() == sizeof(evmc_address))
-                        std::copy_n(cbBytes.begin(), sizeof(evmc_address),
-                            biEnd.coinbase.bytes);
+                    {
+                        std::copy_n(cbBytes.begin(), sizeof(evmc_address), biEnd.coinbase.bytes);
+                    }
                 }
                 if (!block.blockHeader.baseFee.empty())
-                    biEnd.base_fee = static_cast<uint64_t>(
-                        test::hexToU256(block.blockHeader.baseFee));
+                {
+                    biEnd.base_fee =
+                        static_cast<uint64_t>(test::hexToU256(block.blockHeader.baseFee));
+                }
                 if (!block.blockHeader.parentBeaconRoot.empty())
                 {
                     auto pbr = test::hexToBytes(block.blockHeader.parentBeaconRoot);
                     if (pbr.size() == sizeof(evmc_bytes32))
+                    {
                         std::copy_n(pbr.begin(), sizeof(evmc_bytes32),
                             biEnd.parent_beacon_block_root.bytes);
+                    }
                 }
                 // Set the current block's hash for EIP-2935 history storage
                 if (!block.blockHeader.hash.empty())
                 {
-                    auto h = test::hexToBytes(block.blockHeader.hash);
-                    if (h.size() == sizeof(evmc_bytes32))
-                        std::copy_n(h.begin(), sizeof(evmc_bytes32),
-                            biEnd.hash.bytes);
+                    auto hashBytes = test::hexToBytes(block.blockHeader.hash);
+                    if (hashBytes.size() == sizeof(evmc_bytes32))
+                    {
+                        std::copy_n(hashBytes.begin(), sizeof(evmc_bytes32), biEnd.hash.bytes);
+                    }
                 }
 
                 eth::StorageStateView<MutableStorage> stateViewEnd(storage);
@@ -1182,15 +1881,25 @@ inline std::string detectFormatFromPath(fs::path const& filePath)
     // that blockchain_tests/static/state_tests/ files are correctly
     // classified as blockchain_tests.
     if (str.find("/blockchain_tests_engine_x/") != std::string::npos)
+    {
         return "unsupported";
+    }
     if (str.find("/blockchain_tests_engine/") != std::string::npos)
+    {
         return "unsupported";
+    }
     if (str.find("/blockchain_tests/") != std::string::npos)
+    {
         return "blockchain_test";
+    }
     if (str.find("/state_tests/") != std::string::npos)
+    {
         return "state_test";
+    }
     if (str.find("/transaction_tests/") != std::string::npos)
+    {
         return "transaction_test";
+    }
     // Unknown — default to state_test
     return "state_test";
 }
@@ -1211,7 +1920,9 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
     result.path = filePath.string();
 
     if (!g_opts.quiet)
+    {
         printLine("  Loading: " + filePath.string());
+    }
 
     auto format = detectFormatFromPath(filePath);
 
@@ -1303,7 +2014,9 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
 void printProgress(int done, int total, const char* unit = "files")
 {
     if (total == 0)
+    {
         return;
+    }
     int barWidth = 40;
     float ratio = static_cast<float>(done) / total;
     int filled = static_cast<int>(barWidth * ratio);
@@ -1343,7 +2056,9 @@ int main(int argc, char* argv[])
     {
         char const* envDir = std::getenv("EEST_FIXTURE_DIR");
         if (envDir)
+        {
             fixtureDir = envDir;
+        }
     }
 
     // Collect file list
@@ -1354,26 +2069,28 @@ int main(int argc, char* argv[])
         fs::path p(g_opts.singleFixture);
         if (!fs::exists(p) || !fs::is_regular_file(p))
         {
-            std::cerr << "Error: fixture file not found: " << p << std::endl;
+            std::cerr << "Error: fixture file not found: " << p << '\n';
             return 1;
         }
         fileList.push_back(p);
-        std::cout << "[EEST Runner] Single fixture mode: " << p << std::endl;
+        std::cout << "[EEST Runner] Single fixture mode: " << p << '\n';
     }
     else if (!fixtureDir.empty())
     {
         if (!fs::exists(fixtureDir) || !fs::is_directory(fixtureDir))
         {
-            std::cerr << "Error: fixture directory not found: " << fixtureDir << std::endl;
+            std::cerr << "Error: fixture directory not found: " << fixtureDir << '\n';
             return 1;
         }
         for (auto const& entry : fs::recursive_directory_iterator(fixtureDir))
         {
             if (entry.is_regular_file() && entry.path().extension().string() == ".json")
+            {
                 fileList.push_back(entry.path());
+            }
         }
         std::cout << "[EEST Runner] Found " << fileList.size()
-                  << " fixture files in: " << fixtureDir << std::endl;
+                  << " fixture files in: " << fixtureDir << '\n';
     }
     else
     {
@@ -1385,7 +2102,7 @@ int main(int argc, char* argv[])
 
     if (fileList.empty())
     {
-        std::cerr << "No fixture files found." << std::endl;
+        std::cerr << "No fixture files found." << '\n';
         return 0;
     }
 
@@ -1395,7 +2112,7 @@ int main(int argc, char* argv[])
     // Print directory tree (compact)
     if (!g_opts.quiet && fileList.size() > 1)
     {
-        std::cout << "\n--- Fixture tree ---" << std::endl;
+        std::cout << "\n--- Fixture tree ---" << '\n';
         fs::path baseDir = fs::absolute(fixtureDir);
         std::map<std::string, int> dirCounts;
         for (auto const& p : fileList)
@@ -1403,7 +2120,9 @@ int main(int argc, char* argv[])
             auto rel = fs::relative(p, baseDir);
             auto parent = rel.parent_path();
             if (parent.empty())
+            {
                 dirCounts["(root)"]++;
+            }
             else
             {
                 auto it = parent.begin();
@@ -1412,8 +2131,10 @@ int main(int argc, char* argv[])
             }
         }
         for (auto const& [dir, count] : dirCounts)
-            std::cout << "  " << dir << "/  (" << count << " files)" << std::endl;
-        std::cout << "---------------------\n" << std::endl;
+        {
+            std::cout << "  " << dir << "/  (" << count << " files)" << '\n';
+        }
+        std::cout << "---------------------\n";
     }
 
     auto startTime = std::chrono::steady_clock::now();
@@ -1433,16 +2154,22 @@ int main(int argc, char* argv[])
         {
             int total = fr.passed + fr.failed;
             if (fr.failed == 0)
-                std::cout << "OK (" << total << " tests)" << std::endl;
+            {
+                std::cout << "OK (" << total << " tests)" << '\n';
+            }
             else
-                std::cout << fr.failed << "/" << total << " FAILED" << std::endl;
+            {
+                std::cout << fr.failed << "/" << total << " FAILED" << '\n';
+            }
         }
         printProgress(i + 1, fileList.size());
     }
 
     // Clear progress line
     if (!g_opts.quiet)
+    {
         std::cerr << "\r" << std::string(60, ' ') << "\r";
+    }
 
     auto endTime = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
@@ -1494,15 +2221,21 @@ int main(int argc, char* argv[])
         }
     }
     for (auto const& [feat, count] : featureCounts)
+    {
         std::cout << "    " << feat << ": " << count << "\n";
+    }
 
     // Fork-level summary
     std::cout << "\n  By fork:\n";
     std::map<std::string, int> forkCounts;
     for (auto const& fd : g_failureDetails)
+    {
         forkCounts[fd.forkName]++;
+    }
     for (auto const& [fork, count] : forkCounts)
+    {
         std::cout << "    " << fork << ": " << count << "\n";
+    }
 
     std::cout << "=================================================\n";
 

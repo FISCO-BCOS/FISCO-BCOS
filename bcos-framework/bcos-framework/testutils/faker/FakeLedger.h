@@ -190,11 +190,10 @@ public:
         {
             return block;
         }
-        ParentInfoList parentInfo;
+        ParentInfo parentInfo;
         if (_parentBlockHeader != nullptr)
         {
-            ParentInfo info{_parentBlockHeader->number(), _parentBlockHeader->hash()};
-            parentInfo.push_back(info);
+            parentInfo = ParentInfo{_parentBlockHeader->number(), _parentBlockHeader->hash()};
         }
         auto rootHash =
             m_blockFactory->cryptoSuite()->hashImpl()->hash(std::to_string(_blockNumber));
@@ -218,11 +217,10 @@ public:
     {
         auto block = fakeAndCheckBlock(m_blockFactory->cryptoSuite(), m_blockFactory, _txsSize,
             _txsSize, _blockNumber, true, false);
-        ParentInfoList parentInfo;
+        ParentInfo parentInfo;
         if (_parentBlockHeader != nullptr)
         {
-            ParentInfo info{_parentBlockHeader->number(), _parentBlockHeader->hash()};
-            parentInfo.push_back(info);
+            parentInfo = ParentInfo{_parentBlockHeader->number(), _parentBlockHeader->hash()};
         }
         auto rootHash =
             m_blockFactory->cryptoSuite()->hashImpl()->hash(std::to_string(_blockNumber));

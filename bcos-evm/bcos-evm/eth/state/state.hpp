@@ -12,6 +12,7 @@
 #include "state_diff.hpp"
 #include "state_view.hpp"
 #include "transaction.hpp"
+#include <optional>
 #include <variant>
 
 namespace evmone::state
@@ -30,7 +31,8 @@ class State
     };
 
     struct JournalTouched : JournalBase
-    {};
+    {
+    };
 
     struct JournalStorageChange : JournalBase
     {
@@ -46,7 +48,8 @@ class State
     };
 
     struct JournalNonceBump : JournalBase
-    {};
+    {
+    };
 
     struct JournalCreate : JournalBase
     {
@@ -54,10 +57,12 @@ class State
     };
 
     struct JournalDestruct : JournalBase
-    {};
+    {
+    };
 
     struct JournalAccessAccount : JournalBase
-    {};
+    {
+    };
 
     using JournalEntry =
         std::variant<JournalBalanceChange, JournalTouched, JournalStorageChange, JournalNonceBump,
@@ -139,10 +144,23 @@ public:
 
 /// Executes a valid transaction.
 ///
+/// @param chain_id the NODE's chain id, from the caller — NOT tx.chain_id. EIP-7702 step 1
+/// compares each authorization's chain id against it, and validate_transaction never checks
+/// tx.chain_id, so feeding tx.chain_id here compares sender-supplied input against
+/// sender-supplied input: an authorization signed for any other chain is then accepted by
+/// setting tx.chain_id to that chain. Every consensus caller must pass the node's value; the
+/// opstack path (opTransition) takes it the same way.
+///
+/// Required, with no default: a default would make the unsafe value the API's behaviour for
+/// every caller that simply omits the argument. Upstream's own helper
+/// (test/utils/test_state.cpp) calls the 7-argument form and cannot be edited in tree, so the
+/// overlay port patches that one call site to pass tx.chain_id explicitly — the caller that
+/// genuinely wants the upstream value states it in its own source.
+///
 /// @return Transaction receipt with state diff.
 TransactionReceipt transition(const StateView& state, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props);
+    const TransactionProperties& tx_props, uint64_t chain_id);
 
 /// Validate a transaction.
 ///

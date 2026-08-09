@@ -516,10 +516,7 @@ static void conflictTransfer(benchmark::State& state)
 
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
                     // First issue
-                    bcostars::protocol::BlockHeaderImpl blockHeader(
-                        [inner = bcostars::BlockHeader()]() mutable {
-                            return std::addressof(inner);
-                        });
+                    bcostars::protocol::BlockHeaderImpl blockHeader;
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 

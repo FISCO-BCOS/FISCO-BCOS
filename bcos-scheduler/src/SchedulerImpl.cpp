@@ -1187,10 +1187,9 @@ void SchedulerImpl::tryExecuteBlock(
         {
             return;
         }
-        bcos::protocol::ParentInfoList parentInfoList;
-        bcos::protocol::ParentInfo parentInfo{number, parentHash};
-        parentInfoList.push_back(parentInfo);
-        block->blockHeader()->setParentInfo(parentInfoList);
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = number, .blockHash = std::move(parentHash)};
+        block->blockHeader()->setParentInfo(parentInfo);
         block->blockHeader()->calculateHash(*self->m_blockFactory->cryptoSuite()->hashImpl());
 
         auto timestamp = block->blockHeader()->timestamp();

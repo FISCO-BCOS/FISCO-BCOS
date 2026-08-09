@@ -44,13 +44,8 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
 
     auto originParent = blockHeader->parentInfo();
     auto decodedParent = decodedBlockHeader->parentInfo();
-    BOOST_CHECK_EQUAL(originParent.size(), decodedParent.size());
-    for (auto [originParentInfo, decodedParentInfo] :
-        ::ranges::views::zip(originParent, decodedParent))
-    {
-        BOOST_CHECK_EQUAL(originParentInfo.blockHash, decodedParentInfo.blockHash);
-        BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodedParentInfo.blockNumber);
-    }
+    BOOST_CHECK_EQUAL(originParent.blockHash, decodedParent.blockHash);
+    BOOST_CHECK_EQUAL(originParent.blockNumber, decodedParent.blockNumber);
     BOOST_CHECK(decodedBlockHeader->txsRoot() == blockHeader->txsRoot());
     BOOST_CHECK(decodedBlockHeader->receiptsRoot() == blockHeader->receiptsRoot());
     BOOST_CHECK(decodedBlockHeader->stateRoot() == blockHeader->stateRoot());
@@ -92,15 +87,15 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
     std::cout << "### PBBlockHeaderTest: sealer:" << toHex(decodedBlockHeader->extraData())
               << std::endl;
     std::cout << "#### hash:" << decodedBlockHeader->hash().hex() << std::endl;
-    if (blockHeader->parentInfo().size() >= 1)
+    if (blockHeader->number() > 0)
     {
-        std::cout << "### parentHash:" << blockHeader->parentInfo()[0].blockHash.hex() << std::endl;
+        std::cout << "### parentHash:" << blockHeader->parentInfo().blockHash.hex() << std::endl;
     }
 #endif
 }
 
 inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, int32_t _version,
-    const ParentInfoList& _parentInfo, h256 const& _txsRoot, h256 const& _receiptsRoot,
+    ParentInfo const& _parentInfo, h256 const& _txsRoot, h256 const& _receiptsRoot,
     h256 const& _stateRoot, int64_t _number, u256 const& _gasUsed, int64_t _timestamp,
     int64_t _sealer, const std::vector<bytes>& _sealerList, bytes const& _extraData,
     SignatureList _signatureList, bool _check = true)
@@ -170,17 +165,12 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     return blockHeader;
 }
 
-inline ParentInfoList fakeParentInfo(Hash::Ptr _hashImpl, size_t _size)
+inline ParentInfo fakeParentInfo(Hash::Ptr _hashImpl, size_t _size)
 {
-    ParentInfoList parentInfos;
-    for (size_t i = 0; i < _size; i++)
-    {
-        ParentInfo parentInfo;
-        parentInfo.blockNumber = i;
-        parentInfo.blockHash = _hashImpl->hash(std::to_string(i));
-        parentInfos.emplace_back(parentInfo);
-    }
-    return parentInfos;
+    ParentInfo parentInfo;
+    parentInfo.blockNumber = 0;
+    parentInfo.blockHash = _hashImpl->hash(std::to_string(0));
+    return parentInfo;
 }
 
 inline std::vector<bytes> fakeSealerList(

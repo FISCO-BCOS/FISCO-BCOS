@@ -25,6 +25,8 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
+#include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -83,6 +85,12 @@ public:
     std::string m_authAdminAccount;
     bool m_isSerialExecute = true;
     int m_executorVersion = 0;
+
+    // EVMC revision config (consumed by ethereum-executor, executor_version=2).
+    // m_evmcRevision: explicit single revision applied to all blocks (when set).
+    // m_evmcRevisionForks: block height -> revision fork transitions.
+    std::optional<evmc_revision> m_evmcRevision;
+    std::map<protocol::BlockNumber, evmc_revision> m_evmcRevisionForks;
 
     // rpbft config
     int64_t m_epochSealerNum = 4;

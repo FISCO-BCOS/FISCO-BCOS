@@ -21,6 +21,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <gsl/span>
 #include <memory>
 
@@ -464,10 +465,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     parentInfo.blockHash = bcos::crypto::HashType(10000);
     parentInfo.blockNumber = 2000;
 
-    std::vector<bcos::protocol::ParentInfo> parentInfoList;
-    parentInfoList.emplace_back(parentInfo);
-
-    header->setParentInfo(parentInfoList);
+    header->setParentInfo(parentInfo);
 
     auto headerImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
 
@@ -488,16 +486,126 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
     BOOST_CHECK_EQUAL(header->gasUsed(), decodedHeader->gasUsed());
-    BOOST_CHECK_EQUAL(header->parentInfo().size(), decodedHeader->parentInfo().size());
-    for (auto [originParentInfo, decodeParentInfo] :
-        ::ranges::views::zip(header->parentInfo(), decodedHeader->parentInfo()))
-    {
-        BOOST_CHECK_EQUAL(
-            bcos::toString(originParentInfo.blockHash), bcos::toString(decodeParentInfo.blockHash));
-        BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodeParentInfo.blockNumber);
-    }
+    BOOST_CHECK_EQUAL(
+        bcos::toString(header->parentInfo().blockHash), bcos::toString(decodedHeader->parentInfo().blockHash));
+    BOOST_CHECK_EQUAL(header->parentInfo().blockNumber, decodedHeader->parentInfo().blockNumber);
 
     BOOST_CHECK_NO_THROW(header->setExtraData(header->extraData().toBytes()));
+}
+
+// Round-trip the 12 Ethereum-standard header fields: set -> encode -> decode -> get.
+// A short-field case (1-byte prevRandao) guards against the 32-byte overread fixed
+// in the accessors — decode must succeed and the short field must read as empty.
+BOOST_AUTO_TEST_CASE(blockHeaderEthFields)
+{
+    auto header = blockHeaderFactory->createBlockHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+
+    // coinbase (20-byte Address)
+    bcos::Address coinbaseAddr;
+    std::fill(coinbaseAddr.begin(), coinbaseAddr.end(), 0xab);
+    header->setCoinbase(coinbaseAddr);
+
+    // logsBloom (256 bytes)
+    bcos::Bloom bloom{};
+    std::fill(bloom.begin(), bloom.end(), 0xcd);
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+
+    // gasLimit / baseFee / blobGasUsed / excessBlobGas (u256 as string)
+    header->setGasLimit(bcos::u256(30000000));
+    header->setBaseFee(bcos::u256(1000000000));
+    header->setBlobGasUsed(bcos::u256(131072));
+    header->setExcessBlobGas(bcos::u256(0));
+
+    // prevRandao / withdrawalsRoot / parentBeaconBlockRoot / requestsHash /
+    // blockAccessListHash (32-byte hashes)
+    bcos::h256 prevRandao(std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
+        bcos::h256::FromHex);
+    bcos::h256 withdrawalsHash(std::string_view("0x2222222222222222222222222222222222222222222222222222222222222222"),
+        bcos::h256::FromHex);
+    bcos::h256 beaconRoot(std::string_view("0x3333333333333333333333333333333333333333333333333333333333333333"),
+        bcos::h256::FromHex);
+    bcos::h256 requestsHash(std::string_view("0x4444444444444444444444444444444444444444444444444444444444444444"),
+        bcos::h256::FromHex);
+    bcos::h256 accessListHash(std::string_view("0x5555555555555555555555555555555555555555555555555555555555555555"),
+        bcos::h256::FromHex);
+    header->setPrevRandao(prevRandao);
+    header->setWithdrawalsRoot(withdrawalsHash);
+    header->setParentBeaconBlockRoot(beaconRoot);
+    header->setRequestsHash(requestsHash);
+    header->setBlockAccessListHash(accessListHash);
+
+    // slotNumber
+    header->setSlotNumber(42);
+
+    bcos::bytes buffer;
+    header->encode(buffer);
+
+    auto decodedHeader = blockHeaderFactory->createBlockHeader(buffer);
+
+    // coinbase
+    BOOST_CHECK(decodedHeader->coinbase() == coinbaseAddr);
+    // logsBloom
+    auto decodedBloom = decodedHeader->logsBloom();
+    BOOST_CHECK_EQUAL(decodedBloom.size(), bloom.size());
+    BOOST_CHECK(std::equal(bloom.begin(), bloom.end(), decodedBloom.data()));
+    // u256 fields
+    BOOST_CHECK_EQUAL(decodedHeader->gasLimit(), bcos::u256(30000000));
+    BOOST_CHECK(decodedHeader->baseFee().has_value());
+    BOOST_CHECK_EQUAL(*decodedHeader->baseFee(), bcos::u256(1000000000));
+    BOOST_CHECK(decodedHeader->blobGasUsed().has_value());
+    BOOST_CHECK_EQUAL(*decodedHeader->blobGasUsed(), bcos::u256(131072));
+    BOOST_CHECK(decodedHeader->excessBlobGas().has_value());
+    BOOST_CHECK_EQUAL(*decodedHeader->excessBlobGas(), bcos::u256(0));
+    // h256 fields
+    BOOST_CHECK(decodedHeader->prevRandao() == prevRandao);
+    BOOST_CHECK(decodedHeader->withdrawalsRoot().has_value());
+    BOOST_CHECK(*decodedHeader->withdrawalsRoot() == withdrawalsHash);
+    BOOST_CHECK(decodedHeader->parentBeaconBlockRoot().has_value());
+    BOOST_CHECK(*decodedHeader->parentBeaconBlockRoot() == beaconRoot);
+    BOOST_CHECK(decodedHeader->requestsHash().has_value());
+    BOOST_CHECK(*decodedHeader->requestsHash() == requestsHash);
+    BOOST_CHECK(decodedHeader->blockAccessListHash().has_value());
+    BOOST_CHECK(*decodedHeader->blockAccessListHash() == accessListHash);
+    // slotNumber
+    BOOST_CHECK(decodedHeader->slotNumber().has_value());
+    BOOST_CHECK_EQUAL(*decodedHeader->slotNumber(), 42);
+
+    // ---- slotNumber: unset (default -1) vs slot 0 ----
+    // Fresh header: slotNumber unset -> nullopt
+    auto freshHeader = blockHeaderFactory->createBlockHeader();
+    BOOST_CHECK(!freshHeader->slotNumber().has_value());
+
+    // slot 0 is a legal Ethereum slot and must round-trip as 0, not nullopt
+    auto zeroSlotHeader = blockHeaderFactory->createBlockHeader();
+    zeroSlotHeader->setSlotNumber(0);
+    bcos::bytes zeroSlotBuffer;
+    zeroSlotHeader->encode(zeroSlotBuffer);
+    auto decodedZeroSlot = blockHeaderFactory->createBlockHeader(zeroSlotBuffer);
+    BOOST_CHECK(decodedZeroSlot->slotNumber().has_value());
+    BOOST_CHECK_EQUAL(*decodedZeroSlot->slotNumber(), 0);
+
+    // ---- short-field overread guard ----
+    // Feed a 1-byte prevRandao straight into the Tars struct, then re-encode/decode.
+    auto shortImpl = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    shortImpl->inner().data.prevRandao = {0x01};
+    shortImpl->inner().data.withdrawalsHash = {0x01};
+    shortImpl->inner().data.parentBeaconRoot = {0x01};
+    shortImpl->inner().data.requestsHash = {0x01};
+    shortImpl->inner().data.blockAccessListHash = {0x01};
+    shortImpl->inner().data.stateRoot = {0x01};
+    shortImpl->inner().data.txsRoot = {0x01};
+    shortImpl->inner().data.receiptRoot = {0x01};
+
+    // short fields must not overread; they read as empty/default
+    BOOST_CHECK(shortImpl->prevRandao() == bcos::h256{});
+    BOOST_CHECK(!shortImpl->withdrawalsRoot().has_value());
+    BOOST_CHECK(!shortImpl->parentBeaconBlockRoot().has_value());
+    BOOST_CHECK(!shortImpl->requestsHash().has_value());
+    BOOST_CHECK(!shortImpl->blockAccessListHash().has_value());
+    BOOST_CHECK(shortImpl->stateRoot() == bcos::crypto::HashType{});
+    BOOST_CHECK(shortImpl->txsRoot() == bcos::crypto::HashType{});
+    BOOST_CHECK(shortImpl->receiptsRoot() == bcos::crypto::HashType{});
 }
 
 

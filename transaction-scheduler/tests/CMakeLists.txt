@@ -12,6 +12,7 @@ target_link_libraries(test-transaction-scheduler
 	protocol-tars
 	table
 	bcos-framework
+	ethereum-executor
 	Boost::unit_test_framework
 	FakeIt::FakeIt-boost
 )
@@ -21,5 +22,10 @@ set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "FullChainFixtureSmokeTest.cpp" "BaselineSchedulerMPTL1UpgradeTest.cpp"
     "BaselineSchedulerMPTGenesisTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# TestEthereumExecutorScheduler pulls EthereumExecutor + StorageBlockHashes
+# (bcos-ledger LedgerMethods.h / executor / tars headers) whose namespace-scope
+# entities would collide with the other unity-merged TUs; compile standalone.
+set_source_files_properties(
+    "TestEthereumExecutorScheduler.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")

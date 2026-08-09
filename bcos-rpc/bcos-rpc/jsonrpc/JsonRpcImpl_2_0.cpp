@@ -88,7 +88,7 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
     auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp) {
+    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
         auto end = std::chrono::high_resolution_clock::now();
@@ -369,11 +369,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr 
     }
 
     Json::Value jParentInfo(Json::arrayValue);
-    for (const auto& p : _blockHeaderPtr->parentInfo())
+    if (_blockHeaderPtr->number() > 0)
     {
         Json::Value jp;
-        jp["blockNumber"] = p.blockNumber;
-        jp["blockHash"] = toHexStringWithPrefix(p.blockHash);
+        jp["blockNumber"] = _blockHeaderPtr->parentInfo().blockNumber;
+        jp["blockHash"] = toHexStringWithPrefix(_blockHeaderPtr->parentInfo().blockHash);
         jParentInfo.append(jp);
     }
     jResp["parentInfo"] = jParentInfo;

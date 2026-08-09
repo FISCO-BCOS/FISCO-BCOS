@@ -168,6 +168,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadWeb3RpcConfig(_pt);
+    loadOpEngineRpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
@@ -259,8 +260,14 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
                     InvalidConfig() << errinfo_comment(
                         "[" + kv.first + "].nonce must fit in uint64: " + alloc.nonce));
             }
-            alloc.code = kv.second.get<std::string>("code");
-            requireHexField(kv.first, "code", alloc.code, 0, true);
+            alloc.code = kv.second.get<std::string>("code", "");
+            // An EOA alloc (no deployed code) is represented by an empty `code`.
+            // importGenesisState / computeGenesisStateTrie already treat an empty
+            // code as "no code", so only a non-empty value is validated here.
+            if (!alloc.code.empty())
+            {
+                requireHexField(kv.first, "code", alloc.code, 0, true);
+            }
             // storage section is a sibling flat key "<alloc.N>.storage"; '\0'
             // separator avoids boost interpreting the dots as a nested path.
             boost::property_tree::ptree::path_type storagePath(kv.first + ".storage", '\0');
@@ -688,6 +695,45 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("corsMaxAge", corsMaxAge)
                          << LOG_KV("corsAllowCredentials", corsAllowCredentials)
                          << LOG_KV("syncTransaction", m_web3SyncTransaction);
+}
+
+void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [op_engine_rpc]
+        enable=false
+        listen_ip=127.0.0.1
+        listen_port=8551
+        request_body_size_limit=10485760
+        batch_request_size_limit=8
+        jwt_secret_file=conf/op-engine/jwt.hex
+        clock_skew_secs=60
+    */
+    const bool enableOpEngineRpc = _pt.get<bool>("op_engine_rpc.enable", false);
+    const std::string listenIP = _pt.get<std::string>("op_engine_rpc.listen_ip", "127.0.0.1");
+    const int listenPort = _pt.get<int>("op_engine_rpc.listen_port", 8551);
+    const int requestBodySizeLimit =
+        _pt.get<int>("op_engine_rpc.request_body_size_limit", 10485760);
+    const int batchRequestSizeLimit = _pt.get<int>("op_engine_rpc.batch_request_size_limit", 8);
+    const std::string jwtSecretFile =
+        _pt.get<std::string>("op_engine_rpc.jwt_secret_file", "conf/op-engine/jwt.hex");
+    const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
+
+    m_enableOpEngineRpc = enableOpEngineRpc;
+    m_opEngineRpcListenIP = listenIP;
+    m_opEngineRpcListenPort = listenPort;
+    m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
+    m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
+    m_opEngineJwtSecretFile = jwtSecretFile;
+    m_opEngineClockSkewSecs = clockSkewSecs;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
+                         << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
+                         << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
+                         << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", clockSkewSecs);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -1448,6 +1494,144 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                                   "executor.is_auth_check/"
                                   "executor.is_serial_execute is null, please set it!"));
     }
+    // EVMC revision config — consumed by ethereum-executor (executor_version=2):
+    //   executor.evm_revision       = explicit single revision for all blocks, e.g. "cancun"
+    //   executor.evm_revision_forks = comma-separated "block:revision" fork transitions,
+    //                                 e.g. "0:cancun,100000:osaka"
+    // If neither is set, the ethereum-executor defaults to the latest revision from genesis.
+    try
+    {
+        auto evmcRevisionStr = _genesisConfig.get<std::string>("executor.evm_revision", "");
+        if (!evmcRevisionStr.empty())
+        {
+            if (auto rev = ledger::evmcRevisionFromName(evmcRevisionStr); rev)
+            {
+                if (*rev == EVMC_EXPERIMENTAL)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision=experimental is not a released fork: evmone's "
+                            "semantics for it change between versions, which would tie consensus "
+                            "to the binary"));
+                }
+                m_genesisConfig.m_evmcRevision = *rev;
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "executor.evm_revision is invalid: " + evmcRevisionStr +
+                        ", supported revisions: frontier/homestead/tangerinewhistle/"
+                        "spuriousdragon/byzantium/constantinople/petersburg/istanbul/berlin/"
+                        "london/paris/shanghai/cancun/prague/osaka"));
+            }
+        }
+
+        auto evmcForksStr = _genesisConfig.get<std::string>("executor.evm_revision_forks", "");
+        if (!evmcForksStr.empty())
+        {
+            auto trim = [](std::string_view s) -> std::string_view {
+                auto b = s.find_first_not_of(" \t\r\n");
+                if (b == std::string_view::npos)
+                {
+                    return {};
+                }
+                auto e = s.find_last_not_of(" \t\r\n");
+                return s.substr(b, e - b + 1);
+            };
+            std::stringstream ss(evmcForksStr);
+            std::string token;
+            while (std::getline(ss, token, ','))
+            {
+                auto entry = trim(token);
+                if (entry.empty())
+                {
+                    continue;
+                }
+                auto colon = entry.find(':');
+                if (colon == std::string_view::npos)
+                {
+                    BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                              "executor.evm_revision_forks invalid entry (expected "
+                                              "\"block:revision\"): " +
+                                              std::string(entry)));
+                }
+                auto blockStr = trim(entry.substr(0, colon));
+                auto name = trim(entry.substr(colon + 1));
+                auto block = boost::lexical_cast<protocol::BlockNumber>(blockStr);
+                if (block < 0)
+                {
+                    // A negative fork height would otherwise become the block-0 baseline
+                    // (encodeEVMCRevisionConfig picks forks.begin()->second when no 0: entry
+                    // exists) — an operator typing -5 instead of 5 would silently get a
+                    // different fork schedule. Reject it here.
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks block height must be >= 0, got " +
+                            std::to_string(block) + " in entry: " + std::string(entry)));
+                }
+                auto rev = ledger::evmcRevisionFromName(name);
+                if (!rev)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks invalid revision \"" + std::string(name) +
+                            "\" in entry: " + std::string(entry)));
+                }
+                if (*rev == EVMC_EXPERIMENTAL)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "executor.evm_revision_forks revision \"experimental\" is not a "
+                            "released fork (evmone semantics change between versions); entry: " +
+                            std::string(entry)));
+                }
+                m_genesisConfig.m_evmcRevisionForks[block] = *rev;
+            }
+        }
+    }
+    catch (InvalidConfig const& e)
+    {
+        throw;  // already carries a precise message
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "Invalid executor.evm_revision config: " + std::string(e.what())));
+    }
+    // A v2 chain (executor_version >= 2 selects the ethereum-executor) MUST pin its EVMC
+    // revision explicitly. Unlike v0/v1 the revision is consumed on every block, and a
+    // binary-side default would be recorded nowhere on-chain — tying "upgrade the binary" to a
+    // hard fork (replay/resync would diverge and a mixed-version network could split, without
+    // either side erroring). Requiring it here makes the effective revision part of the
+    // genesis config and therefore of the on-chain state.
+    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
+        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.version=2 (ethereum-executor) requires an explicit "
+                "executor.evm_revision (or executor.evm_revision_forks) so the EVM "
+                "revision is recorded on-chain; refusing to run with an implicit "
+                "binary-side default"));
+    }
+    // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
+    // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for
+    // >= V3_15_0). Below 3.18.0 the operator would be forced to write a value that is then
+    // ignored (the chain runs the binary default); below 3.15.0 executor_version is not
+    // persisted either, so getLedgerConfig never injects a revision and every transaction
+    // throws EvmcRevisionNotConfigured. Reject both ranges up front.
+    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
+        m_genesisConfig.m_compatibilityVersion <
+            static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.version=2 requires compatibility_version >= 3.18.0: below that "
+                "Ledger::buildGenesisBlock cannot persist evmc_revision, so the EVM revision "
+                "would not be recorded on-chain"));
+    }
     // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
     // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
     if (_genesisConfig.get<bool>("executor.is_wasm", false))
@@ -1935,6 +2119,41 @@ bool NodeConfig::web3SyncTransaction() const
     return m_web3SyncTransaction;
 }
 
+bool NodeConfig::enableOpEngineRpc() const
+{
+    return m_enableOpEngineRpc;
+}
+
+const std::string& NodeConfig::opEngineRpcListenIP() const
+{
+    return m_opEngineRpcListenIP;
+}
+
+uint16_t NodeConfig::opEngineRpcListenPort() const
+{
+    return m_opEngineRpcListenPort;
+}
+
+uint32_t NodeConfig::opEngineHttpBodySizeLimit() const
+{
+    return m_opEngineHttpBodySizeLimit;
+}
+
+uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
+{
+    return m_opEngineBatchRequestSizeLimit;
+}
+
+const std::string& NodeConfig::opEngineJwtSecretFile() const
+{
+    return m_opEngineJwtSecretFile;
+}
+
+int32_t NodeConfig::opEngineClockSkewSecs() const
+{
+    return m_opEngineClockSkewSecs;
+}
+
 const std::string& NodeConfig::p2pListenIP() const
 {
     return m_p2pListenIP;
@@ -2237,6 +2456,13 @@ std::string bcos::tool::generateGenesisData(
            << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
            << "authAdminAccount:" << genesisConfig.m_authAdminAccount << '\n'
            << "isSerialExecute:" << genesisConfig.m_isSerialExecute << '\n';
+        if (genesisConfig.m_evmcRevision || !genesisConfig.m_evmcRevisionForks.empty())
+        {
+            ss << "evmRevision:"
+               << ledger::encodeEVMCRevisionConfig(
+                      genesisConfig.m_evmcRevision, genesisConfig.m_evmcRevisionForks)
+               << '\n';
+        }
         if (genesisConfig.m_compatibilityVersion >=
             (uint32_t)bcos::protocol::BlockVersion::V3_5_VERSION)
         {
@@ -2299,6 +2525,15 @@ bool bcos::tool::NodeConfig::checkParallelConflict() const
 int bcos::tool::NodeConfig::executorVersion() const
 {
     return m_genesisConfig.m_executorVersion;
+}
+std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
+{
+    return m_genesisConfig.m_evmcRevision;
+}
+std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks()
+    const
+{
+    return m_genesisConfig.m_evmcRevisionForks;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

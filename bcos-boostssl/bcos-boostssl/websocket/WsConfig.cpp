@@ -140,6 +140,16 @@ void WsConfig::setDisableSsl(bool _disableSsl)
     m_disableSsl = _disableSsl;
 }
 
+bool WsConfig::enableWebSocket() const
+{
+    return m_enableWebSocket;
+}
+
+void WsConfig::setEnableWebSocket(bool _enableWebSocket)
+{
+    m_enableWebSocket = _enableWebSocket;
+}
+
 std::shared_ptr<bcos::boostssl::context::ContextConfig> WsConfig::contextConfig() const
 {
     return m_contextConfig;

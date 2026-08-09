@@ -43,6 +43,8 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include "ethereum-executor/EthereumExecutor.h"
+#include "ethereum-executor/StorageBlockHashes.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
@@ -305,6 +307,46 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         *m_protocolInitializer->blockFactory()->receiptFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), *m_precompiledManager);
 
+    // EthereumExecutor (executor_version=2): pure-Ethereum execution layer driven through the
+    // same scheduler prepare()/execute()/finish() pipeline as TransactionExecutorImpl.
+    // The injected StorageBlockHashes provider resolves BLOCKHASH against the committed
+    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash LedgerMethod), so
+    // it outlives any single block's execute view — matching the semantics documented in
+    // EthereumExecutor.h.
+    auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
+        *m_protocolInitializer->blockFactory()->receiptFactory(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(),
+        std::make_shared<executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
+            m_globalStateStorageInitializer->storage().latestBackend()));
+
+    // Resolve the effective executor version BEFORE gating Engine API / wiring the
+    // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
+    // at runtime (executor_version is runtime-settable via SystemConfigPrecompiled, and
+    // MultiVersionScheduler::setVersion saturates any version >= 2 onto the v2
+    // EthereumExecutor), so the gate below must read the ledger rather than the node
+    // config — a node whose genesis said v1 but whose ledger says v2 would otherwise build
+    // the Engine API on the v1 executor, the state-root divergence the gate exists to
+    // prevent. The residual risk of a runtime switch to v2 without genesis config is handled
+    // by the boot refusal below (no on-chain evmc_revision row), not by a per-block
+    // validator. Genesis is already built (LedgerInitializer), so m_ledger is readable at
+    // this point.
+    auto executorVersion = m_nodeConfig->executorVersion();
+    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
+            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    {
+        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
+        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+    }
+    m_executorVersion = executorVersion;
+
+    // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
+    // It must not be built for executor_version >= 2: a v2 chain's state transitions run
+    // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1
+    // executor would produce blocks with v1 semantics that diverge from the v2 main chain
+    // (a state-root fork). v2 chains therefore have no Engine API; engine RPC endpoints
+    // respond "engine service not available" (see EngineEndpoint.cpp).
+    const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =
@@ -320,9 +362,29 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor);
-        m_engineServiceInitializer = EngineServiceInitializer::build(
-            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-            parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+        if (engineApiForV1Only)
+        {
+            m_engineServiceInitializer = EngineServiceInitializer::build(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+        }
+
+        // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
+        // scheduler. Only one scheduler version is active at a time (selected via
+        // MultiVersionScheduler), so a dedicated instance avoids any cross-version state.
+        auto ethereumParallelScheduler =
+            std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>(
+                m_ioServicePool);
+        ethereumParallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
+        if (tbbThreadCount > 0)
+        {
+            ethereumParallelScheduler->m_maxConcurrency = tbbThreadCount;
+        }
+        std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
+            scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), ethereumParallelScheduler,
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
+                ethereumExecutor);
     }
     else
     {
@@ -332,9 +394,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor);
-        m_engineServiceInitializer = EngineServiceInitializer::build(
-            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), serialScheduler,
-            transactionExecutor, m_memPoolInitializer->memPool());
+        if (engineApiForV1Only)
+        {
+            m_engineServiceInitializer = EngineServiceInitializer::build(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+        }
+
+        // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
+        auto ethereumSerialScheduler =
+            std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
+            scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
+                ethereumExecutor);
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -351,17 +425,44 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
 
-    auto executorVersion = m_nodeConfig->executorVersion();
-    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
-            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
+    INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
+    m_scheduler->setVersion(m_executorVersion, {});
+
+    // Parse and log the effective EVMC revision once at startup (v2+). It is fixed at genesis
+    // (NodeConfig requires an explicit evm_revision for executor_version>=2), so a one-time
+    // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
+    // The CI integration test greps this line to pin the effective revision.
+    if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
     {
-        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
-        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+        if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
+        {
+            // Parse here so a corrupt persisted value fails at BOOT (an explicit startup
+            // failure) instead of on the first block execution, where getLedgerConfig's
+            // outer catch would turn it into a per-block "Execute block failed!" loop.
+            ledger::LedgerConfig probe;
+            ledger::applyEVMCRevisionConfig(probe, std::get<0>(*evmcRev));
+            INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2)")
+                                  << LOG_KV("evmcRevision", std::get<0>(*evmcRev));
+        }
+        else
+        {
+            // v2 with no evmc_revision row: the effective revision would fall back to a
+            // binary-side default (EVMC_REVISION_DEFAULT), tying consensus to the binary.
+            // A fresh v2 chain always has the row, so reaching here means a runtime switch
+            // to v2 without genesis config. Refuse to start (node-local policy — no block
+            // semantics touched) instead of defaulting.
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "executor_version >= 2 but no evmc_revision system config is recorded "
+                    "on-chain; the effective EVM revision would be a binary-side default. "
+                    "Refusing to start — configure executor.evm_revision at genesis, or run "
+                    "executor_version 0/1"));
+        }
     }
-    INITIALIZER_LOG(INFO) << "Set executor version to: " << executorVersion;
-    m_scheduler->setVersion(executorVersion, {});
 
     // Set scheduler to TxPoolInitializer after scheduler is created
     m_txpoolInitializer->setScheduler(m_scheduler);
@@ -561,11 +662,33 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
 
+    // executor_version=2 (EthereumExecutor): keep the RPC block-number notifications flowing
+    // when the ethereum baseline scheduler is the active executor version.
+    if (m_setEthereumSchedulerBlockNumberNotifier)
+    {
+        m_setEthereumSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
+
     m_pbftInitializer->initNotificationHandlers(_rpc);
 }
 
 void Initializer::initSysContract()
 {
+    // The pure-Ethereum EthereumExecutor (executor_version >= 2 selects it) does not support
+    // FISCO system contracts (BFS/Auth precompiles): its initSysContract block would be
+    // rejected and the chain could not proceed to seal. Skip the system-contract deployment
+    // entirely for v2+.
+    if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "SysInitializer: skip system-contract deployment for ethereum executor "
+            "(executor_version>=2)");
+        return;
+    }
     // check is it deploy first time
     std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
