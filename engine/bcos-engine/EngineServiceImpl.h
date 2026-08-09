@@ -231,24 +231,21 @@ public:
         // Mempool operations run without lock — they only depend on the state, not on x_state.
         // Step 1: Remove stale/tainted transactions from mempool (cleans tx with nonce < state
         // nonce).
-        // Step 2: Seal valid transactions (in nonce order, with nonce verification) on a
-        // THROWAWAY overlay view. MemPoolImpl::seal() advances the sender's nonce in the view it
-        // is given (its internal nonce bookkeeping), and that advance must not leak into the
-        // view that gets executed and committed: the executor validates tx.nonce against the
-        // state nonce (evmone: NONCE_TOO_LOW when state nonce > tx nonce), so sealing on the
-        // executed view would reject every just-sealed transaction. The seal side-effects stay
-        // on a non-persistent overlay, matching the mempool's own design ("txpool sealing must
-        // use a non-persistent overlay over ledger state rather than real state storage").
+        // Step 2: Seal valid transactions (in nonce order, with nonce verification) directly on
+        // the executed view. Both MemPoolImpl::remove() and MemPoolImpl::seal() are read-only
+        // with respect to the given view: remove() only erases the mempool's own container, and
+        // seal() only reads the sender's current nonce to pick the gapless executable prefix. It
+        // deliberately does NOT advance the nonce in the view — the authoritative nonce advance
+        // happens during execution itself (evmone), matching how geth's legacypool and reth's
+        // best_transactions() select block transactions without touching state. Sealing on the
+        // executed view is therefore safe: evmone validates tx.nonce >= state.nonce, and the
+        // state nonce here is still the committed one.
         std::vector<protocol::Transaction::Ptr> sealedTxs;
-        {
-            auto sealView = m_globalStateStorage.get().fork();
-            sealView.newMutable();
-            m_memPool.get().remove(sealView);
-            m_memPool.get().seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));
-        }
-
-        // Step 3: Create a mutable layer on the executed view and build the payload.
         view.newMutable();
+        m_memPool.get().remove(view);
+        m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+
+        // Step 3: Build the payload on the executed view (already mutable above).
         auto payloadId = nextPayloadID();
         auto nextBlockNumber = *headBlockNumber + 1;
         auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
