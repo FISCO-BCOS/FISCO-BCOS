@@ -131,15 +131,28 @@ static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t n
     return tx;
 }
 
+// The mempool stores senders as raw address bytes (TransactionImpl::sender), while
+// EVMAccount resolves accounts under the lower-case hex path via the evmc_address
+// overload — the same path the executor writes/reads and MemPoolImpl::seal/remove now
+// use. These helpers must therefore build an evmc_address, not pass the raw bytes
+// through the string_view overload (which would compute a wrong table path).
+static evmc_address senderToEvmc(std::string_view sender)
+{
+    evmc_address addr{};
+    std::copy_n(sender.begin(),
+        std::min(sender.size(), static_cast<std::size_t>(sizeof(addr.bytes))), addr.bytes);
+    return addr;
+}
+
 static std::optional<std::string> readNonce(MapStateStorage& s, std::string_view sender)
 {
-    ledger::account::EVMAccount acc{s, sender, false};
+    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false};
     return task::syncWait(acc.nonce());
 }
 
 static void setNonce(MapStateStorage& s, std::string_view sender, std::string nonce)
 {
-    ledger::account::EVMAccount acc{s, sender, false};
+    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false};
     task::syncWait(acc.setNonce(std::move(nonce)));
 }
 

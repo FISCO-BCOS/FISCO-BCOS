@@ -74,9 +74,12 @@ constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
 // system config struct
 using SystemConfigEntry = std::tuple<std::string, bcos::protocol::BlockNumber>;
 
-// Minimum block gas limit. Lowered to go-ethereum's MinGasLimit (5000) so EEST
-// state tests with small block gas limits (lowGasLimit: 80000) can be reproduced;
-// the previous 100000 floor rejected valid sub-100k Ethereum blocks.
+// Minimum block gas limit for node-local startup / genesis validation. Lowered to
+// go-ethereum's MinGasLimit (5000) so EEST state tests with small block gas limits
+// (lowGasLimit: 80000) can be built at genesis; the previous 100000 floor rejected valid
+// sub-100k Ethereum blocks. This is node-local only — the consensus-side runtime floor
+// enforced by SystemConfigPrecompiled (bcos::precompiled::TX_GAS_LIMIT_MIN) deliberately
+// stays at 100000 so existing chains are unaffected.
 const unsigned TX_GAS_LIMIT_MIN = 5000;
 const unsigned RPBFT_EPOCH_SEALER_NUM_MIN = 1;
 const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;

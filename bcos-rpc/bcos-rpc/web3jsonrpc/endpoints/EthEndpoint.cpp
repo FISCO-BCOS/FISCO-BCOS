@@ -21,6 +21,7 @@
 #include "EthEndpoint.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -459,6 +460,28 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     // txpool and P2P broadcast. EngineService seals these txs into blocks on a timer.
     if (auto* memPool = m_nodeService->memPool()) [[unlikely]]
     {
+        // The mempool path bypasses TxValidator, so admission here is deliberately lighter
+        // than the txpool path: signature + EIP-155 chainId are checked below; web3 nonce,
+        // ledger nonce/blockLimit, EIP-3860 initcode size and balance are NOT — the mode is
+        // aimed at single-node EEST reproduction where fixtures use arbitrary nonces and
+        // unfunded senders (MemPoolImpl::add only rejects null / tainted / duplicate-hash /
+        // unparseable-nonce transactions). ChainId IS checked because dropping it would
+        // disable EIP-155 replay protection: a transaction signed for another chain would
+        // execute here and consume the sender's nonce.
+        if (auto chainIdConfig = co_await ledger::getSystemConfig(
+                *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
+        {
+            auto [chainId, _] = chainIdConfig.value();
+            // Legacy txs carry an empty/"0" chainId and are exempt (matches
+            // TxValidator::validateChainId).
+            if (!tx->chainId().empty() && tx->chainId() != "0" && tx->chainId() != chainId)
+            {
+                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
+                                  << LOG_KV("txChainId", tx->chainId())
+                                  << LOG_KV("nodeChainId", chainId);
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+        }
         // The mempool rejects tainted transactions (MemPoolImpl::add throws
         // InvalidTaintedTransaction), so recover the sender / verify the signature the same
         // way TxValidator does for the txpool path before adding.

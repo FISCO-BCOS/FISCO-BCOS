@@ -175,6 +175,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
+    // Single-node consensus mode is AIR-only. It skips txpool/pbft init and wires the
+    // in-process mempool into NodeService via AirNodeInitializer::setMemPool; on a MAX/tars
+    // node the flag would start the block-producing driver while sendRawTransaction still
+    // falls through to an uninitialized txpool. Reject the combination at startup rather
+    // than leaving that state reachable by a config flag.
+    if (m_nodeConfig->enableSingleNodeConsensus() &&
+        _nodeArchType != bcos::protocol::NodeArchitectureType::AIR)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+            "enable_single_node_consensus is only supported on AIR nodes (in-process "
+            "mempool/scheduler); not supported on MAX/tars deployments"));
+    }
+
     // TBB global thread control
     auto tbbThreadCount = m_nodeConfig->tbbThreadCount();
     if (tbbThreadCount > 0)
@@ -368,7 +381,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
         }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
@@ -395,7 +408,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumParallelScheduler, ethereumExecutor, m_memPoolInitializer->memPool());
+                ethereumParallelScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger);
         }
     }
     else
@@ -410,7 +424,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
@@ -426,7 +440,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool());
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger);
         }
     }
 
@@ -633,10 +648,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
 
     // Single-node consensus mode: build the built-in single-node consensus driver that
-    // produces blocks on a timer from the mempool via the scheduler commit path
-    // (BaselineScheduler + Storage), bypassing txpool/sealer/pbft. It does not require the
-    // EngineService — the Engine API endpoints remain available separately for external CL
-    // (Lodestar/op-node) testing.
+    // produces blocks on a timer by driving the EngineService interface like an external CL
+    // (forkchoiceUpdated -> getPayload -> newPayload), bypassing txpool/sealer/pbft. The
+    // EngineService owns the mempool/scheduler/commit, so the driver only needs it plus the
+    // ledger (to resolve the initial head). It is always built in this mode — for
+    // executor_version < 2 on the v1 scheduler, and for executor_version >= 2 on the
+    // EthereumExecutor scheduler — so this is also the in-process CL path for the Engine API.
     if (m_nodeConfig->enableSingleNodeConsensus())
     {
         // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
@@ -652,13 +669,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             return bcos::crypto::keccak256Hash(bytesConstRef(
                 reinterpret_cast<byte const*>(seed.data()), seed.size()));
         }();
+        if (!m_engineServiceInitializer)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                "enable_single_node_consensus requires the EngineService to be built"));
+        }
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
-            scheduler(), m_protocolInitializer->blockFactory(), m_memPoolInitializer->memPool(),
-            m_ledger, m_nodeConfig->compatibilityVersion(),
+            *m_engineServiceInitializer->engineService(), m_ledger,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp(), m_nodeConfig->txGasLimit());
+            m_nodeConfig->singleNodeConsensusFixedTimestamp());
     }
 
 #ifdef TOOLS

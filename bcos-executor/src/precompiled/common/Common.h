@@ -79,8 +79,15 @@ const int CODE_TABLE_DUPLICATE_FIELD = -50007;
 const int CODE_TABLE_INVALIDATE_FIELD = -50008;
 
 const int TX_COUNT_LIMIT_MIN = 1;
-// Matches ledger::TX_GAS_LIMIT_MIN (go-ethereum MinGasLimit 5000).
-const int TX_GAS_LIMIT_MIN = 5000;
+// This is the floor SystemConfigPrecompiled enforces for a runtime
+// setValueByKey("tx_gas_limit", ...) during block execution — a CONSENSUS rule on every
+// chain. It deliberately stays at the historical 100000: lowering it here would change
+// receipts / state roots for the same block on existing chains (a version split mid-
+// rollout). The lower bound lives only in bcos::ledger::TX_GAS_LIMIT_MIN (LedgerTypeDef.h),
+// which is node-local startup/genesis validation and can accept go-ethereum's MinGasLimit
+// (5000) so EEST lowGasLimit fixtures (80000) can be built — those write SYS_CONFIG directly
+// at genesis and never pass through this precompiled floor.
+const int TX_GAS_LIMIT_MIN = 100000;
 
 enum PrecompiledErrorCode : int
 {

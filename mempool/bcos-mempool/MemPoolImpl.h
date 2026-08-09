@@ -13,6 +13,7 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
+#include <algorithm>
 #include <concepts>
 #include <string_view>
 
@@ -104,6 +105,19 @@ private:
     std::mutex m_mutex;
     bool m_rawAddress{};
 
+    /// The mempool stores the sender as raw address bytes (TransactionImpl::sender());
+    /// convert them to an evmc_address so EVMAccount resolves the same lower-case hex
+    /// account path (/apps/<hex>) the executor writes and reads.
+    static evmc_address senderToAddress(std::string_view sender)
+    {
+        evmc_address addr{};
+        if (sender.size() >= sizeof(addr.bytes))
+        {
+            std::copy_n(sender.begin(), sizeof(addr.bytes), addr.bytes);
+        }
+        return addr;
+    }
+
     void add(protocol::Transaction::Ptr transaction);
     void removeBySenderNonces(SenderNonces auto senderNonces)
     {
@@ -141,7 +155,13 @@ public:
         for (const auto& data : senderIndex)
         {
             auto sender = data.sender();
-            ledger::account::EVMAccount account(state, sender, m_rawAddress);
+            // The mempool stores the sender as raw address bytes (forceSender), while the
+            // executor persists accounts under the lower-case hex path (/apps/<hex>) via the
+            // evmc_address EVMAccount overload. Passing the raw bytes through the string_view
+            // overload would treat them as a hex string and compute a wrong table path, so the
+            // nonce read below would miss the account entirely. Build an evmc_address instead
+            // so the same hex path is used as the executor.
+            ledger::account::EVMAccount account(state, senderToAddress(sender), m_rawAddress);
 
             int64_t currentNonce = 0;
             if (auto nonceStr = task::syncWait(account.nonce()))
@@ -153,7 +173,6 @@ public:
                     bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
                 }
             }
-
             auto startNonce = currentNonce;
             for (auto nonceIt = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
                 nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
@@ -190,7 +209,9 @@ public:
         {
             auto sender = it->sender();
             auto nextIt = senderIndex.equal_range(sender).second;
-            ledger::account::EVMAccount account(state, sender, m_rawAddress);
+            // Same hex-path note as in seal(): the raw sender bytes must go through the
+            // evmc_address overload so the account nonce read finds the executor's account.
+            ledger::account::EVMAccount account(state, senderToAddress(sender), m_rawAddress);
             if (auto nonceStr = task::syncWait(account.nonce()))
             {
                 int64_t nonce = 0;
@@ -260,20 +281,32 @@ public:
         return transactions;
     }
 
-    /// Drain all pending transactions from the pool (in (sender, nonce) order) and clear it.
-    /// Used by the single-node consensus driver to assemble the next block proposal — the
-    /// driver hands the txs directly to the scheduler, so no external state view is needed
-    /// here (unlike seal(), which validates nonces against a state view).
-    std::vector<protocol::Transaction::Ptr> takeAll()
+    /// Drain up to @p limit pending transactions from the pool (in (sender, nonce) order) and
+    /// clear them. A negative @p limit means unlimited.
+    ///
+    /// Used by the single-node consensus driver to assemble the next block proposal. Unlike
+    /// seal(), no nonce-vs-state check is performed: the driver hands the txs directly to the
+    /// scheduler, so there is no state view to validate against here — and the driver accepts
+    /// future-nonce (gapped) transactions on purpose, letting execution fail them instead of
+    /// holding them back. @p limit restores the block-size bound seal() enforces, so an
+    /// unbounded submission rate cannot grow a single proposal without limit.
+    std::vector<protocol::Transaction::Ptr> takeAll(int64_t limit = -1)
     {
         std::vector<protocol::Transaction::Ptr> transactions;
         std::unique_lock lock(m_mutex);
         auto& senderNonceIndex = m_transactions.get<0>();
-        transactions.reserve(m_transactions.size());
+        transactions.reserve(limit < 0 ? m_transactions.size() :
+                                         std::min<size_t>(m_transactions.size(), limit));
+        int64_t count = 0;
         for (auto it = senderNonceIndex.begin(); it != senderNonceIndex.end();)
         {
             transactions.push_back(it->m_transaction);
             it = senderNonceIndex.erase(it);
+            ++count;
+            if (limit >= 0 && count >= limit)
+            {
+                break;
+            }
         }
         return transactions;
     }

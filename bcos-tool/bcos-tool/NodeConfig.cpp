@@ -1096,7 +1096,6 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
         enable_single_node_consensus=false
         block_interval=1000
         produce_empty_blocks=true
-        block_api_version=3
         fee_recipient=0x0
     */
     m_enableSingleNodeConsensus =
@@ -1104,7 +1103,6 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
     m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
     m_singleNodeConsensusProduceEmptyBlocks =
         _pt.get<bool>("consensus.produce_empty_blocks", true);
-    m_singleNodeConsensusApiVersion = _pt.get<int32_t>("consensus.block_api_version", 3);
     m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
         "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
     m_singleNodeConsensusPrevRandao =
@@ -1115,7 +1113,6 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
                          << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
                          << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
                          << LOG_KV("produceEmptyBlocks", m_singleNodeConsensusProduceEmptyBlocks)
-                         << LOG_KV("apiVersion", m_singleNodeConsensusApiVersion)
                          << LOG_KV("feeRecipient", m_singleNodeConsensusFeeRecipient);
 }
 
@@ -2189,11 +2186,6 @@ bool NodeConfig::singleNodeConsensusProduceEmptyBlocks() const
     return m_singleNodeConsensusProduceEmptyBlocks;
 }
 
-int32_t NodeConfig::singleNodeConsensusApiVersion() const
-{
-    return m_singleNodeConsensusApiVersion;
-}
-
 const std::string& NodeConfig::singleNodeConsensusFeeRecipient() const
 {
     return m_singleNodeConsensusFeeRecipient;
@@ -2536,6 +2528,19 @@ std::string bcos::tool::generateGenesisData(
            << bcos::protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << '\n'
            << "[tx]" << '\n'
            << "gaslimit:" << genesisConfig.m_txGasLimit << '\n'
+           // tx.gas_price / tx.excess_blob_gas are seeded into SYS_CONFIG at genesis and feed
+           // v2 execution (base fee / blob base fee), so they must be part of the genesis pin
+           // the guard at Ledger::buildGenesisBlock compares on restart — otherwise two nodes
+           // configured identically except for these keys pass the genesis-mismatch check and
+           // diverge on the first block. Emit them only when non-default (mirroring the
+           // evmRevision pattern) so a default-configured chain's genesis string is byte-
+           // identical to before this change and existing chains are unaffected.
+           << (genesisConfig.m_txGasPrice != "0x0" ?
+                      "gasprice:" + genesisConfig.m_txGasPrice + "\n" :
+                      "")
+           << (genesisConfig.m_excessBlobGas ?
+                      "excessBlobGas:" + std::to_string(*genesisConfig.m_excessBlobGas) + "\n" :
+                      "")
            << "[executor]" << '\n'
            << "iswasm: " << genesisConfig.m_isWasm << '\n'
            << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'

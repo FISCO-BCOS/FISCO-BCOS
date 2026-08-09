@@ -7,8 +7,8 @@
  */
 
 #include "SingleNodeConsensus.h"
+#include "bcos-framework/engine/Types.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
@@ -21,24 +21,70 @@ using namespace bcos::single_consensus;
 
 #define SINGLE_CONSENSUS_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SINGLE_CONSENSUS")
 
-SingleNodeConsensus::SingleNodeConsensus(
-    std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler,
-    bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::txpool::MemPoolImpl& _memPool,
-    bcos::ledger::LedgerInterface::Ptr _ledger, std::uint32_t _compatibilityVersion,
-    std::uint64_t _blockIntervalMs, bool _produceEmptyBlocks,
-    bcos::crypto::HashType _prevRandao, std::string _feeRecipient, std::uint64_t _fixedTimestamp,
-    std::uint64_t _gasLimit)
-  : m_scheduler(std::move(_scheduler)),
-    m_blockFactory(std::move(_blockFactory)),
-    m_memPool(_memPool),
+namespace
+{
+/// Bridges the callback-style ledger API to a blocking wait for the driver thread, with two
+/// guards the raw promise/future pattern lacks:
+///  * setValue() is idempotent via std::call_once — a double-invoked callback cannot throw
+///    std::future_error(promise_already_satisfied) from the ledger thread, where nothing
+///    catches it and the process would std::terminate.
+///  * wait() polls and aborts as soon as the driver is stopping, so stop()'s join() cannot
+///    hang forever on a callback that never arrives.
+/// The callback lambda holds a shared_ptr, so even if wait() bails out (shutdown) and the
+/// call site returns, a later callback invocation still targets a live promise.
+template <typename T>
+class CallbackPromise
+{
+public:
+    void setValue(T value)
+    {
+        std::call_once(m_once, [this, v = std::move(value)]() mutable {
+            m_promise.set_value(std::move(v));
+        });
+    }
+
+    T wait(std::atomic_bool const& _running,
+        std::chrono::milliseconds _pollInterval = std::chrono::milliseconds(50))
+    {
+        auto future = m_promise.get_future();
+        while (_running.load())
+        {
+            if (future.wait_for(_pollInterval) == std::future_status::ready)
+            {
+                return future.get();
+            }
+        }
+        throw std::runtime_error("SingleNodeConsensus stopped while waiting for an async callback");
+    }
+
+private:
+    std::once_flag m_once;
+    std::promise<T> m_promise;
+};
+}  // namespace
+
+namespace
+{
+/// Engine API version the built-in CL speaks. V1 keeps the driver minimal (no withdrawals /
+/// beacon-root bookkeeping); the produced blocks' execution semantics are governed by the
+/// ledger's executor version, not by the Engine API version.
+constexpr std::uint32_t c_engineApiVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1);
+}  // namespace
+
+SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
+    bcos::ledger::LedgerInterface::Ptr _ledger, std::uint64_t _blockIntervalMs,
+    bool _produceEmptyBlocks, bcos::crypto::HashType _prevRandao, std::string _feeRecipient,
+    std::uint64_t _fixedTimestamp)
+  : m_engineService(_engineService),
     m_ledger(std::move(_ledger)),
-    m_compatibilityVersion(_compatibilityVersion),
     m_blockIntervalMs(_blockIntervalMs > 0 ? _blockIntervalMs : 1000),
     m_produceEmptyBlocks(_produceEmptyBlocks),
     m_prevRandao(_prevRandao),
-    m_feeRecipient(std::move(_feeRecipient)),
-    m_fixedTimestamp(_fixedTimestamp),
-    m_gasLimit(_gasLimit)
+    // Parse the coinbase exactly once here: a malformed fee_recipient must fail the node at
+    // startup, not fail on the first block tick.
+    m_feeRecipient(toAddress(_feeRecipient)),
+    m_fixedTimestamp(_fixedTimestamp)
 {}
 
 SingleNodeConsensus::~SingleNodeConsensus()
@@ -54,8 +100,7 @@ void SingleNodeConsensus::start()
     }
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Single-node consensus started")
                                << LOG_KV("blockIntervalMs", m_blockIntervalMs)
-                               << LOG_KV("produceEmptyBlocks", m_produceEmptyBlocks)
-                               << LOG_KV("compatibilityVersion", m_compatibilityVersion);
+                               << LOG_KV("produceEmptyBlocks", m_produceEmptyBlocks);
     m_thread = std::thread([this] { loop(); });
 }
 
@@ -65,6 +110,8 @@ void SingleNodeConsensus::stop()
     {
         return;
     }
+    // Wake the loop's interval wait so a large block_interval does not stall shutdown.
+    m_cv.notify_all();
     if (m_thread.joinable())
     {
         m_thread.join();
@@ -94,108 +141,132 @@ void SingleNodeConsensus::loop()
         // sealed immediately after submission instead of waiting for the next interval
         // tick — the EEST harness runs one tx per unit, so this removes ~1s/unit of
         // latency). Only pace the loop when nothing was sealed (empty block or skipped).
+        // stop() notifies the condition variable so shutdown is prompt even with a large
+        // block_interval.
         if (!sealedTxBlock)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(m_blockIntervalMs));
+            std::unique_lock lock(m_cvMutex);
+            m_cv.wait_for(lock, std::chrono::milliseconds(m_blockIntervalMs),
+                [this] { return !m_running.load(); });
         }
     }
 }
 
-bool SingleNodeConsensus::produceBlock()
+void SingleNodeConsensus::resolveInitialHead()
 {
-    // Resolve the current head (block number + hash) from the ledger — commitBlock keeps
-    // SYS_CURRENT_STATE / SYS_NUMBER_2_HASH current, so the next block always extends the
-    // committed chain.
-    std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> headPromise;
-    m_ledger->asyncGetBlockNumber([&headPromise](
-                                      Error::Ptr _error, protocol::BlockNumber _number) {
-        headPromise.set_value(std::make_tuple(std::move(_error), _number));
-    });
-    auto [headError, headNumber] = headPromise.get_future().get();
+    auto headPromise =
+        std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::BlockNumber>>>();
+    m_ledger->asyncGetBlockNumber(
+        [headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
+            headPromise->setValue(std::make_tuple(std::move(_error), _number));
+        });
+    auto [headError, headNumber] = headPromise->wait(m_running);
     if (headError || headNumber < 0)
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("resolve head block number failed")
                                     << LOG_KV("msg", headError ? headError->errorMessage() : "");
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("SingleNodeConsensus: cannot resolve the initial head"));
+    }
+    m_headNumber = headNumber;
+    m_headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
+    m_headInitialized = true;
+    SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Resolved initial head")
+                               << LOG_KV("number", m_headNumber)
+                               << LOG_KV("hash", m_headHash.hexPrefixed());
+}
+
+bool SingleNodeConsensus::produceBlock()
+{
+    if (!m_headInitialized)
+    {
+        resolveInitialHead();
+    }
+
+    // Assemble the payload attributes — the "block proposal" the CL hands to the execution
+    // layer. Header timestamps are in milliseconds (the executor divides by 1000 to get
+    // seconds, matching EEST's currentTimestamp unit). fixed_timestamp (seconds) is pinned by
+    // the harness so the produced block's timestamp matches the fixture; 0 = wall clock.
+    bcos::engine::PayloadAttributes payloadAttributes;
+    payloadAttributes.prevRandao = m_prevRandao;
+    payloadAttributes.suggestedFeeRecipient = m_feeRecipient;
+    payloadAttributes.timestamp = m_fixedTimestamp > 0 ?
+                                      m_fixedTimestamp * 1000 :
+                                      static_cast<std::uint64_t>(utcTime());
+
+    // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes
+    // stale transactions, seals the in-process mempool (with the nonce-vs-state check) and
+    // builds + executes the payload — the step that previously duplicated the mempool /
+    // scheduler logic inside this driver. The head passed here is the last block this CL
+    // committed, so the EL's tracked-head validation (must increase by exactly 1) holds.
+    bcos::engine::ForkchoiceState forkchoiceState{
+        .headBlockHash = m_headHash,
+        .safeBlockHash = m_headHash,
+        .finalizedBlockHash = m_headHash,
+    };
+    auto fcResult = task::syncWait(m_engineService.updateForkchoice(
+        forkchoiceState, &payloadAttributes, c_engineApiVersion));
+    if (fcResult.payloadStatus.status != bcos::engine::PayloadValidationStatus::Valid ||
+        !fcResult.payloadId)
+    {
+        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("updateForkchoice failed to build a payload")
+                                    << LOG_KV("status",
+                                        static_cast<int>(fcResult.payloadStatus.status))
+                                    << LOG_KV("error",
+                                        fcResult.payloadStatus.validationError.value_or(
+                                            "no payloadId returned"));
         return false;
     }
-    auto headHash = task::syncWait(ledger::getBlockHash(*m_ledger, headNumber));
 
-    // Take pending transactions from the mempool.
-    auto txs = m_memPool.takeAll();
-    bool const sealedTxBlock = !txs.empty();
+    // getPayload: fetch the built block proposal (sealed transactions + header).
+    auto payload =
+        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, c_engineApiVersion));
+    if (!payload)
+    {
+        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("getPayload returned null");
+        return false;
+    }
+    auto& executionPayload = payload->executionPayload;
+    bool const sealedTxBlock = !executionPayload.transactions.empty();
 
     // produceEmptyBlocks=false: only produce a block that carries at least one transaction
     // (used by EEST fixture runs so the produced block environment matches the fixture).
-    if (txs.empty() && !m_produceEmptyBlocks)
+    if (executionPayload.transactions.empty() && !m_produceEmptyBlocks)
     {
         SINGLE_CONSENSUS_LOG(DEBUG) << LOG_DESC("Skip empty block (produceEmptyBlocks=false)");
         return false;
     }
 
-    // Assemble the block proposal.
-    auto block = m_blockFactory->createBlock();
-    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-    header->setNumber(headNumber + 1);
-    header->setParentInfo(protocol::ParentInfo{headNumber, headHash});
-    // Header timestamp is in milliseconds (executor divides by 1000 to get seconds, matching
-    // EEST's currentTimestamp unit). fixed_timestamp (seconds) is pinned by the harness so the
-    // produced block's timestamp matches the fixture; 0 = wall clock.
-    header->setTimestamp(static_cast<int64_t>(
-        m_fixedTimestamp > 0 ? m_fixedTimestamp * 1000 : static_cast<std::uint64_t>(utcTime())));
-    header->setVersion(m_compatibilityVersion);
-    header->setCoinbase(toAddress(m_feeRecipient));
-    header->setPrevRandao(m_prevRandao);
-    header->setGasLimit(u256(m_gasLimit));
-    block->setBlockHeader(header);
-    for (auto& tx : txs)
+    // newPayload: validate + execute + commit the built block to storage. Because the payload
+    // was built locally, the EngineService also commits its state view here (pushView +
+    // mergeBackStorage), keeping SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER current for the ledger
+    // and the eth_* RPC reads.
+    bcos::engine::NewPayloadRequest request;
+    request.executionPayload = std::move(executionPayload);
+    auto newPayloadStatus =
+        task::syncWait(m_engineService.newPayload(request, c_engineApiVersion));
+    if (newPayloadStatus.status != bcos::engine::PayloadValidationStatus::Valid)
     {
-        block->appendTransaction(tx);
-    }
-    SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Producing block")
-                               << LOG_KV("number", headNumber + 1)
-                               << LOG_KV("txs", txs.size());
-
-    // Execute the block through the scheduler (BaselineScheduler for v2). The scheduler
-    // executes via the EVM, computes the state root and receipts into the block, and caches
-    // the execution result for the commit below.
-    std::promise<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>> executePromise;
-    m_scheduler->executeBlock(block, false,
-        [&executePromise](
-            Error::Ptr _error, protocol::BlockHeader::Ptr _header, bool _sysBlock) {
-            executePromise.set_value(
-                std::make_tuple(std::move(_error), std::move(_header), _sysBlock));
-        });
-    auto [executeError, executedHeader, sysBlock] = executePromise.get_future().get();
-    (void)sysBlock;
-    if (executeError || !executedHeader)
-    {
-        SINGLE_CONSENSUS_LOG(ERROR)
-            << LOG_DESC("executeBlock failed")
-            << LOG_KV("msg", executeError ? executeError->errorMessage() : "null header");
+        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("newPayload failed")
+                                    << LOG_KV("status",
+                                        static_cast<int>(newPayloadStatus.status))
+                                    << LOG_KV("error",
+                                        newPayloadStatus.validationError.value_or(""));
         return false;
     }
 
-    // Commit the block through the scheduler + storage: BaselineScheduler persists via
-    // prewriteBlockToBuffer + mergeBackStorage — the exact path PBFT/sealer use on v2 chains.
-    std::promise<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> commitPromise;
-    m_scheduler->commitBlock(executedHeader,
-        [&commitPromise](Error::Ptr _error, ledger::LedgerConfig::Ptr _ledgerConfig) {
-            commitPromise.set_value(std::make_tuple(std::move(_error), std::move(_ledgerConfig)));
-        });
-    auto [commitError, ledgerConfig] = commitPromise.get_future().get();
-    (void)ledgerConfig;
-    if (commitError)
-    {
-        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("commitBlock failed")
-                                    << LOG_KV("msg", commitError->errorMessage());
-        return false;
-    }
+    // Advance the CL-side head to the newly committed block. The EngineService does not expose
+    // or advance the canonical head, so the CL tracks it — exactly like a real consensus layer
+    // tracks its own fork choice.
+    m_headNumber = request.executionPayload.blockNumber;
+    m_headHash = request.executionPayload.blockHash;
 
     SINGLE_CONSENSUS_LOG(INFO) << LOG_DESC("Committed block")
-                               << LOG_KV("number", executedHeader->number())
-                               << LOG_KV("hash", executedHeader->hash().hexPrefixed())
-                               << LOG_KV("txs", txs.size())
-                               << LOG_KV("gasUsed", executedHeader->gasUsed().str())
-                               << LOG_KV("stateRoot", executedHeader->stateRoot().hexPrefixed());
+                               << LOG_KV("number", request.executionPayload.blockNumber)
+                               << LOG_KV("hash", request.executionPayload.blockHash.hexPrefixed())
+                               << LOG_KV("txs", request.executionPayload.transactions.size())
+                               << LOG_KV("gasUsed", request.executionPayload.gasUsed.str())
+                               << LOG_KV("stateRoot",
+                                   request.executionPayload.stateRoot.hexPrefixed());
     return sealedTxBlock;
 }

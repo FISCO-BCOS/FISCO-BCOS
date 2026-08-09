@@ -201,7 +201,6 @@ public:
     bool enableSingleNodeConsensus() const;
     uint64_t singleNodeConsensusBlockInterval() const;
     bool singleNodeConsensusProduceEmptyBlocks() const;
-    int32_t singleNodeConsensusApiVersion() const;
     const std::string& singleNodeConsensusFeeRecipient() const;
     const std::string& singleNodeConsensusPrevRandao() const;
     std::uint64_t singleNodeConsensusFixedTimestamp() const;
@@ -501,7 +500,6 @@ private:
     bool m_enableSingleNodeConsensus = false;
     uint64_t m_singleNodeConsensusBlockInterval = 1000;
     bool m_singleNodeConsensusProduceEmptyBlocks = true;
-    int32_t m_singleNodeConsensusApiVersion = 3;
     std::string m_singleNodeConsensusFeeRecipient =
         "0x0000000000000000000000000000000000000000";
     // 32-byte hex prevRandao; empty means derive deterministically from a seed.

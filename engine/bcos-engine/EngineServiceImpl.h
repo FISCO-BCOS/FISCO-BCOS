@@ -20,8 +20,8 @@
 #pragma once
 
 #include "bcos-crypto/merkle/Merkle.h"
-#include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Types.h"
+#include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockFactory.h"
@@ -87,13 +87,15 @@ public:
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
         m_executor(std::ref(executor)),
         m_scheduler(std::ref(scheduler)),
-        m_blockFactory(std::move(blockFactory))
+        m_blockFactory(std::move(blockFactory)),
+        m_ledger(std::move(ledger))
     {
         if (!m_blockFactory)
         {
@@ -226,29 +228,40 @@ public:
             co_return result;
         }
 
-        // Mempool operations run without lock — they only depend on the view, not on x_state.
+        // Mempool operations run without lock — they only depend on the state, not on x_state.
         // Step 1: Remove stale/tainted transactions from mempool (cleans tx with nonce < state
-        // nonce)
-        m_memPool.get().remove(view);
-
-        // Step 2: Create mutable storage layer on the view for transaction sealing
-        view.newMutable();
-
-        // Step 3: Pull valid transactions from mempool (in nonce order, with nonce verification)
+        // nonce).
+        // Step 2: Seal valid transactions (in nonce order, with nonce verification) on a
+        // THROWAWAY overlay view. MemPoolImpl::seal() advances the sender's nonce in the view it
+        // is given (its internal nonce bookkeeping), and that advance must not leak into the
+        // view that gets executed and committed: the executor validates tx.nonce against the
+        // state nonce (evmone: NONCE_TOO_LOW when state nonce > tx nonce), so sealing on the
+        // executed view would reject every just-sealed transaction. The seal side-effects stay
+        // on a non-persistent overlay, matching the mempool's own design ("txpool sealing must
+        // use a non-persistent overlay over ledger state rather than real state storage").
         std::vector<protocol::Transaction::Ptr> sealedTxs;
-        m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+        {
+            auto sealView = m_globalStateStorage.get().fork();
+            sealView.newMutable();
+            m_memPool.get().remove(sealView);
+            m_memPool.get().seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));
+        }
 
+        // Step 3: Create a mutable layer on the executed view and build the payload.
+        view.newMutable();
         auto payloadId = nextPayloadID();
         auto nextBlockNumber = *headBlockNumber + 1;
-        auto payload = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId,
-            version, nextBlockNumber, std::move(sealedTxs), view);
+        auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
+            nextBlockNumber, std::move(sealedTxs), view);
         PayloadEntry entry{
             .version = version,
-            .executionPayload = std::move(payload),
+            .executionPayload = std::move(built.executionPayload),
             .blockValue = 0,
             .blobsBundle = std::nullopt,
             .shouldOverrideBuilder = false,
             .view = std::make_shared<ViewType>(std::move(view)),
+            .header = std::move(built.header),
+            .receipts = std::move(built.receipts),
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
@@ -303,6 +316,13 @@ private:
         std::optional<BlobsBundleV1> blobsBundle;
         bool shouldOverrideBuilder = false;
         std::shared_ptr<ViewType> view;
+        /// Built-block artifacts kept so newPayload() can persist the ledger block tables
+        /// (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
+        /// SYS_CURRENT_STATE / SYS_NUMBER_2_TXS / SYS_BLOCK_NUMBER_2_NONCES /
+        /// SYS_HASH_2_RECEIPT / SYS_HASH_2_TX) via ledger::prewriteBlockToBuffer. Externally
+        /// received payloads leave these null/empty.
+        bcos::protocol::BlockHeader::Ptr header;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
     };
 
     static bool isVersionSupported(std::uint32_t version)
@@ -417,6 +437,8 @@ private:
             .blobsBundle = std::nullopt,
             .shouldOverrideBuilder = false,
             .view = nullptr,
+            .header = nullptr,
+            .receipts = {},
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
@@ -432,7 +454,37 @@ private:
         if (it != m_payloadCache.end() && it->second.view)
         {
             m_globalStateStorage.get().pushView(std::move(*it->second.view));
-            co_await m_globalStateStorage.get().mergeBackStorage();
+            if (m_ledger && it->second.header)
+            {
+                // Locally built payload: persist the ledger block tables atomically with
+                // the state merge, using the same FIB-104 prewriteBlockToBuffer pattern the
+                // BaselineScheduler commit path uses. Without these rows a produced block is
+                // invisible to eth_getBlockByNumber / eth_getBlockByHash /
+                // eth_getTransactionReceipt and to ledger::getBlockHash / getCurrentBlockNumber.
+                typename GlobalStateStorageType::MutableStorage prewriteStorage;
+                auto block = m_blockFactory->createBlock();
+                block->setBlockHeader(it->second.header);
+                for (auto const& tx : it->second.executionPayload.transactions)
+                {
+                    block->appendTransaction(tx);
+                }
+                for (auto const& receipt : it->second.receipts)
+                {
+                    block->appendReceipt(receipt);
+                }
+                auto blockTxs = std::make_shared<protocol::ConstTransactions>(
+                    it->second.executionPayload.transactions |
+                    ::ranges::views::transform(
+                        [](auto const& tx) { return protocol::Transaction::ConstPtr(tx); }) |
+                    ::ranges::to<std::vector>());
+                co_await ledger::prewriteBlockToBuffer(
+                    *m_ledger, blockTxs, block, prewriteStorage);
+                co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
+            }
+            else
+            {
+                co_await m_globalStateStorage.get().mergeBackStorage();
+            }
         }
 
         m_payloadCache[payloadId] = std::move(entry);
@@ -443,7 +495,17 @@ private:
 
     PayloadID nextPayloadID() { return detail::encodePayloadSequence(m_nextPayloadSequence++); }
 
-    bcos::task::Task<ExecutionPayload> buildPayload(const ForkchoiceState& forkchoiceState,
+    /// Result of building a payload: the ExecutionPayload handed to the CL plus the
+    /// built-block artifacts (header + receipts) needed to persist the ledger block tables
+    /// when the payload is committed via newPayload().
+    struct BuildPayloadResult
+    {
+        ExecutionPayload executionPayload;
+        bcos::protocol::BlockHeader::Ptr header;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    };
+
+    bcos::task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
@@ -501,6 +563,9 @@ private:
             emptyHeader->setNumber(nextBlockNumber);
             emptyHeader->setVersion(blockVersion);
             emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+            emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
+            emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
+            emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
             emptyHeader->setReceiptsRoot(h256{});
             emptyHeader->setTxsRoot(h256{});
@@ -510,7 +575,9 @@ private:
             executionPayload.receiptsRoot = h256{};
             executionPayload.gasUsed = 0;
             executionPayload.blockHash = emptyHeader->hash();
-            co_return executionPayload;
+            co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
+                .header = std::move(emptyHeader),
+                .receipts = {}};
         }
 
         // Step 2b: Create BlockHeader for the new block
@@ -521,6 +588,9 @@ private:
         blockHeader->setNumber(nextBlockNumber);
         blockHeader->setVersion(blockVersion);
         blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+        blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
+        blockHeader->setPrevRandao(payloadAttributes.prevRandao);
+        blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
 
         // Step 2c: Execute transactions via the scheduler
         // Use views::indirect to dereference shared_ptr<Transaction> -> const Transaction&
@@ -575,7 +645,7 @@ private:
             }
         }
 
-        // Step 2f: Compute gas used and block-level logsBloom from receipts
+        // Step 2f: Compute gas used and block-level logsBloom from receipts.
         u256 totalGasUsed;
         Bloom logsBloom{};
         for (auto& receipt : receipts)
@@ -585,7 +655,13 @@ private:
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
             }
             totalGasUsed += receipt->gasUsed();
-            orBloom(logsBloom, receipt->logsBloom());
+            // The v2 (pure-Ethereum) executor's receipts carry an empty logsBloom (a
+            // documented limitation — evmoneReceiptToBcos does not compute it), so tolerate
+            // empty blooms instead of indexing past their (zero) length.
+            if (!receipt->logsBloom().empty())
+            {
+                orBloom(logsBloom, receipt->logsBloom());
+            }
         }
 
         // Step 2g: Compute state root (MPT over state storage)
@@ -606,7 +682,9 @@ private:
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
         executionPayload.logsBloom = logsBloom;
 
-        co_return executionPayload;
+        co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
+            .header = std::move(blockHeader),
+            .receipts = std::move(receipts)};
     }
 
     /// Compute state root by iterating over storage and XOR-ing entry hashes.
@@ -671,6 +749,10 @@ private:
     std::reference_wrapper<ExecutorType> m_executor;
     std::reference_wrapper<SchedulerType> m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    /// Optional ledger used to persist the ledger block tables when a locally built payload
+    /// is committed via newPayload(). Null in unit tests / for payloads without block
+    /// persistence.
+    bcos::ledger::LedgerInterface::Ptr m_ledger;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;
