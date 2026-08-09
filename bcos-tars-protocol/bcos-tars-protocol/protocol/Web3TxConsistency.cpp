@@ -48,6 +48,10 @@ bool web3TarsFieldsMatchSignedExtra(bcos::protocol::Transaction const& tx)
         return false;
     }
 
+    // NOTE: unknown EIP-2718 kinds (envelope byte not in TransactionType) fail closed via
+    // decodeFromPayload → UnsupportedTransactionType. When adding a new typed tx (e.g. EIP-7702
+    // kind >= 4), extend TransactionType / the decoder; do not expect admission to pass-through
+    // an unrecognized envelope the way the old executor early-out did.
     bcos::bytes extraCopy(extra.begin(), extra.end());
     bcos::bytesRef ref(extraCopy.data(), extraCopy.size());
     bcos::rpc::Web3Transaction w3{};

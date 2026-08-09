@@ -491,8 +491,10 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
         });
     auto verifyT = utcTime() - startT;
     startT = utcTime();
-    // Import good transactions first so a single poisoned body does not sink the batch.
-    // Invalid txs are skipped by batchVerifyAndSubmitTransaction / batchImportTxs.
+    // Import good transactions first so a single invalid entry (poisoned Tars mirror,
+    // bad signature, or other verify failure) does not sink the whole batch. Invalid txs
+    // are skipped by batchVerifyAndSubmitTransaction / batchImportTxs; we still return
+    // false below on enforceImport so the caller can re-fetch unusable hashes.
     auto txpoolStorage = m_config->txpoolStorage();
     if (enforceImport)
     {
@@ -501,8 +503,9 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
         {
             return false;
         }
-        // Any invalid (poisoned Tars / bad signature) means this peer's copy of that
-        // hash is unusable — fail so the caller can re-fetch from another peer.
+        // Any invalid entry means this peer's copy of that hash is unusable — fail so
+        // the caller can re-fetch from another peer. Applies to consistency and signature
+        // failures alike (broader than the Web3-only case, intentionally).
         if (!verifySuccess)
         {
             return false;

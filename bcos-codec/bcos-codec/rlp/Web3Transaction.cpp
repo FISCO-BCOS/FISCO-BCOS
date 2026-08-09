@@ -384,6 +384,10 @@ bcos::Error::UniquePtr decodeTransaction(
             return error;
         }
 
+        if (in.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input data is too short");
+        }
         if (in[0] == BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;
@@ -412,9 +416,25 @@ bcos::Error::UniquePtr decodeTransaction(
                 return error;
             }
         }
+        // Canonical hash is decode-then-re-encode (TransactionImpl::recomputeWeb3CanonicalHash).
+        // Trailing list items would be dropped by encode and collide on txHash — reject them.
         if (withSignature)
         {
-            decodeError = decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            if (decodeError = decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+                decodeError != nullptr)
+            {
+                return decodeError;
+            }
+            if (!in.empty())
+            {
+                return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
+                    "Typed transaction has trailing items");
+            }
+        }
+        else if (!in.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedListElements,
+                "Typed signing preimage has trailing items");
         }
     }
     else
@@ -442,6 +462,10 @@ bcos::Error::UniquePtr decodeTransaction(
             return decodeError;
         }
 
+        if (in.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input data is too short");
+        }
         if (in[0] == BYTES_HEAD_BASE)
         {
             out.to = std::nullopt;

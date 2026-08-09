@@ -99,6 +99,8 @@ static bcos::crypto::HashType recomputeWeb3CanonicalHash(
     bcos::bytes buffer(payload.begin(), payload.end());
     bcos::bytesRef cursor(buffer.data(), buffer.size());
     bcos::rpc::Web3Transaction w3{};
+    // The canonical hash now depends on the decoder rejecting anything it cannot
+    // round-trip through encode (trailing typed-list items, malformed legacy trailers).
     if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(cursor, w3);
         decodeError != nullptr) [[unlikely]]
     {

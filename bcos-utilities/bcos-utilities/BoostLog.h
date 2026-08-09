@@ -53,6 +53,7 @@
 
 // windows.h (pulled in transitively by Boost.Asio / Winsock) may redefine ERROR.
 // Re-clear after Boost includes so BCOS_LOG(ERROR) stays valid in every TU.
+#ifdef _WIN32
 #ifdef ERROR
 #undef ERROR
 #endif
@@ -67,6 +68,7 @@
 #endif
 #ifdef FATAL
 #undef FATAL
+#endif
 #endif
 
 // BCOS log format

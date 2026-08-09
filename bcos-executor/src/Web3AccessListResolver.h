@@ -13,7 +13,8 @@ struct Web3AccessListResolved
 {
     /// EIP-2718 envelope / typed kind (1 = EIP-2930). 0 = unset / not applicable.
     uint8_t web3TypedTxKind = 0;
-    /// Non-null only when an access list was decoded (may be empty for type-1 txs with no entries).
+    /// Non-null when the Tars access list has at least one entry. Empty lists stay nullptr
+    /// (downstream treats nullptr and empty the same).
     std::shared_ptr<const Eip2930AccessList> accessList;
 };
 
