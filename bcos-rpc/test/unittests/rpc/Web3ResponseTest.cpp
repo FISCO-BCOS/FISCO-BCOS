@@ -188,9 +188,22 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
     auto receipt = makeReceipt(m_blockFactory);
     BOOST_REQUIRE(receipt);
     protocol::OpStackReceiptMeta meta;
+    // D2 (P4-1): ALL 13 mappings positively asserted — a wrong JSON key or value on any field
+    // would otherwise pass (empty-meta test only proves absence-when-empty). Distinct values so
+    // cross-field mixups are caught too.
     meta.l1_gas_price = bcos::u256(5);
+    meta.l1_gas_used = 6;
     meta.l1_fee = bcos::u256(10);
-    meta.operator_fee_scalar = 2;
+    meta.l1_blob_base_fee = bcos::u256(11);
+    meta.l1_base_fee_scalar = 12;
+    meta.l1_blob_base_fee_scalar = 13;
+    meta.operator_fee_scalar = 14;
+    meta.operator_fee_constant = 15;
+    meta.da_footprint_gas_scalar = 16;
+    meta.da_footprint = 17;
+    meta.deposit_nonce = 18;
+    meta.deposit_receipt_version = 19;
+    meta.operator_fee = bcos::u256(20);
     receipt->setOpStackMeta(std::move(meta));
 
     bcos::crypto::HashType blockHash;
@@ -200,8 +213,18 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
     combineReceiptResponse(result, *receipt, *tx, blockHash);
 
     BOOST_CHECK_EQUAL(result["l1GasPrice"].asString(), "0x5");
+    BOOST_CHECK_EQUAL(result["l1GasUsed"].asString(), "0x6");
     BOOST_CHECK_EQUAL(result["l1Fee"].asString(), "0xa");
-    BOOST_CHECK_EQUAL(result["operatorFeeScalar"].asString(), "0x2");
+    BOOST_CHECK_EQUAL(result["l1BlobBaseFee"].asString(), "0xb");
+    BOOST_CHECK_EQUAL(result["l1BaseFeeScalar"].asString(), "0xc");
+    BOOST_CHECK_EQUAL(result["l1BlobBaseFeeScalar"].asString(), "0xd");
+    BOOST_CHECK_EQUAL(result["operatorFeeScalar"].asString(), "0xe");
+    BOOST_CHECK_EQUAL(result["operatorFeeConstant"].asString(), "0xf");
+    BOOST_CHECK_EQUAL(result["daFootprintGasScalar"].asString(), "0x10");
+    BOOST_CHECK_EQUAL(result["blobGasUsed"].asString(), "0x11");  // ← da_footprint (Jovian 复用)
+    BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x12");
+    BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x13");
+    BOOST_CHECK_EQUAL(result["operatorFee"].asString(), "0x14");  // FISCO 扩展
     // from = checksum of the raw sender bytes (review ①). Pinned against the independently-known
     // EIP-55 vector 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed (deliberately NOT derived via the
     // same toChecksumAddress under test, so a checksum-casing regression is actually caught).

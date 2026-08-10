@@ -291,6 +291,13 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptHappyPath)
         /*blockNumber=*/12);
     BOOST_REQUIRE(receipt);
     receipt->setTransactionIndex(0);
+    // C4: seed a receipt WITH opStackMeta so eth_getTransactionReceipt must carry the OP extension
+    // fields through the REAL RPC dispatch (unit-testing combineReceiptResponse alone does not
+    // prove the fields survive the full EthEndpoint → JSON round-trip).
+    protocol::OpStackReceiptMeta meta;
+    meta.l1_gas_price = bcos::u256(5);
+    meta.operator_fee_scalar = 2;
+    receipt->setOpStackMeta(std::move(meta));
     seedLedger->seededReceipt = receipt;
 
     // Rebuild the RPC stack over the seedable ledger.
@@ -323,6 +330,9 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptHappyPath)
         BOOST_CHECK_EQUAL(resp["result"]["transactionHash"].asString(), txHashHex);
         BOOST_CHECK(resp["result"].isMember("logs"));
         BOOST_CHECK(resp["result"].isMember("blockNumber"));
+        // C4: OP extension fields survive the full RPC round-trip (not just combineReceiptResponse).
+        BOOST_CHECK_EQUAL(resp["result"]["l1GasPrice"].asString(), "0x5");
+        BOOST_CHECK_EQUAL(resp["result"]["operatorFeeScalar"].asString(), "0x2");
         // Pinned against the independently-known EIP-55 vector (NOT derived via the same
         // toChecksumAddress under test, so a checksum-casing regression is actually caught).
         BOOST_CHECK_EQUAL(
