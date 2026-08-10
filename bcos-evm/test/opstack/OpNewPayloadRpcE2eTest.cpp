@@ -348,6 +348,31 @@ void runChainedPair(std::string const& aId, std::string const& bId)
     assertSevenFields(bId, producedB, goldenHeaderB, goldenBlockHashB);
 }
 
+/// 播种 + newPayload 一个向量块,返回 {fixture, blockHash, blockNumber} 供 FCU 用例复用。
+/// 对照 runGoldenVector（:215-230）的流程,但保留 fixture 与块身份——updateForkchoice 直接
+/// 以该块做 head/safe/finalized 播种。⚠️ parseNewPayloadRequest 的真实签名是三参
+/// `bcos::rpc::parseNewPayloadRequest(params, txFactory, version)`（EngineHelper.h:68-70）；
+/// 任务 brief 里的一参 `bcos::engine::parseNewPayloadRequest(params)` 是过时草稿,这里按
+/// runGoldenVector 同款三参调用。
+std::tuple<std::unique_ptr<OpE2eFixture>, bcos::h256, bcos::protocol::BlockNumber>
+runVectorAndGetBlockHash(std::string const& id)
+{
+    auto sample = w6test::loadVectorSample(id);
+    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+    w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    const auto goldenHeader = w6test::decodeGoldenHeader(sample);
+    registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
+    auto params = w6test::makeParamsJson(sample);
+    auto req = bcos::rpc::parseNewPayloadRequest(
+        params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto status = bcos::task::syncWait(fixture->service.newPayload(req, /*version=*/4));
+    BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+        id << ": seed newPayload expected VALID, got " << static_cast<int>(status.status));
+    return {std::move(fixture), bcos::h256(std::string(sample.golden["blockHash"].asString())),
+        goldenHeader->number()};
+}
+
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpNewPayloadRpcE2eSuite)
@@ -426,5 +451,119 @@ BOOST_AUTO_TEST_CASE(ChainedAB) { runChainedPair("chainA", "chainB"); }
 BOOST_AUTO_TEST_CASE(JovianChainedAB) { runChainedPair("jovianChainA", "jovianChainB"); }
 // 最终校验：36 用例 = 34 向量（33 + isthmus_system_call_order_observable）+ 2 链式对
 // （chainA/B + jovianChainA/B，覆盖 4 个链式样本）。
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
+// ── FCU 端到端 6 用例（/loop 审计缺口：真实 updateForkchoice OP 语义零覆盖）──
+// 对照 op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated 判定：
+//   head 已知 → VALID + LatestValidHash=head（api.go:316-322 valid()）
+//   head 未知 → STATUS_SYNCING（api.go:238 网络拉取）
+//   OP + attributes → -38003（checkOptimismPayloadAttributes 拒绝对,本仓库 UnsupportedOpPayloadAttributes）
+//   单调性 finalized>head → -38002（api.go safe/finalized 校验,本仓库 InvalidForkchoiceState :263-280）
+//   head 递增必须恰好 +1（:318-323）
+//   无 attributes → head/safe/finalized 推进（updateTrackedBlockNumbers :1520-1525）
+
+// ① head 已知 → VALID + LatestValidHash=head（对照 op-geth valid()）
+BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
+{
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, nullptr, /*version=*/3));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_CHECK(state.latestValidHash.has_value());
+    BOOST_CHECK_EQUAL(*state.latestValidHash, blockHash);
+}
+
+// ② head 未知 → SYNCING（对照 op-geth STATUS_SYNCING；getBlockNumber 无值 → :253-262）
+BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
+{
+    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(/*jovian=*/false));
+    bcos::h256 unknownHash(0xdeadbeef);  // 未登记任何块
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{unknownHash, unknownHash, unknownHash}, nullptr,
+        /*version=*/3));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
+}
+
+// ③ OP attributes → -38003（UnsupportedOpPayloadAttributes；对照 op-geth attributes 拒绝）。
+// 注意：forkchoice 状态更新先生效、构建才被拒（EngineServiceImpl.h:356-359 设计 §6.2）。
+BOOST_AUTO_TEST_CASE(ForkchoiceAttributesRejected)
+{
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    bcos::engine::PayloadAttributes attrs;
+    BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
+                          bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
+                          /*version=*/3)),
+        bcos::engine::UnsupportedOpPayloadAttributes);
+}
+
+// ④ finalized > head → InvalidForkchoiceState（-38002 单调性；对照 updateForkchoice :263-280）
+BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
+{
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    // 手动登记一个更高编号"已知"块供 finalized 用（registerVerifiedBlock 写 SYS_HASH_2_NUMBER）
+    bcos::h256 higherBlock("0x9999999999999999999999999999999999999999999999999999999999999999");
+    registerVerifiedBlock(fixture->multiLayerStorage, higherBlock, number + 2);
+    // finalized(编号 number+2) > head(编号 number) → :269-274 抛 InvalidForkchoiceState
+    BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
+                          bcos::engine::ForkchoiceState{blockHash, blockHash, higherBlock}, nullptr,
+                          /*version=*/3)),
+        bcos::engine::InvalidForkchoiceState);
+}
+
+// ⑤ head 递增必须恰好 +1：跳号（缺中间块）→ 冲突；严格 +1 → VALID（对照 :318-323）
+BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
+{
+    auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
+    // 第一次 FCU(head=块1) → VALID（tracked head 设为块1,编号 n1）
+    auto [s1, p1] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash1, blockHash1, blockHash1}, nullptr,
+        /*version=*/3));
+    (void)p1;
+    BOOST_CHECK_EQUAL(static_cast<int>(s1.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    // 跳号：直接 FCU 指向编号 n1+2 的已登记块（未登记 n1+1）→ :318-323 "must increase by
+    // exactly 1" 抛 InvalidForkchoiceState（抛在 m_trackedHeadBlock 赋值前,tracked 仍为 n1）
+    bcos::h256 jumpBlock("0x8888888888888888888888888888888888888888888888888888888888888888");
+    registerVerifiedBlock(fixture->multiLayerStorage, jumpBlock, n1 + 2);
+    BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
+                          bcos::engine::ForkchoiceState{jumpBlock, jumpBlock, jumpBlock}, nullptr,
+                          /*version=*/3)),
+        bcos::engine::InvalidForkchoiceState);
+    // 严格 +1：登记编号 n1+1 的块 → VALID（tracked head 从 n1 递增到 n1+1）
+    bcos::h256 nextBlock("0x7777777777777777777777777777777777777777777777777777777777777777");
+    registerVerifiedBlock(fixture->multiLayerStorage, nextBlock, n1 + 1);
+    auto [s2, p2] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{nextBlock, nextBlock, nextBlock}, nullptr, /*version=*/3));
+    (void)p2;
+    BOOST_CHECK_EQUAL(static_cast<int>(s2.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+}
+
+// ⑥ 无 attributes → head 推进（getSafe/Finalized 反映；对照 updateForkchoice :334-338 +
+// updateTrackedBlockNumbers :1520-1525）
+BOOST_AUTO_TEST_CASE(ForkchoiceNoAttributesHeadAdvance)
+{
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, nullptr, /*version=*/3));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    // safe/finalized 同步到 FCU 传入的编号（内存态;FCU 无持久化）
+    auto safe = fixture->service.getSafeBlockNumber();
+    auto finalized = fixture->service.getFinalizedBlockNumber();
+    BOOST_REQUIRE(safe.has_value());
+    BOOST_REQUIRE(finalized.has_value());
+    BOOST_CHECK_EQUAL(*safe, number);
+    BOOST_CHECK_EQUAL(*finalized, number);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
