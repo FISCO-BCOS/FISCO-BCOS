@@ -223,6 +223,8 @@ inline intx::uint256 compute_blob_gas_price(
 
     static constexpr auto MIN_BLOB_GASPRICE = 1;
     const auto fraction = blob_params.base_fee_update_fraction;
+    if (fraction == 0)
+        return std::numeric_limits<intx::uint256>::max();  // degenerate schedule
     return fake_exponential(MIN_BLOB_GASPRICE, excess_blob_gas, fraction);
 }
 

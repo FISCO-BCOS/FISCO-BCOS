@@ -21,7 +21,7 @@
 namespace bcos::executor_v1::eth
 {
 
-using ::bcos::executor_v1::eth::toIntxU256;
+using ::bcos::executor_v1::eth::evm::toIntxU256;
 
 // EIP-7840 blob schedule constants (target, max, base_fee_update_fraction).
 // Shared by EthereumExecutor (blob_gas_left for validation) and

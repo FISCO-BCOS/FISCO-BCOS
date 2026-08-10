@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "EVMSupport.h"  // evm::toIntxU256 (single canonical u256 -> intx)
 #include "bcos-evm/eth/state/state.hpp"
 #include "bcos-evm/eth/state/state_view.hpp"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -17,14 +18,6 @@
 
 namespace bcos::executor_v1::eth
 {
-
-/// Helper: convert bcos::u256 to intx::uint256.
-/// Defined here to avoid circular dependency with BCOS2Evmone.h.
-inline intx::uint256 toIntxU256(bcos::u256 const& val)
-{
-    auto hexStr = "0x" + val.str(0, std::ios_base::hex);
-    return intx::from_string<intx::uint256>(hexStr);
-}
 
 /// A read-only StateView backed by BCOS MutableStorage and EVMAccount.
 ///
@@ -105,7 +98,7 @@ private:
         if (nonceVal.has_value())
             acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
 
-        acc.balance = toIntxU256(co_await evmAccount.balance());
+        acc.balance = evm::toIntxU256(co_await evmAccount.balance());
 
         auto codeHashVal = co_await evmAccount.codeHash();
         {
