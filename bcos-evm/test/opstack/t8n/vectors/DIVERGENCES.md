@@ -91,3 +91,85 @@
 | stateRoot | `bcos-evm/bcos-evm/adapter/StateRootCompute.h:76` stateRootOf | `core/blockchain.go:1681-1697` Commit | 等价 | 33 向量 | 事实达成 |
 | 回执映射 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:318-321` | `core/state_processor.go:199` MakeReceipt | 等价 | B-2 | 事实达成 |
 | 回执扩展字段 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:319` setOpStackMeta | `core/types/receipt.go:596` DeriveFields | 已知分叉 | B-3 | 已确认 |
+
+---
+
+## 阶段 5 矩阵（落库/索引）
+
+| 锚点 | FISCO 锚点 | op-geth 锚点 | 判定 | 证据 | 状态 |
+|---|---|---|---|---|---|
+| 落库入口 | `engine/bcos-engine/EngineServiceImpl.h:1191` registerOpBlock | `core/blockchain.go:1650` writeBlockWithState | 等价 | 单入口落库（OP 块 VALID 后统一走 registerOpBlock） | 已确认 |
+| number→hash | `EngineServiceImpl.h:1199` SYS_NUMBER_2_HASH | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | key=number 十进制串 → value=hash raw 32B；与 op-geth canonical 索引同语义 | 已确认 |
+| hash→number | `EngineServiceImpl.h:1206` SYS_HASH_2_NUMBER | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | key=hash raw 32B → value=number 十进制串 | 已确认 |
+| header | `EngineServiceImpl.h:1219` SYS_NUMBER_2_BLOCK_HEADER | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | OP 头以 tars BlockHeader 落标准表（spec D3：一等公民，同 `Ledger.cpp:234`） | 已确认 |
+| 回执 | `EngineServiceImpl.h:1289` SYS_HASH_2_RECEIPT | `core/blockchain.go:1665` rawdb.WriteReceipts | 等价 | key=tx hash（keccak over raw EIP-2718 信封，:1283） | 已确认 |
+| 交易 | `EngineServiceImpl.h:1303` s_eth_hash_2_rawtx（SYS_ETH_HASH_2_RAWTX `OpEngineSeam.h:68`；SchedulerType::c_ethRawTxTable `OpSchedulerImpl.h:925`） | `core/blockchain.go:1664` rawdb.WriteBlock（txs 内联于 block） | 结构性差异 | OP 专用表 vs 通用 block 内联；一 key 两表（:1292-1298：SYS_HASH_2_RECEIPT 答「回执」，s_eth_hash_2_rawtx 答「交易」） | 已确认 |
+| 差异点：SYS_HASH_2_TX 故意不写 | `EngineServiceImpl.h:1226-1253`（论证：tars 解码静默吞错→假交易；0x04/0x7E 无 tars 映射；写假交易不修 UB 只藏错） | —（rawdb 统一索引） | 结构性差异 | 设计取舍，非 bug（:1250-1252）；对 getTransactionReceipt 可查性有影响 | 已确认 |
+
+> **注（阶段 5，UB）**：`bcos-ledger/bcos-ledger/LedgerMethods.h:237` 对缺失 SYS_HASH_2_TX 行无 `has_value()` 检查直接解引用（循环 :235，`auto field = txEntry->get()`）——pre-existing 缺陷，非 OP 引入（任何块 tx 元数据超 SYS_HASH_2_TX 都会命中）；写入假交易不修复它，只是把可发现的崩溃换成不可发现的错误答案（EngineServiceImpl.h:1247-1252）。
+
+---
+
+## 阶段 6 矩阵（输出）
+
+| 锚点 | FISCO 锚点 | op-geth 锚点 | 判定 | 证据 | 状态 |
+|---|---|---|---|---|---|
+| block hash | `engine/bcos-engine/EngineServiceImpl.h:799-803`（opHeaderHash 重建比对）+ `:1094-1147`（六项承诺比对） | `core/types/block.go:124` Header.Hash()（RLP keccak） | 等价 | 33 向量 + chainA/B `encodeOpHeader` 字节级全等 | 已确认 |
+| 差异点：output root | 无对应（不在 EL 范围） | `optimism/op-node/rollup/output_root.go:29` ComputeL2OutputRootV0（op-node 职责） | 不在范围 | output root 由 op-node（CL 侧）计算，非 EL 执行器对比范围；FISCO gate 测试用 `block.Hash()` 对齐 | 标注 |
+
+---
+
+## 结构性差异（架构层，§2 结构性差异节）
+
+| # | 结构性差异 | FISCO 锚点 | op-geth 锚点 | 说明 |
+|---|---|---|---|---|
+| 1 | 块校验位置 | 执行后六项承诺比对 `engine/bcos-engine/EngineServiceImpl.h:1094-1147` + blockHash 重建比对 `:799-803` | `core/block_validator.go:51` ValidateBody（预校验） | FISCO 主体仍是执行后承诺比对，无完整 VerifyHeader/ValidateBody 等价物（§0.0 C-13）；→ 阶段2「块校验主体」行 |
+| 2 | 双执行器并存 | `opstack-executor/OpstackExecutor.h:54`（v2 独立模块，未装配）+ `bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:1014` executeOpBlock（生产单路径） | 唯一路径：`core/state_processor.go:62` Process | v2 模块未装配，生产仅 executeOpBlock 单路径；op-geth 只一条路径（W4-A/D 修正：以 OpstackExecutor.h 为 v2 参照） |
+| 3 | 索引隔离 | `EngineServiceImpl.h:1226-1253`（SYS_HASH_2_TX 故意不写论证）+ `:1289` 回执可查 / `:1303` rawtx 专用表 | rawdb 统一索引（`core/blockchain.go:1664-1665`） | 设计取舍：tars 解码静默吞错→假交易；对 getTransactionReceipt 可查性有影响 → 阶段5「差异点」行 |
+| 4 | PBFT 双执行防护 | `OpSchedulerImpl.h:987/:993` executeBlock throw 哑桩（实测定义 :985、throw :991-992） | —（无对应） | 仅在 OP scheduler 装配后生效；OP 模式禁用 PBFT executeBlock（§4 缺口C） |
+
+---
+
+## D 项（已确认，§2 直接纳入）
+
+| # | 差异 | 判定 | 锚点 / 证据 | 状态 |
+|---|---|---|---|---|
+| D-1 | 交易级执行（费用/L1+operator/Flz/deposit/7702/intrinsic/空账户/CREATE 地址/receipt 共识编码）逐位等价 | 等价 | 记忆审计（v1.101702.2）；→ 阶段3 各交易级行 | 已确认 |
+| D-2 | **Karst 占位**：karstConfig 仅 jovianConfig 别名 | 已知分叉 | `bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp:93-101`（karstConfig；:96-98 复制 jovianConfig 仅改 fork tag :97） | 🔴 上线 Karst 前必须按真实 diff 适配 |
+| D-3 | Jovian DA footprint 是纯块级 header 字段，不进 tx 级状态 | 等价 | `OpBlockSeal.cpp:196` seal.blobGasUsed=Σ meta.da_footprint（块级）；tx 级 gas_used/cumulative/receiptsRoot/stateRoot 不含 DA（记忆已核实） | 已确认 |
+| D-4 | validate↔transition 费用快照契约：FISCO 两阶段共享快照 vs op-geth 即时读 | 已知分叉 | `OpTransition.cpp:328/:237`（共享快照）vs `core/state_transition.go:282/:515`（即时读） | ⚠️ 依赖上层一致；需断言+测试固化（→ 阶段3「差异点#1」行，待W5） |
+
+---
+
+## 差异点归位对照表（§4.2 归位规则，覆盖全部 7 阶段）
+
+| 阶段 | 差异点（comparison doc §1） | 归位 | 指向 | 判定 / 状态 |
+|---|---|---|---|---|
+| 阶段0 | 三次类型翻译（FISCO 双端三次 vs op-geth 一次） | 矩阵行 | 阶段0「差异点：三次类型翻译」行 | 结构性差异 / 已确认 |
+| 阶段1 | 校验位置（validateOpNewPayloadRequest vs checkOptimismPayload） | 矩阵行 | 阶段1「差异点：校验位置」行 | 结构性差异 / 已确认 |
+| 阶段2 | 块校验完整度（op-geth VerifyHeader/ValidateBody vs FISCO 承诺比对） | 矩阵行 | 阶段2「块校验主体」行（承诺比对 :1094-1147） | 结构性差异 / 已确认 |
+| 阶段3 #1 | 快照契约（两阶段共享快照 vs 即时读） | D-4 | 阶段3「差异点#1 快照契约」行 = D-4 | 已知分叉 / 待W5 |
+| 阶段3 #2 | fee 惰性加载（loadOpFeeParams vs L1Block 槽即时解析） | 矩阵行 | 阶段3「fee 惰性加载」行 | 等价 / 待W5 |
+| 阶段3 #3 | DA footprint 不进 tx 级 | D-3 | D 项表 D-3 | 等价 / 已确认 |
+| 阶段4 #1 | withdrawalsRoot 语义一致（opStorageRoot vs GetStorageRoot） | B-1 | B 台账 B-1 | 等价 / 已修一致 |
+| 阶段4 #2 | receiptsRoot 编码（encodeReceiptForRoot vs receiptRLP/depositReceiptRLP） | B-2 | B 台账 B-2 | 等价 / 事实达成 |
+| 阶段4 #3 | OP 回执扩展字段（setOpStackMeta vs deriveOPStackFields） | B-3 | B 台账 B-3 | 已知分叉（2 delta）/ 已确认 |
+| 阶段5 | 索引隔离（SYS_HASH_2_TX 故意不写） | 结构性差异 | 阶段5「差异点：SYS_HASH_2_TX 不写」行 + 结构性差异#3 | 结构性差异 / 已确认 |
+| 阶段6 | output root 不在 EL 范围（op-node 职责） | 不在范围 | 阶段6「差异点：output root」行（标注） | 不在范围 / 标注 |
+
+---
+
+## B 项台账（§4.3，B-5 拆 a/b/c）
+
+| B 项 | 判定 | 状态 | 锚点（FISCO / op-geth） | 依据 |
+|---|---|---|---|---|
+| B-1 | 等价 | 已修一致 | `bcos-evm/bcos-evm/opstack/OpBlockSeal.cpp:170-174` / `consensus/beacon/consensus.go:416-427` | W6 分歧1（opStorageRoot leaf 二次 RLP，OpBlockSeal.cpp:67-97 修复）；`message_passer_write` isthmus+jovian 两向量逐位验证 |
+| B-2 | 等价 | 事实达成 | `OpBlockSeal.cpp:138` sealOpBlock / `core/state_processor.go:199` MakeReceipt（+ `core/types/receipt.go:128-148`） | 承诺比对（EngineServiceImpl.h:1094-1147）+ 七项断言 33 向量逐位匹配；正式迁移留 W7 |
+| B-3 | 已知分叉（2 delta） | 已确认（动态 manifest 待 W5/RPC 层对拍） | `OpTransition.cpp:319` setOpStackMeta / `core/types/receipt.go:596` DeriveFields + `core/types/receipt_opstack.go:11` | 2 delta：`operator_fee`=FISCO 扩展（`OpTransition.h:96-97` 明标）；legacy `FeeScalar`（pre-Ecotone）FISCO 无；W6 harness 不覆盖回执扩展字段（encodeReceiptForRoot 只共识编码） |
+| B-4 | 等价 | 事实达成 | `OpBlockExecute.cpp:143/:198` blockGasLeft 递减 / `core/state_transition.go:282` buyGas | 承诺比对 gasUsed + 七项断言 33 向量（deposit/normal 均递减+回填） |
+| B-5a | 等价 | 事实达成 | `OpBlockSeal.cpp:187-197` / `consensus/beacon/consensus.go:429-437` | `jovian_da_mix`（DA=593600=0x90ec0）字节级对拍通过（seal.blobGasUsed=Σ meta.da_footprint :193-194） |
+| B-5b | 结构性差异-待验 | 待W5 | `EngineServiceImpl.cpp:442-444`（已实现未触发）/ `core/block_validator.go:119-134`（:131-132 拒绝） | W6 全 VALID 正向向量，`blobGasUsed>gasLimit` 拒绝未触发（无拒绝向量） |
+| B-5c | 等价-待验 | 待W5 | `EngineServiceImpl.cpp:233-240` calcOpBaseFee Jovian max / `consensus/misc/eip1559/eip1559.go:99-107` | 无 jovian 链式对（harness 强制链式双块 isthmus），baseFee max 分支未演练 |
+| B-6 | 等价 | 已确认 | `OpBlockExecute.cpp:176-178`（calldata[176:178] 提取，`OpBlockExecute.h:66` JovianL1AttributesLen=178）/ `core/types/rollup_cost.go:547-557` ExtractDAFootprintGasScalar | 仅从首笔 L1 attributes calldata 提取，不读任何槽（slot8=OperatorFeeParamsSlot，非 DA scalar）；FISCO 同法 |
+| B-7 | 等价（效果已证） | 待W5（仅顺序可观测性） | `OpBlockExecute.cpp:112-116`（首笔 L1 attributes；pre-block system call :106-108 先于首笔）/ `core/state_processor.go:90-95`（beaconRoot/parentHash 预执行） | 系统调用**效果**已由 stateRoot 逐位 golden 一致动态证实（`system_contracts_real` 向量）；残余缺口=顺序可观测性（需 order-observable 向量，如用户 tx 读 beaconRoot） |
+| B-8 | 等价 | 已修一致 | `OpEngineSeam.h:171` computeOpTxRoot / `core/types/block.go:271` DeriveSha（TxHash） | W6 链式对（chainA/B state 延续+跨块 fee）+ 分歧2（txRoot ≥128 笔排序，`bcos-ledger/bcos-ledger/mpt/HashBuilder.cpp:199-231`，排序 :229-230） |
