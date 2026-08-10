@@ -149,7 +149,13 @@
           "cumulativeGasUsed": "0x10c1c",
           "logsCount": 3,
           "_op_l1_fee": "0xf4eb688f4",
-          "_op_da_footprint": "0x0"
+          "_op_da_footprint": "0x0",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5",
+          "_op_da_footprint_gas_scalar": "0x0"
         }
       ]
     }

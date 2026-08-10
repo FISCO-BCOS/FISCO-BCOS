@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 整批重生成仪式（spec rev.3）。退出 0 ⇔ 33 案全部生成成功 ∧ 工作树与入库 cases+vectors 字节等同。
+# 整批重生成仪式（spec rev.3）。退出 0 ⇔ 34 案全部生成成功 ∧ 工作树与入库 cases+vectors 字节等同。
 set -euo pipefail
 OPGETH="${OPGETH:-/Users/octopus/octo/code/blockchain-impl/op-geth}"
 PIN="e8800cffe53d459cde8a07c8e8f1de9d86e79e07"
@@ -26,7 +26,7 @@ for in_json in "$T8N_DIR"/cases/*.in.json; do               # fork 在文件名/
     --op-geth-commit "$PIN"
   n=$((n+1))
 done
-[ "$n" -eq 33 ] || { echo "generated $n cases, want 33" >&2; exit 1; }
+[ "$n" -eq 34 ] || { echo "generated $n cases, want 34" >&2; exit 1; }
 
 # cases ↔ manifest basename 集合相等（防孤儿向量/漏格）
 diff <(ls "$T8N_DIR"/cases/*.in.json | xargs -n1 basename | sed 's/\.in\.json$/.json/' | sort) \

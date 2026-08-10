@@ -168,7 +168,12 @@
           "gasUsed": "0xd936",
           "cumulativeGasUsed": "0x133fe",
           "logsCount": 0,
-          "_op_l1_fee": "0x1358c26f27"
+          "_op_l1_fee": "0x1358c26f27",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x7e6",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         }
       ]
     }

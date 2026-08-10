@@ -7,11 +7,11 @@
 # prose says "26"; the table's fork column enumerates 25 -- the table is
 # binding (see generator/README.md "Corpus enumeration").
 #
-# Current total (2026-07-12, defer-sweep batch): 33 entries (18 cases x
-# fork matrix). The 25-vector count above is the original (M-B3+M6) batch
-# and is retained as a historical record, not rewritten; see the "Corpus
-# augmentation" (+6 -> 31) and "Defer-sweep" (+2 -> 33) notes below for
-# the deltas that bring the manifest to its present 33-entry state.
+# Current total (2026-08-10): 34 entries (19 cases x fork matrix). The
+# 25-vector count above is the original (M-B3+M6) batch and is retained as
+# a historical record, not rewritten; see the "Corpus augmentation"
+# (+6 -> 31), "Defer-sweep" (+2 -> 33) and the appended 34th-intake note
+# below for the deltas that bring the manifest to its present 34-entry state.
 isthmus_deposit_only.json
 jovian_deposit_only.json
 isthmus_transfer_basic.json
@@ -53,3 +53,8 @@ jovian_setcode_7702_skips.json
 # then EIP-161 touch-deletes it at block commit.
 isthmus_empty_account_cleanup.json
 jovian_empty_account_cleanup.json
+# 34th vector intake (2026-08-10, user decision): the W5 commit
+# 205ad9573 added this case to cases.go:538 but it was emitted by
+# --write-cases and never manifested. Appended FIRST per manifest
+# discipline (entries written before generation).
+isthmus_system_call_order_observable.json

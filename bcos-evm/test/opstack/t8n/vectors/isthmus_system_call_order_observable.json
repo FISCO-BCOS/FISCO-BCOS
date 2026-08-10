@@ -4,10 +4,10 @@
     "generator": "opt8n-ref",
     "generator_commit": "e8800cffe53d459cde8a07c8e8f1de9d86e79e07"
   },
-  "jovian_system_contracts_real": {
+  "isthmus_system_call_order_observable": {
     "_info": {
-      "hardfork": "jovian",
-      "description": "real EIP-4788/2935 bytecode; pre-seeded stale ring slots overwritten by system calls"
+      "hardfork": "isthmus",
+      "description": "real EIP-4788/2935 bytecode + user reader that CALLs the 4788 GET path and SSTOREs the returned root (order-observable: system call must precede user txs)"
     },
     "env": {
       "currentCoinbase": "0x4200000000000000000000000000000000000011",
@@ -17,7 +17,7 @@
       "currentBaseFee": "0x3a699d00",
       "currentRandom": "0x0",
       "parentBeaconBlockRoot": "0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
-      "parentHash": "0x139f3400ef38ed56a3fd50659d19000116eebe1064cbe4847eb445d3a493d6bd"
+      "parentHash": "0xe57cb7f9c1ce0248019075933af8019029111d5b06734e1789233dc33f0caeb3"
     },
     "pre": {
       "0x0000f90827f1c53a10cb7a02335b175320002935": {
@@ -56,6 +56,11 @@
         "balance": "0x56bc75e2d63100000",
         "nonce": "0x0",
         "code": "0x"
+      },
+      "0xc0de000000000000000000000000000000000006": {
+        "balance": "0x0",
+        "nonce": "0x0",
+        "code": "0x425f52611fff420660205f60205f5f73000f3df6d732807ef1319fb7b8bb8522d0beac025af15060205f5f3e5f51905500"
       }
     },
     "block": {
@@ -67,20 +72,20 @@
             "to": "0x4200000000000000000000000000000000000015",
             "gas": "0xf4240",
             "is_system_tx": false,
-            "source_hash": "0x50603c107190ae29a0cc02f6752bf75362d1d04a55596cd5de9eb07ebcb9a153"
+            "source_hash": "0x6fd3c9ddfeecd228c6e049f7b5a07e9a9ada87b0d82a3fbe41db04482aeaa1ec"
           },
-          "data": "0x3db6be2b00000558000c5fc500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006fc23ac0000000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          "data": "0x098999be00000558000c5fc500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006fc23ac0000000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         },
         {
           "_op_type": "eip1559",
-          "_op_raw": "0x02f874822105808405f5e100847735940082520894b0b0000000000000000000000000000000000001880de0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714",
+          "_op_raw": "0x02f86d822105808405f5e1008477359400830186a094c0de0000000000000000000000000000000000068080c001a0610ee5655df6cca355d96c58a6509168cf64bbc97a0a4bb8fd9b502363b2e3fea0283381f428b038c2478a53f73002c44dd11974a2c2aa124b2ba882a9232a0bdd",
           "chainId": "0x2105",
           "nonce": "0x0",
-          "to": "0xb0b0000000000000000000000000000000000001",
-          "gas": "0x5208",
+          "to": "0xc0de000000000000000000000000000000000006",
+          "gas": "0x186a0",
           "maxFeePerGas": "0x77359400",
           "maxPriorityFeePerGas": "0x5f5e100",
-          "value": "0xde0b6b3a7640000",
+          "value": "0x0",
           "data": "0x",
           "sender": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"
         }
@@ -90,7 +95,7 @@
       "0x0000f90827f1c53a10cb7a02335b175320002935": {
         "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500",
         "storage": {
-          "0x0000000000000000000000000000000000000000000000000000000000000000": "0x139f3400ef38ed56a3fd50659d19000116eebe1064cbe4847eb445d3a493d6bd"
+          "0x0000000000000000000000000000000000000000000000000000000000000000": "0xe57cb7f9c1ce0248019075933af8019029111d5b06734e1789233dc33f0caeb3"
         },
         "balance": "0x0",
         "nonce": "0x1"
@@ -105,7 +110,7 @@
         "nonce": "0x1"
       },
       "0x4200000000000000000000000000000000000011": {
-        "balance": "0x1e8f1c10800"
+        "balance": "0x48e040fa000"
       },
       "0x4200000000000000000000000000000000000015": {
         "storage": {
@@ -121,7 +126,7 @@
         "nonce": "0x1"
       },
       "0x4200000000000000000000000000000000000019": {
-        "balance": "0x12b7a796e800"
+        "balance": "0x2ca2f4992000"
       },
       "0x420000000000000000000000000000000000001a": {
         "balance": "0xf4eb688f4"
@@ -130,11 +135,15 @@
         "balance": "0x0"
       },
       "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf": {
-        "balance": "0x55de692c9d39d870c",
+        "balance": "0x56bc72ced1bb0b70c",
         "nonce": "0x1"
       },
-      "0xb0b0000000000000000000000000000000000001": {
-        "balance": "0xde0b6b3a7640000"
+      "0xc0de000000000000000000000000000000000006": {
+        "code": "0x425f52611fff420660205f60205f5f73000f3df6d732807ef1319fb7b8bb8522d0beac025af15060205f5f3e5f51905500",
+        "storage": {
+          "0x00000000000000000000000000000000000000000000000000000000000003f2": "0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+        },
+        "balance": "0x0"
       },
       "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001": {
         "balance": "0x0",
@@ -143,20 +152,20 @@
     },
     "_op_expected": {
       "header": {
-        "gasUsed": "0xace4",
-        "receiptsRoot": "0x88de4cb261cbf6976af4f198832796aaf10e37126667680bef54e5edbca3105f",
+        "gasUsed": "0x11e68",
+        "receiptsRoot": "0x005889407068501da587f694ec986ace0655f00140baa6ce18c5f8b160072827",
         "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
         "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
         "requestsHash": "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "blobGasUsed": "0x0",
-        "stateRoot": "0x2c58588dee329f2176aa9d505f8cfa6f09d29460a6fcd5232f96903db0efda7d"
+        "stateRoot": "0x75984e903288338c2c0e6e542952b4362e89c4b68c9cb8a540e2e2e3c471d5a6"
       },
       "receipts": [
         {
           "type": "0x7e",
           "status": "0x1",
-          "gasUsed": "0x5adc",
-          "cumulativeGasUsed": "0x5adc",
+          "gasUsed": "0x5ac8",
+          "cumulativeGasUsed": "0x5ac8",
           "logsCount": 0,
           "_op_deposit_nonce": "0x0",
           "_op_deposit_receipt_version": "0x1"
@@ -164,17 +173,15 @@
         {
           "type": "0x2",
           "status": "0x1",
-          "gasUsed": "0x5208",
-          "cumulativeGasUsed": "0xace4",
+          "gasUsed": "0xc3a0",
+          "cumulativeGasUsed": "0x11e68",
           "logsCount": 0,
           "_op_l1_fee": "0xf4eb688f4",
-          "_op_da_footprint": "0x0",
           "_op_l1_gas_price": "0x6fc23ac00",
           "_op_l1_blob_base_fee": "0xf4240",
           "_op_l1_gas_used": "0x640",
           "_op_l1_base_fee_scalar": "0x558",
-          "_op_l1_blob_base_fee_scalar": "0xc5fc5",
-          "_op_da_footprint_gas_scalar": "0x0"
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         }
       ]
     }
