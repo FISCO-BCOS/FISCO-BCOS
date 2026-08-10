@@ -161,5 +161,16 @@ block = rpc("eth_getBlockByNumber", [receipt["blockNumber"], False])
 print(f"block {receipt['blockNumber']}: txs={len(block['transactions'])} "
       f"stateRoot={block['stateRoot']} gasUsed={block['gasUsed']}")
 assert len(block["transactions"]) >= 1, "block has no transactions"
+# Wall-clock mode (this script uses no fixed_timestamp): the produced block's
+# timestamp (seconds, Ethereum RPC semantics — the header stores ms and the RPC
+# divides by 1000) must sit within a sane window of the test's own wall clock.
+# This guards the unit regression where utcTime() — which already returns
+# milliseconds — was multiplied by 1000, turning block.timestamp into
+# ~1.786e15 (year 58577 in the EVM).
+block_ts = int(block["timestamp"], 16)
+now_sec = int(time.time())
+print(f"block timestamp={block_ts} wall-clock-now={now_sec}")
+assert abs(block_ts - now_sec) < 120, (
+    f"block timestamp {block_ts} not within 120s of wall clock {now_sec}")
 print("PASS: single-node consensus produced a block containing the tx")
 PYEOF

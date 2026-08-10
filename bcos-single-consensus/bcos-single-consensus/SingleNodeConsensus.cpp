@@ -190,10 +190,12 @@ bool SingleNodeConsensus::produceBlock()
     //
     // EIP-2 requires strictly increasing block timestamps, so both modes enforce
     // monotonicity: a fixed timestamp is bumped by the block number (consecutive blocks,
-    // including empty ones, must never share the same value), and wall-clock mode uses the
-    // correct millisecond unit (utcTime() is seconds) and never goes backwards relative to
-    // the last produced block.
-    auto const nowMs = static_cast<std::uint64_t>(utcTime()) * 1000;
+    // including empty ones, must never share the same value), and wall-clock mode never goes
+    // backwards relative to the last produced block. utcTime() already returns milliseconds
+    // (bcos-utilities/Common.cpp, despite the header comment saying "seconds") — do NOT
+    // multiply by 1000, which would make the block timestamp ~1.786e15 -> year 58577 in the
+    // EVM (block.timestamp / base fee schedules etc).
+    auto const nowMs = static_cast<std::uint64_t>(utcTime());
     std::uint64_t const timestamp = m_fixedTimestamp > 0 ?
                                         m_fixedTimestamp * 1000 +
                                             static_cast<std::uint64_t>(m_headNumber + 1) :
