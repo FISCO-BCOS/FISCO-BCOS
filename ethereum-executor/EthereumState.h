@@ -40,6 +40,8 @@
 #include <intx/intx.hpp>
 #include <limits>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -290,9 +292,10 @@ class EthereumState
     /// in both branches of the baseline-scheduler wiring in libinitializer). That
     /// change lands with split 4/4 — the split that first wires EthereumState
     /// into a live path; until then this race is documented but unmitigated
-    /// (splits 1/4 and 2/4 are safe to merge alone because nothing compiles
-    /// these headers). Revisit, ideally by recording the range read in the
-    /// read/write set, before v2 is allowed to run on a parallel scheduler.
+    /// (splits 1/4 and 2/4 are safe to merge alone because nothing instantiates
+    /// EthereumState on a production path — the only instantiation is the smoke
+    /// test). Revisit, ideally by recording the range read in the read/write
+    /// set, before v2 is allowed to run on a parallel scheduler.
     task::Task<bool> hasStorageImpl(bcos::ledger::account::EVMAccount<Storage>& evmAccount) const
     {
         using namespace bcos::ledger;
