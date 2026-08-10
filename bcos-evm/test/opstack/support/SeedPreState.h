@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>    // std::move
+#include <vector>     // std::vector
 
 namespace w6test
 {
