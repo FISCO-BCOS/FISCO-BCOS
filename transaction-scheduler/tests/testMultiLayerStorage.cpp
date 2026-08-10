@@ -134,6 +134,76 @@ BOOST_AUTO_TEST_CASE(merge)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(mergeViewPersistsToBackend)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto view = std::make_optional(multiLayerStorage.fork());
+        view->newMutable();
+        StateKey key{"test_table"sv, "test_key"sv};
+        storage::Entry entry;
+        entry.set("Hello mergeView!");
+        co_await storage2::writeOne(*view, key, entry);
+
+        // mergeView 原子落盘：先入栈再合并最旧层 → backend（m_latestBackend）
+        co_await multiLayerStorage.mergeView(std::move(*view));
+
+        // 数据经 backend 层读到——证明已落盘,非仅内存层栈
+        // （merge 后栈空,fork() 读等价 backend 读;直接 latestBackend() 最严格）
+        auto backendRead =
+            co_await storage2::readOne(multiLayerStorage.latestBackend(), key);
+        BOOST_REQUIRE(backendRead.has_value());
+        BOOST_CHECK_EQUAL(backendRead->get(), entry.get());
+
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(mergeViewNoMutableIsNoop)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto view = multiLayerStorage.fork();  // 未 newMutable → m_mutableStorage 为空
+        BOOST_CHECK_NO_THROW(co_await multiLayerStorage.mergeView(std::move(view)));
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(mergeViewMergesOldestLayer)
+{
+    // 审查修正（spec §4）：mergeBackStorage 合并最旧层（FIFO,MultiLayerStorage.h:570）。
+    // 验证前置条件"push 前栈空才立即落盘"与栈积压时最近层留存的 one-block lag 语义。
+    // ⚠️ 相对 brief 补一行：fork() 只把当前栈拷贝进 view 的 immutable storages，
+    //    写 mutable 不会入栈——须先 pushView(v1) 使栈为 [v1]，mergeView(v2) 后才
+    //    有「最旧层 v1 落 backend、最近层 v2 留内存」的 one-block lag 可断言。
+    task::syncWait([this]() -> task::Task<void> {
+        auto v1 = std::make_optional(multiLayerStorage.fork());
+        v1->newMutable();
+        StateKey k1{"test_table"sv, "k1"sv};
+        storage::Entry e1;
+        e1.set("v1");
+        co_await storage2::writeOne(*v1, k1, e1);
+        multiLayerStorage.pushView(std::move(*v1));  // 入栈 → 栈 [v1]
+
+        auto v2 = std::make_optional(multiLayerStorage.fork());
+        v2->newMutable();
+        StateKey k2{"test_table"sv, "k2"sv};
+        storage::Entry e2;
+        e2.set("v2");
+        co_await storage2::writeOne(*v2, k2, e2);
+
+        // 栈为 [v2, v1]（push_front 次序）。mergeView(v2) → push v2 后 merge 最旧层 v1。
+        co_await multiLayerStorage.mergeView(std::move(*v2));
+
+        // 最旧层 v1 落 backend；v2 仍在内存前端,未落（one-block lag）
+        auto r1 = co_await storage2::readOne(multiLayerStorage.latestBackend(), k1);
+        BOOST_REQUIRE(r1.has_value());
+        BOOST_CHECK_EQUAL(r1->get(), e1.get());
+        auto r2 = co_await storage2::readOne(multiLayerStorage.latestBackend(), k2);
+        BOOST_CHECK(!r2.has_value());  // v2 未落
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(rangeMulti)
 {
     using MutableStorage = memory_storage::MemoryStorage<int, int,
