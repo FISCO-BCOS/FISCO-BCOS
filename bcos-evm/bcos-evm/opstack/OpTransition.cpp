@@ -215,12 +215,17 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
     m.l1_base_fee_scalar = fee.base_fee_scalar;
     m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
     m.l1_fee = props.l1_cost;
-    // Fjord+ L1 calldata gas used, op-geth core/types/rollup_cost.go:623-624:
+    // L1 calldata gas used. Ecotone: op-geth reports bedrockCalldataGasUsed on the envelope
+    // (zeroes*4 + ones*16), snapped into props at validate time. Fjord+ (op-geth
+    // core/types/rollup_cost.go:623-624):
     //   L1GasUsed = estimatedDASizeScaled(fastLzSize) * TxDataNonZeroGasEIP2028(16) / 1e6.
-    // deriveOPStackFields emits it on every non-deposit receipt; flz_len is the Fjord+ FastLZ
-    // length captured at validate time (0 under Ecotone, where op-geth instead reports
-    // bedrockCalldataGasUsed — not exercised by the isthmus/jovian t8n gate).
-    m.l1_gas_used = static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000);
+    // deriveOPStackFields emits it on every non-deposit receipt; props.ecotone_calldata_gas_used
+    // is unset (nullopt) under Fjord+, where flz_len is the FastLZ length captured at validate
+    // time and the formula above applies.
+    if (props.ecotone_calldata_gas_used.has_value())
+        m.l1_gas_used = *props.ecotone_calldata_gas_used;
+    else
+        m.l1_gas_used = static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000);
     if (props.has_operator_fee)
     {
         m.operator_fee = operator_fee_at_used;
@@ -387,8 +392,15 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     if (intx::uint512{balance} < maxCost)
         return make_error_code(std::errc::result_out_of_range);
 
-    return OpTxProperties{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
+    OpTxProperties props{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
         flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula, cfg.has_da_footprint};
+    // Ecotone 公式下快照 envelope 的 bedrockCalldataGasUsed（zeroes*4 + ones*16），供
+    // deriveOpReceiptMeta 读取 l1_gas_used——保持 no-cfg 不变量。Fjord+ 保持 nullopt，
+    // l1_gas_used 走 flz_len 的 Fjord 公式。
+    props.ecotone_calldata_gas_used = cfg.has_ecotone_l1_formula ?
+        std::optional<uint64_t>{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)} :
+        std::nullopt;
+    return props;
 }
 
 std::variant<OpTxProperties, std::error_code> opValidateFromState(

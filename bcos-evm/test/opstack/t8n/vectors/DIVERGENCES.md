@@ -173,3 +173,9 @@
 | B-6 | 等价 | 已确认 | `OpBlockExecute.cpp:176-178`（calldata[176:178] 提取，`OpBlockExecute.h:66` JovianL1AttributesLen=178）/ `core/types/rollup_cost.go:547-557` ExtractDAFootprintGasScalar | 仅从首笔 L1 attributes calldata 提取，不读任何槽（slot8=OperatorFeeParamsSlot，非 DA scalar）；FISCO 同法 |
 | B-7 | 等价（效果已证） | 待W5（仅顺序可观测性） | `OpBlockExecute.cpp:112-116`（首笔 L1 attributes；pre-block system call :106-108 先于首笔）/ `core/state_processor.go:90-95`（beaconRoot/parentHash 预执行） | 系统调用**效果**已由 stateRoot 逐位 golden 一致动态证实（`system_contracts_real` 向量）；残余缺口=顺序可观测性（需 order-observable 向量，如用户 tx 读 beaconRoot） |
 | B-8 | 等价 | 已修一致 | `OpEngineSeam.h:171` computeOpTxRoot / `core/types/block.go:271` DeriveSha（TxHash） | W6 链式对（chainA/B state 延续+跨块 fee）+ 分歧2（txRoot ≥128 笔排序，`bcos-ledger/bcos-ledger/mpt/HashBuilder.cpp:199-231`，排序 :229-230） |
+
+> **注（Task 5 闭合，2026-08-10）**：Ecotone 下 `_op_l1_gas_used` 差分分歧已闭合——`deriveOpReceiptMeta`
+> 现读 validate 期快照 `props.ecotone_calldata_gas_used`（= envelope `bedrockCalldataGasUsed`），Fjord+ 仍走
+> flz_len 的 Fjord 公式（字段保持 nullopt）。41 向量 t8n 差分门全绿（0 DIVERGE），本文件无需新增
+> ALLOWLIST 条目；`ecotone_transfer_basic` / `ecotone_contract_create` 曾报 want=0x130c/0x6b8 got=0x640 已一致。
+

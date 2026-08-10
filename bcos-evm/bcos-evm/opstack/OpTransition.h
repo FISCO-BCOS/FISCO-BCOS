@@ -41,6 +41,9 @@ struct OpTxProperties
     // forced to 0) and transition under Jovian would otherwise report a da_footprint_gas_scalar
     // for a transaction the Ecotone L1 formula priced, with da_footprint computed from flz_len 0.
     bool has_da_footprint = false;
+    // Ecotone 公式下的 calldataGasUsed（= zeroes*4 + ones*16）；Fjord+ 下不填（用 flz_len 走 Fjord 公式）。
+    // validate 时快照（envelope 在此可用），transition 时 deriveOpReceiptMeta 读取——保持 no-cfg 不变量。
+    std::optional<uint64_t> ecotone_calldata_gas_used = std::nullopt;
 };
 
 /// Reuses evmone validate_transaction then applies OP checks: reject blob tx; balance cap
