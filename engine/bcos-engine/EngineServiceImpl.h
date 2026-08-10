@@ -154,6 +154,14 @@ bcos::protocol::BlockHeader::OpHeaderConst opHeaderConst();
 bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
+
+/// OP 信封 → tars Transaction 转换（实现见 EngineServiceImpl.cpp；失败返回 nullopt，不 throw）。
+/// 填 extraTransactionHash（D4）与 sender（D8）。0x04 等未知类型返回 nullopt（D7）。
+/// 仅此处前向声明、实现放 .cpp：EngineServiceImpl.h 被 engine/test、libinitializer、bcos-evm
+/// opstack 测试等大量消费方包含，把 Web3Transaction.h 拉进来会拖入 jsoncpp + rpc Common +
+/// RPC_LOG 宏污染（D6）。`bcostars::Transaction` 经 LedgerMethods.h 已完整可见，无需再前向声明。
+std::optional<bcostars::Transaction> opEnvelopeToTars(
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>

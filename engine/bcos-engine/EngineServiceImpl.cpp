@@ -20,6 +20,42 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <limits>
 
+// OP 回执/交易可查（方案 B）写侧转换 helper：raw EIP-2718 信封 → tars Transaction。
+// Web3Transaction.h 已连带拉入 RLPDecode/RLPEncode/TransactionImpl，下面几条单独 include 冗余但无害
+//（保持与 task-1 brief Step 1 一致）。
+#include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
+#include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <optional>
+
+namespace bcos::engine::detail
+{
+std::optional<bcostars::Transaction> opEnvelopeToTars(
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash)
+{
+    bcos::rpc::Web3Transaction web3Tx;
+    bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
+    if (auto err = bcos::codec::rlp::decode(envRef, web3Tx); err)
+    {
+        return std::nullopt;  // 未知类型（0x04）或损坏信封——不 throw（D7）
+    }
+    auto tarsTx = web3Tx.takeToTarsTransaction();
+    // D4: 读侧 tx.hash() 返回 extraTransactionHash；不填则抛 EmptyTransactionHash
+    tarsTx.extraTransactionHash.assign(txHash.begin(), txHash.end());
+    // D8: 非 deposit 补 sender（takeToTarsTransaction 留空；读侧 from 读 tx.sender()）
+    // ⚠️ 审查②修正：web3Tx.sender() 返回 "0x" 前缀 hex string（Web3Transaction.cpp:207-223），
+    //    tarsTx.sender 要 raw 20 字节（读侧 toHex(tx.sender()) 期望 raw bytes）——必须 fromHex 还原，
+    //    否则双编码成 84 字符垃圾。deposit 分支已填 raw bytes（:121），sender.empty() guard 跳过。
+    if (tarsTx.sender.empty())
+    {
+        auto sender = bcos::fromHex(web3Tx.sender());  // DataConvertUtility.h:119-166，0x 感知
+        tarsTx.sender.assign(sender.begin(), sender.end());
+    }
+    return tarsTx;
+}
+}  // namespace bcos::engine::detail
+
 namespace
 {
 constexpr std::size_t c_hashBytes = 32;
