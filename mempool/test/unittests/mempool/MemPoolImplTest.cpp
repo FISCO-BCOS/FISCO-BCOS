@@ -131,15 +131,28 @@ static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t n
     return tx;
 }
 
+// The mempool stores senders as raw address bytes (TransactionImpl::sender), while
+// EVMAccount resolves accounts under the lower-case hex path via the evmc_address
+// overload — the same path the executor writes/reads and MemPoolImpl::seal/remove now
+// use. These helpers must therefore build an evmc_address, not pass the raw bytes
+// through the string_view overload (which would compute a wrong table path).
+static evmc_address senderToEvmc(std::string_view sender)
+{
+    evmc_address addr{};
+    std::copy_n(sender.begin(),
+        std::min(sender.size(), static_cast<std::size_t>(sizeof(addr.bytes))), addr.bytes);
+    return addr;
+}
+
 static std::optional<std::string> readNonce(MapStateStorage& s, std::string_view sender)
 {
-    ledger::account::EVMAccount acc{s, sender, false};
+    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false};
     return task::syncWait(acc.nonce());
 }
 
 static void setNonce(MapStateStorage& s, std::string_view sender, std::string nonce)
 {
-    ledger::account::EVMAccount acc{s, sender, false};
+    ledger::account::EVMAccount acc{s, senderToEvmc(sender), false};
     task::syncWait(acc.setNonce(std::move(nonce)));
 }
 
@@ -160,9 +173,9 @@ BOOST_AUTO_TEST_CASE(seal_single_sender_contiguous)
     pool.seal(100, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 3);
+    // seal() is read-only: it must not create or advance the account nonce in `state`.
     auto nonce = readNonce(state, sender);
-    BOOST_CHECK(nonce.has_value());
-    BOOST_CHECK_EQUAL(nonce.value(), "3");
+    BOOST_CHECK(!nonce.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(seal_limit_within_single_sender)
@@ -189,9 +202,9 @@ BOOST_AUTO_TEST_CASE(seal_limit_within_single_sender)
     ::ranges::sort(nonces);
     BOOST_CHECK(nonces[0] == 0 && nonces[1] == 1);
 
+    // seal() is read-only: no sender nonce is created or advanced in `state`.
     auto nonceA = readNonce(state, sender);
-    BOOST_CHECK(nonceA.has_value());
-    BOOST_CHECK_EQUAL(nonceA.value(), "2");
+    BOOST_CHECK(!nonceA.has_value());
     auto nonceB = readNonce(state, otherSender);
     BOOST_CHECK(!nonceB.has_value());
 }
@@ -229,12 +242,11 @@ BOOST_AUTO_TEST_CASE(seal_limit_across_senders)
     BOOST_CHECK(foundA0);
     BOOST_CHECK(foundB0);
 
+    // seal() is read-only: no sender nonce is created or advanced in `state`.
     auto nonceA = readNonce(state, senderA);
-    BOOST_CHECK(nonceA.has_value());
-    BOOST_CHECK_EQUAL(nonceA.value(), "1");
+    BOOST_CHECK(!nonceA.has_value());
     auto nonceB = readNonce(state, senderB);
-    BOOST_CHECK(nonceB.has_value());
-    BOOST_CHECK_EQUAL(nonceB.value(), "1");
+    BOOST_CHECK(!nonceB.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(seal_limit_exact_boundary)
@@ -249,9 +261,9 @@ BOOST_AUTO_TEST_CASE(seal_limit_exact_boundary)
     pool.seal(2, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
+    // seal() is read-only: it must not create or advance the account nonce in `state`.
     auto nonce = readNonce(state, sender);
-    BOOST_CHECK(nonce.has_value());
-    BOOST_CHECK_EQUAL(nonce.value(), "2");
+    BOOST_CHECK(!nonce.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
@@ -272,9 +284,9 @@ BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
     BOOST_CHECK_EQUAL(std::string(out.front()->sender()), senderA);
     BOOST_CHECK_EQUAL(std::string(out.front()->nonce()), "0");
 
+    // seal() is read-only: no sender nonce is created or advanced in `state`.
     auto nonceA = readNonce(state, senderA);
-    BOOST_CHECK(nonceA.has_value());
-    BOOST_CHECK_EQUAL(nonceA.value(), "1");
+    BOOST_CHECK(!nonceA.has_value());
     auto nonceB = readNonce(state, senderB);
     BOOST_CHECK(!nonceB.has_value());
 }
@@ -301,7 +313,8 @@ BOOST_AUTO_TEST_CASE(seal_with_existing_ledger_nonce)
 
     auto nonce = readNonce(state, sender);
     BOOST_CHECK(nonce.has_value());
-    BOOST_CHECK_EQUAL(nonce.value(), "3");
+    // seal() is read-only: the pre-existing ledger nonce is left untouched.
+    BOOST_CHECK_EQUAL(nonce.value(), "1");
 }
 
 BOOST_AUTO_TEST_CASE(remove_by_state_drops_confirmed)

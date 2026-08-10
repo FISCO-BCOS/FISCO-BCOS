@@ -24,10 +24,18 @@ int64_t bcos::txpool::TransactionData::nonce() const
 }
 bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transaction)
   : m_transaction(std::move(transaction)), m_nonce([&]() {
-        int64_t nonce;
         auto view = m_transaction->nonce();
-        if (auto result = std::from_chars(view.begin(), view.end(), nonce);
-            result.ec != std::errc{})
+        // Web3 transactions store the nonce as a "0x"-prefixed hex string
+        // (Web3Transaction::takeToTarsTransaction -> toQuantity, e.g. "0x1"), while
+        // BCOSTransaction uses a plain decimal string. Parsing "0x1" with a decimal
+        // from_chars stops at the 'x' and yields 0, so every web3 tx with nonce > 0
+        // would be mis-sorted (nonce 0) and dropped by remove()/never sealed. Strip an
+        // optional 0x prefix and parse the remainder as hex when prefixed, else decimal.
+        bool isHex = (view.size() >= 2 && view[0] == '0' && (view[1] == 'x' || view[1] == 'X'));
+        std::string_view digits = isHex ? view.substr(2) : view;
+        int64_t nonce = 0;
+        auto [ptr, ec] = std::from_chars(digits.begin(), digits.end(), nonce, isHex ? 16 : 10);
+        if (ec != std::errc{} || ptr != digits.end())
         {
             bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(std::string{view}));
         }
