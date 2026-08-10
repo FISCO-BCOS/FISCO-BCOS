@@ -162,7 +162,8 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 /// `fieldName` (coordinator review M-2): mirrors `narrowU256ToU64`'s own `fieldName` parameter
 /// above — without it, all three call sites (deposit/eip1559/setcode) produced the exact same
 /// message ("gas limit exceeds int64_t range"), which is also what I-1's fix-vs-no-fix message
-/// assertion in OpSchedulerImplTest.cpp needs to distinguish per call site.
+/// assertion in OpSchedulerImplTest.cpp (live on the source branch, NOT ported here) needs to
+/// distinguish per call site.
 inline int64_t narrowGasLimit(uint64_t v, const char* fieldName)
 {
     if (v > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
@@ -254,8 +255,11 @@ inline void throwOnDecodeError(bcos::Error::UniquePtr&& err)
 // common.Address|common.Hash", "rlp: invalid boolean value". The primitives in
 // `bcos-codec/rlp/RLPDecode.h` are permissive by comparison — `fromBigEndian` silently keeps only
 // the low 8 bytes of an over-long uint64 payload, and `FixedBytes`' constructor right-pads a short
-// payload and truncates a long one. Those defaults are fine for their other consumers, so the
-// strictness is added HERE, on the OP path, rather than by changing shared primitives.
+// payload and truncates a long one. Those per-field defaults are fine for their other consumers, so
+// per-field strictness stays OP-local (layer 1 — the readCanonicalScalar/readFixedWidth/
+// decodeBoolField primitives below); length-prefix strictness, by contrast, lives in the SHARED
+// decoder's `decodeHeader`, where rejecting a non-minimal leading-zero length prefix applies to ALL
+// consumers (W8 C1, ported from a37517327), not just this path.
 //
 // The sharpest consequence of NOT doing this: a deposit envelope carries no signature, so nothing
 // else cross-checks its fields. A 19-byte `from`/`to` or a 33-byte `sourceHash` would have been

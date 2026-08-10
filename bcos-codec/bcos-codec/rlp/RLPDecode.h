@@ -83,6 +83,10 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
                         NonCanonicalSize, "Non-canonical length prefix: leading zero byte"),
                 Header()};
         }
+        // Migration note (W8): canonicality now enforced for ALL consumers of this shared decoder,
+        // not just the OP path. FISCO's own encoder (RLPEncode.h) always writes a minimal length
+        // prefix (round-trip tested), so only externally-supplied non-canonical bytes are affected;
+        // a legacy chain that historically accepted such bytes would now reject them on replay.
         auto payloadSize =
             fromBigEndian<uint64_t, bcos::bytesConstRef>(from.getCroppedData(0, lenOfLen));
         header.payloadLength = payloadSize;

@@ -431,6 +431,14 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         BOOST_CHECK(!err);
         BOOST_CHECK_EQUAL(items.size(), 60u);
     }
+    {  // canonical 2-byte length that is NOT a leading zero (256-item list, 0xf9 01 00) — the
+       // length prefix's first byte is 0x01, so it must decode, proving we reject only leading
+       // zeros, not all lenOfLen>=2 list forms (mirrors the long-string case above).
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f90100" + std::string(512, '1'), items);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(items.size(), 256u);
+    }
     {  // lenOfLen==1 boundary 0xf8 0x00: payloadLength 0 < 56 -> `< 56` rule, not the new check.
         std::vector<uint64_t> items;
         auto err = decodeErr("f800"sv, items);

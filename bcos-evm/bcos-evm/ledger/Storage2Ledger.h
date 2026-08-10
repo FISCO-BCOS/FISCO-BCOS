@@ -284,7 +284,7 @@ public:
         // catch 阶梯的顺序不是风格问题,是本仓 `-fno-rtti` typed-catch 旁路的**实测**结果
         // (终审批 9 F-1 实测两轮,fix 轮复核者独立重做过,勿凭直觉重排或删级):
         //   * 实验一:只把 `catch (const std::runtime_error&)` 里的 poison 抑制掉 → 本文件全部
-        //     四条写路见证(桥层三条 + OpSchedulerImplTest 的分类层一条)**同时翻红** ⇒ 这些
+        //     四条写路见证(桥层三条 + OpSchedulerImplTest 的分类层一条,该测试在源分支未移植到此)**同时翻红** ⇒ 这些
         //     throw 全部落在**第一级**。
         //   * 实验二:整条 `catch (const std::runtime_error&)` 删掉,并给余下各级的 poison 打上
         //     可区分前缀 → 同样四条见证的 firstError() 全部是 **`[VIA-ELLIPSIS]`**,一条
