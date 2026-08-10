@@ -113,6 +113,20 @@ void testCreateAddress()
     const auto sender = addressFromHex("0x6ac7ea33f8831ea9dcc53393aaa88b25a785dbf0");
     const auto expected = addressFromHex("0xcd234a471b72ba2f1ccf0a70fcaba648a5eecd8d");
     CHECK(sameAddress(eth_evm::compute_create_address(sender, 0), expected));
+
+    // RLP nonce-boundary coverage: single-byte 0x7f stays raw (0x7f), 0x80 flips
+    // to 0x81 0x80 — the transition where hand-rolled RLP usually breaks. Values
+    // re-derived with an independent RLP/keccak implementation.
+    CHECK(sameAddress(eth_evm::compute_create_address(sender, 0x7f),
+        addressFromHex("0x06d9a77f5e4b311bae8d559db9cdb4df94104aa0")));
+    CHECK(sameAddress(eth_evm::compute_create_address(sender, 0x80),
+        addressFromHex("0x08e190dcb7b73f5fcdabb43e102215c83659a76d")));
+    CHECK(sameAddress(eth_evm::compute_create_address(sender, 0xff),
+        addressFromHex("0x3ef7c1a519e4b4431e317d7839340e3139b03c65")));
+    CHECK(sameAddress(eth_evm::compute_create_address(sender, 0x100),
+        addressFromHex("0x3837c1ae70354f670550c746580199ac6a73cb0a")));
+    CHECK(sameAddress(eth_evm::compute_create_address(sender, 0xffffffffffffffff),
+        addressFromHex("0x9bc924993b60399df164c3763a964301d3db95ca")));
 }
 
 void testCreate2Address()
