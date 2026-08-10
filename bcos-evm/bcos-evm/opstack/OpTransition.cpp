@@ -215,6 +215,12 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
     m.l1_base_fee_scalar = fee.base_fee_scalar;
     m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
     m.l1_fee = props.l1_cost;
+    // Fjord+ L1 calldata gas used, op-geth core/types/rollup_cost.go:623-624:
+    //   L1GasUsed = estimatedDASizeScaled(fastLzSize) * TxDataNonZeroGasEIP2028(16) / 1e6.
+    // deriveOPStackFields emits it on every non-deposit receipt; flz_len is the Fjord+ FastLZ
+    // length captured at validate time (0 under Ecotone, where op-geth instead reports
+    // bedrockCalldataGasUsed — not exercised by the isthmus/jovian t8n gate).
+    m.l1_gas_used = static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000);
     if (props.has_operator_fee)
     {
         m.operator_fee = operator_fee_at_used;
