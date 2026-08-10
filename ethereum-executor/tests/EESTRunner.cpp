@@ -16,9 +16,13 @@
 
 #include "EESTRunner.h"
 #include "EestFailuresJson.h"
+#include "EestSpikeFork.h"
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-evm/eth/state/system_contracts.hpp"
+#include "bcos-evm/opstack/OpForkSchedule.h"
+#include "bcos-evm/opstack/OpPredeploys.h"
+#include "bcos-evm/opstack/OpTransition.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -29,15 +33,21 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/TBBWait.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include <cxxabi.h>
 #include <evmc/evmc.h>
+#include <evmone/evmone.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/log/core.hpp>
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <evmc/hex.hpp>
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <intx/intx.hpp>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -46,11 +56,15 @@
 #include <range/v3/algorithm/equal.hpp>
 #include <sstream>
 #include <string>
+#include <test/utils/test_state.hpp>
 #include <vector>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
+// opstack is nested in bcos::evm (not bcos), so it needs an explicit alias for the
+// spike-track references below.
+namespace opstack = bcos::evm::opstack;
 namespace fs = std::filesystem;
 
 // =============================================================================
@@ -623,6 +637,10 @@ struct ProgramOptions
     bool quiet = false;         // suppress per-file/per-test output
     bool noLog = false;         // suppress BCOS internal trace/debug log
     bool help = false;
+    // Spike track (Task 5): execute EF fixtures through the REAL opTransition (the opstack
+    // rewrite of evmone's state.cpp) instead of the ethereum-executor baseline.
+    std::string execMode = "baseline";  // "baseline" | "optransition"
+    std::string opFork = "isthmus";  // OP fork config used by the spike track ("isthmus"|"jovian")
 };
 
 ProgramOptions g_opts;
@@ -704,6 +722,9 @@ Options:
   --fixture-dir DIR    Directory containing EEST .json fixture files (recursive)
   --fixture FILE       Run a single fixture file only
   --json-failures FILE Write structured failure records (JSON array) to FILE
+  --exec-mode MODE     Execution engine: "baseline" (ethereum-executor, default) or
+                       "optransition" (real opTransition spike track; runs pure Prague only)
+  --op-fork FORK       OP fork config for the spike track: "isthmus" (default) or "jovian"
   --quiet              Suppress per-file/per-test output; show summary only
   --no-log             Suppress BCOS internal trace/debug log output
   --help               Show this help message
@@ -748,6 +769,14 @@ void parseOptions(int argc, char* argv[])
         {
             g_opts.jsonFailures = argv[++i];
         }
+        else if (arg == "--exec-mode" && i + 1 < argc)
+        {
+            g_opts.execMode = argv[++i];
+        }
+        else if (arg == "--op-fork" && i + 1 < argc)
+        {
+            g_opts.opFork = argv[++i];
+        }
         else if (arg.rfind("--fixture-dir=", 0) == 0)
         {
             g_opts.fixtureDir = arg.substr(14);
@@ -759,6 +788,14 @@ void parseOptions(int argc, char* argv[])
         else if (arg.rfind("--json-failures=", 0) == 0)
         {
             g_opts.jsonFailures = arg.substr(16);  // "--json-failures=" = 16 chars
+        }
+        else if (arg.rfind("--exec-mode=", 0) == 0)
+        {
+            g_opts.execMode = arg.substr(12);  // "--exec-mode=" = 12 chars
+        }
+        else if (arg.rfind("--op-fork=", 0) == 0)
+        {
+            g_opts.opFork = arg.substr(10);  // "--op-fork=" = 10 chars
         }
     }
 }
@@ -774,6 +811,183 @@ struct ForkTransition
     int64_t transitionTimestamp = 0;
 };
 
+namespace
+{
+// ── opTransition spike track: JSON-string → evmone primitive helpers ─────────
+// EESTRunner.h keeps the parsed account/tx fields as hex strings; the spike track
+// converts them to the evmone::test / evmone::state types opTransition consumes.
+
+/// Parse "0x…" into an evmc::address. Malformed / short input → all-zero address
+/// (a well-formed recipient is exactly 20 bytes; the callers gate on that).
+evmc::address spikeAddrFromHex(std::string const& hex)
+{
+    auto bytes = test::hexToBytes(hex);
+    evmc::address a{};
+    if (bytes.size() == sizeof(evmc::address))
+        std::copy(bytes.begin(), bytes.end(), a.bytes);
+    return a;
+}
+
+/// Parse "0x…" into an intx::uint256 ("" / "0x" → 0).
+intx::uint256 spikeU256FromHex(std::string const& hex)
+{
+    if (hex.empty() || hex == "0x")
+        return 0;
+    return intx::from_string<intx::uint256>(hex);
+}
+
+/// Parse "0x…" into an evmc::bytes32, right-aligned (storage slots are big-endian).
+evmc::bytes32 spikeBytes32FromHex(std::string const& hex)
+{
+    auto bytes = test::hexToBytes(hex);
+    evmc::bytes32 out{};
+    if (bytes.size() <= sizeof(evmc::bytes32))
+        std::copy(bytes.begin(), bytes.end(), out.bytes + sizeof(evmc::bytes32) - bytes.size());
+    else
+        std::copy_n(bytes.end() - sizeof(evmc::bytes32), sizeof(evmc::bytes32), out.bytes);
+    return out;
+}
+
+std::string spikeHexBytes32(evmc::bytes32 const& b)
+{
+    return "0x" + evmc::hex(evmc::bytes_view{b.bytes, sizeof(b.bytes)});
+}
+
+/// intx::uint256 → "0x" + minimal lowercase hex (intx ships no ostream operator<<).
+std::string spikeHexU256(intx::uint256 const& v)
+{
+    return "0x" + intx::to_string(v, 16);
+}
+
+/// bcos::bytes (std::vector<uint8_t>) → evmc::bytes (std::basic_string<uint8_t>).
+/// The two are distinct types; the evmone state structs store the basic_string form.
+evmc::bytes spikeBytesFromHex(std::string const& hex)
+{
+    auto b = test::hexToBytes(hex);
+    return evmc::bytes(b.begin(), b.end());
+}
+
+/// Build an evmone::state::Transaction from the parsed EEST transaction + post indices.
+/// Mirrors BCOS2Evmone::bcosTransactionToEvmone: type selection by web3TypedTxKind and the
+/// legacy/access-list max_priority_gas_price = max_gas_price shim (so a legacy tx's effective
+/// gas price equals its gasPrice under a non-zero base fee).
+evmone::state::Transaction spikeBuildTransaction(
+    ::test::EESTTransaction const& tx, int dataIndex, int gasIndex, int valueIndex, int64_t chainId)
+{
+    evmone::state::Transaction evmTx{};
+
+    if (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.data.size())
+        evmTx.data = spikeBytesFromHex(tx.data[dataIndex]);
+
+    std::string gasLimitHex = "0x0";
+    if (gasIndex >= 0 && static_cast<size_t>(gasIndex) < tx.gasLimit.size())
+        gasLimitHex = tx.gasLimit[gasIndex];
+    evmTx.gas_limit = static_cast<int64_t>(test::hexToU256(gasLimitHex));
+
+    std::string valueHex = "0x0";
+    if (valueIndex >= 0 && static_cast<size_t>(valueIndex) < tx.value.size())
+        valueHex = tx.value[valueIndex];
+    evmTx.value = spikeU256FromHex(valueHex);
+
+    if (!tx.sender.empty())
+        evmTx.sender = spikeAddrFromHex(tx.sender);
+
+    if (!tx.to.empty() && tx.to != "0x")
+    {
+        auto tb = test::hexToBytes(tx.to);
+        if (tb.size() == sizeof(evmc::address))
+        {
+            evmc::address ta{};
+            std::copy(tb.begin(), tb.end(), ta.bytes);
+            evmTx.to = ta;
+        }
+    }
+
+    evmTx.nonce = static_cast<uint64_t>(test::hexToU256(tx.nonce));
+    evmTx.chain_id = tx.chainId.empty() ? static_cast<uint64_t>(chainId) :
+                                          static_cast<uint64_t>(test::hexToU256(tx.chainId));
+
+    // Type selection mirrors BCOS2Evmone: blob overrides everything (buildTransaction assigns
+    // web3TypedTxKind=3 last), then set_code, then eip1559, then access_list, else legacy.
+    const bool hasAuthList = tx.authorizationList.has_value();
+    const bool isBlobTx = !tx.maxFeePerBlobGas.empty() || !tx.blobVersionedHashes.empty();
+    const bool isEip1559 = !tx.maxFeePerGas.empty() || !tx.maxPriorityFeePerGas.empty();
+    const bool hasAccessList =
+        (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.accessLists.size() &&
+            tx.accessLists[dataIndex].has_value());
+    if (isBlobTx)
+        evmTx.type = evmone::state::Transaction::Type::blob;
+    else if (hasAuthList)
+        evmTx.type = evmone::state::Transaction::Type::set_code;
+    else if (isEip1559)
+        evmTx.type = evmone::state::Transaction::Type::eip1559;
+    else if (hasAccessList)
+        evmTx.type = evmone::state::Transaction::Type::access_list;
+    else
+        evmTx.type = evmone::state::Transaction::Type::legacy;
+
+    if (!tx.gasPrice.empty())
+        evmTx.max_gas_price = spikeU256FromHex(tx.gasPrice);
+    if (!tx.maxFeePerGas.empty())
+        evmTx.max_gas_price = spikeU256FromHex(tx.maxFeePerGas);
+    if (!tx.maxPriorityFeePerGas.empty())
+        evmTx.max_priority_gas_price = spikeU256FromHex(tx.maxPriorityFeePerGas);
+    if (!tx.maxFeePerBlobGas.empty())
+        evmTx.max_blob_gas_price = spikeU256FromHex(tx.maxFeePerBlobGas);
+
+    // For legacy/access_list txs (no explicit priority fee) set priority = gas price, so the
+    // coinbase gets the gas tip and the effective gas price equals the legacy gasPrice.
+    if ((evmTx.type == evmone::state::Transaction::Type::legacy ||
+            evmTx.type == evmone::state::Transaction::Type::access_list) &&
+        evmTx.max_priority_gas_price == 0)
+        evmTx.max_priority_gas_price = evmTx.max_gas_price;
+
+    if (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.accessLists.size())
+    {
+        auto const& al = tx.accessLists[dataIndex];
+        if (al.has_value())
+        {
+            for (auto const& [addrHex, keys] : *al)
+            {
+                std::vector<evmc::bytes32> storageKeys;
+                storageKeys.reserve(keys.size());
+                for (auto const& k : keys)
+                    storageKeys.push_back(spikeBytes32FromHex(k));
+                evmTx.access_list.emplace_back(spikeAddrFromHex(addrHex), std::move(storageKeys));
+            }
+        }
+    }
+
+    for (auto const& h : tx.blobVersionedHashes)
+        evmTx.blob_hashes.push_back(spikeBytes32FromHex(h));
+
+    if (tx.authorizationList.has_value())
+    {
+        for (auto const& auth : *tx.authorizationList)
+        {
+            evmone::state::Authorization ea{};
+            ea.chain_id = spikeU256FromHex(test::readHexField(auth, "chainId"));
+            ea.nonce = static_cast<uint64_t>(test::hexToU256(test::readHexField(auth, "nonce")));
+            ea.r = spikeU256FromHex(test::readHexField(auth, "r"));
+            ea.s = spikeU256FromHex(test::readHexField(auth, "s"));
+            // EEST emits both "v" and "yParity" (the baseline reads "v"); prefer "v" for
+            // exact baseline parity.
+            auto vHex = test::readHexField(auth, "v");
+            if (vHex.empty())
+                vHex = test::readHexField(auth, "yParity");
+            ea.v = spikeU256FromHex(vHex);
+            ea.addr = spikeAddrFromHex(test::readHexField(auth, "address"));
+            const auto signerHex = test::readHexField(auth, "signer");
+            if (!signerHex.empty())
+                ea.signer = spikeAddrFromHex(signerHex);
+            evmTx.authorization_list.push_back(std::move(ea));
+        }
+    }
+
+    return evmTx;
+}
+}  // namespace
+
 class EESTRunner
 {
 public:
@@ -788,6 +1002,12 @@ public:
     ledger::LedgerConfig m_ledgerConfig;
     std::optional<ForkTransition> m_forkTransition;
     int64_t m_chainId = 1;  // EIP-155 chain id from the fixture config
+    // Spike track (Task 5): the real opTransition needs an evmc::VM (it takes evmc::VM&,
+    // not evmone::VM) and a TransactionReceiptFactory::Ptr. m_receiptFactoryPtr is a
+    // non-owning shared_ptr over the receiptFactory member above (the runner outlives every
+    // synchronous opTransition call).
+    evmc::VM m_vm{evmc_create_evmone()};
+    bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactoryPtr;
 
     EESTRunner()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -795,7 +1015,10 @@ public:
         transactionFactory(cryptoSuite),
         receiptFactory(cryptoSuite),
         executor(receiptFactory, cryptoSuite->hashImpl(), m_blockHashes)
-    {}
+    {
+        m_receiptFactoryPtr = std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl>(
+            &receiptFactory, [](bcostars::protocol::TransactionReceiptFactoryImpl*) {});
+    }
 
     /// Configure the runner for a fork name. Returns false (and leaves the
     /// runner unconfigured) when the fork — or either endpoint of a fork
@@ -1317,6 +1540,299 @@ public:
         return errors.str();
     }
 
+    // ── opTransition spike track (Task 5) ──────────────────────────────────
+    /// Run one tx through the REAL opTransition (the opstack rewrite of evmone's state.cpp),
+    /// using the 10-param API: view / block / hashes / tx / cfg / evmc::VM& / props / chainId /
+    /// receiptFactory, with the state diff returned through outDiff (the FISCO receipt interface
+    /// has no field for it). opTransition does NOT write back to the view — the caller applies
+    /// the diff to the TestState so the post-state can be verified.
+    bcos::protocol::TransactionReceipt::Ptr runOpTransitionTx(evmone::test::TestState& ts,
+        evmone::state::BlockInfo const& block, evmone::state::BlockHashes const& hashes,
+        evmone::state::Transaction const& tx, evmc::bytes_view signedEnvelope,
+        opstack::OpForkConfig const& cfg, evmc::VM& vm, uint64_t chainId,
+        const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
+        evmone::state::StateDiff& outDiff)
+    {
+        auto props = opstack::opValidateFromState(
+            ts, block, tx, signedEnvelope, cfg, /*blockGasLeft=*/block.gas_limit);
+        if (auto* err = std::get_if<std::error_code>(&props))
+            throw std::runtime_error("opValidate rejected: " + err->message());
+        auto const& p = std::get<opstack::OpTxProperties>(props);
+        auto receipt = opstack::opTransition(
+            ts, block, hashes, tx, cfg, vm, p, chainId, receiptFactory, outDiff);
+        ts.apply(outDiff);  // write the state diff back so the post-state can be verified
+        return receipt;
+    }
+
+    /// Verify post-state for the spike track against the EF post expectations.
+    /// EXCLUDES the OP vault accounts (OpPredeploys.h): opTransition routes the base fee to
+    /// OP_BASE_FEE_VAULT and touches L1/operator/sequencer vaults — those balances are OP fee
+    /// routing artifacts that EF state-test post-states never list, so without the exclusion
+    /// every Prague fixture would mismatch on the vault. The sender's net debit is identical to
+    /// plain EEST (base fee is burned there, credited to the vault here), so sender balances are
+    /// compared normally. Returns an error string (empty = all good) and optionally the
+    /// first-mismatch category. Error-marker format matches verifyPostState so
+    /// test::firstMismatchCategory stays the single source of truth.
+    std::string verifyPostStateSpike(evmone::test::TestState const& ts,
+        std::map<std::string, test::EESTAccount> const& expected,
+        std::string* firstCategory = nullptr)
+    {
+        static constexpr std::array<evmc::address, 4> kSpikeVaults = {opstack::OP_BASE_FEE_VAULT,
+            opstack::OP_L1_FEE_VAULT, opstack::OP_OPERATOR_FEE_VAULT,
+            opstack::OP_SEQUENCER_FEE_VAULT};
+
+        std::ostringstream errors;
+        static const evmone::test::TestAccount kZeroAccount{};
+
+        for (auto const& [addrHex, expectedAcc] : expected)
+        {
+            auto addr = spikeAddrFromHex(addrHex);
+            if (std::find(kSpikeVaults.begin(), kSpikeVaults.end(), addr) != kSpikeVaults.end())
+                continue;  // OP fee routing artifact — not an EF post expectation
+
+            auto const it = ts.find(addr);
+            evmone::test::TestAccount const& got = it != ts.end() ? it->second : kZeroAccount;
+
+            if (!expectedAcc.nonce.empty() && expectedAcc.nonce != "0x")
+            {
+                auto expNonce = test::hexToU256(expectedAcc.nonce);
+                if (bcos::u256(got.nonce) != expNonce)
+                {
+                    errors << "    NONCE " << addrHex << ": expected " << expectedAcc.nonce << " ("
+                           << expNonce << "), got " << got.nonce << "\n";
+                    ++g_nonceMismatch;
+                    continue;  // one mismatch per account, mirroring verifyPostState's co_return
+                }
+            }
+
+            if (!expectedAcc.balance.empty())
+            {
+                auto expBal = spikeU256FromHex(expectedAcc.balance);
+                if (expBal != got.balance)
+                {
+                    errors << "    BALANCE " << addrHex << ": expected " << expectedAcc.balance
+                           << " (" << spikeHexU256(expBal) << "), got " << spikeHexU256(got.balance)
+                           << "\n";
+                    ++g_balanceMismatch;
+                    continue;
+                }
+            }
+
+            if (!expectedAcc.code.empty() && expectedAcc.code != "0x")
+            {
+                auto expCode = spikeBytesFromHex(expectedAcc.code);
+                if (got.code != expCode)
+                {
+                    errors << "    CODE " << addrHex << ": expected " << expectedAcc.code << "\n";
+                    ++g_codeMismatch;
+                    continue;
+                }
+            }
+
+            for (auto const& [key, val] : expectedAcc.storage)
+            {
+                auto expVal = spikeBytes32FromHex(val);
+                auto gotIt = got.storage.find(spikeBytes32FromHex(key));
+                auto gotVal = gotIt != got.storage.end() ? gotIt->second : evmc::bytes32{};
+                if (gotVal != expVal)
+                {
+                    errors << "    STORAGE " << addrHex << " key=" << key << ": expected " << val
+                           << ", got " << spikeHexBytes32(gotVal) << "\n";
+                    ++g_storageMismatch;
+                }
+            }
+        }
+
+        if (firstCategory != nullptr && !errors.str().empty())
+        {
+            *firstCategory = test::firstMismatchCategory(errors.str());
+        }
+        return errors.str();
+    }
+
+    /// Spike track entry: run one fixture (post-key == "Prague" only) through the real
+    /// opTransition and compare the written-back TestState against the EF post expectations,
+    /// recording failures with the same shape as the baseline runFixture path (g_failureDetails
+    /// + the per-category counters), so --json-failures is non-empty in spike mode.
+    bool runFixtureOpTransition(::test::EESTFixture const& fixture, std::string const& forkName,
+        ::test::EESTForkPost const& post, bool* skipped)
+    {
+        // Fork filter: only pure Prague (post key) is aligned with isthmusConfig/jovianConfig
+        // (rev = EVMC_PRAGUE). Everything else — Osaka, fork transitions, pre-Prague forks —
+        // is skipped (not counted as pass/fail), same skip contract as the baseline's
+        // "unknown fork" path.
+        if (!test::spikeForkSelect(forkName))
+        {
+            if (skipped != nullptr)
+            {
+                *skipped = true;
+            }
+            printLine("WARNING: skipping state-test fixture '" + fixture.name + "' [" + forkName +
+                      "]: opTransition spike runs only pure Prague (post key)");
+            return false;
+        }
+
+        m_chainId = fixture.chainId;
+        const auto& cfg =
+            (g_opts.opFork == "jovian") ? opstack::jovianConfig() : opstack::isthmusConfig();
+
+        // pre → TestState. Storage slots with zero value are stripped (trie semantics: a zero
+        // slot is absent — same rule as evmone's test::from_json<TestState> loader).
+        evmone::test::TestState ts;
+        for (auto const& [addrHex, acc] : fixture.pre)
+        {
+            auto& out = ts[spikeAddrFromHex(addrHex)];
+            out.nonce = static_cast<uint64_t>(test::hexToU256(acc.nonce));
+            out.balance = spikeU256FromHex(acc.balance);
+            out.code = spikeBytesFromHex(acc.code);
+            for (auto const& [keyHex, valHex] : acc.storage)
+            {
+                auto val = spikeBytes32FromHex(valHex);
+                if (!evmc::is_zero(val))
+                    out.storage[spikeBytes32FromHex(keyHex)] = val;
+            }
+        }
+        // Mirror the baseline: ensure the sender account exists with the tx nonce when the
+        // fixture's pre-state omitted it (opValidate reads get_account(tx.sender) and rejects a
+        // missing sender with balance 0).
+        if (!fixture.transaction.sender.empty())
+        {
+            auto senderAddr = spikeAddrFromHex(fixture.transaction.sender);
+            if (ts.find(senderAddr) == ts.end())
+            {
+                ts[senderAddr].nonce =
+                    static_cast<uint64_t>(test::hexToU256(fixture.transaction.nonce));
+            }
+        }
+
+        // env → BlockInfo. Fields the fixture does not carry are left at their defaults (e.g.
+        // parent hash / blob params absent from state tests — matching the baseline's empty
+        // FixtureBlockHashes behaviour for BLOCKHASH).
+        evmone::state::BlockInfo blk;
+        blk.number = test::hexToInt64(fixture.env.number);
+        blk.timestamp = test::hexToTimestamp(fixture.env.timestamp);
+        blk.gas_limit = test::hexToInt64(fixture.env.gasLimit);
+        blk.base_fee = static_cast<uint64_t>(test::hexToU256(fixture.env.baseFee));
+        if (!fixture.env.coinbase.empty())
+            blk.coinbase = spikeAddrFromHex(fixture.env.coinbase);
+        if (!fixture.env.random.empty())
+            blk.prev_randao = spikeBytes32FromHex(fixture.env.random);
+        if (!fixture.env.parentBeaconRoot.empty())
+            blk.parent_beacon_block_root = spikeBytes32FromHex(fixture.env.parentBeaconRoot);
+        if (!fixture.env.excessBlobGas.empty())
+            blk.excess_blob_gas = static_cast<uint64_t>(test::hexToU256(fixture.env.excessBlobGas));
+        if (!fixture.env.blobGasUsed.empty())
+            blk.blob_gas_used = static_cast<uint64_t>(test::hexToU256(fixture.env.blobGasUsed));
+        evmone::test::TestBlockHashes hashes;
+
+        auto evmTx = spikeBuildTransaction(
+            fixture.transaction, post.dataIndex, post.gasIndex, post.valueIndex, m_chainId);
+        evmc::bytes envelope{0x02};  // dummy non-empty envelope — opValidate only checks non-empty
+
+        evmone::state::StateDiff diff;
+        bcos::protocol::TransactionReceipt::Ptr receipt;
+        std::string opError;
+        bool executionThrew = false;
+        try
+        {
+            receipt = runOpTransitionTx(ts, blk, hashes, evmTx, envelope, cfg, m_vm,
+                static_cast<uint64_t>(m_chainId), m_receiptFactoryPtr, diff);
+        }
+        catch (std::exception const& e)
+        {
+            opError = e.what();
+            executionThrew = true;
+        }
+        catch (...)
+        {
+            // typed-catch RTTI 兜底（机理同 OpT8nReplayTest.cpp:657-667 注释）：libevmone.a
+            // (-fno-rtti) 带入 hidden 非唯一 typeinfo for std::exception，链接后本二进制
+            // catch(std::exception&) 与 libc++ 抛出侧基类 typeinfo 判不等而漏接。点名动态
+            // 类型，与 typed 分支同语义（记失败、流程不变），不吞异常。
+            const auto* excType = abi::__cxa_current_exception_type();
+            opError = std::string("opTransition threw (typed catch bypassed, type: ") +
+                      (excType ? excType->name() : "<unknown>") + ")";
+            executionThrew = true;
+        }
+
+        bool expectsSuccess = post.expectException.empty();
+        if (expectsSuccess && fixture.name.find("successful_False") != std::string::npos)
+        {
+            expectsSuccess = false;
+        }
+        bool gotSuccess =
+            !executionThrew && receipt &&
+            (receipt->status() == 0 ||
+                receipt->status() == static_cast<int32_t>(protocol::TransactionStatus::None));
+
+        // Failure recording mirrors runFixture's four branches exactly (same reasons, categories,
+        // indices and counters) so --json-failures has the same shape in both exec modes.
+        if (expectsSuccess && !gotSuccess)
+        {
+            std::string category;
+            auto errStr = verifyPostStateSpike(ts, post.state, &category);
+            if (errStr.empty())
+            {
+                return true;  // state matches → tx reverted cleanly
+            }
+            std::ostringstream oss;
+            oss << "FAIL: " << fixture.name << " [" << forkName << "] expected success, got failure"
+                << (executionThrew ? " (exception: " + opError + ")" : "")
+                << (receipt ? " status=" + std::to_string(receipt->status()) : "");
+            printLine(oss.str());
+            g_failureDetails.push_back({fixture.name, forkName, "unexpected failure", "unexpected",
+                post.dataIndex, post.gasIndex, post.valueIndex});
+            ++g_unexpectedFailure;
+            return false;
+        }
+
+        if (!expectsSuccess && gotSuccess)
+        {
+            std::ostringstream oss;
+            oss << "FAIL: " << fixture.name << " [" << forkName << "] expected exception '"
+                << post.expectException << "', got success";
+            printLine(oss.str());
+            g_failureDetails.push_back(
+                {fixture.name, forkName, "expected exception '" + post.expectException + "'",
+                    "expected_exception", post.dataIndex, post.gasIndex, post.valueIndex});
+            ++g_expectedException;
+            return false;
+        }
+
+        if (!expectsSuccess && !gotSuccess)
+        {
+            std::string category;
+            auto errStr = verifyPostStateSpike(ts, post.state, &category);
+            if (!errStr.empty())
+            {
+                std::ostringstream oss;
+                oss << "FAIL: " << fixture.name << " [" << forkName
+                    << "] expected failure, got failure but state mismatch\n"
+                    << errStr;
+                printLine(oss.str());
+                g_failureDetails.push_back(
+                    {fixture.name, forkName, "state mismatch (expected failure)", category,
+                        post.dataIndex, post.gasIndex, post.valueIndex});
+                ++g_unexpectedFailure;
+                return false;
+            }
+            return true;
+        }
+
+        std::string category;
+        auto errStr = verifyPostStateSpike(ts, post.state, &category);
+        if (!errStr.empty())
+        {
+            std::ostringstream oss;
+            oss << "FAIL: " << fixture.name << " [" << forkName << "]\n" << errStr;
+            printLine(oss.str());
+            g_failureDetails.push_back({fixture.name, forkName, "state mismatch", category,
+                post.dataIndex, post.gasIndex, post.valueIndex});
+            return false;
+        }
+        return true;
+    }
+
     /// Run a single fixture test case. Returns true if passed.
     /// When the fork is unknown the fixture is skipped: *skipped is set to
     /// true, a WARNING is printed, and false is returned (the caller must not
@@ -1324,6 +1840,14 @@ public:
     bool runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
         ::test::EESTForkPost const& post, bool* skipped = nullptr)
     {
+        // Spike track (Task 5): execute through the real opTransition instead of the
+        // ethereum-executor baseline. The spike path handles its own fork filter (pure Prague
+        // post key only) and failure recording, same shape as the baseline.
+        if (g_opts.execMode == "optransition")
+        {
+            return runFixtureOpTransition(fixture, forkName, post, skipped);
+        }
+
         if (!configureFork(forkName))
         {
             if (skipped != nullptr)

@@ -8,8 +8,11 @@ add_subdirectory(../../bcos-evm/test/eth-eest-test bcos-evm-eest-assets)
 # Standalone EEST runner (no Boost.Test dependency, uses TBB for parallelism)
 find_package(jsoncpp CONFIG REQUIRED)
 add_executable(eest-runner EESTRunner.cpp EestFailuresJson.cpp)
+# bcosevm::opstack MUST precede bcos-evm-eth: the opstack static archive references eth symbols
+# (OpTransition/OpHost resolve against the vendored eth state), and on mac static linking the
+# defining archive must follow the referencing one.
 target_link_libraries(eest-runner
-    ethereum-executor bcos-evm-eth executor ledger protocol-tars bcos-framework rpc
+    ethereum-executor bcosevm::opstack bcos-evm-eth executor ledger protocol-tars bcos-framework rpc
     evmone::evmone jsoncpp_static TBB::tbb)
 add_dependencies(eest-runner executor)
 set_source_files_properties("EESTRunner.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
@@ -22,7 +25,8 @@ set_target_properties(eest-runner PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_R
 find_package(Boost REQUIRED COMPONENTS unit_test_framework)
 add_executable(eest-json-tests
     EestFailuresJsonTest.cpp
-    EestFailuresJson.cpp)
+    EestFailuresJson.cpp
+    EestSpikeForkTest.cpp)
 target_link_libraries(eest-json-tests PRIVATE jsoncpp_static Boost::unit_test_framework)
 set_source_files_properties("EestFailuresJsonTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(eest-json-tests PROPERTIES UNITY_BUILD OFF)
