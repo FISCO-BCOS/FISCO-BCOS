@@ -66,11 +66,44 @@ BOOST_AUTO_TEST_CASE(mergeViewNoMutableIsNoop)
         co_return;
     }());
 }
+
+BOOST_AUTO_TEST_CASE(mergeViewMergesOldestLayer)
+{
+    // 审查修正（spec §4）：mergeBackStorage 合并最旧层（FIFO,MultiLayerStorage.h:570）。
+    // 验证前置条件"push 前栈空才立即落盘"与栈积压时最近层留存的 one-block lag 语义。
+    task::syncWait([this]() -> task::Task<void> {
+        auto v1 = std::make_optional(multiLayerStorage.fork());
+        v1->newMutable();
+        StateKey k1{"test_table"sv, "k1"sv};
+        storage::Entry e1;
+        e1.set("v1");
+        co_await storage2::writeOne(*v1, k1, e1);
+
+        auto v2 = std::make_optional(multiLayerStorage.fork());
+        v2->newMutable();
+        StateKey k2{"test_table"sv, "k2"sv};
+        storage::Entry e2;
+        e2.set("v2");
+        co_await storage2::writeOne(*v2, k2, e2);
+
+        // 栈为 [v2, v1]（push_front 次序）。mergeView(v2) → push v2 后 merge 最旧层 v1。
+        co_await multiLayerStorage.mergeView(std::move(*v2));
+
+        // 最旧层 v1 落 backend；v2 仍在内存前端,未落（one-block lag）
+        auto r1 = co_await storage2::readOne(multiLayerStorage.latestBackend(), k1);
+        BOOST_REQUIRE(r1.has_value());
+        BOOST_CHECK_EQUAL(r1->get(), e1.get());
+        auto r2 = co_await storage2::readOne(multiLayerStorage.latestBackend(), k2);
+        BOOST_CHECK(!r2.has_value());  // v2 未落
+
+        co_return;
+    }());
+}
 ```
 
 - [ ] **Step 2: 跑测试验证失败**
 
-Run: `cmake --build build --target test-transaction-scheduler -j 8 && ./build/transaction-scheduler/test/test-transaction-scheduler --run_test=TestMultiLayerStorage --report_level=short`
+Run: `cmake --build build --target test-transaction-scheduler -j 8 && ./build/transaction-scheduler/tests/test-transaction-scheduler --run_test=TestMultiLayerStorage --report_level=short`
 Expected: FAIL——`mergeView` 未定义（编译错误）或 `readOne(latestBackend())` 读不到值。
 
 - [ ] **Step 3: 实现 `mergeView`**
@@ -79,13 +112,13 @@ Expected: FAIL——`mergeView` 未定义（编译错误）或 `readOne(latestBa
 
 ```cpp
 /// C2 落盘修复（spec 2026-08-10-op-block-persist-mergeview-design.md）：pushView + mergeBackStorage
-/// 原子合一——先入栈再合并最旧层（单块 VALID 即落盘）。规避 mergeBackStorage 抛 throw 时 mutable
+/// 合一——先入栈再合并最旧层（m_storages.back()，FIFO）。规避 mergeBackStorage 抛 throw 时 mutable
 /// layer 泄漏：push 已入栈、merge 失败时层保留供下次重试（降级语义,异常向上传播由调用方定类）。
 /// 实现 EngineServiceImpl.h:671 的 TODO。`view.m_mutableStorage` 为空时 no-op（与 pushView guard 一致）。
 task::Task<void> mergeView(ViewType view)
 {
     if (!view.m_mutableStorage)
-        return;
+        co_return;   // ⚠️ 审查修正：协程内须 co_return（return; 编译失败）——防空栈 mergeBackStorage
     pushView(std::move(view));
     co_await mergeBackStorage();
 }
@@ -93,7 +126,7 @@ task::Task<void> mergeView(ViewType view)
 
 - [ ] **Step 4: 跑测试验证通过**
 
-Run: `cmake --build build --target test-transaction-scheduler -j 8 && ./build/transaction-scheduler/test/test-transaction-scheduler --run_test=TestMultiLayerStorage --report_level=short`
+Run: `cmake --build build --target test-transaction-scheduler -j 8 && ./build/transaction-scheduler/tests/test-transaction-scheduler --run_test=TestMultiLayerStorage --report_level=short`
 Expected: PASS——`mergeViewPersistsToBackend`（backend 可读）+ `mergeViewNoMutableIsNoop`（no-op 不抛）。
 
 - [ ] **Step 5: Commit**
@@ -117,9 +150,20 @@ git commit --no-verify -m "feat(storage2): MultiLayerStorage::mergeView — push
 - Consumes: `MultiLayerStorage::mergeView(ViewType)`（Task 1）——`m_globalStateStorage` 是 `MultiLayerStorage` 实例（composition root 绑定 RocksDB backend）。
 - Produces: OP VALID 块后 `SYS_HASH_2_TX` 行可经 `fixture->multiLayerStorage.latestBackend()` 直接读到。
 
-- [ ] **Step 1: 写失败断言（backend 落盘）**
+- [ ] **Step 1: 排空测试层栈 + 写失败断言（backend 落盘）**
 
-在 `OpNewPayloadRpcE2eTest.cpp` 写侧块（`runGoldenVector` 内）的 round-trip 断言（:272 `tx->hash() == txHash`）之后、rawtx-absent 断言（:273-278）之前加：
+⚠️ **审查修正（P1 CRITICAL/P2 HIGH/S1 IMPORTANT 共识）**：`mergeBackStorage` 合并**最旧层**（`MultiLayerStorage.h:570`）。fixture 的 `seedPreState`（`SeedPreState.h:107`）+ `registerVerifiedBlock`（:174）`pushView` 不 merge，栈积压 `[parent, seed]`——若直接 `mergeView(block)`，合并的是 seed 层而非块，backend 断言永不绿。**必须先排空**（纯测试文件改动，符合"只改 2 个生产文件"约束）：
+
+```cpp
+// registerVerifiedBlock（OpNewPayloadRpcE2eTest.cpp:174）:
+// 原: multiLayerStorage.pushView(std::move(view));
+bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+// seedPreState（support/SeedPreState.h:107）同改:
+// 原: multiLayerStorage.pushView(std::move(view));
+bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+```
+
+排空后每个块 push 前栈空 → `mergeView` 立即落盘。然后在写侧块 round-trip 断言（`tx->hash() == txHash`）之后加 backend 断言（锚定断言文本，非行号）：
 
 ```cpp
         // C2: 数据必须落 backend（m_latestBackend）——重启恢复语义（spec §6）。
@@ -148,7 +192,14 @@ Expected: FAIL——`SYS_HASH_2_TX in backend` 断言红（当前只 pushView �
 co_await m_globalStateStorage.get().mergeView(std::move(view));
 ```
 
-同时更新 `:1161-1175` 的注释——删掉/改写"pushView alone is enough…this branch NEVER calls mergeBackStorage()"的自证说明，改为"mergeView 原子落盘（C2 修复,单块 VALID 即落 RocksDB backend）"。保留 `SYS_CURRENT_STATE` head 推进仍缺欠的标注（裁定 A4）。
+同时把 `:1161-1175` 的注释整段替换为（原注释的"pushView alone is enough…this branch NEVER calls mergeBackStorage()…unbounded growth"在改后均不再成立）：
+
+```cpp
+        // `mergeView` 原子落盘（C2 修复,spec 2026-08-10-op-block-persist-mergeview-design.md）：
+        // pushView + mergeBackStorage 合一,单块 VALID 即落 RocksDB backend。`SYS_CURRENT_STATE`
+        // head 推进仍缺失（裁定 A4）：重启后块表可读但 head 指针无,留 orchestration 层与
+        // reorg 窗口编排同批（§6.4 欠账台账）。
+```
 
 - [ ] **Step 4: 跑测试验证通过**
 
@@ -177,7 +228,7 @@ git commit --no-verify -m "feat(engine): OP 提交路径 mergeView 原子落盘�
 
 - [ ] **Step 1: 构建 + 跑 transaction-scheduler 单测（验证 MultiLayerStorage 兼容）**
 
-Run: `cmake --build build --target test-transaction-scheduler -j 8 && ./build/transaction-scheduler/test/test-transaction-scheduler --report_level=short`
+Run: `cmake --build build --target test-transaction-scheduler -j 8 && ./build/transaction-scheduler/tests/test-transaction-scheduler --report_level=short`
 Expected: 全 PASS——现有 `pushView`/`mergeBackStorage`/`fork` 调用方零回归（纯新增 `mergeView`）。
 
 - [ ] **Step 2: 全量 opstack + rpc 回归**
@@ -204,7 +255,7 @@ git commit --no-verify -m "test: C2 落盘修复全量回归 — transaction-sch
 
 | spec 验收 | Task 覆盖 |
 |---|---|
-| §6.1 MultiLayerStorage mergeView 成功/异常路径 | Task 1（`mergeViewPersistsToBackend` + `mergeViewNoMutableIsNoop`） |
+| §6.1 MultiLayerStorage mergeView 成功/异常路径 | Task 1（`mergeViewPersistsToBackend` 成功 + `mergeViewNoMutableIsNoop` no-op + `mergeViewMergesOldestLayer` FIFO 最旧层语义）；**故障注入路径声明出范围**（spec §5 降级语义由 FIFO 测试 + 设计文档覆盖，自审表修正） |
 | §6.2 OpNewPayloadRpcE2eTest backend 断言 | Task 2 Step 1-4（`SYS_HASH_2_TX in backend`） |
 | §8 只改 2 生产文件 + 纯新增 | Task 1（MultiLayerStorage.h）+ Task 2（EngineServiceImpl.h），均为新增/单行改 |
 | §5 异常 → -32603 非 INVALID | merge 异常向上传播（mergeView 不 catch），handleNewPayload 既有 storage error 通道接管 |
