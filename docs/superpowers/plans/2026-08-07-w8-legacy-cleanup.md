@@ -16,6 +16,13 @@
 - **T4 C2**：typed-tx `signatureV ≤1` 校验已存在（Web3TxHandler.cpp:420/596/923）——**只补测试**（yParity>1 负向 / v=0/1 显式 / 7702 auth 宽度 `OpSchedulerImpl.h:374`）；**C6 = 裁定放行/等价留档**（非硬拒——op-geth 块执行层也放行 legacy/0x01）
 - **T5 语料**：重生成无意义（结构性恒值）；改**可复现性验证**——`regen.sh` exit 0（git-diff 字节等同）；**无 SHA256SUMS**（manifest + git-diff 机制）；数量 34
 - **T3 拍板 checkpoint**：T3 产证据包后暂停等用户拍板（确认搬运 Plan A vs 保持宽松）；T4/T5 与 T3 正交
+- **构建/测试 target 名（W8 审查 A/B/C/D 修正）**：`test-bcos-codec`（非 bcos-codec-ut）、`test-bcos-rpc`（非 bcos-rpc-ut）、`bcos-evm-opstack-tests`（✓ 已对）；run 用 `./build/bcos-codec/test/test-bcos-codec` / `./build/bcos-rpc/test/test-bcos-rpc` / `./build/bcos-evm/test/bcos-evm-opstack-tests`
+- **Boost suite 名**：`--run_test=testWeb3Type`（⚠️ 非 Web3TypeSuite）；`--run_test=RLPTest`（✓）；`--run_test=BcosEvmOpstackTests`
+- **T3 修复片段**：只加 `if (lenOfLen>=2 && from[0]==0) return NonCanonicalSize;` 块（⚠️ `const auto lenOfLen` 已存在于 RLPDecode.h:69/:97，勿重复声明）
+- **T3 注释修正范围**：`OpSchedulerImpl.h:277-278` + `:289-300`（⚠️ 后者也引用不存在的 OpSchedulerImplTest.cpp 命名测试）
+- **T4 测试 (c) 落点**：7702 auth 宽度测试须在 `if(TARGET bcos-framework)` 条件块（OpSchedulerImplSmokeTest.cpp 或新增 decode 级测试）——不能进无条件 Op7702Test.cpp（会拉 OpSchedulerImpl.h 重依赖，破坏 standalone 构建）
+- **T5**：golden/engine/SHA256SUMS **存在**（79 行，覆盖 golden+chained）；vectors 层无 SHA256SUMS（manifest + regen git-diff）；cases/ untracked 是常态（regen git-diff 不覆盖 untracked）；T5 commit 需 `git add` 目标文件（若 regen 无改动则无物可 commit）
+- **Non-goals（W8 审查 A）**：批8（接缝 11 条）+ 非 20 字节 `/apps/` 表名状态根语义——spec §7 parked，不入本 plan（防 scope creep）
 - commit `--no-verify`；worktree 内运行
 
 ---
@@ -129,30 +136,30 @@ Expected: 确认上游修复 = `decodeHeader` 长字节/长列表分支加 `if (
 
 - [ ] **Step 3: 搬运修复 + 测试（拍板为搬运后）**
 
-`RLPDecode.h` 的 `decodeHeader` 长字节（:69-83）与长列表（:96-112）分支加：
+`RLPDecode.h` 的 `decodeHeader` 长字节（:69-83）与长列表（:96-112）分支，在 InputTooShort 检查后、`fromBigEndian` 前加（⚠️ **只加 `if` 块**——`const auto lenOfLen` 已存在于 :69/:97，勿重复声明）：
 
 ```cpp
-const auto lenOfLen{byte - LONG_BYTES_HEAD_BASE};
 if (lenOfLen >= 2 && from[0] == 0)
 {
-    return {BCOS_ERROR_UNIQUE_PTR(DecodingError::NonCanonicalSize,
+    return {BCOS_ERROR_UNIQUE_PTR(NonCanonicalSize,
                 "Non-canonical length prefix: leading zero byte"), Header()};
 }
 ```
 
-搬运 `RLPTest` 的 `decodeRejectsNonCanonicalLengthPrefix` 用例（对照上游 a37517327）。
+搬运 `RLPTest` 的 `decodeRejectsNonCanonicalLengthPrefix` 用例（对照上游 a37517327；⚠️ 勿按上游行号盲搬——本地 RLPTest.cpp 与上游已分歧，按套件结构定位，插入在 `decodeRejectsMalformedInputs` 之后、`BOOST_AUTO_TEST_SUITE_END()` 之前）。
 
-- [ ] **Step 4: 修注释失实**
+- [ ] **Step 4: 修注释失实（范围扩宽）**
 
-`OpSchedulerImpl.h:277-278` 注释声称"C1 fixed the SHARED decoder (RLPDecode.h)"——改为如实描述（本分支搬运后已修，或搬运前注明待修）。
+`OpSchedulerImpl.h:277-278` 注释声称"C1 fixed the SHARED decoder (RLPDecode.h)"——改为如实描述。⚠️ **同时修 :289-300**：该段也引用本分支不存在的 `OpSchedulerImplTest.cpp` 及其命名测试（`NonCanonicalOuterFramingIsRejectedAtDecode` 等）——整段 stale 注释块核对修正（或注明本分支测试在 OpSchedulerImplSmokeTest）。
 
 - [ ] **Step 5: 影响面回归 + Commit**
 
-影响面消费方（Web3Transaction.cpp / ledger MPT / TransactionImpl / Web3AccessListResolver / ChecksumAddress）——跑相关测试确认不破坏。
+影响面消费方（⚠️ W8 审查 B 路径修正：`Web3Transaction.h`（header-only 非 .cpp）/ ledger MPT（Account/NodeDecoder/StorageValueCodec）/ `TransactionImpl.cpp`（bcos-tars-protocol）/ `Web3AccessListResolver.cpp`（**bcos-executor**）/ `ChecksumAddress.cpp`（**bcos-crypto**）+ 额外 EthEndpoint/BlockHeaderImpl/Web3TypeTest）——跑相关测试确认不破坏。
 
 ```bash
-cd build && cmake --build build --target bcos-codec-ut bcos-evm-opstack-tests bcos-rpc-ut（按实际 target 名）
-./build/bcos-codec/test/... --run_test=RLPTest  # 新用例绿
+cmake --build build --target test-bcos-codec bcos-evm-opstack-tests test-bcos-rpc   # ⚠️ 实际 target 名
+./build/bcos-codec/test/test-bcos-codec --run_test=RLPTest  # 新用例绿
+git add bcos-codec/bcos-codec/rlp/RLPDecode.h bcos-codec/test/unittests/RLPTest.cpp bcos-evm/bcos-evm/engine/OpSchedulerImpl.h
 git commit --no-verify -m "fix(w8): #5-C1 搬运 Plan A RLP 前导零修复 + 注释修正"
 ```
 
@@ -176,16 +183,21 @@ grep `InvalidVInSignature`（Web3TxHandler.cpp:420/596/923 typed-tx ≤1 + OpSch
 
 - [ ] **Step 2: 补测试 (a) typed-tx yParity>1 负向**
 
-在 `Web3TypeTest.cpp` 加用例：构造 typed-tx（2930/1559/4844）signatureV=2（`0x02`）的 rawTx，断言 decode 返回 `InvalidVInSignature`。
+在 `Web3TypeTest.cpp` 加用例（⚠️ W8 审查 C 给出精确改法）：从现有 rawTx（`testEIP1559Transaction` 等）改 yParity wire 字节 → signatureV=2。**wire 偏移**（RLP 解码实证）：EIP1559 字段[9] 的 `0x80` 在偏移 184、EIP2930 字段[8] 的 `0x80` 在偏移 178、EIP4844 字段[11] 的 `0x01` 在偏移 232——改为 `0x02`（单字节自编码，长度不变，外层前缀不受影响）。
 
 ```cpp
 // yParity > 1 必须拒绝（typed tx signatureV 只允许 0/1）
 BOOST_AUTO_TEST_CASE(typedTxYParityOverOneRejected)
 {
-    // 构造 signatureV=0x02 的 EIP-1559 rawTx（仿 testEIP1559Transaction 但改 v 字段）
-    auto rawTx = /* EIP-1559 有效 rawTx，signatureV 改为 0x02 */;
-    auto result = decodeTransaction(rawTx, ...);  // 照 Web3TypeTest 现有 decode 调用
-    BOOST_CHECK(result.errorCode == /* InvalidVInSignature */);
+    // 取 testEIP1559Transaction 的 rawTx，改 wire 偏移 184 的 0x80 → 0x02（signatureV=2）
+    auto rawTx = /* EIP-1559 rawTx，bytes[184] = 0x02 */;
+    auto bytes = fromHexWithPrefix(rawTx);
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx;
+    auto e = codec::rlp::decode(bRef, tx);  // ⚠️ 实际 API：codec::rlp::decode 返回 Error::UniquePtr
+    BOOST_CHECK(e != nullptr);
+    BOOST_CHECK_EQUAL(e->errorCode(),
+        static_cast<int64_t>(codec::rlp::DecodingError::InvalidVInSignature));  // Error.h:91
 }
 ```
 
@@ -195,15 +207,17 @@ BOOST_AUTO_TEST_CASE(typedTxYParityOverOneRejected)
 
 - [ ] **Step 4: 补测试 (c) 7702 auth yParity 宽度**
 
-在 OP 侧测试（`Op7702Test.cpp` 或对应）加用例：auth yParity 超宽编码（`0x82 0x01 0x00`==256）应被 `decodeAuthYParityScalar` 拒绝（对照 `OpSchedulerImpl.h:374` 的 readCanonicalScalar(in,1) 严格性）。
+⚠️ W8 审查 C：测试**须在 `if(TARGET bcos-framework)` 条件块**（`OpSchedulerImplSmokeTest.cpp` 扩展或新增 decode 级测试）——不能进无条件的 `Op7702Test.cpp`（会拉 OpSchedulerImpl.h 重依赖，破坏 standalone 构建）。用例：auth yParity 超宽编码（`0x82 0x01 0x00`==256）喂 `detail::decodeAuthYParityScalar`（或 `detail::decodeOneRawTx` 的 0x04 信封）应抛 `OpConsensusError`（`readCanonicalScalar(in,1)` 对 payloadLength=2 拒绝——代码实证）。
 
 - [ ] **Step 5: C6 裁定留档 + Commit**
 
 C6 裁定：legacy/0x01 块执行放行 = 与 op-geth 等价（`decodeOneRawTx` 分派 + opValidate 白名单 vs op-geth `state_transition.go` IsDepositTx-only）——**留档**（报告记录裁定 + 证据，不落地硬拒）。
 
 ```bash
-cd build && cmake --build build --target bcos-rpc-ut（按实际 target）
-./build/bcos-rpc/test/... --run_test=Web3TypeSuite  # 新用例绿
+cmake --build build --target test-bcos-rpc bcos-evm-opstack-tests   # ⚠️ target 名
+./build/bcos-rpc/test/test-bcos-rpc --run_test=testWeb3Type  # ⚠️ suite 名（非 Web3TypeSuite）
+./build/bcos-evm/test/bcos-evm-opstack-tests --run_test=Op7702Suite  # 若 (c) 落 smoke
+git add bcos-rpc/test/unittests/rpc/Web3TypeTest.cpp bcos-evm/test/opstack/OpSchedulerImplSmokeTest.cpp
 git commit --no-verify -m "test(w8): #5-C2 yParity 补测试 + C6 裁定留档"
 ```
 
