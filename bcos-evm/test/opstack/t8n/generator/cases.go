@@ -178,6 +178,37 @@ func sourceHash(label string) common.Hash {
 	return crypto.Keccak256Hash([]byte("opt8n-ref source " + label))
 }
 
+// l1AttributesLayout is the L1-attributes deposit layout for an OP-Stack fork
+// (the per-fork byte form of the L1InfoDeposit calldata, mirroring op-geth
+// core/types/rollup_cost.go extractL1GasParamsPostEcotone/PostIsthmus and
+// ExtractDAFootprintGasScalar). Ecotone/Fjord/Granite/Holocene all use the
+// 164-byte Ecotone layout; only Isthmus adds the operator-fee segment and
+// Jovian the DA-footprint scalar.
+type l1AttributesLayout int
+
+const (
+	layoutEcotone l1AttributesLayout = iota // 164B, selector 0x440a5e20, no operator-fee/DA segment
+	layoutIsthmus                           // 176B, selector 0x098999be, + operatorFeeScalar/Constant [164:176]
+	layoutJovian                            // 178B, selector 0x3db6be2b, + daFootprintGasScalar [176:178]
+)
+
+// forkLayout maps a hardfork name to its L1-attributes layout. The four
+// Ecotone-family forks (ecotone/fjord/granite/holocene) are byte-identical for
+// L1 attributes -- op-geth only branches on the Ecotone selector, and
+// extractL1GasParamsPostEcotone hard-rejects any non-164-byte payload.
+func forkLayout(fork string) l1AttributesLayout {
+	switch fork {
+	case "ecotone", "fjord", "granite", "holocene":
+		return layoutEcotone
+	case "isthmus":
+		return layoutIsthmus
+	case "jovian":
+		return layoutJovian
+	default:
+		panic(fmt.Sprintf("unknown hardfork %q in forkLayout", fork))
+	}
+}
+
 // feeParams is the single source for BOTH the L1Block storage pre-seeding and
 // the L1-attributes deposit calldata (iron rule: field-for-field identical).
 type feeParams struct {
@@ -200,19 +231,23 @@ func defaultFeeParams() feeParams {
 	}
 }
 
-func (fp feeParams) attributesData(jovianCfg bool) hexutil.Bytes {
-	size := types.IsthmusL1AttributesLen
-	jovianLayout := jovianCfg && !fp.isthmusLayout
-	if jovianLayout {
-		size = types.JovianL1AttributesLen
+func (fp feeParams) attributesData(fork string) hexutil.Bytes {
+	layout := forkLayout(fork)
+	if layout == layoutJovian && fp.isthmusLayout {
+		layout = layoutIsthmus // Jovian activation form: Isthmus-length/selector calldata (case 12)
+	}
+	var size int
+	var selector []byte
+	switch layout {
+	case layoutEcotone:
+		size, selector = 164, types.EcotoneL1AttributesSelector // extractL1GasParamsPostEcotone: hard 164
+	case layoutIsthmus:
+		size, selector = types.IsthmusL1AttributesLen, types.IsthmusL1AttributesSelector
+	case layoutJovian:
+		size, selector = types.JovianL1AttributesLen, types.JovianL1AttributesSelector
 	}
 	buf := make([]byte, size)
-	if jovianLayout {
-		copy(buf[0:4], types.JovianL1AttributesSelector)
-		binary.BigEndian.PutUint16(buf[176:178], fp.daScalar)
-	} else {
-		copy(buf[0:4], types.IsthmusL1AttributesSelector)
-	}
+	copy(buf[0:4], selector)
 	binary.BigEndian.PutUint32(buf[4:8], fp.baseFeeScalar)
 	binary.BigEndian.PutUint32(buf[8:12], fp.blobBaseFeeScalar)
 	// [12:20] sequenceNumber, [20:28] l1 timestamp, [28:36] l1 number: zero
@@ -220,12 +255,20 @@ func (fp feeParams) attributesData(jovianCfg bool) hexutil.Bytes {
 	fp.l1BaseFee.FillBytes(buf[36:68])
 	fp.blobBaseFee.FillBytes(buf[68:100])
 	// [100:132] l1 block hash, [132:164] batcher hash: zero.
-	binary.BigEndian.PutUint32(buf[164:168], fp.opFeeScalar)
-	binary.BigEndian.PutUint64(buf[168:176], fp.opFeeConstant)
+	if layout != layoutEcotone {
+		// Operator-fee segment exists ONLY in Isthmus+ layouts (the Ecotone
+		// 164B form has no [164:176] -- writing it would make data 176B and
+		// extractL1GasParamsPostEcotone would reject it).
+		binary.BigEndian.PutUint32(buf[164:168], fp.opFeeScalar)
+		binary.BigEndian.PutUint64(buf[168:176], fp.opFeeConstant)
+	}
+	if layout == layoutJovian {
+		binary.BigEndian.PutUint16(buf[176:178], fp.daScalar)
+	}
 	return buf
 }
 
-func (fp feeParams) l1BlockStorage(jovianCfg bool) map[common.Hash]common.Hash {
+func (fp feeParams) l1BlockStorage(fork string) map[common.Hash]common.Hash {
 	st := map[common.Hash]common.Hash{}
 	st[types.L1BaseFeeSlot] = common.BigToHash(fp.l1BaseFee)
 	st[types.L1BlobBaseFeeSlot] = common.BigToHash(fp.blobBaseFee)
@@ -234,18 +277,27 @@ func (fp feeParams) l1BlockStorage(jovianCfg bool) map[common.Hash]common.Hash {
 	binary.BigEndian.PutUint32(slot3[20:24], fp.blobBaseFeeScalar)
 	st[types.L1FeeScalarsSlot] = slot3
 	var slot8 common.Hash
-	if jovianCfg && !fp.isthmusLayout {
-		binary.BigEndian.PutUint16(slot8[18:20], fp.daScalar)
+	switch forkLayout(fork) {
+	case layoutJovian:
+		if !fp.isthmusLayout {
+			binary.BigEndian.PutUint16(slot8[18:20], fp.daScalar)
+		}
+		binary.BigEndian.PutUint32(slot8[20:24], fp.opFeeScalar)
+		binary.BigEndian.PutUint64(slot8[24:32], fp.opFeeConstant)
+	case layoutIsthmus:
+		binary.BigEndian.PutUint32(slot8[20:24], fp.opFeeScalar)
+		binary.BigEndian.PutUint64(slot8[24:32], fp.opFeeConstant)
+	case layoutEcotone:
+		// No operator-fee / DA segment in the Ecotone 164B layout: slot 8
+		// (OperatorFeeParams) stays unseeded -- it is an Isthmus+ concept.
 	}
-	binary.BigEndian.PutUint32(slot8[20:24], fp.opFeeScalar)
-	binary.BigEndian.PutUint64(slot8[24:32], fp.opFeeConstant)
 	if slot8 != (common.Hash{}) {
 		st[types.OperatorFeeParamsSlot] = slot8
 	}
 	return st
 }
 
-func (fp feeParams) attributesTx(label string, jovianCfg bool) inputTx {
+func (fp feeParams) attributesTx(label string, fork string) inputTx {
 	to := l1BlockAddr
 	return inputTx{
 		OpType: "deposit",
@@ -256,7 +308,7 @@ func (fp feeParams) attributesTx(label string, jovianCfg bool) inputTx {
 			IsSystemTx: false,
 			SourceHash: sourceHash("attributes " + label),
 		},
-		Data: fp.attributesData(jovianCfg),
+		Data: fp.attributesData(fork),
 	}
 }
 
@@ -299,7 +351,7 @@ func caseFrame(fork, name, desc string, fp feeParams, gasLimit uint64) inputCase
 	// non-empty (they carry code); nonce 1 models that without giving
 	// L1Block code, keeping "no tx writes L1Block slots" structurally true.
 	pre := types.GenesisAlloc{
-		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(jovianCfg)},
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(fork)},
 		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
 	}
 	return inputCase{
@@ -309,7 +361,7 @@ func caseFrame(fork, name, desc string, fp feeParams, gasLimit uint64) inputCase
 		ParentBeaconBlockRoot: common.HexToHash("0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
 		Pre:                   pre,
 		Transactions: []inputTx{
-			fp.attributesTx(fork+"_"+name, jovianCfg),
+			fp.attributesTx(fork+"_"+name, fork),
 		},
 	}
 }

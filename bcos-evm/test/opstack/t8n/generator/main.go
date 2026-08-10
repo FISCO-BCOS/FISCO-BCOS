@@ -598,7 +598,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 	// --- Startup consistency assertion (iron rule 2): L1Block slots <->
 	// attributes calldata, field for field, plus the first-Ecotone-fallback
 	// trap guard. Mismatch = corpus authoring error, hard stop.
-	if err := assertL1BlockConsistency(cfg, in); err != nil {
+	if err := assertL1BlockConsistency(cfg, fork, in); err != nil {
 		return nil, nil, fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
 	}
 	if err := assertDepositsFirst(in.Transactions); err != nil {
@@ -725,7 +725,7 @@ func probeReceiptFields(in *inputCase) error {
 	// --- Startup consistency assertion (iron rule 2): L1Block slots <->
 	// attributes calldata, field for field, plus the first-Ecotone-fallback
 	// trap guard. Mismatch = corpus authoring error, hard stop.
-	if err := assertL1BlockConsistency(cfg, in); err != nil {
+	if err := assertL1BlockConsistency(cfg, in.Info.Hardfork, in); err != nil {
 		return fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
 	}
 	if err := assertDepositsFirst(in.Transactions); err != nil {
@@ -1092,7 +1092,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 	beaconRoot := common.HexToHash("0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c")
 	senderAddr := addrOfKey(1)
 	genesisPre := types.GenesisAlloc{
-		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(jovianCfg)},
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(fork)},
 		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
 		senderAddr:        {Balance: eth(100)},
 	}
@@ -1150,7 +1150,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 			bg.SetParentBeaconRoot(beaconRoot)
 			signer := bg.Signer() // == MakeSigner(cfg, bg.Number(), bg.Timestamp())
 
-			attr := fp.attributesTx(fmt.Sprintf("chain_%d", i), jovianCfg)
+			attr := fp.attributesTx(fmt.Sprintf("chain_%d", i), fork)
 			tx0, outTx0, terr := buildTx(&attr, signer, cfg)
 			if terr != nil {
 				panic(fmt.Errorf("block %d attributes tx: %w", i, terr))
@@ -1207,7 +1207,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("expected 2 generated blocks, got %d", len(blocks))
 	}
 
-	if err := assertL1BlockConsistency(cfg, ins[0]); err != nil {
+	if err := assertL1BlockConsistency(cfg, fork, ins[0]); err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block A: %w", err)
 	}
 	if err := assertDepositsFirst(ins[0].Transactions); err != nil {
@@ -1231,7 +1231,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 
 	// Block B's pre IS block A's post -- not a second seed (decision A2).
 	ins[1].Pre = outA.PostState
-	if err := assertL1BlockConsistency(cfg, ins[1]); err != nil {
+	if err := assertL1BlockConsistency(cfg, fork, ins[1]); err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block B: %w", err)
 	}
 	if err := assertDepositsFirst(ins[1].Transactions); err != nil {
@@ -1331,20 +1331,25 @@ func selfCheck(genesis *core.Genesis, blocks []*types.Block) error {
 // ---------------------------------------------------------------------
 // L1Block slot <-> calldata consistency (iron rule 2)
 //
-// Calldata layout (rollup_cost.go extractL1GasParamsPostIsthmus /
-// ExtractDAFootprintGasScalar):
-//   [0:4]   selector (Isthmus 0x098999be / Jovian 0x3db6be2b)
+// Calldata layout (rollup_cost.go extractL1GasParamsPostEcotone /
+// extractL1GasParamsPostIsthmus / ExtractDAFootprintGasScalar):
+//   [0:4]   selector (Ecotone 0x440a5e20 / Isthmus 0x098999be / Jovian 0x3db6be2b)
 //   [4:8]   baseFeeScalar        <-> slot 3 bytes [16:20]
 //   [8:12]  blobBaseFeeScalar    <-> slot 3 bytes [20:24]
 //   [36:68] l1BaseFee            <-> slot 1
 //   [68:100] l1BlobBaseFee       <-> slot 7
-//   [164:168] operatorFeeScalar  <-> slot 8 bytes [20:24]
-//   [168:176] operatorFeeConstant<-> slot 8 bytes [24:32]
+//   [164:168] operatorFeeScalar  <-> slot 8 bytes [20:24]   (Isthmus+ only)
+//   [168:176] operatorFeeConstant<-> slot 8 bytes [24:32]   (Isthmus+ only)
 //   [176:178] daFootprintGasScalar (Jovian) <-> slot 8 bytes [18:20]
 //             (slot mapping mirrors bcos-evm-ref OpFeeParams.h)
+// The Ecotone 164B layout has NO [164:176] operator-fee segment and no
+// [176:178] DA scalar. extractL1GasParamsPostEcotone hard-rejects any
+// non-164-byte payload, so the length/selector checks here are the corpus
+// guard against emitting an Isthmus-shaped deposit under an Ecotone-family
+// fork.
 // ---------------------------------------------------------------------
 
-func assertL1BlockConsistency(cfg *params.ChainConfig, in *inputCase) error {
+func assertL1BlockConsistency(cfg *params.ChainConfig, fork string, in *inputCase) error {
 	if len(in.Transactions) == 0 {
 		return fmt.Errorf("case has no transactions (needs the L1 attributes deposit)")
 	}
@@ -1365,8 +1370,16 @@ func assertL1BlockConsistency(cfg *params.ChainConfig, in *inputCase) error {
 	}
 	slot1, slot3, slot7, slot8 := slot(1), slot(3), slot(7), slot(8)
 
-	jovianCfg := cfg.IsJovian(uint64(in.Genesis.Timestamp))
-	checkCommon := func() error {
+	// blockTime (NOT genesis time) decides jovianCfg: an upgrade-boundary
+	// vector whose genesis is pre-Jovian but whose single block crosses
+	// JovianTime must still be treated as Jovian for the deposits-only /
+	// DA-footprint checks. Pure predicate -- the upgrade-boundary config
+	// machinery itself is Task 3's job.
+	blockTime := uint64(in.Genesis.Timestamp) + 10 // chain_makers.makeHeader: block time fixed at parent+10
+	jovianCfg := cfg.IsJovian(blockTime)
+	layout := forkLayout(fork)
+
+	checkCommon := func(layout l1AttributesLayout) error {
 		if !bytes.Equal(slot1[:], data[36:68]) {
 			return fmt.Errorf("slot1 (l1BaseFee) %x != calldata[36:68] %x", slot1, data[36:68])
 		}
@@ -1379,11 +1392,15 @@ func assertL1BlockConsistency(cfg *params.ChainConfig, in *inputCase) error {
 		if !bytes.Equal(slot3[20:24], data[8:12]) {
 			return fmt.Errorf("slot3[20:24] (blobBaseFeeScalar) %x != calldata[8:12] %x", slot3[20:24], data[8:12])
 		}
-		if !bytes.Equal(slot8[20:24], data[164:168]) {
-			return fmt.Errorf("slot8[20:24] (operatorFeeScalar) %x != calldata[164:168] %x", slot8[20:24], data[164:168])
-		}
-		if !bytes.Equal(slot8[24:32], data[168:176]) {
-			return fmt.Errorf("slot8[24:32] (operatorFeeConstant) %x != calldata[168:176] %x", slot8[24:32], data[168:176])
+		if layout != layoutEcotone {
+			// Operator-fee segment exists only in Isthmus+ layouts; the
+			// Ecotone 164B form has no [164:176] bytes to mirror.
+			if !bytes.Equal(slot8[20:24], data[164:168]) {
+				return fmt.Errorf("slot8[20:24] (operatorFeeScalar) %x != calldata[164:168] %x", slot8[20:24], data[164:168])
+			}
+			if !bytes.Equal(slot8[24:32], data[168:176]) {
+				return fmt.Errorf("slot8[24:32] (operatorFeeConstant) %x != calldata[168:176] %x", slot8[24:32], data[168:176])
+			}
 		}
 		// First-Ecotone fallback trap (rollup_cost.go:169-179): blob slot and
 		// BOTH 4-byte scalars all zero would silently select the Bedrock cost
@@ -1409,7 +1426,7 @@ func assertL1BlockConsistency(cfg *params.ChainConfig, in *inputCase) error {
 		if !isZero(slot8[18:20]) {
 			return fmt.Errorf("Jovian activation-form block requires slot8 DA bytes [18:20] zero, got %x", slot8[18:20])
 		}
-		return checkCommon()
+		return checkCommon(layoutIsthmus)
 	case jovianCfg:
 		if len(data) != types.JovianL1AttributesLen {
 			return fmt.Errorf("Jovian attributes must be %d bytes (or %d for the activation form), got %d",
@@ -1418,13 +1435,25 @@ func assertL1BlockConsistency(cfg *params.ChainConfig, in *inputCase) error {
 		if !bytes.Equal(data[0:4], types.JovianL1AttributesSelector) {
 			return fmt.Errorf("Jovian attributes selector mismatch: got %x", data[0:4])
 		}
-		if err := checkCommon(); err != nil {
+		if err := checkCommon(layoutJovian); err != nil {
 			return err
 		}
 		if !bytes.Equal(slot8[18:20], data[176:178]) {
 			return fmt.Errorf("slot8[18:20] (daFootprintGasScalar) %x != calldata[176:178] %x", slot8[18:20], data[176:178])
 		}
 		return nil
+	case layout == layoutEcotone:
+		// Ecotone/Fjord/Granite/Holocene: exactly 164B with the Ecotone
+		// selector and NO operator-fee/DA segment. extractL1GasParamsPostEcotone
+		// (rollup_cost.go:477-479) hard-rejects any other length, so this is
+		// also the corpus-side guard that the deposit is not Isthmus-shaped.
+		if len(data) != 164 {
+			return fmt.Errorf("Ecotone-family attributes must be 164 bytes, got %d", len(data))
+		}
+		if !bytes.Equal(data[0:4], types.EcotoneL1AttributesSelector) {
+			return fmt.Errorf("Ecotone-family attributes selector mismatch: got %x", data[0:4])
+		}
+		return checkCommon(layoutEcotone)
 	default: // isthmus
 		if len(data) != types.IsthmusL1AttributesLen {
 			return fmt.Errorf("Isthmus attributes must be %d bytes, got %d", types.IsthmusL1AttributesLen, len(data))
@@ -1432,7 +1461,7 @@ func assertL1BlockConsistency(cfg *params.ChainConfig, in *inputCase) error {
 		if !bytes.Equal(data[0:4], types.IsthmusL1AttributesSelector) {
 			return fmt.Errorf("Isthmus attributes selector mismatch: got %x", data[0:4])
 		}
-		return checkCommon()
+		return checkCommon(layoutIsthmus)
 	}
 }
 
