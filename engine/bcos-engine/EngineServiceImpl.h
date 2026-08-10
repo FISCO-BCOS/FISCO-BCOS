@@ -269,7 +269,7 @@ public:
         {
             std::unique_lock lock(x_state);
             m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-            m_payloadCache[payloadId] = entry;
+            m_payloadCache[payloadId] = std::move(entry);
         }
         result.payloadId = payloadId;
         co_return result;
@@ -461,6 +461,13 @@ private:
                 typename GlobalStateStorageType::MutableStorage prewriteStorage;
                 auto block = m_blockFactory->createBlock();
                 block->setBlockHeader(it->second.header);
+                // Persist the block-level logsBloom (computed in buildPayload from the
+                // per-receipt blooms). Without it every block produced by this driver
+                // answers eth_getBlockByNumber with 256 zero bytes — the legacy
+                // BaselineScheduler commit path sets the block bloom before commit, so
+                // this restores parity with that path (eth_getLogs uses it as a filter).
+                auto const& bloom = it->second.executionPayload.logsBloom;
+                block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
                 for (auto const& tx : it->second.executionPayload.transactions)
                 {
                     block->appendTransaction(tx);
@@ -485,6 +492,19 @@ private:
         }
 
         m_payloadCache[payloadId] = std::move(entry);
+
+        // Evict stale payload entries. A payload is only read between updateForkchoice /
+        // getPayload and newPayload, so once a block is committed its payloadId and
+        // blockHash are unreachable. The built-in single-node driver mints one new
+        // payloadId per block_interval tick, so without eviction both maps grow by one
+        // row per produced block and hold strong references to every transaction ever
+        // executed (unbounded memory over time). Keep only the just-committed block; the
+        // newPayload() parent check accepts the head hash directly, so dropping older
+        // blockHash rows is safe.
+        std::erase_if(m_blockHashToPayloadId, [&](auto const& kv) {
+            return kv.first != request.executionPayload.blockHash;
+        });
+        std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
 
         co_return makeStatus(
             PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);

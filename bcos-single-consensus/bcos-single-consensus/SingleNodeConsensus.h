@@ -84,11 +84,12 @@ private:
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
 
-    /// CL-side head tracking. The EngineService commits produced blocks but does not expose or
-    /// advance the canonical head (and does not update SYS_CURRENT_STATE — that row is only
-    /// written by the legacy commit path), so the head is resolved once from the ledger at
-    /// startup and then tracked here, exactly like a real consensus layer tracks its own fork
-    /// choice.
+    /// CL-side head tracking. newPayload() persists the ledger block tables — including
+    /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer
+    /// (EngineServiceImpl.h, same FIB-104 pattern as the legacy commit path), so the head is
+    /// fully recoverable from the ledger after a restart. The EngineService does not expose
+    /// the canonical head, so it is resolved once at startup and tracked here afterwards,
+    /// exactly like a real consensus layer tracks its own fork choice.
     bcos::protocol::BlockNumber m_headNumber = 0;
     bcos::crypto::HashType m_headHash;
     bool m_headInitialized = false;

@@ -35,6 +35,7 @@
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
@@ -723,6 +724,25 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                             {
                                 block->appendReceipt(it);
                             }
+                            // The block-level logsBloom is not persisted with the block
+                            // (only header / tx hashes / txs / receipts are stored), so a
+                            // block reconstructed here would otherwise carry 256 zero bytes
+                            // and eth_getBlockByNumber / eth_getLogs would report an empty
+                            // bloom for blocks with logs — from the legacy BaselineScheduler
+                            // commit path and the built-in single-node driver alike. Recompute
+                            // it from the receipts' log entries (receipts may carry an empty
+                            // per-receipt logsBloom, but their logEntries are populated).
+                            bcos::Bloom logsBloom{};
+                            for (auto const& receipt : receipts)
+                            {
+                                if (!receipt)
+                                {
+                                    continue;
+                                }
+                                bcos::orBloom(logsBloom, bcos::getLogsBloom(receipt->logEntries()));
+                            }
+                            block->setLogsBloom(
+                                bcos::bytesConstRef(logsBloom.data(), logsBloom.size()));
                             finally(std::move(error));
                         });
                 }

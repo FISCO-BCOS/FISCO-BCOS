@@ -295,35 +295,6 @@ public:
         return transactions;
     }
 
-    /// Drain up to @p limit pending transactions from the pool (in (sender, nonce) order) and
-    /// clear them. A negative @p limit means unlimited.
-    ///
-    /// Used by the single-node consensus driver to assemble the next block proposal. Unlike
-    /// seal(), no nonce-vs-state check is performed: the driver hands the txs directly to the
-    /// scheduler, so there is no state view to validate against here — and the driver accepts
-    /// future-nonce (gapped) transactions on purpose, letting execution fail them instead of
-    /// holding them back. @p limit restores the block-size bound seal() enforces, so an
-    /// unbounded submission rate cannot grow a single proposal without limit.
-    std::vector<protocol::Transaction::Ptr> takeAll(int64_t limit = -1)
-    {
-        std::vector<protocol::Transaction::Ptr> transactions;
-        std::unique_lock lock(m_mutex);
-        auto& senderNonceIndex = m_transactions.get<0>();
-        transactions.reserve(limit < 0 ? m_transactions.size() :
-                                         std::min<size_t>(m_transactions.size(), limit));
-        int64_t count = 0;
-        for (auto it = senderNonceIndex.begin(); it != senderNonceIndex.end();)
-        {
-            transactions.push_back(it->m_transaction);
-            it = senderNonceIndex.erase(it);
-            ++count;
-            if (limit >= 0 && count >= limit)
-            {
-                break;
-            }
-        }
-        return transactions;
-    }
 };
 
 }  // namespace bcos::txpool

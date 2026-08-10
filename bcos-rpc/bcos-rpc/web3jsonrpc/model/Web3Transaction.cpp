@@ -187,31 +187,18 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
             bcostars::AuthorizationEntry tarsEntry;
             // EIP-7702 chain_id is a 256-bit value (see Web3Transaction.h — it is part of
             // the signed payload and must not be narrowed for the signing hash), but the
-            // protocol::Authorization / tars field can only carry 64 bits. A chain_id larger
-            // than 64 bits can never equal any real chain id, so per EIP-7702 the
-            // authorization is simply ignored (chain-id mismatch, the same path a
-            // well-formed-but-wrong chain id takes). It must still be KEPT in the list:
-            // a set_code transaction with an empty authorization list is rejected by the
-            // executor ("empty authorization list"), and dropping the entry would also
-            // change the tx's signing hash. Keep it with its low 64 bits. To avoid the
-            // 0 = "any chain" wildcard when the low bits are zero (a truncated large
-            // chain_id must never be treated as chain-agnostic), pin a zero truncation to
-            // the max uint64 value — never a real chain, never the wildcard — so evmone
-            // skips the authorization via chain-id mismatch.
-            if (entry.chainId > std::numeric_limits<uint64_t>::max())
-            {
-                auto const truncated = static_cast<uint64_t>(entry.chainId);
-                tarsEntry.chainID =
-                    static_cast<int64_t>(truncated == 0 ? UINT64_MAX : truncated);
-                tarsEntry.address = entry.address.hex();  // 40-char hex, no 0x prefix
-                tarsEntry.nonce = static_cast<int64_t>(entry.nonce);
-                tarsEntry.v = static_cast<tars::Char>(entry.yParity);
-                tarsEntry.r = "0x" + entry.r.str(0, std::ios_base::hex);
-                tarsEntry.s = "0x" + entry.s.str(0, std::ios_base::hex);
-                tarsTx.data.authorizationList.emplace_back(std::move(tarsEntry));
-                continue;
-            }
-            tarsEntry.chainID = static_cast<int64_t>(static_cast<uint64_t>(entry.chainId));
+            // protocol::Authorization / tars field can only carry 64 bits. No chain id above
+            // 64 bits can be this chain, so map EVERY such chain_id to UINT64_MAX — a value
+            // that is neither a real chain id nor the 0 = "any chain" wildcard — and let
+            // evmone skip the authorization on chain-id mismatch. (Mapping the low 64 bits
+            // instead would be unsafe: 2**64 + 1 truncates to 1 = Ethereum mainnet.) The
+            // entry must still be KEPT in the list: a set_code transaction with an empty
+            // authorization list is rejected by the executor, and dropping it would change
+            // the signing hash.
+            tarsEntry.chainID = static_cast<int64_t>(
+                entry.chainId > std::numeric_limits<uint64_t>::max() ?
+                    UINT64_MAX :
+                    static_cast<uint64_t>(entry.chainId));
             tarsEntry.address = entry.address.hex();  // 40-char hex, no 0x prefix
             tarsEntry.nonce = static_cast<int64_t>(entry.nonce);
             tarsEntry.v = static_cast<tars::Char>(entry.yParity);
