@@ -1,7 +1,9 @@
 // Corpus definitions for the M-B3+M6 block-level vector matrix (plan Step 2
 // table, 14 cases x fork column = 25 vectors; corpus augmentation spec rev.3
 // adds 3 cases x both forks = 31 vectors; the defer-sweep batch adds
-// empty_account_cleanup x both forks = 33 vectors). `opt8n-ref --write-cases <dir>`
+// empty_account_cleanup x both forks = 34 vectors). Phase 2 line A (Task 3)
+// adds 7 vectors: 2 Ecotone + 2 Fjord formula-boundary + 3 upgrade-boundary
+// activation cases = 41 vectors. `opt8n-ref --write-cases <dir>`
 // re-emits the *.in.json files deterministically from these definitions, so
 // the L1Block slot pre-seeding and the L1-attributes deposit calldata are
 // built from ONE feeParams source and cannot drift apart -- and
@@ -364,6 +366,50 @@ func caseFrame(fork, name, desc string, fp feeParams, gasLimit uint64) inputCase
 			fp.attributesTx(fork+"_"+name, fork),
 		},
 	}
+}
+
+// opForkOrder is the strict OP-Stack fork sequence. upgradeFrame activates
+// EVERY fork strictly after baseFork and up to (and including) activationFork
+// at activationT: real OP chains cannot skip forks -- a fjord->isthmus upgrade
+// must also fire granite+holocene, otherwise the block's extraData stays empty
+// (pre-Holocene) instead of the mandatory 9-byte Holocene form. The base fork
+// itself and all forks before it stay at 0 (already active at genesis).
+var opForkOrder = []string{"ecotone", "fjord", "granite", "holocene", "isthmus", "jovian"}
+
+// upgradeFrame assembles the upgrade-boundary skeleton (spec A2, Task 3):
+// genesis in baseFork, single block (timestamp = genesis+10 = 1010) crossing
+// into activationFork at activationT = 1005 -- the 10-second coupling
+// (1000 < 1005 <= 1010 holds, so the single block is the FIRST block of the
+// new fork). The L1-attributes deposit format switches at the fork boundary
+// (op-geth extractL1GasParams branches on the selector), so the L1Block slot
+// seeding and the deposit calldata are REBUILT under the activation fork's
+// layout -- still from the same feeParams (iron rule: slot <-> calldata).
+func upgradeFrame(baseFork, name, desc string, fp feeParams, gasLimit uint64, activationFork string, activationT uint64) inputCase {
+	c := caseFrame(baseFork, name, desc, fp, gasLimit)
+	c.Pre[l1BlockAddr] = types.Account{Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(activationFork)}
+	c.Transactions[0] = fp.attributesTx(baseFork+"_"+name, activationFork)
+	c.Info.Activations = map[string]uint64{}
+	started := false
+	for _, f := range opForkOrder {
+		if !started {
+			if f == baseFork {
+				started = true
+			}
+			continue
+		}
+		c.Info.Activations[f] = activationT
+		if f == activationFork {
+			break
+		}
+	}
+	if activationFork == "jovian" {
+		// EncodeOptimismExtraData panics on nil minBaseFee for Jovian BLOCKS;
+		// processBlockVector gates minBaseFee on blockTime (Task 3 handoff A),
+		// so a genesis that is pre-Jovian but crosses JovianTime must still
+		// carry genesis.minBaseFee.
+		c.Genesis.MinBaseFee = hd64(0)
+	}
+	return c
 }
 
 func fund(c *inputCase, key byte, amount *big.Int) {
@@ -873,6 +919,131 @@ var caseSpecs = []caseSpec{
 		c.Pre[emptyTouchAddr] = types.Account{Balance: big.NewInt(0)}
 		c.Transactions = append(c.Transactions,
 			transferTx(1, 0, emptyTouchAddr, big.NewInt(0), 21_000, nil))
+		return c
+	}},
+
+	// ----- Phase 2 line A: formula-boundary cases (Task 3 Step 1) -----
+	// Ecotone/Fjord run at EVMC_CANCUN (PragueTime nilled together with
+	// IsthmusTime): NO 7702/setcode arm, rev = CANCUN. The transfer carries
+	// calldata so the L1 formula is meaningfully exercised (a data-less
+	// transfer would sit on the FastLZ/Ecotone floor and not discriminate).
+
+	{"transfer_basic", []string{"ecotone"}, func(fork string) inputCase {
+		c := caseFrame(fork, "transfer_basic",
+			"Ecotone formula boundary: attributes + EIP-1559 transfer with calldata (activates the Ecotone calldata-gas L1 formula; l1_gas_used > floor)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("ecotone_transfer_basic", 200)))
+		return c
+	}},
+
+	{"contract_create", []string{"ecotone"}, func(fork string) inputCase {
+		// EIP-1559 CREATE: the initcode IS the tx calldata, so the Ecotone
+		// calldata formula charges against it; created address pre-derived into
+		// extra_candidates and its init-phase slot 0x0 into extra_storage.
+		c := caseFrame(fork, "contract_create",
+			"Ecotone formula boundary: attributes + EIP-1559 CREATE (initcode calldata exercises the Ecotone L1 formula)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		k := privKey(1)
+		c.Transactions = append(c.Transactions, inputTx{
+			OpType:               "eip1559",
+			ChainID:              hd256(chainID),
+			Nonce:                hd64(0),
+			Value:                hd256(big.NewInt(0)),
+			Gas:                  hd64(200_000),
+			MaxFeePerGas:         hdu(2_000_000_000),
+			MaxPriorityFeePerGas: hdu(100_000_000),
+			Data:                 createInitCode,
+			SecretKey:            &k,
+		})
+		eipCreated := crypto.CreateAddress(addrOfKey(1), 0)
+		c.ExtraCandidates = []common.Address{eipCreated}
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			eipCreated: {common.BigToHash(big.NewInt(0))},
+		}
+		return c
+	}},
+
+	{"transfer_basic", []string{"fjord"}, func(fork string) inputCase {
+		c := caseFrame(fork, "transfer_basic",
+			"Fjord formula boundary: attributes + EIP-1559 transfer with calldata (activates the FastLZ linear-regression L1 formula; l1_gas_used via estimatedDASizeScaled)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("fjord_transfer_basic", 200)))
+		return c
+	}},
+
+	{"contract_create", []string{"fjord"}, func(fork string) inputCase {
+		c := caseFrame(fork, "contract_create",
+			"Fjord formula boundary: attributes + EIP-1559 CREATE (initcode calldata exercises the FastLZ L1 formula)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		k := privKey(1)
+		c.Transactions = append(c.Transactions, inputTx{
+			OpType:               "eip1559",
+			ChainID:              hd256(chainID),
+			Nonce:                hd64(0),
+			Value:                hd256(big.NewInt(0)),
+			Gas:                  hd64(200_000),
+			MaxFeePerGas:         hdu(2_000_000_000),
+			MaxPriorityFeePerGas: hdu(100_000_000),
+			Data:                 createInitCode,
+			SecretKey:            &k,
+		})
+		eipCreated := crypto.CreateAddress(addrOfKey(1), 0)
+		c.ExtraCandidates = []common.Address{eipCreated}
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			eipCreated: {common.BigToHash(big.NewInt(0))},
+		}
+		return c
+	}},
+
+	// ----- Phase 2 line A: upgrade-boundary cases (Task 3 Step 2, spec A2) -----
+	// chainConfigSpec expressed via _info.activations (base = _info.hardfork).
+	// 10-second coupling: genesis timestamp 1000 (= T-5), blockTime 1010
+	// (= genesis+10 = T+5) -- the single block is the FIRST block of the new
+	// fork (1000 < 1005 <= 1010 holds).
+
+	{"upgrade_fjord_activation", []string{"ecotone"}, func(fork string) inputCase {
+		// L1 formula switch: Ecotone calldata formula -> Fjord FastLZ. The
+		// block (timestamp 1010) is Fjord; l1_gas_used reflects the FastLZ
+		// estimatedDASizeScaled model instead of bedrockCalldataGasUsed.
+		c := upgradeFrame("ecotone", "upgrade_fjord_activation",
+			"upgrade boundary ecotone->fjord: genesis Ecotone, single block crosses FjordTime; calldataGas -> FastLZ formula switch observable in l1_gas_used",
+			defaultFeeParams(), 10_000_000, "fjord", 1005)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("upgrade_fjord_activation", 200)))
+		return c
+	}},
+
+	{"upgrade_isthmus_activation", []string{"fjord"}, func(fork string) inputCase {
+		// Operator fee introduced: genesis Fjord, single block crosses
+		// IsthmusTime. Non-zero operator fee params -> the operator fee is
+		// charged for the first time (gasUsed*scalar/1e6 + constant, Isthmus
+		// formula), and the receipt emits the operator field group.
+		fp := defaultFeeParams()
+		fp.opFeeScalar = 5000
+		fp.opFeeConstant = 7777
+		c := upgradeFrame("fjord", "upgrade_isthmus_activation",
+			"upgrade boundary fjord->isthmus: genesis Fjord, single block crosses IsthmusTime; operator fee first charged (Isthmus formula, non-zero scalar/constant)",
+			fp, 10_000_000, "isthmus", 1005)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("upgrade_isthmus_activation", 64)))
+		return c
+	}},
+
+	{"upgrade_jovian_activation", []string{"isthmus"}, func(fork string) inputCase {
+		// DA fields appear: genesis Isthmus, single block crosses JovianTime.
+		// Deposits-ONLY + Isthmus-length/selector attributes (fp.isthmusLayout):
+		// op-geth CalcDAFootprint (rollup_cost.go:568-575) hard-requires this
+		// shape for the first Jovian block (176B -> no non-deposit txs -> DA
+		// footprint 0). Header BlobGasUsed = 0.
+		fp := defaultFeeParams()
+		fp.isthmusLayout = true
+		c := upgradeFrame("isthmus", "upgrade_jovian_activation",
+			"upgrade boundary isthmus->jovian: genesis Isthmus, single block crosses JovianTime; deposits-only with Isthmus-length attributes (CalcDAFootprint activation form), DA fields appear in header semantics",
+			fp, 10_000_000, "jovian", 1005)
 		return c
 	}},
 }

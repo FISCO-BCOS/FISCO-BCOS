@@ -18,7 +18,7 @@
 // Two subcommands:
 //
 //	opt8n-ref --write-cases <dir>
-//	    deterministically (re)writes the 33 corpus case files (*.in.json).
+//	    deterministically (re)writes the 41 corpus case files (*.in.json).
 //	    The corpus definitions live in this file (see caseDefs) so that the
 //	    L1Block slot values and the L1-attributes calldata can never drift
 //	    apart by hand-editing -- and processBlockVector re-asserts their
@@ -150,6 +150,13 @@ func main() {
 type caseInfo struct {
 	Hardfork    string `json:"hardfork"`
 	Description string `json:"description"`
+	// Activations is the upgrade-boundary spec (Task 3): per-fork activation
+	// timestamps. Present only on the upgrade_*_activation cases; when set,
+	// processBlockVector/probeReceiptFields build the chain config via
+	// buildChainConfigSpec({base: hardfork, activations}) instead of the plain
+	// buildChainConfig(hardfork). omitempty keeps the pre-existing 33 case
+	// files byte-stable under regeneration.
+	Activations map[string]uint64 `json:"activations,omitempty"`
 }
 
 // genesisKnobs are the ONLY environment inputs (plan decision record 7):
@@ -307,13 +314,13 @@ type outputBlock struct {
 }
 
 type expectedHeader struct {
-	GasUsed         string `json:"gasUsed"`
-	ReceiptsRoot    string `json:"receiptsRoot"`
-	LogsBloom       string `json:"logsBloom"`
-	WithdrawalsRoot string `json:"withdrawalsRoot"`
-	RequestsHash    string `json:"requestsHash"`
-	BlobGasUsed     string `json:"blobGasUsed"`
-	StateRoot       string `json:"stateRoot"`
+	GasUsed         string  `json:"gasUsed"`
+	ReceiptsRoot    string  `json:"receiptsRoot"`
+	LogsBloom       string  `json:"logsBloom"`
+	WithdrawalsRoot string  `json:"withdrawalsRoot"`
+	RequestsHash    *string `json:"requestsHash,omitempty"` // nil pre-Prague (ecotone/fjord/granite/holocene): op-geth t8n omits it
+	BlobGasUsed     string  `json:"blobGasUsed"`
+	StateRoot       string  `json:"stateRoot"`
 }
 
 type expectedReceipt struct {
@@ -498,6 +505,18 @@ func buildChainConfigSpec(spec chainConfigSpec) (*params.ChainConfig, error) {
 
 func uint64Ptr(v uint64) *uint64 { return &v }
 
+// buildConfigForCase builds the chain config for one case: the plain per-fork
+// recipe for pure-fork cases, or the upgrade-boundary spec (base fork + the
+// _info.activations timestamps) for the Task-3 activation vectors. The 10-second
+// coupling is enforced by the case constructor (genesis timestamp = T-5,
+// blockTime = genesis+10 = T+5), not here.
+func buildConfigForCase(in *inputCase) (*params.ChainConfig, error) {
+	if len(in.Info.Activations) > 0 {
+		return buildChainConfigSpec(chainConfigSpec{base: in.Info.Hardfork, activations: in.Info.Activations})
+	}
+	return buildChainConfig(in.Info.Hardfork)
+}
+
 // probeChainConfigSpec is a self-contained dev probe (--probe-spec) that
 // builds representative chainConfigSpec values through buildChainConfigSpec
 // and prints each fork activation timeline. It verifies the Task-0 acceptance
@@ -589,8 +608,7 @@ func run(inputPath, outputPath, opGethCommit, goldenOutputPath string) error {
 }
 
 func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecord, error) {
-	fork := in.Info.Hardfork
-	cfg, err := buildChainConfig(fork)
+	cfg, err := buildConfigForCase(in)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -598,7 +616,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 	// --- Startup consistency assertion (iron rule 2): L1Block slots <->
 	// attributes calldata, field for field, plus the first-Ecotone-fallback
 	// trap guard. Mismatch = corpus authoring error, hard stop.
-	if err := assertL1BlockConsistency(cfg, fork, in); err != nil {
+	if err := assertL1BlockConsistency(cfg, in); err != nil {
 		return nil, nil, fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
 	}
 	if err := assertDepositsFirst(in.Transactions); err != nil {
@@ -611,8 +629,13 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 	blockTime := genesisTime + 10 // chain_makers.makeHeader: block time fixed at parent+10
 	denom := uint64(in.Genesis.EIP1559Denominator)
 	elasticity := uint64(in.Genesis.EIP1559Elasticity)
+	// minBaseFee is gated on BLOCK time (Task 3 handoff A), not genesis time:
+	// an upgrade-boundary vector whose genesis is pre-Jovian but whose single
+	// block crosses JovianTime still needs a non-nil minBaseFee for the BLOCK
+	// extraData (EncodeOptimismExtraData panics on nil under Jovian). The
+	// genesis extraData (pre-Jovian Holocene form) ignores minBaseFee.
 	var minBaseFee *uint64
-	if cfg.IsJovian(genesisTime) {
+	if cfg.IsJovian(blockTime) {
 		if in.Genesis.MinBaseFee == nil {
 			return nil, nil, fmt.Errorf("jovian case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
 		}
@@ -716,7 +739,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 // This feeds the OP_RECEIPT_FIELDMAP.md fieldmap (Phase 2 line C task 0).
 func probeReceiptFields(in *inputCase) error {
 	// cfg/fork -- replaces processBlockVector :431-434.
-	cfg, err := buildChainConfig(in.Info.Hardfork)
+	cfg, err := buildConfigForCase(in)
 	if err != nil {
 		return err
 	}
@@ -725,7 +748,7 @@ func probeReceiptFields(in *inputCase) error {
 	// --- Startup consistency assertion (iron rule 2): L1Block slots <->
 	// attributes calldata, field for field, plus the first-Ecotone-fallback
 	// trap guard. Mismatch = corpus authoring error, hard stop.
-	if err := assertL1BlockConsistency(cfg, in.Info.Hardfork, in); err != nil {
+	if err := assertL1BlockConsistency(cfg, in); err != nil {
 		return fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
 	}
 	if err := assertDepositsFirst(in.Transactions); err != nil {
@@ -738,8 +761,10 @@ func probeReceiptFields(in *inputCase) error {
 	blockTime := genesisTime + 10 // chain_makers.makeHeader: block time fixed at parent+10
 	denom := uint64(in.Genesis.EIP1559Denominator)
 	elasticity := uint64(in.Genesis.EIP1559Elasticity)
+	// minBaseFee gated on BLOCK time, not genesis time (Task 3 handoff A) --
+	// see processBlockVector for the upgrade-boundary rationale.
 	var minBaseFee *uint64
-	if cfg.IsJovian(genesisTime) {
+	if cfg.IsJovian(blockTime) {
 		if in.Genesis.MinBaseFee == nil {
 			return fmt.Errorf("jovian case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
 		}
@@ -958,8 +983,12 @@ func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer,
 	}
 
 	// --- Header expectations + env (both emissions from the header; iron rule 6).
-	if header.WithdrawalsHash == nil || header.RequestsHash == nil || header.BlobGasUsed == nil {
-		return outputVector{}, nil, fmt.Errorf("generated header missing WithdrawalsHash/RequestsHash/BlobGasUsed")
+	// RequestsHash is NOT required: pre-Prague forks (ecotone/fjord/granite/
+	// holocene) have no requests (chain_makers.collectRequests returns nil), so
+	// the header's RequestsHash stays nil and is emitted absent, mirroring
+	// op-geth's own t8n (requestsHash,omitempty).
+	if header.WithdrawalsHash == nil || header.BlobGasUsed == nil {
+		return outputVector{}, nil, fmt.Errorf("generated header missing WithdrawalsHash/BlobGasUsed")
 	}
 	if header.MixDigest != (common.Hash{}) {
 		return outputVector{}, nil, fmt.Errorf("generated header MixDigest expected zero, got %s", header.MixDigest)
@@ -979,18 +1008,22 @@ func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer,
 		Pre:       emitPre(in.Pre),
 		Block:     outputBlock{Transactions: outTxs},
 		PostState: postState,
-		OpExpected: opExpected{
-			Header: expectedHeader{
-				GasUsed:         hexutil.EncodeUint64(header.GasUsed),
-				ReceiptsRoot:    header.ReceiptHash.Hex(),
-				LogsBloom:       hexutil.Encode(header.Bloom[:]),
-				WithdrawalsRoot: header.WithdrawalsHash.Hex(),
-				RequestsHash:    header.RequestsHash.Hex(),
-				BlobGasUsed:     hexutil.EncodeUint64(*header.BlobGasUsed),
-				StateRoot:       header.Root.Hex(),
-			},
-			Receipts: expReceipts,
-		},
+	}
+	expHeader := expectedHeader{
+		GasUsed:         hexutil.EncodeUint64(header.GasUsed),
+		ReceiptsRoot:    header.ReceiptHash.Hex(),
+		LogsBloom:       hexutil.Encode(header.Bloom[:]),
+		WithdrawalsRoot: header.WithdrawalsHash.Hex(),
+		BlobGasUsed:     hexutil.EncodeUint64(*header.BlobGasUsed),
+		StateRoot:       header.Root.Hex(),
+	}
+	if header.RequestsHash != nil {
+		s := header.RequestsHash.Hex()
+		expHeader.RequestsHash = &s
+	}
+	out.OpExpected = opExpected{
+		Header:   expHeader,
+		Receipts: expReceipts,
 	}
 
 	golden, err := buildGoldenRecord(block, txs)
@@ -1207,7 +1240,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("expected 2 generated blocks, got %d", len(blocks))
 	}
 
-	if err := assertL1BlockConsistency(cfg, fork, ins[0]); err != nil {
+	if err := assertL1BlockConsistency(cfg, ins[0]); err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block A: %w", err)
 	}
 	if err := assertDepositsFirst(ins[0].Transactions); err != nil {
@@ -1231,7 +1264,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 
 	// Block B's pre IS block A's post -- not a second seed (decision A2).
 	ins[1].Pre = outA.PostState
-	if err := assertL1BlockConsistency(cfg, fork, ins[1]); err != nil {
+	if err := assertL1BlockConsistency(cfg, ins[1]); err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block B: %w", err)
 	}
 	if err := assertDepositsFirst(ins[1].Transactions); err != nil {
@@ -1349,7 +1382,29 @@ func selfCheck(genesis *core.Genesis, blocks []*types.Block) error {
 // fork.
 // ---------------------------------------------------------------------
 
-func assertL1BlockConsistency(cfg *params.ChainConfig, fork string, in *inputCase) error {
+// blockFork returns the fork that governs a block at the given time under cfg:
+// the latest activated OP fork (jovian > isthmus > holocene > granite > fjord
+// > ecotone). For pure fork-at-0 recipes this equals the case's hardfork; for
+// upgrade-boundary specs (Task 3) it is the BLOCK-TIME fork, which is what
+// decides the L1-attributes byte layout.
+func blockFork(cfg *params.ChainConfig, blockTime uint64) string {
+	switch {
+	case cfg.IsJovian(blockTime):
+		return "jovian"
+	case cfg.IsIsthmus(blockTime):
+		return "isthmus"
+	case cfg.IsHolocene(blockTime):
+		return "holocene"
+	case cfg.IsGranite(blockTime):
+		return "granite"
+	case cfg.IsFjord(blockTime):
+		return "fjord"
+	default:
+		return "ecotone"
+	}
+}
+
+func assertL1BlockConsistency(cfg *params.ChainConfig, in *inputCase) error {
 	if len(in.Transactions) == 0 {
 		return fmt.Errorf("case has no transactions (needs the L1 attributes deposit)")
 	}
@@ -1370,14 +1425,14 @@ func assertL1BlockConsistency(cfg *params.ChainConfig, fork string, in *inputCas
 	}
 	slot1, slot3, slot7, slot8 := slot(1), slot(3), slot(7), slot(8)
 
-	// blockTime (NOT genesis time) decides jovianCfg: an upgrade-boundary
-	// vector whose genesis is pre-Jovian but whose single block crosses
-	// JovianTime must still be treated as Jovian for the deposits-only /
-	// DA-footprint checks. Pure predicate -- the upgrade-boundary config
-	// machinery itself is Task 3's job.
+	// blockTime (NOT genesis time) decides jovianCfg and the attributes LAYOUT:
+	// an upgrade-boundary vector whose genesis is pre-Isthmus/pre-Jovian but
+	// whose single block crosses IsthmusTime/JovianTime must be judged by the
+	// block-time fork -- op-geth switches the attributes deposit format at the
+	// fork boundary. For pure fork-at-0 recipes blockFork == the case hardfork.
 	blockTime := uint64(in.Genesis.Timestamp) + 10 // chain_makers.makeHeader: block time fixed at parent+10
 	jovianCfg := cfg.IsJovian(blockTime)
-	layout := forkLayout(fork)
+	layout := forkLayout(blockFork(cfg, blockTime))
 
 	checkCommon := func(layout l1AttributesLayout) error {
 		if !bytes.Equal(slot1[:], data[36:68]) {
