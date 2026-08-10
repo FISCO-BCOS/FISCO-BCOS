@@ -81,9 +81,9 @@ inline intx::uint256 ethMaxGasPrice(
     if (callParams.free)
         return 0;
     if (auto mf = tx.maxFeePerGas(); mf.has_value())
-        return toIntxU256(*mf);
+        return evm::toIntxU256(*mf);
     if (auto gp = tx.gasPrice(); gp.has_value())
-        return toIntxU256(*gp);
+        return evm::toIntxU256(*gp);
     return 0;
 }
 
@@ -94,7 +94,7 @@ inline intx::uint256 ethMaxPriorityGasPrice(
     if (callParams.free)
         return 0;
     if (auto mp = tx.maxPriorityFeePerGas(); mp.has_value())
-        return toIntxU256(*mp);
+        return evm::toIntxU256(*mp);
     // For legacy / access_list txs there is no separate priority-fee field: the
     // whole gas price is the tip above the base fee. Mirror the old
     // bcosTransactionToEvmone normalization (and evmone's RLP loaders), which
@@ -109,7 +109,7 @@ inline intx::uint256 ethMaxPriorityGasPrice(
 inline intx::uint256 ethMaxBlobGasPrice(protocol::Transaction const& tx)
 {
     if (auto mb = tx.maxFeePerBlobGas(); mb.has_value())
-        return toIntxU256(*mb);
+        return evm::toIntxU256(*mb);
     return 0;
 }
 

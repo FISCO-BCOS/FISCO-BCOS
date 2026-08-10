@@ -211,7 +211,7 @@ inline evmc_message build_message(protocol::Transaction const& tx, int64_t execu
         .sender = ethSender(tx),
         .input_data = input.data(),
         .input_size = input.size(),
-        .value = intx::be::store<evmc::uint256be>(toIntxU256(tx.value())),
+        .value = intx::be::store<evmc::uint256be>(evm::toIntxU256(tx.value())),
         .create2_salt = {},
         .code_address = recipient,
         .code = nullptr,
@@ -243,7 +243,7 @@ int64_t processAuthorizationList(
         // 3. y_parity must be 0 or 1; s must be <= secp256k1n/2 (EIP-2).
         if (auth.v > 1)
             continue;
-        if (toIntxU256(auth.s) > evm::SECP256K1N_OVER_2)
+        if (evm::toIntxU256(auth.s) > evm::SECP256K1N_OVER_2)
             continue;
 
         // 4. Always recover the signer via real ecrecover (never honour an
@@ -421,7 +421,7 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
     auto max_total_fee =
         intx::umul(intx::uint256(static_cast<uint64_t>(gasLimit)), maxGasPrice);
-    max_total_fee += toIntxU256(tx.value());
+    max_total_fee += evm::toIntxU256(tx.value());
 
     if (txKind == 3)  // blob
     {
