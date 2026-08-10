@@ -1,3 +1,9 @@
+// evmone: Fast Ethereum Virtual Machine implementation
+// Copyright 2022 The evmone Authors.
+// SPDX-License-Identifier: Apache-2.0
+// Portions from evmone test/state/precompiles_internal.hpp: Copyright 2024 The
+// evmone Authors.
+
 /// @file EVMPrecompiles.h
 /// @brief Ported evmone test/state precompiles (precompiles.hpp +
 ///        precompiles_internal.hpp), renamed into the

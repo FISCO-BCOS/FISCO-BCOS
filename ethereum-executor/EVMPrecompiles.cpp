@@ -1,3 +1,7 @@
+// evmone: Fast Ethereum Virtual Machine implementation
+// Copyright 2022 The evmone Authors.
+// SPDX-License-Identifier: Apache-2.0
+
 /// @file EVMPrecompiles.cpp
 /// @brief Ported evmone test/state precompiles (precompiles.cpp) into the
 ///        `bcos::executor_v1::eth::evm` namespace. The implementation is the
@@ -12,7 +16,10 @@
 /// upstream precompiles change (fork gas repricing, new precompiles), mirror
 /// the change here. The only intended differences are the namespace, the
 /// removed libsecp256k1/GMP build-time alternatives, the `namespace crypto`
-/// alias and the local to_underlying helper.
+/// alias, the local to_underlying helper, and the two explicit aggregate
+/// initializers on the evmc_result in call_precompile (evmc_address{} for
+/// create_address and {} for padding — they value-initialize members this evmc
+/// version requires under -Werror=missing-field-initializers).
 
 #include "EVMPrecompiles.h"
 
