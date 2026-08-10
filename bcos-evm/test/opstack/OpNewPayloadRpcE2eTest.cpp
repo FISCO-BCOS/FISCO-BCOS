@@ -127,7 +127,11 @@ using OpEngineService =
 
 struct OpE2eFixture
 {
-    BackendMemStorage backendStorage;
+    // 单桶 CONCURRENT backend：C2 修复后 seed/parent 经 mergeView 落 backend,stateRoot 计算
+    // 的 range(SYS_TABLES) 遍历依赖 backend 的 RANGE_SEEK 语义;多桶(默认
+    // hardware_concurrency*2+1 桶)下 MemoryStorage 的 range 只 seek 桶 0,桶 1+ 全量返回
+    // 非 SYS_TABLES 键 → visitAccounts 提前 break → stateRoot 为空根。单桶保证 range 正确。
+    BackendMemStorage backendStorage{1};
     CheckpointBackend checkpointBackend{backendStorage};
     MLS multiLayerStorage{checkpointBackend};
     StubMemPool memPool;
@@ -171,7 +175,9 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(bcos::storage2::writeOne(view,
         StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(entry)));
-    multiLayerStorage.pushView(std::move(view));
+    // C2 审查修正（P1 CRITICAL）：mergeBackStorage 合并最旧层（FIFO）。排空栈——parent 预登记
+    // 即落 backend,后续每个块 push 前栈空 → mergeView 立即落盘,backend 断言才可能绿。
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
 // ── 七项断言 ──
@@ -277,6 +283,14 @@ void runGoldenVector(std::string const& id)
         auto tx = fixture->blockFactory->transactionFactory()->createTransaction(
             txBytes, /*checkSig=*/false, /*checkHash=*/false, /*tainted=*/false);
         BOOST_CHECK_MESSAGE(tx->hash() == txHash, id << ": tx #" << i << " round-trip hash==txHash");
+        // C2: 数据必须落 backend（m_latestBackend）——重启恢复语义（spec §6）。
+        // 当前实现只 pushView（内存层栈）,backend 读为空 → 此断言先红。
+        auto backendEntry = bcos::task::syncWait(bcos::storage2::readOne(
+            fixture->multiLayerStorage.latestBackend(),
+            bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
+                bcos::concepts::bytebuffer::toView(txHash)}));
+        BOOST_CHECK_MESSAGE(
+            backendEntry.has_value(), id << ": tx #" << i << " SYS_HASH_2_TX in backend");
         // rawtx 表 absent（D1：不保留）
         auto rawEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
             bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,

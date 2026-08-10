@@ -3,6 +3,7 @@
 // seedFromTestState 依赖它），这里用 jsoncpp 解析向量 pre，直接构 StateDiff 走 applyDiff(seeding=true)。
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/ledger/Storage2Ledger.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 #include <evmc/evmc.hpp>
@@ -58,7 +59,7 @@ inline uint64_t jsonU64(std::string_view hex)
 }
 
 /// 把向量 pre（jsoncpp object，key=地址 hex，value={balance,nonce,code,storage}）
-/// 播进 MLS：fork → Storage2Ledger::applyDiff(seeding=true) → pushView。
+/// 播进 MLS：fork → Storage2Ledger::applyDiff(seeding=true) → mergeView。
 /// `Storage2Ledger::applyDiff`（Storage2Ledger.h:275）签名确认；seeding=true 豁免
 /// EIP-161 空账户守卫（LedgerSeed.h 同款契约）。
 template <class MLS>
@@ -104,7 +105,9 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
             throw std::runtime_error("seedPreState: ledger poisoned: " + std::string(bridge.firstError()));
         }
     }
-    multiLayerStorage.pushView(std::move(view));
+    // C2 审查修正（P1 CRITICAL）：mergeBackStorage 合并最旧层（FIFO）。排空栈——seed 即落
+    // backend,后续每个块 push 前栈空 → mergeView 立即落盘,backend 断言才可能绿。
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
 }  // namespace w6test

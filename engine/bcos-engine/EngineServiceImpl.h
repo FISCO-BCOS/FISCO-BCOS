@@ -1158,22 +1158,11 @@ private:
 
         // ---- Step 6: block registration, then publish the view ----
         co_await registerOpBlock(view, payload, *ethHeader, *executeResult);
-        // `pushView` alone is enough for the forkchoice path to see this block: it reads through
-        // `fork()`, and MultiLayerStorage makes pushed layers visible to subsequent forks without
-        // a `mergeBackStorage()` (design §6.1 step 6 "merge 时机"). No chain-head progress table
-        // is written this cycle (裁定 A4): FCU stays read-only + in-memory, and
-        // `SYS_CURRENT_STATE`'s current number is on the §6.4 欠账台账.
-        //
-        // Known consequence, deliberately not solved here (task-5b review I3, for the §6.4
-        // ledger): this branch NEVER calls `mergeBackStorage()`, so every accepted block leaves
-        // one more immutable layer on the MultiLayerStorage stack -- unbounded growth, and read
-        // amplification linear in the number of blocks accepted since process start. Deciding
-        // when to merge (and how it interacts with reorg windows) belongs to the orchestration
-        // layer that also owns `SYS_CURRENT_STATE`'s head progression; both land together when
-        // the loop is wired into a real node, and both are on the same §6.4 欠账台账. The minimal
-        // loop's block counts are small enough that this is a scaling issue, not a correctness
-        // one.
-        m_globalStateStorage.get().pushView(std::move(view));
+        // `mergeView` 原子落盘（C2 修复,spec 2026-08-10-op-block-persist-mergeview-design.md）：
+        // pushView + mergeBackStorage 合一,单块 VALID 即落 RocksDB backend。`SYS_CURRENT_STATE`
+        // head 推进仍缺失（裁定 A4）：重启后块表可读但 head 指针无,留 orchestration 层与
+        // reorg 窗口编排同批（§6.4 欠账台账）。
+        co_await m_globalStateStorage.get().mergeView(std::move(view));
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
 
