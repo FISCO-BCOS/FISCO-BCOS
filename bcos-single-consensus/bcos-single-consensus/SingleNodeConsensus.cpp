@@ -187,12 +187,22 @@ bool SingleNodeConsensus::produceBlock()
     // layer. Header timestamps are in milliseconds (the executor divides by 1000 to get
     // seconds, matching EEST's currentTimestamp unit). fixed_timestamp (seconds) is pinned by
     // the harness so the produced block's timestamp matches the fixture; 0 = wall clock.
+    //
+    // EIP-2 requires strictly increasing block timestamps, so both modes enforce
+    // monotonicity: a fixed timestamp is bumped by the block number (consecutive blocks,
+    // including empty ones, must never share the same value), and wall-clock mode uses the
+    // correct millisecond unit (utcTime() is seconds) and never goes backwards relative to
+    // the last produced block.
+    auto const nowMs = static_cast<std::uint64_t>(utcTime()) * 1000;
+    std::uint64_t const timestamp = m_fixedTimestamp > 0 ?
+                                        m_fixedTimestamp * 1000 +
+                                            static_cast<std::uint64_t>(m_headNumber + 1) :
+                                        std::max(nowMs, m_lastTimestamp + 1);
+    m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
     payloadAttributes.suggestedFeeRecipient = m_feeRecipient;
-    payloadAttributes.timestamp = m_fixedTimestamp > 0 ?
-                                      m_fixedTimestamp * 1000 :
-                                      static_cast<std::uint64_t>(utcTime());
+    payloadAttributes.timestamp = timestamp;
 
     // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes
     // stale transactions, seals the in-process mempool (with the nonce-vs-state check) and

@@ -93,6 +93,9 @@ private:
     bcos::protocol::BlockNumber m_headNumber = 0;
     bcos::crypto::HashType m_headHash;
     bool m_headInitialized = false;
+    /// Timestamp of the last produced block (ms). EIP-2 requires strictly increasing block
+    /// timestamps, so wall-clock mode never goes backwards relative to this value.
+    std::uint64_t m_lastTimestamp = 0;
 
     std::atomic_bool m_running = {false};
     std::thread m_thread;
