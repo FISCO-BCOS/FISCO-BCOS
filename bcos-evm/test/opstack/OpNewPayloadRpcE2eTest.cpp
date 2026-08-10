@@ -232,6 +232,51 @@ void runGoldenVector(std::string const& id)
     auto produced = productionHeaderOf(fixture->blockFactory, request);
     const auto goldenBlockHash = bcos::h256(std::string(sample.golden["blockHash"].asString()));
     assertSevenFields(id, produced, goldenHeader, goldenBlockHash);
+
+    // 方案 B 写侧：OP 交易落 SYS_HASH_2_TX（tars 编码），s_eth_hash_2_rawtx 不再写。
+    // newPayload 的 registerOpBlock（EngineServiceImpl.h:1160-1308）把每笔 raw EIP-2718 信封转
+    // tars Transaction 写 SYS_HASH_2_TX[txHash]（extraTransactionHash=txHash 锁 D4），原始信封
+    // 不再写 s_eth_hash_2_rawtx（D1）；0x04 (EIP-7702) 无 TransactionType 对应 → opEnvelopeToTars
+    // 返回 nullopt → 表 absent，但 SYS_HASH_2_RECEIPT 仍写（D7）。
+    auto const& rawTxs = *request.executionPayload.rawTransactions;
+    auto& hashImpl = *fixture->blockFactory->cryptoSuite()->hashImpl();
+    auto view = fixture->multiLayerStorage.fork();
+    for (std::size_t i = 0; i < rawTxs.size(); ++i)
+    {
+        auto txHash = hashImpl.hash(rawTxs[i]);
+        // 0x04 (EIP-7702)：opEnvelopeToTars 返回 nullopt → SYS_HASH_2_TX absent（D7）
+        if (rawTxs[i].size() >= 1 && rawTxs[i][0] == 0x04)
+        {
+            auto zeroEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+                bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
+                    bcos::concepts::bytebuffer::toView(txHash)}));
+            BOOST_CHECK_MESSAGE(
+                !zeroEntry.has_value(), id << ": 0x04 tx #" << i << " SYS_HASH_2_TX absent");
+            // SYS_HASH_2_RECEIPT 仍写（EngineServiceImpl.h:1287-1290）
+            auto rcpEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+                bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
+                    bcos::concepts::bytebuffer::toView(txHash)}));
+            BOOST_CHECK_MESSAGE(
+                rcpEntry.has_value(), id << ": 0x04 tx #" << i << " SYS_HASH_2_RECEIPT present");
+            continue;
+        }
+        // SYS_HASH_2_TX present + round-trip（tars 解码回 Transaction，hash==txHash 锁 D4）
+        auto txEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+            bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
+                bcos::concepts::bytebuffer::toView(txHash)}));
+        BOOST_REQUIRE_MESSAGE(txEntry.has_value(), id << ": tx #" << i << " SYS_HASH_2_TX present");
+        auto txBytes = bcos::bytesConstRef(
+            reinterpret_cast<bcos::byte const*>(txEntry->get().data()), txEntry->get().size());
+        auto tx = fixture->blockFactory->transactionFactory()->createTransaction(
+            txBytes, /*checkSig=*/false, /*checkHash=*/false, /*tainted=*/false);
+        BOOST_CHECK_MESSAGE(tx->hash() == txHash, id << ": tx #" << i << " round-trip hash==txHash");
+        // rawtx 表 absent（D1：不保留）
+        auto rawEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+            bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
+                bcos::concepts::bytebuffer::toView(txHash)}));
+        BOOST_CHECK_MESSAGE(
+            !rawEntry.has_value(), id << ": tx #" << i << " s_eth_hash_2_rawtx absent");
+    }
 }
 
 /// 链式双块（chainA/B，R2-C 核实流程）：只播 A 的 pre → 登记 A 的 parent(0) →
