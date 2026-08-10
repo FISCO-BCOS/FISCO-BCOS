@@ -739,7 +739,8 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
         const bool isDeposit = (result.txTypes[i] == static_cast<uint8_t>(kDepositTxType));
         const auto& meta = receipt->opStackMeta();
         std::optional<std::string> gotDepNonce, gotDepVersion, gotL1Fee, gotOperatorFee,
-            gotDaFootprint;
+            gotDaFootprint, gotL1GasPrice, gotL1BlobBaseFee, gotL1GasUsed, gotL1BaseFeeScalar,
+            gotL1BlobBaseFeeScalar, gotOpFeeScalar, gotOpFeeConstant, gotDaFootprintGasScalar;
         if (isDeposit)
         {
             if (meta && meta->deposit_nonce.has_value())
@@ -760,6 +761,26 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
                 gotOperatorFee = hexU256Bcos(meta->operator_fee.value_or(bcos::u256{0}));
             if (meta && meta->da_footprint.has_value())
                 gotDaFootprint = hexU64(*meta->da_footprint);
+            // 全字段比对（fieldmap isthmus/jovian）：u256 → hexU256Bcos、uint64 → hexU64。
+            // got-reads 位于非 deposit 分支内（与生成器 !IsDepositTx 发射规则对齐：deposit
+            // 回执双端都不带费用字段，未 gate 会假分歧）。l1_gas_used 无条件保留——即便向量
+            // 无该 key（optWant nullopt），也断言 FISCO 侧存在性（Task 4 补算）。
+            if (meta && meta->l1_gas_price.has_value())
+                gotL1GasPrice = hexU256Bcos(*meta->l1_gas_price);
+            if (meta && meta->l1_blob_base_fee.has_value())
+                gotL1BlobBaseFee = hexU256Bcos(*meta->l1_blob_base_fee);
+            if (meta && meta->l1_gas_used.has_value())
+                gotL1GasUsed = hexU64(*meta->l1_gas_used);
+            if (meta && meta->l1_base_fee_scalar.has_value())
+                gotL1BaseFeeScalar = hexU64(*meta->l1_base_fee_scalar);
+            if (meta && meta->l1_blob_base_fee_scalar.has_value())
+                gotL1BlobBaseFeeScalar = hexU64(*meta->l1_blob_base_fee_scalar);
+            if (meta && meta->operator_fee_scalar.has_value())
+                gotOpFeeScalar = hexU64(*meta->operator_fee_scalar);
+            if (meta && meta->operator_fee_constant.has_value())
+                gotOpFeeConstant = hexU64(*meta->operator_fee_constant);
+            if (meta && meta->da_footprint_gas_scalar.has_value())
+                gotDaFootprintGasScalar = hexU64(*meta->da_footprint_gas_scalar);
         }
 
         ctx.checkField(p + ".type", hexU256(parseU256(er.at("type"))),
@@ -782,6 +803,20 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
         ctx.checkOptional(p + "._op_l1_fee", optWant("_op_l1_fee"), gotL1Fee);
         ctx.checkOptional(p + "._op_operator_fee", optWant("_op_operator_fee"), gotOperatorFee);
         ctx.checkOptional(p + "._op_da_footprint", optWant("_op_da_footprint"), gotDaFootprint);
+        ctx.checkOptional(p + "._op_l1_gas_price", optWant("_op_l1_gas_price"), gotL1GasPrice);
+        ctx.checkOptional(
+            p + "._op_l1_blob_base_fee", optWant("_op_l1_blob_base_fee"), gotL1BlobBaseFee);
+        ctx.checkOptional(p + "._op_l1_gas_used", optWant("_op_l1_gas_used"), gotL1GasUsed);
+        ctx.checkOptional(
+            p + "._op_l1_base_fee_scalar", optWant("_op_l1_base_fee_scalar"), gotL1BaseFeeScalar);
+        ctx.checkOptional(p + "._op_l1_blob_base_fee_scalar",
+            optWant("_op_l1_blob_base_fee_scalar"), gotL1BlobBaseFeeScalar);
+        ctx.checkOptional(
+            p + "._op_operator_fee_scalar", optWant("_op_operator_fee_scalar"), gotOpFeeScalar);
+        ctx.checkOptional(p + "._op_operator_fee_constant", optWant("_op_operator_fee_constant"),
+            gotOpFeeConstant);
+        ctx.checkOptional(p + "._op_da_footprint_gas_scalar",
+            optWant("_op_da_footprint_gas_scalar"), gotDaFootprintGasScalar);
     }
 
     // ── postState 双向（决策记录 8）─────────────────────────────────────────
