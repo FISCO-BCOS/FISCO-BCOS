@@ -413,5 +413,6 @@ Karst 适配（专项）→ 重跑 W5 gate（回归）→ 重新对拍（Karst �
 - deferred minors 清理（cases/ gitignore、golden manifest 校验、首投 B 软断言）
 - 生产互通待办（V4 端点桩 / V4 能力广播 / generator 重生成——见 §7「W6 外待办」）
 - **W8 / W0**（记忆遗留 ctest/落盘/四项决策 + DU 冲突清理）
+- **s_number_2_header 落盘欠账**（W8 T2 核实确认）：OP 提交路径 `EngineServiceImpl.h:1167` 只 `pushView`、从不 `mergeBackStorage()` → 同 view 内所有 OP 写表（s_number_2_header / SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / 回执表 / s_eth_hash_2_rawtx）只存内存层，不落后端 RocksDB，进程重启即丢。最小 loop 未接真实节点故暂留档（落盘无消费方）；修复应随 orchestration 层接真实节点时整层 merge（仿 FISCO `:662-669`，采纳原子 mergeView 规避 throw 泄漏），与 `SYS_CURRENT_STATE` head 推进/reorg 编排同批。核实报告见 SDD workspace `task-2-report.md`。
 
 > 注：B-2/B-4 正式迁移 + B-3 注记收紧已在 §8.3 W7 内完成，不入此移交。
