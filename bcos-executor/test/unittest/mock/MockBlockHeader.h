@@ -13,17 +13,20 @@ public:
     MockBlockHeader(protocol::BlockNumber _number) : m_blockNumber(_number) {}
     ~MockBlockHeader() override = default;
 
-    bcos::crypto::HashType hash() const override { return {}; }
+    bcos::crypto::HashType hash() const override { return m_rlpHash; }
     void calculateHash(const crypto::Hash& hashImpl) override {}
 
     void decode(bytesConstRef _data) override {}
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
-    bcos::protocol::ParentInfo parentInfo() const override
+    bcos::protocol::EthBlockVersion ethBlockVersion() const override { return m_ethVersion; }
+    void setEthBlockVersion(bcos::protocol::EthBlockVersion _version) override
     {
-        return bcos::protocol::ParentInfo{};
+        m_ethVersion = _version;
     }
+    void setRLPHash(bcos::crypto::HashType _hash) override { m_rlpHash = _hash; }
+    bcos::protocol::ParentInfo parentInfo() const override { return bcos::protocol::ParentInfo{}; }
     crypto::HashType txsRoot() const override { return {}; }
     crypto::HashType receiptsRoot() const override { return {}; }
     crypto::HashType stateRoot() const override { return {}; }
@@ -63,6 +66,12 @@ public:
     void setGasLimit(u256 _limit) override {}
     bcos::h256 prevRandao() const override { return {}; }
     void setPrevRandao(bcos::h256 _digest) override {}
+    crypto::HashType uncleHash() const override { return {}; }
+    void setUncleHash(crypto::HashType _hash) override {}
+    u256 difficulty() const override { return {}; }
+    void setDifficulty(u256 _difficulty) override {}
+    bcos::h64 nonce() const override { return {}; }
+    void setNonce(bcos::h64 _nonce) override {}
     std::optional<u256> baseFee() const override { return std::nullopt; }
     void setBaseFee(u256 _fee) override {}
     std::optional<bcos::h256> withdrawalsRoot() const override { return std::nullopt; }
@@ -75,12 +84,10 @@ public:
     void setParentBeaconBlockRoot(bcos::h256 _root) override {}
     std::optional<bcos::h256> requestsHash() const override { return std::nullopt; }
     void setRequestsHash(bcos::h256 _hash) override {}
-    std::optional<bcos::h256> blockAccessListHash() const override { return std::nullopt; }
-    void setBlockAccessListHash(bcos::h256 _hash) override {}
-    std::optional<uint64_t> slotNumber() const override { return std::nullopt; }
-    void setSlotNumber(uint64_t _val) override {}
 
 private:
     protocol::BlockNumber m_blockNumber;
+    bcos::protocol::EthBlockVersion m_ethVersion{bcos::protocol::EthBlockVersion::NON_ETH};
+    bcos::crypto::HashType m_rlpHash;
 };
 }  // namespace bcos::test

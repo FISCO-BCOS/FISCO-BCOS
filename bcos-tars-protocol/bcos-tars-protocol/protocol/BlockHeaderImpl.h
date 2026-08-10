@@ -28,9 +28,11 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Error.h>
 #include <gsl/span>
+#include <memory>
 #include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
@@ -54,6 +56,8 @@ public:
     void clear() override;
 
     uint32_t version() const override;
+    bcos::protocol::EthBlockVersion ethBlockVersion() const override;
+    void setEthBlockVersion(bcos::protocol::EthBlockVersion _version) override;
     bcos::protocol::ParentInfo parentInfo() const override;
 
     bcos::crypto::HashType txsRoot() const override;
@@ -100,6 +104,13 @@ public:
     bcos::h256 prevRandao() const override;
     void setPrevRandao(bcos::h256 _digest) override;
 
+    bcos::crypto::HashType uncleHash() const override;
+    void setUncleHash(bcos::crypto::HashType _hash) override;
+    bcos::u256 difficulty() const override;
+    void setDifficulty(bcos::u256 _difficulty) override;
+    bcos::h64 nonce() const override;
+    void setNonce(bcos::h64 _nonce) override;
+
     std::optional<bcos::u256> baseFee() const override;
     void setBaseFee(bcos::u256 _fee) override;
 
@@ -118,11 +129,10 @@ public:
     std::optional<bcos::h256> requestsHash() const override;
     void setRequestsHash(bcos::h256 _hash) override;
 
-    std::optional<bcos::h256> blockAccessListHash() const override;
-    void setBlockAccessListHash(bcos::h256 _hash) override;
-
-    std::optional<uint64_t> slotNumber() const override;
-    void setSlotNumber(uint64_t _val) override;
+    // Inject a pre-computed Ethereum RLP hash (set by the rlp-protocol layer via
+    // EthBlockHeader::calculateHash). For Eth headers (ethBlockVersion() != NON_ETH)
+    // calculateHash() keeps this value instead of recomputing the FISCO Tars hash.
+    void setRLPHash(bcos::crypto::HashType _hash) override;
 
     const bcostars::BlockHeader& inner() const;
     bcostars::BlockHeader& inner();
