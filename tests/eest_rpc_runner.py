@@ -291,30 +291,52 @@ class Node:
         self.proc = None
         self.url = f"http://127.0.0.1:{rpc_port}"
 
-    def start(self):
-        env = dict(os.environ)
-        logf = open(self.workdir / "node.log", "w")
+    def start(self, retries=3):
         # Raise the main-thread stack (ulimit -s) before exec. Importing a very
         # large genesis (e.g. EEST many_delegations non_empty_balance: 4800
         # accounts) overflows the default 8MB stack in RocksDB's WAL/crc32c path
         # (SIGSEGV in crc32c::gf_multiply_sw); 64MB is plenty. A bash wrapper is
         # used instead of subprocess preexec_fn because the harness runs under a
         # ThreadPoolExecutor (preexec_fn is unsafe in multi-threaded parents).
-        inner = [self.binary, "-c", "config.ini", "-g", "config.genesis"]
-        inner = " ".join(shlex.quote(a) for a in inner)
-        self.proc = subprocess.Popen(
-            ["bash", "-c", f"ulimit -s 65536 && exec {inner}"],
-            cwd=str(self.workdir), stdout=logf, stderr=subprocess.STDOUT, env=env,
-            start_new_session=True)
-        for _ in range(60):
-            try:
-                if self.rpc("eth_blockNumber", []) is not None:
-                    return True
-            except Exception:  # noqa: BLE001
-                pass
-            if self.proc.poll() is not None:
-                return False
-            time.sleep(0.5)
+        #
+        # Startup is retried: a node occasionally dies during boot with a
+        # transient "bind: Address already in use" (the 3 per-node listener ports
+        # are unique per unit, but a rare lingering socket from a just-killed
+        # neighbour can still collide for a few ms). The port is released
+        # immediately after the process dies, so a short delay + a fresh start
+        # (with the half-written storage dir removed) reliably recovers — this is
+        # the residual "node failed to start" flakiness seen in CI eest runs.
+        for attempt in range(retries):
+            env = dict(os.environ)
+            logf = open(self.workdir / "node.log", "w")
+            inner = [self.binary, "-c", "config.ini", "-g", "config.genesis"]
+            inner = " ".join(shlex.quote(a) for a in inner)
+            self.proc = subprocess.Popen(
+                ["bash", "-c", f"ulimit -s 65536 && exec {inner}"],
+                cwd=str(self.workdir), stdout=logf, stderr=subprocess.STDOUT,
+                env=env, start_new_session=True)
+            ready = False
+            for _ in range(60):
+                try:
+                    if self.rpc("eth_blockNumber", []) is not None:
+                        ready = True
+                        break
+                except Exception:  # noqa: BLE001
+                    pass
+                if self.proc.poll() is not None:
+                    break
+                time.sleep(0.5)
+            if ready:
+                return True
+            # Node exited before becoming ready (or RPC not ready within 30s).
+            # Clean up the dead process and the half-written storage, wait for
+            # the sockets to drain, then retry.
+            self.stop()
+            data_dir = self.workdir / "data"
+            if data_dir.exists():
+                shutil.rmtree(data_dir, ignore_errors=True)
+            if attempt + 1 < retries:
+                time.sleep(1)
         return False
 
     def stop(self):
