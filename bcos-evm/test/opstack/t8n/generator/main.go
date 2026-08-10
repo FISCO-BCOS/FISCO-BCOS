@@ -87,6 +87,7 @@ const ringSize = 8191 // EIP-4788 HISTORY_BUFFER_LENGTH == EIP-2935 window
 func main() {
 	var (
 		writeCases     = flag.String("write-cases", "", "write the 33 corpus case files into <dir> and exit")
+		probeFields    = flag.String("probe-receipt-fields", "", "dev probe: run one <case.in.json> through the self-contained op-geth pipeline and dump every receipt's OP-Stack field emission (presence + hex value), then exit")
 		inputPath      = flag.String("input", "", "input case JSON")
 		outputPath     = flag.String("output", "", "output vector JSON")
 		opGethCommit   = flag.String("op-geth-commit", "unknown", "full sha of the op-geth checkout, recorded into _op_test_vectors.generator_commit")
@@ -104,6 +105,21 @@ func main() {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
+	case *probeFields != "":
+		raw, err := os.ReadFile(*probeFields)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
+			os.Exit(1)
+		}
+		var in inputCase
+		if err := json.Unmarshal(raw, &in); err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: parsing %s: %v\n", *probeFields, err)
+			os.Exit(1)
+		}
+		if err := probeReceiptFields(&in); err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
+			os.Exit(1)
+		}
 	case *chainOutputDir != "":
 		if err := runChainPair(*chainOutputDir, *opGethCommit); err != nil {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
@@ -115,7 +131,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
+		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
 		os.Exit(2)
 	}
 }
@@ -539,6 +555,179 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 		return nil, nil, err
 	}
 	return vec, golden, nil
+}
+
+// probeReceiptFields is a SELF-CONTAINED dev probe that drives the op-geth
+// pipeline for one case and dumps the full OP-Stack receipt field emission
+// surface (presence + hex value) of every receipt. It deliberately does NOT
+// reuse processBlockVector: that path returns (json.RawMessage, *goldenRecord,
+// error) and hides receipts, and refactoring its front half would disturb the
+// golden path (selfCheck / assembleOutput need genesis/blocks/db/txs/outTxs/
+// signer). A throwaway probe -- the front half is copied verbatim below
+// (main.go:436-517, genesis construction -> tx signing ->
+// GenerateChainWithGenesis -> receiptsAll); the copy produces
+// signer/db/engine/genesis/txs/blocks/receiptsAll. Only receiptsAll is read.
+// This feeds the OP_RECEIPT_FIELDMAP.md fieldmap (Phase 2 line C task 0).
+func probeReceiptFields(in *inputCase) error {
+	// cfg/fork -- replaces processBlockVector :431-434.
+	cfg, err := buildChainConfig(in.Info.Hardfork)
+	if err != nil {
+		return err
+	}
+
+	// ── copied from processBlockVector front half (main.go:436-517) ──
+	// --- Startup consistency assertion (iron rule 2): L1Block slots <->
+	// attributes calldata, field for field, plus the first-Ecotone-fallback
+	// trap guard. Mismatch = corpus authoring error, hard stop.
+	if err := assertL1BlockConsistency(cfg, in); err != nil {
+		return fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
+	}
+	if err := assertDepositsFirst(in.Transactions); err != nil {
+		return err
+	}
+
+	// --- Genesis (iron rule 1: extraData on BOTH genesis and the generated
+	// block; 9B Isthmus / 17B Jovian incl. mandatory minBaseFee).
+	genesisTime := uint64(in.Genesis.Timestamp)
+	blockTime := genesisTime + 10 // chain_makers.makeHeader: block time fixed at parent+10
+	denom := uint64(in.Genesis.EIP1559Denominator)
+	elasticity := uint64(in.Genesis.EIP1559Elasticity)
+	var minBaseFee *uint64
+	if cfg.IsJovian(genesisTime) {
+		if in.Genesis.MinBaseFee == nil {
+			return fmt.Errorf("jovian case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
+		}
+		v := uint64(*in.Genesis.MinBaseFee)
+		minBaseFee = &v
+	}
+	var genesisBaseFee *big.Int
+	if in.Genesis.BaseFee != nil {
+		genesisBaseFee = (*big.Int)(in.Genesis.BaseFee)
+	}
+	genesis := &core.Genesis{
+		Config:     cfg,
+		Timestamp:  genesisTime,
+		GasLimit:   uint64(in.Genesis.GasLimit),
+		BaseFee:    genesisBaseFee,
+		Difficulty: big.NewInt(0),
+		ExtraData:  eip1559.EncodeOptimismExtraData(cfg, genesisTime, denom, elasticity, minBaseFee),
+		Alloc:      in.Pre,
+	}
+
+	// --- Build transactions. Signer per iron rule 9: MakeSigner(cfg, 1, blockTime).
+	signer := types.MakeSigner(cfg, big.NewInt(1), blockTime)
+	var txs []*types.Transaction
+	for i := range in.Transactions {
+		tx, _, err := buildTx(&in.Transactions[i], signer, cfg)
+		if err != nil {
+			return fmt.Errorf("tx %d: %w", i, err)
+		}
+		txs = append(txs, tx)
+	}
+
+	// --- Generate the block (iron rules 1(ii), 3, 4).
+	blockExtra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, minBaseFee)
+	engine := beacon.New(ethash.NewFaker())
+	var (
+		db          ethdb.Database
+		blocks      []*types.Block
+		receiptsAll []types.Receipts
+	)
+	if err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("GenerateChainWithGenesis panic: %v", r)
+			}
+		}()
+		db, blocks, receiptsAll = core.GenerateChainWithGenesis(genesis, engine, 1, func(i int, b *core.BlockGen) {
+			b.SetCoinbase(in.Coinbase)
+			b.SetExtra(blockExtra)                          // iron rule 1(ii): InsertChain verifyHeader rejects otherwise
+			b.SetParentBeaconRoot(in.ParentBeaconBlockRoot) // iron rule 4: 4788 build/replay symmetry
+			for _, tx := range txs {
+				b.AddTx(tx) // L1CostFunc/OperatorCostFunc wired inside NewEVMBlockContext (core/evm.go)
+			}
+		})
+		return nil
+	}(); err != nil {
+		return err
+	}
+	if len(blocks) != 1 {
+		return fmt.Errorf("expected 1 generated block, got %d", len(blocks))
+	}
+	// ── end copied front half (skips :518 `block, receipts := blocks[0], receiptsAll[0]`) ──
+	// db is only read by assembleOutput on the golden path; unused here.
+	_ = db
+
+	receipts := receiptsAll[0]
+	for i, r := range receipts {
+		fmt.Printf("tx[%d] type=0x%02x\n", i, r.Type)
+		if r.DepositNonce != nil {
+			fmt.Printf("  DepositNonce\t0x%x\n", *r.DepositNonce)
+		} else {
+			fmt.Printf("  DepositNonce\tabsent\n")
+		}
+		if r.DepositReceiptVersion != nil {
+			fmt.Printf("  DepositReceiptVersion\t0x%x\n", *r.DepositReceiptVersion)
+		} else {
+			fmt.Printf("  DepositReceiptVersion\tabsent\n")
+		}
+		if r.L1GasPrice != nil {
+			fmt.Printf("  L1GasPrice\t0x%x\n", r.L1GasPrice)
+		} else {
+			fmt.Printf("  L1GasPrice\tabsent\n")
+		}
+		if r.L1BlobBaseFee != nil {
+			fmt.Printf("  L1BlobBaseFee\t0x%x\n", r.L1BlobBaseFee)
+		} else {
+			fmt.Printf("  L1BlobBaseFee\tabsent\n")
+		}
+		if r.L1GasUsed != nil {
+			fmt.Printf("  L1GasUsed\t0x%x\n", r.L1GasUsed)
+		} else {
+			fmt.Printf("  L1GasUsed\tabsent\n")
+		}
+		if r.L1Fee != nil {
+			fmt.Printf("  L1Fee\t0x%x\n", r.L1Fee)
+		} else {
+			fmt.Printf("  L1Fee\tabsent\n")
+		}
+		if r.FeeScalar != nil {
+			fmt.Printf("  FeeScalar\t%s\n", r.FeeScalar.String())
+		} else {
+			fmt.Printf("  FeeScalar\tabsent\n")
+		}
+		if r.L1BaseFeeScalar != nil {
+			fmt.Printf("  L1BaseFeeScalar\t0x%x\n", *r.L1BaseFeeScalar)
+		} else {
+			fmt.Printf("  L1BaseFeeScalar\tabsent\n")
+		}
+		if r.L1BlobBaseFeeScalar != nil {
+			fmt.Printf("  L1BlobBaseFeeScalar\t0x%x\n", *r.L1BlobBaseFeeScalar)
+		} else {
+			fmt.Printf("  L1BlobBaseFeeScalar\tabsent\n")
+		}
+		if r.OperatorFeeScalar != nil {
+			fmt.Printf("  OperatorFeeScalar\t0x%x\n", *r.OperatorFeeScalar)
+		} else {
+			fmt.Printf("  OperatorFeeScalar\tabsent\n")
+		}
+		if r.OperatorFeeConstant != nil {
+			fmt.Printf("  OperatorFeeConstant\t0x%x\n", *r.OperatorFeeConstant)
+		} else {
+			fmt.Printf("  OperatorFeeConstant\tabsent\n")
+		}
+		if r.DAFootprintGasScalar != nil {
+			fmt.Printf("  DAFootprintGasScalar\t0x%x\n", *r.DAFootprintGasScalar)
+		} else {
+			fmt.Printf("  DAFootprintGasScalar\tabsent\n")
+		}
+		if r.BlobGasUsed != 0 {
+			fmt.Printf("  BlobGasUsed\t0x%x\n", r.BlobGasUsed)
+		} else {
+			fmt.Printf("  BlobGasUsed\tabsent\n")
+		}
+	}
+	return nil
 }
 
 // assembleOutput turns one generated block (still open on its generation db,
