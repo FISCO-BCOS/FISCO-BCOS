@@ -4,7 +4,11 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
+#include <filesystem>
+#include <fstream>
+#include <set>
 #include <string>
+#include <string_view>
 
 BOOST_AUTO_TEST_SUITE(GoldenSampleSuite)
 
@@ -56,6 +60,52 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
     BOOST_CHECK(ep["timestamp"].asString().size() >= 3);  // "0x..."
     // rawTransactions 原样进 transactions（parse 层 decode 容错跳过，raw 无条件保留）
     BOOST_CHECK_EQUAL(ep["transactions"].size(), 1);  // jovian_deposit_only 1 笔 deposit
+}
+
+BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
+{
+    // D4: golden manifest 自动校验——manifest.txt（非注释行）↔ vectors/*.json ↔ golden/engine/*.golden.json
+    // 三集合必须一致。防漏格（向量该生成未生成）/孤儿向量/清单漂移——regen.sh 的手动 diff 之外,
+    // 测试运行时自动检查（语料改动不跑 regen 时也能暴露）。
+    auto basenameSet = [](std::filesystem::path const& dir, std::string_view suffix) {
+        std::set<std::string> names;
+        for (auto const& entry : std::filesystem::directory_iterator(dir))
+        {
+            if (!entry.is_regular_file())
+                continue;
+            auto name = entry.path().filename().string();
+            if (name.size() > suffix.size() &&
+                name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
+                names.insert(name.substr(0, name.size() - suffix.size()));
+        }
+        return names;
+    };
+
+    // manifest.txt：非注释、非空行 → basename（去 .json 后缀）
+    std::set<std::string> manifest;
+    {
+        std::ifstream in(std::string(OP_T8N_VECTORS_DIR) + "/manifest.txt");
+        BOOST_REQUIRE(in.good());
+        std::string line;
+        while (std::getline(in, line))
+        {
+            if (line.empty() || line[0] == '#')
+                continue;
+            constexpr std::string_view kJsonSuffix = ".json";
+            if (line.size() > kJsonSuffix.size() &&
+                line.compare(line.size() - kJsonSuffix.size(), kJsonSuffix.size(), kJsonSuffix) == 0)
+                line.resize(line.size() - kJsonSuffix.size());
+            manifest.insert(line);
+        }
+    }
+
+    auto vectors = basenameSet(OP_T8N_VECTORS_DIR, ".json");
+    auto golden = basenameSet(OP_T8N_GOLDEN_ENGINE_DIR, ".golden.json");
+
+    BOOST_CHECK_MESSAGE(manifest == vectors,
+        "manifest.txt ↔ vectors/ basename 集合不一致（漏格/孤儿/漂移）");
+    BOOST_CHECK_MESSAGE(vectors == golden,
+        "vectors/ ↔ golden/engine/ basename 集合不一致（漏格/孤儿）");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
