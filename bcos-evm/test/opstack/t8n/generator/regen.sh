@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 整批重生成仪式（spec rev.3）。退出 0 ⇔ 33 案全部生成成功 ∧ 工作树与入库 cases+vectors 字节等同。
+# 整批重生成仪式（spec rev.4）。退出 0 ⇔ 34 案全部生成成功 ∧ 工作树与入库 cases+vectors 字节等同。
 set -euo pipefail
 OPGETH="${OPGETH:-/Users/octopus/octo/code/blockchain-impl/op-geth}"
 PIN="e8800cffe53d459cde8a07c8e8f1de9d86e79e07"
@@ -23,10 +23,14 @@ n=0
 for in_json in "$T8N_DIR"/cases/*.in.json; do               # fork 在文件名/_info 内，无 --fork
   base="$(basename "$in_json" .in.json)"
   "$OPGETH/opt8n-ref" --input "$in_json" --output "$T8N_DIR/vectors/${base}.json" \
+    --golden-output "$T8N_DIR/golden/engine/${base}.golden.json" \
     --op-geth-commit "$PIN"
   n=$((n+1))
 done
-[ "$n" -eq 33 ] || { echo "generated $n cases, want 33" >&2; exit 1; }
+[ "$n" -eq 34 ] || { echo "generated $n cases, want 34" >&2; exit 1; }
+
+"$OPGETH/opt8n-ref" --chain-output-dir "$T8N_DIR/golden/engine/chained" \
+  --op-geth-commit "$PIN"                                    # 链式对 golden（chainA/B + jovianChainA/B）
 
 # cases ↔ manifest basename 集合相等（防孤儿向量/漏格）
 diff <(ls "$T8N_DIR"/cases/*.in.json | xargs -n1 basename | sed 's/\.in\.json$/.json/' | sort) \

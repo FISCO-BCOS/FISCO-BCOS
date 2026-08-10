@@ -53,3 +53,9 @@ jovian_setcode_7702_skips.json
 # then EIP-161 touch-deletes it at block commit.
 isthmus_empty_account_cleanup.json
 jovian_empty_account_cleanup.json
+# B-7 order-observable batch (W5): 1 single-fork (isthmus) case = +1 -> 34
+# vectors. Written FIRST (before generation), same discipline as above. The
+# reader contract CALLs the EIP-4788 GET path and SSTOREs the returned root,
+# so the stored root / tx status discriminates whether the block's 4788 system
+# call runs before or after user txs.
+isthmus_system_call_order_observable.json

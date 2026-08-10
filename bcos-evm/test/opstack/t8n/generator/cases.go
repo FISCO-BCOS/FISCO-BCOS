@@ -1,7 +1,8 @@
 // Corpus definitions for the M-B3+M6 block-level vector matrix (plan Step 2
 // table, 14 cases x fork column = 25 vectors; corpus augmentation spec rev.3
 // adds 3 cases x both forks = 31 vectors; the defer-sweep batch adds
-// empty_account_cleanup x both forks = 33 vectors). `opt8n-ref --write-cases <dir>`
+// empty_account_cleanup x both forks = 33 vectors; the B-7 order-observable
+// batch adds 1 single-fork (isthmus) case = 34 vectors). `opt8n-ref --write-cases <dir>`
 // re-emits the *.in.json files deterministically from these definitions, so
 // the L1Block slot pre-seeding and the L1-attributes deposit calldata are
 // built from ONE feeParams source and cannot drift apart -- and
@@ -104,8 +105,11 @@ var (
 	//   TIMESTAMP; PUSH0; MSTORE             mem[0:32] = block.timestamp
 	//   PUSH2 0x1fff; TIMESTAMP; MOD          idx = t % 8191 (own storage slot)
 	//   PUSH1 32; PUSH0; PUSH1 32; PUSH0; PUSH0
-	//   PUSH20 <BeaconRootsAddress>; GAS; CALL   GET (calldata = timestamp)
-	//   POP; PUSH1 32; PUSH0; PUSH0; RETURNDATACOPY  mem[0:32] = returndata
+	//   PUSH20 <BeaconRootsAddress>; GAS; CALL   GET (calldata=timestamp; out buf mem[0:32])
+	//   POP; PUSH1 32; PUSH0; PUSH0; RETURNDATACOPY  no-op on success (root is already
+	//                                        in mem[0:32] via the CALL out-buffer); the
+	//                                        "empty returndata halts" path is what makes
+	//                                        the wrong-order reader tx fail
 	//   PUSH0; MLOAD; SWAP1; SSTORE; STOP     storage[idx] = returned root
 	// The 4788 GET path (beaconRootsCode) only returns a value once its
 	// ts==sload(ts) ring check passes, which happens ONLY AFTER the block's
@@ -534,6 +538,8 @@ var caseSpecs = []caseSpec{
 		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 21_000, nil))
 		return c
 	}},
+
+	// ----- B-7 order-observable batch: +1 single-fork (isthmus) case = 34 vectors -----
 
 	{"system_call_order_observable", []string{"isthmus"}, func(fork string) inputCase {
 		// B-7 (single fork isthmus, order-observable). Same real EIP-4788/2935

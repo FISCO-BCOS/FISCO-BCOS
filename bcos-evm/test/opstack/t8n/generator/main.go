@@ -18,7 +18,7 @@
 // Two subcommands:
 //
 //	opt8n-ref --write-cases <dir>
-//	    deterministically (re)writes the 33 corpus case files (*.in.json).
+//	    deterministically (re)writes the 34 corpus case files (*.in.json).
 //	    The corpus definitions live in this file (see caseDefs) so that the
 //	    L1Block slot values and the L1-attributes calldata can never drift
 //	    apart by hand-editing -- and processBlockVector re-asserts their
@@ -86,7 +86,7 @@ const ringSize = 8191 // EIP-4788 HISTORY_BUFFER_LENGTH == EIP-2935 window
 
 func main() {
 	var (
-		writeCases     = flag.String("write-cases", "", "write the 33 corpus case files into <dir> and exit")
+		writeCases     = flag.String("write-cases", "", "write the 34 corpus case files into <dir> and exit")
 		inputPath      = flag.String("input", "", "input case JSON")
 		outputPath     = flag.String("output", "", "output vector JSON")
 		opGethCommit   = flag.String("op-geth-commit", "unknown", "full sha of the op-geth checkout, recorded into _op_test_vectors.generator_commit")
@@ -552,7 +552,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 // with the pre-generation and post-generation halves of the candidate-set
 // build merged into one pass now that txs/receipts are both in scope) --
 // only the golden extraction at the end is new. Shared verbatim between the
-// 33-case single-block path (processBlockVector) and the off-line 1->2
+// 34-case single-block path (processBlockVector) and the off-line 1->2
 // chained pair (processChainPair, Step 2): both need identical assembly
 // logic, just fed a different (in, db, block, receipts, txs, signer) tuple
 // per block.
@@ -914,7 +914,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 // chainedBlockOutput is one block of the off-line chained pair (Task 2 Step
 // 2): the full v3-block payload (same fields as outputVector) merged flatly
 // with the golden extension (same fields as goldenRecord) -- there is no
-// pre-existing vectors/chainX.json to complement, so unlike the 33 flat
+// pre-existing vectors/chainX.json to complement, so unlike the 34 flat
 // golden files, these carry the complete per-block record.
 type chainedBlockOutput struct {
 	Info       caseInfo                         `json:"_info"`

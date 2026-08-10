@@ -1,5 +1,5 @@
 # Task 2 (op-validator-minimal-loop spec §7.1) engine-gate golden manifest.
-# One <id>.golden.json per vectors/<id>.json (same id, 33/33, set-equal to
+# One <id>.golden.json per vectors/<id>.json (same id, 34/34, set-equal to
 # cases/*.in.json -- checked at generation time). Each file carries exactly
 # the fields the corpus's own v3-block vectors are structurally missing:
 # blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/
@@ -39,11 +39,16 @@ isthmus_setcode_7702_skips.golden.json
 jovian_setcode_7702_skips.golden.json
 isthmus_empty_account_cleanup.golden.json
 jovian_empty_account_cleanup.golden.json
+# B-7 order-observable batch (W5): 1 single-fork (isthmus) case = +1 -> 34.
+isthmus_system_call_order_observable.golden.json
 #
 # Off-line chained pair (spec §7.1 rev.3 decision A2, Step 2): NOT part of
-# the 33-set above -- a dedicated 1->2 block chain (no vectors/ counterpart),
+# the 34-set above -- a dedicated 1->2 block chain (no vectors/ counterpart),
 # each file carrying the FULL v3-block payload merged flatly with the golden
-# extension. Lives in chained/, not listed by basename here (2 files, fixed
-# names, self-describing).
+# extension. Lives in chained/, not listed by basename here (4 files, fixed
+# names, self-describing). The jovian pair (jovianChainA/B) exercises the DA
+# max/linear branch (block1 blobGasUsed > gasUsed).
 #   chained/chainA.golden.json  chained/chainA.pre.json  chained/chainA.post.json
 #   chained/chainB.golden.json  chained/chainB.pre.json  chained/chainB.post.json
+#   chained/jovianChainA.golden.json  chained/jovianChainA.pre.json  chained/jovianChainA.post.json
+#   chained/jovianChainB.golden.json  chained/jovianChainB.pre.json  chained/jovianChainB.post.json
