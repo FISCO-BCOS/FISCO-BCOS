@@ -300,7 +300,7 @@ public:
         {
             auto tx = blockTxs ? blockTxs->at(i) : block->transactions()[i].toShared();
             auto txHash = tx->hash();
-            std::shared_ptr<bcos::bytes> txData;
+            auto txData = std::make_shared<bcos::bytes>();  // C3: 修复 null shared_ptr 解引用（P4-3）
             tx->encode(*txData);
             m_txsHashToData[txHash] = txData;
         }
