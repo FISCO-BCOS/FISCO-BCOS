@@ -716,9 +716,13 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     // 翻红优先归因执行/落账或 pre-alloc 完整性（见 plan 风险 4），非引擎。
     ctx.checkField("stateRoot", hexHash(test::from_json<hash256>(h.at("stateRoot"))),
         hexHash(bcos::evm::stateRootOf(TestStateLedger{ts})));
-    // requestsHash：两 fork 恒必填的值比对（seal 侧 optional 经 checkOptional，无门控）。
+    // requestsHash：预 Prague（ecotone/fjord/…，含 ecotone_upgrade_fjord_activation）
+    // 向量头不发射该键（op-geth t8n omitempty，Prague 才有 EIP-7685 requests），期望侧
+    // 按在场性走 checkOptional（与下方 blobGasUsed 同 pattern，无门控）。
     ctx.checkOptional("requestsHash",
-        std::optional{hexHash(test::from_json<hash256>(h.at("requestsHash")))},
+        h.contains("requestsHash") ?
+            std::optional{hexHash(test::from_json<hash256>(h.at("requestsHash")))} :
+            std::nullopt,
         seal.requestsHash.has_value() ? std::optional{hexHash(*seal.requestsHash)} : std::nullopt);
     // blobGasUsed：六 fork 的向量都发射（op-geth 各头真带 0x0，Ecotone+ 的 4844 遗留字段）。
     // Jovian → 值比对（"0x0" 是在场的零，如 jovian_first_block）；其余五 fork → 断言 C++

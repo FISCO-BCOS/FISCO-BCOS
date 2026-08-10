@@ -7,11 +7,12 @@
 # prose says "26"; the table's fork column enumerates 25 -- the table is
 # binding (see generator/README.md "Corpus enumeration").
 #
-# Current total (2026-08-10): 34 entries (19 cases x fork matrix). The
-# 25-vector count above is the original (M-B3+M6) batch and is retained as
-# a historical record, not rewritten; see the "Corpus augmentation"
-# (+6 -> 31), "Defer-sweep" (+2 -> 33) and the appended 34th-intake note
-# below for the deltas that bring the manifest to its present 34-entry state.
+# Current total (2026-08-10): 41 entries (34 corpus + 7 Phase-2 线 A
+# ecotone/fjord formula + upgrade boundaries). The 25-vector count above is
+# the original (M-B3+M6) batch and is retained as a historical record, not
+# rewritten; see the "Corpus augmentation" (+6 -> 31), "Defer-sweep"
+# (+2 -> 33), the appended 34th-intake note, and the Task-4 (+7 -> 41) note
+# below for the deltas that bring the manifest to its present 41-entry state.
 isthmus_deposit_only.json
 jovian_deposit_only.json
 isthmus_transfer_basic.json
@@ -58,3 +59,17 @@ jovian_empty_account_cleanup.json
 # --write-cases and never manifested. Appended FIRST per manifest
 # discipline (entries written before generation).
 isthmus_system_call_order_observable.json
+# Phase-2 线 A genesis fork 矩阵（Task 4, 2026-08-10）：+7 -> 41 vectors.
+# 公式边界（formula-boundary）：ecotone/fjord 纯 fork 的 transfer/contract_create
+# 基础对（L1 费公式在 ecotone→fjord 切换：Ecotone 动态标量 vs Fjord 分段常量，
+# 均无 operator-fee/DA 段；属性 calldata 均 164B Ecotone 布局）。
+ecotone_transfer_basic.json
+ecotone_contract_create.json
+fjord_transfer_basic.json
+fjord_contract_create.json
+# 升级边界（upgrade-boundary）：FILENAME 前缀 = genesis 基础 fork，而每个向量的
+# _info.hardfork = 块时 TARGET fork（有意为之：replayer 按 _info.hardfork 选配置；
+# 基础 fork 可从 _info.activations 恢复）。属性布局/extraData 由块时 fork 决定。
+ecotone_upgrade_fjord_activation.json
+fjord_upgrade_isthmus_activation.json
+isthmus_upgrade_jovian_activation.json
