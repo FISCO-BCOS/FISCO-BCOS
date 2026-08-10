@@ -575,5 +575,76 @@ BOOST_AUTO_TEST_CASE(calculateHashRecomputesRLPHash)
     BOOST_CHECK(header->hash() == expected);
 }
 
+// The genesis block (number 0) has an empty parent hash by definition and must pass
+// validateHeader (regression for the parentInfo check).
+BOOST_AUTO_TEST_CASE(genesisExemption)
+{
+    auto header = makeEthHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().data.blockNumber = 0;
+    impl->inner().data.parentInfo.clear();  // empty parent hash
+
+    bcos::Error::UniquePtr error;
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
+    BOOST_CHECK(!error);
+}
+
+// uncleHash is never legitimately zero on Ethereum (the empty-ommers constant is 0x1dcc…);
+// an all-zero uncleHash must be rejected (regression for the restored zero check).
+BOOST_AUTO_TEST_CASE(uncleHashZeroRejected)
+{
+    auto header = makeEthHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().data.uncleHash.clear();  // all-zero
+
+    bcos::Error::UniquePtr error;
+    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
+    BOOST_CHECK(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+}
+
+// toTarsHeader must clear residual optional fields when the destination header is reused:
+// decoding a lower-version RLP into a header that previously held higher-version fields
+// must not leak them.
+BOOST_AUTO_TEST_CASE(toTarsHeaderClearsResidual)
+{
+    // Reuse the same header object: first a PRAGUE decode, then a PRE_LONDON decode.
+    auto header = makeEthHeader(EthBlockVersion::PRAGUE);
+    EthBlockHeader ethHeader(*header);
+    bytes pragueRlp;
+    ethHeader.rlpEncode(pragueRlp);
+
+    auto preLondonHeader = makeEthHeader(EthBlockVersion::PRE_LONDON);
+    EthBlockHeader preLondon(*preLondonHeader);
+    bytes preLondonRlp;
+    preLondon.rlpEncode(preLondonRlp);
+
+    // Decode PRE_LONDON into a header that currently holds PRAGUE fields.
+    auto reused = makeEthHeader(EthBlockVersion::PRAGUE);
+    bcos::Error::UniquePtr error;
+    error = EthBlockHeader::toTarsHeader(reused, bcos::ref(preLondonRlp));
+    BOOST_CHECK(!error);
+    // Residual PRAGUE-only fields must have been cleared.
+    BOOST_CHECK(!reused->requestsHash().has_value());
+    BOOST_CHECK(!reused->parentBeaconBlockRoot().has_value());
+    BOOST_CHECK(reused->ethBlockVersion() == EthBlockVersion::PRE_LONDON);
+}
+
+// An invalid Eth header: calculateHash clears dataHash, so hash() must throw
+// EmptyBlockHeaderHash (regression for the FIB-130 clear-on-failure behaviour).
+BOOST_AUTO_TEST_CASE(calculateHashClearsOnInvalid)
+{
+    auto header = makeEthHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().data.stateRoot.clear();  // make it invalid
+
+    bcos::crypto::Keccak256 keccak;
+    BOOST_CHECK_NO_THROW(impl->calculateHash(keccak));
+    BOOST_CHECK_THROW(header->hash(), std::exception);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

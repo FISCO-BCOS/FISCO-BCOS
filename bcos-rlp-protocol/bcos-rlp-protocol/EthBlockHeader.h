@@ -81,7 +81,7 @@ public:
     explicit EthBlockHeader(const bcos::protocol::BlockHeader& header);
 
     void rlpEncode(bcos::bytes& out) const;
-    bcos::Error::UniquePtr rlpDecode(bcos::bytesRef data);
+    bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
 
     // The fork version this header's fields correspond to (derived from the presence of
     // optional fields after rlpDecode). 0/NON_ETH means no Eth fields were decoded.
@@ -102,9 +102,9 @@ public:
     //  - calculateRLPHash: compute keccak256(rlp(header)) and inject it into the
     //    base-class header via setRLPHash.
     static bcos::Error::UniquePtr toTarsHeader(
-        bcos::protocol::BlockHeader::Ptr header, bcos::bytesRef _data);
+        bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
     static bcos::Error::UniquePtr toEthBlockHeader(
-        EthBlockHeader& ethHeader, bcos::bytesRef _data);
+        EthBlockHeader& ethHeader, bcos::bytesConstRef _data);
     static bcos::Error::UniquePtr calculateRLPHash(bcos::protocol::BlockHeader& header);
 
     const EthBlockHeaderData& data() const { return m_data; }

@@ -67,9 +67,10 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
     if (ethBlockVersion() != bcos::protocol::EthBlockVersion::NON_ETH)
     {
         // Eth header: recompute the RLP hash via the rlp-protocol bridge. If the header is
-        // invalid (a required field for its EthBlockVersion is missing), calculateRLPHash
-        // reports an error and we leave dataHash untouched — hash() will then report the
-        // empty hash, signalling to the caller that the header is not hashable.
+        // invalid for its EthBlockVersion, clear dataHash rather than keeping whatever came
+        // off the wire — FIB-130's recompute-then-compare depends on calculateHash() never
+        // leaving an attacker-supplied hash in place. hash() then throws EmptyBlockHeaderHash,
+        // which is how the caller learns the header is not hashable.
         auto err = bcos::protocol::EthBlockHeader::calculateRLPHash(*this);
         if (err)
         {

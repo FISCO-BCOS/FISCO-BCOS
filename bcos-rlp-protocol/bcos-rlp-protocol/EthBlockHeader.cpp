@@ -44,7 +44,7 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
 }
 
 bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
-    bcos::protocol::BlockHeader::Ptr header, bcos::bytesRef _data)
+    bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
 {
     if (header == nullptr)
     {
@@ -135,7 +135,7 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
 }
 
 bcos::Error::UniquePtr EthBlockHeader::toEthBlockHeader(
-    EthBlockHeader& ethHeader, bcos::bytesRef _data)
+    EthBlockHeader& ethHeader, bcos::bytesConstRef _data)
 {
     auto err = ethHeader.rlpDecode(_data);
     if (err)
@@ -182,6 +182,13 @@ bool EthBlockHeader::validateHeader(
     }
     // The base-class accessors return fixed-size FixedBytes: a "not set" field surfaces as
     // all-zero bytes. Check for all-zero rather than size.
+    // uncleHash is never legitimately zero on Ethereum — the empty-ommers constant is
+    // 0x1dcc4de8…, so an all-zero uncleHash means "missing" (unlike coinbase/prevRandao,
+    // which can be zero on real chains).
+    if (_header.uncleHash() == bcos::crypto::HashType{})
+    {
+        return invalid("EthBlockHeader: missing or bad uncleHash");
+    }
     if (_header.stateRoot() == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad stateRoot");
@@ -370,13 +377,18 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
         m_data.parentBeaconRoot, m_data.requestsHash);
 }
 
-bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesRef out)
+bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
 {
     // The scalar codec accepts non-canonical integer encodings (leading zeros) and over-long
     // payloads (truncated mod 2^64). This bridge therefore hashes the canonical re-encoding
     // (rlpEncode) rather than the raw input bytes, so a non-canonical input is normalised
     // before hashing. geth would reject such input as malformed; rejecting it here is tracked
     // as a shared-codec change (see RLP scalar decode), out of scope for this bridge.
+    //
+    // The codec's decode takes a mutable bytesRef& (it advances a view cursor); the bytes
+    // themselves are never written, so a single copy into a mutable buffer is enough.
+    auto mutableData = data.toBytes();
+    bytesRef out(mutableData.data(), mutableData.size());
     uint64_t _number = 0;
     uint64_t _timestamp = 0;
 
@@ -393,39 +405,12 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesRef out)
     m_data.number = static_cast<int64_t>(_number);
     m_data.timestamp = static_cast<int64_t>(_timestamp);
 
-    // Reject positionally-misaligned inputs: Ethereum optional fork fields are appended
-    // cumulatively at the tail, so a later field can only be present if every earlier fork
-    // field is genuinely present. Without this check a truncated input would silently shift
-    // every later field down one slot (e.g. withdrawalsHash bytes parsed as baseFee), pass
-    // validation, and hash to something no Ethereum client would agree with.
-    auto prefixOk = [&] {
-        if (m_data.requestsHash.has_value() && !m_data.parentBeaconRoot.has_value())
-        {
-            return false;
-        }
-        if (m_data.parentBeaconRoot.has_value() && !m_data.excessBlobGas.has_value())
-        {
-            return false;
-        }
-        if (m_data.excessBlobGas.has_value() && !m_data.blobGasUsed.has_value())
-        {
-            return false;
-        }
-        if (m_data.blobGasUsed.has_value() && !m_data.withdrawalsHash.has_value())
-        {
-            return false;
-        }
-        if (m_data.withdrawalsHash.has_value() && !m_data.baseFee.has_value())
-        {
-            return false;
-        }
-        return true;
-    };
-    if (!prefixOk())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
-            "EthBlockHeader: optional fork fields are not prefix-contiguous");
-    }
+    // Optional fork fields are decoded positionally, so the set of present optionals is
+    // always a contiguous prefix — a later field can only be present if the view was still
+    // non-empty when the earlier one was read. A truncated or shifted input therefore
+    // surfaces as a version/field mismatch, which validateHeader's require/forbidForkField
+    // pair rejects, or as a wrong-width item, which the FixedBytes length check rejects at
+    // decode time (or as more than 21 items, rejected as UnexpectedListElements).
 
     // Derive the fork version from the presence of optional fields.
     if (m_data.requestsHash.has_value())
