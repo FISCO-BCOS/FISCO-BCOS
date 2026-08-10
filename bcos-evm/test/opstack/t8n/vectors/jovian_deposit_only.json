@@ -105,6 +105,7 @@
           "gasUsed": "0x5adc",
           "cumulativeGasUsed": "0x5adc",
           "logsCount": 0,
+          "output": "0x",
           "_op_deposit_nonce": "0x0",
           "_op_deposit_receipt_version": "0x1"
         }

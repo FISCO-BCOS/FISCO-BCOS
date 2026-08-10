@@ -5,14 +5,14 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/RollupCost.h>
-#include <algorithm>
-#include <bcos-evm/eth/state/bloom_filter.hpp>
-#include <bcos-evm/eth/state/errors.hpp>
-#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <algorithm>
+#include <bcos-evm/eth/state/bloom_filter.hpp>
+#include <bcos-evm/eth/state/errors.hpp>
+#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <cassert>
 // TODO(eth-utils-removal): 本文件多段照抄自
 // evmone test/state/state.cpp(官方 v0.21.0),替换即照抄面重写,须重验等价性宣称。
@@ -143,15 +143,15 @@ inline int32_t toFiscoStatus(evmc_status_code status) noexcept
 /// bloom and encodeReceiptForRoot's leaf both read it back).
 inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
-    const evmone::state::TransactionReceipt& evmoneReceipt,
-    const evmone::state::BlockInfo& block)
+    const evmone::state::TransactionReceipt& evmoneReceipt, const evmone::state::BlockInfo& block,
+    bcos::bytesConstRef output)
 {
-    auto out = receiptFactory->createReceipt(
-        bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)}, std::string{},
-        mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status), bcos::bytesConstRef{},
-        static_cast<bcos::protocol::BlockNumber>(block.number));
-    out->setLogsBloom(bcos::bytesConstRef{evmoneReceipt.logs_bloom_filter.bytes,
-        sizeof(evmoneReceipt.logs_bloom_filter.bytes)});
+    auto out =
+        receiptFactory->createReceipt(bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)},
+            std::string{}, mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status),
+            output, static_cast<bcos::protocol::BlockNumber>(block.number));
+    out->setLogsBloom(bcos::bytesConstRef{
+        evmoneReceipt.logs_bloom_filter.bytes, sizeof(evmoneReceipt.logs_bloom_filter.bytes)});
     return out;
 }
 }  // namespace
@@ -215,6 +215,18 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
     m.l1_base_fee_scalar = fee.base_fee_scalar;
     m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
     m.l1_fee = props.l1_cost;
+    // L1 calldata gas used. Ecotone: op-geth reports bedrockCalldataGasUsed on the envelope
+    // (zeroes*4 + ones*16), snapped into props at validate time. Fjord+ (op-geth
+    // core/types/rollup_cost.go:623-624):
+    //   L1GasUsed = estimatedDASizeScaled(fastLzSize) * TxDataNonZeroGasEIP2028(16) / 1e6.
+    // deriveOPStackFields emits it on every non-deposit receipt; props.ecotone_calldata_gas_used
+    // is unset (nullopt) under Fjord+, where flz_len is the FastLZ length captured at validate
+    // time and the formula above applies.
+    if (props.ecotone_calldata_gas_used.has_value())
+        m.l1_gas_used = *props.ecotone_calldata_gas_used;
+    else
+        m.l1_gas_used =
+            static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000);
     if (props.has_operator_fee)
     {
         m.operator_fee = operator_fee_at_used;
@@ -315,7 +327,8 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     auto meta = deriveOpReceiptMeta(props, opAtUsed, /*fill_operator_scalars=*/true);
 
     outStateDiff = receipt.state_diff;
-    auto out = makeFiscoReceipt(receiptFactory, receipt, block);
+    auto out = makeFiscoReceipt(receiptFactory, receipt, block,
+        bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size});
     out->setOpStackMeta(toOpStackMeta(meta));
     // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (api.go:1775, RPC top-level).
     out->setEffectiveGasPrice("0x" + intx::to_string(effective_gas_price, 16));
@@ -381,8 +394,16 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     if (intx::uint512{balance} < maxCost)
         return make_error_code(std::errc::result_out_of_range);
 
-    return OpTxProperties{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
+    OpTxProperties props{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
         flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula, cfg.has_da_footprint};
+    // Ecotone 公式下快照 envelope 的 bedrockCalldataGasUsed（zeroes*4 + ones*16），供
+    // deriveOpReceiptMeta 读取 l1_gas_used——保持 no-cfg 不变量。Fjord+ 保持 nullopt，
+    // l1_gas_used 走 flz_len 的 Fjord 公式。
+    props.ecotone_calldata_gas_used =
+        cfg.has_ecotone_l1_formula ?
+            std::optional<uint64_t>{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)} :
+            std::nullopt;
+    return props;
 }
 
 std::variant<OpTxProperties, std::error_code> opValidateFromState(
@@ -475,6 +496,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
 
     evmone::state::TransactionReceipt receipt;
     receipt.type = kDepositTxType;
+    bcos::bytes outputBytes;  // deposit return data (empty on the failure paths below)
 
     if (const auto* err = std::get_if<std::error_code>(&props))
     {
@@ -510,13 +532,18 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
             receipt.status = outcome.result.status_code;
             receipt.gas_used = outcome.gas_used;
             receipt.logs = host.take_logs();
+            // The attributes deposit's own return data (normally empty: it CALLs L1Block with a
+            // void return). Copied into a buffer because outcome.result is scoped to this branch.
+            outputBytes.assign(outcome.result.output_data,
+                outcome.result.output_data + outcome.result.output_size);
         }
     }
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
     receipt.state_diff = bcos::evm::sanitizeStateDiff(view, state.build_diff(cfg.rev));
 
     outStateDiff = receipt.state_diff;
-    auto out = makeFiscoReceipt(receiptFactory, receipt, block);
+    auto out = makeFiscoReceipt(receiptFactory, receipt, block,
+        bcos::bytesConstRef{outputBytes.data(), outputBytes.size()});
 
     // Deposit nonce/version are carried on the receipt's opStackMeta (op-geth's deposit receipt
     // has no L1/operator/DA fields, so nothing else to project).

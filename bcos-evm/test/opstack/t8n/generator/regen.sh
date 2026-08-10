@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 整批重生成仪式（spec rev.4）。退出 0 ⇔ 34 案全部生成成功 ∧ 工作树与入库 cases+vectors 字节等同。
+# 整批重生成仪式（spec rev.4 + Phase-2 线 B Task 5 预编译矩阵）。退出 0 ⇔ 77 案全部生成成功 ∧ 工作树与入库 cases+vectors 字节等同。
 set -euo pipefail
 OPGETH="${OPGETH:-/Users/octopus/octo/code/blockchain-impl/op-geth}"
 PIN="e8800cffe53d459cde8a07c8e8f1de9d86e79e07"
@@ -27,7 +27,7 @@ for in_json in "$T8N_DIR"/cases/*.in.json; do               # fork 在文件名/
     --op-geth-commit "$PIN"
   n=$((n+1))
 done
-[ "$n" -eq 34 ] || { echo "generated $n cases, want 34" >&2; exit 1; }
+[ "$n" -eq 77 ] || { echo "generated $n cases, want 77" >&2; exit 1; }
 
 "$OPGETH/opt8n-ref" --chain-output-dir "$T8N_DIR/golden/engine/chained" \
   --op-geth-commit "$PIN"                                    # 链式对 golden（chainA/B + jovianChainA/B）

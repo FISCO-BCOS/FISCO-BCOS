@@ -396,10 +396,26 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         return std::string("gasLimit exceeds the maximum block gas limit (2^63-1)");
     }
-    // extraData: OP Holocene+ header shape (batch C, spec §6.4 — the check that final review B2-4
-    // deliberately parked while it only enforced the plain 32-byte ETH bound). op-geth validates
-    // it in `consensus/misc/eip1559/eip1559_optimism.go`'s `ValidateHoloceneExtraData` (Isthmus) /
-    // `ValidateJovianExtraData` (Jovian), reached from BOTH the block-verify path
+    // `gasUsed <= gasLimit` has NO pre-execution header check here on purpose, unlike op-geth's
+    // beacon `verifyHeader` (`consensus/beacon/consensus.go:266-268`, reached before any state is
+    // touched). It is guaranteed by the execution side instead, in two layers that together match
+    // op-geth's pre-execution rejection:
+    //   1. by construction — `processOpBlock` (`OpBlockExecute.cpp:126`) starts the gas pool at the
+    //      block gas limit and each tx is gated by `tx.gasLimit <= blockGasLeft` (evmone
+    //      validate/transition) with `gasUsed <= tx.gasLimit`, so the computed `cumulative`
+    //      (= OpExecuteBlockResult::gasUsed) can never exceed the block gas limit;
+    //   2. by commitment comparison — `payload.gasUsed` is one of the six-way comparison fields
+    //      (bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:94-103, struct OpExecuteBlockResult),
+    //      pinned to the computed value, so a payload that CLAIMS `gasUsed > gasLimit` fails the
+    //      comparison after execution -> INVALID.
+    // Behaviorally equivalent to op-geth, with a different timing: FISCO rejects only after
+    // executing the block, op-geth rejects before execution (the same "no full
+    // VerifyHeader/ValidateBody equivalent" structural note as
+    // docs/opstack-opgeth-e2e-comparison.md §0.0 C-13). Not a gap, but deliberately not mirrored
+    // here. extraData: OP Holocene+ header shape (batch C, spec §6.4 — the check that final review
+    // B2-4 deliberately parked while it only enforced the plain 32-byte ETH bound). op-geth
+    // validates it in `consensus/misc/eip1559/eip1559_optimism.go`'s `ValidateHoloceneExtraData`
+    // (Isthmus) / `ValidateJovianExtraData` (Jovian), reached from BOTH the block-verify path
     // (`consensus/beacon/consensus.go:240`) and the newPayload path
     // (`eth/catalyst/api_optimism.go:22`):
     //   - Isthmus: exactly 9 bytes = 0x00 version ‖ uint32 denominator ‖ uint32 elasticity (big

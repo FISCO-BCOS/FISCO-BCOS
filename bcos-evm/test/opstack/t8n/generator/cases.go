@@ -1,8 +1,10 @@
 // Corpus definitions for the M-B3+M6 block-level vector matrix (plan Step 2
 // table, 14 cases x fork column = 25 vectors; corpus augmentation spec rev.3
 // adds 3 cases x both forks = 31 vectors; the defer-sweep batch adds
-// empty_account_cleanup x both forks = 33 vectors; the B-7 order-observable
-// batch adds 1 single-fork (isthmus) case = 34 vectors). `opt8n-ref --write-cases <dir>`
+// empty_account_cleanup x both forks = 34 vectors). Phase 2 line A (Task 3)
+// adds 7 vectors: 2 Ecotone + 2 Fjord formula-boundary + 3 upgrade-boundary
+// activation cases = 41 vectors; line B (precompile matrix) adds 36 = 77
+// vectors. `opt8n-ref --write-cases <dir>`
 // re-emits the *.in.json files deterministically from these definitions, so
 // the L1Block slot pre-seeding and the L1-attributes deposit calldata are
 // built from ONE feeParams source and cannot drift apart -- and
@@ -119,11 +121,93 @@ var (
 	// diverges (status 0, no storage write).
 	beaconReaderCode = func() []byte {
 		head := hexutil.MustDecode("0x425f52611fff420660205f60205f5f73") // up to the PUSH20
-		tail := hexutil.MustDecode("0x5af15060205f5f3e5f51905500")        // GAS CALL POP RDC PUSH0 MLOAD SWAP1 SSTORE STOP
+		tail := hexutil.MustDecode("0x5af15060205f5f3e5f51905500")       // GAS CALL POP RDC PUSH0 MLOAD SWAP1 SSTORE STOP
 		out := append(head, params.BeaconRootsAddress.Bytes()...)
 		return append(out, tail...)
 	}()
+
+	// -----------------------------------------------------------------
+	// Phase 2 line B (Task 1): precompile vector INPUTS. Each is genuinely
+	// valid so the precompile succeeds where the plan says success (verified
+	// end-to-end by --probe-receipt-fields during Task 1; construction detail
+	// in the Task 1 report).
+	// -----------------------------------------------------------------
+
+	// validEcrecoverInput is a REAL secp256k1 signature recovering to key 1
+	// (0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf). hash = sha256("fisco
+	// line-b ecrecover"), signed with privKey(1); recovery verified against
+	// crypto.Ecrecover during generation. Layout follows op-geth core/vm
+	// ecrecover.Run: hash(32) || v-slot(32, last byte = recovery-id + 27) ||
+	// r(32) || s(32).
+	validEcrecoverInput = hexutil.MustDecode("0x" +
+		"34fd596c5986a266fe0e5c5f2a160701bb8877079ecc6f617c81bfddcdbbbe5b" + // hash
+		"000000000000000000000000000000000000000000000000000000000000001b" + // v-slot (recid 0 -> 0x1b)
+		"a048fc6ef02730c5eff7fedfdaa9ed5f27725d2ae4edea299ec783192c6adf9e" + // r
+		"62d797bf5a0d6cb3cd9f2b5caa77ef735a2cffe4f1907d8c880c7157e0f4d074") // s
+
+	// validBlake2fInput is EIP-152 test vector 5 (the BLAKE2b F-compression
+	// "abc" case): rounds=12, h = BLAKE2b IV ^ 0x01010040, m = "abc", final=1.
+	// Provenance: op-geth core/vm/testdata/precompiles/blake2F.json vector 5
+	// (canonical; Expected = ba80a53f…409923).
+	validBlake2fInput = hexutil.MustDecode("0x0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001")
+
+	// expmodZeroHeader: 96B modexp header with baseLen=expLen=modLen=0 (empty
+	// base/exp/mod). op-geth bigModExp.Run returns []byte{} for baseLen==0 &&
+	// modLen==0 (EIP-198) -- SUCCESS (status 1) with an empty output, NOT "1"
+	// as the Task 1 brief stated (corrected; the receipt is unaffected).
+	expmodZeroHeader = make([]byte, 96)
+
+	// bn256AddInput: two valid G1 points (128B, EIP-196).
+	bn256AddInput = repeatedPair(validBn256G1(), 2)
+	// bn256MulInput: valid G1 point (64B) || scalar 0x02 (32B) = 96B.
+	bn256MulInput = append(validBn256G1(), common.BigToHash(big.NewInt(2)).Bytes()...)
+
+	// deadbeefInput: shared 4-byte input for sha256/ripemd160/identity.
+	deadbeefInput = hexutil.MustDecode("0xdeadbeef")
 )
+
+// ---------------------------------------------------------------------
+// Precompile addresses (EIP-196/197/198/152/2537/4844/7212 + OP extension)
+// ---------------------------------------------------------------------
+
+const (
+	preEcRecover    = 0x01
+	preSha256       = 0x02
+	preRipemd160    = 0x03
+	preIdentity     = 0x04
+	preExpMod       = 0x05
+	preBn256Add     = 0x06
+	preBn256Mul     = 0x07
+	preBn256Pairing = 0x08
+	preBlake2f      = 0x09
+	prePointEval    = 0x0a // EIP-4844 KZG point evaluation
+	preBlsG1Add     = 0x0b
+	preBlsG1MSM     = 0x0c
+	preBlsG2Add     = 0x0d
+	preBlsG2MSM     = 0x0e
+	preBlsPairing   = 0x0f
+	preBlsMapG1     = 0x10
+	preBlsMapG2     = 0x11
+	preP256Verify   = 0x100 // RIP-7212; 20-byte address 0x…0100 (two low bytes)
+)
+
+// addrBytes(n) returns the 20-byte precompile address. The single-byte
+// precompiles (0x01..0x11) sit at 0x…00nn; P256VERIFY (0x100) needs the
+// second-lowest byte set (0x…0100), so values above 0xFF write into b[18].
+func addrBytes(n uint) []byte {
+	b := make([]byte, 20)
+	if n > 0xFF {
+		b[18] = byte(n >> 8)
+	}
+	b[19] = byte(n)
+	return b
+}
+
+// senderHex returns the checksummed hex form of the EOA for private key i
+// (key 1 is the standard precompile-call sender; precompileFrame funds it).
+func senderHex(i byte) string {
+	return addrOfKey(i).Hex()
+}
 
 func logsCode() []byte {
 	code := hexutil.MustDecode("0x602a5f55") // SSTORE(0, 0x2a)
@@ -182,6 +266,37 @@ func sourceHash(label string) common.Hash {
 	return crypto.Keccak256Hash([]byte("opt8n-ref source " + label))
 }
 
+// l1AttributesLayout is the L1-attributes deposit layout for an OP-Stack fork
+// (the per-fork byte form of the L1InfoDeposit calldata, mirroring op-geth
+// core/types/rollup_cost.go extractL1GasParamsPostEcotone/PostIsthmus and
+// ExtractDAFootprintGasScalar). Ecotone/Fjord/Granite/Holocene all use the
+// 164-byte Ecotone layout; only Isthmus adds the operator-fee segment and
+// Jovian the DA-footprint scalar.
+type l1AttributesLayout int
+
+const (
+	layoutEcotone l1AttributesLayout = iota // 164B, selector 0x440a5e20, no operator-fee/DA segment
+	layoutIsthmus                           // 176B, selector 0x098999be, + operatorFeeScalar/Constant [164:176]
+	layoutJovian                            // 178B, selector 0x3db6be2b, + daFootprintGasScalar [176:178]
+)
+
+// forkLayout maps a hardfork name to its L1-attributes layout. The four
+// Ecotone-family forks (ecotone/fjord/granite/holocene) are byte-identical for
+// L1 attributes -- op-geth only branches on the Ecotone selector, and
+// extractL1GasParamsPostEcotone hard-rejects any non-164-byte payload.
+func forkLayout(fork string) l1AttributesLayout {
+	switch fork {
+	case "ecotone", "fjord", "granite", "holocene":
+		return layoutEcotone
+	case "isthmus":
+		return layoutIsthmus
+	case "jovian":
+		return layoutJovian
+	default:
+		panic(fmt.Sprintf("unknown hardfork %q in forkLayout", fork))
+	}
+}
+
 // feeParams is the single source for BOTH the L1Block storage pre-seeding and
 // the L1-attributes deposit calldata (iron rule: field-for-field identical).
 type feeParams struct {
@@ -204,19 +319,23 @@ func defaultFeeParams() feeParams {
 	}
 }
 
-func (fp feeParams) attributesData(jovianCfg bool) hexutil.Bytes {
-	size := types.IsthmusL1AttributesLen
-	jovianLayout := jovianCfg && !fp.isthmusLayout
-	if jovianLayout {
-		size = types.JovianL1AttributesLen
+func (fp feeParams) attributesData(fork string) hexutil.Bytes {
+	layout := forkLayout(fork)
+	if layout == layoutJovian && fp.isthmusLayout {
+		layout = layoutIsthmus // Jovian activation form: Isthmus-length/selector calldata (case 12)
+	}
+	var size int
+	var selector []byte
+	switch layout {
+	case layoutEcotone:
+		size, selector = 164, types.EcotoneL1AttributesSelector // extractL1GasParamsPostEcotone: hard 164
+	case layoutIsthmus:
+		size, selector = types.IsthmusL1AttributesLen, types.IsthmusL1AttributesSelector
+	case layoutJovian:
+		size, selector = types.JovianL1AttributesLen, types.JovianL1AttributesSelector
 	}
 	buf := make([]byte, size)
-	if jovianLayout {
-		copy(buf[0:4], types.JovianL1AttributesSelector)
-		binary.BigEndian.PutUint16(buf[176:178], fp.daScalar)
-	} else {
-		copy(buf[0:4], types.IsthmusL1AttributesSelector)
-	}
+	copy(buf[0:4], selector)
 	binary.BigEndian.PutUint32(buf[4:8], fp.baseFeeScalar)
 	binary.BigEndian.PutUint32(buf[8:12], fp.blobBaseFeeScalar)
 	// [12:20] sequenceNumber, [20:28] l1 timestamp, [28:36] l1 number: zero
@@ -224,12 +343,20 @@ func (fp feeParams) attributesData(jovianCfg bool) hexutil.Bytes {
 	fp.l1BaseFee.FillBytes(buf[36:68])
 	fp.blobBaseFee.FillBytes(buf[68:100])
 	// [100:132] l1 block hash, [132:164] batcher hash: zero.
-	binary.BigEndian.PutUint32(buf[164:168], fp.opFeeScalar)
-	binary.BigEndian.PutUint64(buf[168:176], fp.opFeeConstant)
+	if layout != layoutEcotone {
+		// Operator-fee segment exists ONLY in Isthmus+ layouts (the Ecotone
+		// 164B form has no [164:176] -- writing it would make data 176B and
+		// extractL1GasParamsPostEcotone would reject it).
+		binary.BigEndian.PutUint32(buf[164:168], fp.opFeeScalar)
+		binary.BigEndian.PutUint64(buf[168:176], fp.opFeeConstant)
+	}
+	if layout == layoutJovian {
+		binary.BigEndian.PutUint16(buf[176:178], fp.daScalar)
+	}
 	return buf
 }
 
-func (fp feeParams) l1BlockStorage(jovianCfg bool) map[common.Hash]common.Hash {
+func (fp feeParams) l1BlockStorage(fork string) map[common.Hash]common.Hash {
 	st := map[common.Hash]common.Hash{}
 	st[types.L1BaseFeeSlot] = common.BigToHash(fp.l1BaseFee)
 	st[types.L1BlobBaseFeeSlot] = common.BigToHash(fp.blobBaseFee)
@@ -238,18 +365,27 @@ func (fp feeParams) l1BlockStorage(jovianCfg bool) map[common.Hash]common.Hash {
 	binary.BigEndian.PutUint32(slot3[20:24], fp.blobBaseFeeScalar)
 	st[types.L1FeeScalarsSlot] = slot3
 	var slot8 common.Hash
-	if jovianCfg && !fp.isthmusLayout {
-		binary.BigEndian.PutUint16(slot8[18:20], fp.daScalar)
+	switch forkLayout(fork) {
+	case layoutJovian:
+		if !fp.isthmusLayout {
+			binary.BigEndian.PutUint16(slot8[18:20], fp.daScalar)
+		}
+		binary.BigEndian.PutUint32(slot8[20:24], fp.opFeeScalar)
+		binary.BigEndian.PutUint64(slot8[24:32], fp.opFeeConstant)
+	case layoutIsthmus:
+		binary.BigEndian.PutUint32(slot8[20:24], fp.opFeeScalar)
+		binary.BigEndian.PutUint64(slot8[24:32], fp.opFeeConstant)
+	case layoutEcotone:
+		// No operator-fee / DA segment in the Ecotone 164B layout: slot 8
+		// (OperatorFeeParams) stays unseeded -- it is an Isthmus+ concept.
 	}
-	binary.BigEndian.PutUint32(slot8[20:24], fp.opFeeScalar)
-	binary.BigEndian.PutUint64(slot8[24:32], fp.opFeeConstant)
 	if slot8 != (common.Hash{}) {
 		st[types.OperatorFeeParamsSlot] = slot8
 	}
 	return st
 }
 
-func (fp feeParams) attributesTx(label string, jovianCfg bool) inputTx {
+func (fp feeParams) attributesTx(label string, fork string) inputTx {
 	to := l1BlockAddr
 	return inputTx{
 		OpType: "deposit",
@@ -260,7 +396,7 @@ func (fp feeParams) attributesTx(label string, jovianCfg bool) inputTx {
 			IsSystemTx: false,
 			SourceHash: sourceHash("attributes " + label),
 		},
-		Data: fp.attributesData(jovianCfg),
+		Data: fp.attributesData(fork),
 	}
 }
 
@@ -303,7 +439,7 @@ func caseFrame(fork, name, desc string, fp feeParams, gasLimit uint64) inputCase
 	// non-empty (they carry code); nonce 1 models that without giving
 	// L1Block code, keeping "no tx writes L1Block slots" structurally true.
 	pre := types.GenesisAlloc{
-		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(jovianCfg)},
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(fork)},
 		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
 	}
 	return inputCase{
@@ -313,14 +449,156 @@ func caseFrame(fork, name, desc string, fp feeParams, gasLimit uint64) inputCase
 		ParentBeaconBlockRoot: common.HexToHash("0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"),
 		Pre:                   pre,
 		Transactions: []inputTx{
-			fp.attributesTx(fork+"_"+name, jovianCfg),
+			fp.attributesTx(fork+"_"+name, fork),
 		},
 	}
+}
+
+// opForkOrder is the strict OP-Stack fork sequence. upgradeFrame activates
+// EVERY fork strictly after baseFork and up to (and including) activationFork
+// at activationT: real OP chains cannot skip forks -- a fjord->isthmus upgrade
+// must also fire granite+holocene, otherwise the block's extraData stays empty
+// (pre-Holocene) instead of the mandatory 9-byte Holocene form. The base fork
+// itself and all forks before it stay at 0 (already active at genesis).
+var opForkOrder = []string{"ecotone", "fjord", "granite", "holocene", "isthmus", "jovian"}
+
+// upgradeFrame assembles the upgrade-boundary skeleton (spec A2, Task 3):
+// genesis in baseFork, single block (timestamp = genesis+10 = 1010) crossing
+// into activationFork at activationT = 1005 -- the 10-second coupling
+// (1000 < 1005 <= 1010 holds, so the single block is the FIRST block of the
+// new fork). The L1-attributes deposit format switches at the fork boundary
+// (op-geth extractL1GasParams branches on the selector), so the L1Block slot
+// seeding and the deposit calldata are REBUILT under the activation fork's
+// layout -- still from the same feeParams (iron rule: slot <-> calldata).
+func upgradeFrame(baseFork, name, desc string, fp feeParams, gasLimit uint64, activationFork string, activationT uint64) inputCase {
+	c := caseFrame(baseFork, name, desc, fp, gasLimit)
+	c.Pre[l1BlockAddr] = types.Account{Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(activationFork)}
+	c.Transactions[0] = fp.attributesTx(baseFork+"_"+name, activationFork)
+	c.Info.Activations = map[string]uint64{}
+	started := false
+	for _, f := range opForkOrder {
+		if !started {
+			if f == baseFork {
+				started = true
+			}
+			continue
+		}
+		c.Info.Activations[f] = activationT
+		if f == activationFork {
+			break
+		}
+	}
+	if activationFork == "jovian" {
+		// EncodeOptimismExtraData panics on nil minBaseFee for Jovian BLOCKS;
+		// processBlockVector gates minBaseFee on blockTime (Task 3 handoff A),
+		// so a genesis that is pre-Jovian but crosses JovianTime must still
+		// carry genesis.minBaseFee.
+		c.Genesis.MinBaseFee = hd64(0)
+	}
+	// _info.hardfork carries the BLOCK-TIME fork (the upgrade TARGET), matching
+	// its established meaning across every other vector -- "the fork the block
+	// executes under" -- so the C++ differential-gate replayer (which selects
+	// its chain config from _info.hardfork ONLY and never reads activations)
+	// replays the block under the target fork instead of the genesis base fork.
+	// The base fork lives only in the vector FILE name (vectorName) and in the
+	// activations schedule. buildConfigForCase still derives an IDENTICAL chain
+	// config from (hardfork = target, activations): the target-as-base keeps
+	// every fork through the target at 0 and the activations map re-timestamps
+	// exactly the forks that fire at activationT, so op-geth generation output
+	// is byte-for-byte unchanged -- this is a metadata-only edit.
+	c.Info.Hardfork = activationFork
+	return c
 }
 
 func fund(c *inputCase, key byte, amount *big.Int) {
 	c.Pre[addrOfKey(key)] = types.Account{Balance: amount}
 }
+
+// precompileCallTx builds a direct EIP-1559 call to a precompile address
+// (To = the 20-byte precompile address, Data = the precompile input). Field
+// shape mirrors transferTx (cases.go) / buildTx's eip1559 arm (main.go):
+// sender is key 1 (SecretKey), nonce 0 -- precompileFrame funds key 1, and a
+// frame holding several precompile txs must raise nonces at its call site.
+// gas is the full tx gas limit (line-B §4.1: cap-over-limit vectors need
+// gas >= RequiredGas(cap-sized input) so the call reaches the precompile's own
+// cap check instead of OOG-ing first); value defaults to 0.
+func precompileCallTx(addr []byte, data []byte, gas uint64, value uint64) inputTx {
+	k := privKey(1)
+	to := common.BytesToAddress(addr)
+	return inputTx{
+		OpType:               "eip1559",
+		ChainID:              hd256(chainID),
+		Nonce:                hd64(0),
+		To:                   &to,
+		Value:                hd256(new(big.Int).SetUint64(value)),
+		Gas:                  hd64(gas),
+		MaxFeePerGas:         hdu(2_000_000_000), // 2 gwei
+		MaxPriorityFeePerGas: hdu(100_000_000),   // 0.1 gwei
+		Data:                 data,
+		SecretKey:            &k,
+	}
+}
+
+// precompileFrame assembles a single-block precompile case on top of the
+// line-A caseFrame skeleton (genesis knobs, coinbase, beacon root, L1Block
+// slot seeding, L1-attributes deposit tx0). txs are appended after the
+// attributes deposit; sender key 1 is funded eth(100) -- plenty for a ~20M-gas
+// over-limit call at 2 gwei plus its calldata/L1 fee.
+//
+// blockGasLimit is threaded straight into caseFrame's gasLimit -> genesisKnobs
+// GasLimit -> inputCase.Genesis.GasLimit, which processBlockVector
+// (main.go:652) reads verbatim as core.Genesis.GasLimit; the single generated
+// block inherits the genesis gas limit, so a raised value (30M, big_block
+// precedent) is what lets cap-over-limit vectors clear the block-level OOG and
+// actually reach the precompile cap path. Default is 10_000_000 (line-A norm).
+//
+// It returns a caseSpec for Tasks 1-4 to drop into the caseSpecs table (Task 0
+// itself adds no vectors, keeping regen.sh's 41-case count stable; the
+// --probe-precompile dev probe exercises this constructor end-to-end).
+func precompileFrame(fork, name, desc string, txs []inputTx, blockGasLimit uint64) caseSpec {
+	return caseSpec{
+		name:  name,
+		forks: []string{fork},
+		build: func(f string) inputCase {
+			c := caseFrame(f, name, desc, defaultFeeParams(), blockGasLimit)
+			fund(&c, 1, eth(100))
+			c.Transactions = append(c.Transactions, txs...)
+			return c
+		},
+	}
+}
+
+// basePrecompileCase is the shared shape for the base-7 + bn256 add/mul normal
+// vectors (line B Task 1 steps 1-2): fork=isthmus, a single direct EIP-1559
+// call to precompile addr with a VALID input. tx gas 500_000 covers the
+// intrinsic gas (~21.5k) PLUS the precompile's RequiredGas (see the Task 0
+// probe note: a 150-gas tx would OOG at the intrinsic check and never reach
+// the precompile); block gas 10M (precompileFrame default).
+func basePrecompileCase(name, desc string, addr uint, input []byte) caseSpec {
+	return precompileFrame("isthmus", name, desc,
+		[]inputTx{precompileCallTx(addrBytes(addr), input, 500_000, 0)},
+		10_000_000)
+}
+
+// bn256 pairing over-cap tx gas (line B §4.1 / Task 1 brief constraint
+// "tx gas >= max(intrinsic, floor, RequiredGas) + margin"). The tx gas limit
+// is charged intrinsic FIRST (state_transition.go:563), so it must clear
+// intrinsic + RequiredGas or the precompile OOGs before its cap check.
+// RequiredGas = 45000 + 34000×pairs (Istanbul rate; Granite/Jovian defer to
+// it). Measured (Task 1 report, reproducible):
+//
+//	587 pairs (granite/fjord): intrinsic 1,373,448 + RequiredGas 20,003,000
+//	                           = 21,376,448 -> 21,400,000
+//	428 pairs (jovian):        intrinsic 1,007,112 + RequiredGas 14,597,000
+//	                           = 15,604,112 -> 15,700,000
+//
+// The EIP-7623 floor (3.40M / 2.49M) does not bind. EIP-7825's 16.7M MaxTxGas
+// cap does NOT apply: OsakaTime is nil in every OP vector config
+// (buildChainConfig), so rules.IsOsaka is false.
+const (
+	bn256PairOvercapGas587 = 21_400_000
+	bn256PairOvercapGas428 = 15_700_000
+)
 
 // ---------------------------------------------------------------------
 // The 18 cases (14 from the M-B3+M6 plan table + 3 corpus-augmentation
@@ -828,6 +1106,202 @@ var caseSpecs = []caseSpec{
 		c.Transactions = append(c.Transactions,
 			transferTx(1, 0, emptyTouchAddr, big.NewInt(0), 21_000, nil))
 		return c
+	}},
+
+	// ----- Phase 2 line A: formula-boundary cases (Task 3 Step 1) -----
+	// Ecotone/Fjord run at EVMC_CANCUN (PragueTime nilled together with
+	// IsthmusTime): NO 7702/setcode arm, rev = CANCUN. The transfer carries
+	// calldata so the L1 formula is meaningfully exercised (a data-less
+	// transfer would sit on the FastLZ/Ecotone floor and not discriminate).
+
+	{"transfer_basic", []string{"ecotone"}, func(fork string) inputCase {
+		c := caseFrame(fork, "transfer_basic",
+			"Ecotone formula boundary: attributes + EIP-1559 transfer with calldata (activates the Ecotone calldata-gas L1 formula; l1_gas_used > floor)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("ecotone_transfer_basic", 200)))
+		return c
+	}},
+
+	{"contract_create", []string{"ecotone"}, func(fork string) inputCase {
+		// EIP-1559 CREATE: the initcode IS the tx calldata, so the Ecotone
+		// calldata formula charges against it; created address pre-derived into
+		// extra_candidates and its init-phase slot 0x0 into extra_storage.
+		c := caseFrame(fork, "contract_create",
+			"Ecotone formula boundary: attributes + EIP-1559 CREATE (initcode calldata exercises the Ecotone L1 formula)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		k := privKey(1)
+		c.Transactions = append(c.Transactions, inputTx{
+			OpType:               "eip1559",
+			ChainID:              hd256(chainID),
+			Nonce:                hd64(0),
+			Value:                hd256(big.NewInt(0)),
+			Gas:                  hd64(200_000),
+			MaxFeePerGas:         hdu(2_000_000_000),
+			MaxPriorityFeePerGas: hdu(100_000_000),
+			Data:                 createInitCode,
+			SecretKey:            &k,
+		})
+		eipCreated := crypto.CreateAddress(addrOfKey(1), 0)
+		c.ExtraCandidates = []common.Address{eipCreated}
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			eipCreated: {common.BigToHash(big.NewInt(0))},
+		}
+		return c
+	}},
+
+	{"transfer_basic", []string{"fjord"}, func(fork string) inputCase {
+		c := caseFrame(fork, "transfer_basic",
+			"Fjord formula boundary: attributes + EIP-1559 transfer with calldata (activates the FastLZ linear-regression L1 formula; l1_gas_used via estimatedDASizeScaled)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("fjord_transfer_basic", 200)))
+		return c
+	}},
+
+	{"contract_create", []string{"fjord"}, func(fork string) inputCase {
+		c := caseFrame(fork, "contract_create",
+			"Fjord formula boundary: attributes + EIP-1559 CREATE (initcode calldata exercises the FastLZ L1 formula)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		k := privKey(1)
+		c.Transactions = append(c.Transactions, inputTx{
+			OpType:               "eip1559",
+			ChainID:              hd256(chainID),
+			Nonce:                hd64(0),
+			Value:                hd256(big.NewInt(0)),
+			Gas:                  hd64(200_000),
+			MaxFeePerGas:         hdu(2_000_000_000),
+			MaxPriorityFeePerGas: hdu(100_000_000),
+			Data:                 createInitCode,
+			SecretKey:            &k,
+		})
+		eipCreated := crypto.CreateAddress(addrOfKey(1), 0)
+		c.ExtraCandidates = []common.Address{eipCreated}
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			eipCreated: {common.BigToHash(big.NewInt(0))},
+		}
+		return c
+	}},
+
+	// ----- Phase 2 line A: upgrade-boundary cases (Task 3 Step 2, spec A2) -----
+	// chainConfigSpec expressed via _info.activations (base = _info.hardfork).
+	// 10-second coupling: genesis timestamp 1000 (= T-5), blockTime 1010
+	// (= genesis+10 = T+5) -- the single block is the FIRST block of the new
+	// fork (1000 < 1005 <= 1010 holds).
+
+	{"upgrade_fjord_activation", []string{"ecotone"}, func(fork string) inputCase {
+		// L1 formula switch: Ecotone calldata formula -> Fjord FastLZ. The
+		// block (timestamp 1010) is Fjord; l1_gas_used reflects the FastLZ
+		// estimatedDASizeScaled model instead of bedrockCalldataGasUsed.
+		c := upgradeFrame("ecotone", "upgrade_fjord_activation",
+			"upgrade boundary ecotone->fjord: genesis Ecotone, single block crosses FjordTime; calldataGas -> FastLZ formula switch observable in l1_gas_used",
+			defaultFeeParams(), 10_000_000, "fjord", 1005)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("upgrade_fjord_activation", 200)))
+		return c
+	}},
+
+	{"upgrade_isthmus_activation", []string{"fjord"}, func(fork string) inputCase {
+		// Operator fee introduced: genesis Fjord, single block crosses
+		// IsthmusTime. Non-zero operator fee params -> the operator fee is
+		// charged for the first time (gasUsed*scalar/1e6 + constant, Isthmus
+		// formula), and the receipt emits the operator field group.
+		fp := defaultFeeParams()
+		fp.opFeeScalar = 5000
+		fp.opFeeConstant = 7777
+		c := upgradeFrame("fjord", "upgrade_isthmus_activation",
+			"upgrade boundary fjord->isthmus: genesis Fjord, single block crosses IsthmusTime; operator fee first charged (Isthmus formula, non-zero scalar/constant)",
+			fp, 10_000_000, "isthmus", 1005)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 100_000, junkData("upgrade_isthmus_activation", 64)))
+		return c
+	}},
+
+	{"upgrade_jovian_activation", []string{"isthmus"}, func(fork string) inputCase {
+		// DA fields appear: genesis Isthmus, single block crosses JovianTime.
+		// Deposits-ONLY + Isthmus-length/selector attributes (fp.isthmusLayout):
+		// op-geth CalcDAFootprint (rollup_cost.go:568-575) hard-requires this
+		// shape for the first Jovian block (176B -> no non-deposit txs -> DA
+		// footprint 0). Header BlobGasUsed = 0.
+		fp := defaultFeeParams()
+		fp.isthmusLayout = true
+		c := upgradeFrame("isthmus", "upgrade_jovian_activation",
+			"upgrade boundary isthmus->jovian: genesis Isthmus, single block crosses JovianTime; deposits-only with Isthmus-length attributes (CalcDAFootprint activation form), DA fields appear in header semantics",
+			fp, 10_000_000, "jovian", 1005)
+		return c
+	}},
+
+	// ----- Phase 2 line B: precompile vectors (Task 1, 13 cases) -----
+	// Step 1: base-7 normal vectors (fork=isthmus, tx gas 500_000). Each input
+	// is genuinely valid (probe-confirmed) so the precompile returns success.
+	basePrecompileCase("precompile_ecrecover",
+		"ecrecover (0x01): real secp256k1 signature recovering to key 1; hash = sha256(\"fisco line-b ecrecover\")",
+		preEcRecover, validEcrecoverInput),
+	basePrecompileCase("precompile_sha256",
+		"sha256 (0x02): 4-byte input 0xdeadbeef",
+		preSha256, deadbeefInput),
+	basePrecompileCase("precompile_ripemd160",
+		"ripemd160 (0x03): 4-byte input 0xdeadbeef",
+		preRipemd160, deadbeefInput),
+	basePrecompileCase("precompile_identity",
+		"identity (0x04): 4-byte input 0xdeadbeef (returns it verbatim)",
+		preIdentity, deadbeefInput),
+	basePrecompileCase("precompile_expmod",
+		"modexp (0x05): 96B zero-header (baseLen=expLen=modLen=0) -> success; empty output (EIP-198 baseLen==modLen==0 rule)",
+		preExpMod, expmodZeroHeader),
+	basePrecompileCase("precompile_blake2f",
+		"blake2f (0x09): EIP-152 vector 5 (rounds=12, h=IV^0x01010040, m=\"abc\", final=1)",
+		preBlake2f, validBlake2fInput),
+	basePrecompileCase("precompile_point_evaluation",
+		"kzg point evaluation (0x0a): valid EIP-4844 proof (192B, validKZGInput)",
+		prePointEval, validKZGInput()),
+
+	// Step 2: bn256 add/mul normal vectors (fork=isthmus, tx gas 500_000).
+	basePrecompileCase("precompile_bn256add",
+		"bn256 add (0x06): two valid G1 points (128B input; RequiredGas 150)",
+		preBn256Add, bn256AddInput),
+	basePrecompileCase("precompile_bn256mul",
+		"bn256 scalar mul (0x07): valid G1 + scalar 0x02 (96B input; RequiredGas 6000)",
+		preBn256Mul, bn256MulInput),
+
+	// Step 3: bn256 pairing 4-cap matrix (cap discriminators, block gas 30M).
+	{"precompile_bn256pair_norm", []string{"isthmus"}, func(fork string) inputCase {
+		// One valid pair (192B): well under the granite cap (112687) that is
+		// active at isthmus; pairing check runs and returns (status 1).
+		return precompileFrame(fork, "precompile_bn256pair_norm",
+			"bn256 pairing (0x08): one valid pair (192B) succeeds at isthmus (granite-cap active, 192 << 112687)",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(1), 500_000, 0)},
+			10_000_000).build(fork)
+	}},
+	{"precompile_bn256pair_overcap", []string{"granite"}, func(fork string) inputCase {
+		// 587 pairs = 112704B > granite cap 112687 -> bn256PairingGranite.Run
+		// returns errBadPairingInputSize AFTER charging RequiredGas (20,003,000)
+		// -> status 0, ALL call gas consumed (gasUsed = tx gas). tx gas clears
+		// intrinsic + RequiredGas so the CAP check (not an OOG) is what fires.
+		return precompileFrame(fork, "precompile_bn256pair_overcap",
+			"bn256 pairing over granite cap: 587 pairs (112704B > 112687) rejected with errBadPairingInputSize after charging RequiredGas",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(587), bn256PairOvercapGas587, 0)},
+			30_000_000).build(fork)
+	}},
+	{"precompile_bn256pair_overcap", []string{"jovian"}, func(fork string) inputCase {
+		// 428 pairs = 82176B > jovian cap 81984 (and <= granite's 112687):
+		// DISCRIMINATES jovian's tighter cap from granite's. Same cap-path
+		// semantics as granite (errBadPairingInputSize, status 0, all gas).
+		return precompileFrame(fork, "precompile_bn256pair_overcap",
+			"bn256 pairing over jovian cap: 428 pairs (82176B > 81984, <= granite 112687) rejected with errBadPairingInputSize (tighter cap than granite)",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(428), bn256PairOvercapGas428, 0)},
+			30_000_000).build(fork)
+	}},
+	{"precompile_bn256pair_large_success", []string{"fjord"}, func(fork string) inputCase {
+		// No cap at fjord (bn256PairingIstanbul): 587 VALID pairs SUCCEED
+		// (status 1, 32B output). Proves the 112687B cap appears only at
+		// granite+ (same input as the granite over-cap case diverges).
+		return precompileFrame(fork, "precompile_bn256pair_large_success",
+			"bn256 pairing large input: 587 valid pairs (112704B) SUCCEED at fjord (no cap yet; granite+ introduces the 112687B cap)",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(587), bn256PairOvercapGas587, 0)},
+			30_000_000).build(fork)
 	}},
 }
 

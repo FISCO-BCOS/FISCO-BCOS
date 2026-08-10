@@ -7,11 +7,12 @@
 # prose says "26"; the table's fork column enumerates 25 -- the table is
 # binding (see generator/README.md "Corpus enumeration").
 #
-# Current total (2026-07-12, defer-sweep batch): 33 entries (18 cases x
-# fork matrix). The 25-vector count above is the original (M-B3+M6) batch
-# and is retained as a historical record, not rewritten; see the "Corpus
-# augmentation" (+6 -> 31) and "Defer-sweep" (+2 -> 33) notes below for
-# the deltas that bring the manifest to its present 33-entry state.
+# Current total (2026-08-10): 41 entries (34 corpus + 7 Phase-2 线 A
+# ecotone/fjord formula + upgrade boundaries). The 25-vector count above is
+# the original (M-B3+M6) batch and is retained as a historical record, not
+# rewritten; see the "Corpus augmentation" (+6 -> 31), "Defer-sweep"
+# (+2 -> 33), the appended 34th-intake note, and the Task-4 (+7 -> 41) note
+# below for the deltas that bring the manifest to its present 41-entry state.
 isthmus_deposit_only.json
 jovian_deposit_only.json
 isthmus_transfer_basic.json
@@ -53,9 +54,68 @@ jovian_setcode_7702_skips.json
 # then EIP-161 touch-deletes it at block commit.
 isthmus_empty_account_cleanup.json
 jovian_empty_account_cleanup.json
-# B-7 order-observable batch (W5): 1 single-fork (isthmus) case = +1 -> 34
-# vectors. Written FIRST (before generation), same discipline as above. The
-# reader contract CALLs the EIP-4788 GET path and SSTOREs the returned root,
-# so the stored root / tx status discriminates whether the block's 4788 system
-# call runs before or after user txs.
+# 34th vector intake (2026-08-10, user decision): the W5 commit
+# 205ad9573 added this case to cases.go:538 but it was emitted by
+# --write-cases and never manifested. Appended FIRST per manifest
+# discipline (entries written before generation).
 isthmus_system_call_order_observable.json
+# Phase-2 线 A genesis fork 矩阵（Task 4, 2026-08-10）：+7 -> 41 vectors.
+# 公式边界（formula-boundary）：ecotone/fjord 纯 fork 的 transfer/contract_create
+# 基础对（L1 费公式在 ecotone→fjord 切换：Ecotone 动态标量 vs Fjord 分段常量，
+# 均无 operator-fee/DA 段；属性 calldata 均 164B Ecotone 布局）。
+ecotone_transfer_basic.json
+ecotone_contract_create.json
+fjord_transfer_basic.json
+fjord_contract_create.json
+# 升级边界（upgrade-boundary）：FILENAME 前缀 = genesis 基础 fork，而每个向量的
+# _info.hardfork = 块时 TARGET fork（有意为之：replayer 按 _info.hardfork 选配置；
+# 基础 fork 可从 _info.activations 恢复）。属性布局/extraData 由块时 fork 决定。
+ecotone_upgrade_fjord_activation.json
+fjord_upgrade_isthmus_activation.json
+isthmus_upgrade_jovian_activation.json
+# Phase-2 线 B 预编译矩阵（Task 5, 2026-08-11）：+36 -> 77 vectors.
+# 实测枚举：generator 输出 77 case（41 旧 + 36 新），与 plan 的 34 新增/75 总数
+# 不符（plan 算术 13+14+4+5=36 为实，41+34=75 是笔误）——以生成器实测为准。
+# 基础 7（ecrecover/sha256/ripemd160/identity/expmod/blake2f/point_evaluation）、
+# bn256 5（add/mul/pair_norm + granite/jovian overcap + fjord large_success）、
+# BLS12-381 14（g1add/g1msm/g2add/g2msm/pairing/map_g1/map_g2 + 3 isthmus overcap
+# + 3 jovian overcap + fjord noop）、RIP-7212 4（valid/invalid/wronglen + ecotone
+# noop）、wrapper CALL 语义 5（63of64/returndata/value_revert/value_overcap/eip7702）。
+# wrapper case 名已修复单 fork 前缀（原 Task 4 实现为双前缀 ist…_ist…，见
+# cases_precompile_wrapper.go；修复后与 <fork>_<name>.json 不变量一致）。
+ecotone_precompile_p256_noop.json
+fjord_precompile_bls_noop.json
+fjord_precompile_bn256pair_large_success.json
+fjord_precompile_p256_invalid.json
+fjord_precompile_p256_valid.json
+fjord_precompile_p256_wronglen.json
+granite_precompile_bn256pair_overcap.json
+isthmus_precompile_blake2f.json
+isthmus_precompile_bls_g1add.json
+isthmus_precompile_bls_g1msm.json
+isthmus_precompile_bls_g1msm_overcap.json
+isthmus_precompile_bls_g2add.json
+isthmus_precompile_bls_g2msm.json
+isthmus_precompile_bls_g2msm_overcap.json
+isthmus_precompile_bls_map_g1.json
+isthmus_precompile_bls_map_g2.json
+isthmus_precompile_bls_pairing.json
+isthmus_precompile_bls_pairing_overcap.json
+isthmus_precompile_bn256add.json
+isthmus_precompile_bn256mul.json
+isthmus_precompile_bn256pair_norm.json
+isthmus_precompile_ecrecover.json
+isthmus_precompile_expmod.json
+isthmus_precompile_identity.json
+isthmus_precompile_point_evaluation.json
+isthmus_precompile_ripemd160.json
+isthmus_precompile_sha256.json
+isthmus_precompile_wrap_63of64.json
+isthmus_precompile_wrap_eip7702.json
+isthmus_precompile_wrap_returndata.json
+jovian_precompile_bls_g1msm_overcap.json
+jovian_precompile_bls_g2msm_overcap.json
+jovian_precompile_bls_pairing_overcap.json
+jovian_precompile_bn256pair_overcap.json
+jovian_precompile_wrap_value_overcap.json
+jovian_precompile_wrap_value_revert.json

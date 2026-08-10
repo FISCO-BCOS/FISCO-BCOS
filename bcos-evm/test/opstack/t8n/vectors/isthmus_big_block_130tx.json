@@ -1807,6 +1807,7 @@
           "gasUsed": "0x5ac8",
           "cumulativeGasUsed": "0x5ac8",
           "logsCount": 0,
+          "output": "0x",
           "_op_deposit_nonce": "0x0",
           "_op_deposit_receipt_version": "0x1"
         },
@@ -1816,7 +1817,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xacd0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1824,7 +1831,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xfed8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1832,7 +1845,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x150e0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1840,7 +1859,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1a2e8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1848,7 +1873,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1f4f0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1856,7 +1887,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x246f8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1864,7 +1901,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x29900",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1872,7 +1915,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x2eb08",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1880,7 +1929,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x33d10",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1888,7 +1943,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x38f18",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1896,7 +1957,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x3e120",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1904,7 +1971,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x43328",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1912,7 +1985,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x48530",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1920,7 +1999,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x4d738",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1928,7 +2013,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x52940",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1936,7 +2027,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x57b48",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1944,7 +2041,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x5cd50",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1952,7 +2055,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x61f58",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1960,7 +2069,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x67160",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1968,7 +2083,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x6c368",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1976,7 +2097,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x71570",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1984,7 +2111,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x76778",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -1992,7 +2125,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x7b980",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2000,7 +2139,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x80b88",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2008,7 +2153,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x85d90",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2016,7 +2167,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x8af98",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2024,7 +2181,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x901a0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2032,7 +2195,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x953a8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2040,7 +2209,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x9a5b0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2048,7 +2223,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x9f7b8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2056,7 +2237,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xa49c0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2064,7 +2251,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xa9bc8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2072,7 +2265,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xaedd0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2080,7 +2279,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xb3fd8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2088,7 +2293,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xb91e0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2096,7 +2307,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xbe3e8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2104,7 +2321,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xc35f0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2112,7 +2335,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xc87f8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2120,7 +2349,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xcda00",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2128,7 +2363,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xd2c08",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2136,7 +2377,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xd7e10",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2144,7 +2391,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xdd018",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2152,7 +2405,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xe2220",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2160,7 +2419,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xe7428",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2168,7 +2433,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xec630",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2176,7 +2447,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xf1838",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2184,7 +2461,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xf6a40",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2192,7 +2475,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xfbc48",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2200,7 +2489,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x100e50",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2208,7 +2503,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x106058",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2216,7 +2517,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x10b260",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2224,7 +2531,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x110468",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2232,7 +2545,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x115670",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2240,7 +2559,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x11a878",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2248,7 +2573,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x11fa80",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2256,7 +2587,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x124c88",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2264,7 +2601,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x129e90",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2272,7 +2615,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x12f098",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2280,7 +2629,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1342a0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2288,7 +2643,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1394a8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2296,7 +2657,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x13e6b0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2304,7 +2671,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1438b8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2312,7 +2685,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x148ac0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2320,7 +2699,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x14dcc8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2328,7 +2713,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x152ed0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2336,7 +2727,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1580d8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2344,7 +2741,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x15d2e0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2352,7 +2755,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1624e8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2360,7 +2769,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1676f0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2368,7 +2783,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x16c8f8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2376,7 +2797,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x171b00",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2384,7 +2811,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x176d08",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2392,7 +2825,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x17bf10",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2400,7 +2839,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x181118",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2408,7 +2853,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x186320",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2416,7 +2867,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x18b528",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2424,7 +2881,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x190730",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2432,7 +2895,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x195938",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2440,7 +2909,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x19ab40",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2448,7 +2923,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x19fd48",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2456,7 +2937,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1a4f50",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2464,7 +2951,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1aa158",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2472,7 +2965,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1af360",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2480,7 +2979,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1b4568",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2488,7 +2993,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1b9770",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2496,7 +3007,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1be978",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2504,7 +3021,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1c3b80",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2512,7 +3035,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1c8d88",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2520,7 +3049,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1cdf90",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2528,7 +3063,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1d3198",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2536,7 +3077,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1d83a0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2544,7 +3091,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1dd5a8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2552,7 +3105,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1e27b0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2560,7 +3119,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1e79b8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2568,7 +3133,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1ecbc0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2576,7 +3147,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1f1dc8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2584,7 +3161,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1f6fd0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2592,7 +3175,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x1fc1d8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2600,7 +3189,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x2013e0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2608,7 +3203,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x2065e8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2616,7 +3217,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x20b7f0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2624,7 +3231,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x2109f8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2632,7 +3245,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x215c00",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2640,7 +3259,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x21ae08",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2648,7 +3273,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x220010",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2656,7 +3287,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x225218",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2664,7 +3301,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x22a420",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2672,7 +3315,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x22f628",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2680,7 +3329,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x234830",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2688,7 +3343,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x239a38",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2696,7 +3357,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x23ec40",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2704,7 +3371,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x243e48",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2712,7 +3385,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x249050",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2720,7 +3399,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x24e258",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2728,7 +3413,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x253460",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2736,7 +3427,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x258668",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2744,7 +3441,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x25d870",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2752,7 +3455,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x262a78",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2760,7 +3469,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x267c80",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2768,7 +3483,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x26ce88",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2776,7 +3497,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x272090",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2784,7 +3511,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x277298",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2792,7 +3525,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x27c4a0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2800,7 +3539,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x2816a8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2808,7 +3553,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x2868b0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2816,7 +3567,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x28bab8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2824,7 +3581,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x290cc0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2832,7 +3595,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x295ec8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2840,7 +3609,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x29b0d0",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         },
         {
           "type": "0x2",
@@ -2848,7 +3623,13 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0x2a02d8",
           "logsCount": 0,
-          "_op_l1_fee": "0xf4eb688f4"
+          "output": "0x",
+          "_op_l1_fee": "0xf4eb688f4",
+          "_op_l1_gas_price": "0x6fc23ac00",
+          "_op_l1_blob_base_fee": "0xf4240",
+          "_op_l1_gas_used": "0x640",
+          "_op_l1_base_fee_scalar": "0x558",
+          "_op_l1_blob_base_fee_scalar": "0xc5fc5"
         }
       ]
     }
