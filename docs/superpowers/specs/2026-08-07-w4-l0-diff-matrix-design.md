@@ -79,7 +79,7 @@ W4 把这些整合成 `DIVERGENCES.md`：7 阶段 × 锚点的三态判定清单
 ### 4.4 结构性差异（架构层）
 
 - 块校验位置（执行后承诺比对 vs VerifyHeader/ValidateBody）
-- 双执行器并存（OpstackExecutor.h vs executeOpBlock 单路径）
+- 双执行器并存（`opstack-executor/OpstackExecutor.h` v2 未装配 vs `OpSchedulerImpl::executeOpBlock` 单路径）
 - 索引隔离（SYS_HASH_2_TX 故意不写）
 - PBFT 双执行防护（throw 哑桩）
 

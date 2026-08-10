@@ -45,7 +45,7 @@
 | `OpBlockExecute.cpp:85-91` 首笔 deposit | `:112-116` | 同上文件读 :112-116 |
 | `OpBlockExecute.cpp:115/:165` blockGasLeft | `:143/:198` | 同上文件读 :143/:198 |
 | `OpBlockExecute.cpp:128` loadOpFeeParams | `:157` | `grep -n "loadOpFeeParams" bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp` |
-| `OpBlockExecute.cpp:130-152` DA calldata | `:164-180`（JovianL1AttributesLen=178，提取在 :176-178） | 同上文件读 :164-180 |
+| `OpBlockExecute.cpp:130-152` DA calldata | `:164-180`（JovianL1AttributesLen=178，提取在 :177-179，W4-B off-by-1 修正） | 同上文件读 :164-180 |
 | `OpTransition.cpp:143/:186-191` opTransition/vault | `:237`（opTransition）/`:295-300`（vault 路由） | `grep -n "opTransition\|OP_BASE_FEE_VAULT" bcos-evm/bcos-evm/opstack/OpTransition.cpp` |
 | `OpSchedulerImpl.h:857` decodeOneRawTx | `:855` | `grep -n "decodeOneRawTx" bcos-evm/bcos-evm/engine/OpSchedulerImpl.h` |
 | `EngineServiceImpl.cpp:233-239` | def `:191`；Jovian max 逻辑 :233-240 | `grep -n "calcOpBaseFee" engine/bcos-engine/EngineServiceImpl.cpp` |
@@ -120,8 +120,8 @@ Expected: 4 条 grep 全命中；commit 成功。
 
 | 锚点 | FISCO 锚点 | op-geth 锚点 | 判定 | 证据 | 状态 |
 |---|---|---|---|---|---|
-| ExecutionPayload | `Types.h:89-130` | `types.go:252` DecodeTransactions | 等价 | 结构一致 | 已确认 |
-| typed tx 解码 | `OpSchedulerImpl.h:855` decodeOneRawTx | `transaction.go:212` decodeTyped | 等价 | 分派覆盖 0x7E/0x01/0x02/0x04 | 已确认 |
+| ExecutionPayload | `bcos-framework/engine/Types.h:89-130` | `beacon/engine/types.go:252` DecodeTransactions | 等价 | 结构一致 | 已确认 |
+| typed tx 解码 | `bcos-evm/engine/OpSchedulerImpl.h:855` decodeOneRawTx | `core/types/transaction.go:212` decodeTyped | 等价 | 分派覆盖 0x7E/0x01/0x02/0x04 | 已确认 |
 | deposit 转换 | `OpTransition.cpp:456-457` | `deposit_tx.go:27-46` | 等价 | 字段映射一致 | 已确认 |
 | 差异点：三次类型翻译 | — | — | 结构性差异 | FISCO 双端三次翻译 vs op-geth 一次 | 已确认 |
 
@@ -129,27 +129,27 @@ Expected: 4 条 grep 全命中；commit 成功。
 
 | 锚点 | FISCO | op-geth | 判定 | 证据 | 状态 |
 |---|---|---|---|---|---|
-| 注册 | `EndpointsMapping.cpp:68-71` | `api.go:695/703/724/743/770` | 结构性差异 | FISCO V4 桩 | 已确认 |
-| 分派 | `EngineEndpoint.cpp:177-221` | `api.go:796` newPayload | 等价 | 唯一路径 | 已确认 |
-| OP 校验 | `EngineServiceImpl.cpp:279/:299/:318` | `types.go:289/:320-327` | 等价 | raw/withdrawalsRoot 必填 | 已确认 |
+| 注册 | `bcos-rpc/.../endpoints/EndpointsMapping.cpp:68-71` | `eth/catalyst/api.go:695/703/724/743/770` | 结构性差异 | FISCO V4 桩、V5 缺失 | 已确认 |
+| 分派 | `bcos-rpc/.../endpoints/EngineEndpoint.cpp:177-221` | `eth/catalyst/api.go:796` newPayload | 等价 | 唯一路径 | 已确认 |
+| OP 校验 | `EngineServiceImpl.cpp:279/:294/:313` | `beacon/engine/types.go:289/:320-327` | 等价 | rawTransactions 必填 :294、withdrawalsRoot 必填 :313（W4-B 修正 :299/:318） | 已确认 |
 | 差异点：校验位置 | validateOpNewPayloadRequest | checkOptimismPayload | 结构性差异 | 执行后 vs catalyst 层 | 已确认 |
 
 - [ ] **Step 4: 阶段 2 矩阵（块校验）**
 
 | 锚点 | FISCO | op-geth | 判定 | 证据 | 状态 |
 |---|---|---|---|---|---|
-| 块校验主体 | `EngineServiceImpl.h:1094-1147` 承诺比对 | `block_validator.go:51` ValidateBody | 结构性差异 | 执行后 vs 预校验 | 已确认 |
-| extraData | 无对应 | `eip1559_optimism.go:22` | 结构性差异 | FISCO 无独立 | 待W5 |
-| base fee | `calcOpBaseFee` def `EngineServiceImpl.cpp:191` | `eip1559.go:64/:99-107` | 等价 | Jovian max 一致 | 事实达成 |
-| DA footprint ==≤GasLimit | `EngineServiceImpl.cpp:442-444` | `block_validator.go:119-134` | 等价 | 均实现 | 事实达成 |
-| 单侧：DA 拒绝路径 | 无对应（未触发） | `block_validator.go:131-132` | 结构性差异 | 无拒绝用例 | 待W5 |
+| 块校验主体 | `EngineServiceImpl.h:1094-1147` 承诺比对 | `block_validator.go:51` ValidateBody | 结构性差异 | 执行后承诺比对 vs 预校验（§2 结构性差异） | 已确认 |
+| extraData | `EngineServiceImpl.cpp:383-421`（validateOpNewPayloadRequest 内 Isthmus 9B/Jovian 17B 形状校验） | `eip1559_optimism.go:22` | 等价 | FISCO 已实现（对齐 ValidateHolocene/JovianExtraData）；W4-C 证伪「无对应」 | 已确认 |
+| base fee | `calcOpBaseFee` def `EngineServiceImpl.cpp:191`；Jovian max 分支 :233-240 | `eip1559.go:64/:99-107` | 等价 | 一般路径经 33 向量 encodeOpHeader 字节级佐证；**Jovian max 分支属 B-5c（无 jovian 链式对）** | 待W5 |
+| DA footprint ==≤GasLimit | `EngineServiceImpl.cpp:442-444` | `block_validator.go:119-134` | 等价 | 均实现（jovian_da_mix DA=593600 字节级） | 事实达成 |
+| 单侧：DA 拒绝路径 | `EngineServiceImpl.cpp:442-444`（已实现未触发） | `block_validator.go:131-132` | 结构性差异 | W6 全 VALID 正向向量，`blobGasUsed>gasLimit` 拒绝未触发（B-5b） | 待W5 |
 
-> ⚠️ base fee 的 FISCO 锚点是 `EngineServiceImpl.cpp:191`（def）——§1 写 :233-239 是 Jovian max 逻辑，两者都要在证据列区分。
+> ⚠️ base fee 的 FISCO 锚点是 `EngineServiceImpl.cpp:191`（def）——§1 写 :233-239 是 Jovian max 逻辑，两者都要在证据列区分；Jovian max 分支状态与 B-5c 保持一致（待W5）。
 
 - [ ] **Step 5: 自验 + Commit**
 
 ```bash
-# 抽查 3 个阶段 0-2 锚点在双端存在
+# 抽查 2 个阶段 0-2 锚点在双端存在
 grep -n "ExecutionPayload" bcos-framework/bcos-framework/engine/Types.h
 grep -n "func.*newPayload" ~/octo/code/blockchain-impl/op-geth/eth/catalyst/api.go
 git add bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md
@@ -177,7 +177,7 @@ Expected: grep 命中；commit 成功。
 | 块执行入口 | `OpBlockExecute.cpp:99` processOpBlock | `state_processor.go:62` Process | 等价 | 首笔 deposit 强制（:112-116） | 已确认 |
 | 首笔 L1 attributes | `OpBlockExecute.cpp:112-116` | `state_transition.go:346-361` preCheck | 等价 | D-1 交易级 | 已确认 |
 | blockGasLeft 递减 | `OpBlockExecute.cpp:143/:198` | `state_transition.go:282` buyGas | 等价 | B-4 相关 | 事实达成 |
-| fee 惰性加载 | `OpBlockExecute.cpp:157` loadOpFeeParams | `rollup_cost.go:151/215/353` | 等价 | D-4 相关 | 已确认 |
+| fee 惰性加载 | `OpBlockExecute.cpp:157` loadOpFeeParams | `core/types/rollup_cost.go:151/:214/:347` | 等价 | D-4 相关（静态等价；语义等价待动态证实，W4-C） | 待W5 |
 | validate | `OpTransition.cpp:328` opValidate | `state_transition.go:346` preCheck | 等价 | D-1 | 已确认 |
 | fee 路由至 vaults | `OpTransition.cpp:295-300` | `state_transition.go:711-734` | 等价 | C-5 校正后 | 已确认 |
 | deposit 执行 | `OpTransition.cpp:441` runDeposit | `state_transition.go:473-511` | 等价 | D-1 | 已确认 |
@@ -220,7 +220,7 @@ Expected: 命中 + commit 成功。
 
 - [ ] **Step 1: 阶段 5-6 矩阵**
 
-阶段 5（落库）：`registerOpBlock`（EngineServiceImpl.h:1191；SYS_NUMBER_2_HASH :1198、SYS_HASH_2_NUMBER :1204、SYS_NUMBER_2_BLOCK_HEADER :1218、SYS_HASH_2_RECEIPT :1287、SYS_ETH_HASH_2_RAWTX :1301）vs `writeBlockWithState`（blockchain.go:1650/:1664-1665）——判定：结构性差异（FISCO 故意不写 SYS_HASH_2_TX，:1226-1253 论证）→ 已确认。附 `LedgerMethods.h:237` UB 注。
+阶段 5（落库）：`registerOpBlock`（EngineServiceImpl.h:1191；SYS_NUMBER_2_HASH :1199、SYS_HASH_2_NUMBER :1206、SYS_NUMBER_2_BLOCK_HEADER :1219、SYS_HASH_2_RECEIPT :1289、SYS_ETH_HASH_2_RAWTX :1303，W4-B/D 行号修正）vs `writeBlockWithState`（blockchain.go:1650/:1664-1665）——判定：结构性差异（FISCO 故意不写 SYS_HASH_2_TX，:1226-1253 论证）→ 已确认。附 `LedgerMethods.h:237` UB 注。
 
 阶段 6（输出）：block hash 承诺比对（`EngineServiceImpl.h:799-803` + :1094-1147）vs `Header.Hash()`（block.go:124）——判定：等价 → 已确认。output root 不在 EL 范围 → 标注。
 
@@ -228,7 +228,7 @@ Expected: 命中 + commit 成功。
 
 结构性差异（4 项，来自 §2 结构性差异节，用校正锚点）：
 - 块校验位置（承诺比对 vs ValidateBody）
-- 双执行器并存（`OpstackExecutor.h` vs executeOpBlock 单路径）
+- 双执行器并存（`opstack-executor/OpstackExecutor.h` v2 未装配 vs `OpSchedulerImpl::executeOpBlock` 单路径，W4-A/D 修正路径）
 - 索引隔离（SYS_HASH_2_TX 不写）
 - PBFT 双执行防护（`OpSchedulerImpl.h:987/:993` throw 哑桩）
 
@@ -236,11 +236,12 @@ D 项（§2 已确认，直接纳入）：D-1 交易级逐位等价 / D-2 Karst 
 
 - [ ] **Step 3: 差异点归位**
 
-按 §4.2 归位规则，把 comparison doc §1 每阶段「差异点」段落逐一映射，确认无孤儿：
+按 §4.2 归位规则，把 comparison doc §1 **全部 7 阶段**「差异点」段落逐一映射（⚠️ W4-A：枚举必须含阶段2，对照 comparison doc §1 逐段复核），确认无孤儿：
 - 阶段0 三次类型翻译 → 已入 Task 2 阶段 0 表（结构性差异）
 - 阶段1 校验位置 → 已入 Task 2 阶段 1 表（结构性差异）
+- 阶段2 块校验完整度（op-geth VerifyHeader/ValidateBody vs FISCO 承诺比对）→ 已入 Task 2 阶段 2 表（块校验主体行，结构性差异）
 - 阶段3 #1 快照契约 → 已入 Task 3（D-4）
-- 阶段3 #2 fee 惰性加载 → 已入 Task 3（等价，已确认）
+- 阶段3 #2 fee 惰性加载 → 已入 Task 3（等价，状态待W5）
 - 阶段3 #3 DA 不进 tx 级 → D-3
 - 阶段4 #1/#2/#3 → B-1/B-2/B-3
 - 阶段5 → 结构性差异（索引隔离）
@@ -256,13 +257,13 @@ D 项（§2 已确认，直接纳入）：D-1 交易级逐位等价 / D-2 Karst 
 |---|---|---|
 | B-1 | 等价 | 已修一致 |
 | B-2 | 等价 | 事实达成 |
-| B-3 | 已知分叉（2 delta） | 已确认 |
+| B-3 | 已知分叉（2 delta） | 已确认（动态 manifest 待 W5/RPC 层对拍） |
 | B-4 | 等价 | 事实达成 |
 | B-5a | 等价 | 事实达成 |
 | B-5b | 结构性差异-待验 | 待W5 |
 | B-5c | 等价-待验 | 待W5 |
 | B-6 | 等价 | 已确认 |
-| B-7 | 等价（效果已证） | 待W5（顺序可观测性） |
+| B-7 | 等价（效果已证） | 待W5（仅顺序可观测性） |
 | B-8 | 等价 | 已修一致 |
 
 每行加依据列（锚点 + 一条证据）。
@@ -292,28 +293,41 @@ Expected: 命中 + commit 成功。
 
 - [ ] **Step 1: DIVERGENCES.md 一致性终检**
 
-逐节检查：7 阶段全有表、每行三态 + 证据 + 状态齐全、B 台账 10 行（B-5 拆 3）、无「未判」残留（待W5 只作状态）、单侧行有「无对应」约定。缺则补。
+逐节检查：7 阶段全有表、每行三态 + 证据 + 状态齐全、B 台账 10 行（B-5 拆 3）、无「未判」残留（待W5 只作状态）、单侧行有「无对应」约定、**差异点归位对照表存在且覆盖全部 7 阶段差异点**（对照 comparison doc §1 逐段复核，W4-A 补）——缺则补。
 
 - [ ] **Step 2: comparison doc §2 加指向**
 
-在 `docs/opstack-opgeth-e2e-comparison.md` §2 标题下加：
+在 `docs/opstack-opgeth-e2e-comparison.md` §2 标题下加（⚠️ W4-A：摘要须为 B 项状态表格，非单行内联）：
 
 ```markdown
 > **完整差异矩阵见** `bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md`（W4，L0 静态对拍）。
-> **B 项最新状态**：B-1 已修一致 / B-2 事实达成 / B-3 已确认 / B-4 事实达成 / B-5a 事实达成 / B-5b 待W5 / B-5c 待W5 / B-6 已确认 / B-7 待W5（顺序可观测性）/ B-8 已修一致
+> **B 项最新状态**：
+
+| B 项 | 状态 |
+|---|---|
+| B-1 | 已修一致 |
+| B-2 | 事实达成 |
+| B-3 | 已确认（动态 manifest 待 W5） |
+| B-4 | 事实达成 |
+| B-5a | 事实达成 |
+| B-5b | 待W5 |
+| B-5c | 待W5 |
+| B-6 | 已确认 |
+| B-7 | 待W5（仅顺序可观测性） |
+| B-8 | 已修一致 |
 ```
 
 - [ ] **Step 3: 自验 + Commit**
 
 ```bash
-# 终检：DIVERGENCES 章节数 + B 台账行数
+# 终检：DIVERGENCES 章节数 + B 台账行数（⚠️ W4-A：B- 计数限定在 B 台账章节内，防归位对照表的 B- 行误报）
 grep -c "^## " bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md   # 应 >= 10
-grep -c "^| B-" bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md   # 应 == 10
+awk '/^## .*B 项台账/,/^## /' bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md | grep -c "^| B-"   # 应 == 10
 git add bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md docs/opstack-opgeth-e2e-comparison.md
 git commit --no-verify -m "docs(w4): finalize DIVERGENCES.md + comparison doc §2 pointer + B-item summary"
 ```
 
-Expected: 章节数 >= 10、B 台账行 == 10；commit 成功。
+Expected: 章节数 >= 10、B 台账行（限定章节内）== 10；commit 成功。
 
 ---
 
