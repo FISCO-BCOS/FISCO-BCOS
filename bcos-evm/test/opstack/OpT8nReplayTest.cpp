@@ -9,8 +9,9 @@
 //   A) 目录 *.json 文件名集合 == manifest.txt 集合（缺/多均 FAILURE）；
 //      JSON parse 失败/必填字段缺失 = ADD_FAILURE 点名文件（无静默 continue）；
 //      每向量比对计数 RecordProperty，计数 0 = FAILURE。
-//   B) 必填一律 j.at()；_info.hardfork 仅精确 "isthmus"|"jovian"（禁默认档）；
-//      未知 _op_type = FAILURE；receipts 数不等 = FAILURE（禁 zip-min）。
+//   B) 必填一律 j.at()；_info.hardfork 仅精确
+//      ecotone|fjord|granite|holocene|isthmus|jovian（禁默认档）；未知 _op_type =
+//      FAILURE；receipts 数不等 = FAILURE（禁 zip-min）。
 //   D) 比对全经 checkField/checkOptional 汇入 DivergenceLedger；checkOptional
 //      绝不 has_value() 门控（单侧缺席即 DIVERGE <absent>）；bloom 恒 512 hex；
 //      postState 双向 + 零槽 trie 规约（0 ≡ 缺席）+ 写集覆盖断言。
@@ -457,21 +458,35 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
 {
     VectorContext ctx{ledger, id};
 
-    // _info.hardfork：仅精确 "isthmus"|"jovian"，其他值 = FAILURE。禁止默认档
-    // （M-T 先例的默认 Isthmus 是已知洞，不移植）。
+    // _info.hardfork：仅精确 ecotone|fjord|granite|holocene|isthmus|jovian，其他值 =
+    // FAILURE。禁止默认档（M-T 先例的默认 Isthmus 是已知洞，不移植）。isJovian 布尔驱动
+    // blobGasUsed header gate 与 _op_da_footprint 期望——ecotone/fjord/granite/holocene
+    // 全 false，语义与 isthmus 一致（has_da_footprint 仅 Jovian 真，预 Isthmus 双端缺席）。
     const auto hardfork = v.at("_info").at("hardfork").get<std::string>();
     const OpForkConfig* cfg = nullptr;
+    bool isJovian = false;
     if (hardfork == "isthmus")
         cfg = &isthmusConfig();
     else if (hardfork == "jovian")
+    {
         cfg = &jovianConfig();
+        isJovian = true;
+    }
+    else if (hardfork == "ecotone")
+        cfg = &ecotoneConfig();
+    else if (hardfork == "fjord")
+        cfg = &fjordConfig();
+    else if (hardfork == "granite")
+        cfg = &graniteConfig();
+    else if (hardfork == "holocene")
+        cfg = &holoceneConfig();
     else
     {
-        BOOST_ERROR(id << ": _info.hardfork must be exactly isthmus|jovian, got '" << hardfork
-                       << "' (no default fork)");
+        BOOST_ERROR(id << ": _info.hardfork must be exactly "
+                          "ecotone|fjord|granite|holocene|isthmus|jovian, got '"
+                       << hardfork << "' (no default fork)");
         return;
     }
-    const bool jovian = (hardfork == "jovian");
 
     // env（8 字段全必填）→ BlockInfo 手建。
     const auto& env = v.at("env");
@@ -705,15 +720,15 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     ctx.checkOptional("requestsHash",
         std::optional{hexHash(test::from_json<hash256>(h.at("requestsHash")))},
         seal.requestsHash.has_value() ? std::optional{hexHash(*seal.requestsHash)} : std::nullopt);
-    // blobGasUsed：向量两 fork 都发射（op-geth Isthmus 头真带 0x0）。Jovian → 值比对
-    // （"0x0" 是在场的零，如 jovian_first_block）；Isthmus → 断言 C++ 侧缺席
-    // （seal.blobGasUsed 语义 = Jovian DA footprint 头字段，Isthmus 无此重用位；
-    //  向量的 0x0 是 op-geth 头的 4844 遗留字段，信息性，不比值）。
+    // blobGasUsed：六 fork 的向量都发射（op-geth 各头真带 0x0，Ecotone+ 的 4844 遗留字段）。
+    // Jovian → 值比对（"0x0" 是在场的零，如 jovian_first_block）；其余五 fork → 断言 C++
+    // 侧缺席（seal.blobGasUsed 语义 = Jovian DA footprint 头字段，Isthmus- 无此重用位；
+    //  向量的 0x0 是 op-geth 头的信息性 4844 遗留字段，不比值）。
     {
-        const auto wantBlobGas = parseU256(h.at("blobGasUsed"));  // 必填（含 Isthmus）
+        const auto wantBlobGas = parseU256(h.at("blobGasUsed"));  // 必填（Ecotone+ 恒发射）
         const auto gotBlobGas =
             seal.blobGasUsed.has_value() ? std::optional{hexU64(*seal.blobGasUsed)} : std::nullopt;
-        if (jovian)
+        if (isJovian)
             ctx.checkOptional("blobGasUsed", std::optional{hexU256(wantBlobGas)}, gotBlobGas);
         else
             ctx.checkOptional("blobGasUsed", std::nullopt, gotBlobGas);
@@ -761,10 +776,14 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
                 gotOperatorFee = hexU256Bcos(meta->operator_fee.value_or(bcos::u256{0}));
             if (meta && meta->da_footprint.has_value())
                 gotDaFootprint = hexU64(*meta->da_footprint);
-            // 全字段比对（fieldmap isthmus/jovian）：u256 → hexU256Bcos、uint64 → hexU64。
-            // got-reads 位于非 deposit 分支内（与生成器 !IsDepositTx 发射规则对齐：deposit
-            // 回执双端都不带费用字段，未 gate 会假分歧）。l1_gas_used 无条件保留——即便向量
-            // 无该 key（optWant nullopt），也断言 FISCO 侧存在性（Task 4 补算）。
+            // 全字段比对（fieldmap ecotone/fjord/granite/holocene/isthmus/jovian）：
+            // u256 → hexU256Bcos、uint64 → hexU64。got-reads 位于非 deposit 分支内（与生成器
+            // !IsDepositTx 发射规则对齐：deposit 回执双端都不带费用字段，未 gate 会假分歧）。
+            // operator-fee 预 Isthmus 缺席：ecotone/fjord/granite/holocene 的 has_operator_fee
+            // =false → deriveOpReceiptMeta 不填 operator_fee* → got 全 nullopt；生成器对预
+            // Isthmus 不发射 _op_operator_fee → optWant 也 nullopt → 双缺席 pass（无假分歧）。
+            // l1_gas_used 无条件保留——即便向量无该 key（optWant nullopt），也断言 FISCO 侧
+            // 存在性（Task 4 补算；Fjord+ 恒发射，Ecotone 为 bedrockCalldataGasUsed）。
             if (meta && meta->l1_gas_price.has_value())
                 gotL1GasPrice = hexU256Bcos(*meta->l1_gas_price);
             if (meta && meta->l1_blob_base_fee.has_value())
