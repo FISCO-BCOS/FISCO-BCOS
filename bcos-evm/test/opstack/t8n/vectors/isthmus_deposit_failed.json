@@ -131,6 +131,7 @@
           "gasUsed": "0x5ac8",
           "cumulativeGasUsed": "0x5ac8",
           "logsCount": 0,
+          "output": "0x",
           "_op_deposit_nonce": "0x0",
           "_op_deposit_receipt_version": "0x1"
         },
@@ -140,6 +141,7 @@
           "gasUsed": "0x520c",
           "cumulativeGasUsed": "0xacd4",
           "logsCount": 0,
+          "output": "0x",
           "_op_deposit_nonce": "0x0",
           "_op_deposit_receipt_version": "0x1"
         }

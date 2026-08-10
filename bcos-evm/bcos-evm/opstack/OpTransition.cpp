@@ -144,11 +144,11 @@ inline int32_t toFiscoStatus(evmc_status_code status) noexcept
 inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const evmone::state::TransactionReceipt& evmoneReceipt,
-    const evmone::state::BlockInfo& block)
+    const evmone::state::BlockInfo& block, bcos::bytesConstRef output)
 {
     auto out = receiptFactory->createReceipt(
         bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)}, std::string{},
-        mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status), bcos::bytesConstRef{},
+        mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status), output,
         static_cast<bcos::protocol::BlockNumber>(block.number));
     out->setLogsBloom(bcos::bytesConstRef{evmoneReceipt.logs_bloom_filter.bytes,
         sizeof(evmoneReceipt.logs_bloom_filter.bytes)});
@@ -326,7 +326,8 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     auto meta = deriveOpReceiptMeta(props, opAtUsed, /*fill_operator_scalars=*/true);
 
     outStateDiff = receipt.state_diff;
-    auto out = makeFiscoReceipt(receiptFactory, receipt, block);
+    auto out = makeFiscoReceipt(receiptFactory, receipt, block,
+        bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size});
     out->setOpStackMeta(toOpStackMeta(meta));
     // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (api.go:1775, RPC top-level).
     out->setEffectiveGasPrice("0x" + intx::to_string(effective_gas_price, 16));
@@ -493,6 +494,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
 
     evmone::state::TransactionReceipt receipt;
     receipt.type = kDepositTxType;
+    bcos::bytes outputBytes;  // deposit return data (empty on the failure paths below)
 
     if (const auto* err = std::get_if<std::error_code>(&props))
     {
@@ -528,13 +530,18 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
             receipt.status = outcome.result.status_code;
             receipt.gas_used = outcome.gas_used;
             receipt.logs = host.take_logs();
+            // The attributes deposit's own return data (normally empty: it CALLs L1Block with a
+            // void return). Copied into a buffer because outcome.result is scoped to this branch.
+            outputBytes.assign(
+                outcome.result.output_data, outcome.result.output_data + outcome.result.output_size);
         }
     }
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
     receipt.state_diff = bcos::evm::sanitizeStateDiff(view, state.build_diff(cfg.rev));
 
     outStateDiff = receipt.state_diff;
-    auto out = makeFiscoReceipt(receiptFactory, receipt, block);
+    auto out = makeFiscoReceipt(
+        receiptFactory, receipt, block, bcos::bytesConstRef{outputBytes.data(), outputBytes.size()});
 
     // Deposit nonce/version are carried on the receipt's opStackMeta (op-geth's deposit receipt
     // has no L1/operator/DA fields, so nothing else to project).

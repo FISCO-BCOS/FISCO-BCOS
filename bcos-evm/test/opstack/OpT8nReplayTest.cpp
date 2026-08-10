@@ -816,6 +816,13 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
             std::string{receipt->cumulativeGasUsed()});
         ctx.checkField(p + ".logsCount", std::to_string(er.at("logsCount").get<int64_t>()),
             std::to_string(receipt->logEntries().size()));
+        // 回执 output（tx 执行返回数据）：生成器恒发射（空 = "0x"）；FISCO 侧 output() 返回
+        // 原始字节，hexBytes 归一化为 "0x"+小写 hex。双缺席/双在场逐字节比对——wrapper 的
+        // returndata 截断与 p256 的 32-byte-1 都由它钉死。
+        ctx.checkOptional(p + ".output",
+            er.contains("output") ? std::optional{er.at("output").get<std::string>()} : std::nullopt,
+            std::optional{hexBytes(
+                evmc::bytes_view{receipt->output().data(), receipt->output().size()})});
 
         const auto optWant = [&](const char* key) -> std::optional<std::string> {
             return er.contains(key) ? std::optional{hexU256(parseU256(er.at(key)))} : std::nullopt;

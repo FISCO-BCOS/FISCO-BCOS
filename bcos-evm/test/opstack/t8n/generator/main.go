@@ -52,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -331,11 +332,14 @@ type expectedHeader struct {
 }
 
 type expectedReceipt struct {
-	Type                    string  `json:"type"`
-	Status                  string  `json:"status"`
-	GasUsed                 string  `json:"gasUsed"`
-	CumulativeGasUsed       string  `json:"cumulativeGasUsed"`
-	LogsCount               int     `json:"logsCount"`
+	Type              string `json:"type"`
+	Status            string `json:"status"`
+	GasUsed           string `json:"gasUsed"`
+	CumulativeGasUsed string `json:"cumulativeGasUsed"`
+	LogsCount         int    `json:"logsCount"`
+	// Tx return data (receipt output), hex-encoded; always emitted ("0x" for
+	// empty). Captured by reexecuting the block (chain-maker AddTx discards it).
+	Output                  string  `json:"output"`
 	OpDepositNonce          *string `json:"_op_deposit_nonce,omitempty"`
 	OpDepositReceiptVersion *string `json:"_op_deposit_receipt_version,omitempty"`
 	OpL1Fee                 *string `json:"_op_l1_fee,omitempty"`
@@ -818,7 +822,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 		return nil, nil, fmt.Errorf("InsertChain self-check FAILED (corpus/generator defect, do not bypass): %w", err)
 	}
 
-	out, golden, err := assembleOutput(in, cfg, signer, db, block, receipts, txs, outTxs)
+	out, golden, err := assembleOutput(in, cfg, signer, genesis, db, block, receipts, txs, outTxs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("vector %q: %w", id, err)
 	}
@@ -1020,7 +1024,7 @@ func probeReceiptFields(in *inputCase) error {
 // chained pair (processChainPair, Step 2): both need identical assembly
 // logic, just fed a different (in, db, block, receipts, txs, signer) tuple
 // per block.
-func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer, db ethdb.Database, block *types.Block, receipts types.Receipts, txs []*types.Transaction, outTxs []json.RawMessage) (outputVector, *goldenRecord, error) {
+func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer, genesis *core.Genesis, db ethdb.Database, block *types.Block, receipts types.Receipts, txs []*types.Transaction, outTxs []json.RawMessage) (outputVector, *goldenRecord, error) {
 	header := block.Header()
 
 	// --- postState: decision-record-8 candidate set, all accounts, all slots,
@@ -1078,7 +1082,15 @@ func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer,
 	// per fork formula (iron rule 7; rollup_cost.go:254-287) from the
 	// pre-state slot-8 params, then cross-checked against op-geth's own
 	// NewOperatorCostFunc and against the OperatorFeeVault balance delta.
-	expReceipts, err := buildExpectedReceipts(cfg, in, txs, receipts, header.Time)
+	// --- Receipt output: re-execute the block to capture return data (the
+	// chain maker discards ExecutionResult.ReturnData). Rejected if the replay
+	// does not reproduce the real receipts' gasUsed/status per tx.
+	outputs, err := reexecuteOutputs(cfg, genesis, db, header, txs, receipts,
+		in.Coinbase, in.ParentBeaconBlockRoot)
+	if err != nil {
+		return outputVector{}, nil, err
+	}
+	expReceipts, err := buildExpectedReceipts(cfg, in, txs, receipts, outputs, header.Time)
 	if err != nil {
 		return outputVector{}, nil, err
 	}
@@ -1361,7 +1373,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 	}
 
 	signerA := types.MakeSigner(cfg, blocks[0].Number(), blocks[0].Time())
-	outA, goldenA, err := assembleOutput(ins[0], cfg, signerA, db, blocks[0], receiptsAll[0], txSets[0], outSets[0])
+	outA, goldenA, err := assembleOutput(ins[0], cfg, signerA, genesis, db, blocks[0], receiptsAll[0], txSets[0], outSets[0])
 	if err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("chain block A: %w", err)
 	}
@@ -1375,7 +1387,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block B: %w", err)
 	}
 	signerB := types.MakeSigner(cfg, blocks[1].Number(), blocks[1].Time())
-	outB, goldenB, err := assembleOutput(ins[1], cfg, signerB, db, blocks[1], receiptsAll[1], txSets[1], outSets[1])
+	outB, goldenB, err := assembleOutput(ins[1], cfg, signerB, genesis, db, blocks[1], receiptsAll[1], txSets[1], outSets[1])
 	if err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("chain block B: %w", err)
 	}
@@ -2090,8 +2102,96 @@ func operatorFee(jovian bool, gasUsed uint64, scalar uint32, constant uint64) *b
 	return fee.Add(fee, new(big.Int).SetUint64(constant))
 }
 
-func buildExpectedReceipts(cfg *params.ChainConfig, in *inputCase, txs []*types.Transaction, receipts types.Receipts, blockTime uint64) ([]expectedReceipt, error) {
+// chainCtxStub satisfies core.ChainContext for the output re-execution. The EVM
+// block context reads Config() (blob base fee) and defers GetHeader* to
+// BLOCKHASH; the corpus never executes BLOCKHASH, so the lookups are inert.
+// core.BlockChain's chainConfig field is unexported, so a hand stub is required
+// outside the core package.
+type chainCtxStub struct{ cfg *params.ChainConfig }
+
+func (c chainCtxStub) Engine() consensus.Engine {
+	return nil
+}
+func (c chainCtxStub) Config() *params.ChainConfig {
+	return c.cfg
+}
+func (c chainCtxStub) CurrentHeader() *types.Header {
+	return nil
+}
+func (c chainCtxStub) GetHeader(common.Hash, uint64) *types.Header {
+	return nil
+}
+func (c chainCtxStub) GetHeaderByNumber(uint64) *types.Header {
+	return nil
+}
+func (c chainCtxStub) GetHeaderByHash(common.Hash) *types.Header {
+	return nil
+}
+
+// reexecuteOutputs replays a generated block's txs against a fresh state and
+// returns each tx's return data (the receipt output). The chain maker's AddTx
+// discards ExecutionResult.ReturnData, so the real receipts never carry output;
+// this replay reproduces the chain maker's pre-tx state (genesis root + EIP-2935
+// parent-hash + EIP-4788 beacon-root system calls, same order as GenerateChain)
+// and applies each tx via core.ApplyMessage, capturing ReturnData. Faithfulness
+// is enforced per tx: each replayed result's UsedGas and success/failure must
+// equal the real receipt's gasUsed/status, otherwise the emitted outputs are
+// rejected (a divergence between the replay and the actual block execution would
+// make the output field untrustworthy).
+func reexecuteOutputs(cfg *params.ChainConfig, genesis *core.Genesis, db ethdb.Database,
+	header *types.Header, txs []*types.Transaction, receipts types.Receipts,
+	coinbase common.Address, parentBeaconRoot common.Hash) ([][]byte, error) {
+	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
+	defer tdb.Close()
+	statedb, err := state.New(genesis.ToBlock().Root(), state.NewDatabase(tdb, nil))
+	if err != nil {
+		return nil, fmt.Errorf("open re-execution state: %w", err)
+	}
+	gp := core.NewGasPool(header.GasLimit)
+	bc := &chainCtxStub{cfg: cfg}
+
+	// EIP-2935 parent-hash: gated exactly as chain_makers.genblock does. EIP-4788
+	// beacon-root runs unconditionally (SetParentBeaconRoot always calls it); both
+	// are no-ops pre-Prague (empty system-contract code).
+	if cfg.IsPrague(header.Number, header.Time) || cfg.IsVerkle(header.Number, header.Time) {
+		blockCtx := core.NewEVMBlockContext(header, bc, &coinbase, cfg, statedb)
+		blockCtx.Random = &common.Hash{} // enable post-merge instruction set
+		core.ProcessParentBlockHash(header.ParentHash, vm.NewEVM(blockCtx, statedb, cfg, vm.Config{}))
+	}
+	blockCtx := core.NewEVMBlockContext(header, bc, &coinbase, cfg, statedb)
+	core.ProcessBeaconBlockRoot(parentBeaconRoot, vm.NewEVM(blockCtx, statedb, cfg, vm.Config{}))
+
+	outs := make([][]byte, len(txs))
+	for i, tx := range txs {
+		statedb.SetTxContext(tx.Hash(), i)
+		blockCtx := core.NewEVMBlockContext(header, bc, &coinbase, cfg, statedb)
+		evm := vm.NewEVM(blockCtx, statedb, cfg, vm.Config{})
+		msg, err := core.TransactionToMessage(tx, types.MakeSigner(cfg, header.Number, header.Time), header.BaseFee)
+		if err != nil {
+			return nil, fmt.Errorf("replay tx %d msg: %w", i, err)
+		}
+		result, err := core.ApplyMessage(evm, msg, gp)
+		if err != nil {
+			return nil, fmt.Errorf("replay tx %d: %w", i, err)
+		}
+		// Faithfulness cross-check: the replay must reproduce the real block's
+		// receipt (MakeReceipt sets GasUsed = result.UsedGas, Status from Failed).
+		if result.UsedGas != receipts[i].GasUsed ||
+			result.Failed() != (receipts[i].Status != types.ReceiptStatusSuccessful) {
+			return nil, fmt.Errorf("replay tx %d: gasUsed/status mismatch (replay %d/%v vs receipt %d/%d)",
+				i, result.UsedGas, result.Failed(), receipts[i].GasUsed, receipts[i].Status)
+		}
+		outs[i] = common.CopyBytes(result.ReturnData)
+		statedb.Finalise(true)
+	}
+	return outs, nil
+}
+
+func buildExpectedReceipts(cfg *params.ChainConfig, in *inputCase, txs []*types.Transaction, receipts types.Receipts, outputs [][]byte, blockTime uint64) ([]expectedReceipt, error) {
 	jovian := cfg.IsJovian(blockTime)
+	if len(outputs) != len(receipts) {
+		return nil, fmt.Errorf("outputs/receipts count mismatch: %d vs %d", len(outputs), len(receipts))
+	}
 	slot8 := preStateGetter(in.Pre).GetState(l1BlockAddr, types.OperatorFeeParamsSlot)
 	opScalar := binary.BigEndian.Uint32(slot8[20:24])
 	opConstant := binary.BigEndian.Uint64(slot8[24:32])
@@ -2111,6 +2211,7 @@ func buildExpectedReceipts(cfg *params.ChainConfig, in *inputCase, txs []*types.
 			GasUsed:           hexutil.EncodeUint64(r.GasUsed),
 			CumulativeGasUsed: hexutil.EncodeUint64(r.CumulativeGasUsed),
 			LogsCount:         len(r.Logs),
+			Output:            hexutil.Encode(outputs[i]),
 		}
 		if r.DepositNonce != nil {
 			s := hexutil.EncodeUint64(*r.DepositNonce)

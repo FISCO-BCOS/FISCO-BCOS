@@ -130,6 +130,7 @@
           "gasUsed": "0x5ac8",
           "cumulativeGasUsed": "0x5ac8",
           "logsCount": 0,
+          "output": "0x",
           "_op_deposit_nonce": "0x0",
           "_op_deposit_receipt_version": "0x1"
         },
@@ -139,6 +140,7 @@
           "gasUsed": "0x11ce8",
           "cumulativeGasUsed": "0x177b0",
           "logsCount": 0,
+          "output": "0x000000000000000000000000000000000e7a30979a8853a077454eb63b8dcee75f106221b262886bb8e01b0abb043368da82f60899cc1412e33e4120195fc55700000000000000000000000000000000070227d3f13684fdb7ce31b8065ba3acb35f7bde6fe2ddfefa359f8b35d08a9ab9537b43e24f4ffb720b5a0bda2a82f2000000000000000000000000000000000701377cb7da22789d032737eabcea2b2eee6bb4634c4365864511a43c2caad50422993ccd3e99636eb8a5f189454b18000000000000000000000000000000000782c14e2c4ee61cbe7be6e462a66b2e3509f42d53ff333efc9bfe9a00307cd2f68b007606446d98a75fb808a405d8b9",
           "_op_l1_fee": "0x243fb95bee",
           "_op_l1_gas_price": "0x6fc23ac00",
           "_op_l1_blob_base_fee": "0xf4240",

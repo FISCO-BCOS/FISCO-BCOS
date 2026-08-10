@@ -179,3 +179,31 @@
 > flz_len 的 Fjord 公式（字段保持 nullopt）。41 向量 t8n 差分门全绿（0 DIVERGE），本文件无需新增
 > ALLOWLIST 条目；`ecotone_transfer_basic` / `ecotone_contract_create` 曾报 want=0x130c/0x6b8 got=0x640 已一致。
 
+---
+
+## FINDING-create-output
+
+**回执 output（CREATE 交易）基座层语义分叉（2026-08-11，output 维度新增比对后暴露）**。
+
+门跑新增 `output` 字段比对后，6 个 `*_contract_create` 向量的创建交易回执 `output` 分歧：
+- **want** = `0x600160005500`：op-geth `ExecutionResult.ReturnData` 对合约创建 = 部署出的合约字节码（init code 的 return）。
+- **got** = `0x`：FISCO `opTransition` 经 vendored evmone `Host::create()` 执行，成功创建后返回
+  `evmc::Result{status, gas_left, gas_refund, create_address}`（`bcos-evm/bcos-evm/eth/state/host.cpp:305`
+  的 4 参构造，不带 output_data）；创建代码写入 state 账户 `new_acc->code`，而非 result.output_data。
+
+**归属**：**基座层（vendored evmone）语义差异**，非 opstack 层 bug——evmone 的 create 结果不携带
+代码到 output，op-geth 的 ReturnData 则携带。回执 `output` 是 FISCO 自有 TARS 扩展字段（非共识编码，
+`encodeReceiptForRoot` 不含它，receiptsRoot 不受影响），op-geth 回执本无此字段，故这是
+「FISCO 回执 output 与 op-geth 执行结果 ReturnData 的表示差异」而非块执行语义分叉。
+
+**处置**：`attribution=a`（基座层 PENDING-FIX）ALLOWLIST 豁免，**不修**（按线 B 纪律：base 层立案不修；
+改动 vendored evmone create 结果携带代码属独立决策，留作后续）。wrapper/precompile 的 output 语义
+（截断 quirk、32-byte-1、ecrecover 地址）已全绿，正是本维度新增比对的目的。
+
+<!-- ALLOWLIST vectorId=ecotone_contract_create field=receipts[1].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
+<!-- ALLOWLIST vectorId=fjord_contract_create field=receipts[1].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
+<!-- ALLOWLIST vectorId=isthmus_contract_create field=receipts[1].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
+<!-- ALLOWLIST vectorId=isthmus_contract_create field=receipts[2].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
+<!-- ALLOWLIST vectorId=jovian_contract_create field=receipts[1].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
+<!-- ALLOWLIST vectorId=jovian_contract_create field=receipts[2].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
+

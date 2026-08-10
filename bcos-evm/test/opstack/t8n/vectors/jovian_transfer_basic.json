@@ -130,6 +130,7 @@
           "gasUsed": "0x5adc",
           "cumulativeGasUsed": "0x5adc",
           "logsCount": 0,
+          "output": "0x",
           "_op_deposit_nonce": "0x0",
           "_op_deposit_receipt_version": "0x1"
         },
@@ -139,6 +140,7 @@
           "gasUsed": "0x5208",
           "cumulativeGasUsed": "0xace4",
           "logsCount": 0,
+          "output": "0x",
           "_op_l1_fee": "0xf4eb688f4",
           "_op_da_footprint": "0x0",
           "_op_l1_gas_price": "0x6fc23ac00",
