@@ -18,6 +18,7 @@
 
 #include "bcos-framework/protocol/Authorization.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <algorithm>
 #include <evmc/evmc.hpp>
@@ -38,11 +39,21 @@
 namespace bcos::executor_v1::eth::evm
 {
 
-/// Convert bcos::u256 to intx::uint256 (via hex string).
+/// Convert bcos::u256 to intx::uint256 (big-endian byte copy; no string
+/// round-trip). Single canonical home of this conversion.
 inline intx::uint256 toIntxU256(bcos::u256 const& val)
 {
-    auto hexStr = "0x" + val.str(0, std::ios_base::hex);
-    return intx::from_string<intx::uint256>(hexStr);
+    const auto be = bcos::toBigEndian(val);  // 32 bytes, big-endian.
+    return intx::be::unsafe::load<intx::uint256>(be.data());
+}
+
+/// Convert intx::uint256 to bcos::u256 (big-endian byte copy; no string
+/// round-trip).
+inline bcos::u256 toBcosU256(intx::uint256 const& val)
+{
+    const auto be = intx::be::store<evmc::bytes32>(val);
+    return bcos::fromBigEndian<bcos::u256>(
+        bcos::bytesConstRef(be.bytes, sizeof(be.bytes)));
 }
 
 /// A transaction log entry (ported evmone state::Log).

@@ -20,7 +20,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-task/TBBWait.h"
-#include "ethereum-executor/EthereumState.h"  // eth::toIntxU256 / eth::toBcosU256 / eth::clearAccountStorage
+#include "ethereum-executor/EthereumState.h"  // evm::toIntxU256 / evm::toBcosU256 / eth::clearAccountStorage
 #include <evmc/evmc.h>
 #include <optional>
 
@@ -93,7 +93,7 @@ private:
         if (nonceVal.has_value())
             acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
 
-        acc.balance = bcos::executor_v1::eth::toIntxU256(co_await evmAccount.balance());
+        acc.balance = bcos::executor_v1::eth::evm::toIntxU256(co_await evmAccount.balance());
 
         auto codeHashVal = co_await evmAccount.codeHash();
         {
@@ -183,7 +183,7 @@ task::Task<void> testApplyStateDiff(
     Storage& storage, evmone::state::StateDiff const& diff, crypto::Hash const& hashImpl)
 {
     using namespace bcos::ledger::account;
-    using bcos::executor_v1::eth::toBcosU256;
+    using bcos::executor_v1::eth::evm::toBcosU256;
     using bcos::executor_v1::eth::clearAccountStorage;
 
     // Phase 1: Process modified_accounts FIRST so created accounts exist.

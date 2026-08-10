@@ -380,17 +380,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
         // scheduler. Only one scheduler version is active at a time (selected via
         // MultiVersionScheduler), so a dedicated instance avoids any cross-version state.
-        auto ethereumParallelScheduler =
-            std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>(
-                m_ioServicePool);
-        ethereumParallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
-        if (tbbThreadCount > 0)
-        {
-            ethereumParallelScheduler->m_maxConcurrency = tbbThreadCount;
-        }
+        //
+        // The v2 pipeline is deliberately SERIAL-ONLY even when the node is configured for
+        // parallel baseline scheduling: EthereumState::has_storage scans the account table via
+        // storage2::range(), which ReadWriteSetStorage does not record in the read/write set,
+        // so on SchedulerParallelImpl a chunk writing an account's storage would not be
+        // ordered against a chunk reading that account's has_storage (an EIP-7610
+        // CREATE-collision input) — a consensus divergence. Revisit (record the range read)
+        // before v2 is allowed to run on a parallel scheduler.
+        auto ethereumSerialScheduler =
+            std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumParallelScheduler,
+                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor);
     }
