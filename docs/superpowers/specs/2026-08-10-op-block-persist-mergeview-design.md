@@ -103,6 +103,7 @@ VALID 块
 2. **OpNewPayloadRpcE2eTest 扩展**（`bcos-evm/test/opstack/OpNewPayloadRpcE2eTest.cpp`）：
    - VALID 块后断言 `SYS_HASH_2_TX` 行可经 **backend 层**直接读到（重启恢复语义——不再是纯内存层栈）。
    - ⚠️ **0x04 (EIP-7702)/malformed 交易被 `registerOpBlock` 跳过（D7，不写 `SYS_HASH_2_TX`）**——断言需排除含 7702 的向量（`*_setcode_7702*`），或用 deposit/legacy 向量 + 断言 `s_number_2_header`（总是写）。
+   - ⚠️ **单桶 backend 必需（Task 2 review 实证）**：fixture 的 `BackendMemStorage` 必须构造为 `{1}`（单桶）。默认多桶（`hardware_concurrency()*2+1`）下 `MemoryStorage::range(RANGE_SEEK)` 只 seek 桶 0，桶 1+ 泄漏非 SYS_TABLES 键 → `visitAccounts` 破坏 → stateRoot 空根（36/36 RED 全在 stateRoot）。单桶后 range 正确。**生产不受影响**（`RocksDBStorage2` 单有序存储，无桶）。
 
 ## 7. 边界（明确不做，本 spec 范围外）
 

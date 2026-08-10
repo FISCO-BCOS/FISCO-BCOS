@@ -165,6 +165,8 @@ bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 
 排空后每个块 push 前栈空 → `mergeView` 立即落盘。然后在写侧块 round-trip 断言（`tx->hash() == txHash`）之后加 backend 断言（锚定断言文本，非行号）：
 
+⚠️ **单桶 backend 必需（Task 2 review 实证，重要）**：fixture 的 `BackendMemStorage backendStorage` 必须改为 `BackendMemStorage backendStorage{1}`（单桶）。默认多桶（`hardware_concurrency()*2+1`）下 `MemoryStorage::range(RANGE_SEEK)` 只 seek 桶 0，桶 1+ 泄漏非 SYS_TABLES 键 → `visitAccounts` 破坏 → stateRoot 空根（36/36 RED 全在 stateRoot，非 backend 断言）。单桶后 range 正确。**生产不受影响**（`RocksDBStorage2` 单有序存储，无桶）。
+
 ```cpp
         // C2: 数据必须落 backend（m_latestBackend）——重启恢复语义（spec §6）。
         // 当前实现只 pushView（内存层栈）,backend 读为空 → 此断言先红。
