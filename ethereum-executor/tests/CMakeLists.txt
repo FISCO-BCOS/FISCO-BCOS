@@ -20,3 +20,6 @@ target_link_libraries(test-ethereum-state-smoke
 set_source_files_properties("TestEthereumStateSmoke.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-ethereum-state-smoke PROPERTIES UNITY_BUILD OFF)
 set_target_properties(test-ethereum-state-smoke PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+# SearchTestCases.cmake only discovers BOOST_*TEST_* targets; this standalone
+# target must register itself so ctest actually runs it in CI.
+add_test(NAME test-ethereum-state-smoke COMMAND test-ethereum-state-smoke)

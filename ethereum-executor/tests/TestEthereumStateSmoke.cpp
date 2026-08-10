@@ -8,17 +8,39 @@
 /// Yellow-Paper CREATE example, the EIP-1014 CREATE2 examples, the EIP-4844
 /// blob-gas vector, and the EIP-7702 authority-recovery vector shared with
 /// bcos-evm/test/opstack/Op7702Test.cpp.
+///
+/// Checks are NDEBUG-independent (CHECK exits non-zero on failure): CI builds
+/// with Release/-DNDEBUG, which would compile out assert() and leave the
+/// helpers unused under -Werror. The target is registered with add_test() so
+/// ctest actually runs it.
 
 #include "ethereum-executor/EVMSupport.h"
 #include "ethereum-executor/EthereumState.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
 
 #include "bcos-task/TBBWait.h"
-#include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
+
+namespace
+{
+int g_failures = 0;
+
+void checkImpl(bool ok, const char* expr, const char* file, int line)
+{
+    if (!ok)
+    {
+        std::cerr << file << ':' << line << ": CHECK failed: " << expr << '\n';
+        ++g_failures;
+    }
+}
+}  // namespace
+
+/// NDEBUG-independent check (see file header).
+#define CHECK(expr) checkImpl(static_cast<bool>(expr), #expr, __FILE__, __LINE__)
 
 namespace eth = bcos::executor_v1::eth;
 namespace eth_evm = bcos::executor_v1::eth::evm;
@@ -68,11 +90,11 @@ void testU256IntxRoundTrip()
     for (const auto& v : values)
     {
         const auto i = eth_evm::toIntxU256(v);
-        assert(eth_evm::toBcosU256(i) == v);
-        assert(eth_evm::toIntxU256(eth_evm::toBcosU256(i)) == i);
+        CHECK(eth_evm::toBcosU256(i) == v);
+        CHECK(eth_evm::toIntxU256(eth_evm::toBcosU256(i)) == i);
     }
     // Spot-check the big-endian mapping: 1 -> 0x00..01.
-    assert(eth_evm::toIntxU256(bcos::u256(1)) == intx::uint256{1});
+    CHECK(eth_evm::toIntxU256(bcos::u256(1)) == intx::uint256{1});
 }
 
 void testKeccak256()
@@ -80,7 +102,7 @@ void testKeccak256()
     const auto h = eth_evm::keccak256({});
     const auto expected = bytes32FromHex(
         "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
-    assert(h == expected);
+    CHECK(h == expected);
 }
 
 void testCreateAddress()
@@ -90,7 +112,7 @@ void testCreateAddress()
     //   -> 0xcd234a471b72ba2f1ccf0a70fcaba648a5eecd8d
     const auto sender = addressFromHex("0x6ac7ea33f8831ea9dcc53393aaa88b25a785dbf0");
     const auto expected = addressFromHex("0xcd234a471b72ba2f1ccf0a70fcaba648a5eecd8d");
-    assert(sameAddress(eth_evm::compute_create_address(sender, 0), expected));
+    CHECK(sameAddress(eth_evm::compute_create_address(sender, 0), expected));
 }
 
 void testCreate2Address()
@@ -101,14 +123,14 @@ void testCreate2Address()
     const uint8_t init00[] = {0x00};
     const uint8_t initDeadbeef[] = {0xde, 0xad, 0xbe, 0xef};
 
-    assert(sameAddress(eth_evm::compute_create2_address(zero20, zeroSalt, {init00, 1}),
+    CHECK(sameAddress(eth_evm::compute_create2_address(zero20, zeroSalt, {init00, 1}),
         addressFromHex("0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38")));
 
     const auto deadbeef = addressFromHex("0xdeadbeef00000000000000000000000000000000");
-    assert(sameAddress(eth_evm::compute_create2_address(deadbeef, zeroSalt, {init00, 1}),
+    CHECK(sameAddress(eth_evm::compute_create2_address(deadbeef, zeroSalt, {init00, 1}),
         addressFromHex("0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3")));
 
-    assert(sameAddress(
+    CHECK(sameAddress(
         eth_evm::compute_create2_address(zero20, zeroSalt, {initDeadbeef, 4}),
         addressFromHex("0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e")));
 }
@@ -117,11 +139,17 @@ void testBlobGasPrice()
 {
     // EIP-4844 mainnet schedule: fake_exponential(1, excess, 3338477).
     const eth_evm::BlobParams params{3, 6, 3338477};
-    assert(eth_evm::compute_blob_gas_price(params, 0) == 1);
-    assert(eth_evm::compute_blob_gas_price(params, 16777216) == 152);    // 2**24
-    assert(eth_evm::compute_blob_gas_price(params, 33554432) == 23174);   // 2**25
-    assert(eth_evm::compute_blob_gas_price(params, 67108864) == 537070730);  // 2**26
-    assert(eth_evm::max_blob_gas_per_block(params) == 6 * eth_evm::GAS_PER_BLOB);
+    CHECK(eth_evm::compute_blob_gas_price(params, 0) == 1);
+    CHECK(eth_evm::compute_blob_gas_price(params, 16777216) == 152);      // 2**24
+    CHECK(eth_evm::compute_blob_gas_price(params, 33554432) == 23174);    // 2**25
+    CHECK(eth_evm::compute_blob_gas_price(params, 67108864) == 537070730);  // 2**26
+    CHECK(eth_evm::max_blob_gas_per_block(params) == 6 * eth_evm::GAS_PER_BLOB);
+
+    // Degenerate schedule (base_fee_update_fraction == 0) must not divide by
+    // zero; the guard returns the maximum like the overflow path.
+    const eth_evm::BlobParams degenerate{0, 0, 0};
+    CHECK(eth_evm::compute_blob_gas_price(degenerate, 0) ==
+        std::numeric_limits<intx::uint256>::max());
 }
 
 void testRecoverAuthority()
@@ -138,9 +166,24 @@ void testRecoverAuthority()
     auth.s = bcos::u256("0x7399ba8d6bdec8bacec1cfb93d1f1bd00bedbade84959bda53464acaaa32f330");
 
     const auto recovered = eth_evm::recoverAuthority(auth);
-    assert(recovered.has_value());
-    assert(sameAddress(
+    CHECK(recovered.has_value());
+    CHECK(sameAddress(
         *recovered, addressFromHex("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")));
+}
+
+void testRecoverAuthorityRejectsBadSignature()
+{
+    // EIP-2: r and s must be in [1, N-1]; (0, 0) is not a valid signature, so
+    // recoverAuthority must fail (covers the ecrecover failure path).
+    bcos::protocol::Authorization auth;
+    auth.chainId = 1;
+    auth.address = bcos::Address("0x00000000000000000000000000000000000000cc");
+    auth.nonce = 0;
+    auth.v = 0;
+    auth.r = bcos::u256(0);
+    auth.s = bcos::u256(0);
+
+    CHECK(!eth_evm::recoverAuthority(auth).has_value());
 }
 
 void testEthereumStateInstantiation()
@@ -155,10 +198,10 @@ void testEthereumStateInstantiation()
     // clearAccountStorage (the ODR-relevant free template).
     state.insert(addr, {});
     auto* acc = state.find(addr);
-    assert(acc != nullptr);
+    CHECK(acc != nullptr);
     acc->nonce = 1;
     bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
-    assert(state.find(addr) != nullptr);
+    CHECK(state.find(addr) != nullptr);
 
     // Journal machinery: checkpoint, journaled create, rollback. insert() is a
     // low-level map op (no journal entry), so rollback is exercised through the
@@ -166,7 +209,7 @@ void testEthereumStateInstantiation()
     const auto cp = state.checkpoint();
     state.journal_create(addr, /*existed=*/true);
     state.rollback(cp);
-    assert(state.find(addr) != nullptr);
+    CHECK(state.find(addr) != nullptr);
 }
 
 }  // namespace
@@ -179,7 +222,14 @@ int main()
     testCreate2Address();
     testBlobGasPrice();
     testRecoverAuthority();
+    testRecoverAuthorityRejectsBadSignature();
     testEthereumStateInstantiation();
+
+    if (g_failures > 0)
+    {
+        std::cerr << "TestEthereumStateSmoke: " << g_failures << " check(s) failed\n";
+        return EXIT_FAILURE;
+    }
     std::cout << "TestEthereumStateSmoke: all checks passed" << std::endl;
-    return 0;
+    return EXIT_SUCCESS;
 }
