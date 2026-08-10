@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include "EVMSupport.h"
 #include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-task/TBBWait.h"
@@ -50,19 +51,6 @@ using evmc::bytes;
 using evmc::bytes32;
 using evmc::bytes_view;
 using intx::uint256;
-
-/// Convert bcos::u256 to intx::uint256 (via hex string, like the old adapter).
-inline intx::uint256 toIntxU256(bcos::u256 const& val)
-{
-    auto hexStr = "0x" + val.str(0, std::ios_base::hex);
-    return intx::from_string<intx::uint256>(hexStr);
-}
-
-/// Convert intx::uint256 to bcos::u256 (via decimal string).
-inline bcos::u256 toBcosU256(intx::uint256 const& val)
-{
-    return bcos::u256(intx::to_string(val));
-}
 
 /// The representation of the account storage value (ported evmone StorageValue).
 struct EthStorageValue
@@ -150,7 +138,8 @@ struct ReadAccount
 /// be cleared so that a later CREATE/CREATE2 at the same address is not treated
 /// as an EIP-7610 collision.
 template <class Storage>
-task::Task<void> clearAccountStorage(Storage& storage, bcos::ledger::account::EVMAccount<Storage>& acc)
+task::Task<void> clearAccountStorage(
+    Storage& storage, bcos::ledger::account::EVMAccount<Storage>& acc)
 {
     using namespace bcos::ledger;
     using namespace bcos::ledger::account;
@@ -247,7 +236,7 @@ class EthereumState
     task::Task<std::optional<eth_state_detail::ReadAccount>> readAccountImpl(address addr) const
     {
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
 
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
@@ -259,7 +248,7 @@ class EthereumState
         if (nonceVal.has_value())
             acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
 
-        acc.balance = toIntxU256(co_await evmAccount.balance());
+        acc.balance = evm::toIntxU256(co_await evmAccount.balance());
 
         auto codeHashVal = co_await evmAccount.codeHash();
         {
@@ -291,13 +280,20 @@ class EthereumState
     /// account may therefore be scheduled in parallel with — and race against —
     /// a chunk that reads that account's has_storage here (the writer's slots
     /// are not in the reader's read set, so the two chunks are not ordered).
-    /// Revisit if parallel execution of v2 chunks becomes dependent on
-    /// cross-chunk has_storage ordering.
+    ///
+    /// This is a LIVE risk, not a hypothetical one: a node configured for
+    /// parallel baseline scheduling (SchedulerParallelImpl) would run the v2
+    /// pipeline on it and could hit exactly this race on EIP-7610
+    /// CREATE-collision inputs. Mitigation for now: the v2 pipeline is built
+    /// SERIAL-ONLY in libinitializer (see the ethereum scheduler wiring in
+    /// Initializer.cpp), so has_storage reads and storage writes are never
+    /// concurrent. Revisit — ideally by recording the range read in the
+    /// read/write set — before v2 is allowed to run on a parallel scheduler.
     task::Task<bool> hasStorageImpl(bcos::ledger::account::EVMAccount<Storage>& evmAccount) const
     {
         using namespace bcos::ledger;
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
         auto tableName = co_await evmAccount.path();
 
         bool hasStorage = false;
@@ -339,7 +335,7 @@ class EthereumState
     task::Task<bytes> readCodeImpl(address addr) const
     {
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
         if (!co_await evmAccount.exists())
@@ -368,7 +364,7 @@ class EthereumState
     task::Task<bytes32> readStorageImpl(address addr, bytes32 key) const
     {
         using namespace bcos::ledger::account;
-        auto& storage = const_cast<Storage&>(m_storage);
+        auto& storage = m_storage;
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
         // SLOAD on a non-existent account returns 0 per EVM spec.
@@ -424,9 +420,11 @@ public:
 
     void journal_balance_change(const address& addr, const intx::uint256& prev_balance);
 
-    void journal_storage_change(const address& addr, const bytes32& key, const EthStorageValue& value);
+    void journal_storage_change(
+        const address& addr, const bytes32& key, const EthStorageValue& value);
 
-    void journal_transient_storage_change(const address& addr, const bytes32& key, const bytes32& value);
+    void journal_transient_storage_change(
+        const address& addr, const bytes32& key, const bytes32& value);
 
     void journal_bump_nonce(const address& addr);
 
@@ -659,7 +657,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         if (!co_await bcosAcc.exists())
             co_await bcosAcc.create();
         co_await bcosAcc.setNonce(std::to_string(acc.nonce));
-        co_await bcosAcc.setBalance(toBcosU256(acc.balance));
+        co_await bcosAcc.setBalance(evm::toBcosU256(acc.balance));
         if (acc.code_changed)
         {
             bcos::bytes code(acc.code.begin(), acc.code.end());
