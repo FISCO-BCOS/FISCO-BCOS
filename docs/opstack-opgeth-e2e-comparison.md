@@ -404,3 +404,14 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 Karst 适配（专项）→ 重跑 W5 gate（回归）→ 重新对拍（Karst 专项金标准）→ 可上线评估
 ```
 3. **Go/No-Go**：**当前 No-Go**——FISCO 无法激活/表征 Karst（无 karstTime 通道）+ OP 块回执不可查。附条件：① Karst 适配完成（引入 karst_time 激活通道 + 按 op-geth 真实 diff）② W5 gate 回归通过 ③ 重新对拍（仿 B-5c 的 Karst 链式对 + Karst 金标准 golden + op-geth 版本 pin）通过 ④ OP 块回执可查 → 重新评估可上线。
+
+### 待办移交（W7 之后）
+
+- **Karst 适配专项任务**（引入 karst_time 激活通道，按 op-geth 真实 diff）
+- **OP 块回执可查修复**（rawtx 回退 + opReceiptMeta，从 val-loop 移植）
+- **PBFT 共识层决策**（是否整体禁用 + retry loop 抑制）
+- deferred minors 清理（cases/ gitignore、golden manifest 校验、首投 B 软断言）
+- 生产互通待办（V4 端点桩 / V4 能力广播 / generator 重生成——见 §7「W6 外待办」）
+- **W8 / W0**（记忆遗留 ctest/落盘/四项决策 + DU 冲突清理）
+
+> 注：B-2/B-4 正式迁移 + B-3 注记收紧已在 §8.3 W7 内完成，不入此移交。
