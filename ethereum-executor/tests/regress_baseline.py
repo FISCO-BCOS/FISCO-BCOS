@@ -216,7 +216,15 @@ def run_multiple_fixtures(
             print(f"[regress_baseline] ERROR: eest-runner produced no --json-failures output "
                   f"for fixture {f}", file=sys.stderr)
             return False, counts
-        merged.extend(load_json(tmp))
+        # Strict merge: a truncated per-file --json-failures write must fail the
+        # run, not silently degrade to [] (which would drop that fixture's
+        # failures and could turn a regression green).
+        try:
+            merged.extend(load_json(tmp, strict=True))
+        except json.JSONDecodeError as e:
+            print(f"[regress_baseline] ERROR: per-fixture --json-failures output {tmp} is "
+                  f"invalid or truncated JSON ({e}); failing closed", file=sys.stderr)
+            return False, counts
         tmp.unlink()
     write_json(json_out, merged)
     return True, counts

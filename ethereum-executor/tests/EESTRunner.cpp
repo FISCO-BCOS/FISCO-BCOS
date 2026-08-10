@@ -43,6 +43,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <evmc/hex.hpp>
 #include <filesystem>
 #include <fstream>
@@ -797,6 +798,24 @@ void parseOptions(int argc, char* argv[])
         {
             g_opts.opFork = arg.substr(10);  // "--op-fork=" = 10 chars
         }
+    }
+
+    // Validate enumerated options so a typo (e.g. "--exec-mode optranstion") fails loudly
+    // instead of silently falling through to the baseline track (the worst failure mode for
+    // a verification tool).  --help short-circuits above, so these run only on a real run.
+    if (g_opts.execMode != "baseline" && g_opts.execMode != "optransition")
+    {
+        std::cerr << "error: invalid --exec-mode \"" << g_opts.execMode
+                  << "\" (expected \"baseline\" or \"optransition\")\n\n";
+        printUsage(argv[0]);
+        std::exit(1);
+    }
+    if (g_opts.opFork != "isthmus" && g_opts.opFork != "jovian")
+    {
+        std::cerr << "error: invalid --op-fork \"" << g_opts.opFork
+                  << "\" (expected \"isthmus\" or \"jovian\")\n\n";
+        printUsage(argv[0]);
+        std::exit(1);
     }
 }
 
@@ -2718,8 +2737,10 @@ int main(int argc, char* argv[])
 
     if (fileList.empty())
     {
-        std::cerr << "No fixture files found." << '\n';
-        return 0;
+        std::cerr << "Error: no fixture files found under: " << fixtureDir
+                  << " (dangling smoke symlinks or an empty fixture tree?); "
+                     "refusing a vacuous pass.\n";
+        return 1;
     }
 
     // Sort for deterministic output
@@ -2865,7 +2886,19 @@ int main(int argc, char* argv[])
             details.push_back(fd);
         }
         std::ofstream f(g_opts.jsonFailures);
+        if (!f)
+        {
+            std::cerr << "error: cannot open --json-failures file \"" << g_opts.jsonFailures
+                      << "\" for writing\n";
+            return 1;
+        }
         f << writeFailuresJson(details);
+        if (!f)
+        {
+            std::cerr << "error: failed writing --json-failures file \"" << g_opts.jsonFailures
+                      << "\"\n";
+            return 1;
+        }
     }
 
     return g_totalFailed > 0 ? 1 : 0;

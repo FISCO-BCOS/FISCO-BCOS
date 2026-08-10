@@ -31,6 +31,10 @@ target_link_libraries(eest-json-tests PRIVATE jsoncpp_static Boost::unit_test_fr
 set_source_files_properties("EestFailuresJsonTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(eest-json-tests PROPERTIES UNITY_BUILD OFF)
 set_target_properties(eest-json-tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+# ctest registration (matches the BcosEvm*Tests convention in bcos-evm/test): without this
+# the writeFailuresJson 7-field schema, firstMismatchCategory, and spikeForkSelect are dead
+# code in CI (the target is built but never run).
+add_test(NAME EestJsonTests COMMAND eest-json-tests)
 
 # ---------------------------------------------------------------------------
 # PR smoke subset (Task 7): register eest-runner as a ctest so a PR that
