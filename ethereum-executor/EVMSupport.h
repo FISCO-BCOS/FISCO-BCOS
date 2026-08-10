@@ -192,7 +192,9 @@ struct BlobParams
 /// Max amount of blob gas allowed in block (ported evmone block.cpp).
 inline uint64_t max_blob_gas_per_block(const BlobParams& blob_params) noexcept
 {
-    return blob_params.max * GAS_PER_BLOB;
+    // Compute in uint64_t: GAS_PER_BLOB (int) * uint16_t max would otherwise
+    // be evaluated in int (signed overflow UB once max >= 16384).
+    return static_cast<uint64_t>(blob_params.max) * GAS_PER_BLOB;
 }
 
 /// Computes the current blob gas price based on the excess blob gas
@@ -281,6 +283,12 @@ inline constexpr int64_t AUTHORIZATION_BASE_COST = 12500;
 /// Recover the EIP-7702 authority signer from a bcos Authorization via real
 /// ecrecover. signing hash = keccak256(0x05 || rlp([chain_id, address, nonce])),
 /// where the RLP tuple is encoded with bcos-codec's canonical encoder.
+///
+/// NOTE: this performs recovery ONLY. EIP-2 canonical-s (s <= SECP256K1N_OVER_2),
+/// y-parity <= 1, chain-id match and nonce != max are NOT checked here; the
+/// caller must apply them before calling, as processAuthorizationList does in
+/// bcos-evm/bcos-evm/eth/Eip7702Recover.h:68-83 (and its port in
+/// EthereumTransition.h, split 4/4). Skipping them diverges from geth/op-geth.
 inline std::optional<evmc::address> recoverAuthority(protocol::Authorization const& auth)
 {
     // rlp([chain_id, address, nonce]).
