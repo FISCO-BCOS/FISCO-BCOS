@@ -352,3 +352,68 @@ Phase 6  结论: 差异矩阵定稿 + Karst 上线闸清单
 - **PBFT retry loop**：OP 模式 proposal 短路后无限重推（禁 sealer/抑制重推决策）
 - **V4 能力广播**：`supportedOpCapabilities` 广告 V4 实为正确（引擎强制 V4），留生产互通验证
 - **generator 重生成 golden**：语料信任度由 vendored `SHA256SUMS` 锚定；重生成需 op-geth v1.101702.2 环境
+
+---
+
+## §8 结论定稿 + Karst 上线闸（W7，2026-08-07）
+
+> **形态**：三层对拍（W4 L0 静态矩阵 + W5 L1 动态 gate + W6 L2 e2e）汇总成最终裁决。
+> **范围**：EL 执行器等价 + Karst 就绪；生产互通待办见 §8.5。
+
+### 总体结论
+
+FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 逐位一致**（限定于块级共识字节——stateRoot/receiptsRoot/withdrawalsRoot/encodeOpHeader；D-4 快照时序契约与 B-3 RPC 扩展字段是矩阵级「已知分叉」，不进块级字节）。差异集中在**结构层设计（索引隔离/块校验位置/双执行器）**与 **Karst 未适配（D-2 🔴）**。
+
+### 7 阶段三态判定表
+
+| 阶段 | 聚合判定 | 依据（DIVERGENCES 矩阵行） |
+|---|---|---|
+| 0 数据形态 | 等价 + 1 结构性 | 三次类型翻译（结构性，已确认） |
+| 1 RPC 入口 | 等价 + 2 结构性 | 注册（V4 桩/V5 缺失）+ 差异点：校验位置 |
+| 2 块校验 | 等价 + 2 结构性 | 块校验主体（承诺比对 vs ValidateBody）+ 单侧 DA 拒绝路径（B-5b） |
+| 3 状态执行 | 等价 + 1 已知分叉 | D-1 交易级 + D-4 快照契约（契约已固化，不进块级字节） |
+| 4 块级收尾 | 等价 + 1 已知分叉 | B 台账终态已定（B-1/B-8 已修一致；B-2/B-4/B-5a 事实达成）+ B-3 回执扩展字段 2 delta |
+| 5 落库 | 结构性差异 | 索引隔离（SYS_HASH_2_TX 不写；对 getTransactionReceipt 可查性有影响） |
+| 6 输出 | 等价 | block hash 承诺比对；output root 不在 EL 范围 |
+
+### 已知差异明细落定
+
+- **D 项终态**：D-1/D-3 等价（已确认）；D-2 Karst 🔴（阻塞，论证见上线闸）；D-4 已知分叉（契约已固化）
+- **B 项终态**：B-1/B-8 已修一致；B-2/B-4/B-5a 事实达成（B-2/B-4 正式迁移在此落定）；B-3 已知分叉（2 delta，注记收紧归 W7）；B-5b/B-5c/B-6/B-7 已确认
+- **结构性差异「接受」决策**：
+  - 块校验位置：接受（承诺比对是 FISCO 架构选择，VALID/INVALID 语义互通无碍）
+  - 双执行器并存：接受（v2 未装配，生产单路径）
+  - **索引隔离：接受，但标注互通后果**——SYS_HASH_2_TX 刻意不写 → OP 块 `eth_getTransactionReceipt` 恒返回 null（当前分支未合 rawtx 回退/opReceiptMeta，fix 在 val-loop 未合并）；属功能性 RPC 缺口，入上线闸 gap 清单
+  - PBFT 哑桩：接受（W3 门控已生效），但与「PBFT 共识层是否整体禁用」未决决策纠缠——纯 EL 无碍，自持共识上线需决策
+
+### Karst 上线闸
+
+1. **gap 清单**（影响 / 工作量 / 阻塞性）：
+
+| gap | 影响 | 工作量 | 阻塞性 |
+|---|---|---|---|
+| D-2 Karst 适配 | ~~高——FISCO 无 karstTime 激活通道…~~ **用户裁定 2026-08-10：不处理**（op-geth 侧 Karst 纯 config 骨架、真实内容在 op-reth 且生态已要求迁移，无对拍对象） | 中高 | ~~🔴 阻塞~~ → **已关闭** |
+| OP 块回执不可查 | 高——SYS_HASH_2_TX 刻意不写 → eth_getTransactionReceipt 恒 null；写侧已有（OpStackReceiptMeta 编码 + rawtx 落表），**RPC 读侧 fix（rawtx 回退）在 val-loop 未合并** | 中 | 🔴 生产阻塞 |
+| PBFT 共识层未决 | 中——自持共识上线阻塞；纯 EL 视角可降级互通项 | 中 | 视上线形态 |
+| B-2/B-4 正式迁移 | 低（W7 内完成） | 低 | 否 |
+| B-3 注记收紧 | 低（W7 内完成） | 低 | 否 |
+| deferred minors（cases/ gitignore、golden manifest 校验、首投 B 软断言） | 低 | 低 | 否 |
+
+2. **修复排期**（⛔ 用户裁定 2026-08-10 移除 Karst 专项）：
+```
+（Karst 适配已裁定不处理）→ OP 块回执可查修复（剩余 🔴 项）→ 可上线评估
+```
+3. **Go/No-Go**：~~**当前 No-Go**——FISCO 无法激活/表征 Karst…~~ **更新（用户裁定 2026-08-10）：Karst 阻塞已关闭**（不处理）。剩余阻塞 = **OP 块回执不可查**（🔴 生产阻塞，RPC 读侧 fix 在 val-loop 未合并）。重新评估可上线的条件收敛为：① OP 块回执可查修复完成（rawtx 回退 + opReceiptMeta 从 val-loop 移植）② W5 gate 回归通过 ③ 按需重新对拍（不含 Karst）。
+
+### 待办移交（W7 之后）
+
+- ~~**Karst 适配专项任务**~~（**用户裁定 2026-08-10：不处理**——op-geth 侧 Karst 是纯 config 骨架（`IsKarst` 零行为调用点，registry commit cc07e96d9 无任何链配 karst_time），真实 Karst 内容（Fusaka 7 EIP / BN256 上限 / L2CM）在 op-reth 侧且 OP 生态已要求 Karst 后迁移 op-reth；FISCO 对拍基线停在 Jovian/Isthmus，Karst 无对拍对象）
+- **OP 块回执可查修复**（rawtx 回退 + opReceiptMeta，从 val-loop 移植）
+- **PBFT 共识层决策**（是否整体禁用 + retry loop 抑制）
+- deferred minors 清理（cases/ gitignore、golden manifest 校验、首投 B 软断言）
+- 生产互通待办（V4 端点桩 / V4 能力广播 / generator 重生成——见 §7「W6 外待办」）
+- **W8 / W0**（记忆遗留 ctest/落盘/四项决策 + DU 冲突清理）
+- **s_number_2_header 落盘欠账**（W8 T2 核实确认）：OP 提交路径 `EngineServiceImpl.h:1167` 只 `pushView`、从不 `mergeBackStorage()` → 同 view 内所有 OP 写表（s_number_2_header / SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / 回执表 / s_eth_hash_2_rawtx）只存内存层，不落后端 RocksDB，进程重启即丢。最小 loop 未接真实节点故暂留档（落盘无消费方）；修复应随 orchestration 层接真实节点时整层 merge（仿 FISCO `:662-669`，采纳原子 mergeView 规避 throw 泄漏），与 `SYS_CURRENT_STATE` head 推进/reorg 编排同批。核实报告见 SDD workspace `task-2-report.md`。
+- **legacy/0x01 块执行放行留档**（W8 C6 裁定确认）：FISCO OP 块执行层对 legacy(0xc0)/access_list(0x01) **放行** = 与 op-geth **等价**（`OpSchedulerImpl.h` decodeOneRawTx 分派无拒绝分支 + `OpTransition.cpp` opValidate 白名单仅拒 blob 0x03/>0x04；op-geth `state_transition.go` 块执行层亦仅 IsDepositTx 特殊分支）；**不实现硬拒**——若硬拒会对合法区块单侧判 INVALID，与差分对拍目标冲突。裁定报告见 SDD workspace `task-4-report.md`。
+
+> 注：B-2/B-4 正式迁移 + B-3 注记收紧已在 §8.3 W7 内完成，不入此移交。
