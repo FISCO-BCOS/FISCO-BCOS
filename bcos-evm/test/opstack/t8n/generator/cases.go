@@ -409,6 +409,18 @@ func upgradeFrame(baseFork, name, desc string, fp feeParams, gasLimit uint64, ac
 		// carry genesis.minBaseFee.
 		c.Genesis.MinBaseFee = hd64(0)
 	}
+	// _info.hardfork carries the BLOCK-TIME fork (the upgrade TARGET), matching
+	// its established meaning across every other vector -- "the fork the block
+	// executes under" -- so the C++ differential-gate replayer (which selects
+	// its chain config from _info.hardfork ONLY and never reads activations)
+	// replays the block under the target fork instead of the genesis base fork.
+	// The base fork lives only in the vector FILE name (vectorName) and in the
+	// activations schedule. buildConfigForCase still derives an IDENTICAL chain
+	// config from (hardfork = target, activations): the target-as-base keeps
+	// every fork through the target at 0 and the activations map re-timestamps
+	// exactly the forks that fire at activationT, so op-geth generation output
+	// is byte-for-byte unchanged -- this is a metadata-only edit.
+	c.Info.Hardfork = activationFork
 	return c
 }
 
