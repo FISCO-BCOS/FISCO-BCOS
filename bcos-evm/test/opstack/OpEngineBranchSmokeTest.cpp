@@ -38,10 +38,7 @@ struct TrivialCheckpointStorage
     Storage& m_storage;
     explicit TrivialCheckpointStorage(Storage& storage) noexcept : m_storage(storage) {}
     Storage& open() & { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) &
-    {
-        std::abort();
-    }
+    [[noreturn]] Storage& open(CheckpointName const& /*unused*/) & { std::abort(); }
     void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
     void deleteCheckpoint(CheckpointName const& /*unused*/) {}
     [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
@@ -115,12 +112,14 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
             .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1});
     StubMemPool memPool;
     StubExecutor executor;
-    static auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
 
     // The OP composition root relaxes the version-gate upper bound to V4 (spec §6.3, 裁定 B1);
     // the generic root's V3 default would refuse version 4 before the OP branch's -38005 gate.
     OpEngine engine(memPool, storage, executor, scheduler, blockFactory,
-        bcos::engine::c_defaultBlockTxCountLimit, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4));
+        /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit,
+        static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4));
 
     // A V4 newPayload with a pre-Isthmus timestamp hits the -38005 version gate (which lives
     // outside the classification barrier), proving the OP branch is wired end-to-end.

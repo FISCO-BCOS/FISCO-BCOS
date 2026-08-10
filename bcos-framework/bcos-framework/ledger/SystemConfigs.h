@@ -48,6 +48,7 @@ enum class SystemConfig
     balance_transfer,
     executor_version,
     evmc_revision,
+    excess_blob_gas,
 };
 
 struct SystemConfigs

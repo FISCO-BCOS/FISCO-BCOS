@@ -23,6 +23,9 @@
 #include "bcos-utilities/Error.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <algorithm>
+#include <cstring>
+#include <optional>
 #include <utility>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
@@ -168,13 +171,38 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
         to =
             from.getCroppedData(0, header.payloadLength).toStringLike<std::decay_t<decltype(to)>>();
     }
-    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<32>>)
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<32>> ||
+                       std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<20>> ||
+                       std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<8>>)
     {
-        to = FixedBytes<32>{from.getCroppedData(0, header.payloadLength)};
+        // Fixed-size hashes/addresses must be exactly their declared size. A short or long
+        // payload is malformed input — silently right-aligning (zero-padding) or truncating
+        // would re-encode differently and change the keccak hash on hash-sensitive bridges.
+        // NOTE: this is a behaviour change for the shared RLP codec (previously short payloads
+        // were right-aligned/zero-padded, long ones truncated). Canonical inputs are unaffected;
+        // all existing in-tree decode callers (Web3Transaction, MPT, ledger, tx RLP) have been
+        // verified to only feed fixed-size payloads here.
+        using FixedT = std::decay_t<decltype(to)>;
+        if (header.payloadLength != FixedT::SIZE)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                DecodingError::UnexpectedLength, "Unexpected fixed-bytes length");
+        }
+        to = FixedT{from.getCroppedData(0, header.payloadLength)};
     }
-    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<20>>)
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, std::array<bcos::byte, 256>>)
     {
-        to = FixedBytes<20>{from.getCroppedData(0, header.payloadLength)};
+        // Ethereum's logsBloom is exactly 256 bytes; anything shorter or longer is rejected
+        // rather than silently padded/truncated (a padded bloom would re-encode differently
+        // and change the keccak hash). Fixed-size byte blobs are left-aligned here, unlike the
+        // big-endian scalar FixedBytes branches above which right-align.
+        if (header.payloadLength != to.size())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                DecodingError::UnexpectedLength, "Unexpected bloom length");
+        }
+        auto payload = from.getCroppedData(0, header.payloadLength);
+        std::memcpy(to.data(), payload.data(), payload.size());
     }
     else
     {
@@ -248,29 +276,44 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcep
     return nullptr;
 }
 
-template <typename Arg1, typename Arg2>
-inline bcos::Error::UniquePtr decodeItems(bytesRef& from, Arg1& arg1, Arg2& arg2) noexcept
+// Decodes an optional element. Presence is decided by "the view is exhausted" — i.e.
+// from.empty() — so this overload is only meaningful on a bytesRef already cropped to the
+// current list's payload (the variadic list decode does this). Calling it on a raw buffer
+// that still holds trailing data will silently treat the remaining fields as absent rather
+// than reporting malformed input; keep the list-context invariant in mind.
+template <typename T>
+inline bcos::Error::UniquePtr decode(bytesRef& from, std::optional<T>& to) noexcept
 {
-    if (auto error = decode(from, arg1); error != nullptr)
+    if (from.empty())
     {
-        return error;
+        to.reset();
+        return nullptr;
     }
-    return decode(from, arg2);
+    T value;
+    if (auto decodeError = decode(from, value); decodeError != nullptr)
+    {
+        return decodeError;
+    }
+    to = std::move(value);
+    return nullptr;
 }
 
-template <typename Arg1, typename Arg2, typename... Args>
-inline bcos::Error::UniquePtr decodeItems(
-    bytesRef& from, Arg1& arg1, Arg2& arg2, Args&... args) noexcept
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline bcos::Error::UniquePtr decodeItems(bytesRef& from, Args&... args) noexcept
 {
-    if (auto error = decode(from, arg1); error != nullptr)
+    bcos::Error::UniquePtr decodeError;
+    ((decodeError = decode(from, args)) || ...);
+    if (decodeError != nullptr)
     {
-        return error;
+        return decodeError;
     }
-    return decodeItems(from, arg2, args...);
+    return nullptr;
 }
 
-template <typename Arg1, typename Arg2, typename... Args>
-inline bcos::Error::UniquePtr decode(bytesRef& from, Arg1& arg1, Arg2& arg2, Args&... args) noexcept
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline bcos::Error::UniquePtr decode(bytesRef& from, Args&... args) noexcept
 {
     auto&& [error, header] = decodeHeader(from);
     if (error)
@@ -281,18 +324,21 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, Arg1& arg1, Arg2& arg2, Arg
     {
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
     }
-    const uint64_t leftover{from.size() - header.payloadLength};
-
-    if (auto decodeError = decodeItems(from, arg1, arg2, args...); decodeError != nullptr)
+    // Crop to this list's payload before decoding the items: decode(std::optional) decides
+    // presence by "the view is exhausted", which must mean "this list is exhausted" — not
+    // "the whole buffer is consumed". Without the crop, a header nested inside a block RLP
+    // would try to decode the trailing transactions as optional fields.
+    auto payloadView = from.getCroppedData(0, header.payloadLength);
+    if (auto decodeError = decodeItems(payloadView, args...); decodeError != nullptr)
     {
         return decodeError;
     }
-
-    if (from.size() != leftover)
+    if (!payloadView.empty())
     {
         return BCOS_ERROR_UNIQUE_PTR(
             DecodingError::UnexpectedListElements, "Unexpected list elements");
     }
+    from = from.getCroppedData(header.payloadLength);
     return {};
 }
 

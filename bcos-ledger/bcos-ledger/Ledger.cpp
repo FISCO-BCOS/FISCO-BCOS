@@ -35,6 +35,7 @@
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
@@ -139,7 +140,18 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    auto const contractTableName = getContractTableName(SYS_DIRECTORY::USER_APPS, _address);
+    // System-contract addresses (0x1000 range, etc.) are stored under the
+    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
+    // right prefix here keeps eth_getBalance / eth_getStorageAt /
+    // eth_getTransactionCount consistent with both the genesis alloc import and
+    // the v2 executor (which both go through EVMAccount). Without this, reads
+    // for system-range accounts hit the wrong table and return empty (e.g.
+    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
+    auto const tablePrefix =
+        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
+            SYS_DIRECTORY::SYS_APPS :
+            SYS_DIRECTORY::USER_APPS;
+    auto const contractTableName = getContractTableName(tablePrefix, _address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
@@ -712,6 +724,25 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                             {
                                 block->appendReceipt(it);
                             }
+                            // The block-level logsBloom is not persisted with the block
+                            // (only header / tx hashes / txs / receipts are stored), so a
+                            // block reconstructed here would otherwise carry 256 zero bytes
+                            // and eth_getBlockByNumber / eth_getLogs would report an empty
+                            // bloom for blocks with logs — from the legacy BaselineScheduler
+                            // commit path and the built-in single-node driver alike. Recompute
+                            // it from the receipts' log entries (receipts may carry an empty
+                            // per-receipt logsBloom, but their logEntries are populated).
+                            bcos::Bloom logsBloom{};
+                            for (auto const& receipt : receipts)
+                            {
+                                if (!receipt)
+                                {
+                                    continue;
+                                }
+                                bcos::orBloom(logsBloom, bcos::getLogsBloom(receipt->logEntries()));
+                            }
+                            block->setLogsBloom(
+                                bcos::bytesConstRef(logsBloom.data(), logsBloom.size()));
                             finally(std::move(error));
                         });
                 }
@@ -2117,7 +2148,8 @@ bool Ledger::buildGenesisBlock(
         if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
         {
             Entry gasPriceEntry;
-            gasPriceEntry.set(bcos::storage::serialize::encode(SystemConfigEntry("0x0", 0)));
+            gasPriceEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry(genesis.m_txGasPrice, 0)));
             sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
         }
 
@@ -2235,6 +2267,18 @@ bool Ledger::buildGenesisBlock(
                 encodeEVMCRevisionConfig(genesis.m_evmcRevision, genesis.m_evmcRevisionForks), 0}));
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EVMC_REVISION), evmcRevisionEntry);
+        }
+
+        // Write excess blob gas config (consumed by ethereum-executor, executor_version=2,
+        // for EIP-4844 blob base fee). Only written when explicitly configured in the genesis
+        // config; otherwise getLedgerConfig leaves excessBlobGas unset (executor uses 0).
+        if (versionNumber >= BlockVersion::V3_18_0_VERSION && genesis.m_excessBlobGas.has_value())
+        {
+            Entry excessBlobGasEntry;
+            excessBlobGasEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{std::to_string(*genesis.m_excessBlobGas), 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS), excessBlobGasEntry);
         }
 
         // write consensus node list

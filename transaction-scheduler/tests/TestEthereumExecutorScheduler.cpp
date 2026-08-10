@@ -34,19 +34,23 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-ledger/LedgerMethods.h"
+#include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include "engine/bcos-engine/EngineServiceImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/StorageBlockHashes.h"
 #include <boost/test/unit_test.hpp>
 #include <cstring>
+#include <magic_enum/magic_enum.hpp>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -91,6 +95,14 @@ std::string EEQuantity(uint64_t value)
     return oss.str();
 }
 
+/// TransactionImpl subclass exposing markClean() (setTainted(false)); transactions built
+/// from TransactionImpl are tainted by default and the mempool rejects tainted txs.
+class EETestTransactionImpl : public bcostars::protocol::TransactionImpl
+{
+public:
+    void markClean() { setTainted(false); }
+};
+
 /// A legacy value-transfer transaction. `to` is stored as the "0x"-prefixed
 /// lowercase hex address string (exactly the encoding every real tx path uses:
 /// Web3Transaction::takeToTarsTransaction() writes hexPrefixed(), and the RPC
@@ -108,11 +120,11 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> EEMakeTransferTx(
     std::shared_ptr<bcos::crypto::CryptoSuite> const& cryptoSuite, evmc_address const& from,
     evmc_address const& to, uint64_t value, std::string const& nonce)
 {
-    auto toHexStr = bcos::toHexStringWithPrefix(
-        bcos::bytes(std::begin(to.bytes), std::end(to.bytes)));
-    auto tx = factory.createTransaction(1 /* V1 */, toHexStr, {}, nonce,
-        1000 /* blockLimit */, "0x1" /* chainId */, "" /* groupId */, 0 /* importTime */,
-        {} /* abi */, EEQuantity(value) /* value */, "0x0" /* gasPrice */, 21000 /* gasLimit */);
+    auto toHexStr =
+        bcos::toHexStringWithPrefix(bcos::bytes(std::begin(to.bytes), std::end(to.bytes)));
+    auto tx = factory.createTransaction(1 /* V1 */, toHexStr, {}, nonce, 1000 /* blockLimit */,
+        "0x1" /* chainId */, "" /* groupId */, 0 /* importTime */, {} /* abi */,
+        EEQuantity(value) /* value */, "0x0" /* gasPrice */, 21000 /* gasLimit */);
     tx->forceSender(bcos::bytes(std::begin(from.bytes), std::end(from.bytes)));
     tx->calculateHash(*cryptoSuite->hashImpl());
     return std::static_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
@@ -145,8 +157,8 @@ task::Task<void> EEWriteBlockHash(
 {
     storage::Entry entry;
     entry.set(hash.asBytes());
-    co_await storage2::writeOne(storage,
-        StateKey{ledger::SYS_NUMBER_2_HASH, std::to_string(number)}, std::move(entry));
+    co_await storage2::writeOne(
+        storage, StateKey{ledger::SYS_NUMBER_2_HASH, std::to_string(number)}, std::move(entry));
 }
 
 /// Persist the committed current block height into SYS_CURRENT_STATE/current_number —
@@ -162,9 +174,8 @@ task::Task<void> EEWriteCurrentNumber(EEBackendStorage& storage, int64_t number)
 class TestEthereumExecutorSchedulerFixture
 {
 public:
-    bcos::crypto::CryptoSuite::Ptr cryptoSuite =
-        std::make_shared<bcos::crypto::CryptoSuite>(
-            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    bcos::crypto::CryptoSuite::Ptr cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
     bcostars::protocol::TransactionFactoryImpl transactionFactory{cryptoSuite};
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
@@ -214,11 +225,10 @@ task::Task<void> EERunTransfers(Scheduler& scheduler, EthereumExecutor& executor
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    auto transactions =
-        txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+    auto transactions = txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
 
-    auto receipts = co_await scheduler.executeBlock(
-        view, executor, blockHeader, transactions, ledgerConfig);
+    auto receipts =
+        co_await scheduler.executeBlock(view, executor, blockHeader, transactions, ledgerConfig);
 
     BOOST_CHECK_EQUAL(receipts.size(), txs.size());
     for (size_t i = 0; i < receipts.size(); ++i)
@@ -231,8 +241,8 @@ task::Task<void> EERunTransfers(Scheduler& scheduler, EthereumExecutor& executor
     for (auto const& [addr, expected] : expectedBalances)
     {
         auto actual = co_await EEReadBalance(view, addr);
-        BOOST_CHECK_MESSAGE(actual == expected,
-            "balance mismatch: expected " << expected << " got " << actual);
+        BOOST_CHECK_MESSAGE(
+            actual == expected, "balance mismatch: expected " << expected << " got " << actual);
     }
 }
 
@@ -255,8 +265,10 @@ BOOST_AUTO_TEST_CASE(serialExecuteBlock)
         co_await EEFundAccount(backendStorage, recipient1, 0);
 
         std::vector<protocol::Transaction::Ptr> txs;
-        txs.emplace_back(EEMakeTransferTx(transactionFactory, cryptoSuite, sender0, recipient0, 100, "0"));
-        txs.emplace_back(EEMakeTransferTx(transactionFactory, cryptoSuite, sender1, recipient1, 200, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender0, recipient0, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender1, recipient1, 200, "0"));
 
         co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
             cryptoSuite, txs,
@@ -264,12 +276,10 @@ BOOST_AUTO_TEST_CASE(serialExecuteBlock)
                 {recipient1, 200}});
 
         // The storage-backed BlockHashes resolves committed hashes via LedgerMethod.
-        auto h0 = task::tbb::syncWait(
-            ledger::getBlockHash(backendStorage, 0, ledger::fromStorage));
+        auto h0 = task::tbb::syncWait(ledger::getBlockHash(backendStorage, 0, ledger::fromStorage));
         BOOST_CHECK(h0.has_value());
         auto resolved = blockHashes->get_block_hash(0);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
     }());
 }
 
@@ -302,8 +312,7 @@ BOOST_AUTO_TEST_CASE(serialExecuteBlockWithHexTo)
             EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 200, "1"));
 
         co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
-            cryptoSuite, txs,
-            {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
+            cryptoSuite, txs, {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
     }());
 }
 
@@ -327,8 +336,8 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
             transfers.emplace_back(sender, recipient);
             co_await EEFundAccount(backendStorage, sender, EEFunding);
             co_await EEFundAccount(backendStorage, recipient, 0);
-            txs.emplace_back(EEMakeTransferTx(
-                transactionFactory, cryptoSuite, sender, recipient, 10 + i, "0"));
+            txs.emplace_back(
+                EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient, 10 + i, "0"));
             expected.emplace_back(sender, EEFunding - (10 + i));
             expected.emplace_back(recipient, 10 + i);
         }
@@ -367,15 +376,15 @@ BOOST_AUTO_TEST_CASE(serialSameSenderSequentialNonces)
             EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 200, "1"));
 
         co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
-            cryptoSuite, txs,
-            {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
+            cryptoSuite, txs, {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
     }());
 }
 
 BOOST_AUTO_TEST_CASE(parallelSameSenderSequentialNonces)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthParallelSameSenderGC");
+        auto ioServicePool =
+            std::make_shared<bcos::IOServicePool>(1, "testEthParallelSameSenderGC");
         SchedulerParallelImpl<EEMutableStorage> scheduler(ioServicePool);
 
         auto sender = EEMakeAddress(23);
@@ -393,8 +402,7 @@ BOOST_AUTO_TEST_CASE(parallelSameSenderSequentialNonces)
             EEMakeTransferTx(transactionFactory, cryptoSuite, sender, recipient1, 200, "1"));
 
         co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
-            cryptoSuite, txs,
-            {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
+            cryptoSuite, txs, {{sender, EEFunding - 300}, {recipient0, 100}, {recipient1, 200}});
     }());
 }
 
@@ -427,7 +435,8 @@ BOOST_AUTO_TEST_CASE(serialSharedRecipient)
 BOOST_AUTO_TEST_CASE(parallelSharedRecipient)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthParallelSharedRecipGC");
+        auto ioServicePool =
+            std::make_shared<bcos::IOServicePool>(1, "testEthParallelSharedRecipGC");
         SchedulerParallelImpl<EEMutableStorage> scheduler(ioServicePool);
 
         auto sender0 = EEMakeAddress(43);
@@ -495,7 +504,7 @@ BOOST_AUTO_TEST_CASE(serialInvalidTxDoesNotAbortBlock)
             view, *executor, blockHeader, transactions, ledgerConfig);
 
         BOOST_CHECK_EQUAL(receipts.size(), 2u);
-        BOOST_CHECK(receipts[0]->status() != 0);  // invalid tx → failure receipt
+        BOOST_CHECK(receipts[0]->status() != 0);      // invalid tx → failure receipt
         BOOST_CHECK_EQUAL(receipts[1]->status(), 0);  // good tx still succeeds
         auto goodBalance = co_await EEReadBalance(view, goodSender);
         BOOST_CHECK(goodBalance == EEFunding - 50);
@@ -557,7 +566,7 @@ BOOST_AUTO_TEST_CASE(serialSameNonceSecondRejected)
 
         BOOST_CHECK_EQUAL(receipts.size(), 2u);
         BOOST_CHECK_EQUAL(receipts[0]->status(), 0);  // first nonce-"0" tx succeeds
-        BOOST_CHECK(receipts[1]->status() != 0);  // second same-nonce tx rejected
+        BOOST_CHECK(receipts[1]->status() != 0);      // second same-nonce tx rejected
 
         // The sender must NOT be wrapped to ~2^256: only the first transfer is
         // debited, and the rejected second one writes nothing.
@@ -573,8 +582,7 @@ BOOST_AUTO_TEST_CASE(serialSameNonceSecondRejected)
 BOOST_AUTO_TEST_CASE(parallelSameNonceSecondRejected)
 {
     task::syncWait([&, this]() -> task::Task<void> {
-        auto ioServicePool =
-            std::make_shared<bcos::IOServicePool>(1, "testEthParallelSameNonceGC");
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEthParallelSameNonceGC");
         SchedulerParallelImpl<EEMutableStorage> scheduler(ioServicePool);
 
         auto sender = EEMakeAddress(82);
@@ -615,7 +623,7 @@ BOOST_AUTO_TEST_CASE(parallelSameNonceSecondRejected)
 
         BOOST_CHECK_EQUAL(receipts.size(), 2u);
         BOOST_CHECK_EQUAL(receipts[0]->status(), 0);  // first nonce-"0" tx succeeds
-        BOOST_CHECK(receipts[1]->status() != 0);  // second same-nonce tx rejected
+        BOOST_CHECK(receipts[1]->status() != 0);      // second same-nonce tx rejected
 
         auto senderBalance = co_await EEReadBalance(view, sender);
         BOOST_CHECK(senderBalance == EEFunding - 100);
@@ -644,8 +652,7 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
             task::tbb::syncWait(ledger::getBlockHash(backendStorage, 50, ledger::fromStorage));
         BOOST_CHECK(h50.has_value());
         auto resolved50 = blockHashes->get_block_hash(50);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
 
         // Older than 256 ancestors — unknown (zero hash), despite the hash being stored.
         evmc::bytes32 zero{};
@@ -698,10 +705,9 @@ BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
         // CallRequest::takeToTransaction produces for an eth_call that omits them.
         auto toHexStr = bcos::toHexStringWithPrefix(
             bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
-        auto tx = transactionFactory.createTransaction(1 /* V1 */, toHexStr, {},
-            "" /*nonce*/, 1000 /*blockLimit*/, "0x1" /*chainId*/, "" /*groupId*/,
-            0 /*importTime*/, {} /*abi*/, EEQuantity(100) /*value*/, "0x0" /*gasPrice*/,
-            0 /*gasLimit*/);
+        auto tx = transactionFactory.createTransaction(1 /* V1 */, toHexStr, {}, "" /*nonce*/,
+            1000 /*blockLimit*/, "0x1" /*chainId*/, "" /*groupId*/, 0 /*importTime*/, {} /*abi*/,
+            EEQuantity(100) /*value*/, "0x0" /*gasPrice*/, 0 /*gasLimit*/);
         tx->forceSender(bcos::bytes(std::begin(sender.bytes), std::end(sender.bytes)));
         tx->calculateHash(*cryptoSuite->hashImpl());
 
@@ -730,8 +736,8 @@ BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
             bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
 
         auto mkTx = [&](std::string const& toField) {
-            auto tx = transactionFactory.createTransaction(1 /* V1 */, toField, {}, "0", 1000,
-                "0x1", "", 0, {}, EEQuantity(1), "0x0", 21000);
+            auto tx = transactionFactory.createTransaction(
+                1 /* V1 */, toField, {}, "0", 1000, "0x1", "", 0, {}, EEQuantity(1), "0x0", 21000);
             tx->forceSender(bcos::bytes(20, 0));
             tx->calculateHash(*cryptoSuite->hashImpl());
             return tx;
@@ -772,6 +778,197 @@ BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
             BOOST_CHECK(!evmTx.to.has_value());
         }
         co_return;
+    }());
+}
+
+// End-to-end guard for the EngineService seal/execute interaction
+// (engine/bcos-engine/EngineServiceImpl.h updateForkchoice): MemPoolImpl::seal() advances
+// the sender's nonce in the view it is given, so sealing on the executed/committed view
+// would make the v2 executor validate the just-sealed transactions (nonce N) against state
+// nonce N+1 and reject every one of them as NONCE_TOO_LOW. The EngineService must seal on a
+// throwaway overlay and execute on a separate view — this test drives the REAL
+// EngineServiceImpl (real EthereumExecutor + SchedulerSerialImpl + storage) with a real
+// value-transfer transaction and requires it to commit successfully.
+BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEngineE2EGC");
+        SchedulerSerialImpl scheduler(ioServicePool);
+        bcos::txpool::MemPoolImpl memPool;
+
+        auto sender = EEMakeAddress(7);
+        auto recipient = EEMakeAddress(8);
+
+        // Genesis/pre state: sender exists with nonce 0 (as an EEST fixture would).
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient, 0);
+
+        // Genesis block-0 hash mappings so updateForkchoice can resolve the head.
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEWriteBlockHash(backendStorage, 0, genesisHash);
+        // updateForkchoice resolves the head by hash (SYS_HASH_2_NUMBER).
+        {
+            storage::Entry entry;
+            entry.set("0");
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{
+                    ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(genesisHash)},
+                std::move(entry));
+        }
+        co_await EEWriteCurrentNumber(backendStorage, 0);
+
+        // executor_version=2 → getLedgerConfig wires the EVMC revision for the v2 executor.
+        // A block gas limit so the transfer (gas 21000) fits in the block.
+        {
+            storage::Entry entry;
+            entry.set(bcos::storage::serialize::encode(
+                ledger::SystemConfigEntry{std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION), 0}));
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{ledger::SYS_CONFIG,
+                    std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version))},
+                std::move(entry));
+
+            storage::Entry gasLimitEntry;
+            gasLimitEntry.set(
+                bcos::storage::serialize::encode(ledger::SystemConfigEntry{"3000000000", 0}));
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{ledger::SYS_CONFIG,
+                    std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit))},
+                std::move(gasLimitEntry));
+        }
+
+        static auto blockFactory =
+            bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl, EEMultiLayerStorage,
+            EthereumExecutor, SchedulerSerialImpl>
+            engineService(memPool, multiLayerStorage, *executor, scheduler, blockFactory);
+
+        // Submit a real value-transfer tx (nonce 0, matching the sender's state nonce).
+        // Built directly as EETestTransactionImpl (the factory returns a base TransactionImpl
+        // which cannot be markClean()'d) with the same inner encoding the factory produces.
+        auto tx = std::make_shared<EETestTransactionImpl>();
+        {
+            auto& inner = tx->mutableInner();
+            inner.data.version = 1;
+            inner.data.to = bcos::toHexStringWithPrefix(
+                bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
+            inner.data.blockLimit = 1000;
+            inner.data.chainID = "0x1";
+            inner.data.nonce = "0";
+            inner.data.value = EEQuantity(100);
+            inner.data.gasPrice = "0x0";
+            inner.data.gasLimit = 100000;
+            inner.data.maxFeePerGas = "0x0";
+            inner.data.maxPriorityFeePerGas = "0x0";
+        }
+        tx->forceSender(bcos::bytes(std::begin(sender.bytes), std::end(sender.bytes)));
+        tx->calculateHash(*cryptoSuite->hashImpl());
+        tx->markClean();
+        memPool.add(std::vector<protocol::Transaction::Ptr>{tx});
+
+        // The CL flow: forkchoiceUpdated(head, attrs) → getPayload → newPayload.
+        bcos::engine::ForkchoiceState fc{genesisHash, genesisHash, genesisHash};
+        bcos::engine::PayloadAttributes attrs;
+        attrs.prevRandao = cryptoSuite->hashImpl()->hash(std::string("randao"));
+        attrs.timestamp = 12345;
+        auto fcResult = co_await engineService.updateForkchoice(fc, &attrs, 1);
+        BOOST_REQUIRE(fcResult.payloadId.has_value());
+
+        auto payload = co_await engineService.getPayload(*fcResult.payloadId, 1);
+        BOOST_REQUIRE(payload);
+        // The tx must be sealed (nonce 0 == state nonce 0).
+        BOOST_CHECK_EQUAL(payload->executionPayload.transactions.size(), 1u);
+        // gasUsed > 0 proves the tx actually executed (a NONCE_TOO_LOW failure would leave
+        // gasUsed 0); the exact value depends on the EVM revision (Osaka default).
+        BOOST_CHECK(payload->executionPayload.gasUsed > 0);
+
+        bcos::engine::NewPayloadRequest request;
+        request.executionPayload = payload->executionPayload;
+        auto newPayloadStatus = co_await engineService.newPayload(request, 1);
+        BOOST_CHECK_EQUAL(static_cast<int>(newPayloadStatus.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+
+        // The committed state must show the transfer executed successfully (not
+        // NONCE_TOO_LOW — the seal's nonce advance must not leak into execution) and be
+        // visible in the backend after newPayload's pushView + mergeBackStorage.
+        auto recipientBalance =
+            co_await EEReadBalance(multiLayerStorage.latestBackend(), recipient);
+        BOOST_CHECK_EQUAL(recipientBalance, u256(100));
+        auto senderBalance = co_await EEReadBalance(multiLayerStorage.latestBackend(), sender);
+        BOOST_CHECK_EQUAL(senderBalance, EEFunding - 100);
+    }());
+}
+
+// Mechanism check: writes into a forked view's mutable layer must survive
+// pushView + mergeBackStorage into the backend (the EngineService's commit path).
+BOOST_AUTO_TEST_CASE(viewCommitMechanism)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        storage::Entry entry;
+        entry.set("42");
+        co_await storage2::writeOne(view, executor_v1::StateKey{"t", "k"}, std::move(entry));
+        multiLayerStorage.pushView(std::move(view));
+        co_await multiLayerStorage.mergeBackStorage();
+        auto read = co_await storage2::readOne(
+            multiLayerStorage.latestBackend(), executor_v1::StateKeyView{"t", "k"});
+        BOOST_REQUIRE(read.has_value());
+        BOOST_CHECK_EQUAL(read->get(), "42");
+    }());
+}
+
+// Isolation probe: the manually-built EETestTransactionImpl transfer must move value
+// when executed directly through the scheduler (rules out the tx construction as the
+// cause of the EngineService end-to-end balance mismatch).
+BOOST_AUTO_TEST_CASE(manualTxTransfersValueDirectly)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testManualTxGC");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEMakeAddress(17);
+        auto recipient = EEMakeAddress(18);
+        co_await EEFundAccount(backendStorage, sender, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient, 0);
+
+        auto tx = std::make_shared<EETestTransactionImpl>();
+        {
+            auto& inner = tx->mutableInner();
+            inner.data.version = 1;
+            inner.data.to = bcos::toHexStringWithPrefix(
+                bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
+            inner.data.blockLimit = 1000;
+            inner.data.chainID = "0x1";
+            inner.data.nonce = "0";
+            inner.data.value = EEQuantity(100);
+            inner.data.gasPrice = "0x0";
+            inner.data.gasLimit = 21000;
+            inner.data.maxFeePerGas = "0x0";
+            inner.data.maxPriorityFeePerGas = "0x0";
+        }
+        tx->forceSender(bcos::bytes(std::begin(sender.bytes), std::end(sender.bytes)));
+        tx->calculateHash(*cryptoSuite->hashImpl());
+        tx->markClean();
+
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setNumber(1);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+        ledger::LedgerConfig ledgerConfig;
+        ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        std::vector<protocol::Transaction::Ptr> txs{tx};
+        auto transactions =
+            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, blockHeader, transactions, ledgerConfig);
+        BOOST_CHECK_EQUAL(receipts[0]->status(), 0);
+        auto recipientBalance = co_await EEReadBalance(view, recipient);
+        BOOST_CHECK_EQUAL(recipientBalance, u256(100));
+        auto senderBalance = co_await EEReadBalance(view, sender);
+        BOOST_CHECK_EQUAL(senderBalance, EEFunding - 100);
     }());
 }
 

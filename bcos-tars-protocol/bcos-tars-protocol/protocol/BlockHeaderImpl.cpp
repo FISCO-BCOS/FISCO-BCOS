@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "../impl/TarsHashable.h"
 #include "bcos-concepts/Hash.h"
+#include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -32,9 +33,9 @@
 #include <boost/lexical_cast.hpp>
 #include <cstring>
 #include <limits>
-#include <stdexcept>
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
+#include <stdexcept>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 
@@ -188,10 +189,28 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::hash() const
 
 void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
-    // FISCO-BCOS block — original Tars hash
-    bcos::crypto::HashType hashResult;
-    bcos::concepts::hash::calculate(*m_inner, hashImpl.hasher(), hashResult);
-    m_inner->dataHash.assign(hashResult.begin(), hashResult.end());
+    if (ethBlockVersion() != bcos::protocol::EthBlockVersion::NON_ETH)
+    {
+        // Eth header: recompute the RLP hash via the rlp-protocol bridge. If the header is
+        // invalid for its EthBlockVersion, clear dataHash rather than keeping whatever came
+        // off the wire — FIB-130's recompute-then-compare depends on calculateHash() never
+        // leaving an attacker-supplied hash in place. hash() then throws EmptyBlockHeaderHash,
+        // which is how the caller learns the header is not hashable.
+        auto err = bcos::protocol::EthBlockHeader::calculateRLPHash(*this);
+        if (err)
+        {
+            clearDataHash();
+            BCOS_LOG(WARNING) << LOG_DESC("calculateHash: Eth header validation failed")
+                              << LOG_KV("error", err->errorMessage());
+        }
+    }
+    else
+    {
+        // FISCO-BCOS block — original Tars hash
+        bcos::crypto::HashType hashResult;
+        bcos::concepts::hash::calculate(*m_inner, hashImpl.hasher(), hashResult);
+        m_inner->dataHash.assign(hashResult.begin(), hashResult.end());
+    }
 }
 
 void bcostars::protocol::BlockHeaderImpl::clear()
@@ -207,10 +226,9 @@ bcos::protocol::ParentInfo bcostars::protocol::BlockHeaderImpl::parentInfo() con
         return {};
     }
     const auto& first = parentInfos.front();
-    return bcos::protocol::ParentInfo{
-        .blockNumber = first.blockNumber,
-        .blockHash = bcos::crypto::HashType(reinterpret_cast<const bcos::byte*>(first.blockHash.data()),
-            first.blockHash.size())};
+    return bcos::protocol::ParentInfo{.blockNumber = first.blockNumber,
+        .blockHash = bcos::crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(first.blockHash.data()), first.blockHash.size())};
 }
 
 bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::txsRoot() const
@@ -235,8 +253,7 @@ bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::receiptsRoot() const
 {
     if (m_inner->data.receiptRoot.size() >= bcos::crypto::HashType::SIZE)
     {
-        return *(
-            reinterpret_cast<const bcos::crypto::HashType*>(m_inner->data.receiptRoot.data()));
+        return *(reinterpret_cast<const bcos::crypto::HashType*>(m_inner->data.receiptRoot.data()));
     }
     return {};
 }
@@ -250,8 +267,7 @@ bcos::u256 bcostars::protocol::BlockHeaderImpl::gasUsed() const
     return {};
 }
 
-void bcostars::protocol::BlockHeaderImpl::setParentInfo(
-    bcos::protocol::ParentInfo parentInfo)
+void bcostars::protocol::BlockHeaderImpl::setParentInfo(bcos::protocol::ParentInfo parentInfo)
 {
     auto& parentInfos = m_inner->data.parentInfo;
     parentInfos.clear();
@@ -411,6 +427,18 @@ uint32_t bcostars::protocol::BlockHeaderImpl::version() const
 {
     return m_inner->data.version;
 }
+bcos::protocol::EthBlockVersion bcostars::protocol::BlockHeaderImpl::ethBlockVersion() const
+{
+    return static_cast<bcos::protocol::EthBlockVersion>(m_inner->ethBlockVersion);
+}
+void bcostars::protocol::BlockHeaderImpl::setEthBlockVersion(
+    bcos::protocol::EthBlockVersion _version)
+{
+    m_inner->ethBlockVersion = static_cast<uint8_t>(_version);
+    // Changing the Eth marker invalidates any previously computed hash (a FISCO Tars hash
+    // must not be returned for a header now marked as Ethereum).
+    clearDataHash();
+}
 bcos::protocol::BlockNumber bcostars::protocol::BlockHeaderImpl::number() const
 {
     return m_inner->data.blockNumber;
@@ -483,6 +511,55 @@ bcos::h256 bcostars::protocol::BlockHeaderImpl::prevRandao() const
 void bcostars::protocol::BlockHeaderImpl::setPrevRandao(bcos::h256 _digest)
 {
     m_inner->data.prevRandao.assign(_digest.begin(), _digest.end());
+    clearDataHash();
+}
+
+bcos::crypto::HashType bcostars::protocol::BlockHeaderImpl::uncleHash() const
+{
+    const auto& _uncleHash = inner().data.uncleHash;
+    if (_uncleHash.size() >= bcos::crypto::HashType::SIZE)
+    {
+        return bcos::crypto::HashType(
+            reinterpret_cast<const bcos::byte*>(_uncleHash.data()), _uncleHash.size());
+    }
+    return {};
+}
+
+void bcostars::protocol::BlockHeaderImpl::setUncleHash(bcos::crypto::HashType _hash)
+{
+    m_inner->data.uncleHash.assign(_hash.begin(), _hash.end());
+    clearDataHash();
+}
+
+bcos::u256 bcostars::protocol::BlockHeaderImpl::difficulty() const
+{
+    const auto& _difficulty = m_inner->data.difficulty;
+    if (!_difficulty.empty())
+    {
+        return boost::lexical_cast<bcos::u256>(_difficulty);
+    }
+    return {};
+}
+
+void bcostars::protocol::BlockHeaderImpl::setDifficulty(bcos::u256 _difficulty)
+{
+    m_inner->data.difficulty = boost::lexical_cast<std::string>(_difficulty);
+    clearDataHash();
+}
+
+bcos::h64 bcostars::protocol::BlockHeaderImpl::nonce() const
+{
+    const auto& _nonce = inner().data.nonce;
+    if (_nonce.size() >= bcos::h64::SIZE)
+    {
+        return bcos::h64(reinterpret_cast<const bcos::byte*>(_nonce.data()), _nonce.size());
+    }
+    return {};
+}
+
+void bcostars::protocol::BlockHeaderImpl::setNonce(bcos::h64 _nonce)
+{
+    m_inner->data.nonce.assign(_nonce.begin(), _nonce.end());
     clearDataHash();
 }
 
@@ -582,38 +659,10 @@ void bcostars::protocol::BlockHeaderImpl::setRequestsHash(bcos::h256 _hash)
     clearDataHash();
 }
 
-std::optional<bcos::h256> bcostars::protocol::BlockHeaderImpl::blockAccessListHash() const
+void bcostars::protocol::BlockHeaderImpl::setRLPHash(bcos::crypto::HashType _hash)
 {
-    const auto& _blockAccessListHash = inner().data.blockAccessListHash;
-    if (_blockAccessListHash.size() >= bcos::h256::SIZE)
-    {
-        return *(reinterpret_cast<const bcos::h256*>(_blockAccessListHash.data()));
-    }
-    return std::nullopt;
+    m_inner->dataHash.assign(_hash.begin(), _hash.end());
 }
-
-void bcostars::protocol::BlockHeaderImpl::setBlockAccessListHash(bcos::h256 _hash)
-{
-    m_inner->data.blockAccessListHash.assign(_hash.begin(), _hash.end());
-    clearDataHash();
-}
-
-std::optional<uint64_t> bcostars::protocol::BlockHeaderImpl::slotNumber() const
-{
-    const auto& _slotNumber = inner().data.slotNumber;
-    if (_slotNumber == -1)  // Tars default sentinel: unset
-    {
-        return std::nullopt;
-    }
-    return static_cast<uint64_t>(_slotNumber);
-}
-
-void bcostars::protocol::BlockHeaderImpl::setSlotNumber(uint64_t _val)
-{
-    m_inner->data.slotNumber = static_cast<long>(_val);
-    clearDataHash();
-}
-
 // ---- OP Stack header capability ----
 
 bcos::bytes bcostars::protocol::BlockHeaderImpl::encodeOpHeader(

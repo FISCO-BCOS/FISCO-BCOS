@@ -170,6 +170,18 @@ enum class TransactionVersion : uint32_t
 
 };
 
+// Version of an Ethereum-standard block header.
+enum class EthBlockVersion : uint8_t
+{
+    NON_ETH = 0,     // native FISCO-BCOS header
+    PRE_LONDON = 1,  // mandatory fields only
+    LONDON = 2,      // + baseFeePerGas
+    SHANGHAI = 3,    // + withdrawalsRoot
+    CANCUN = 4,      // + blobGasUsed / excessBlobGas / parentBeaconBlockRoot
+    PRAGUE = 5,      // + requestsHash
+    MAX_ETH_VERSION = PRAGUE,
+};
+
 const std::string RC4_VERSION_STR = "3.0.0-rc4";
 const std::string RC_VERSION_PREFIX = "3.0.0-rc";
 const std::string V3_9_VERSION_STR = "3.9.0";

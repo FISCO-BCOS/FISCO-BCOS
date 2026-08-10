@@ -469,10 +469,8 @@ EESTBlockchainFixture parseBlockchainFixture(
     fixture.name = name;
 
     // genesisBlockHeader (optional: engine_x format lacks it)
-    if (fixtureJson.isMember("genesisBlockHeader") &&
-        fixtureJson["genesisBlockHeader"].isObject())
-        fixture.genesisBlockHeader =
-            parseBlockHeader(fixtureJson["genesisBlockHeader"]);
+    if (fixtureJson.isMember("genesisBlockHeader") && fixtureJson["genesisBlockHeader"].isObject())
+        fixture.genesisBlockHeader = parseBlockHeader(fixtureJson["genesisBlockHeader"]);
 
     // pre state
     if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
@@ -511,8 +509,7 @@ EESTBlockchainFixture parseBlockchainFixture(
 
     // postState
     if (fixtureJson.isMember("postState") && !fixtureJson["postState"].isNull())
-        for (auto it = fixtureJson["postState"].begin();
-             it != fixtureJson["postState"].end(); ++it)
+        for (auto it = fixtureJson["postState"].begin(); it != fixtureJson["postState"].end(); ++it)
             fixture.postState[it.key().asString()] = parseAccount(*it);
 
     // config
@@ -533,8 +530,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
     std::ifstream file(filePath);
     if (!file.is_open())
-        BOOST_THROW_EXCEPTION(
-            std::runtime_error("Cannot open fixture file: " + filePath));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Cannot open fixture file: " + filePath));
 
     Json::CharReaderBuilder builder;
     Json::Value root;
@@ -545,8 +541,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
     for (auto it = root.begin(); it != root.end(); ++it)
     {
-        if (it.key().asString().rfind("//", 0) == 0 ||
-            it.key().asString().rfind("_", 0) == 0)
+        if (it.key().asString().rfind("//", 0) == 0 || it.key().asString().rfind("_", 0) == 0)
             continue;
 
         // Skip non-object values
@@ -555,13 +550,12 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
         try
         {
-            fixtures.push_back(
-                parseBlockchainFixture(it.key().asString(), *it));
+            fixtures.push_back(parseBlockchainFixture(it.key().asString(), *it));
         }
         catch (std::exception const& e)
         {
-            std::cerr << "Warning: Failed to parse blockchain fixture '"
-                      << it.key().asString() << "': " << e.what() << std::endl;
+            std::cerr << "Warning: Failed to parse blockchain fixture '" << it.key().asString()
+                      << "': " << e.what() << std::endl;
         }
     }
 
@@ -1011,6 +1005,35 @@ public:
                 std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
             }
             header.setCoinbase(coinbaseAddr);
+        }
+
+        // EIP-4399 (Paris+): opcode 0x44 is PREVRANDAO, returning the block
+        // mixHash. State-test fixtures carry it in env.currentRandom. The
+        // executor resolves PREVRANDAO from the block header (blockHeaderToBlockInfo
+        // reads header.prevRandao()), NOT from the ledger config, so the value
+        // MUST be placed on the header here. Without this, Cancun/Prague
+        // fixtures whose contract stores PREVRANDAO (static stRandom /
+        // mergeTest / blockInfo) observe 0x0 — and if that 0 is SSTORE'd into
+        // an already-zero slot, evmone charges only the no-op SSTORE cost (100)
+        // instead of SSTORE_SET (20000), under-charging gas by exactly 19900
+        // and corrupting the coinbase/sender balances too.
+        if (!env.random.empty())
+        {
+            auto mixHashBytes = test::hexToBytes(env.random);
+            if (!mixHashBytes.empty())
+            {
+                // bcos::h256 from raw bytes (right-aligned, big-endian) so a
+                // short currentRandom is left-zero-padded to 32 bytes.
+                header.setPrevRandao(bcos::h256(mixHashBytes));
+            }
+            else
+            {
+                header.setPrevRandao(bcos::h256{});
+            }
+        }
+        else
+        {
+            header.setPrevRandao(bcos::h256{});
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
@@ -1487,6 +1510,32 @@ public:
                 std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
             }
             header.setCoinbase(coinbaseAddr);
+        }
+
+        // EIP-4399 (Paris+): PREVRANDAO (opcode 0x44) returns the block mixHash.
+        // The executor resolves it from header.prevRandao() (blockHeaderToBlockInfo),
+        // so the mixHash parsed from the fixture block header MUST be placed on
+        // the BCOS header too — configuring m_ledgerConfig alone is not enough
+        // (same fix as the state-test buildBlockHeader(env)). Without this,
+        // Cancun/Prague blockchain tests (static stRandom / mergeTest / blockInfo)
+        // read PREVRANDAO == 0, and an SSTORE of that 0 into an empty slot is
+        // charged as a no-op (100) instead of SSTORE_SET (20000) → -19900 gas.
+        if (!bh.random.empty())
+        {
+            auto mixHashBytes = test::hexToBytes(bh.random);
+            if (!mixHashBytes.empty())
+            {
+                // bcos::h256 from raw bytes (right-aligned, big-endian).
+                header.setPrevRandao(bcos::h256(mixHashBytes));
+            }
+            else
+            {
+                header.setPrevRandao(bcos::h256{});
+            }
+        }
+        else
+        {
+            header.setPrevRandao(bcos::h256{});
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;

@@ -27,11 +27,11 @@
 // 必须先把 TransactionFactory.h 引入，否则声明处即报错（OpNewPayloadRpcE2eTest.cpp:20 模式）。
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
-#include <bcos-task/Wait.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <engine/bcos-engine/EngineServiceImpl.h>
@@ -79,18 +79,27 @@ struct TrivialCheckpointStorage
     [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
     void createCheckpoint(Storage&, CheckpointName const&) {}
     void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const { return std::nullopt; }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
+    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
+    {
+        return std::nullopt;
+    }
+    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
+    {
+        return std::nullopt;
+    }
 };
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
 using BackendMemStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT), std::hash<StateKey>>;
+    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
+    std::hash<StateKey>>;
 using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendMemStorage>;
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-struct StubMemPool {};
+struct StubMemPool
+{
+};
 struct StubExecutor
 {
     template <class Storage>
@@ -125,9 +134,12 @@ bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 bcos::protocol::BlockFactory::Ptr makeBlockFactory()
 {
     auto cryptoSuite = makeCryptoSuite();
-    auto blockHeaderFactory = std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
-    auto transactionFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
-    auto receiptFactory = std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto transactionFactory =
+        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
     return std::make_shared<bcostars::protocol::BlockFactoryImpl>(
         cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory);
 }
@@ -166,7 +178,7 @@ struct OpE2eFixture
     explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
       : scheduler(receiptFactory, kChainId, forkTimestamps),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
-            bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4)
+            /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4)
     {}
 };
 
@@ -184,7 +196,8 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
     auto params = w6test::makeParamsJson(sample);
     // 读 golden header 的 gasLimit，override blobGasUsed = gasLimit+1
     const auto gasLimit = w6test::decodeGoldenHeader(sample)->gasLimit();
-    // ⚠️ 勿用 (gasLimit+1).str(16)——十进制位数非 hex（GoldenSample.h:85-90 已警示）；quantityOf 正确。
+    // ⚠️ 勿用 (gasLimit+1).str(16)——十进制位数非 hex（GoldenSample.h:85-90 已警示）；quantityOf
+    // 正确。
     params[0u]["blobGasUsed"] = w6test::quantityOf(gasLimit + 1);
 
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(true));
@@ -280,7 +293,8 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
         ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
 
-    // 回执 opStackMeta l1_fee == 按 F 计算值（props.l1_cost），而非按 F'（照 OpTransitionTest.cpp:146-149）。
+    // 回执 opStackMeta l1_fee == 按 F 计算值（props.l1_cost），而非按 F'（照
+    // OpTransitionTest.cpp:146-149）。
     const auto& meta = txR->opStackMeta();
     BOOST_REQUIRE(meta.has_value());
     BOOST_REQUIRE(meta->l1_fee.has_value());

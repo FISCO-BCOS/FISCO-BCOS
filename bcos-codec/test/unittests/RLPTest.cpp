@@ -370,6 +370,24 @@ BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
         BOOST_REQUIRE(err);
         BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedList);
     }
+    {  // a FixedBytes target with a payload shorter than its fixed size: must be rejected
+        // (previously right-aligned/zero-padded silently, which would re-encode differently)
+        bcos::h256 value{};
+        auto err = decodeErr("9e" + std::string(60, '1'), value);  // 30-byte payload
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedLength);
+    }
+    {  // a FixedBytes target with a payload longer than its fixed size: must be rejected
+        bcos::h256 value{};
+        auto err = decodeErr("a1" + std::string(66, '1'), value);  // 33-byte payload
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedLength);
+    }
+    {  // a FixedBytes<32> target with an exactly-32-byte payload still decodes fine
+        bcos::h256 value{};
+        auto err = decodeErr("a0" + std::string(64, '1'), value);  // 32-byte payload
+        BOOST_REQUIRE(!err);
+    }
 }
 
 // C1 (final review batch B): a long-form RLP header (0xb8.. / 0xf8..) whose multi-byte length

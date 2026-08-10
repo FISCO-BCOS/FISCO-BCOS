@@ -38,6 +38,11 @@
 #include <servant/Application.h>
 #include <utility>
 
+namespace bcos::txpool
+{
+class MemPoolImpl;
+}  // namespace bcos::txpool
+
 namespace bcos::rpc
 {
 class NodeService
@@ -74,6 +79,14 @@ public:
     {
         return m_engineService;
     }
+
+    /// Single-node consensus mode (config [consensus] enable_single_node_consensus): the
+    /// in-process mempool that sendRawTransaction routes to instead of txpool. Owned by the
+    /// Initializer, which outlives this NodeService, so a raw pointer is safe. Unset
+    /// (nullptr) in normal mode and on tars-built nodes.
+    void setMemPool(bcos::txpool::MemPoolImpl& _memPool) noexcept { m_memPool = &_memPool; }
+    bool memPoolAvailable() const noexcept { return m_memPool != nullptr; }
+    bcos::txpool::MemPoolImpl* memPool() const noexcept { return m_memPool; }
 
     /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
     /// hash, value = the node's raw RLP encoding, physically stored as ordinary state rows —
@@ -116,6 +129,9 @@ private:
     /// MPT node reader handle (owns its adapter, borrows the underlying storage); see
     /// setMPTNodeReader() for the lifetime contract.
     std::shared_ptr<MPTNodeReader> m_mptNodeReader;
+
+    /// Raw pointer to the single-node-consensus mempool (see setMemPool for lifetime).
+    bcos::txpool::MemPoolImpl* m_memPool = nullptr;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

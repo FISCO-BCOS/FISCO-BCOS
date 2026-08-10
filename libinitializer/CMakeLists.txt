@@ -38,6 +38,7 @@ target_link_libraries(init PUBLIC
     tool front
     txpool
     mempool
+    single-consensus
     engine
     ledger
     transaction-scheduler transaction-executor

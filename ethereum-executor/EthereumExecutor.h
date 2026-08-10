@@ -340,12 +340,15 @@ public:
                 // may be senders, which evmone's validate_transaction already
                 // accepts.
                 m_validationError = std::get<std::error_code>(validationResult);
+                BCOS_LOG(INFO) << LOG_BADGE("EXECUTE") << LOG_DESC("tx validation failed")
+                               << LOG_KV("error", m_validationError.value().message())
+                               << LOG_KV("code", m_validationError.value().value());
                 co_return;
             }
 
-            m_evmReceipt = evmone::state::transition(m_stateView, m_blockInfo,
-                executor.get().blockHashes(), m_evmTx, m_rev, executor.get().vm(), m_txProps,
-                nodeChainId());
+            m_evmReceipt =
+                evmone::state::transition(m_stateView, m_blockInfo, executor.get().blockHashes(),
+                    m_evmTx, m_rev, executor.get().vm(), m_txProps, nodeChainId());
 
             // Apply the resulting state diff immediately so later transactions
             // in the same chunk observe it.

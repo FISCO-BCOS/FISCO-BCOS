@@ -204,6 +204,17 @@ jobs:
           pip3 install --quiet eth-account requests 2>/dev/null || \
           pip3 install --break-system-packages --quiet eth-account requests 2>/dev/null || true
           bash tools/.ci/ci_check_eth_executor.sh
+      - name: Single-node consensus mode integration test
+        # Built-in single-node consensus mode ([consensus] enable_single_node_consensus):
+        # builds a single-node AIR chain, patches config.ini to enable the mode (no
+        # pbft/sealer/txpool), and drives eth_sendRawTransaction -> receipt / block reads.
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          # eth-account (tx signing) + requests (RPC). Handle PEP 668.
+          python3 -m pip install --quiet eth-account requests 2>/dev/null || \
+          pip3 install --quiet eth-account requests 2>/dev/null || \
+          pip3 install --break-system-packages --quiet eth-account requests 2>/dev/null || true
+          bash tools/.ci/ci_check_single_node_consensus.sh
       - name: Engine API integration test
         if: matrix.os != 'windows-2025'
         run: |

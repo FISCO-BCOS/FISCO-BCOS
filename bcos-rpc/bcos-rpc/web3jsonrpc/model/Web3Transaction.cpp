@@ -25,6 +25,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <limits>
 #include <range/v3/algorithm/move.hpp>
 #include <utility>
 
@@ -144,9 +145,10 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
 
     tarsTx.data.value = "0x" + this->value.str(0, std::ios_base::hex);
     tarsTx.data.gasLimit = this->gasLimit;
-    // Use explicit range check rather than `>=` so that Deposit (0x7e) is excluded
+    // Use explicit range check rather than `>=` so that Deposit (0x7e) is excluded;
+    // EIP7702 is fee-market (maxFeePerGas/maxPriorityFeePerGas) so it is included
     if (static_cast<uint8_t>(this->type) >= static_cast<uint8_t>(TransactionType::EIP1559) &&
-        static_cast<uint8_t>(this->type) <= static_cast<uint8_t>(TransactionType::EIP4844))
+        static_cast<uint8_t>(this->type) <= static_cast<uint8_t>(TransactionType::EIP7702))
     {
         tarsTx.data.maxFeePerGas = "0x" + this->maxFeePerGas.str(0, std::ios_base::hex);
         tarsTx.data.maxPriorityFeePerGas =
@@ -170,6 +172,48 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
                 tarsEntry.storageKeys.emplace_back(key.begin(), key.end());
             }
             tarsTx.data.accessList.emplace_back(std::move(tarsEntry));
+        }
+    }
+
+    // EIP-4844 blob fields: without these the executor sees a type-3 tx with 0
+    // blobs, so no blob gas is charged (EEST test_blob_gas_subtraction fails).
+    if (this->maxFeePerBlobGas > 0)
+    {
+        tarsTx.data.maxFeePerBlobGas = "0x" + this->maxFeePerBlobGas.str(0, std::ios_base::hex);
+    }
+    for (auto const& h : this->blobVersionedHashes)
+    {
+        tarsTx.data.blobVersionedHashes.emplace_back(h.begin(), h.end());
+    }
+
+    // EIP-7702 authorization list (set_code tx, Prague+). The executor
+    // (bcosTransactionToEvmone) reads tx.authorizationList() from these entries.
+    if (!this->authorizationList.empty())
+    {
+        tarsTx.data.authorizationList.reserve(this->authorizationList.size());
+        for (auto const& entry : this->authorizationList)
+        {
+            bcostars::AuthorizationEntry tarsEntry;
+            // EIP-7702 chain_id is a 256-bit value (see Web3Transaction.h — it is part of
+            // the signed payload and must not be narrowed for the signing hash), but the
+            // protocol::Authorization / tars field can only carry 64 bits. No chain id above
+            // 64 bits can be this chain, so map EVERY such chain_id to UINT64_MAX — a value
+            // that is neither a real chain id nor the 0 = "any chain" wildcard — and let
+            // evmone skip the authorization on chain-id mismatch. (Mapping the low 64 bits
+            // instead would be unsafe: 2**64 + 1 truncates to 1 = Ethereum mainnet.) The
+            // entry must still be KEPT in the list: a set_code transaction with an empty
+            // authorization list is rejected by the executor, and dropping it would change
+            // the signing hash.
+            tarsEntry.chainID =
+                static_cast<int64_t>(entry.chainId > std::numeric_limits<uint64_t>::max() ?
+                                         UINT64_MAX :
+                                         static_cast<uint64_t>(entry.chainId));
+            tarsEntry.address = entry.address.hex();  // 40-char hex, no 0x prefix
+            tarsEntry.nonce = static_cast<int64_t>(entry.nonce);
+            tarsEntry.v = static_cast<tars::Char>(entry.yParity);
+            tarsEntry.r = "0x" + entry.r.str(0, std::ios_base::hex);
+            tarsEntry.s = "0x" + entry.s.str(0, std::ios_base::hex);
+            tarsTx.data.authorizationList.emplace_back(std::move(tarsEntry));
         }
     }
 
@@ -257,6 +301,52 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
     // would allocate a second time. Callers pass an empty `out` (the previous append semantics
     // matched move for the empty case), so move-assign preserves compatibility.
     out = handlerFor(tx.type).encode(tx);
+}
+
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) noexcept
+{
+    // Each authorization entry is itself an RLP list:
+    // [chain_id, address, nonce, y_parity, r, s]
+    auto&& [error, header] = decodeHeader(in);
+    if (error != nullptr)
+    {
+        return std::move(error);
+    }
+    if (!header.isList)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
+    }
+    const uint64_t leftover{in.size() - header.payloadLength};
+    u256 chainId = 0;
+    if (auto e = decodeItems(in, chainId, out.address); e != nullptr)
+    {
+        return e;
+    }
+    uint64_t nonce = 0;
+    if (auto e = decode(in, nonce); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.yParity); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.r); e != nullptr)
+    {
+        return e;
+    }
+    if (auto e = decode(in, out.s); e != nullptr)
+    {
+        return e;
+    }
+    if (in.size() != leftover)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::UnexpectedListElements, "Unexpected list elements");
+    }
+    out.chainId = chainId;
+    out.nonce = nonce;
+    return nullptr;
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
 {

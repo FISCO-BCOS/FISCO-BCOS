@@ -19,11 +19,11 @@
 // 单 TU 直编必须先把 TransactionFactory.h 引入，否则声明处即报错。
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
-#include <bcos-task/Wait.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <engine/bcos-engine/EngineServiceImpl.h>
@@ -52,19 +52,28 @@ struct TrivialCheckpointStorage
     [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
     void createCheckpoint(Storage&, CheckpointName const&) {}
     void deleteCheckpoint(CheckpointName const&) {}
-    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const { return std::nullopt; }
-    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
+    [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
+    {
+        return std::nullopt;
+    }
+    [[nodiscard]] std::optional<CheckpointName> oldestCheckpointName() const
+    {
+        return std::nullopt;
+    }
 };
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
 using BackendMemStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT), std::hash<StateKey>>;
+    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
+    std::hash<StateKey>>;
 using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendMemStorage>;
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
 // ── 组合根 stand-ins（val-loop GateFixture 同款：OP 模式不经 memPool/executor）──
-struct StubMemPool {};
+struct StubMemPool
+{
+};
 struct StubExecutor
 {
     template <class Storage>
@@ -99,9 +108,12 @@ bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 bcos::protocol::BlockFactory::Ptr makeBlockFactory()
 {
     auto cryptoSuite = makeCryptoSuite();
-    auto blockHeaderFactory = std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
-    auto transactionFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
-    auto receiptFactory = std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto transactionFactory =
+        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
     return std::make_shared<bcostars::protocol::BlockFactoryImpl>(
         cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory);
 }
@@ -144,7 +156,7 @@ struct OpE2eFixture
     explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
       : scheduler(receiptFactory, kChainId, forkTimestamps),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
-            bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4)
+            /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4)
     {}
 };
 
@@ -165,7 +177,8 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
 /// Parent 预登记（R3/R5 致命缺口 A 修复）：OP 路径 step-3 parentKnown
 /// 查 SYS_HASH_2_NUMBER 判 parent-known。33 个孤立向量都是 block 1，parent 必须以「受信创世」
 /// 预登记，否则 newPayload 返回 SYNCING。写入编码必须是生产同款：key=hash 原始 32 字节，
-/// value=number 十进制字符串（gate 测试 registerVerifiedBlock，EngineNewPayloadGateTest.cpp:188-198）。
+/// value=number 十进制字符串（gate 测试
+/// registerVerifiedBlock，EngineNewPayloadGateTest.cpp:188-198）。
 void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, int64_t number)
 {
     auto view = multiLayerStorage.fork();
@@ -181,10 +194,8 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
 }
 
 // ── 七项断言 ──
-void assertSevenFields(std::string const& id,
-    bcos::protocol::BlockHeader::Ptr const& produced,
-    bcostars::protocol::BlockHeaderImpl::Ptr const& goldenHeader,
-    bcos::h256 const& goldenBlockHash)
+void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr const& produced,
+    bcostars::protocol::BlockHeaderImpl::Ptr const& goldenHeader, bcos::h256 const& goldenBlockHash)
 {
     const auto c = bcos::engine::detail::opHeaderConst();
     // 1. blockHash：produced opHeaderHash = keccak256(encodeOpHeader())，须等于 golden.blockHash
@@ -194,8 +205,8 @@ void assertSevenFields(std::string const& id,
     BOOST_CHECK_MESSAGE(produced->stateRoot() == goldenHeader->stateRoot(), id << ": stateRoot");
     BOOST_CHECK_MESSAGE(
         produced->receiptsRoot() == goldenHeader->receiptsRoot(), id << ": receiptsRoot");
-    BOOST_CHECK_MESSAGE(produced->withdrawalsRoot() == goldenHeader->withdrawalsRoot(),
-        id << ": withdrawalsRoot");
+    BOOST_CHECK_MESSAGE(
+        produced->withdrawalsRoot() == goldenHeader->withdrawalsRoot(), id << ": withdrawalsRoot");
     BOOST_CHECK_MESSAGE(produced->gasUsed() == goldenHeader->gasUsed(), id << ": gasUsed");
     BOOST_CHECK_MESSAGE(produced->txsRoot() == goldenHeader->txsRoot(), id << ": txRoot");
     // ⚠️ bytesConstRef(RefDataContainer) 的 operator== 是「指针+长度」浅比较，不是内容比较
@@ -206,8 +217,8 @@ void assertSevenFields(std::string const& id,
                             goldenHeader->logsBloom().begin(), goldenHeader->logsBloom().end()),
         id << ": logsBloom");
     // 主断言：encodeOpHeader 字节级全等（覆盖全部字段的 RLP 编码）
-    BOOST_CHECK_MESSAGE(produced->encodeOpHeader(c) == goldenHeader->encodeOpHeader(c),
-        id << ": encodeOpHeader");
+    BOOST_CHECK_MESSAGE(
+        produced->encodeOpHeader(c) == goldenHeader->encodeOpHeader(c), id << ": encodeOpHeader");
 }
 
 /// 一个向量端到端：seed pre → register parent → makeParamsJson → parseNewPayloadRequest(V4)
@@ -229,12 +240,12 @@ void runGoldenVector(std::string const& id)
     // ⚠️ PayloadValidationStatus 是 enum class，无 operator<<；必须 static_cast<int> 比较
     // （全代码库既有 engine 测试同款，EngineServiceTest.cpp:312 等）。
     BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
-            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+                              static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
         id << ": expected VALID, got " << static_cast<int>(status.status)
            << (status.validationError ? " : " + *status.validationError : ""));
 
-    // produced header（生产映射重构）+ golden header（复用上面 parent 预登记时已解码的 goldenHeader，
-    // 勿重复声明——同一函数块重定义 goldenHeader 是编译错误，R2-A 捕获）
+    // produced header（生产映射重构）+ golden header（复用上面 parent 预登记时已解码的
+    // goldenHeader， 勿重复声明——同一函数块重定义 goldenHeader 是编译错误，R2-A 捕获）
     auto produced = productionHeaderOf(fixture->blockFactory, request);
     const auto goldenBlockHash = bcos::h256(std::string(sample.golden["blockHash"].asString()));
     assertSevenFields(id, produced, goldenHeader, goldenBlockHash);
@@ -242,8 +253,8 @@ void runGoldenVector(std::string const& id)
     // 方案 B 写侧：OP 交易落 SYS_HASH_2_TX（tars 编码），s_eth_hash_2_rawtx 不再写。
     // newPayload 的 registerOpBlock 把每笔 raw EIP-2718 信封转 tars Transaction 写
     // SYS_HASH_2_TX[txHash]（extraTransactionHash=txHash 锁 D4），原始信封不再写 s_eth_hash_2_rawtx
-    // （D1）；0x04 (EIP-7702) 无 TransactionType 对应 → opEnvelopeToTars 返回 nullopt → 表 absent，
-    // 但 SYS_HASH_2_RECEIPT 仍写（D7）。
+    // （D1）。0x04 (EIP-7702) 自上游 #5411 起是一等 TransactionType（EIP7702=4），
+    // opEnvelopeToTars 可转换 → 与其它 typed tx 一样落 SYS_HASH_2_TX（不再 absent，D7 已过时）。
     BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // P3-1: 漏字段干净失败
     auto const& rawTxs = *request.executionPayload.rawTransactions;
     auto& hashImpl = *fixture->blockFactory->cryptoSuite()->hashImpl();
@@ -251,50 +262,29 @@ void runGoldenVector(std::string const& id)
     for (std::size_t i = 0; i < rawTxs.size(); ++i)
     {
         auto txHash = hashImpl.hash(rawTxs[i]);
-        // 0x04 (EIP-7702)：opEnvelopeToTars 返回 nullopt → SYS_HASH_2_TX absent（D7）
-        if (rawTxs[i].size() >= 1 && rawTxs[i][0] == 0x04)
-        {
-            auto zeroEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
-                bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
-                    bcos::concepts::bytebuffer::toView(txHash)}));
-            BOOST_CHECK_MESSAGE(
-                !zeroEntry.has_value(), id << ": 0x04 tx #" << i << " SYS_HASH_2_TX absent");
-            // SYS_HASH_2_RECEIPT 仍写（D7：块执行不受 0x04 影响）
-            auto rcpEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
-                bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
-                    bcos::concepts::bytebuffer::toView(txHash)}));
-            BOOST_CHECK_MESSAGE(
-                rcpEntry.has_value(), id << ": 0x04 tx #" << i << " SYS_HASH_2_RECEIPT present");
-            // P3-3: 0x04 分支同样断言 rawtx 表 absent（D1 一致性——s_eth_hash_2_rawtx 已删,任何 tx 都 absent）
-            auto zeroRaw = bcos::task::syncWait(bcos::storage2::readOne(view,
-                bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
-                    bcos::concepts::bytebuffer::toView(txHash)}));
-            BOOST_CHECK_MESSAGE(
-                !zeroRaw.has_value(), id << ": 0x04 tx #" << i << " s_eth_hash_2_rawtx absent");
-            continue;
-        }
         // SYS_HASH_2_TX present + round-trip（tars 解码回 Transaction，hash==txHash 锁 D4）
-        auto txEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
-            bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
-                bcos::concepts::bytebuffer::toView(txHash)}));
+        auto txEntry = bcos::task::syncWait(
+            bcos::storage2::readOne(view, bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
+                                              bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_REQUIRE_MESSAGE(txEntry.has_value(), id << ": tx #" << i << " SYS_HASH_2_TX present");
         auto txBytes = bcos::bytesConstRef(
             reinterpret_cast<bcos::byte const*>(txEntry->get().data()), txEntry->get().size());
         auto tx = fixture->blockFactory->transactionFactory()->createTransaction(
             txBytes, /*checkSig=*/false, /*checkHash=*/false, /*tainted=*/false);
-        BOOST_CHECK_MESSAGE(tx->hash() == txHash, id << ": tx #" << i << " round-trip hash==txHash");
+        BOOST_CHECK_MESSAGE(
+            tx->hash() == txHash, id << ": tx #" << i << " round-trip hash==txHash");
         // C2: 数据必须落 backend（m_latestBackend）——重启恢复语义（spec §6）。
         // 当前实现只 pushView（内存层栈）,backend 读为空 → 此断言先红。
-        auto backendEntry = bcos::task::syncWait(bcos::storage2::readOne(
-            fixture->multiLayerStorage.latestBackend(),
-            bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
-                bcos::concepts::bytebuffer::toView(txHash)}));
+        auto backendEntry =
+            bcos::task::syncWait(bcos::storage2::readOne(fixture->multiLayerStorage.latestBackend(),
+                bcos::executor_v1::StateKey{
+                    bcos::ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_CHECK_MESSAGE(
             backendEntry.has_value(), id << ": tx #" << i << " SYS_HASH_2_TX in backend");
         // rawtx 表 absent（D1：不保留）
-        auto rawEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
-            bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
-                bcos::concepts::bytebuffer::toView(txHash)}));
+        auto rawEntry = bcos::task::syncWait(
+            bcos::storage2::readOne(view, bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
+                                              bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_CHECK_MESSAGE(
             !rawEntry.has_value(), id << ": tx #" << i << " s_eth_hash_2_rawtx absent");
     }
@@ -323,19 +313,19 @@ void runChainedPair(std::string const& aId, std::string const& bId)
     // 先投 B：parent(A) 未登记 → SYNCING
     auto earlyB = bcos::task::syncWait(fixture->service.newPayload(requestB, 4));
     BOOST_CHECK_MESSAGE(static_cast<int>(earlyB.status) ==
-            static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
+                            static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
         bId << ": first B should be SYNCING (parent A unknown)");
 
     // 投 A：VALID（registerOpBlock 写 SYS_HASH_2_NUMBER[hashA]=1）
     auto statusA = bcos::task::syncWait(fixture->service.newPayload(requestA, 4));
     BOOST_REQUIRE_MESSAGE(static_cast<int>(statusA.status) ==
-            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+                              static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
         aId << ": A expected VALID, got " << static_cast<int>(statusA.status));
 
     // 再投 B：parentKnown 命中 A → VALID
     auto statusB = bcos::task::syncWait(fixture->service.newPayload(requestB, 4));
     BOOST_REQUIRE_MESSAGE(static_cast<int>(statusB.status) ==
-            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+                              static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
         bId << ": B expected VALID after A, got " << static_cast<int>(statusB.status));
 
     // 各自七项断言（productionHeaderOf 从 request 重构，独立于执行）
@@ -367,7 +357,7 @@ runVectorAndGetBlockHash(std::string const& id)
         params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(req, /*version=*/4));
     BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
-            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+                              static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
         id << ": seed newPayload expected VALID, got " << static_cast<int>(status.status));
     return {std::move(fixture), bcos::h256(std::string(sample.golden["blockHash"].asString())),
         goldenHeader->number()};
@@ -377,23 +367,50 @@ runVectorAndGetBlockHash(std::string const& id)
 
 BOOST_AUTO_TEST_SUITE(OpNewPayloadRpcE2eSuite)
 
-BOOST_AUTO_TEST_CASE(JovianDepositOnly) { runGoldenVector("jovian_deposit_only"); }
+BOOST_AUTO_TEST_CASE(JovianDepositOnly)
+{
+    runGoldenVector("jovian_deposit_only");
+}
 
-BOOST_AUTO_TEST_CASE(JovianTransferMulti) { runGoldenVector("jovian_transfer_multi"); }
+BOOST_AUTO_TEST_CASE(JovianTransferMulti)
+{
+    runGoldenVector("jovian_transfer_multi");
+}
 
-BOOST_AUTO_TEST_CASE(JovianDaMix) { runGoldenVector("jovian_da_mix"); }
+BOOST_AUTO_TEST_CASE(JovianDaMix)
+{
+    runGoldenVector("jovian_da_mix");
+}
 
-BOOST_AUTO_TEST_CASE(JovianFirstBlock) { runGoldenVector("jovian_first_block"); }
+BOOST_AUTO_TEST_CASE(JovianFirstBlock)
+{
+    runGoldenVector("jovian_first_block");
+}
 
-BOOST_AUTO_TEST_CASE(IsthmusDepositOnly) { runGoldenVector("isthmus_deposit_only"); }
+BOOST_AUTO_TEST_CASE(IsthmusDepositOnly)
+{
+    runGoldenVector("isthmus_deposit_only");
+}
 
-BOOST_AUTO_TEST_CASE(IsthmusTransferMulti) { runGoldenVector("isthmus_transfer_multi"); }
+BOOST_AUTO_TEST_CASE(IsthmusTransferMulti)
+{
+    runGoldenVector("isthmus_transfer_multi");
+}
 
-BOOST_AUTO_TEST_CASE(IsthmusSetcode7702) { runGoldenVector("isthmus_setcode_7702"); }
+BOOST_AUTO_TEST_CASE(IsthmusSetcode7702)
+{
+    runGoldenVector("isthmus_setcode_7702");
+}
 
-BOOST_AUTO_TEST_CASE(IsthmusTxReverted) { runGoldenVector("isthmus_tx_reverted"); }
+BOOST_AUTO_TEST_CASE(IsthmusTxReverted)
+{
+    runGoldenVector("isthmus_tx_reverted");
+}
 
-BOOST_AUTO_TEST_CASE(IsthmusBigBlock130tx) { runGoldenVector("isthmus_big_block_130tx"); }
+BOOST_AUTO_TEST_CASE(IsthmusBigBlock130tx)
+{
+    runGoldenVector("isthmus_big_block_130tx");
+}
 
 // B-7：单 fork isthmus 的 system-call 顺序可观测向量（W5 审查 A#1 定 id）。顺序错 →
 // L1 读者 REVERT → stateRoot 失配 → VALID 断言+七项断言变红。
@@ -403,30 +420,102 @@ BOOST_AUTO_TEST_CASE(SystemCallOrderObservable)
 }
 
 // ── 全部 33 向量（16 isthmus + 17 jovian），每个一行 ──
-BOOST_AUTO_TEST_CASE(IsthmusAccessList) { runGoldenVector("isthmus_access_list"); }
-BOOST_AUTO_TEST_CASE(IsthmusContractCreate) { runGoldenVector("isthmus_contract_create"); }
-BOOST_AUTO_TEST_CASE(IsthmusContractLogs) { runGoldenVector("isthmus_contract_logs"); }
-BOOST_AUTO_TEST_CASE(IsthmusDepositFailed) { runGoldenVector("isthmus_deposit_failed"); }
-BOOST_AUTO_TEST_CASE(IsthmusDepositMint) { runGoldenVector("isthmus_deposit_mint"); }
-BOOST_AUTO_TEST_CASE(IsthmusEmptyAccountCleanup) { runGoldenVector("isthmus_empty_account_cleanup"); }
-BOOST_AUTO_TEST_CASE(IsthmusFeeEnvObserver) { runGoldenVector("isthmus_fee_env_observer"); }
-BOOST_AUTO_TEST_CASE(IsthmusMessagePasserWrite) { runGoldenVector("isthmus_message_passer_write"); }
-BOOST_AUTO_TEST_CASE(IsthmusSetcode7702Skips) { runGoldenVector("isthmus_setcode_7702_skips"); }
-BOOST_AUTO_TEST_CASE(IsthmusSystemContractsReal) { runGoldenVector("isthmus_system_contracts_real"); }
-BOOST_AUTO_TEST_CASE(IsthmusTransferBasic) { runGoldenVector("isthmus_transfer_basic"); }
-BOOST_AUTO_TEST_CASE(JovianAccessList) { runGoldenVector("jovian_access_list"); }
-BOOST_AUTO_TEST_CASE(JovianContractCreate) { runGoldenVector("jovian_contract_create"); }
-BOOST_AUTO_TEST_CASE(JovianContractLogs) { runGoldenVector("jovian_contract_logs"); }
-BOOST_AUTO_TEST_CASE(JovianDepositFailed) { runGoldenVector("jovian_deposit_failed"); }
-BOOST_AUTO_TEST_CASE(JovianDepositMint) { runGoldenVector("jovian_deposit_mint"); }
-BOOST_AUTO_TEST_CASE(JovianEmptyAccountCleanup) { runGoldenVector("jovian_empty_account_cleanup"); }
-BOOST_AUTO_TEST_CASE(JovianFeeEnvObserver) { runGoldenVector("jovian_fee_env_observer"); }
-BOOST_AUTO_TEST_CASE(JovianMessagePasserWrite) { runGoldenVector("jovian_message_passer_write"); }
-BOOST_AUTO_TEST_CASE(JovianSetcode7702) { runGoldenVector("jovian_setcode_7702"); }
-BOOST_AUTO_TEST_CASE(JovianSetcode7702Skips) { runGoldenVector("jovian_setcode_7702_skips"); }
-BOOST_AUTO_TEST_CASE(JovianSystemContractsReal) { runGoldenVector("jovian_system_contracts_real"); }
-BOOST_AUTO_TEST_CASE(JovianTransferBasic) { runGoldenVector("jovian_transfer_basic"); }
-BOOST_AUTO_TEST_CASE(JovianTxReverted) { runGoldenVector("jovian_tx_reverted"); }
+BOOST_AUTO_TEST_CASE(IsthmusAccessList)
+{
+    runGoldenVector("isthmus_access_list");
+}
+BOOST_AUTO_TEST_CASE(IsthmusContractCreate)
+{
+    runGoldenVector("isthmus_contract_create");
+}
+BOOST_AUTO_TEST_CASE(IsthmusContractLogs)
+{
+    runGoldenVector("isthmus_contract_logs");
+}
+BOOST_AUTO_TEST_CASE(IsthmusDepositFailed)
+{
+    runGoldenVector("isthmus_deposit_failed");
+}
+BOOST_AUTO_TEST_CASE(IsthmusDepositMint)
+{
+    runGoldenVector("isthmus_deposit_mint");
+}
+BOOST_AUTO_TEST_CASE(IsthmusEmptyAccountCleanup)
+{
+    runGoldenVector("isthmus_empty_account_cleanup");
+}
+BOOST_AUTO_TEST_CASE(IsthmusFeeEnvObserver)
+{
+    runGoldenVector("isthmus_fee_env_observer");
+}
+BOOST_AUTO_TEST_CASE(IsthmusMessagePasserWrite)
+{
+    runGoldenVector("isthmus_message_passer_write");
+}
+BOOST_AUTO_TEST_CASE(IsthmusSetcode7702Skips)
+{
+    runGoldenVector("isthmus_setcode_7702_skips");
+}
+BOOST_AUTO_TEST_CASE(IsthmusSystemContractsReal)
+{
+    runGoldenVector("isthmus_system_contracts_real");
+}
+BOOST_AUTO_TEST_CASE(IsthmusTransferBasic)
+{
+    runGoldenVector("isthmus_transfer_basic");
+}
+BOOST_AUTO_TEST_CASE(JovianAccessList)
+{
+    runGoldenVector("jovian_access_list");
+}
+BOOST_AUTO_TEST_CASE(JovianContractCreate)
+{
+    runGoldenVector("jovian_contract_create");
+}
+BOOST_AUTO_TEST_CASE(JovianContractLogs)
+{
+    runGoldenVector("jovian_contract_logs");
+}
+BOOST_AUTO_TEST_CASE(JovianDepositFailed)
+{
+    runGoldenVector("jovian_deposit_failed");
+}
+BOOST_AUTO_TEST_CASE(JovianDepositMint)
+{
+    runGoldenVector("jovian_deposit_mint");
+}
+BOOST_AUTO_TEST_CASE(JovianEmptyAccountCleanup)
+{
+    runGoldenVector("jovian_empty_account_cleanup");
+}
+BOOST_AUTO_TEST_CASE(JovianFeeEnvObserver)
+{
+    runGoldenVector("jovian_fee_env_observer");
+}
+BOOST_AUTO_TEST_CASE(JovianMessagePasserWrite)
+{
+    runGoldenVector("jovian_message_passer_write");
+}
+BOOST_AUTO_TEST_CASE(JovianSetcode7702)
+{
+    runGoldenVector("jovian_setcode_7702");
+}
+BOOST_AUTO_TEST_CASE(JovianSetcode7702Skips)
+{
+    runGoldenVector("jovian_setcode_7702_skips");
+}
+BOOST_AUTO_TEST_CASE(JovianSystemContractsReal)
+{
+    runGoldenVector("jovian_system_contracts_real");
+}
+BOOST_AUTO_TEST_CASE(JovianTransferBasic)
+{
+    runGoldenVector("jovian_transfer_basic");
+}
+BOOST_AUTO_TEST_CASE(JovianTxReverted)
+{
+    runGoldenVector("jovian_tx_reverted");
+}
 
 // 注：前 9 个样例 case 已覆盖 9 个向量；上面补全的 24 个 case 覆盖剩余 24 个，合计 33。
 // 全量清单（16 isthmus + 17 jovian）：
@@ -444,11 +533,17 @@ BOOST_AUTO_TEST_CASE(JovianTxReverted) { runGoldenVector("jovian_tx_reverted"); 
 // 补全段的 24 个 case 名已刻意避开前 9 个样例 case 名（R2-D 实测：与既有 107 个 case 名、
 // 计划内 33 个 case 名均零冲突）。
 // 链式双块：一个 case（runChainedPair）同流执行 chainA+chainB（先 B SYNCING → A VALID → B VALID）。
-BOOST_AUTO_TEST_CASE(ChainedAB) { runChainedPair("chainA", "chainB"); }
+BOOST_AUTO_TEST_CASE(ChainedAB)
+{
+    runChainedPair("chainA", "chainB");
+}
 
 // B-5c：jovian 链式对。runChainedPair 内断言 block2 VALID = step 3a-2 baseFee 一致性校验
 // 通过即验证 max 分支（baseFee 按父块推导 + 上取整封顶）。
-BOOST_AUTO_TEST_CASE(JovianChainedAB) { runChainedPair("jovianChainA", "jovianChainB"); }
+BOOST_AUTO_TEST_CASE(JovianChainedAB)
+{
+    runChainedPair("jovianChainA", "jovianChainB");
+}
 // 最终校验：36 用例 = 34 向量（33 + isthmus_system_call_order_observable）+ 2 链式对
 // （chainA/B + jovianChainA/B，覆盖 4 个链式样本）。
 
@@ -459,10 +554,10 @@ BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
 // 对照 op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated 判定：
 //   head 已知 → VALID + LatestValidHash=head（api.go:316-322 valid()）
 //   head 未知 → STATUS_SYNCING（api.go:238 网络拉取）
-//   OP + attributes → -38003（checkOptimismPayloadAttributes 拒绝对,本仓库 UnsupportedOpPayloadAttributes）
-//   单调性 finalized>head → -38002（api.go safe/finalized 校验,本仓库 InvalidForkchoiceState :263-280）
-//   head 递增必须恰好 +1（:318-323）
-//   无 attributes → head/safe/finalized 推进（updateTrackedBlockNumbers :1520-1525）
+//   OP + attributes → -38003（checkOptimismPayloadAttributes 拒绝对,本仓库
+//   UnsupportedOpPayloadAttributes） 单调性 finalized>head → -38002（api.go safe/finalized
+//   校验,本仓库 InvalidForkchoiceState :263-280） head 递增必须恰好 +1（:318-323） 无 attributes →
+//   head/safe/finalized 推进（updateTrackedBlockNumbers :1520-1525）
 
 // ① head 已知 → VALID + LatestValidHash=head（对照 op-geth valid()）
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
