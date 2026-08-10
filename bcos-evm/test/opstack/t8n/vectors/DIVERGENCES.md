@@ -62,3 +62,32 @@
 | 单侧：DA 拒绝路径 | `engine/bcos-engine/EngineServiceImpl.cpp:442-444`（已实现未触发） | `core/block_validator.go:131-132` | 结构性差异 | W6 全 VALID 正向向量，`blobGasUsed>gasLimit` 拒绝未触发（B-5b） | 待W5 |
 
 > ⚠️ base fee 的 FISCO 锚点是 `EngineServiceImpl.cpp:191`（def）——§1 写 :233-239 是 Jovian max 逻辑，两者都要在证据列区分；Jovian max 分支状态与 B-5c 保持一致（待W5）。
+
+---
+
+## 阶段 3 矩阵（状态执行）
+
+| 锚点 | FISCO 锚点 | op-geth 锚点 | 判定 | 证据 | 状态 |
+|---|---|---|---|---|---|
+| 块执行入口 | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:99` processOpBlock | `core/state_processor.go:62` Process | 等价 | 首笔 deposit 强制（:112-116） | 已确认 |
+| 首笔 L1 attributes | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:112-116` | `core/state_transition.go:346-361` preCheck | 等价 | D-1 交易级 | 已确认 |
+| blockGasLeft 递减 | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:143/:198` | `core/state_transition.go:282` buyGas | 等价 | B-4 相关 | 事实达成 |
+| fee 惰性加载 | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:157` loadOpFeeParams | `core/types/rollup_cost.go:151/:215/:353`（NewL1CostFunc/NewOperatorCostFunc/NewTotalRollupCostFunc） | 等价 | D-4 相关（静态等价；语义等价待动态证实，W4-C） | 待W5 |
+| validate | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:328` opValidate | `core/state_transition.go:346` preCheck | 等价 | D-1 | 已确认 |
+| fee 路由至 vaults | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:295-300` | `core/state_transition.go:711-734` | 等价 | C-5 校正后 | 已确认 |
+| deposit 执行 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:441` runDeposit | `core/state_transition.go:473-511` | 等价 | D-1 | 已确认 |
+| 差异点#1 快照契约 | `opValidate/opTransition 共享快照（OpTransition.cpp:328/:237）` | `buyGas/innerExecute 即时读（state_transition.go:282/:515）` | 已知分叉 | D-4 | 待W5 |
+
+---
+
+## 阶段 4 矩阵（块级收尾）
+
+| 锚点 | FISCO 锚点 | op-geth 锚点 | 判定 | 证据 | 状态 |
+|---|---|---|---|---|---|
+| txRoot | `bcos-evm/bcos-evm/engine/OpEngineSeam.h:171` computeOpTxRoot | `core/types/block.go:271` DeriveSha（TxHash） | 等价 | HashBuilder 排序修复 | 已修一致 |
+| 密封 header | `bcos-evm/bcos-evm/opstack/OpBlockSeal.cpp:138` sealOpBlock | `consensus/beacon/consensus.go:383` FinalizeAndAssemble | 等价 | encodeOpHeader 字节级 | 事实达成 |
+| withdrawalsRoot | `bcos-evm/bcos-evm/opstack/OpBlockSeal.cpp:170-174` | `consensus/beacon/consensus.go:416-427` | 等价 | B-1 | 已修一致 |
+| blobGasUsed | `bcos-evm/bcos-evm/opstack/OpBlockSeal.cpp:187-197` | `consensus/beacon/consensus.go:429-437` | 等价 | B-5a | 事实达成 |
+| stateRoot | `bcos-evm/bcos-evm/adapter/StateRootCompute.h:76` stateRootOf | `core/blockchain.go:1681-1697` Commit | 等价 | 33 向量 | 事实达成 |
+| 回执映射 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:318-321` | `core/state_processor.go:199` MakeReceipt | 等价 | B-2 | 事实达成 |
+| 回执扩展字段 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:319` setOpStackMeta | `core/types/receipt.go:596` DeriveFields | 已知分叉 | B-3 | 已确认 |
