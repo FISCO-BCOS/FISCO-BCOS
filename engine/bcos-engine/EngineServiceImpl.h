@@ -668,9 +668,10 @@ private:
 
             // If this payload was built locally (via updateForkchoice), commit the view's
             // state changes to storage. Externally received payloads have no view to commit.
-            // TODO: merge pushView + mergeBackStorage into a single atomic mergeView()
-            // operation. This will eliminate the risk of leaking a mutable layer if
-            // mergeBackStorage throws, and avoid holding x_state across a co_await.
+            // mergeView()（C2 修复,commit 589d15dd8）已消除 mergeBackStorage throw 泄漏 mutable
+            // layer 的风险（OP 路径 EngineServiceImpl.h:1165 已用它）。剩余 TODO：avoid holding
+            // x_state across a co_await——OP 路径仍持 x_state 跨 mergeView 内部 co_await（spec §3.1
+            // 承认）;本通用路径仍为两步 pushView+mergeBackStorage（语义等价,可改 mergeView 快随）。
             auto it = m_payloadCache.find(payloadId);
             if (it != m_payloadCache.end() && it->second.view)
             {
