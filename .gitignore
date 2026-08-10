@@ -69,6 +69,9 @@ tools/BcosProBuilder/generated**
 tools/BcosAirBuilder/*
 *.log
 
+# t8n generator intermediate inputs (regenerable via t8n/generator; golden/ is the tracked asset)
+bcos-evm/test/opstack/t8n/cases/
+
 test/*
 /CMakeSettings.json
 

@@ -320,9 +320,10 @@ Expected: 命中 + commit 成功。
 - [ ] **Step 3: 自验 + Commit**
 
 ```bash
-# 终检：DIVERGENCES 章节数 + B 台账行数（⚠️ W4-A：B- 计数限定在 B 台账章节内，防归位对照表的 B- 行误报）
+# 终检：DIVERGENCES 章节数 + B 台账行数（⚠️ W4-A：B- 计数限定在 B 台账章节内，防归位对照表的 B- 行误报；
+# ⚠️ T4 implementer：勿用 '/^## .*B 项台账/,/^## /' range（节头同时命中起止，range 塌缩返回 0），改用 f{print} 模式）
 grep -c "^## " bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md   # 应 >= 10
-awk '/^## .*B 项台账/,/^## /' bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md | grep -c "^| B-"   # 应 == 10
+awk 'f{print} /^## B 项台账/{f=1}' bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md | grep -c "^| B-"   # 应 == 10
 git add bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md docs/opstack-opgeth-e2e-comparison.md
 git commit --no-verify -m "docs(w4): finalize DIVERGENCES.md + comparison doc §2 pointer + B-item summary"
 ```
