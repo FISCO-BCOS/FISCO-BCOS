@@ -95,4 +95,35 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         }
     }
     result["type"] = toQuantity(static_cast<uint64_t>(type));
+    // OP 扩展字段（对照 op-geth MarshalReceipt api.go:1779-1814）。空 opStackMeta → 无输出（不能输出
+    // 全零/默认值）；每个字段独立判空，写链不 throw（D7）。
+    if (auto meta = receipt.opStackMeta())
+    {
+        if (meta->l1_gas_price)
+            result["l1GasPrice"] = toQuantity(*meta->l1_gas_price);
+        if (meta->l1_gas_used)
+            result["l1GasUsed"] = toQuantity(*meta->l1_gas_used);
+        if (meta->l1_fee)
+            result["l1Fee"] = toQuantity(*meta->l1_fee);
+        if (meta->l1_blob_base_fee)
+            result["l1BlobBaseFee"] = toQuantity(*meta->l1_blob_base_fee);
+        if (meta->l1_base_fee_scalar)
+            result["l1BaseFeeScalar"] = toQuantity(*meta->l1_base_fee_scalar);
+        if (meta->l1_blob_base_fee_scalar)
+            result["l1BlobBaseFeeScalar"] = toQuantity(*meta->l1_blob_base_fee_scalar);
+        if (meta->operator_fee_scalar)
+            result["operatorFeeScalar"] = toQuantity(*meta->operator_fee_scalar);
+        if (meta->operator_fee_constant)
+            result["operatorFeeConstant"] = toQuantity(*meta->operator_fee_constant);
+        if (meta->da_footprint_gas_scalar)
+            result["daFootprintGasScalar"] = toQuantity(*meta->da_footprint_gas_scalar);
+        if (meta->da_footprint)
+            result["blobGasUsed"] = toQuantity(*meta->da_footprint);  // Jovian 复用
+        if (meta->deposit_nonce)
+            result["depositNonce"] = toQuantity(*meta->deposit_nonce);
+        if (meta->deposit_receipt_version)
+            result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
+        if (meta->operator_fee)
+            result["operatorFee"] = toQuantity(*meta->operator_fee);  // FISCO 扩展
+    }
 }
