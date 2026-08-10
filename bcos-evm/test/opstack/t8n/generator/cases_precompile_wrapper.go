@@ -149,7 +149,7 @@ func init() {
 		// returns the 32-byte-1 the precompile wrote. gasUsed therefore
 		// reflects: intrinsic + wrapper overhead + CALL cost + 3450 (the p256
 		// consumption charged against the 63/64-forwarded gas).
-		wrapperFrame("isthmus", "isthmus_precompile_wrap_63of64",
+		wrapperFrame("isthmus", "precompile_wrap_63of64",
 			"wrapper contract CALLs P256VERIFY (0x100) with a valid sig, gas=GAS (EIP-150 63/64 forwarding); precompile's 3450 covered by forwarded gas; wrapper returns the 32-byte-1 success output",
 			wrapAddr63, buildPrecompileWrapper(addrBytes(preP256Verify), false),
 			precompileCallTx(wrapAddr63.Bytes(), validP256Sig(), 500_000, 0),
@@ -166,7 +166,7 @@ func init() {
 		// observable truncation. The behavior column ("bn256 add 输出 64B")
 		// and the returndata-size quirk require the 64-byte-output 0x06, which
 		// takes two valid G1 points ("a pair" of points).
-		wrapperFrame("isthmus", "isthmus_precompile_wrap_returndata",
+		wrapperFrame("isthmus", "precompile_wrap_returndata",
 			"wrapper contract CALLs bn256 add (0x06) with two valid G1 points; 64B output truncated to the first 32B by the CALL's retSize (returndata-size quirk) -- receipt output is the x-coordinate only",
 			wrapAddrRd, buildPrecompileWrapper(addrBytes(preBn256Add), false),
 			precompileCallTx(wrapAddrRd.Bytes(), bn256AddInput, 500_000, 0),
@@ -179,7 +179,7 @@ func init() {
 		// failure -> tx status 0, no balance residue on 0x06. (0x100 was not
 		// usable: P256VERIFY never errors on malformed input -- see
 		// malformedBn256AddInput comment.)
-		wrapperFrame("jovian", "jovian_precompile_wrap_value_revert",
+		wrapperFrame("jovian", "precompile_wrap_value_revert",
 			"wrapper contract CALLs bn256 add (0x06) with a malformed off-curve point and value 1 wei; precompile errors -> value rolled back, wrapper REVERT propagates the failure (tx status 0, no balance residue)",
 			wrapAddrVr, buildPrecompileWrapper(addrBytes(preBn256Add), true),
 			precompileCallTx(wrapAddrVr.Bytes(), malformedBn256AddInput, 500_000, 1),
@@ -195,7 +195,7 @@ func init() {
 		// intrinsic 1,007,112 + wrapper overhead + CALL cost) clears the
 		// precompile's RequiredGas(428)=14,597,000 so the CAP CHECK (not an
 		// OOG) is what fires -- the path this case pins.
-		wrapperFrame("jovian", "jovian_precompile_wrap_value_overcap",
+		wrapperFrame("jovian", "precompile_wrap_value_overcap",
 			"wrapper contract CALLs bn256 pairing (0x08) with an over-cap 428-pair input and value 1 wei; OpHost length-limit early return fires before value application -> status 0, all forwarded gas consumed, no value residue (net-semantics regression pin)",
 			wrapAddrVo, buildPrecompileWrapper(addrBytes(preBn256Pairing), true),
 			precompileCallTx(wrapAddrVo.Bytes(), repeatedBn256Pair(428), 17_000_000, 1),
@@ -209,8 +209,8 @@ func init() {
 		// and OpHost's EVMC_DELEGATED branch runs empty code instead of the
 		// precompile. BOTH txs succeed (status 1) with empty output and no
 		// storage writes -- the "双端执行空码" observable.
-		caseSpec{"isthmus_precompile_wrap_eip7702", []string{"isthmus"}, func(fork string) inputCase {
-			c := caseFrame(fork, "isthmus_precompile_wrap_eip7702",
+		caseSpec{"precompile_wrap_eip7702", []string{"isthmus"}, func(fork string) inputCase {
+			c := caseFrame(fork, "precompile_wrap_eip7702",
 				"EIP-7702 setcode tx installs a delegation designator to the 0x08 precompile on the authority; setcode tx AND a user call to the authority both execute EMPTY code (EVMC_DELEGATED branch) -- status 1, no storage, no precompile execution",
 				defaultFeeParams(), 10_000_000)
 			fund(&c, 1, eth(100))

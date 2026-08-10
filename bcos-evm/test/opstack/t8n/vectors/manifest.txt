@@ -73,3 +73,49 @@ fjord_contract_create.json
 ecotone_upgrade_fjord_activation.json
 fjord_upgrade_isthmus_activation.json
 isthmus_upgrade_jovian_activation.json
+# Phase-2 线 B 预编译矩阵（Task 5, 2026-08-11）：+36 -> 77 vectors.
+# 实测枚举：generator 输出 77 case（41 旧 + 36 新），与 plan 的 34 新增/75 总数
+# 不符（plan 算术 13+14+4+5=36 为实，41+34=75 是笔误）——以生成器实测为准。
+# 基础 7（ecrecover/sha256/ripemd160/identity/expmod/blake2f/point_evaluation）、
+# bn256 5（add/mul/pair_norm + granite/jovian overcap + fjord large_success）、
+# BLS12-381 14（g1add/g1msm/g2add/g2msm/pairing/map_g1/map_g2 + 3 isthmus overcap
+# + 3 jovian overcap + fjord noop）、RIP-7212 4（valid/invalid/wronglen + ecotone
+# noop）、wrapper CALL 语义 5（63of64/returndata/value_revert/value_overcap/eip7702）。
+# wrapper case 名已修复单 fork 前缀（原 Task 4 实现为双前缀 ist…_ist…，见
+# cases_precompile_wrapper.go；修复后与 <fork>_<name>.json 不变量一致）。
+ecotone_precompile_p256_noop.json
+fjord_precompile_bls_noop.json
+fjord_precompile_bn256pair_large_success.json
+fjord_precompile_p256_invalid.json
+fjord_precompile_p256_valid.json
+fjord_precompile_p256_wronglen.json
+granite_precompile_bn256pair_overcap.json
+isthmus_precompile_blake2f.json
+isthmus_precompile_bls_g1add.json
+isthmus_precompile_bls_g1msm.json
+isthmus_precompile_bls_g1msm_overcap.json
+isthmus_precompile_bls_g2add.json
+isthmus_precompile_bls_g2msm.json
+isthmus_precompile_bls_g2msm_overcap.json
+isthmus_precompile_bls_map_g1.json
+isthmus_precompile_bls_map_g2.json
+isthmus_precompile_bls_pairing.json
+isthmus_precompile_bls_pairing_overcap.json
+isthmus_precompile_bn256add.json
+isthmus_precompile_bn256mul.json
+isthmus_precompile_bn256pair_norm.json
+isthmus_precompile_ecrecover.json
+isthmus_precompile_expmod.json
+isthmus_precompile_identity.json
+isthmus_precompile_point_evaluation.json
+isthmus_precompile_ripemd160.json
+isthmus_precompile_sha256.json
+isthmus_precompile_wrap_63of64.json
+isthmus_precompile_wrap_eip7702.json
+isthmus_precompile_wrap_returndata.json
+jovian_precompile_bls_g1msm_overcap.json
+jovian_precompile_bls_g2msm_overcap.json
+jovian_precompile_bls_pairing_overcap.json
+jovian_precompile_bn256pair_overcap.json
+jovian_precompile_wrap_value_overcap.json
+jovian_precompile_wrap_value_revert.json
