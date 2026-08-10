@@ -21,12 +21,10 @@
 #include <limits>
 
 // OP 回执/交易可查（方案 B）写侧转换 helper：raw EIP-2718 信封 → tars Transaction。
-// Web3Transaction.h 已连带拉入 RLPDecode/RLPEncode/TransactionImpl，下面几条单独 include 冗余但无害
-//（保持与 task-1 brief Step 1 一致）。
+// Web3Transaction.h 已连带拉入 RLPDecode/TransactionImpl；RLPDecode 显式保留（rlp::decode 实际使用,
+// include 自足）。Keccak256.h/TransactionImpl.h 本文件无直接使用,删除（P1-2）。
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include <bcos-codec/rlp/RLPDecode.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <optional>
 
 namespace bcos::engine::detail

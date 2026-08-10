@@ -81,10 +81,10 @@ void assertOpEnvelopeSender(TransactionType type)
         web3Tx.maxFeePerGas = bcos::u256(10);
     }
 
-    auto recoveredAddress = signAndFill(web3Tx, keyPair);
-    // Signing sanity: the recover path agrees with the pubkey-derived address (otherwise the
-    // envelope below is not the one the test thinks it is).
-    BOOST_CHECK(recoveredAddress == expectedAddress);
+    // signAndFill signs web3Tx in place; the D8 path inside opEnvelopeToTars re-derives the sender
+    // from the signature. (F1-1: removed a self-comparing sanity check — recoveredAddress and
+    // expectedAddress were the same expression, so it was trivially true and caught nothing.)
+    signAndFill(web3Tx, keyPair);
 
     auto envelope = web3Tx.encode();
     auto txHash = bcos::crypto::keccak256Hash(bcos::ref(envelope));

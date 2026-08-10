@@ -158,7 +158,7 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
         transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
-/// Parent 预登记（R3/R5 致命缺口 A 修复）：OP 路径 step-3 parentKnown（EngineServiceImpl.h:821-827）
+/// Parent 预登记（R3/R5 致命缺口 A 修复）：OP 路径 step-3 parentKnown
 /// 查 SYS_HASH_2_NUMBER 判 parent-known。33 个孤立向量都是 block 1，parent 必须以「受信创世」
 /// 预登记，否则 newPayload 返回 SYNCING。写入编码必须是生产同款：key=hash 原始 32 字节，
 /// value=number 十进制字符串（gate 测试 registerVerifiedBlock，EngineNewPayloadGateTest.cpp:188-198）。
@@ -234,10 +234,11 @@ void runGoldenVector(std::string const& id)
     assertSevenFields(id, produced, goldenHeader, goldenBlockHash);
 
     // 方案 B 写侧：OP 交易落 SYS_HASH_2_TX（tars 编码），s_eth_hash_2_rawtx 不再写。
-    // newPayload 的 registerOpBlock（EngineServiceImpl.h:1160-1308）把每笔 raw EIP-2718 信封转
-    // tars Transaction 写 SYS_HASH_2_TX[txHash]（extraTransactionHash=txHash 锁 D4），原始信封
-    // 不再写 s_eth_hash_2_rawtx（D1）；0x04 (EIP-7702) 无 TransactionType 对应 → opEnvelopeToTars
-    // 返回 nullopt → 表 absent，但 SYS_HASH_2_RECEIPT 仍写（D7）。
+    // newPayload 的 registerOpBlock 把每笔 raw EIP-2718 信封转 tars Transaction 写
+    // SYS_HASH_2_TX[txHash]（extraTransactionHash=txHash 锁 D4），原始信封不再写 s_eth_hash_2_rawtx
+    // （D1）；0x04 (EIP-7702) 无 TransactionType 对应 → opEnvelopeToTars 返回 nullopt → 表 absent，
+    // 但 SYS_HASH_2_RECEIPT 仍写（D7）。
+    BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // P3-1: 漏字段干净失败
     auto const& rawTxs = *request.executionPayload.rawTransactions;
     auto& hashImpl = *fixture->blockFactory->cryptoSuite()->hashImpl();
     auto view = fixture->multiLayerStorage.fork();
@@ -252,12 +253,18 @@ void runGoldenVector(std::string const& id)
                     bcos::concepts::bytebuffer::toView(txHash)}));
             BOOST_CHECK_MESSAGE(
                 !zeroEntry.has_value(), id << ": 0x04 tx #" << i << " SYS_HASH_2_TX absent");
-            // SYS_HASH_2_RECEIPT 仍写（EngineServiceImpl.h:1287-1290）
+            // SYS_HASH_2_RECEIPT 仍写（D7：块执行不受 0x04 影响）
             auto rcpEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
                 bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
                     bcos::concepts::bytebuffer::toView(txHash)}));
             BOOST_CHECK_MESSAGE(
                 rcpEntry.has_value(), id << ": 0x04 tx #" << i << " SYS_HASH_2_RECEIPT present");
+            // P3-3: 0x04 分支同样断言 rawtx 表 absent（D1 一致性——s_eth_hash_2_rawtx 已删,任何 tx 都 absent）
+            auto zeroRaw = bcos::task::syncWait(bcos::storage2::readOne(view,
+                bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
+                    bcos::concepts::bytebuffer::toView(txHash)}));
+            BOOST_CHECK_MESSAGE(
+                !zeroRaw.has_value(), id << ": 0x04 tx #" << i << " s_eth_hash_2_rawtx absent");
             continue;
         }
         // SYS_HASH_2_TX present + round-trip（tars 解码回 Transaction，hash==txHash 锁 D4）
