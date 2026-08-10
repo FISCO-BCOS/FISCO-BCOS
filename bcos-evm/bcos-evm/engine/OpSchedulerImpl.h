@@ -934,7 +934,9 @@ public:
     using ConsensusError = OpConsensusError;
     /// Storage-layer failure -> engine maps to JSON-RPC -32603, never INVALID (design §4.3).
     using StorageError = OpStorageError;
-    /// Table for the raw EIP-2718 transaction envelopes written on VALID (batch 6, decision (B)).
+    /// c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX（s_eth_hash_2_rawtx）。方案 B（2026-08-10）后不再写——
+    /// registerOpBlock 改经 opEnvelopeToTars 写 SYS_HASH_2_TX。常量保留，仅供读侧测试断言 rawtx 表
+    /// absent（D1，OpNewPayloadRpcE2eTest）。
     static constexpr std::string_view c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX;
 
     /// The six-way comparison surface (+ the two §5.1 seal outputs) in bcos:: types.

@@ -98,13 +98,13 @@
 
 | 锚点 | FISCO 锚点 | op-geth 锚点 | 判定 | 证据 | 状态 |
 |---|---|---|---|---|---|
-| 落库入口 | `engine/bcos-engine/EngineServiceImpl.h:1191` registerOpBlock | `core/blockchain.go:1650` writeBlockWithState | 等价 | 单入口落库（OP 块 VALID 后统一走 registerOpBlock） | 已确认 |
-| number→hash | `EngineServiceImpl.h:1199` SYS_NUMBER_2_HASH | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | key=number 十进制串 → value=hash raw 32B；与 op-geth canonical 索引同语义 | 已确认 |
-| hash→number | `EngineServiceImpl.h:1206` SYS_HASH_2_NUMBER | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | key=hash raw 32B → value=number 十进制串 | 已确认 |
-| header | `EngineServiceImpl.h:1219` SYS_NUMBER_2_BLOCK_HEADER | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | OP 头以 tars BlockHeader 落标准表（spec D3：一等公民，同 `Ledger.cpp:234`） | 已确认 |
-| 回执 | `EngineServiceImpl.h:1289` SYS_HASH_2_RECEIPT | `core/blockchain.go:1665` rawdb.WriteReceipts | 等价 | key=tx hash（keccak over raw EIP-2718 信封，:1283） | 已确认 |
-| 交易 | `EngineServiceImpl.h:1303` s_eth_hash_2_rawtx（SYS_ETH_HASH_2_RAWTX `OpEngineSeam.h:68`；SchedulerType::c_ethRawTxTable `OpSchedulerImpl.h:925`） | `core/blockchain.go:1664` rawdb.WriteBlock（txs 内联于 block） | 结构性差异 | OP 专用表 vs 通用 block 内联；一 key 两表（:1292-1298：SYS_HASH_2_RECEIPT 答「回执」，s_eth_hash_2_rawtx 答「交易」） | 已确认 |
-| 差异点：SYS_HASH_2_TX 故意不写 | `EngineServiceImpl.h:1226-1253`（论证：tars 解码静默吞错→假交易；0x04/0x7E 无 tars 映射；写假交易不修 UB 只藏错） | —（rawdb 统一索引） | 结构性差异 | 设计取舍，非 bug（:1250-1252）；对 getTransactionReceipt 可查性有影响 | 已确认 |
+| 落库入口 | `engine/bcos-engine/EngineServiceImpl.h:1200` registerOpBlock | `core/blockchain.go:1650` writeBlockWithState | 等价 | 单入口落库（OP 块 VALID 后统一走 registerOpBlock） | 已确认 |
+| number→hash | `EngineServiceImpl.h:1207-1209` SYS_NUMBER_2_HASH | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | key=number 十进制串 → value=hash raw 32B；与 op-geth canonical 索引同语义 | 已确认 |
+| hash→number | `EngineServiceImpl.h:1213-1216` SYS_HASH_2_NUMBER | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | key=hash raw 32B → value=number 十进制串 | 已确认 |
+| header | `EngineServiceImpl.h:1227-1229` SYS_NUMBER_2_BLOCK_HEADER | `core/blockchain.go:1664` rawdb.WriteBlock | 等价 | OP 头以 tars BlockHeader 落标准表（spec D3：一等公民，同 `Ledger.cpp:234`） | 已确认 |
+| 回执 | `EngineServiceImpl.h:1288-1291` SYS_HASH_2_RECEIPT | `core/blockchain.go:1665` rawdb.WriteReceipts | 等价 | key=tx hash（keccak over raw EIP-2718 信封，:1284） | 已确认 |
+| 交易 | `EngineServiceImpl.h:1293-1307` SYS_HASH_2_TX（方案 B：`opEnvelopeToTars` 转换后写 tars Transaction，key=keccak 信封；0x04/损坏信封返回 nullopt 跳过写表 D7） | `core/blockchain.go:1664` rawdb.WriteBlock（txs 内联于 block） | 等价 | 方案 B（2026-08-10）：OP 交易落通用 SYS_HASH_2_TX，读侧 eth_getTransactionByHash/eth_getTransactionReceipt 与普通交易同通道可查；s_eth_hash_2_rawtx 写已删（:1253-1254）。残留：0x04 (EIP-7702) 读侧 null（TransactionType 无 handler） | 已确认 |
+| 差异点：OP 交易落库（方案 B） | `EngineServiceImpl.h:1293-1307`（opEnvelopeToTars 转换后写 SYS_HASH_2_TX；D7：0x04/损坏信封 nullopt 跳过写表——读侧 null，块仍 VALID）+ `:1253-1254`（s_eth_hash_2_rawtx 写删） | `core/blockchain.go:1664` rawdb.WriteBlock（txs 内联于 block） | 等价 | 2026-08-10 方案 B 后 OP 交易经通用通道可查；0x04 (EIP-7702) 读侧 null 是已知 divergence（TransactionType 无 handler，与 op-geth 不一致） | 已确认 |
 
 > **注（阶段 5，UB）**：`bcos-ledger/bcos-ledger/LedgerMethods.h:237` 对缺失 SYS_HASH_2_TX 行无 `has_value()` 检查直接解引用（循环 :235，`auto field = txEntry->get()`）——pre-existing 缺陷，非 OP 引入（任何块 tx 元数据超 SYS_HASH_2_TX 都会命中）；写入假交易不修复它，只是把可发现的崩溃换成不可发现的错误答案（EngineServiceImpl.h:1247-1252）。
 
@@ -125,7 +125,7 @@
 |---|---|---|---|---|
 | 1 | 块校验位置 | 执行后六项承诺比对 `engine/bcos-engine/EngineServiceImpl.h:1094-1147` + blockHash 重建比对 `:799-803` | `core/block_validator.go:51` ValidateBody（预校验） | FISCO 主体仍是执行后承诺比对，无完整 VerifyHeader/ValidateBody 等价物（§0.0 C-13）；→ 阶段2「块校验主体」行 |
 | 2 | 双执行器并存 | `opstack-executor/OpstackExecutor.h:54`（v2 独立模块，未装配）+ `bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:1014` executeOpBlock（生产单路径） | 唯一路径：`core/state_processor.go:62` Process | v2 模块未装配，生产仅 executeOpBlock 单路径；op-geth 只一条路径（W4-A/D 修正：以 OpstackExecutor.h 为 v2 参照） |
-| 3 | 索引隔离 | `EngineServiceImpl.h:1226-1253`（SYS_HASH_2_TX 故意不写论证）+ `:1289` 回执可查 / `:1303` rawtx 专用表 | rawdb 统一索引（`core/blockchain.go:1664-1665`） | 设计取舍：tars 解码静默吞错→假交易；对 getTransactionReceipt 可查性有影响 → 阶段5「差异点」行 |
+| 3 | 索引隔离（已消除） | 方案 B（2026-08-10）：`EngineServiceImpl.h:1293-1307` 写 SYS_HASH_2_TX（opEnvelopeToTars 转换）+ `:1253-1254` rawtx 写删 | rawdb 统一索引（`core/blockchain.go:1664-1665`） | 已消除：OP 交易落通用 SYS_HASH_2_TX，读侧统一可查；残留 divergence = 0x04 (EIP-7702) 读侧 null（TransactionType 无 handler，块仍 VALID）→ 阶段5「差异点」行 |
 | 4 | PBFT 双执行防护 | `OpSchedulerImpl.h:987/:993` executeBlock throw 哑桩（实测定义 :985、throw :991-992） | —（无对应） | 仅在 OP scheduler 装配后生效；OP 模式禁用 PBFT executeBlock（§4 缺口C） |
 
 ---
@@ -154,7 +154,7 @@
 | 阶段4 #1 | withdrawalsRoot 语义一致（opStorageRoot vs GetStorageRoot） | B-1 | B 台账 B-1 | 等价 / 已修一致 |
 | 阶段4 #2 | receiptsRoot 编码（encodeReceiptForRoot vs receiptRLP/depositReceiptRLP） | B-2 | B 台账 B-2 | 等价 / 事实达成 |
 | 阶段4 #3 | OP 回执扩展字段（setOpStackMeta vs deriveOPStackFields） | B-3 | B 台账 B-3 | 已知分叉（2 delta）/ 已确认 |
-| 阶段5 | 索引隔离（SYS_HASH_2_TX 故意不写） | 结构性差异 | 阶段5「差异点：SYS_HASH_2_TX 不写」行 + 结构性差异#3 | 结构性差异 / 已确认 |
+| 阶段5 | OP 交易落库（方案 B：opEnvelopeToTars 转换后写 SYS_HASH_2_TX；0x04 跳过） | 等价 | 阶段5「差异点：OP 交易落库」行 + 结构性差异#3（已消除） | 等价 / 已确认 |
 | 阶段6 | output root 不在 EL 范围（op-node 职责） | 不在范围 | 阶段6「差异点：output root」行（标注） | 不在范围 / 标注 |
 
 ---

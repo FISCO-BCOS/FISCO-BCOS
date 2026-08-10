@@ -141,10 +141,10 @@
 ### 阶段 5 — 落库 / 索引
 | FISCO | op-geth |
 |---|---|
-| `registerOpBlock`（`EngineServiceImpl.h:1191`）：SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER / SYS_HASH_2_RECEIPT / **s_eth_hash_2_rawtx**（OP 专用表）；**故意不写 SYS_HASH_2_TX**（:1232-1263 论证：tars 解码静默吞错会造"哈希与 key 不符的假交易"） | `writeBlockWithState`（`core/blockchain.go:1650`）：`rawdb.WriteBlock/WriteReceipts`（:1664-1665）→ 通用 `eth/tracers`/rpc 统一查询 |
+| `registerOpBlock`（`EngineServiceImpl.h:1200`）：SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER / SYS_HASH_2_RECEIPT / **SYS_HASH_2_TX**（方案 B：`opEnvelopeToTars` 转换后写 tars Transaction，`EngineServiceImpl.h:1293-1307`）；s_eth_hash_2_rawtx 写已删（:1253-1254）；0x04/损坏信封转换失败返回 nullopt 跳过写表（D7） | `writeBlockWithState`（`core/blockchain.go:1650`）：`rawdb.WriteBlock/WriteReceipts`（:1664-1665）→ 通用 `eth/tracers`/rpc 统一查询 |
 | 已知边界：`bcos-ledger/bcos-ledger/LedgerMethods.h:233-235` 对缺失 SYS_HASH_2_TX 行无 has_value 检查直接解引用 → UB（pre-existing；行号仅对 pr-5366 成立，val-loop 偏移 2 行） | — |
 
-**差异点**：FISCO 故意隔离 OP 索引（SYS_HASH_2_TX 不写 → 交易不可经 generic 通道查，回执经 SYS_HASH_2_RECEIPT 可查）；op-geth 全部进 rawdb 统一索引。**这是设计取舍，不是 bug，但对"getTransactionReceipt 可查性"有影响**（记忆已记录）。
+**差异点**：OP 交易经方案 B（2026-08-10）落通用 SYS_HASH_2_TX（`opEnvelopeToTars` 转换后写，key=keccak 信封 hash），读侧 eth_getTransactionByHash / eth_getTransactionReceipt 与普通交易同通道可查；s_eth_hash_2_rawtx 写已删。残留 divergence：0x04 (EIP-7702) 无 handler → 跳过写表，读侧返回 null（块执行不受影响，D7）。
 
 ### 阶段 6 — 输出（block hash / output root）
 | FISCO | op-geth |
@@ -197,7 +197,7 @@
 ### 结构性差异（FISCO 架构层面）
 - **块校验位置**：op-geth 有独立 header/body 预校验（ValidateBody/verifyHeader + EIP-1559 header 校验）；FISCO 有 `validateOpNewPayloadRequest`（`EngineServiceImpl.cpp:279`）+ base fee 静态校验（`EngineServiceImpl.h:945`），但主体仍是执行后"六/八项承诺比对"，无完整 VerifyHeader/ValidateBody 等价物（见 §0.0 C-13）。
 - **双执行器并存**：`OpstackExecutor.h`（v2 未装配）与 `OpSchedulerImpl::executeOpBlock`（`bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:1016`，生产未装配）两套；op-geth 只有一条路径。
-- **索引隔离**：SYS_HASH_2_TX 故意不写（设计取舍）。
+- ~~**索引隔离**~~：方案 B（2026-08-10）已消除——OP 交易经 `opEnvelopeToTars` 转换后写 SYS_HASH_2_TX（`EngineServiceImpl.h:1293-1307`），读侧统一可查；s_eth_hash_2_rawtx 写删。残留 divergence：0x04 读侧 null。
 - **PBFT 双执行防护**：`OpSchedulerImpl::executeBlock` throw 哑桩（`bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:987` 定义 / :993 throw），仅在 OP scheduler 装配后生效。
 
 ---
@@ -373,7 +373,7 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 | 2 块校验 | 等价 + 2 结构性 | 块校验主体（承诺比对 vs ValidateBody）+ 单侧 DA 拒绝路径（B-5b） |
 | 3 状态执行 | 等价 + 1 已知分叉 | D-1 交易级 + D-4 快照契约（契约已固化，不进块级字节） |
 | 4 块级收尾 | 等价 + 1 已知分叉 | B 台账终态已定（B-1/B-8 已修一致；B-2/B-4/B-5a 事实达成）+ B-3 回执扩展字段 2 delta |
-| 5 落库 | 结构性差异 | 索引隔离（SYS_HASH_2_TX 不写；对 getTransactionReceipt 可查性有影响） |
+| 5 落库 | 等价 | OP 交易落通用 SYS_HASH_2_TX（方案 B）；0x04 读侧 null 注记 |
 | 6 输出 | 等价 | block hash 承诺比对；output root 不在 EL 范围 |
 
 ### 已知差异明细落定
@@ -383,7 +383,7 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 - **结构性差异「接受」决策**：
   - 块校验位置：接受（承诺比对是 FISCO 架构选择，VALID/INVALID 语义互通无碍）
   - 双执行器并存：接受（v2 未装配，生产单路径）
-  - **索引隔离：接受，但标注互通后果**——SYS_HASH_2_TX 刻意不写 → OP 块 `eth_getTransactionReceipt` 恒返回 null（当前分支未合 rawtx 回退/opReceiptMeta，fix 在 val-loop 未合并）；属功能性 RPC 缺口，入上线闸 gap 清单
+  - **索引隔离：已消除（方案 B，2026-08-10）**——OP 交易经 `opEnvelopeToTars` 转换后写 SYS_HASH_2_TX，读侧 eth_getTransactionReceipt / eth_getTransactionByHash 与普通交易同通道可查；s_eth_hash_2_rawtx 写删。残留：0x04 (EIP-7702) 读侧 null（TransactionType 无 handler，块仍 VALID）
   - PBFT 哑桩：接受（W3 门控已生效），但与「PBFT 共识层是否整体禁用」未决决策纠缠——纯 EL 无碍，自持共识上线需决策
 
 ### Karst 上线闸
@@ -393,7 +393,7 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 | gap | 影响 | 工作量 | 阻塞性 |
 |---|---|---|---|
 | D-2 Karst 适配 | ~~高——FISCO 无 karstTime 激活通道…~~ **用户裁定 2026-08-10：不处理**（op-geth 侧 Karst 纯 config 骨架、真实内容在 op-reth 且生态已要求迁移，无对拍对象） | 中高 | ~~🔴 阻塞~~ → **已关闭** |
-| OP 块回执不可查 | 高——SYS_HASH_2_TX 刻意不写 → eth_getTransactionReceipt 恒 null；写侧已有（OpStackReceiptMeta 编码 + rawtx 落表），**RPC 读侧 fix（rawtx 回退）在 val-loop 未合并** | 中 | 🔴 生产阻塞 |
+| ~~OP 块回执不可查~~ | **已修复（方案 B，2026-08-10）**——OP 交易转换后写 SYS_HASH_2_TX + 读侧 opStackMeta 13 字段输出；eth_getTransactionReceipt / eth_getTransactionByHash 与普通交易同通道可查 | — | 🔴 ~~生产阻塞~~ → 已关闭 |
 | PBFT 共识层未决 | 中——自持共识上线阻塞；纯 EL 视角可降级互通项 | 中 | 视上线形态 |
 | B-2/B-4 正式迁移 | 低（W7 内完成） | 低 | 否 |
 | B-3 注记收紧 | 低（W7 内完成） | 低 | 否 |
@@ -403,17 +403,17 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 ```
 （Karst 适配已裁定不处理）→ OP 块回执可查修复（剩余 🔴 项）→ 可上线评估
 ```
-3. **Go/No-Go**：~~**当前 No-Go**——FISCO 无法激活/表征 Karst…~~ **更新（用户裁定 2026-08-10）：Karst 阻塞已关闭**（不处理）。剩余阻塞 = **OP 块回执不可查**（🔴 生产阻塞，RPC 读侧 fix 在 val-loop 未合并）。重新评估可上线的条件收敛为：① OP 块回执可查修复完成（rawtx 回退 + opReceiptMeta 从 val-loop 移植）② W5 gate 回归通过 ③ 按需重新对拍（不含 Karst）。
+3. **Go/No-Go**：~~**当前 No-Go**——FISCO 无法激活/表征 Karst…~~ **更新（2026-08-10）：Karst 阻塞已关闭**（用户裁定不处理）**+ OP 块回执不可查已修复**（方案 B：交易写 SYS_HASH_2_TX + 读侧 opStackMeta 字段输出）。剩余 🔴 = **无**。重新评估可上线的条件收敛为：① 方案 B 回归通过（W5 gate + test-bcos-rpc + bcos-evm-opstack-tests 全绿）② PBFT 共识层决策（§8.5，视上线形态）③ 按需重新对拍（不含 Karst）。
 
 ### 待办移交（W7 之后）
 
 - ~~**Karst 适配专项任务**~~（**用户裁定 2026-08-10：不处理**——op-geth 侧 Karst 是纯 config 骨架（`IsKarst` 零行为调用点，registry commit cc07e96d9 无任何链配 karst_time），真实 Karst 内容（Fusaka 7 EIP / BN256 上限 / L2CM）在 op-reth 侧且 OP 生态已要求 Karst 后迁移 op-reth；FISCO 对拍基线停在 Jovian/Isthmus，Karst 无对拍对象）
-- **OP 块回执可查修复**（rawtx 回退 + opReceiptMeta，从 val-loop 移植）
+- ~~**OP 块回执可查修复**~~（**方案 B 已完成，2026-08-10**——交易经 `opEnvelopeToTars` 转换写 SYS_HASH_2_TX + 读侧 opStackMeta 字段输出；采用方案 B，未走 val-loop 的 rawtx 回退方案）
 - **PBFT 共识层决策**（是否整体禁用 + retry loop 抑制）
 - deferred minors 清理（cases/ gitignore、golden manifest 校验、首投 B 软断言）
 - 生产互通待办（V4 端点桩 / V4 能力广播 / generator 重生成——见 §7「W6 外待办」）
 - **W8 / W0**（记忆遗留 ctest/落盘/四项决策 + DU 冲突清理）
-- **s_number_2_header 落盘欠账**（W8 T2 核实确认）：OP 提交路径 `EngineServiceImpl.h:1167` 只 `pushView`、从不 `mergeBackStorage()` → 同 view 内所有 OP 写表（s_number_2_header / SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / 回执表 / s_eth_hash_2_rawtx）只存内存层，不落后端 RocksDB，进程重启即丢。最小 loop 未接真实节点故暂留档（落盘无消费方）；修复应随 orchestration 层接真实节点时整层 merge（仿 FISCO `:662-669`，采纳原子 mergeView 规避 throw 泄漏），与 `SYS_CURRENT_STATE` head 推进/reorg 编排同批。核实报告见 SDD workspace `task-2-report.md`。
+- **s_number_2_header 落盘欠账**（W8 T2 核实确认）：OP 提交路径 `EngineServiceImpl.h:1167` 只 `pushView`、从不 `mergeBackStorage()` → 同 view 内所有 OP 写表（s_number_2_header / SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / 回执表 / SYS_HASH_2_TX（方案 B））只存内存层，不落后端 RocksDB，进程重启即丢。最小 loop 未接真实节点故暂留档（落盘无消费方）；修复应随 orchestration 层接真实节点时整层 merge（仿 FISCO `:662-669`，采纳原子 mergeView 规避 throw 泄漏），与 `SYS_CURRENT_STATE` head 推进/reorg 编排同批。核实报告见 SDD workspace `task-2-report.md`。
 - **legacy/0x01 块执行放行留档**（W8 C6 裁定确认）：FISCO OP 块执行层对 legacy(0xc0)/access_list(0x01) **放行** = 与 op-geth **等价**（`OpSchedulerImpl.h` decodeOneRawTx 分派无拒绝分支 + `OpTransition.cpp` opValidate 白名单仅拒 blob 0x03/>0x04；op-geth `state_transition.go` 块执行层亦仅 IsDepositTx 特殊分支）；**不实现硬拒**——若硬拒会对合法区块单侧判 INVALID，与差分对拍目标冲突。裁定报告见 SDD workspace `task-4-report.md`。
 
 > 注：B-2/B-4 正式迁移 + B-3 注记收紧已在 §8.3 W7 内完成，不入此移交。
