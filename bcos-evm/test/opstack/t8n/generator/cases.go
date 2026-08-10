@@ -121,6 +121,45 @@ var (
 		out := append(head, params.BeaconRootsAddress.Bytes()...)
 		return append(out, tail...)
 	}()
+
+	// -----------------------------------------------------------------
+	// Phase 2 line B (Task 1): precompile vector INPUTS. Each is genuinely
+	// valid so the precompile succeeds where the plan says success (verified
+	// end-to-end by --probe-receipt-fields during Task 1; construction detail
+	// in the Task 1 report).
+	// -----------------------------------------------------------------
+
+	// validEcrecoverInput is a REAL secp256k1 signature recovering to key 1
+	// (0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf). hash = sha256("fisco
+	// line-b ecrecover"), signed with privKey(1); recovery verified against
+	// crypto.Ecrecover during generation. Layout follows op-geth core/vm
+	// ecrecover.Run: hash(32) || v-slot(32, last byte = recovery-id + 27) ||
+	// r(32) || s(32).
+	validEcrecoverInput = hexutil.MustDecode("0x" +
+		"34fd596c5986a266fe0e5c5f2a160701bb8877079ecc6f617c81bfddcdbbbe5b" + // hash
+		"000000000000000000000000000000000000000000000000000000000000001b" + // v-slot (recid 0 -> 0x1b)
+		"a048fc6ef02730c5eff7fedfdaa9ed5f27725d2ae4edea299ec783192c6adf9e" + // r
+		"62d797bf5a0d6cb3cd9f2b5caa77ef735a2cffe4f1907d8c880c7157e0f4d074") // s
+
+	// validBlake2fInput is EIP-152 test vector 5 (the BLAKE2b F-compression
+	// "abc" case): rounds=12, h = BLAKE2b IV ^ 0x01010040, m = "abc", final=1.
+	// Provenance: op-geth core/vm/testdata/precompiles/blake2F.json vector 5
+	// (canonical; Expected = ba80a53f…409923).
+	validBlake2fInput = hexutil.MustDecode("0x0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001")
+
+	// expmodZeroHeader: 96B modexp header with baseLen=expLen=modLen=0 (empty
+	// base/exp/mod). op-geth bigModExp.Run returns []byte{} for baseLen==0 &&
+	// modLen==0 (EIP-198) -- SUCCESS (status 1) with an empty output, NOT "1"
+	// as the Task 1 brief stated (corrected; the receipt is unaffected).
+	expmodZeroHeader = make([]byte, 96)
+
+	// bn256AddInput: two valid G1 points (128B, EIP-196).
+	bn256AddInput = repeatedPair(validBn256G1(), 2)
+	// bn256MulInput: valid G1 point (64B) || scalar 0x02 (32B) = 96B.
+	bn256MulInput = append(validBn256G1(), common.BigToHash(big.NewInt(2)).Bytes()...)
+
+	// deadbeefInput: shared 4-byte input for sha256/ripemd160/identity.
+	deadbeefInput = hexutil.MustDecode("0xdeadbeef")
 )
 
 // ---------------------------------------------------------------------
@@ -524,6 +563,38 @@ func precompileFrame(fork, name, desc string, txs []inputTx, blockGasLimit uint6
 		},
 	}
 }
+
+// basePrecompileCase is the shared shape for the base-7 + bn256 add/mul normal
+// vectors (line B Task 1 steps 1-2): fork=isthmus, a single direct EIP-1559
+// call to precompile addr with a VALID input. tx gas 500_000 covers the
+// intrinsic gas (~21.5k) PLUS the precompile's RequiredGas (see the Task 0
+// probe note: a 150-gas tx would OOG at the intrinsic check and never reach
+// the precompile); block gas 10M (precompileFrame default).
+func basePrecompileCase(name, desc string, addr uint, input []byte) caseSpec {
+	return precompileFrame("isthmus", name, desc,
+		[]inputTx{precompileCallTx(addrBytes(addr), input, 500_000, 0)},
+		10_000_000)
+}
+
+// bn256 pairing over-cap tx gas (line B §4.1 / Task 1 brief constraint
+// "tx gas >= max(intrinsic, floor, RequiredGas) + margin"). The tx gas limit
+// is charged intrinsic FIRST (state_transition.go:563), so it must clear
+// intrinsic + RequiredGas or the precompile OOGs before its cap check.
+// RequiredGas = 45000 + 34000×pairs (Istanbul rate; Granite/Jovian defer to
+// it). Measured (Task 1 report, reproducible):
+//
+//	587 pairs (granite/fjord): intrinsic 1,373,448 + RequiredGas 20,003,000
+//	                           = 21,376,448 -> 21,400,000
+//	428 pairs (jovian):        intrinsic 1,007,112 + RequiredGas 14,597,000
+//	                           = 15,604,112 -> 15,700,000
+//
+// The EIP-7623 floor (3.40M / 2.49M) does not bind. EIP-7825's 16.7M MaxTxGas
+// cap does NOT apply: OsakaTime is nil in every OP vector config
+// (buildChainConfig), so rules.IsOsaka is false.
+const (
+	bn256PairOvercapGas587 = 21_400_000
+	bn256PairOvercapGas428 = 15_700_000
+)
 
 // ---------------------------------------------------------------------
 // The 18 cases (14 from the M-B3+M6 plan table + 3 corpus-augmentation
@@ -1154,6 +1225,77 @@ var caseSpecs = []caseSpec{
 			"upgrade boundary isthmus->jovian: genesis Isthmus, single block crosses JovianTime; deposits-only with Isthmus-length attributes (CalcDAFootprint activation form), DA fields appear in header semantics",
 			fp, 10_000_000, "jovian", 1005)
 		return c
+	}},
+
+	// ----- Phase 2 line B: precompile vectors (Task 1, 13 cases) -----
+	// Step 1: base-7 normal vectors (fork=isthmus, tx gas 500_000). Each input
+	// is genuinely valid (probe-confirmed) so the precompile returns success.
+	basePrecompileCase("precompile_ecrecover",
+		"ecrecover (0x01): real secp256k1 signature recovering to key 1; hash = sha256(\"fisco line-b ecrecover\")",
+		preEcRecover, validEcrecoverInput),
+	basePrecompileCase("precompile_sha256",
+		"sha256 (0x02): 4-byte input 0xdeadbeef",
+		preSha256, deadbeefInput),
+	basePrecompileCase("precompile_ripemd160",
+		"ripemd160 (0x03): 4-byte input 0xdeadbeef",
+		preRipemd160, deadbeefInput),
+	basePrecompileCase("precompile_identity",
+		"identity (0x04): 4-byte input 0xdeadbeef (returns it verbatim)",
+		preIdentity, deadbeefInput),
+	basePrecompileCase("precompile_expmod",
+		"modexp (0x05): 96B zero-header (baseLen=expLen=modLen=0) -> success; empty output (EIP-198 baseLen==modLen==0 rule)",
+		preExpMod, expmodZeroHeader),
+	basePrecompileCase("precompile_blake2f",
+		"blake2f (0x09): EIP-152 vector 5 (rounds=12, h=IV^0x01010040, m=\"abc\", final=1)",
+		preBlake2f, validBlake2fInput),
+	basePrecompileCase("precompile_point_evaluation",
+		"kzg point evaluation (0x0a): valid EIP-4844 proof (192B, validKZGInput)",
+		prePointEval, validKZGInput()),
+
+	// Step 2: bn256 add/mul normal vectors (fork=isthmus, tx gas 500_000).
+	basePrecompileCase("precompile_bn256add",
+		"bn256 add (0x06): two valid G1 points (128B input; RequiredGas 150)",
+		preBn256Add, bn256AddInput),
+	basePrecompileCase("precompile_bn256mul",
+		"bn256 scalar mul (0x07): valid G1 + scalar 0x02 (96B input; RequiredGas 6000)",
+		preBn256Mul, bn256MulInput),
+
+	// Step 3: bn256 pairing 4-cap matrix (cap discriminators, block gas 30M).
+	{"precompile_bn256pair_norm", []string{"isthmus"}, func(fork string) inputCase {
+		// One valid pair (192B): well under the granite cap (112687) that is
+		// active at isthmus; pairing check runs and returns (status 1).
+		return precompileFrame(fork, "precompile_bn256pair_norm",
+			"bn256 pairing (0x08): one valid pair (192B) succeeds at isthmus (granite-cap active, 192 << 112687)",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(1), 500_000, 0)},
+			10_000_000).build(fork)
+	}},
+	{"precompile_bn256pair_overcap", []string{"granite"}, func(fork string) inputCase {
+		// 587 pairs = 112704B > granite cap 112687 -> bn256PairingGranite.Run
+		// returns errBadPairingInputSize AFTER charging RequiredGas (20,003,000)
+		// -> status 0, ALL call gas consumed (gasUsed = tx gas). tx gas clears
+		// intrinsic + RequiredGas so the CAP check (not an OOG) is what fires.
+		return precompileFrame(fork, "precompile_bn256pair_overcap",
+			"bn256 pairing over granite cap: 587 pairs (112704B > 112687) rejected with errBadPairingInputSize after charging RequiredGas",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(587), bn256PairOvercapGas587, 0)},
+			30_000_000).build(fork)
+	}},
+	{"precompile_bn256pair_overcap", []string{"jovian"}, func(fork string) inputCase {
+		// 428 pairs = 82176B > jovian cap 81984 (and <= granite's 112687):
+		// DISCRIMINATES jovian's tighter cap from granite's. Same cap-path
+		// semantics as granite (errBadPairingInputSize, status 0, all gas).
+		return precompileFrame(fork, "precompile_bn256pair_overcap",
+			"bn256 pairing over jovian cap: 428 pairs (82176B > 81984, <= granite 112687) rejected with errBadPairingInputSize (tighter cap than granite)",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(428), bn256PairOvercapGas428, 0)},
+			30_000_000).build(fork)
+	}},
+	{"precompile_bn256pair_large_success", []string{"fjord"}, func(fork string) inputCase {
+		// No cap at fjord (bn256PairingIstanbul): 587 VALID pairs SUCCEED
+		// (status 1, 32B output). Proves the 112687B cap appears only at
+		// granite+ (same input as the granite over-cap case diverges).
+		return precompileFrame(fork, "precompile_bn256pair_large_success",
+			"bn256 pairing large input: 587 valid pairs (112704B) SUCCEED at fjord (no cap yet; granite+ introduces the 112687B cap)",
+			[]inputTx{precompileCallTx(addrBytes(preBn256Pairing), repeatedBn256Pair(587), bn256PairOvercapGas587, 0)},
+			30_000_000).build(fork)
 	}},
 }
 
