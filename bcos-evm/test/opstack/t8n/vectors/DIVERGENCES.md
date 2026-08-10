@@ -57,11 +57,11 @@
 |---|---|---|---|---|---|
 | 块校验主体 | `engine/bcos-engine/EngineServiceImpl.h:1094-1147` 承诺比对 | `core/block_validator.go:51` ValidateBody | 结构性差异 | 执行后承诺比对 vs 预校验（§2 结构性差异） | 已确认 |
 | extraData | `engine/bcos-engine/EngineServiceImpl.cpp:383-421`（validateOpNewPayloadRequest 内 Isthmus 9B/Jovian 17B 形状校验） | `consensus/misc/eip1559/eip1559_optimism.go:22` | 等价 | FISCO 已实现（对齐 ValidateHolocene/JovianExtraData）；W4-C 证伪「无对应」 | 已确认 |
-| base fee | `engine/bcos-engine/EngineServiceImpl.cpp:191`（def）；Jovian max 分支 :233-240 | `consensus/misc/eip1559/eip1559.go:64/:99-107` | 等价 | 一般路径经 33 向量 encodeOpHeader 字节级佐证；**Jovian max 分支属 B-5c（无 jovian 链式对）** | 待W5 |
+| base fee | `engine/bcos-engine/EngineServiceImpl.cpp:191`（def）；Jovian max 分支 :233-240 | `consensus/misc/eip1559/eip1559.go:64/:99-107` | 等价 | 一般路径经 33 向量 encodeOpHeader 字节级佐证；**Jovian max 分支已由 jovian 链式对证实（B-5c：block2 baseFee=0x3a7e98a8=calcOpBaseFee(DA)）** | 已确认 |
 | DA footprint ==≤GasLimit | `engine/bcos-engine/EngineServiceImpl.cpp:442-444` | `core/block_validator.go:119-134` | 等价 | 均实现（jovian_da_mix DA=593600 字节级） | 事实达成 |
-| 单侧：DA 拒绝路径 | `engine/bcos-engine/EngineServiceImpl.cpp:442-444`（已实现未触发） | `core/block_validator.go:131-132` | 结构性差异 | W6 全 VALID 正向向量，`blobGasUsed>gasLimit` 拒绝未触发（B-5b） | 待W5 |
+| 单侧：DA 拒绝路径 | `engine/bcos-engine/EngineServiceImpl.cpp:442-444` | `core/block_validator.go:131-132` | 结构性差异 | B-5b 拒绝向量已验证：`jovian_da_mix` 改 `blobGasUsed=gasLimit+1` → INVALID + "DA footprint"（OpL1EdgeGateTest/DAFootprintExceedsGasLimitRejected） | 已确认 |
 
-> ⚠️ base fee 的 FISCO 锚点是 `EngineServiceImpl.cpp:191`（def）——§1 写 :233-239 是 Jovian max 逻辑，两者都要在证据列区分；Jovian max 分支状态与 B-5c 保持一致（待W5）。
+> ⚠️ base fee 的 FISCO 锚点是 `EngineServiceImpl.cpp:191`（def）——§1 写 :233-239 是 Jovian max 逻辑，两者都要在证据列区分；Jovian max 分支状态与 B-5c 保持一致（已确认）。
 
 ---
 
@@ -72,11 +72,11 @@
 | 块执行入口 | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:99` processOpBlock | `core/state_processor.go:62` Process | 等价 | 首笔 deposit 强制（:112-116） | 已确认 |
 | 首笔 L1 attributes | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:112-116` | `core/state_transition.go:346-361` preCheck | 等价 | D-1 交易级 | 已确认 |
 | blockGasLeft 递减 | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:143/:198` | `core/state_transition.go:282` buyGas | 等价 | B-4 相关 | 事实达成 |
-| fee 惰性加载 | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:157` loadOpFeeParams | `core/types/rollup_cost.go:151/:215/:353`（NewL1CostFunc/NewOperatorCostFunc/NewTotalRollupCostFunc） | 等价 | D-4 相关（静态等价；语义等价待动态证实，W4-C） | 待W5 |
+| fee 惰性加载 | `bcos-evm/bcos-evm/opstack/OpBlockExecute.cpp:157` loadOpFeeParams | `core/types/rollup_cost.go:151/:215/:353`（NewL1CostFunc/NewOperatorCostFunc/NewTotalRollupCostFunc） | 等价 | D-4 相关；随 D-4 快照契约固化 + 既有 golden（jovian 链式对 baseFee=calcOpBaseFee(DA)）关闭 | 已确认 |
 | validate | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:328` opValidate | `core/state_transition.go:346` preCheck | 等价 | D-1 | 已确认 |
 | fee 路由至 vaults | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:295-300` | `core/state_transition.go:711-734` | 等价 | C-5 校正后 | 已确认 |
 | deposit 执行 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:441` runDeposit | `core/state_transition.go:473-511` | 等价 | D-1 | 已确认 |
-| 差异点#1 快照契约 | `opValidate/opTransition 共享快照（OpTransition.cpp:328/:237）` | `buyGas/innerExecute 即时读（state_transition.go:282/:515）` | 已知分叉 | D-4 | 待W5 |
+| 差异点#1 快照契约 | `opValidate/opTransition 共享快照（OpTransition.cpp:328/:237）` | `buyGas/innerExecute 即时读（state_transition.go:282/:515）` | 已知分叉 | D-4 契约已固化（TransitionUsesValidateSnapshot：opValidate 写 F → slot1 写 F' → opTransition 用 props=F 非 F'） | 已确认 |
 
 ---
 
@@ -137,7 +137,7 @@
 | D-1 | 交易级执行（费用/L1+operator/Flz/deposit/7702/intrinsic/空账户/CREATE 地址/receipt 共识编码）逐位等价 | 等价 | 记忆审计（v1.101702.2）；→ 阶段3 各交易级行 | 已确认 |
 | D-2 | **Karst 占位**：karstConfig 仅 jovianConfig 别名 | 已知分叉 | `bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp:93-101`（karstConfig；:96-98 复制 jovianConfig 仅改 fork tag :97） | 🔴 上线 Karst 前必须按真实 diff 适配 |
 | D-3 | Jovian DA footprint 是纯块级 header 字段，不进 tx 级状态 | 等价 | `OpBlockSeal.cpp:196` seal.blobGasUsed=Σ meta.da_footprint（块级）；tx 级 gas_used/cumulative/receiptsRoot/stateRoot 不含 DA（记忆已核实） | 已确认 |
-| D-4 | validate↔transition 费用快照契约：FISCO 两阶段共享快照 vs op-geth 即时读 | 已知分叉 | `OpTransition.cpp:328/:237`（共享快照）vs `core/state_transition.go:282/:515`（即时读） | ⚠️ 依赖上层一致；需断言+测试固化（→ 阶段3「差异点#1」行，待W5） |
+| D-4 | validate↔transition 费用快照契约：FISCO 两阶段共享快照 vs op-geth 即时读 | 已知分叉（契约已固化） | `OpTransition.cpp:328/:237`（共享快照）vs `core/state_transition.go:282/:515`（即时读） | W5 契约测试已固化：opValidate 写 F → slot1 写 F' → opTransition 用 props=F 非 F'（TransitionUsesValidateSnapshot，OpL1EdgeGateTest）；→ 阶段3「差异点#1」行，已确认 |
 
 ---
 
@@ -148,8 +148,8 @@
 | 阶段0 | 三次类型翻译（FISCO 双端三次 vs op-geth 一次） | 矩阵行 | 阶段0「差异点：三次类型翻译」行 | 结构性差异 / 已确认 |
 | 阶段1 | 校验位置（validateOpNewPayloadRequest vs checkOptimismPayload） | 矩阵行 | 阶段1「差异点：校验位置」行 | 结构性差异 / 已确认 |
 | 阶段2 | 块校验完整度（op-geth VerifyHeader/ValidateBody vs FISCO 承诺比对） | 矩阵行 | 阶段2「块校验主体」行（承诺比对 :1094-1147） | 结构性差异 / 已确认 |
-| 阶段3 #1 | 快照契约（两阶段共享快照 vs 即时读） | D-4 | 阶段3「差异点#1 快照契约」行 = D-4 | 已知分叉 / 待W5 |
-| 阶段3 #2 | fee 惰性加载（loadOpFeeParams vs L1Block 槽即时解析） | 矩阵行 | 阶段3「fee 惰性加载」行 | 等价 / 待W5 |
+| 阶段3 #1 | 快照契约（两阶段共享快照 vs 即时读） | D-4 | 阶段3「差异点#1 快照契约」行 = D-4 | 已知分叉（契约已固化） / 已确认 |
+| 阶段3 #2 | fee 惰性加载（loadOpFeeParams vs L1Block 槽即时解析） | 矩阵行 | 阶段3「fee 惰性加载」行 | 等价 / 已确认 |
 | 阶段3 #3 | DA footprint 不进 tx 级 | D-3 | D 项表 D-3 | 等价 / 已确认 |
 | 阶段4 #1 | withdrawalsRoot 语义一致（opStorageRoot vs GetStorageRoot） | B-1 | B 台账 B-1 | 等价 / 已修一致 |
 | 阶段4 #2 | receiptsRoot 编码（encodeReceiptForRoot vs receiptRLP/depositReceiptRLP） | B-2 | B 台账 B-2 | 等价 / 事实达成 |
@@ -168,8 +168,21 @@
 | B-3 | 已知分叉（2 delta） | 已确认（动态 manifest 待 W5/RPC 层对拍） | `OpTransition.cpp:319` setOpStackMeta / `core/types/receipt.go:596` DeriveFields + `core/types/receipt_opstack.go:11` | 2 delta：`operator_fee`=FISCO 扩展（`OpTransition.h:96-97` 明标）；legacy `FeeScalar`（pre-Ecotone）FISCO 无；W6 harness 不覆盖回执扩展字段（encodeReceiptForRoot 只共识编码） |
 | B-4 | 等价 | 事实达成 | `OpBlockExecute.cpp:143/:198` blockGasLeft 递减 / `core/state_transition.go:282` buyGas | 承诺比对 gasUsed + 七项断言 33 向量（deposit/normal 均递减+回填） |
 | B-5a | 等价 | 事实达成 | `OpBlockSeal.cpp:187-197` / `consensus/beacon/consensus.go:429-437` | `jovian_da_mix`（DA=593600=0x90ec0）字节级对拍通过（seal.blobGasUsed=Σ meta.da_footprint :193-194） |
-| B-5b | 结构性差异-待验 | 待W5 | `EngineServiceImpl.cpp:442-444`（已实现未触发）/ `core/block_validator.go:119-134`（:131-132 拒绝） | W6 全 VALID 正向向量，`blobGasUsed>gasLimit` 拒绝未触发（无拒绝向量） |
-| B-5c | 等价-待验 | 待W5 | `EngineServiceImpl.cpp:233-240` calcOpBaseFee Jovian max / `consensus/misc/eip1559/eip1559.go:99-107` | 无 jovian 链式对（harness 强制链式双块 isthmus），baseFee max 分支未演练 |
+| B-5b | 结构性差异 | 已确认 | `EngineServiceImpl.cpp:442-444` / `core/block_validator.go:119-134`（:131-132 拒绝） | W5 拒绝向量已验证：`jovian_da_mix` 改 `blobGasUsed=gasLimit+1` → INVALID + "DA footprint"（OpL1EdgeGateTest/DAFootprintExceedsGasLimitRejected） |
+| B-5c | 等价 | 已确认 | `EngineServiceImpl.cpp:233-240` calcOpBaseFee Jovian max / `consensus/misc/eip1559/eip1559.go:99-107` | W5 jovian 链式对已验证：jovianChainA block1 DA=1,783,600（0x1b3730）> gasUsed=264,840（0x40a88），block2 baseFee=0x3a7e98a8=calcOpBaseFee(DA)（JovianChainedAB） |
 | B-6 | 等价 | 已确认 | `OpBlockExecute.cpp:176-178`（calldata[176:178] 提取，`OpBlockExecute.h:66` JovianL1AttributesLen=178）/ `core/types/rollup_cost.go:547-557` ExtractDAFootprintGasScalar | 仅从首笔 L1 attributes calldata 提取，不读任何槽（slot8=OperatorFeeParamsSlot，非 DA scalar）；FISCO 同法 |
-| B-7 | 等价（效果已证） | 待W5（仅顺序可观测性） | `OpBlockExecute.cpp:112-116`（首笔 L1 attributes；pre-block system call :106-108 先于首笔）/ `core/state_processor.go:90-95`（beaconRoot/parentHash 预执行） | 系统调用**效果**已由 stateRoot 逐位 golden 一致动态证实（`system_contracts_real` 向量）；残余缺口=顺序可观测性（需 order-observable 向量，如用户 tx 读 beaconRoot） |
+| B-7 | 等价 | 已确认 | `OpBlockExecute.cpp:112-116`（首笔 L1 attributes；pre-block system call :106-108 先于首笔）/ `core/state_processor.go:90-95`（beaconRoot/parentHash 预执行） | W5 order-observable 向量已验证：`isthmus_system_call_order_observable`，顺序错 → L1 读者 REVERT → stateRoot 失配 → VALID+七项断言变红（SystemCallOrderObservable）；效果已由 stateRoot 逐位 golden 一致证实（`system_contracts_real`） |
 | B-8 | 等价 | 已修一致 | `OpEngineSeam.h:171` computeOpTxRoot / `core/types/block.go:271` DeriveSha（TxHash） | W6 链式对（chainA/B state 延续+跨块 fee）+ 分歧2（txRoot ≥128 笔排序，`bcos-ledger/bcos-ledger/mpt/HashBuilder.cpp:199-231`，排序 :229-230） |
+
+---
+
+## M-B 块级台账（W5，L1 差分 gate）
+
+> W5（L1 差分 gate）对 B 台账 B-5b/B-5c/B-7/D-4 的动态定论。schema 依 spec §6；实测值来自 W5 T2-T4 交付的用例/golden（OpL1EdgeGateTest / OpNewPayloadRpcE2eTest）。
+
+| M-B项 | 验证手段 | 断言 | 用例/golden | 结果状态 |
+|---|---|---|---|---|
+| M-B5b | 拒绝向量：`jovian_da_mix` 改 `blobGasUsed=gasLimit+1` | INVALID + "DA footprint" | OpL1EdgeGateTest | ✅ 已验证 |
+| M-B5c | jovian 链式对：jovianChainA block1 DA=1,783,600 > gasUsed=264,840 | block2 baseFee=0x3a7e98a8=calcOpBaseFee(DA)，VALID（step 3a-2） | OpNewPayloadRpcE2eSuite/JovianChainedAB | ✅ 已验证 |
+| M-B7 | order-observable 向量：`isthmus_system_call_order_observable`，顺序错 reader REVERT | VALID + 七项；stateRoot 失配捕获 | OpNewPayloadRpcE2eSuite/SystemCallOrderObservable | ✅ 已验证 |
+| M-D4 | opValidate/opTransition 函数对：opValidate 写 F → slot1 写 F' → opTransition 用 props | transition 用快照 F 非 F' | OpL1EdgeGateTest | ✅ 已固化 |
