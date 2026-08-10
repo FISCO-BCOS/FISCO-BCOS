@@ -372,7 +372,7 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 | 1 RPC 入口 | 等价 + 2 结构性 | 注册（V4 桩/V5 缺失）+ 差异点：校验位置 |
 | 2 块校验 | 等价 + 2 结构性 | 块校验主体（承诺比对 vs ValidateBody）+ 单侧 DA 拒绝路径（B-5b） |
 | 3 状态执行 | 等价 + 1 已知分叉 | D-1 交易级 + D-4 快照契约（契约已固化，不进块级字节） |
-| 4 块级收尾 | 等价 + 1 已知分叉 | B 台账全关闭（B-1/B-8 已修一致）+ B-3 回执扩展字段 2 delta |
+| 4 块级收尾 | 等价 + 1 已知分叉 | B 台账终态已定（B-1/B-8 已修一致；B-2/B-4/B-5a 事实达成）+ B-3 回执扩展字段 2 delta |
 | 5 落库 | 结构性差异 | 索引隔离（SYS_HASH_2_TX 不写；对 getTransactionReceipt 可查性有影响） |
 | 6 输出 | 等价 | block hash 承诺比对；output root 不在 EL 范围 |
 
@@ -393,7 +393,7 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 | gap | 影响 | 工作量 | 阻塞性 |
 |---|---|---|---|
 | D-2 Karst 适配 | 高——FISCO 无 karstTime 激活通道（configAt/OpForkTimestamps/NodeConfig/Initializer 全缺）+ karstConfig 调度路径死代码 + 前向兼容风险；op-geth v1.101702.2 的 Karst 是纯 config fork（IsKarst 零行为调用点） | 中高 | 🔴 阻塞 |
-| OP 块回执不可查 | 高——SYS_HASH_2_TX 刻意不写 → eth_getTransactionReceipt 恒 null；fix 在 val-loop（rawtx 回退 + opReceiptMeta）未合并 | 中 | 🔴 生产阻塞 |
+| OP 块回执不可查 | 高——SYS_HASH_2_TX 刻意不写 → eth_getTransactionReceipt 恒 null；写侧已有（OpStackReceiptMeta 编码 + rawtx 落表），**RPC 读侧 fix（rawtx 回退）在 val-loop 未合并** | 中 | 🔴 生产阻塞 |
 | PBFT 共识层未决 | 中——自持共识上线阻塞；纯 EL 视角可降级互通项 | 中 | 视上线形态 |
 | B-2/B-4 正式迁移 | 低（W7 内完成） | 低 | 否 |
 | B-3 注记收紧 | 低（W7 内完成） | 低 | 否 |
