@@ -43,6 +43,7 @@
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <deque>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -270,6 +271,22 @@ public:
             std::unique_lock lock(x_state);
             m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
             m_payloadCache[payloadId] = std::move(entry);
+            // Bound the payload cache at insert time. A payload is only read between
+            // updateForkchoice / getPayload and newPayload; the single-node driver can skip
+            // newPayload entirely (empty block with produce_empty_blocks=false — the EEST
+            // configuration — or getPayload returning null), and an external CL may abandon
+            // a requested payload. None of those reach handleNewPayload's eviction, so
+            // without a bound here each skipped tick would retain a live storage fork (the
+            // PayloadEntry::view) plus the block's transactions forever.
+            m_payloadOrder.push_back(payloadId);
+            while (m_payloadOrder.size() > c_maxPayloadEntries)
+            {
+                auto const evictedId = m_payloadOrder.front();
+                m_payloadOrder.pop_front();
+                m_payloadCache.erase(evictedId);
+                std::erase_if(m_blockHashToPayloadId,
+                    [&](auto const& kv) { return kv.second == evictedId; });
+            }
         }
         result.payloadId = payloadId;
         co_return result;
@@ -776,6 +793,12 @@ private:
     std::optional<bcos::protocol::BlockNumber> m_finalizedBlockNumber;
     std::unordered_map<PayloadID, PayloadEntry> m_payloadCache;
     std::unordered_map<h256, PayloadID> m_blockHashToPayloadId;
+    /// Insertion order of m_payloadCache payloadIds, used to bound the cache at insert time
+    /// (updateForkchoice), independent of whether the caller ever reaches newPayload.
+    std::deque<PayloadID> m_payloadOrder;
+    /// Upper bound on retained payload entries (both m_payloadCache and m_blockHashToPayloadId
+    /// rows). A payload is only needed between updateForkchoice / getPayload and newPayload.
+    static constexpr size_t c_maxPayloadEntries = 64;
     std::uint64_t m_nextPayloadSequence = 1;
 };
 

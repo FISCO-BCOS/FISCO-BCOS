@@ -39,6 +39,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
+#include "bcos-utilities/Bloom.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-codec/scale/Scale.h>
@@ -974,6 +975,67 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     BOOST_CHECK_EQUAL(f6.get(), true);
     BOOST_CHECK_EQUAL(f7.get(), true);
     BOOST_CHECK_EQUAL(f8.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
+{
+    // The ledger persists header / tx hashes / txs / receipts but NOT the block-level
+    // logsBloom, so asyncGetBlockDataByNumber recomputes it from the receipts' log entries.
+    // Without that, eth_getBlockByNumber reports 256 zero bytes for every block that has
+    // logs (both the legacy BaselineScheduler commit path and the single-node driver).
+    // Regression test: write a block whose receipt carries a log entry, read it back and
+    // assert the bloom is non-zero and equals the OR of the per-receipt blooms.
+    initFixture();
+
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(1);
+    header->setTimestamp(1000);
+    header->setGasLimit(30000000);
+    header->setSealer(0);
+    header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+    block->setBlockHeader(header);
+
+    // one transaction so the block has a tx-hash row for the receipt lookup
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0x1000000000000000000000000000000000000000", bcos::bytes{0x60}, "1", 1000,
+        "chain0", "group0", 0);
+    block->appendTransaction(tx);
+
+    protocol::LogEntry logEntry(bcos::bytes(20, 0x10),
+        {bcos::h256("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")},
+        bcos::bytes(32, 0xab));
+    auto receipt = m_blockFactory->receiptFactory()->createReceipt2(21000, "", {logEntry}, 0,
+        bcos::ref(bcos::bytes{}), 1, "1", protocol::TransactionVersion::V1_VERSION, true);
+    block->appendReceipt(receipt);
+
+    bcos::Bloom expectedBloom{};
+    bcos::orBloom(expectedBloom, bcos::getLogsBloom(receipt->logEntries()));
+
+    std::promise<bool> prewritePromise;
+    m_ledger->asyncPrewriteBlock(m_storage, nullptr, block,
+        [&](std::string, Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            prewritePromise.set_value(true);
+        },
+        true, std::nullopt);
+    BOOST_CHECK(prewritePromise.get_future().get());
+
+    std::promise<protocol::Block::Ptr> blockPromise;
+    m_ledger->asyncGetBlockDataByNumber(1, bcos::ledger::RECEIPTS,
+        [&](Error::Ptr error, protocol::Block::Ptr result) {
+            BOOST_CHECK(!error);
+            blockPromise.set_value(std::move(result));
+        });
+    auto readBlock = blockPromise.get_future().get();
+    BOOST_REQUIRE(readBlock != nullptr);
+    BOOST_CHECK_EQUAL(readBlock->receiptsSize(), 1);
+    auto readBloom = readBlock->logsBloom();
+    BOOST_CHECK(!readBloom.empty());
+    bcos::bytes readBloomBytes(readBloom.begin(), readBloom.end());
+    BOOST_CHECK(readBloomBytes != bcos::bytes(bcos::BloomBytesSize, 0));
+    BOOST_CHECK(readBloomBytes ==
+                bcos::bytes(expectedBloom.begin(), expectedBloom.end()));
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionByHash)
