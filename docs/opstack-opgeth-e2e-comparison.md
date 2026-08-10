@@ -375,3 +375,13 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 | 4 块级收尾 | 等价 + 1 已知分叉 | B 台账全关闭（B-1/B-8 已修一致）+ B-3 回执扩展字段 2 delta |
 | 5 落库 | 结构性差异 | 索引隔离（SYS_HASH_2_TX 不写；对 getTransactionReceipt 可查性有影响） |
 | 6 输出 | 等价 | block hash 承诺比对；output root 不在 EL 范围 |
+
+### 已知差异明细落定
+
+- **D 项终态**：D-1/D-3 等价（已确认）；D-2 Karst 🔴（阻塞，论证见上线闸）；D-4 已知分叉（契约已固化）
+- **B 项终态**：B-1/B-8 已修一致；B-2/B-4/B-5a 事实达成（B-2/B-4 正式迁移在此落定）；B-3 已知分叉（2 delta，注记收紧归 W7）；B-5b/B-5c/B-6/B-7 已确认
+- **结构性差异「接受」决策**：
+  - 块校验位置：接受（承诺比对是 FISCO 架构选择，VALID/INVALID 语义互通无碍）
+  - 双执行器并存：接受（v2 未装配，生产单路径）
+  - **索引隔离：接受，但标注互通后果**——SYS_HASH_2_TX 刻意不写 → OP 块 `eth_getTransactionReceipt` 恒返回 null（当前分支未合 rawtx 回退/opReceiptMeta，fix 在 val-loop 未合并）；属功能性 RPC 缺口，入上线闸 gap 清单
+  - PBFT 哑桩：接受（W3 门控已生效），但与「PBFT 共识层是否整体禁用」未决决策纠缠——纯 EL 无碍，自持共识上线需决策
