@@ -351,7 +351,7 @@ Phase 6  结论: 差异矩阵定稿 + Karst 上线闸清单
 - **V4 端点桩**：`newPayloadV4` RPC 端点实现（生产 op-node 互通时修；**C1 决策 2026-08-10：端点补全前不广告 V4**）
 - **PBFT retry loop**：OP 模式 proposal 短路后无限重推（禁 sealer/抑制重推决策）
 - **V4 能力广播**：~~广告 V4 实为正确~~ **已降级（2026-08-10，C1，commit 124f105）**：`supportedOpCapabilities` 不再追加 V4（端点未注册,op-node 协商即 -38005 撞桩）；V4 端点补全后恢复广告
-- **generator 重生成 golden**：语料信任度由 vendored `SHA256SUMS` 锚定；重生成需 op-geth v1.101702.2 环境
+- ~~**generator 重生成 golden**~~：**已就绪-按需执行（W8 T5 验证 `regen.sh` exit 0 可复现）**——触发条件（op-geth 版本变更/新向量/新 fork）未发生，无需动作；执行需 op-geth v1.101702.2 环境（PIN e8800cffe）
 
 ---
 
