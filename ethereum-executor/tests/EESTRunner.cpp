@@ -15,6 +15,7 @@
  */
 
 #include "EESTRunner.h"
+#include "EestFailuresJson.h"
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-evm/eth/state/system_contracts.hpp"
@@ -469,10 +470,8 @@ EESTBlockchainFixture parseBlockchainFixture(
     fixture.name = name;
 
     // genesisBlockHeader (optional: engine_x format lacks it)
-    if (fixtureJson.isMember("genesisBlockHeader") &&
-        fixtureJson["genesisBlockHeader"].isObject())
-        fixture.genesisBlockHeader =
-            parseBlockHeader(fixtureJson["genesisBlockHeader"]);
+    if (fixtureJson.isMember("genesisBlockHeader") && fixtureJson["genesisBlockHeader"].isObject())
+        fixture.genesisBlockHeader = parseBlockHeader(fixtureJson["genesisBlockHeader"]);
 
     // pre state
     if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
@@ -511,8 +510,7 @@ EESTBlockchainFixture parseBlockchainFixture(
 
     // postState
     if (fixtureJson.isMember("postState") && !fixtureJson["postState"].isNull())
-        for (auto it = fixtureJson["postState"].begin();
-             it != fixtureJson["postState"].end(); ++it)
+        for (auto it = fixtureJson["postState"].begin(); it != fixtureJson["postState"].end(); ++it)
             fixture.postState[it.key().asString()] = parseAccount(*it);
 
     // config
@@ -533,8 +531,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
     std::ifstream file(filePath);
     if (!file.is_open())
-        BOOST_THROW_EXCEPTION(
-            std::runtime_error("Cannot open fixture file: " + filePath));
+        BOOST_THROW_EXCEPTION(std::runtime_error("Cannot open fixture file: " + filePath));
 
     Json::CharReaderBuilder builder;
     Json::Value root;
@@ -545,8 +542,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
     for (auto it = root.begin(); it != root.end(); ++it)
     {
-        if (it.key().asString().rfind("//", 0) == 0 ||
-            it.key().asString().rfind("_", 0) == 0)
+        if (it.key().asString().rfind("//", 0) == 0 || it.key().asString().rfind("_", 0) == 0)
             continue;
 
         // Skip non-object values
@@ -555,13 +551,12 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
 
         try
         {
-            fixtures.push_back(
-                parseBlockchainFixture(it.key().asString(), *it));
+            fixtures.push_back(parseBlockchainFixture(it.key().asString(), *it));
         }
         catch (std::exception const& e)
         {
-            std::cerr << "Warning: Failed to parse blockchain fixture '"
-                      << it.key().asString() << "': " << e.what() << std::endl;
+            std::cerr << "Warning: Failed to parse blockchain fixture '" << it.key().asString()
+                      << "': " << e.what() << std::endl;
         }
     }
 
@@ -624,6 +619,7 @@ struct ProgramOptions
 {
     std::string fixtureDir;     // directory with .json fixtures
     std::string singleFixture;  // single fixture file path
+    std::string jsonFailures;   // write structured failure JSON to this file
     bool quiet = false;         // suppress per-file/per-test output
     bool noLog = false;         // suppress BCOS internal trace/debug log
     bool help = false;
@@ -652,13 +648,8 @@ std::atomic<int> g_unexpectedFailure{0};
 std::atomic<int> g_skippedFiles{0};
 std::atomic<int> g_loadFailures{0};
 
-// Failure details for summary
-struct FailureDetail
-{
-    std::string testName;
-    std::string forkName;
-    std::string reason;
-};
+// Failure details for summary (struct defined in EestFailuresJson.h)
+using bcos::test::FailureDetail;
 tbb::concurrent_vector<FailureDetail> g_failureDetails;
 
 // Mutex for console output (keep lines from interleaving)
@@ -712,6 +703,7 @@ void printUsage(char const* prog)
 Options:
   --fixture-dir DIR    Directory containing EEST .json fixture files (recursive)
   --fixture FILE       Run a single fixture file only
+  --json-failures FILE Write structured failure records (JSON array) to FILE
   --quiet              Suppress per-file/per-test output; show summary only
   --no-log             Suppress BCOS internal trace/debug log output
   --help               Show this help message
@@ -752,6 +744,10 @@ void parseOptions(int argc, char* argv[])
         {
             g_opts.singleFixture = argv[++i];
         }
+        else if (arg == "--json-failures" && i + 1 < argc)
+        {
+            g_opts.jsonFailures = argv[++i];
+        }
         else if (arg.rfind("--fixture-dir=", 0) == 0)
         {
             g_opts.fixtureDir = arg.substr(14);
@@ -759,6 +755,10 @@ void parseOptions(int argc, char* argv[])
         else if (arg.rfind("--fixture=", 0) == 0)
         {
             g_opts.singleFixture = arg.substr(10);
+        }
+        else if (arg.rfind("--json-failures=", 0) == 0)
+        {
+            g_opts.jsonFailures = arg.substr(16);  // "--json-failures=" = 16 chars
         }
     }
 }
@@ -1162,8 +1162,11 @@ public:
     }
 
     /// Verify post-state. Returns a string with mismatch details (empty = all good).
-    std::string verifyPostState(
-        MutableStorage& storage, std::map<std::string, test::EESTAccount> const& expected)
+    /// When non-null, *firstCategory receives the field category ("nonce"/"balance"/
+    /// "code"/"storage") of the FIRST mismatch found, so callers can tag a FailureDetail.
+    std::string verifyPostState(MutableStorage& storage,
+        std::map<std::string, test::EESTAccount> const& expected,
+        std::string* firstCategory = nullptr)
     {
         std::ostringstream errors;
         int passed = 0, failed = 0;
@@ -1281,6 +1284,11 @@ public:
 
         }  // end for loop over expected accounts
 
+        if (firstCategory != nullptr && !errors.str().empty())
+        {
+            *firstCategory = test::firstMismatchCategory(errors.str());
+        }
+
         return errors.str();
     }
 
@@ -1360,7 +1368,8 @@ public:
         // expectException for expected-failure tests.
         if (expectsSuccess && !gotSuccess)
         {
-            auto errStr = verifyPostState(storage, post.state);
+            std::string category;
+            auto errStr = verifyPostState(storage, post.state, &category);
             if (errStr.empty())
             {
                 return true;  // State matches → test passes (tx reverted correctly)
@@ -1371,7 +1380,8 @@ public:
                 << (executionThrew ? " (exception: " + evmError + ")" : "")
                 << (receipt ? " status=" + std::to_string(receipt->status()) : "");
             printLine(oss.str());
-            g_failureDetails.push_back({fixture.name, forkName, "unexpected failure"});
+            g_failureDetails.push_back({fixture.name, forkName, "unexpected failure", "unexpected",
+                post.dataIndex, post.gasIndex, post.valueIndex});
             ++g_unexpectedFailure;
             return false;
         }
@@ -1383,7 +1393,8 @@ public:
                 << post.expectException << "', got success";
             printLine(oss.str());
             g_failureDetails.push_back(
-                {fixture.name, forkName, "expected exception '" + post.expectException + "'"});
+                {fixture.name, forkName, "expected exception '" + post.expectException + "'",
+                    "expected_exception", post.dataIndex, post.gasIndex, post.valueIndex});
             ++g_expectedException;
             return false;
         }
@@ -1395,7 +1406,8 @@ public:
         // silently scored as "failed as expected".
         if (!expectsSuccess && !gotSuccess)
         {
-            auto errStr = verifyPostState(storage, post.state);
+            std::string category;
+            auto errStr = verifyPostState(storage, post.state, &category);
             if (!errStr.empty())
             {
                 std::ostringstream oss;
@@ -1404,7 +1416,8 @@ public:
                     << errStr;
                 printLine(oss.str());
                 g_failureDetails.push_back(
-                    {fixture.name, forkName, "state mismatch (expected failure)"});
+                    {fixture.name, forkName, "state mismatch (expected failure)", category,
+                        post.dataIndex, post.gasIndex, post.valueIndex});
                 ++g_unexpectedFailure;
                 return false;
             }
@@ -1412,13 +1425,15 @@ public:
         }
 
         // Success: verify post-state
-        auto errStr = verifyPostState(storage, post.state);
+        std::string category;
+        auto errStr = verifyPostState(storage, post.state, &category);
         if (!errStr.empty())
         {
             std::ostringstream oss;
             oss << "FAIL: " << fixture.name << " [" << forkName << "]\n" << errStr;
             printLine(oss.str());
-            g_failureDetails.push_back({fixture.name, forkName, "state mismatch"});
+            g_failureDetails.push_back({fixture.name, forkName, "state mismatch", category,
+                post.dataIndex, post.gasIndex, post.valueIndex});
             return false;
         }
 
@@ -1755,7 +1770,8 @@ public:
                             << " execution threw: " << evmError;
                         printLine(oss.str());
                         g_failureDetails.push_back({fixture.name, forkName,
-                            "tx#" + std::to_string(txIndex) + " execution threw"});
+                            "tx#" + std::to_string(txIndex) + " execution threw", "unexpected", 0,
+                            0, 0});
                         ++g_unexpectedFailure;
                         return false;
                     }
@@ -1850,13 +1866,15 @@ public:
         }
 
         // Verify postState
-        auto errStr = verifyPostState(storage, fixture.postState);
+        std::string category;
+        auto errStr = verifyPostState(storage, fixture.postState, &category);
         if (!errStr.empty())
         {
             std::ostringstream oss;
             oss << "FAIL: " << fixture.name << " [" << forkName << "]\n" << errStr;
             printLine(oss.str());
-            g_failureDetails.push_back({fixture.name, forkName, "state mismatch"});
+            g_failureDetails.push_back(
+                {fixture.name, forkName, "state mismatch", category, 0, 0, 0});
             return false;
         }
 
@@ -2238,6 +2256,19 @@ int main(int argc, char* argv[])
     }
 
     std::cout << "=================================================\n";
+
+    // Structured failure output (Task 2 baseline recording for Task 3).
+    if (!g_opts.jsonFailures.empty())
+    {
+        std::vector<FailureDetail> details;
+        details.reserve(g_failureDetails.size());
+        for (auto const& fd : g_failureDetails)
+        {
+            details.push_back(fd);
+        }
+        std::ofstream f(g_opts.jsonFailures);
+        f << writeFailuresJson(details);
+    }
 
     return g_totalFailed > 0 ? 1 : 0;
 }
