@@ -352,3 +352,26 @@ Phase 6  结论: 差异矩阵定稿 + Karst 上线闸清单
 - **PBFT retry loop**：OP 模式 proposal 短路后无限重推（禁 sealer/抑制重推决策）
 - **V4 能力广播**：`supportedOpCapabilities` 广告 V4 实为正确（引擎强制 V4），留生产互通验证
 - **generator 重生成 golden**：语料信任度由 vendored `SHA256SUMS` 锚定；重生成需 op-geth v1.101702.2 环境
+
+---
+
+## §8 结论定稿 + Karst 上线闸（W7，2026-08-07）
+
+> **形态**：三层对拍（W4 L0 静态矩阵 + W5 L1 动态 gate + W6 L2 e2e）汇总成最终裁决。
+> **范围**：EL 执行器等价 + Karst 就绪；生产互通待办见 §8.5。
+
+### 总体结论
+
+FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 逐位一致**（限定于块级共识字节——stateRoot/receiptsRoot/withdrawalsRoot/encodeOpHeader；D-4 快照时序契约与 B-3 RPC 扩展字段是矩阵级「已知分叉」，不进块级字节）。差异集中在**结构层设计（索引隔离/块校验位置/双执行器）**与 **Karst 未适配（D-2 🔴）**。
+
+### 7 阶段三态判定表
+
+| 阶段 | 聚合判定 | 依据（DIVERGENCES 矩阵行） |
+|---|---|---|
+| 0 数据形态 | 等价 + 1 结构性 | 三次类型翻译（结构性，已确认） |
+| 1 RPC 入口 | 等价 + 2 结构性 | 注册（V4 桩/V5 缺失）+ 差异点：校验位置 |
+| 2 块校验 | 等价 + 2 结构性 | 块校验主体（承诺比对 vs ValidateBody）+ 单侧 DA 拒绝路径（B-5b） |
+| 3 状态执行 | 等价 + 1 已知分叉 | D-1 交易级 + D-4 快照契约（契约已固化，不进块级字节） |
+| 4 块级收尾 | 等价 + 1 已知分叉 | B 台账全关闭（B-1/B-8 已修一致）+ B-3 回执扩展字段 2 delta |
+| 5 落库 | 结构性差异 | 索引隔离（SYS_HASH_2_TX 不写；对 getTransactionReceipt 可查性有影响） |
+| 6 输出 | 等价 | block hash 承诺比对；output root 不在 EL 范围 |
