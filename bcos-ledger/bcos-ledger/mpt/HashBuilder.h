@@ -72,8 +72,11 @@ TrieBuildResult computeTrieRootFromSorted(
 /// Contract (differs from computeTrieRoot's 64-nibble assumption): the caller MUST guarantee no
 /// key is a prefix of another (a variable-length key may terminate inside a branch node, which
 /// this build does not support — the 64-nibble case never does). The OP receipts-root keys
-/// rlp(0..N) satisfy this by construction. Keys are also assumed distinct; the input is sorted by
-/// the caller (std::map<bcos::bytes> orders lexicographically = nibble-path order).
+/// rlp(0..N) satisfy this by construction. Keys are also assumed distinct. The input does NOT
+/// need to be pre-sorted: the build sorts defensively by nibble-path order (byte lexicographic
+/// == nibble-path order) — a fix for the OP callers passing index-order entries, which produced
+/// a malformed trie once 2-byte keys (rlp(128..)) appeared alongside rlp(0) (W6 L2
+/// isthmus_big_block_130tx).
 TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::bytes> const> entries);
 
 /// Apply one change-set over a prior trie version and return the complete node delta — the single

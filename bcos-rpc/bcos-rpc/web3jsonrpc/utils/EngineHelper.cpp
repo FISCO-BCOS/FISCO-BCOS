@@ -78,11 +78,16 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             {
                 payload.transactions.push_back(transactionFactory.decodeTransaction(ref(txData)));
             }
-            catch (std::exception const&)
+            catch (...)
             {
                 // decodeTransaction 对 EIP-2718/0x7E 抛 TarsDecodeMismatch（TransactionImpl::decode
                 // = tars serialize::decode，把 RLP 当 tars 线格式解析即抛）。OP 路径不需要
                 // decoded transactions，跳过失败笔；rawTransactions 已无条件保留。
+                // ⚠️ 必须 catch(...) 而非 catch(std::exception const&)：在链接 evmone(-fno-rtti) 的
+                // 二进制里（如 bcos-evm-opstack-tests），evmone 带入 std::exception 的隐藏 non-unique
+                // typeinfo，typed catch 无法可靠绑定 tars 的 TarsDecodeMismatch(runtime_error 子树)——
+                // 与 bcos-evm/OpSchedulerImpl.h executeOpBlock 的 catch(...) 注释记录同一 RTTI 现象。
+                // W6 L2 harness 直编本文件即暴露该问题；catch(...) 严格更强且贴合"跳过失败笔"意图。
             }
         }
     }

@@ -67,6 +67,27 @@ if(TARGET bcos-framework)
         opstack/support/GoldenSampleTest.cpp
     )
     target_link_libraries(bcos-evm-opstack-tests PRIVATE jsoncpp_static)
+    # W6 Task 4 L2 harness: real RPC parse path (parseNewPayloadRequest V4) over the 33 golden
+    # vectors + the chained pair. Compiles EngineHelper.cpp directly (the parse layer; same
+    # resolution as bcos-rpc's find_package) into this binary — the rest of bcos-rpc is not
+    # linked. EngineHelper.cpp's include chain (bcos-framework/engine/Types.h +
+    # bcos-rpc/jsonrpc/Common.h + utilities + jsoncpp) is covered by the include dirs/link
+    # below.
+    target_sources(bcos-evm-opstack-tests PRIVATE
+        opstack/OpNewPayloadRpcE2eTest.cpp
+        ${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp
+    )
+    # EngineHelper.h 的 parseNewPayloadRequest 声明引用 bcos::protocol::TransactionFactory&，
+    # 但 EngineHelper.h 不自声明（生产靠 bcos-rpc unity-build 的 include 顺序）。单 TU 直编时
+    # 用 -include 把 TransactionFactory.h 前置（仅此源文件生效，不动生产代码）。
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp
+        PROPERTIES COMPILE_FLAGS "-include bcos-framework/protocol/TransactionFactory.h")
+    target_link_libraries(bcos-evm-opstack-tests PRIVATE
+        codec protocol-tars ledger engine bcos-utilities jsoncpp_static)
+    target_include_directories(bcos-evm-opstack-tests PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/bcos-ledger
+        ${CMAKE_SOURCE_DIR}/bcos-rpc)
 endif()
 target_compile_definitions(bcos-evm-opstack-tests PRIVATE
     OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/vectors"

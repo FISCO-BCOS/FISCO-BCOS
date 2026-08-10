@@ -79,7 +79,15 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
         {
             ++first;
         }
-        bcos::bytes leaf(value.bytes + first, value.bytes + sizeof(value.bytes));
+        // ⚠️ op-geth 的 storage-trie leaf value = rlp(trimmed value)（trie/secure_trie.go
+        // UpdateStorage: v,_ := rlp.EncodeToBytes(value) 后再入 trie），即 leaf 内是
+        // rlp(trim) 的字节串，相对 trim 是二次 RLP。本函数旧实现把 raw trim 直接当 leaf value，
+        // 单槽时产出 d00be84d… 而非 op-geth 的 02dffd0c…（W6 L2 message_passer_write 暴露）。
+        // 与 accountStorageRoot（adapter/StateRootCompute.cpp:21-22，stateRoot 据此匹配 golden）
+        // 对齐：这里先把 trim 值 rlp 编码成 leaf 字节串。
+        bcos::bytes leaf;
+        bcos::codec::rlp::encode(leaf,
+            bcos::bytes(value.bytes + first, value.bytes + sizeof(value.bytes)));
         entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
     }
     auto result = bcos::ledger::mpt::computeTrieRoot(entries);

@@ -24,6 +24,7 @@
 #include "NodeEncoder.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <algorithm>
 #include <span>
 #include <utility>
 #include <vector>
@@ -207,6 +208,17 @@ TrieBuildResult computeTrieRootVarKey(
     // count = 2 * key.size(), not the fixed 64). The caller guarantees no key is a prefix of
     // another, so no key terminates inside a branch — hbBuild/hbEmit/hbRefToRaw are agnostic to
     // nibble-path length (NodeEncoder's HP encoding handles odd/even counts).
+    //
+    // ⚠️ hbBuild REQUIRES entries in nibble-path order (first/last common-prefix shortcut). The
+    // documented caller contract was "input is sorted by the caller", but both in-tree OP callers
+    // (computeOpTxRoot in OpEngineSeam.h, sealOpBlock in OpBlockSeal.cpp) passed index-order
+    // entries — correct for small counts only because index 0's key (0x80) happened not to share
+    // a first nibble with the then-absent 2-byte keys. At >= 128 transactions the 2-byte keys
+    // (rlp(128..) = 0x8180..) share the leading 0x81 nibble-prefix with 0x80, so first/last common
+    // prefix became [8] while the middle entries (0x01..0x7f) start with 0-7, producing a
+    // malformed extension node (W6 L2 isthmus_big_block_130tx exposed this: FISCO txRoot
+    // 5e8b0395… vs op-geth DeriveSha f8477d27…). Sort defensively here so the API is robust
+    // regardless of caller ordering (byte lexicographic == nibble-path order).
     std::vector<HBEntry> buildEntries;
     buildEntries.reserve(entries.size());
     for (auto const& [key, value] : entries)
@@ -214,6 +226,8 @@ TrieBuildResult computeTrieRootVarKey(
         buildEntries.push_back(
             HBEntry{.nibbles = bytesToNibbles(bcos::ref(key)), .value = value});
     }
+    std::sort(buildEntries.begin(), buildEntries.end(),
+        [](HBEntry const& a, HBEntry const& b) { return a.nibbles < b.nibbles; });
 
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
