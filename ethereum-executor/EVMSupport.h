@@ -21,6 +21,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <algorithm>
+#include <array>
 #include <evmc/evmc.hpp>
 #include <evmone_precompiles/keccak.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
@@ -39,11 +40,13 @@
 namespace bcos::executor_v1::eth::evm
 {
 
-/// Convert bcos::u256 to intx::uint256 (big-endian byte copy; no string
-/// round-trip). Single canonical home of this conversion.
+/// Convert bcos::u256 to intx::uint256 (big-endian byte copy into a stack
+/// buffer; no string round-trip, no heap allocation). Single canonical home of
+/// this conversion.
 inline intx::uint256 toIntxU256(bcos::u256 const& val)
 {
-    const auto be = bcos::toBigEndian(val);  // 32 bytes, big-endian.
+    std::array<bcos::byte, 32> be{};
+    bcos::toBigEndian(val, be);  // writes 32 big-endian bytes, no allocation.
     return intx::be::unsafe::load<intx::uint256>(be.data());
 }
 

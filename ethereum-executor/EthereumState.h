@@ -284,11 +284,15 @@ class EthereumState
     /// This is a LIVE risk, not a hypothetical one: a node configured for
     /// parallel baseline scheduling (SchedulerParallelImpl) would run the v2
     /// pipeline on it and could hit exactly this race on EIP-7610
-    /// CREATE-collision inputs. Mitigation for now: the v2 pipeline is built
-    /// SERIAL-ONLY in libinitializer (see the ethereum scheduler wiring in
-    /// Initializer.cpp), so has_storage reads and storage writes are never
-    /// concurrent. Revisit — ideally by recording the range read in the
-    /// read/write set — before v2 is allowed to run on a parallel scheduler.
+    /// CREATE-collision inputs.
+    ///
+    /// Mitigation: the v2 pipeline must be built SERIAL-ONLY (SchedulerSerialImpl
+    /// in both branches of the baseline-scheduler wiring in libinitializer). That
+    /// change lands with split 4/4 — the split that first wires EthereumState
+    /// into a live path; until then this race is documented but unmitigated
+    /// (splits 1/4 and 2/4 are safe to merge alone because nothing compiles
+    /// these headers). Revisit, ideally by recording the range read in the
+    /// read/write set, before v2 is allowed to run on a parallel scheduler.
     task::Task<bool> hasStorageImpl(bcos::ledger::account::EVMAccount<Storage>& evmAccount) const
     {
         using namespace bcos::ledger;
