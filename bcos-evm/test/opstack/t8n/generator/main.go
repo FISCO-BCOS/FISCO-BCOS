@@ -26,7 +26,8 @@
 //
 //	opt8n-ref --input <case.in.json> --output <vector.json> --op-geth-commit <sha>
 //	    generates one v3-block vector. The hardfork is taken from the case's
-//	    _info.hardfork (isthmus|jovian).
+//	    _info.hardfork (ecotone|fjord|granite|holocene|isthmus|jovian); upgrade
+//	    boundaries use the chainConfigSpec shape (see buildChainConfigSpec).
 //
 // This file is checked into the FISCO-BCOS repo as source of truth but is
 // built from inside an op-geth checkout (see README.md):
@@ -92,6 +93,7 @@ func main() {
 		outputPath     = flag.String("output", "", "output vector JSON")
 		opGethCommit   = flag.String("op-geth-commit", "unknown", "full sha of the op-geth checkout, recorded into _op_test_vectors.generator_commit")
 		probeWrap      = flag.Bool("probe-genesis-number", false, "dev probe: attempt Genesis.Number=8191 (ring-wrap feasibility) and report")
+		probeSpec      = flag.Bool("probe-spec", false, "dev probe: build representative chainConfigSpec values through buildChainConfigSpec and print each activation timeline (verifies the Task-0 upgrade-boundary interface), then exit")
 		goldenOutput   = flag.String("golden-output", "", "Task 2 (engine gate golden ritual): also emit blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/encodedHeaderHex for this vector to this path (vectors/ itself is untouched)")
 		chainOutputDir = flag.String("chain-output-dir", "", "Task 2 Step 2: generate the off-line 1->2 chained golden pair (GenerateChainWithGenesis n=2, InsertChain-validated) into this directory and exit")
 	)
@@ -100,6 +102,11 @@ func main() {
 	switch {
 	case *probeWrap:
 		probeGenesisNumber()
+	case *probeSpec:
+		if err := probeChainConfigSpec(); err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
+			os.Exit(1)
+		}
 	case *writeCases != "":
 		if err := emitCases(*writeCases); err != nil {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
@@ -131,7 +138,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
+		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
 		os.Exit(2)
 	}
 }
@@ -383,29 +390,159 @@ type outputVector struct {
 
 // ---------------------------------------------------------------------
 // Chain config (per-fork recipe, mirroring op-geth
-// miner/payload_building_test.go isthmusConfig()/jovianConfig(): start from
-// params.OptimismTestConfig and nil-out later forks. OptimismTestConfig
-// already has Regolith..Jovian at time 0, KarstTime=nil, OsakaTime=nil, and
-// the ETH twins Shanghai/Cancun/Prague at 0 -- which is exactly what
+// miner/payload_building_test.go holoceneConfig()/isthmusConfig()/
+// jovianConfig() and params.OptimismTestConfig: start from
+// OptimismTestConfig and nil-out later forks. OptimismTestConfig already has
+// Regolith..Jovian at time 0, KarstTime=nil, OsakaTime=nil, InteropTime=nil,
+// and the ETH twins Shanghai/Cancun/Prague at 0 -- which is exactly what
 // CheckOptimismValidity requires (Shanghai==Canyon, Cancun==Ecotone,
-// Prague==Isthmus).
+// Prague==Isthmus). Every pre-Isthmus recipe therefore ALSO nils PragueTime
+// together with IsthmusTime (ETH twin: equalPtrValues(Prague, Isthmus)).
+// Note the consequence: nil PragueTime disables EIP-2935 / EIP-7702 /
+// requestsHash, so ecotone/fjord/granite/holocene cases cannot use the
+// setcode/7702 arm (and ecotoneConfig/fjordConfig run at EVMC_CANCUN).
 // ---------------------------------------------------------------------
 
 func buildChainConfig(fork string) (*params.ChainConfig, error) {
 	conf := *params.OptimismTestConfig
 	conf.ChainID = big.NewInt(8453) // 0x2105, Base mainnet, matches the plan's schema example
 	switch fork {
+	case "jovian":
+		// OptimismTestConfig already sets JovianTime = 0 (Regolith..Jovian at 0).
 	case "isthmus":
 		conf.JovianTime = nil
-	case "jovian":
-		// OptimismTestConfig already sets JovianTime = 0.
+	case "holocene":
+		conf.IsthmusTime = nil
+		conf.JovianTime = nil
+		conf.PragueTime = nil // ETH twin: PragueTime == IsthmusTime
+	case "granite":
+		conf.HoloceneTime = nil
+		conf.IsthmusTime = nil
+		conf.JovianTime = nil
+		conf.PragueTime = nil
+	case "fjord":
+		conf.GraniteTime = nil
+		conf.HoloceneTime = nil
+		conf.IsthmusTime = nil
+		conf.JovianTime = nil
+		conf.PragueTime = nil
+	case "ecotone":
+		conf.FjordTime = nil
+		conf.GraniteTime = nil
+		conf.HoloceneTime = nil
+		conf.IsthmusTime = nil
+		conf.JovianTime = nil
+		conf.PragueTime = nil
 	default:
-		return nil, fmt.Errorf("unknown hardfork %q (want isthmus|jovian)", fork)
+		return nil, fmt.Errorf("unknown hardfork %q (want ecotone|fjord|granite|holocene|isthmus|jovian)", fork)
 	}
 	if err := conf.CheckOptimismValidity(); err != nil {
 		return nil, fmt.Errorf("chain config invalid: %w", err)
 	}
 	return &conf, nil
+}
+
+// chainConfigSpec is the upgrade-boundary config shape: base = the fork the
+// chain starts at genesis; activations = per-fork activation timestamps.
+// buildChainConfig(fork) only produces fork-at-0 configs (a single block
+// cannot express "genesis in old fork, one block crosses into a new fork");
+// this shape does. The single block's timestamp is controlled by the case's
+// blockTime (= genesisTime+10, chain_makers.makeHeader), so an activation T
+// must satisfy genesisTime < T <= genesisTime+10 -- the case constructor
+// picks genesisTime in [T-10, T-1]. Consumed by Tasks 1/3 for the
+// upgrade-boundary vectors; here it is exercised by --probe-spec.
+type chainConfigSpec struct {
+	base        string            // ecotone|fjord|granite|holocene|isthmus|jovian
+	activations map[string]uint64 // may be nil; e.g. {"fjord": T} => FjordTime=T
+}
+
+// buildChainConfigSpec starts from buildChainConfig(spec.base) and then sets
+// the per-fork activation timestamps. ETH twins are re-coupled on activation
+// (canyon->Shanghai, ecotone->Cancun, isthmus->Prague per CheckOptimismValidity)
+// so a pre-Isthmus base activated into Isthmus stays valid.
+func buildChainConfigSpec(spec chainConfigSpec) (*params.ChainConfig, error) {
+	cfg, err := buildChainConfig(spec.base)
+	if err != nil {
+		return nil, err
+	}
+	for fork, ts := range spec.activations {
+		switch fork {
+		case "regolith":
+			cfg.RegolithTime = uint64Ptr(ts)
+		case "canyon":
+			cfg.CanyonTime = uint64Ptr(ts)
+			cfg.ShanghaiTime = uint64Ptr(ts) // ETH twin
+		case "ecotone":
+			cfg.EcotoneTime = uint64Ptr(ts)
+			cfg.CancunTime = uint64Ptr(ts) // ETH twin
+		case "fjord":
+			cfg.FjordTime = uint64Ptr(ts)
+		case "granite":
+			cfg.GraniteTime = uint64Ptr(ts)
+		case "holocene":
+			cfg.HoloceneTime = uint64Ptr(ts)
+		case "isthmus":
+			cfg.IsthmusTime = uint64Ptr(ts)
+			cfg.PragueTime = uint64Ptr(ts) // ETH twin
+		case "jovian":
+			cfg.JovianTime = uint64Ptr(ts)
+		default:
+			return nil, fmt.Errorf("unknown activation fork %q", fork)
+		}
+	}
+	if err := cfg.CheckOptimismValidity(); err != nil {
+		return nil, fmt.Errorf("chain config invalid: %w", err)
+	}
+	return cfg, nil
+}
+
+func uint64Ptr(v uint64) *uint64 { return &v }
+
+// probeChainConfigSpec is a self-contained dev probe (--probe-spec) that
+// builds representative chainConfigSpec values through buildChainConfigSpec
+// and prints each fork activation timeline. It verifies the Task-0 acceptance
+// criteria -- the interface can express pure Ecotone/Fjord AND upgrade
+// boundaries, with the ETH twins nil'd/co-activated together -- without
+// touching the golden path. The 10-second coupling is demonstrated by placing
+// every activation at T=1005 with the corpus-default genesisTime=1000 /
+// blockTime=1010 (1000 < 1005 <= 1010 holds).
+func probeChainConfigSpec() error {
+	specs := []struct {
+		label string
+		spec  chainConfigSpec
+	}{
+		{"pure ecotone", chainConfigSpec{base: "ecotone"}},
+		{"pure fjord", chainConfigSpec{base: "fjord"}},
+		{"pure granite", chainConfigSpec{base: "granite"}},
+		{"pure holocene", chainConfigSpec{base: "holocene"}},
+		{"pure isthmus", chainConfigSpec{base: "isthmus"}},
+		{"pure jovian", chainConfigSpec{base: "jovian"}},
+		{"upgrade ecotone->fjord @1005", chainConfigSpec{base: "ecotone", activations: map[string]uint64{"fjord": 1005}}},
+		{"upgrade fjord->granite @1005", chainConfigSpec{base: "fjord", activations: map[string]uint64{"granite": 1005}}},
+		{"upgrade granite->holocene @1005", chainConfigSpec{base: "granite", activations: map[string]uint64{"holocene": 1005}}},
+		{"upgrade holocene->isthmus @1005", chainConfigSpec{base: "holocene", activations: map[string]uint64{"isthmus": 1005}}},
+		{"upgrade isthmus->jovian @1005", chainConfigSpec{base: "isthmus", activations: map[string]uint64{"jovian": 1005}}},
+	}
+	for _, s := range specs {
+		cfg, err := buildChainConfigSpec(s.spec)
+		if err != nil {
+			return fmt.Errorf("spec %q: %w", s.label, err)
+		}
+		fmt.Printf("%-30s chainID=%s\n", s.label, cfg.ChainID)
+		fmt.Printf("  regolith=%-4s canyon=%-4s ecotone=%-4s fjord=%-4s granite=%-4s holocene=%-4s isthmus=%-4s jovian=%-4s\n",
+			ptrOrNil(cfg.RegolithTime), ptrOrNil(cfg.CanyonTime), ptrOrNil(cfg.EcotoneTime), ptrOrNil(cfg.FjordTime),
+			ptrOrNil(cfg.GraniteTime), ptrOrNil(cfg.HoloceneTime), ptrOrNil(cfg.IsthmusTime), ptrOrNil(cfg.JovianTime))
+		fmt.Printf("  shanghai=%-4s cancun=%-4s prague=%-4s   (ETH twins: shanghai==canyon, cancun==ecotone, prague==isthmus)\n",
+			ptrOrNil(cfg.ShanghaiTime), ptrOrNil(cfg.CancunTime), ptrOrNil(cfg.PragueTime))
+	}
+	return nil
+}
+
+func ptrOrNil(p *uint64) string {
+	if p == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%d", *p)
 }
 
 // ---------------------------------------------------------------------
