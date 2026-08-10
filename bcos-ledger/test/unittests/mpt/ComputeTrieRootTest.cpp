@@ -27,6 +27,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <thread>
@@ -73,6 +74,69 @@ std::map<bcos::h256, bcos::bytes> ctrSortedMap(
     return sorted;
 }
 }  // namespace
+
+// ---- computeTrieRootVarKey: variable-length-key build ----
+
+// Var-key build agrees with the secure build for EQUAL-LENGTH keys: when every key is 32 bytes,
+// bytesToNibbles produces the same 64-nibble paths as the h256-keyed secure build, so both entry
+// points must yield the identical root. This pins the var-key path to the same canonical build
+// core as the secure path (the short-key OP receipts-root usage relies on that same core).
+BOOST_AUTO_TEST_CASE(VarKey32ByteMatchesSecureBuild)
+{
+    // Distinct 32-byte keys (each byte nonzero to stay distinct across the whole width), values
+    // arbitrary. Sorted ascending — the var-key contract.
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> entries;
+    std::vector<std::pair<bcos::h256, bcos::bytes>> asH256;
+    for (uint32_t i = 0; i < 5; ++i)
+    {
+        bcos::bytes key(bcos::h256::SIZE);
+        bcos::h256 hkey{};
+        for (size_t j = 0; j < bcos::h256::SIZE; ++j)
+        {
+            key[j] = static_cast<bcos::byte>(i + 1);
+            hkey.data()[j] = key[j];
+        }
+        bcos::bytes value{static_cast<bcos::byte>(0x10 + i)};
+        entries.emplace_back(key, value);
+        asH256.emplace_back(hkey, value);
+    }
+    std::sort(entries.begin(), entries.end(),
+        [](auto const& a, auto const& b) { return a.first < b.first; });
+
+    TrieBuildResult const varResult = computeTrieRootVarKey(entries);
+    TrieBuildResult const secureResult = computeTrieRoot(ctrSortedMap(asH256));
+    BOOST_CHECK_EQUAL(varResult.root, secureResult.root);
+    BOOST_CHECK(varResult.newNodes == secureResult.newNodes);
+
+    // Cross-check against the reference oracle (referenceRoot's refInsert is insertion-ordered;
+    // feed the same ascending order the secure map uses).
+    std::sort(asH256.begin(), asH256.end(),
+        [](auto const& a, auto const& b) { return a.first < b.first; });
+    BOOST_CHECK_EQUAL(secureResult.root, referenceRoot(asH256));
+}
+
+// Short (non-32-byte) keys: the build runs and yields a NON-empty root different from the empty
+// trie — the receipts-root usage relies on this. (No padded-h256 equivalence exists for short
+// keys: their nibble paths are shorter than 64, so the MPT shape differs by construction.)
+BOOST_AUTO_TEST_CASE(VarKeyShortKeysBuildToNonEmptyRoot)
+{
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> entries{
+        {bcos::bytes{0x01}, bcos::bytes{0xbb}},
+        {bcos::bytes{0x02}, bcos::bytes{0xcc}},
+        {bcos::bytes{0x80}, bcos::bytes{0xaa}},
+    };
+    TrieBuildResult const result = computeTrieRootVarKey(entries);
+    BOOST_CHECK(result.root != emptyRootHash());
+    BOOST_CHECK(!result.newNodes.empty());
+}
+
+// Empty var-key input commits to the canonical empty-trie root.
+BOOST_AUTO_TEST_CASE(VarKeyEmptyIsEmptyRoot)
+{
+    TrieBuildResult const result = computeTrieRootVarKey({});
+    BOOST_CHECK_EQUAL(result.root, emptyRootHash());
+    BOOST_CHECK(result.newNodes.empty());
+}
 
 // The stateless core must agree with the independent reference oracle AND with the commitTrie
 // from-empty entry point — same root and a byte-identical produced node set — across several

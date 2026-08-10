@@ -23,6 +23,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3TxHandler.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
@@ -400,6 +401,181 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     BOOST_CHECK(re);
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xc1b634853cb333d3ad8663715b08f41a3aec47cc");
+}
+
+// Deposit encode→decode roundtrip locks the uint32_t isSystemTransaction workaround
+// (see Web3TxHandler.h header comment) — when the underlying ODR defect is fixed and
+// the field switches back to uint8_t, this test ensures the encoded byte does not
+// silently regress.
+BOOST_AUTO_TEST_CASE(depositRoundtrip)
+{
+    Web3Transaction deposit;
+    deposit.type = rpc::TransactionType::Deposit;
+    deposit.sourceHash = h256("6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    deposit.from = Address("0xdead000000000000000000000000000000000011");
+    deposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+    deposit.mint = u256("0x16345785d8a0000");
+    deposit.value = u256(0);
+    deposit.gasLimit = 1000000;
+    deposit.isSystemTx = true;
+    deposit.data = bcos::bytes{};
+
+    // Encode → decode roundtrip
+    auto encoded = deposit.encode();
+    auto ref = bcos::ref(encoded);
+    Web3Transaction decoded;
+    auto err = decoded.decode(ref, false);  // withSig=false, deposit has no signature
+    BOOST_REQUIRE(err == nullptr);
+
+    BOOST_CHECK(decoded.type == rpc::TransactionType::Deposit);
+    BOOST_CHECK(decoded.isSystemTx);
+    BOOST_CHECK_EQUAL(decoded.sourceHash.hex(), deposit.sourceHash.hex());
+    BOOST_CHECK_EQUAL(decoded.from.hexPrefixed(), deposit.from.hexPrefixed());
+    BOOST_CHECK(decoded.to.has_value());
+    BOOST_CHECK_EQUAL(decoded.to->hexPrefixed(), deposit.to->hexPrefixed());
+    BOOST_CHECK_EQUAL(decoded.mint, deposit.mint);
+    BOOST_CHECK_EQUAL(decoded.value, deposit.value);
+    BOOST_CHECK_EQUAL(decoded.gasLimit, deposit.gasLimit);
+
+    // Also round-trip the system-tx=false case
+    Web3Transaction nonSysDeposit;
+    nonSysDeposit.type = rpc::TransactionType::Deposit;
+    nonSysDeposit.sourceHash =
+        h256("7bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8");
+    nonSysDeposit.from = Address("0xdead000000000000000000000000000000000011");
+    nonSysDeposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+    nonSysDeposit.mint = u256(100);
+    nonSysDeposit.value = u256(0);
+    nonSysDeposit.gasLimit = 500000;
+    nonSysDeposit.isSystemTx = false;
+    nonSysDeposit.data = bcos::bytes{};
+
+    auto encoded2 = nonSysDeposit.encode();
+    auto ref2 = bcos::ref(encoded2);
+    Web3Transaction decoded2;
+    err = decoded2.decode(ref2, false);
+    BOOST_REQUIRE(err == nullptr);
+
+    BOOST_CHECK(decoded2.type == rpc::TransactionType::Deposit);
+    BOOST_CHECK(!decoded2.isSystemTx);
+    BOOST_CHECK_EQUAL(decoded2.mint, nonSysDeposit.mint);
+}
+
+// The sendRawTransaction guard in EthEndpoint.cpp checks web3Tx.type == Deposit after decoding the
+// raw bytes. The guard itself is a simple `if` + throw; the decode → type-detection path is the
+// test that verifies a valid 0x7E envelope is correctly identified. An RPC-level test would need
+// the full EthEndpoint fixture (future work).
+BOOST_AUTO_TEST_CASE(decodeDepositIdentifiesTypeForSendRawGuard)
+{
+    Web3Transaction deposit;
+    deposit.type = rpc::TransactionType::Deposit;
+    deposit.sourceHash = h256("0xabcd000000000000000000000000000000000000000000000000000000000000");
+    deposit.from = Address("0xdead000000000000000000000000000000000099");
+    deposit.to.emplace(Address("0x4200000000000000000000000000000000000011"));
+    deposit.mint = u256(1);
+    deposit.value = u256(0);
+    deposit.gasLimit = 21000;
+    deposit.isSystemTx = false;
+    deposit.data = bcos::bytes{};
+
+    auto encoded = deposit.encode();
+    BOOST_REQUIRE(!encoded.empty());
+
+    // The raw envelope must start with 0x7E (EIP-2718 type byte)
+    BOOST_CHECK_EQUAL(
+        static_cast<uint8_t>(encoded[0]), static_cast<uint8_t>(rpc::TransactionType::Deposit));
+
+    // Decode through the public codec entry point — this is the path EthEndpoint calls
+    // (codec::rlp::decode → Web3Transaction::decode) before the type-guard check.
+    auto ref = bcos::ref(encoded);
+    Web3Transaction decoded;
+    auto err = bcos::codec::rlp::decode(ref, decoded);
+    BOOST_REQUIRE(err == nullptr);
+    BOOST_CHECK(decoded.type == rpc::TransactionType::Deposit);
+    // A real sendRawTransaction call would now hit: if (web3Tx.type == Deposit) → throw
+    // InvalidParams
+}
+
+// Golden-vector deposit encoding: encode a known deposit tx and compare byte-for-byte
+// against the expected RLP output (cross-validated against the OP Stack deposit spec:
+// 0x7E || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])).
+// If a future change alters the deposit encoding, this test breaks — that's intentional.
+BOOST_AUTO_TEST_CASE(depositGoldenEncoding)
+{
+    // isSystemTx=true golden
+    {
+        Web3Transaction deposit;
+        deposit.type = rpc::TransactionType::Deposit;
+        deposit.sourceHash =
+            h256("0x0100000000000000000000000000000000000000000000000000000000000000");
+        deposit.from = Address("0xdead000000000000000000000000000000000011");
+        deposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+        deposit.mint = u256("0x16345785d8a0000");
+        deposit.value = u256(0);
+        deposit.gasLimit = 1000000;
+        deposit.isSystemTx = true;
+        deposit.data = bcos::bytes{};
+
+        auto encoded = deposit.encode();
+        // Pre-computed RLP: 0x7E || list_header || [33b sourceHash, 21b from, 21b to,
+        // 9b mint, 1b value(0), 4b gas, 1b isSystemTx(1), 1b data(empty)]
+        auto expected = fromHex(
+            "0x7ef85ba00100000000000000000000000000000000000000000000000000000000000000"
+            "94dead000000000000000000000000000000000011"
+            "944200000000000000000000000000000000000022"
+            "88016345785d8a0000"
+            "80"
+            "830f4240"
+            "01"
+            "80");
+        BOOST_REQUIRE(!expected.empty());
+        BOOST_CHECK_EQUAL(toHex(encoded), toHex(expected));
+
+        // Decode back and verify fields survived
+        auto ref = bcos::ref(encoded);
+        Web3Transaction decoded;
+        auto err = decoded.decode(ref, false);
+        BOOST_REQUIRE(err == nullptr);
+        BOOST_CHECK(decoded.type == rpc::TransactionType::Deposit);
+        BOOST_CHECK(decoded.isSystemTx);
+        BOOST_CHECK_EQUAL(decoded.mint, deposit.mint);
+        BOOST_CHECK_EQUAL(decoded.value, deposit.value);
+        BOOST_CHECK_EQUAL(decoded.gasLimit, deposit.gasLimit);
+    }
+
+    // isSystemTx=false golden (only differs in field 7: 0x80 instead of 0x01)
+    {
+        Web3Transaction deposit;
+        deposit.type = rpc::TransactionType::Deposit;
+        deposit.sourceHash =
+            h256("0x0100000000000000000000000000000000000000000000000000000000000000");
+        deposit.from = Address("0xdead000000000000000000000000000000000011");
+        deposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+        deposit.mint = u256("0x16345785d8a0000");
+        deposit.value = u256(0);
+        deposit.gasLimit = 1000000;
+        deposit.isSystemTx = false;
+        deposit.data = bcos::bytes{};
+
+        auto encoded = deposit.encode();
+        auto expected = fromHex(
+            "0x7ef85ba00100000000000000000000000000000000000000000000000000000000000000"
+            "94dead000000000000000000000000000000000011"
+            "944200000000000000000000000000000000000022"
+            "88016345785d8a0000"
+            "80"
+            "830f4240"
+            "80"  // isSystemTx=false → empty byte string
+            "80");
+        BOOST_REQUIRE(!expected.empty());
+        BOOST_CHECK_EQUAL(toHex(encoded), toHex(expected));
+
+        auto ref = bcos::ref(encoded);
+        Web3Transaction decoded;
+        auto err = decoded.decode(ref, false);
+        BOOST_REQUIRE(err == nullptr);
+        BOOST_CHECK(!decoded.isSystemTx);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

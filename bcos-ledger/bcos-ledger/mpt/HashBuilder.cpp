@@ -195,4 +195,43 @@ TrieBuildResult computeTrieRootFromSorted(
     return computeTrieRootImpl(sortedEntries);
 }
 
+TrieBuildResult computeTrieRootVarKey(
+    std::span<std::pair<bcos::bytes, bcos::bytes> const> entries)
+{
+    if (entries.empty())
+    {
+        return TrieBuildResult{.root = emptyRootHash(), .newNodes = {}};
+    }
+
+    // Same build as computeTrieRootImpl, but the key is a variable-length byte string (nibble
+    // count = 2 * key.size(), not the fixed 64). The caller guarantees no key is a prefix of
+    // another, so no key terminates inside a branch — hbBuild/hbEmit/hbRefToRaw are agnostic to
+    // nibble-path length (NodeEncoder's HP encoding handles odd/even counts).
+    std::vector<HBEntry> buildEntries;
+    buildEntries.reserve(entries.size());
+    for (auto const& [key, value] : entries)
+    {
+        buildEntries.push_back(
+            HBEntry{.nibbles = bytesToNibbles(bcos::ref(key)), .value = value});
+    }
+
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    HBContext ctx{.hasher = hasher, .newNodes = newNodes};
+    NodeRef const rootRef =
+        hbBuild(ctx, std::span<HBEntry const>{buildEntries.data(), buildEntries.size()}, /*depth=*/0);
+
+    bcos::h256 root;
+    if (rootRef.kind() == NodeRef::Kind::Hash)
+    {
+        root = rootRef.hash();
+    }
+    else
+    {
+        bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
+        newNodes.emplace(root, rootRef.inlineRef().toBytes());
+    }
+    return TrieBuildResult{.root = root, .newNodes = std::move(newNodes)};
+}
+
 }  // namespace bcos::ledger::mpt

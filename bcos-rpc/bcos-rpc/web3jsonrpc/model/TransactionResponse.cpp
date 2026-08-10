@@ -63,7 +63,9 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["nonce"] = toQuantity(web3Tx.nonce);
         result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
         result["value"] = toQuantity(web3Tx.value);
-        if (web3Tx.type >= TransactionType::EIP2930)
+        // Use explicit range checks rather than `>=` so that Deposit (0x7e), which is numerically
+        // larger than all EIP types, is excluded from EIP-specific field output.
+        if (web3Tx.type >= TransactionType::EIP2930 && web3Tx.type <= TransactionType::EIP4844)
         {
             result["accessList"] = Json::arrayValue;
             result["accessList"].resize(web3Tx.accessList.size());
@@ -81,13 +83,13 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
                 result["accessList"].append(std::move(access));
             }
         }
-        if (web3Tx.type >= TransactionType::EIP1559)
+        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP4844)
         {
             result["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
-        if (web3Tx.type >= TransactionType::EIP4844)
+        if (web3Tx.type == TransactionType::EIP4844)
         {
             result["maxFeePerBlobGas"] = web3Tx.maxFeePerBlobGas.str();
             result["blobVersionedHashes"] = Json::arrayValue;

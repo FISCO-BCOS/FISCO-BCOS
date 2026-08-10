@@ -24,6 +24,7 @@
 #include "bcos-utilities/AnyHolder.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -172,6 +173,40 @@ public:
 
     virtual std::optional<uint64_t> slotNumber() const = 0;
     virtual void setSlotNumber(uint64_t _val) = 0;
+
+    // ---- OP Stack header capability (EIP-2718 execution-layer block hash) ----
+    // The 21-field OP/ETH execution-layer header RLP is a distinct encoding from the FISCO
+    // tars wire format: `encode()`/`decode()` stay FISCO-specific, while the OP header bytes
+    // (field order == go-ethereum core/types.Header, pinned byte-for-byte by the golden corpus in
+    // bcos-evm/test/opstack/EthBlockHeaderTest.cpp) and its keccak block hash are exposed here.
+    // The 3 post-merge protocol constants have no tars carrier; the caller supplies them (they are
+    // constant on post-merge/OP chains, but the interface never hardcodes a value). See the retired
+    // bcos-codec/rlp/OpHeaderCodec for the provenance of these semantics.
+
+    /// 3 post-merge protocol constants with no tars carrier (ommersHash=keccak256(rlp([])),
+    /// difficulty=0, nonce=8 zero bytes on post-merge/OP chains).
+    struct OpHeaderConst
+    {
+        bcos::h256 ommersHash;
+        bcos::u256 difficulty;
+        bcos::h64 nonce;
+    };
+
+    /// 21-field OP/ETH header RLP; timestamp in/out are FISCO milliseconds / OP seconds (the
+    /// /1000 keeps the bytes identical to the golden corpus). Default: empty bytes (non-OP impl).
+    virtual bcos::bytes encodeOpHeader(const OpHeaderConst& opHeaderConst) const { return {}; }
+    /// keccak256(encodeOpHeader()) — the OP block hash. Default: empty (non-OP impl).
+    virtual bcos::crypto::HashType opHeaderHash(const OpHeaderConst& opHeaderConst) const
+    {
+        return {};
+    }
+    /// Strict inverse of encodeOpHeader(): parses the 21-field RLP into `*this` (tars-carried
+    /// fields) and the 3 constants into `c`. Trailing bytes are an error. Default: non-null error
+    /// (non-OP impl).
+    virtual bcos::Error::UniquePtr decodeOpHeader(bcos::bytesRef in, OpHeaderConst& c)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(-1, "OP header decode not supported");
+    }
 };
 
 using AnyBlockHeader = AnyHolder<BlockHeader, 72>;  // 多平台BlockHeaderImpl的最大尺寸 (Maximum size

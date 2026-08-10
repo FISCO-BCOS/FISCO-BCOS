@@ -58,10 +58,16 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    # 只编入实际被引用的两个。blob_schedule/mpt/mpt_hash/utils 曾在此，但全模块零引用
+    # 自研内存账本（块级 PR 移植）：MemoryLedger 是 evmone test_state 的替换品，
+    # StateRootCompute 是状态根引擎（AccountVisitor 建根，用 FISCO bcos-ledger/mpt
+    # computeTrieRoot，不再依赖 evmone 的 MPT/mpt_hash）。
+    bcos-evm/ledger/MemoryLedger.cpp
+    bcos-evm/adapter/StateRootCompute.cpp
+    # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
-    # rlp_encode：OpReceipt.cpp 的回执编码用它，属生产依赖。
+    # rlp_encode：块级回执建根（sealOpBlock 的 receipts-root leaf）用 evmone 编码作金值锚，
+    # 属生产依赖。
     #
     # DEBT(eth-utils-removal): test_state 是 evmone 的内存**测试**账本。全部 11 个引用点都在
     # bcos-evm/test/ 下，两个生产库一个都不引用（nm 核验），所以它出现在生产库
@@ -89,6 +95,14 @@ target_include_directories(bcos-evm-eth PUBLIC
     ${EVMONE_PKG_SHIM_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
+# 自研建根(替代退役 evmone mpt/mpt_hash):StateRootCompute.h 用 bcos-codec RLP + bcos-ledger
+# computeTrieRoot。`codec` 仅 in-tree 存在;`ledger` 由顶层 add_subdirectory(bcos-ledger) 提供
+# (在 bcos-evm 之后,目标引用在 generate 期解析)。
+if(TARGET codec)
+    target_link_libraries(bcos-evm-eth PUBLIC codec)
+endif()
+target_link_libraries(bcos-evm-eth PUBLIC ledger)
+target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_SOURCE_DIR}/bcos-ledger)
 
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
 # （cmake/CompilerSettings.cmake），AppleClang 对上游代码报 missing-field-initializers。
@@ -112,7 +126,10 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpFeeParams.cpp
     bcos-evm/opstack/RollupCost.cpp
     bcos-evm/opstack/OpTransition.cpp
-    bcos-evm/opstack/OpReceipt.cpp)
+    # 块级执行层（op-validator-loop 移植）：processOpBlock / finalizeOpBlock / sealOpBlock。
+    bcos-evm/opstack/OpBlockExecute.cpp
+    bcos-evm/opstack/OpBlockFinalize.cpp
+    bcos-evm/opstack/OpBlockSeal.cpp)
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)

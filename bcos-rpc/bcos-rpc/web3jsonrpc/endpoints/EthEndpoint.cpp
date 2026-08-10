@@ -434,6 +434,14 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
+    // op-geth rejects Deposit (0x7e) from eth_sendRawTransaction
+    // (ErrTxTypeNotSupported); deposits only enter via the derivation/engine
+    // path, never from a client RPC submission.
+    if (web3Tx.type == TransactionType::Deposit) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
+    }
     auto encodeTxHash = web3Tx.txHash();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
