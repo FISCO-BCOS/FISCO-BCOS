@@ -320,6 +320,15 @@ type expectedReceipt struct {
 	OpL1Fee                 *string `json:"_op_l1_fee,omitempty"`
 	OpOperatorFee           *string `json:"_op_operator_fee,omitempty"`
 	OpDaFootprint           *string `json:"_op_da_footprint,omitempty"`
+	// 线 C 新增（按 OP_RECEIPT_FIELDMAP.md 发射面）
+	OpL1GasPrice           *string `json:"_op_l1_gas_price,omitempty"`
+	OpL1BlobBaseFee        *string `json:"_op_l1_blob_base_fee,omitempty"`
+	OpL1GasUsed            *string `json:"_op_l1_gas_used,omitempty"`
+	OpL1BaseFeeScalar      *string `json:"_op_l1_base_fee_scalar,omitempty"`
+	OpL1BlobBaseFeeScalar  *string `json:"_op_l1_blob_base_fee_scalar,omitempty"`
+	OpOperatorFeeScalar    *string `json:"_op_operator_fee_scalar,omitempty"`
+	OpOperatorFeeConstant  *string `json:"_op_operator_fee_constant,omitempty"`
+	OpDaFootprintGasScalar *string `json:"_op_da_footprint_gas_scalar,omitempty"`
 }
 
 type opExpected struct {
@@ -1792,6 +1801,39 @@ func buildExpectedReceipts(cfg *params.ChainConfig, in *inputCase, txs []*types.
 			}
 			s := hexutil.EncodeBig(r.L1Fee)
 			er.OpL1Fee = &s
+			// 线 C：字段发射面按 OP_RECEIPT_FIELDMAP.md（nil → absent → omitempty）。
+			if r.L1GasPrice != nil {
+				s := hexutil.EncodeBig(r.L1GasPrice)
+				er.OpL1GasPrice = &s
+			}
+			if r.L1BlobBaseFee != nil {
+				s := hexutil.EncodeBig(r.L1BlobBaseFee)
+				er.OpL1BlobBaseFee = &s
+			}
+			if r.L1GasUsed != nil {
+				s := hexutil.EncodeBig(r.L1GasUsed)
+				er.OpL1GasUsed = &s
+			}
+			if r.L1BaseFeeScalar != nil {
+				s := hexutil.EncodeUint64(*r.L1BaseFeeScalar)
+				er.OpL1BaseFeeScalar = &s
+			}
+			if r.L1BlobBaseFeeScalar != nil {
+				s := hexutil.EncodeUint64(*r.L1BlobBaseFeeScalar)
+				er.OpL1BlobBaseFeeScalar = &s
+			}
+			if r.OperatorFeeScalar != nil {
+				s := hexutil.EncodeUint64(*r.OperatorFeeScalar)
+				er.OpOperatorFeeScalar = &s
+			}
+			if r.OperatorFeeConstant != nil {
+				s := hexutil.EncodeUint64(*r.OperatorFeeConstant)
+				er.OpOperatorFeeConstant = &s
+			}
+			if r.DAFootprintGasScalar != nil {
+				s := hexutil.EncodeUint64(*r.DAFootprintGasScalar)
+				er.OpDaFootprintGasScalar = &s
+			}
 			if emitOpFee {
 				fee := operatorFee(jovian, r.GasUsed, opScalar, opConstant)
 				// Cross-check the hand formula against op-geth's own cost func.
