@@ -372,5 +372,72 @@ BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
     }
 }
 
+// C1 (final review batch B): a long-form RLP header (0xb8.. / 0xf8..) whose multi-byte length
+// prefix carries a leading zero byte is non-canonical. op-geth rlp/decode.go readUint() rejects it
+// with ErrCanonSize when lenOfLen>=2; the single-byte-length forms (0xb8/0xf8, lenOfLen==1) are
+// left to the pre-existing `< 56` rule, matching op-geth's readUint `case 1`. Both the long-string
+// and long-list header branches must enforce this (fixing only one is the classic failure mode).
+BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
+{
+    auto decodeErr = [](std::string_view hex, auto& out) {
+        bcos::bytes buffer = fromHex(hex);
+        auto view = bcos::ref(buffer);
+        return bcos::codec::rlp::decode(view, out);
+    };
+    // 60 bytes of 0xaa as a hex payload, and 60 canonical single-byte list items (each 0x01).
+    std::string const payload60(120, 'a');    // "aa" * 60
+    std::string const listItems60(120, '1');  // "01" * 60 -> 60 single-byte RLP items
+
+    // ---- long string ----
+    {  // lenOfLen==2 with a leading zero: 0xb9 00 3c (== length 60 written non-minimally) — REJECT.
+        std::string str;
+        auto err = decodeErr("b9003c" + payload60, str);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+    {  // canonical 60-byte string, single-byte length 0xb8 3c — MUST STILL DECODE.
+        std::string str;
+        auto err = decodeErr("b83c" + payload60, str);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(str.size(), 60u);
+    }
+    {  // lenOfLen==1 boundary 0xb8 0x00: canonical would be 0x80; here payloadLength 0 < 56, so it
+       // is rejected by the `< 56` rule (NOT the new leading-zero check). Guards against a future
+       // "just tighten lenOfLen>=1 too" edit that would diverge from op-geth's readUint case 1.
+        std::string str;
+        auto err = decodeErr("b800"sv, str);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+    {  // canonical 2-byte length that is NOT a leading zero (256-byte string, 0xb9 01 00) — the
+       // length prefix's first byte is 0x01, so it must decode, proving we reject only leading
+       // zeros, not all lenOfLen>=2 forms.
+        std::string str;
+        auto err = decodeErr("b90100" + std::string(512, 'c'), str);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(str.size(), 256u);
+    }
+
+    // ---- long list ----
+    {  // lenOfLen==2 with a leading zero: 0xf9 00 3c — REJECT before any element is read.
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f9003c" + listItems60, items);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+    {  // canonical 60-byte list, single-byte length 0xf8 3c — MUST STILL DECODE (60 items).
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f83c" + listItems60, items);
+        BOOST_CHECK(!err);
+        BOOST_CHECK_EQUAL(items.size(), 60u);
+    }
+    {  // lenOfLen==1 boundary 0xf8 0x00: payloadLength 0 < 56 -> `< 56` rule, not the new check.
+        std::vector<uint64_t> items;
+        auto err = decodeErr("f800"sv, items);
+        BOOST_REQUIRE(err);
+        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
