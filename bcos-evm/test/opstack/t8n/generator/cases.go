@@ -117,11 +117,54 @@ var (
 	// diverges (status 0, no storage write).
 	beaconReaderCode = func() []byte {
 		head := hexutil.MustDecode("0x425f52611fff420660205f60205f5f73") // up to the PUSH20
-		tail := hexutil.MustDecode("0x5af15060205f5f3e5f51905500")        // GAS CALL POP RDC PUSH0 MLOAD SWAP1 SSTORE STOP
+		tail := hexutil.MustDecode("0x5af15060205f5f3e5f51905500")       // GAS CALL POP RDC PUSH0 MLOAD SWAP1 SSTORE STOP
 		out := append(head, params.BeaconRootsAddress.Bytes()...)
 		return append(out, tail...)
 	}()
 )
+
+// ---------------------------------------------------------------------
+// Precompile addresses (EIP-196/197/198/152/2537/4844/7212 + OP extension)
+// ---------------------------------------------------------------------
+
+const (
+	preEcRecover    = 0x01
+	preSha256       = 0x02
+	preRipemd160    = 0x03
+	preIdentity     = 0x04
+	preExpMod       = 0x05
+	preBn256Add     = 0x06
+	preBn256Mul     = 0x07
+	preBn256Pairing = 0x08
+	preBlake2f      = 0x09
+	prePointEval    = 0x0a // EIP-4844 KZG point evaluation
+	preBlsG1Add     = 0x0b
+	preBlsG1MSM     = 0x0c
+	preBlsG2Add     = 0x0d
+	preBlsG2MSM     = 0x0e
+	preBlsPairing   = 0x0f
+	preBlsMapG1     = 0x10
+	preBlsMapG2     = 0x11
+	preP256Verify   = 0x100 // RIP-7212; 20-byte address 0x…0100 (two low bytes)
+)
+
+// addrBytes(n) returns the 20-byte precompile address. The single-byte
+// precompiles (0x01..0x11) sit at 0x…00nn; P256VERIFY (0x100) needs the
+// second-lowest byte set (0x…0100), so values above 0xFF write into b[18].
+func addrBytes(n uint) []byte {
+	b := make([]byte, 20)
+	if n > 0xFF {
+		b[18] = byte(n >> 8)
+	}
+	b[19] = byte(n)
+	return b
+}
+
+// senderHex returns the checksummed hex form of the EOA for private key i
+// (key 1 is the standard precompile-call sender; precompileFrame funds it).
+func senderHex(i byte) string {
+	return addrOfKey(i).Hex()
+}
 
 func logsCode() []byte {
 	code := hexutil.MustDecode("0x602a5f55") // SSTORE(0, 0x2a)
@@ -426,6 +469,60 @@ func upgradeFrame(baseFork, name, desc string, fp feeParams, gasLimit uint64, ac
 
 func fund(c *inputCase, key byte, amount *big.Int) {
 	c.Pre[addrOfKey(key)] = types.Account{Balance: amount}
+}
+
+// precompileCallTx builds a direct EIP-1559 call to a precompile address
+// (To = the 20-byte precompile address, Data = the precompile input). Field
+// shape mirrors transferTx (cases.go) / buildTx's eip1559 arm (main.go):
+// sender is key 1 (SecretKey), nonce 0 -- precompileFrame funds key 1, and a
+// frame holding several precompile txs must raise nonces at its call site.
+// gas is the full tx gas limit (line-B §4.1: cap-over-limit vectors need
+// gas >= RequiredGas(cap-sized input) so the call reaches the precompile's own
+// cap check instead of OOG-ing first); value defaults to 0.
+func precompileCallTx(addr []byte, data []byte, gas uint64, value uint64) inputTx {
+	k := privKey(1)
+	to := common.BytesToAddress(addr)
+	return inputTx{
+		OpType:               "eip1559",
+		ChainID:              hd256(chainID),
+		Nonce:                hd64(0),
+		To:                   &to,
+		Value:                hd256(new(big.Int).SetUint64(value)),
+		Gas:                  hd64(gas),
+		MaxFeePerGas:         hdu(2_000_000_000), // 2 gwei
+		MaxPriorityFeePerGas: hdu(100_000_000),   // 0.1 gwei
+		Data:                 data,
+		SecretKey:            &k,
+	}
+}
+
+// precompileFrame assembles a single-block precompile case on top of the
+// line-A caseFrame skeleton (genesis knobs, coinbase, beacon root, L1Block
+// slot seeding, L1-attributes deposit tx0). txs are appended after the
+// attributes deposit; sender key 1 is funded eth(100) -- plenty for a ~20M-gas
+// over-limit call at 2 gwei plus its calldata/L1 fee.
+//
+// blockGasLimit is threaded straight into caseFrame's gasLimit -> genesisKnobs
+// GasLimit -> inputCase.Genesis.GasLimit, which processBlockVector
+// (main.go:652) reads verbatim as core.Genesis.GasLimit; the single generated
+// block inherits the genesis gas limit, so a raised value (30M, big_block
+// precedent) is what lets cap-over-limit vectors clear the block-level OOG and
+// actually reach the precompile cap path. Default is 10_000_000 (line-A norm).
+//
+// It returns a caseSpec for Tasks 1-4 to drop into the caseSpecs table (Task 0
+// itself adds no vectors, keeping regen.sh's 41-case count stable; the
+// --probe-precompile dev probe exercises this constructor end-to-end).
+func precompileFrame(fork, name, desc string, txs []inputTx, blockGasLimit uint64) caseSpec {
+	return caseSpec{
+		name:  name,
+		forks: []string{fork},
+		build: func(f string) inputCase {
+			c := caseFrame(f, name, desc, defaultFeeParams(), blockGasLimit)
+			fund(&c, 1, eth(100))
+			c.Transactions = append(c.Transactions, txs...)
+			return c
+		},
+	}
 }
 
 // ---------------------------------------------------------------------

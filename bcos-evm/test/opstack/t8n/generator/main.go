@@ -59,6 +59,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
@@ -94,6 +95,7 @@ func main() {
 		opGethCommit   = flag.String("op-geth-commit", "unknown", "full sha of the op-geth checkout, recorded into _op_test_vectors.generator_commit")
 		probeWrap      = flag.Bool("probe-genesis-number", false, "dev probe: attempt Genesis.Number=8191 (ring-wrap feasibility) and report")
 		probeSpec      = flag.Bool("probe-spec", false, "dev probe: build representative chainConfigSpec values through buildChainConfigSpec and print each activation timeline (verifies the Task-0 upgrade-boundary interface), then exit")
+		probePrecomp   = flag.String("probe-precompile", "", "dev probe: verify every precompile valid-input helper against the real op-geth precompile Run (core/vm.PrecompiledContractsOsaka), then build+generate the bn256-add probe frame and dump its receipts (line-B Task 0 infra), then exit")
 		goldenOutput   = flag.String("golden-output", "", "Task 2 (engine gate golden ritual): also emit blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/encodedHeaderHex for this vector to this path (vectors/ itself is untouched)")
 		chainOutputDir = flag.String("chain-output-dir", "", "Task 2 Step 2: generate the off-line 1->2 chained golden pair (GenerateChainWithGenesis n=2, InsertChain-validated) into this directory and exit")
 	)
@@ -104,6 +106,11 @@ func main() {
 		probeGenesisNumber()
 	case *probeSpec:
 		if err := probeChainConfigSpec(); err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
+			os.Exit(1)
+		}
+	case *probePrecomp != "":
+		if err := probePrecompile(*probePrecomp); err != nil {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
@@ -138,7 +145,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
+		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --probe-precompile <fork> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
 		os.Exit(2)
 	}
 }
@@ -564,6 +571,102 @@ func ptrOrNil(p *uint64) string {
 	return fmt.Sprintf("%d", *p)
 }
 
+// probePrecompile is the line-B Task 0 dev probe (--probe-precompile <fork>).
+// Two halves:
+//
+//  1. Input-helper verification: every valid-* / repeated* helper output is fed
+//     to the REAL op-geth precompile Run (core/vm.PrecompiledContractsOsaka, the
+//     map carrying bn256 + KZG + BLS12-381 + P256VERIFY). A helper passes iff
+//     Run returns no error; p256/KZG additionally assert the exact expected
+//     output (32-byte-1 / the EIP-4844 fixed return value), proving the
+//     signature/proof actually verify.
+//  2. Frame generation: build the bn256-add probe frame via precompileFrame +
+//     precompileCallTx (To=0x06, two valid G1 points, gas 500_000 -- see the
+//     NOTE below on OP intrinsic gas) under the given fork and push it through
+//     probeReceiptFields (the full GenerateChainWithGenesis + AddTx pipeline).
+//     Confirms the constructor + block gasLimit plumbing produce a generated
+//     block whose precompile tx receipt shows success (status 1) and gasUsed
+//     ~intrinsic+150.
+func probePrecompile(fork string) error {
+	osaka := vm.PrecompiledContractsOsaka
+	pc := func(n uint) vm.PrecompiledContract {
+		c, ok := osaka[common.BytesToAddress(addrBytes(n))]
+		if !ok {
+			panic(fmt.Sprintf("probe: no precompile at 0x%x in PrecompiledContractsOsaka", n))
+		}
+		return c
+	}
+
+	// --- Half 1: verify every input helper against the real precompile Run ---
+	type check struct {
+		label   string
+		addr    uint
+		input   func() []byte
+		wantOut []byte // nil => assert no-error only
+	}
+	kzgReturn := common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000100073eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")
+	true32 := make([]byte, 32)
+	true32[31] = 1
+	checks := []check{
+		{"bn256 G1 x2 (add input)", preBn256Add, func() []byte { return repeatedPair(validBn256G1(), 2) }, nil},
+		{"bn256 G2 (pairing, 1 pair)", preBn256Pairing, func() []byte { return repeatedBn256Pair(1) }, nil},
+		{"bn256 pairing, 2 pairs", preBn256Pairing, func() []byte { return repeatedBn256Pair(2) }, nil},
+		{"bls12-381 G1 x2 (g1add input)", preBlsG1Add, func() []byte { return repeatedPair(validBlsG1(), 2) }, nil},
+		{"bls12-381 G2 x2 (g2add input)", preBlsG2Add, func() []byte { return repeatedPair(validBlsG2(), 2) }, nil},
+		{"bls12-381 pairing (1 pair)", preBlsPairing, func() []byte { return append(validBlsG1(), validBlsG2()...) }, nil},
+		{"kzg4844 point evaluation", prePointEval, validKZGInput, kzgReturn},
+		{"secp256r1 (RIP-7212)", preP256Verify, validP256Sig, true32},
+	}
+
+	fmt.Printf("helper length assertions:\n")
+	fmt.Printf("  validBn256G1()       len=%d (want 64)\n", len(validBn256G1()))
+	fmt.Printf("  validBn256G2()       len=%d (want 128)\n", len(validBn256G2()))
+	fmt.Printf("  repeatedBn256Pair(1) len=%d (want 192)\n", len(repeatedBn256Pair(1)))
+	fmt.Printf("  validBlsG1()         len=%d (want 128)\n", len(validBlsG1()))
+	fmt.Printf("  validBlsG2()         len=%d (want 256)\n", len(validBlsG2()))
+	fmt.Printf("  validP256Sig()       len=%d (want 160)\n", len(validP256Sig()))
+	fmt.Printf("  validKZGInput()      len=%d (want 192)\n", len(validKZGInput()))
+
+	fail := 0
+	for _, c := range checks {
+		in := c.input()
+		out, err := pc(c.addr).Run(in)
+		if err != nil {
+			fmt.Printf("  FAIL  %-34s Run error: %v\n", c.label, err)
+			fail++
+			continue
+		}
+		if c.wantOut != nil && !bytes.Equal(out, c.wantOut) {
+			fmt.Printf("  FAIL  %-34s output mismatch: got 0x%x\n", c.label, out)
+			fail++
+			continue
+		}
+		fmt.Printf("  ok    %-34s Run accepted %dB input, output %dB\n", c.label, len(in), len(out))
+	}
+	if fail > 0 {
+		return fmt.Errorf("probe-precompile: %d input-helper check(s) FAILED", fail)
+	}
+
+	// --- Half 2: build + generate the bn256-add probe frame ---
+	// NOTE: tx gas 500_000, NOT the precompile's 150. On OP-stack the tx gas
+	// limit must cover INTRINSIC gas (21000 base + calldata cost; ~21560 for a
+	// 128-byte call) and the precompile's RequiredGas (150) is charged on top.
+	// A 150-gas tx would OOG at the intrinsic check ("intrinsic gas too low: have
+	// 150, want 21560") and never reach the precompile. The brief's "gas 150 /
+	// gasUsed ~150" predates the OP intrinsic-gas reality; the receipt's gasUsed
+	// is intrinsic + 150 (~21710), with the precompile's 150 visible as the
+	// delta over an empty-calldata transfer.
+	probeInput := repeatedPair(validBn256G1(), 2) // 128B: two valid G1 points
+	spec := precompileFrame(fork, "probe_bn256_add",
+		"probe: bn256 add with two valid G1 points (line-B Task 0 infra)",
+		[]inputTx{precompileCallTx(addrBytes(preBn256Add), probeInput, 500_000, 0)},
+		10_000_000)
+	in := spec.build(fork)
+	fmt.Printf("\nprobe frame: fork=%s name=%s blockGasLimit=%d txs=%d\n",
+		fork, spec.name, uint64(in.Genesis.GasLimit), len(in.Transactions))
+	return probeReceiptFields(&in)
+}
+
 // ---------------------------------------------------------------------
 // Vector generation
 // ---------------------------------------------------------------------
@@ -831,7 +934,8 @@ func probeReceiptFields(in *inputCase) error {
 
 	receipts := receiptsAll[0]
 	for i, r := range receipts {
-		fmt.Printf("tx[%d] type=0x%02x\n", i, r.Type)
+		fmt.Printf("tx[%d] type=0x%02x status=0x%x gasUsed=%d cumulativeGasUsed=%d\n",
+			i, r.Type, r.Status, r.GasUsed, r.CumulativeGasUsed)
 		if r.DepositNonce != nil {
 			fmt.Printf("  DepositNonce\t0x%x\n", *r.DepositNonce)
 		} else {
