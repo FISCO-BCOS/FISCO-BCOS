@@ -118,14 +118,11 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 
 std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 {
-    // task-5a (spec §6.3): OP composition root only -- appends the V4 entries to the generic
-    // list. `newPayloadV4`/`getPayloadV4`'s semantics are `EngineServiceImpl`-layer only; RPC
-    // endpoint registration is out of scope for this whole feature (spec §6.4 欠账台账,裁定
-    // A6), so advertising these two capabilities here does not imply an RPC-reachable method.
-    auto capabilities = supportedCapabilities();
-    capabilities.push_back("engine_newPayloadV4");
-    capabilities.push_back("engine_getPayloadV4");
-    return capabilities;
+    // 生产互通降级（2026-08-10，C1）：不再向 OP 模式能力协商追加 `engine_newPayloadV4` /
+    // `engine_getPayloadV4`。二者仅有 EngineServiceImpl 层语义，RPC 端点注册未实现（spec §6.4
+    // 欠账台账，裁定 A6）——广告 V4 会让 op-node 经 exchangeCapabilities 协商到不存在的端点，
+    // 调用即 -38005 撞桩（W2 引入的债）。诚实暴露当前能力为 V3；V4 端点补全后在此恢复追加。
+    return supportedCapabilities();
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
