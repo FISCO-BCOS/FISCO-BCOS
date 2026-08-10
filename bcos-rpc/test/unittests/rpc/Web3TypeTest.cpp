@@ -132,6 +132,9 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
     BOOST_CHECK_EQUAL(tx.value, 2000000000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "6ebaf477f83e051589c1188bcc6ddccd");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
+    // C2 (W8 review): typed-tx signatureV is the raw y_parity, restricted to 0/1. This
+    // EIP-2930 sample carries yParity=0.
+    BOOST_CHECK_EQUAL(tx.signatureV, 0u);
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
@@ -165,6 +168,9 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
     BOOST_CHECK_EQUAL(tx.value, 2000000000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "6ebaf477f83e051589c1188bcc6ddccd");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
+    // C2 (W8 review): typed-tx signatureV is the raw y_parity, restricted to 0/1. This
+    // EIP-1559 sample carries yParity=0.
+    BOOST_CHECK_EQUAL(tx.signatureV, 0u);
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
@@ -243,6 +249,9 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     BOOST_CHECK_EQUAL(toHex(tx.blobVersionedHashes[1]),
         "8aaeccaf3873d07cef005aca28c39f8a9f8bdb1ec8d79ffc25afc0a4fa2ab736");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35 + 1);
+    // C2 (W8 review): typed-tx signatureV is the raw y_parity, restricted to 0/1. This
+    // EIP-4844 sample carries yParity=1 (hence the +1 in getSignatureV above).
+    BOOST_CHECK_EQUAL(tx.signatureV, 1u);
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
@@ -253,6 +262,73 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     codec::rlp::encode(encoded, tx);
     auto rawTx2 = toHexStringWithPrefix(encoded);
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
+}
+
+// C2 (W8 review): typed-tx yParity is restricted to 0/1 (Web3TxHandler rejects signatureV > 1 with
+// InvalidVInSignature). Flip the yParity wire byte of each legal typed-tx sample to 0x02
+// (single-byte self-encoding — same wire length, outer RLP prefix unaffected) and assert the
+// decoder rejects it. Wire offsets are RLP-decoding-verified: EIP-2930 field[8] at 178,
+// EIP-1559 field[9] at 184, EIP-4844 field[11] at 232.
+BOOST_AUTO_TEST_CASE(typedTxYParityOverOneRejected)
+{
+    auto byteAt = [](std::string_view hex, std::size_t byteOffset) -> int {
+        auto nibble = [](char c) -> int {
+            if (c >= '0' && c <= '9')
+            {
+                return c - '0';
+            }
+            if (c >= 'a' && c <= 'f')
+            {
+                return c - 'a' + 10;
+            }
+            return c - 'A' + 10;
+        };
+        auto pos = 2 + byteOffset * 2;  // skip "0x"
+        return nibble(hex[pos]) * 16 + nibble(hex[pos + 1]);
+    };
+    auto flipByteToTwo = [](std::string_view hex, std::size_t byteOffset) {
+        std::string out(hex);
+        auto pos = 2 + byteOffset * 2;  // skip "0x"
+        out[pos] = '0';
+        out[pos + 1] = '2';
+        return out;
+    };
+
+    // clang-format off
+    constexpr std::string_view kEIP2930RawTx = "0x01f8f205078506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7881bc16d674ec80000906ebaf477f83e051589c1188bcc6ddccdf872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842a00000000000000000000000000000000000000000000000000000000000000003a00000000000000000000000000000000000000000000000000000000000000007d694bb9bc244d798123fde783fcc1c72d3bb8c189413c080a036b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0a05edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094";
+    constexpr std::string_view kEIP1559RawTx = "0x02f8f805078502540be4008506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7881bc16d674ec80000906ebaf477f83e051589c1188bcc6ddccdf872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842a00000000000000000000000000000000000000000000000000000000000000003a00000000000000000000000000000000000000000000000000000000000000007d694bb9bc244d798123fde783fcc1c72d3bb8c189413c080a036b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0a05edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094";
+    constexpr std::string_view kEIP4844RawTx = "0x03f9012705078502540be4008506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7808204f7f872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842a00000000000000000000000000000000000000000000000000000000000000003a00000000000000000000000000000000000000000000000000000000000000007d694bb9bc244d798123fde783fcc1c72d3bb8c189413c07bf842a0c6bdd1de713471bd6cfa62dd8b5a5b42969ed09e26212d3377f3f8426d8ec210a08aaeccaf3873d07cef005aca28c39f8a9f8bdb1ec8d79ffc25afc0a4fa2ab73601a036b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0a05edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094";
+    // clang-format on
+
+    struct Sample
+    {
+        std::string_view rawTx;
+        std::size_t yParityOffset;
+        int expectedYParityByte;  // the RLP-encoded yParity currently at the offset
+    };
+    const Sample samples[] = {
+        {kEIP2930RawTx, 178, 0x80},
+        {kEIP1559RawTx, 184, 0x80},
+        {kEIP4844RawTx, 232, 0x01},
+    };
+    for (const auto& sample : samples)
+    {
+        // Guard: fail loudly if a wire offset is stale — never silently test the wrong byte.
+        BOOST_CHECK_MESSAGE(byteAt(sample.rawTx, sample.yParityOffset) == sample.expectedYParityByte,
+            "yParity wire byte mismatch at offset " << sample.yParityOffset);
+
+        auto bytes = fromHexWithPrefix(flipByteToTwo(sample.rawTx, sample.yParityOffset));
+        auto bRef = bcos::ref(bytes);
+        Web3Transaction tx{};
+        auto e = codec::rlp::decode(bRef, tx);
+        BOOST_REQUIRE_MESSAGE(e != nullptr, "yParity=2 must be rejected (offset "
+                                                << sample.yParityOffset << ')');
+        if (e != nullptr)
+        {
+            BOOST_CHECK_EQUAL(e->errorCode(),
+                static_cast<int64_t>(codec::rlp::DecodingError::InvalidVInSignature));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(recoverAddress)

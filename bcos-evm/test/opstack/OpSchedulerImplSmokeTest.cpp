@@ -161,4 +161,42 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejected)
         bcos::task::syncWait(scheduler.executeOpBlock(view, *header, emptyTxs)), std::runtime_error);
 }
 
+// C2 (W8 review): EIP-7702 authorization yParity is a uint8 in op-geth
+// (core/types/tx_setcode.go:76). A wider RLP scalar — e.g. 0x82 0x01 0x00 (256) — overflows that
+// uint8 and must be rejected at decode time by readCanonicalScalar(in, 1, "authorization
+// yParity"). Without this width check the value-range guard (OpTransition.cpp:67, auth.v > 1)
+// would merely *skip* the authorization and leave the block VALID where op-geth rejects the whole
+// transaction — a consensus split. The value-RANGE case (yParity in [2,255]) is deliberately NOT
+// rejected here (EIP-7702 says skip, not fatal); only the >1-byte encoding is a decode-time error.
+BOOST_AUTO_TEST_CASE(OverWideAuthYParityIsConsensusError)
+{
+    namespace engine = bcos::evm::engine;
+
+    // 0x82 0x01 0x00 = RLP string with payloadLength 2, value 256 → wider than uint8. The
+    // "too wide" message proves the throw comes from the width guard
+    // (readCanonicalScalar: payloadLength > maxBytes), not from the leading-zero or list checks.
+    bcos::bytes wide{0x82, 0x01, 0x00};
+    auto inWide = bcos::ref(wide);
+    BOOST_CHECK_EXCEPTION(engine::detail::decodeAuthYParityScalar(inWide),
+        engine::OpConsensusError, [](const engine::OpConsensusError& e) {
+            return std::string(e.what()).find("too wide") != std::string::npos;
+        });
+
+    // Boundary: the canonical single-byte encodings still decode (yParity 0 and 1).
+    bcos::bytes zero{0x80};  // empty string → 0
+    auto inZero = bcos::ref(zero);
+    BOOST_CHECK(engine::detail::decodeAuthYParityScalar(inZero) == intx::uint256(0));
+
+    bcos::bytes one{0x01};  // 0x01 → 1
+    auto inOne = bcos::ref(one);
+    BOOST_CHECK(engine::detail::decodeAuthYParityScalar(inOne) == intx::uint256(1));
+
+    // Value-RANGE case: a single-byte 0x02 (yParity=2) is NOT rejected at decode — EIP-7702
+    // requires it to be *skipped* at execution (OpTransition.cpp:67), not fatal. Only the
+    // >1-byte encoding is a decode-time error. This pins the width-vs-range boundary.
+    bcos::bytes two{0x02};  // 0x02 → 2
+    auto inTwo = bcos::ref(two);
+    BOOST_CHECK(engine::detail::decodeAuthYParityScalar(inTwo) == intx::uint256(2));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
