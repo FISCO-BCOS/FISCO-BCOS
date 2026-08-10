@@ -77,6 +77,7 @@ if(TARGET bcos-framework)
     target_sources(bcos-evm-opstack-tests PRIVATE
         opstack/OpNewPayloadRpcE2eTest.cpp
         opstack/OpL1EdgeGateTest.cpp
+        opstack/OpEnvelopeToTarsTest.cpp
     )
     target_link_libraries(bcos-evm-opstack-tests PRIVATE
         codec protocol-tars ledger engine bcos-utilities jsoncpp_static rpc)

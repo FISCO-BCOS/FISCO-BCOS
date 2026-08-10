@@ -45,8 +45,8 @@ public:
     }
 
     void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool,
-        std::function<void(Error::Ptr, TransactionsPtr,
-            std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
+        std::function<void(
+            Error::Ptr, TransactionsPtr, std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
             _onGetTx) override
     {
         auto txs = std::make_shared<Transactions>();
@@ -93,7 +93,9 @@ public:
     {
         std::promise<bcos::bytes> promise;
         web3JsonRpc->onRPCRequest(
-            request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+            request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -279,7 +281,9 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptHappyPath)
         groupId, 0);
     BOOST_REQUIRE(tx);
     // D8 (review ①): install a raw 20-byte sender so the read side must checksum the raw bytes.
-    tx->forceSender(bcos::fromHex("1234567890123456789012345678901234567890"));
+    // Mixed-case hex letters (0x5aAe...BeAed) make EIP-55 checksum casing observable (an
+    // all-digit address would make toChecksumAddress a no-op).
+    tx->forceSender(bcos::fromHex("5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"));
     seedLedger->seedTx(tx);
 
     auto receipt = m_blockFactory->receiptFactory()->createReceipt(bcos::u256(21000),
@@ -299,10 +303,9 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptHappyPath)
     auto const txHashHex = tx->hash().hexPrefixed();
     auto callSeeded = [&](std::string_view request) {
         std::promise<bcos::bytes> promise;
-        seededWeb3->onRPCRequest(request,
-            [&promise](bcos::bytes resp, boost::beast::http::status) {
-                promise.set_value(std::move(resp));
-            });
+        seededWeb3->onRPCRequest(request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -320,10 +323,10 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptHappyPath)
         BOOST_CHECK_EQUAL(resp["result"]["transactionHash"].asString(), txHashHex);
         BOOST_CHECK(resp["result"].isMember("logs"));
         BOOST_CHECK(resp["result"].isMember("blockNumber"));
-        auto expectedFrom = std::string("1234567890123456789012345678901234567890");
-        toChecksumAddress(expectedFrom,
-            bcos::crypto::keccak256Hash(bcos::bytesConstRef(expectedFrom)).hex());
-        BOOST_CHECK_EQUAL(resp["result"]["from"].asString(), "0x" + expectedFrom);
+        // Pinned against the independently-known EIP-55 vector (NOT derived via the same
+        // toChecksumAddress under test, so a checksum-casing regression is actually caught).
+        BOOST_CHECK_EQUAL(
+            resp["result"]["from"].asString(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
     }
 
     // eth_getTransactionByHash resolves the same tx.

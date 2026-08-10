@@ -1233,19 +1233,22 @@ private:
         // `prewriteBlockToBuffer`.
         //
         // The transaction body IS stored (方案 B, spec §6.4): each raw EIP-2718 envelope is mapped
-        // by `detail::opEnvelopeToTars` (task-1 helper) into a tars `bcostars::protocol::Transaction`
+        // by `detail::opEnvelopeToTars` (task-1 helper) into a tars
+        // `bcostars::protocol::Transaction`
         // (`extraTransactionHash` = txHash per D4, `sender` filled per D8) and written to the
-        // generic `SYS_HASH_2_TX` as its `TransactionImpl::encode` bytes -- the same table/key/value
-        // shape `LedgerMethods.h:121-155`'s `prewriteBlockToBuffer` uses for normal blocks. Storing
-        // a converted transaction rather than the raw envelope is load-bearing: `SYS_HASH_2_TX`
-        // readers (`Ledger.cpp:1440-1443`, `LedgerMethods.h:235-239`, lightnode, storage-tool) pass
-        // the bytes straight to `createTransaction(..., checkSig=false, checkHash=false)`, and an
-        // Ethereum envelope there does NOT fail loudly -- every `bcostars::Transaction` field is
-        // `optional` and tars' tag scanner swallows decode errors, yielding an all-default object
-        // whose hash does not equal the key it was stored under, which nobody checks.
+        // generic `SYS_HASH_2_TX` as its `TransactionImpl::encode` bytes -- the same
+        // table/key/value shape `LedgerMethods.h:121-155`'s `prewriteBlockToBuffer` uses for normal
+        // blocks. Storing a converted transaction rather than the raw envelope is load-bearing:
+        // `SYS_HASH_2_TX` readers (`Ledger.cpp:1440-1443`, `LedgerMethods.h:235-239`, lightnode,
+        // storage-tool) pass the bytes straight to `createTransaction(..., checkSig=false,
+        // checkHash=false)`, and an Ethereum envelope there does NOT fail loudly -- every
+        // `bcostars::Transaction` field is `optional` and tars' tag scanner swallows decode errors,
+        // yielding an all-default object whose hash does not equal the key it was stored under,
+        // which nobody checks.
         //
-        // When `opEnvelopeToTars` returns nullopt (0x04/0x7E unknown type, or a malformed envelope --
-        // D7), the row is skipped: the block stays VALID and the tx is simply not queryable by hash.
+        // When `opEnvelopeToTars` returns nullopt (0x04 or any un-enumerated type byte, or a
+        // malformed envelope -- D7; 0x7E deposit is NOT unknown, it decodes via DepositTxHandler),
+        // the row is skipped: the block stays VALID and the tx is simply not queryable by hash.
         // Known boundary, stated rather than hidden: `LedgerMethods.h:233-235` dereferences the
         // entry WITHOUT checking `has_value()`, so a missing row is UB on that path. That is a
         // pre-existing defect unrelated to OP (any block whose tx metadata outruns `SYS_HASH_2_TX`
@@ -1301,8 +1304,8 @@ private:
                 storage::Entry txEntry;
                 txEntry.set(std::move(encodedTx));
                 co_await storage2::writeOne(view,
-                    executor_v1::StateKey{ledger::SYS_HASH_2_TX,
-                        bcos::concepts::bytebuffer::toView(txHash)},
+                    executor_v1::StateKey{
+                        ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)},
                     std::move(txEntry));
             }
         }

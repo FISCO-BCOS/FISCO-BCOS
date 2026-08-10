@@ -179,8 +179,11 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
     BOOST_REQUIRE(tx);
     // D8 (review ①): non-deposit from must be the checksum of the RAW sender bytes. Install a raw
     // 20-byte sender; if the read side re-encoded a hex-string (double-encoded) sender this
-    // assertion would fail — that is exactly the bug review ① caught on the write side.
-    tx->forceSender(bcos::fromHex("1234567890123456789012345678901234567890"));
+    // assertion would fail — that is exactly the bug review ① caught on the write side. The
+    // address carries mixed-case hex letters (0x5aAe...BeAed) so EIP-55 checksum casing is
+    // actually observable — an all-digit address makes toChecksumAddress a no-op and could never
+    // regress-catch.
+    tx->forceSender(bcos::fromHex("5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"));
 
     auto receipt = makeReceipt(m_blockFactory);
     BOOST_REQUIRE(receipt);
@@ -199,11 +202,74 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
     BOOST_CHECK_EQUAL(result["l1GasPrice"].asString(), "0x5");
     BOOST_CHECK_EQUAL(result["l1Fee"].asString(), "0xa");
     BOOST_CHECK_EQUAL(result["operatorFeeScalar"].asString(), "0x2");
-    // from = checksum of the raw sender bytes (review ①). Must match exactly.
-    auto expectedFrom = std::string("1234567890123456789012345678901234567890");
-    toChecksumAddress(expectedFrom,
-        bcos::crypto::keccak256Hash(bcos::bytesConstRef(expectedFrom)).hex());
-    BOOST_CHECK_EQUAL(result["from"].asString(), "0x" + expectedFrom);
+    // from = checksum of the raw sender bytes (review ①). Pinned against the independently-known
+    // EIP-55 vector 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed (deliberately NOT derived via the
+    // same toChecksumAddress under test, so a checksum-casing regression is actually caught).
+    BOOST_CHECK_EQUAL(result["from"].asString(), "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+}
+
+// Important #1 (whole-branch review): receipt `type` for a Web3 tx must equal the EIP-2718 kind
+// byte. The write side stores encodeForSign() (RLP WITHOUT the type byte) in extraTransactionBytes
+// for typed non-deposit txs, so byte-sniffing extraTransactionBytes collapsed EIP-2930/1559/4844
+// receipts into Legacy 0x0 while eth_getTransactionByHash reported the correct kind.
+// combineReceiptResponse now reads the `web3TypedTxKind` tars slot (populated by
+// takeToTarsTransaction for every Web3 kind).
+BOOST_AUTO_TEST_CASE(combineReceiptResponseTypedTxKindType)
+{
+    auto makeWeb3TarsTx = [&](bcos::rpc::Web3Transaction web3Tx) {
+        auto tarsTx = web3Tx.takeToTarsTransaction();
+        // D4: manual extraTransactionHash so combineReceiptResponse:19 tx.hash() does not throw.
+        bcos::h256 arbitraryHash(
+            "0303030303030303030303030303030303030303030303030303030303030303");
+        tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+        return std::make_shared<bcostars::protocol::TransactionImpl>(
+            [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+    };
+
+    // EIP-1559 (0x02): previously misreported as 0x0 Legacy by the byte-sniff.
+    {
+        bcos::rpc::Web3Transaction web3Tx;
+        web3Tx.type = bcos::rpc::TransactionType::EIP1559;
+        web3Tx.chainId = 1;
+        web3Tx.nonce = 0;
+        web3Tx.maxPriorityFeePerGas = bcos::u256(1);
+        web3Tx.maxFeePerGas = bcos::u256(2);
+        web3Tx.gasLimit = 21000;
+        web3Tx.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+        web3Tx.value = bcos::u256(0);
+        web3Tx.signatureR = bcos::bytes(32, 0x11);
+        web3Tx.signatureS = bcos::bytes(32, 0x22);
+        web3Tx.signatureV = 0;
+        auto tx = makeWeb3TarsTx(std::move(web3Tx));
+        auto receipt = makeReceipt(m_blockFactory);
+        Json::Value result = Json::objectValue;
+        combineReceiptResponse(result, *receipt, *tx, bcos::crypto::HashType{});
+        BOOST_CHECK_EQUAL(result["type"].asString(), "0x2");
+    }
+    // Deposit (0x7e): full envelope stored, kind slot set to Deposit.
+    {
+        bcos::rpc::Web3Transaction web3Deposit;
+        web3Deposit.type = bcos::rpc::TransactionType::Deposit;
+        web3Deposit.from = bcos::Address("0xdead000000000000000000000000000000000011");
+        web3Deposit.sourceHash =
+            bcos::h256("6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+        web3Deposit.mint = bcos::u256("0x16345785d8a0000");
+        web3Deposit.nonce = 0;
+        web3Deposit.isSystemTx = true;
+        auto tx = makeWeb3TarsTx(std::move(web3Deposit));
+        auto receipt = makeReceipt(m_blockFactory);
+        Json::Value result = Json::objectValue;
+        combineReceiptResponse(result, *receipt, *tx, bcos::crypto::HashType{});
+        BOOST_CHECK_EQUAL(result["type"].asString(), "0x7e");
+    }
+    // Legacy BCOSTransaction: web3TypedTxKind() is 0 == Legacy → 0x0.
+    {
+        auto tx = makeWeb3Tx(m_blockFactory, chainId, groupId);
+        auto receipt = makeReceipt(m_blockFactory);
+        Json::Value result = Json::objectValue;
+        combineReceiptResponse(result, *receipt, *tx, bcos::crypto::HashType{});
+        BOOST_CHECK_EQUAL(result["type"].asString(), "0x0");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(combineReceiptResponseOmitsOpFieldsWhenMetaEmpty)
@@ -255,8 +321,8 @@ BOOST_AUTO_TEST_CASE(combineTxResponseDepositMinimalFields)
         [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
 
     Json::Value result = Json::objectValue;
-    combineTxResponse(result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12,
-        bcos::crypto::HashType{});
+    combineTxResponse(
+        result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12, bcos::crypto::HashType{});
 
     BOOST_CHECK(result.isMember("nonce"));  // deposit nonce=0
     BOOST_CHECK_EQUAL(result["type"].asString(), "0x7e");
@@ -279,8 +345,8 @@ BOOST_AUTO_TEST_CASE(combineTxResponseBlob4844)
     web3Tx.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
     web3Tx.value = bcos::u256(0);
     web3Tx.maxFeePerBlobGas = bcos::u256(3);
-    web3Tx.blobVersionedHashes = {bcos::h256(
-        "c6bdd1de713471bd6cfa62dd8b5a5b42969ed09e26212d3377f3f8426d8ec210")};
+    web3Tx.blobVersionedHashes = {
+        bcos::h256("c6bdd1de713471bd6cfa62dd8b5a5b42969ed09e26212d3377f3f8426d8ec210")};
     web3Tx.signatureR = bcos::bytes(32, 0x11);
     web3Tx.signatureS = bcos::bytes(32, 0x22);
     web3Tx.signatureV = 0;
@@ -293,8 +359,8 @@ BOOST_AUTO_TEST_CASE(combineTxResponseBlob4844)
         [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
 
     Json::Value result = Json::objectValue;
-    combineTxResponse(result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12,
-        bcos::crypto::HashType{});
+    combineTxResponse(
+        result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12, bcos::crypto::HashType{});
 
     BOOST_CHECK(result.isMember("blobVersionedHashes"));
     BOOST_CHECK(result.isMember("maxFeePerBlobGas"));

@@ -2,9 +2,9 @@
 #include "Log.h"
 #include "Web3Transaction.h"
 #include "bcos-crypto/ChecksumAddress.h"
-#include <bcos-crypto/hash/Keccak256.h>
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-crypto/hash/Keccak256.h>
 #include <cstdint>
 
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
@@ -85,18 +85,22 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         logs.push_back(std::move(logObj));
     }
     result["logsBloom"] = toHexStringWithPrefix(receipt.logsBloom());
+    // EIP-2718 tx type: for a Web3 tx the authoritative kind is the `web3TypedTxKind` tars slot,
+    // populated by Web3Transaction::takeToTarsTransaction for EVERY Web3 kind (Legacy=0,
+    // EIP-2930=1, EIP-1559=2, EIP-4844=3, Deposit=0x7e). Byte-sniffing extraTransactionBytes was
+    // wrong for typed non-deposit txs: the write side stores encodeForSign() there (RLP WITHOUT
+    // the type byte, first byte is a 0xC0+ list header), so the old `< BYTES_HEAD_BASE` sniff
+    // collapsed EIP-2930/1559/4844 receipts into Legacy 0x0 — while eth_getTransactionByHash
+    // correctly reported 0x01/0x02/0x03. For non-Web3 (BCOS) txs web3TypedTxKind() is 0 == Legacy,
+    // matching the old empty-extraTransactionBytes path.
     auto type = TransactionType::Legacy;
-    if (!tx.extraTransactionBytes().empty())
+    if (tx.type() == bcos::protocol::TransactionType::Web3Transaction)
     {
-        if (auto firstByte = tx.extraTransactionBytes()[0];
-            firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
-        {
-            type = static_cast<TransactionType>(firstByte);
-        }
+        type = static_cast<TransactionType>(tx.web3TypedTxKind());
     }
     result["type"] = toQuantity(static_cast<uint64_t>(type));
-    // OP 扩展字段（对照 op-geth MarshalReceipt api.go:1779-1814）。空 opStackMeta → 无输出（不能输出
-    // 全零/默认值）；每个字段独立判空，写链不 throw（D7）。
+    // OP 扩展字段（对照 op-geth MarshalReceipt api.go:1779-1814）。空 opStackMeta →
+    // 无输出（不能输出 全零/默认值）；每个字段独立判空，写链不 throw（D7）。
     if (auto meta = receipt.opStackMeta())
     {
         if (meta->l1_gas_price)
