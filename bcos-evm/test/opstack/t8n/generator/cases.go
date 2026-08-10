@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ---------------------------------------------------------------------
@@ -52,6 +53,10 @@ var (
 	// access_list case: SLOAD target + a listed-but-never-called address.
 	aclAddr       = common.HexToAddress("0xc0de000000000000000000000000000000000005")
 	aclListedOnly = common.HexToAddress("0xdddddddddddddddddddddddddddddddddddddddd")
+	// system_call_order_observable (B-7): user reader contract that CALLs the
+	// EIP-4788 GET path (the BeaconRootsAddress predeploy) and SSTOREs the
+	// returned root.
+	readerAddr = common.HexToAddress("0xc0de000000000000000000000000000000000006")
 	// empty_account_cleanup case: pre-seeded exists-but-empty account
 	// (balance 0, nonce 0, no code, no storage). NOT a precompile on either
 	// side (exact-set membership; op-stack P256VERIFY sits at 0x…0100).
@@ -91,6 +96,29 @@ var (
 	// packages/testing/src/execution_testing/forks/forks/eips/prague/contracts/history_contract.bin
 	// (xxd dump; NOT hand-typed).
 	historyStorageCode = hexutil.MustDecode("0x3373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500")
+
+	// EIP-4788 order-observable reader (B-7), hand-assembled; disassembly in
+	// Task 1 report. BUILT from params.BeaconRootsAddress so the CALL target
+	// can never drift from the real EIP-4788 predeploy (0xfff...ffe is the
+	// SystemAddress, which carries no code). Flow:
+	//   TIMESTAMP; PUSH0; MSTORE             mem[0:32] = block.timestamp
+	//   PUSH2 0x1fff; TIMESTAMP; MOD          idx = t % 8191 (own storage slot)
+	//   PUSH1 32; PUSH0; PUSH1 32; PUSH0; PUSH0
+	//   PUSH20 <BeaconRootsAddress>; GAS; CALL   GET (calldata = timestamp)
+	//   POP; PUSH1 32; PUSH0; PUSH0; RETURNDATACOPY  mem[0:32] = returndata
+	//   PUSH0; MLOAD; SWAP1; SSTORE; STOP     storage[idx] = returned root
+	// The 4788 GET path (beaconRootsCode) only returns a value once its
+	// ts==sload(ts) ring check passes, which happens ONLY AFTER the block's
+	// 4788 system call overwrote the stale pre-seeded ring slot -- so a
+	// replayer that runs user txs before the system call makes the reader's
+	// CALL revert (empty returndata -> RETURNDATACOPY halts) and the reader tx
+	// diverges (status 0, no storage write).
+	beaconReaderCode = func() []byte {
+		head := hexutil.MustDecode("0x425f52611fff420660205f60205f5f73") // up to the PUSH20
+		tail := hexutil.MustDecode("0x5af15060205f5f3e5f51905500")        // GAS CALL POP RDC PUSH0 MLOAD SWAP1 SSTORE STOP
+		out := append(head, params.BeaconRootsAddress.Bytes()...)
+		return append(out, tail...)
+	}()
 )
 
 func logsCode() []byte {
@@ -504,6 +532,49 @@ var caseSpecs = []caseSpec{
 		}
 		fund(&c, 1, eth(100))
 		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 21_000, nil))
+		return c
+	}},
+
+	{"system_call_order_observable", []string{"isthmus"}, func(fork string) inputCase {
+		// B-7 (single fork isthmus, order-observable). Same real EIP-4788/2935
+		// pre-deployment as system_contracts_real (stale ring slots), PLUS a
+		// user reader contract that CALLs the 4788 GET path with the block
+		// timestamp and SSTOREs the returned beacon root into its own slot
+		// t%8191. The 4788 GET path's ts==sload(ts) check passes only after the
+		// block's system call overwrote the stale pre-seeded slot -- so the
+		// stored root (and the reader tx status) is a direct probe of whether
+		// the system call precedes the user tx.
+		c := caseFrame(fork, "system_call_order_observable",
+			"real EIP-4788/2935 bytecode + user reader that CALLs the 4788 GET path and SSTOREs the returned root (order-observable: system call must precede user txs)",
+			defaultFeeParams(), 10_000_000)
+		blockTime := uint64(c.Genesis.Timestamp) + 10
+		blockNumber := uint64(1)
+		slot4788a := common.BigToHash(new(big.Int).SetUint64(blockTime % ringSize))
+		slot4788b := common.BigToHash(new(big.Int).SetUint64(blockTime%ringSize + ringSize))
+		slot2935 := common.BigToHash(new(big.Int).SetUint64((blockNumber - 1) % ringSize))
+		c.Pre[beaconRootsAddr] = types.Account{
+			Balance: big.NewInt(0),
+			Nonce:   1,
+			Code:    beaconRootsCode,
+			Storage: map[common.Hash]common.Hash{
+				slot4788a: common.HexToHash("0xdead000000000000000000000000000000000000000000000000000000000001"),
+				slot4788b: common.HexToHash("0xdead000000000000000000000000000000000000000000000000000000000002"),
+			},
+		}
+		c.Pre[historyStorage] = types.Account{
+			Balance: big.NewInt(0),
+			Nonce:   1,
+			Code:    historyStorageCode,
+			Storage: map[common.Hash]common.Hash{
+				slot2935: common.HexToHash("0xdead000000000000000000000000000000000000000000000000000000000003"),
+			},
+		}
+		c.Pre[readerAddr] = types.Account{Balance: big.NewInt(0), Code: beaconReaderCode}
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, readerAddr, big.NewInt(0), 100_000, nil))
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			readerAddr: {common.BigToHash(new(big.Int).SetUint64(blockTime % ringSize))},
+		}
 		return c
 	}},
 

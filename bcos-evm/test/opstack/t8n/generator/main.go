@@ -738,12 +738,16 @@ func writeJSON(path string, v any) error {
 // would be wrong, and state/number would disagree with a real chain).
 // ---------------------------------------------------------------------
 
-func processChainPair() (outputVector, outputVector, *goldenRecord, *goldenRecord, error) {
-	cfg, err := buildChainConfig("isthmus")
+func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *goldenRecord, error) {
+	cfg, err := buildChainConfig(fork)
 	if err != nil {
 		return outputVector{}, outputVector{}, nil, nil, err
 	}
+	jovianCfg := fork == "jovian"
 	fp := defaultFeeParams()
+	if jovianCfg {
+		fp.daScalar = 400 // non-zero DA scalar: block1 DA footprint (header.BlobGasUsed) > gasUsed, max branch observable
+	}
 	const (
 		genesisTime = uint64(1000)
 		denom       = uint64(50)
@@ -753,9 +757,28 @@ func processChainPair() (outputVector, outputVector, *goldenRecord, *goldenRecor
 	beaconRoot := common.HexToHash("0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c")
 	senderAddr := addrOfKey(1)
 	genesisPre := types.GenesisAlloc{
-		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(false)},
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(jovianCfg)},
 		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
 		senderAddr:        {Balance: eth(100)},
+	}
+	if jovianCfg {
+		genesisPre[addrOfKey(2)] = types.Account{Balance: eth(100)} // block1 junk-calldata tx sender
+	}
+	// Jovian requires a non-nil minBaseFee in EncodeOptimismExtraData
+	// (eip1559_optimism.go:51-53 panics otherwise) -- mandatory for the three
+	// extraData encodings below (genesis + both blocks).
+	var minBaseFee *uint64
+	knobs := genesisKnobs{
+		Timestamp:          math.HexOrDecimal64(genesisTime),
+		GasLimit:           math.HexOrDecimal64(gasLimit),
+		BaseFee:            hdu(1_000_000_000),
+		EIP1559Denominator: math.HexOrDecimal64(denom),
+		EIP1559Elasticity:  math.HexOrDecimal64(elasticity),
+	}
+	if jovianCfg {
+		v := uint64(0)
+		minBaseFee = &v
+		knobs.MinBaseFee = hd64(0)
 	}
 	genesis := &core.Genesis{
 		Config:     cfg,
@@ -763,15 +786,8 @@ func processChainPair() (outputVector, outputVector, *goldenRecord, *goldenRecor
 		GasLimit:   gasLimit,
 		BaseFee:    big.NewInt(1_000_000_000),
 		Difficulty: big.NewInt(0),
-		ExtraData:  eip1559.EncodeOptimismExtraData(cfg, genesisTime, denom, elasticity, nil),
+		ExtraData:  eip1559.EncodeOptimismExtraData(cfg, genesisTime, denom, elasticity, minBaseFee),
 		Alloc:      genesisPre,
-	}
-	knobs := genesisKnobs{
-		Timestamp:          math.HexOrDecimal64(genesisTime),
-		GasLimit:           math.HexOrDecimal64(gasLimit),
-		BaseFee:            hdu(1_000_000_000),
-		EIP1559Denominator: math.HexOrDecimal64(denom),
-		EIP1559Elasticity:  math.HexOrDecimal64(elasticity),
 	}
 
 	var (
@@ -793,13 +809,13 @@ func processChainPair() (outputVector, outputVector, *goldenRecord, *goldenRecor
 		}()
 		db, blocks, receiptsAll = core.GenerateChainWithGenesis(genesis, engine, 2, func(i int, bg *core.BlockGen) {
 			blockTime := bg.Timestamp() // chain_makers: parent.Time()+10, real per-block advance
-			blockExtra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, nil)
+			blockExtra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, minBaseFee)
 			bg.SetCoinbase(sequencerVault)
 			bg.SetExtra(blockExtra)
 			bg.SetParentBeaconRoot(beaconRoot)
 			signer := bg.Signer() // == MakeSigner(cfg, bg.Number(), bg.Timestamp())
 
-			attr := fp.attributesTx(fmt.Sprintf("chain_%d", i), false)
+			attr := fp.attributesTx(fmt.Sprintf("chain_%d", i), jovianCfg)
 			tx0, outTx0, terr := buildTx(&attr, signer, cfg)
 			if terr != nil {
 				panic(fmt.Errorf("block %d attributes tx: %w", i, terr))
@@ -814,19 +830,39 @@ func processChainPair() (outputVector, outputVector, *goldenRecord, *goldenRecor
 			}
 			bg.AddTx(tx1)
 
+			txs := []*types.Transaction{tx0, tx1}
+			outTxs := []json.RawMessage{outTx0, outTx1}
+			transactions := []inputTx{attr, transfer}
+			// Jovian block1 carries a large-calldata tx so its DA footprint
+			// (header.BlobGasUsed, daScalar=400) exceeds gasUsed -- the max
+			// branch of the DA-footprint model is observable (and stays well
+			// below gasLimit). Isthmus has no DA footprint; its chainA/B stay
+			// byte-identical to the pre-W5 output.
+			if jovianCfg && i == 0 {
+				junk := transferTx(2, bg.TxNonce(addrOfKey(2)), recB, big.NewInt(0), 400_000, junkData("chain jovian block1", 5000))
+				txJ, outTxJ, jerr := buildTx(&junk, signer, cfg)
+				if jerr != nil {
+					panic(fmt.Errorf("block %d junk calldata tx: %w", i, jerr))
+				}
+				bg.AddTx(txJ)
+				txs = append(txs, txJ)
+				outTxs = append(outTxs, outTxJ)
+				transactions = append(transactions, junk)
+			}
+
 			in := &inputCase{
-				Info:                  caseInfo{Hardfork: "isthmus", Description: fmt.Sprintf("off-line chained pair (spec §7.1 Step 2, decision A2), block %d/2", i+1)},
+				Info:                  caseInfo{Hardfork: fork, Description: fmt.Sprintf("off-line chained pair (spec §7.1 Step 2, decision A2), block %d/2", i+1)},
 				Genesis:               knobs,
 				Coinbase:              sequencerVault,
 				ParentBeaconBlockRoot: beaconRoot,
-				Transactions:          []inputTx{attr, transfer},
+				Transactions:          transactions,
 			}
 			if i == 0 {
 				in.Pre = genesisPre // block B's Pre is filled in AFTER generation, from A's postState
 			}
 			ins[i] = in
-			txSets[i] = []*types.Transaction{tx0, tx1}
-			outSets[i] = []json.RawMessage{outTx0, outTx1}
+			txSets[i] = txs
+			outSets[i] = outTxs
 		})
 		return nil
 	}(); err != nil {
@@ -898,10 +934,6 @@ type chainedBlockOutput struct {
 
 func runChainPair(outputDir, opGethCommit string) error {
 	_ = opGethCommit // recorded in golden/engine/README.md's generation record, not per-file (chained pair has no vectors/ counterpart to key off)
-	outA, outB, goldenA, goldenB, err := processChainPair()
-	if err != nil {
-		return err
-	}
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return err
 	}
@@ -924,11 +956,23 @@ func runChainPair(outputDir, opGethCommit string) error {
 		}
 		return nil
 	}
-	if err := write("chainA", outA, goldenA); err != nil {
-		return fmt.Errorf("chainA: %w", err)
-	}
-	if err := write("chainB", outB, goldenB); err != nil {
-		return fmt.Errorf("chainB: %w", err)
+	// Parameterized by fork (W5 review A#4/B#2): each fork produces its own
+	// pair prefix so the jovian pair (jovianChainA/B) does not clobber the
+	// existing isthmus chainA/B files.
+	for _, p := range []struct{ fork, prefix string }{
+		{"isthmus", "chain"},
+		{"jovian", "jovianChain"},
+	} {
+		outA, outB, goldenA, goldenB, err := processChainPair(p.fork)
+		if err != nil {
+			return fmt.Errorf("%s chain pair: %w", p.fork, err)
+		}
+		if err := write(p.prefix+"A", outA, goldenA); err != nil {
+			return fmt.Errorf("%sA: %w", p.prefix, err)
+		}
+		if err := write(p.prefix+"B", outB, goldenB); err != nil {
+			return fmt.Errorf("%sB: %w", p.prefix, err)
+		}
 	}
 	return nil
 }
