@@ -392,22 +392,22 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 
 | gap | 影响 | 工作量 | 阻塞性 |
 |---|---|---|---|
-| D-2 Karst 适配 | 高——FISCO 无 karstTime 激活通道（configAt/OpForkTimestamps/NodeConfig/Initializer 全缺）+ karstConfig 调度路径死代码 + 前向兼容风险；op-geth v1.101702.2 的 Karst 是纯 config fork（IsKarst 零行为调用点） | 中高 | 🔴 阻塞 |
+| D-2 Karst 适配 | ~~高——FISCO 无 karstTime 激活通道…~~ **用户裁定 2026-08-10：不处理**（op-geth 侧 Karst 纯 config 骨架、真实内容在 op-reth 且生态已要求迁移，无对拍对象） | 中高 | ~~🔴 阻塞~~ → **已关闭** |
 | OP 块回执不可查 | 高——SYS_HASH_2_TX 刻意不写 → eth_getTransactionReceipt 恒 null；写侧已有（OpStackReceiptMeta 编码 + rawtx 落表），**RPC 读侧 fix（rawtx 回退）在 val-loop 未合并** | 中 | 🔴 生产阻塞 |
 | PBFT 共识层未决 | 中——自持共识上线阻塞；纯 EL 视角可降级互通项 | 中 | 视上线形态 |
 | B-2/B-4 正式迁移 | 低（W7 内完成） | 低 | 否 |
 | B-3 注记收紧 | 低（W7 内完成） | 低 | 否 |
 | deferred minors（cases/ gitignore、golden manifest 校验、首投 B 软断言） | 低 | 低 | 否 |
 
-2. **修复排期**：
+2. **修复排期**（⛔ 用户裁定 2026-08-10 移除 Karst 专项）：
 ```
-Karst 适配（专项）→ 重跑 W5 gate（回归）→ 重新对拍（Karst 专项金标准）→ 可上线评估
+（Karst 适配已裁定不处理）→ OP 块回执可查修复（剩余 🔴 项）→ 可上线评估
 ```
-3. **Go/No-Go**：**当前 No-Go**——FISCO 无法激活/表征 Karst（无 karstTime 通道）+ OP 块回执不可查。附条件：① Karst 适配完成（引入 karst_time 激活通道 + 按 op-geth 真实 diff）② W5 gate 回归通过 ③ 重新对拍（仿 B-5c 的 Karst 链式对 + Karst 金标准 golden + op-geth 版本 pin）通过 ④ OP 块回执可查 → 重新评估可上线。
+3. **Go/No-Go**：~~**当前 No-Go**——FISCO 无法激活/表征 Karst…~~ **更新（用户裁定 2026-08-10）：Karst 阻塞已关闭**（不处理）。剩余阻塞 = **OP 块回执不可查**（🔴 生产阻塞，RPC 读侧 fix 在 val-loop 未合并）。重新评估可上线的条件收敛为：① OP 块回执可查修复完成（rawtx 回退 + opReceiptMeta 从 val-loop 移植）② W5 gate 回归通过 ③ 按需重新对拍（不含 Karst）。
 
 ### 待办移交（W7 之后）
 
-- **Karst 适配专项任务**（引入 karst_time 激活通道，按 op-geth 真实 diff）
+- ~~**Karst 适配专项任务**~~（**用户裁定 2026-08-10：不处理**——op-geth 侧 Karst 是纯 config 骨架（`IsKarst` 零行为调用点，registry commit cc07e96d9 无任何链配 karst_time），真实 Karst 内容（Fusaka 7 EIP / BN256 上限 / L2CM）在 op-reth 侧且 OP 生态已要求 Karst 后迁移 op-reth；FISCO 对拍基线停在 Jovian/Isthmus，Karst 无对拍对象）
 - **OP 块回执可查修复**（rawtx 回退 + opReceiptMeta，从 val-loop 移植）
 - **PBFT 共识层决策**（是否整体禁用 + retry loop 抑制）
 - deferred minors 清理（cases/ gitignore、golden manifest 校验、首投 B 软断言）
