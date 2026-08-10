@@ -76,6 +76,7 @@ if(TARGET bcos-framework)
     target_sources(bcos-evm-opstack-tests PRIVATE
         opstack/OpNewPayloadRpcE2eTest.cpp
         ${CMAKE_SOURCE_DIR}/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp
+        opstack/OpL1EdgeGateTest.cpp
     )
     # EngineHelper.h 的 parseNewPayloadRequest 声明引用 bcos::protocol::TransactionFactory&，
     # 但 EngineHelper.h 不自声明（生产靠 bcos-rpc unity-build 的 include 顺序）。单 TU 直编时
