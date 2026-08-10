@@ -240,8 +240,8 @@ void runChainedPair(std::string const& aId, std::string const& bId)
 {
     auto sampleA = w6test::loadChainedSample(aId);
     auto sampleB = w6test::loadChainedSample(bId);
-    BOOST_REQUIRE(!sampleA.jovian && !sampleB.jovian);  // 链式双块同为 isthmus
-    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(/*jovian=*/false));
+    BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // 链式双块 fork 一致（isthmus 或 jovian）
+    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sampleA.jovian));
 
     // 只播 A 的 pre（B 的 pre 即 A 的 postState，绝不重播）
     w6test::seedPreState(fixture->multiLayerStorage, sampleA.vector["pre"]);
@@ -304,6 +304,13 @@ BOOST_AUTO_TEST_CASE(IsthmusTxReverted) { runGoldenVector("isthmus_tx_reverted")
 
 BOOST_AUTO_TEST_CASE(IsthmusBigBlock130tx) { runGoldenVector("isthmus_big_block_130tx"); }
 
+// B-7：单 fork isthmus 的 system-call 顺序可观测向量（W5 审查 A#1 定 id）。顺序错 →
+// L1 读者 REVERT → stateRoot 失配 → VALID 断言+七项断言变红。
+BOOST_AUTO_TEST_CASE(SystemCallOrderObservable)
+{
+    runGoldenVector("isthmus_system_call_order_observable");
+}
+
 // ── 全部 33 向量（16 isthmus + 17 jovian），每个一行 ──
 BOOST_AUTO_TEST_CASE(IsthmusAccessList) { runGoldenVector("isthmus_access_list"); }
 BOOST_AUTO_TEST_CASE(IsthmusContractCreate) { runGoldenVector("isthmus_contract_create"); }
@@ -347,6 +354,11 @@ BOOST_AUTO_TEST_CASE(JovianTxReverted) { runGoldenVector("jovian_tx_reverted"); 
 // 计划内 33 个 case 名均零冲突）。
 // 链式双块：一个 case（runChainedPair）同流执行 chainA+chainB（先 B SYNCING → A VALID → B VALID）。
 BOOST_AUTO_TEST_CASE(ChainedAB) { runChainedPair("chainA", "chainB"); }
-// 最终校验：34 用例 = 33 向量 + 1 链式对（覆盖 chainA+chainB 两个样本）。
+
+// B-5c：jovian 链式对。runChainedPair 内断言 block2 VALID = step 3a-2 baseFee 一致性校验
+// 通过即验证 max 分支（baseFee 按父块推导 + 上取整封顶）。
+BOOST_AUTO_TEST_CASE(JovianChainedAB) { runChainedPair("jovianChainA", "jovianChainB"); }
+// 最终校验：36 用例 = 34 向量（33 + isthmus_system_call_order_observable）+ 2 链式对
+// （chainA/B + jovianChainA/B，覆盖 4 个链式样本）。
 
 BOOST_AUTO_TEST_SUITE_END()
