@@ -68,7 +68,7 @@ W5 把这些收口，把「待W5」升级为已验证，并产出 M-B 块级台�
 > ⚠️ W5 审查（R2）修正：读路径判别力更强——EIP-4788 beaconRootsCode 读路径（PC 36-72）**先校验 `w == storage[w%8191]`，失配即 REVERT**。若用户 tx 先于系统调用，读到 stale/0 → 用户合约 REVERT → stateRoot 失配 → 测试红。用户 reader 合约须**传当前块 timestamp 作 calldata**（读路径校验 `w==storage[w%8191]`），写入槽须声明 `ExtraStorage`。复用 `system_contracts_real` 的 4788 预部署（`cases.go:472-508`，beaconRootsCode + stale ring 槽），**新增**用户 reader 合约。
 
 - **generator case**：复用 `system_contracts_real` 的 EIP-4788 预部署（beaconRootsCode @ 0xfff...ffe + stale ring 槽）；**新增**用户 reader 合约（bytecode 计算 `t%8191`、CALL 0xfff...ffe、SSTORE 自有槽）+ 用户 tx 调用（传当前 timestamp 作 calldata）+ `ExtraStorage` 声明
-- **golden**：regen 从 op-geth 产（fork 建议 bothForks，与现有模式一致）——顺序错则读路径 REVERT → stateRoot 失配 → 测试红
+- **golden**：regen 从 op-geth 产（**⚠️ 单 fork isthmus**——W5 审查裁决：bothForks 会使向量计数矛盾（34 vs 35），且顺序可观测性 fork 无关；case id = `isthmus_system_call_order_observable`）——顺序错则读路径 REVERT → stateRoot 失配 → 测试红
 - **断言**：VALID + 七项全等（顺序正确则 stateRoot 匹配 golden）
 - **落点**：W6 harness
 
