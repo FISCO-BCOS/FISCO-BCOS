@@ -7,6 +7,9 @@
 #include <json/json.h>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
+#include <algorithm>  // std::copy
+#include <cstdint>    // std::uint64_t
+#include <iterator>   // std::begin/std::end
 #include <stdexcept>
 #include <string>
 #include <string_view>

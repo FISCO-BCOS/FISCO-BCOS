@@ -130,6 +130,43 @@ BOOST_AUTO_TEST_CASE(VarKeyShortKeysBuildToNonEmptyRoot)
     BOOST_CHECK(!result.newNodes.empty());
 }
 
+// Regression for the W6 L2 divergence (isthmus_big_block_130tx, 131 tx): the OP callers
+// (computeOpTxRoot / sealOpBlock) pass index-order keys — rlp(0)=0x80, rlp(1..127)=0x01..0x7f,
+// rlp(128..)=0x8180.. — which is NOT byte-sorted. At >= 128 entries the first key 0x80 shares its
+// leading 0x8 nibble with the 2-byte keys, so the first/last common-prefix shortcut spanned
+// [8] while the middle entries (0x01..0x7f) start with 0-7, producing a malformed extension node.
+// computeTrieRootVarKey must be order-independent (defensive sort): unsorted input must yield the
+// same root as sorted input.
+BOOST_AUTO_TEST_CASE(VarKeyUnorderedManyKeysOrderIndependent)
+{
+    // 131 keys in INDEX order (the OP caller's order): 0x80, 0x01..0x7f, 0x8180..0x8182.
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> indexOrder;
+    indexOrder.reserve(131);
+    indexOrder.emplace_back(bcos::bytes{0x80}, bcos::bytes{0xaa});  // index 0
+    for (uint32_t i = 1; i < 128; ++i)
+    {
+        indexOrder.emplace_back(
+            bcos::bytes{static_cast<bcos::byte>(i)}, bcos::bytes{0xbb});  // 0x01..0x7f
+    }
+    for (uint32_t i = 128; i < 131; ++i)
+    {
+        indexOrder.emplace_back(
+            bcos::bytes{0x81, static_cast<bcos::byte>(i)}, bcos::bytes{0xcc});  // 0x8180..0x8182
+    }
+    // Sanity: this input really is unsorted (0x80 must not sort first).
+    auto sorted = indexOrder;
+    std::sort(sorted.begin(), sorted.end(),
+        [](auto const& a, auto const& b) { return a.first < b.first; });
+    BOOST_CHECK(!std::equal(indexOrder.begin(), indexOrder.end(), sorted.begin(),
+        [](auto const& a, auto const& b) { return a.first == b.first; }));
+
+    TrieBuildResult const unsortedResult = computeTrieRootVarKey(indexOrder);
+    TrieBuildResult const sortedResult = computeTrieRootVarKey(sorted);
+    BOOST_CHECK_EQUAL(unsortedResult.root, sortedResult.root);
+    BOOST_CHECK(unsortedResult.root != emptyRootHash());
+    BOOST_CHECK(!unsortedResult.newNodes.empty());
+}
+
 // Empty var-key input commits to the canonical empty-trie root.
 BOOST_AUTO_TEST_CASE(VarKeyEmptyIsEmptyRoot)
 {
