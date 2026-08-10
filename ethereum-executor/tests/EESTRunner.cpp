@@ -563,7 +563,7 @@ std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(std::string const&
     return fixtures;
 }
 
-evmc_revision forkNameToRevision(std::string const& forkName)
+std::optional<evmc_revision> forkNameToRevision(std::string const& forkName)
 {
     // Normalize: lowercase
     auto lower = forkName;
@@ -605,10 +605,10 @@ evmc_revision forkNameToRevision(std::string const& forkName)
     if (lower == "osaka")
         return EVMC_OSAKA;
 
-    // Unknown fork → default to the latest handled revision so a future fork
-    // is not silently mis-executed as Cancun (which would produce false
-    // pass/fail outcomes in the compliance suite).
-    return EVMC_OSAKA;
+    // Unknown fork → nullopt so the caller can SKIP the fixture instead of
+    // silently executing it under the latest handled revision (which would
+    // produce undefined-behavior pass/fail outcomes in the compliance suite).
+    return std::nullopt;
 }
 }  // namespace bcos::test
 
@@ -797,11 +797,12 @@ public:
         executor(receiptFactory, cryptoSuite->hashImpl(), m_blockHashes)
     {}
 
-    void configureFork(std::string const& forkName)
+    /// Configure the runner for a fork name. Returns false (and leaves the
+    /// runner unconfigured) when the fork — or either endpoint of a fork
+    /// transition name — is unknown, so callers can skip the fixture instead
+    /// of executing it under an arbitrary revision.
+    bool configureFork(std::string const& forkName)
     {
-        auto const rev = test::forkNameToRevision(forkName);
-        m_currentRevision = rev;
-        m_ledgerConfig.setEVMCRevision(rev);
         m_forkTransition.reset();
 
         // Detect fork transition names like "CancunToPragueAtTime15k"
@@ -824,14 +825,38 @@ public:
                 {
                     transitionTime = std::stoll(timeStr);
                 }
-                m_forkTransition = ForkTransition{test::forkNameToRevision(fromFork),
-                    test::forkNameToRevision(toFork), transitionTime};
+                auto const fromRevOpt = test::forkNameToRevision(fromFork);
+                auto const toRevOpt = test::forkNameToRevision(toFork);
+                if (!fromRevOpt.has_value() || !toRevOpt.has_value())
+                {
+                    // Unknown fork in a transition → skip the whole fixture
+                    // (do NOT fall back to executing under fromRev).
+                    return false;
+                }
+                m_forkTransition = ForkTransition{*fromRevOpt, *toRevOpt, transitionTime};
+                // Base the pre-transition revision (and block-header versioning)
+                // on the from-fork rather than an arbitrary default.
+                m_currentRevision = *fromRevOpt;
+                m_ledgerConfig.setEVMCRevision(*fromRevOpt);
+                return true;
             }
             catch (...)
             {
+                // Malformed transition name → treat as unknown/skip.
                 m_forkTransition.reset();
+                return false;
             }
         }
+
+        // Plain (non-transition) fork name.
+        auto const revOpt = test::forkNameToRevision(forkName);
+        if (!revOpt.has_value())
+        {
+            return false;  // unknown fork → skip
+        }
+        m_currentRevision = *revOpt;
+        m_ledgerConfig.setEVMCRevision(*revOpt);
+        return true;
     }
 
     /// Get the EVMC revision for a block given its timestamp (handles fork transitions).
@@ -1293,10 +1318,22 @@ public:
     }
 
     /// Run a single fixture test case. Returns true if passed.
+    /// When the fork is unknown the fixture is skipped: *skipped is set to
+    /// true, a WARNING is printed, and false is returned (the caller must not
+    /// count it as a failure).
     bool runFixture(::test::EESTFixture const& fixture, std::string const& forkName,
-        ::test::EESTForkPost const& post)
+        ::test::EESTForkPost const& post, bool* skipped = nullptr)
     {
-        configureFork(forkName);
+        if (!configureFork(forkName))
+        {
+            if (skipped != nullptr)
+            {
+                *skipped = true;
+            }
+            printLine("WARNING: skipping state-test fixture '" + fixture.name + "' [" + forkName +
+                      "]: unknown fork (not in forkNameToRevision)");
+            return false;
+        }
         m_chainId = fixture.chainId;
         m_ledgerConfig.setChainId(
             intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
@@ -1579,15 +1616,26 @@ public:
 
     /// Run a blockchain test fixture: execute blocks sequentially,
     /// apply block rewards via finalize(), then verify postState.
-    /// Returns true if passed.
-    bool runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
+    /// Returns true if passed. When the fork is unknown the fixture is
+    /// skipped: *skipped is set to true, a WARNING is printed, and false is
+    /// returned (the caller must not count it as a failure).
+    bool runBlockchainFixture(test::EESTBlockchainFixture const& fixture, bool* skipped = nullptr)
     {
         auto forkName = extractForkFromName(fixture.name);
         if (forkName.empty())
         {
             forkName = "Cancun";  // default
         }
-        configureFork(forkName);
+        if (!configureFork(forkName))
+        {
+            if (skipped != nullptr)
+            {
+                *skipped = true;
+            }
+            printLine("WARNING: skipping blockchain-test fixture '" + fixture.name + "' [" +
+                      forkName + "]: unknown fork (not in forkNameToRevision)");
+            return false;
+        }
         m_chainId = fixture.chainId;
         m_ledgerConfig.setChainId(
             intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(m_chainId))));
@@ -1964,7 +2012,16 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
         for (auto const& fixture : bcFixtures)
         {
             ++g_totalTests;
-            bool passed = runner.runBlockchainFixture(fixture);
+            bool skipped = false;
+            bool passed = runner.runBlockchainFixture(fixture, &skipped);
+            if (skipped)
+            {
+                // Unknown fork → undo the pre-increment and record as skipped
+                // (not passed, not failed).
+                --g_totalTests;
+                ++g_skippedFiles;
+                continue;
+            }
             if (passed)
             {
                 ++g_totalPassed;
@@ -2008,7 +2065,17 @@ FileResult processFixtureFile(EESTRunner& runner, fs::path const& filePath)
             {
                 ++g_totalTests;
                 auto const& post = posts[i];
-                bool passed = runner.runFixture(fixture, forkName, post);
+                bool skipped = false;
+                bool passed = runner.runFixture(fixture, forkName, post, &skipped);
+
+                if (skipped)
+                {
+                    // Unknown fork → undo the pre-increment and record as
+                    // skipped (not passed, not failed).
+                    --g_totalTests;
+                    ++g_skippedFiles;
+                    continue;
+                }
 
                 if (passed)
                 {
@@ -2100,7 +2167,14 @@ int main(int argc, char* argv[])
             std::cerr << "Error: fixture directory not found: " << fixtureDir << '\n';
             return 1;
         }
-        for (auto const& entry : fs::recursive_directory_iterator(fixtureDir))
+        // follow_directory_symlink: the fetched EEST tree under
+        // EVM_REF_EEST_ROOT/fixtures exposes state_tests / blockchain_tests /
+        // transaction_tests as symlinks into the source dir; the default
+        // iterator would not descend into them and the full baseline would
+        // silently see zero files (the earlier "blockchain_tests is empty"
+        // mis-report).
+        for (auto const& entry : fs::recursive_directory_iterator(
+                 fixtureDir, fs::directory_options::follow_directory_symlink))
         {
             if (entry.is_regular_file() && entry.path().extension().string() == ".json")
             {
