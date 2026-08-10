@@ -75,9 +75,12 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     // D4: 读侧 tx.hash() 返回 extraTransactionHash；不填则抛 EmptyTransactionHash
     tarsTx.extraTransactionHash.assign(txHash.begin(), txHash.end());
     // D8: 非 deposit 补 sender（takeToTarsTransaction 留空；读侧 from 读 tx.sender()）
+    // ⚠️ 审查②修正：web3Tx.sender() 返回 "0x" 前缀 hex string（Web3Transaction.cpp:207-223），
+    //    tarsTx.sender 要 raw 20 字节（读侧 toHex(tx.sender()) 期望 raw bytes）——必须 fromHex 还原，
+    //    否则双编码成 84 字符垃圾。deposit 分支已填 raw bytes（:121），sender.empty() guard 跳过。
     if (tarsTx.sender.empty())
     {
-        auto sender = web3Tx.sender();  // ecrecover（Web3Transaction.cpp:207-223）
+        auto sender = bcos::fromHex(web3Tx.sender());  // DataConvertUtility.h:119-166，0x 感知
         tarsTx.sender.assign(sender.begin(), sender.end());
     }
     return tarsTx;
@@ -143,7 +146,7 @@ if (auto tarsTx = detail::opEnvelopeToTars(rawTransactions[index], txHash))
         std::move(txEntry));
 }
 ```
-（`EngineServiceImpl.h` 需 include `bcos-tars-protocol/protocol/TransactionImpl.h` 或确认已通过其他头引入；`ledger::SYS_HASH_2_TX` 与现有 `ledger::SYS_HASH_2_RECEIPT`（`:1289`）同源）
+（⚠️ 审查②修正：**必须**在 `EngineServiceImpl.h` 顶部加 `#include "bcos-tars-protocol/protocol/TransactionImpl.h"`——模板体 `std::move(*tarsTx)` + `TransactionImpl txImpl(...)` 需要 TransactionImpl **完整类型**（前向声明不够）。该头只拉 tars/crypto/framework，无 json/rpc/RPC_LOG，不破坏 D6。`ledger::SYS_HASH_2_TX` 与现有 `ledger::SYS_HASH_2_RECEIPT`（`:1289`）同源，已可用）
 
 - [ ] **Step 2: 编译验证**
 
@@ -179,33 +182,54 @@ git commit --no-verify -m "feat(engine): registerOpBlock 写 SYS_HASH_2_TX（opE
 
 - [ ] **Step 2: 在 VALID assert 后加写侧落表断言**
 
-在 7 字段断言后加：
+在 7 字段断言后加（⚠️ 审查④修正：代码形状按 `OpNewPayloadRpcE2eTest.cpp` 实际 API——`runGoldenVector` 的入参是 `request` 非 `payload`、crypto suite 经 `blockFactory`、`readOne` 需 fork+syncWait、0x04 特判）：
+
 ```cpp
 // 方案 B 写侧：OP 交易落 SYS_HASH_2_TX（tars 编码），s_eth_hash_2_rawtx 不再写。
-auto const& rawTxs = *payload.rawTransactions;
-auto& hashImpl = *fixture->cryptoSuite->hashImpl();
+auto const& rawTxs = *request.executionPayload.rawTransactions;
+auto& hashImpl = *fixture->blockFactory->cryptoSuite()->hashImpl();
 for (std::size_t i = 0; i < rawTxs.size(); ++i)
 {
     auto txHash = hashImpl.hash(rawTxs[i]);
+    auto view = fixture->multiLayerStorage.fork();
+    // 0x04 (EIP-7702)：opEnvelopeToTars 返回 nullopt → SYS_HASH_2_TX absent（D7）
+    if (rawTxs[i].size() >= 1 && rawTxs[i][0] == 0x04)
+    {
+        auto zeroEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+            bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
+                bcos::concepts::bytebuffer::toView(txHash)}));
+        BOOST_CHECK(!zeroEntry.has_value());
+        // 审查④补：0x04 读侧 null 锁定（spec §5-6）——SYS_HASH_2_RECEIPT 有回执但 SYS_HASH_2_TX 无交易
+        // → eth_getTransactionReceipt(0x04 tx) 应返回 null。此处断言回执表 present（读侧可达但交易缺）。
+        auto rcpEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+            bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
+                bcos::concepts::bytebuffer::toView(txHash)}));
+        BOOST_CHECK(rcpEntry.has_value());  // 回执仍写（EngineServiceImpl.h:1287-1290）
+        continue;
+    }
     // SYS_HASH_2_TX present + round-trip
-    auto txEntry = readOne(*fixture->multiLayerStorage,
-        StateKey{ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)});
+    auto txEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+        bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
+            bcos::concepts::bytebuffer::toView(txHash)}));
     BOOST_REQUIRE(txEntry.has_value());
+    auto txBytes = bcos::bytesConstRef(
+        reinterpret_cast<bcos::byte const*>(txEntry->get().data()), txEntry->get().size());
     auto tx = fixture->blockFactory->transactionFactory()->createTransaction(
-        txEntry->get(), /*checkSig=*/false, /*checkHash=*/false, /*tainted=*/false);
+        txBytes, /*checkSig=*/false, /*checkHash=*/false, /*tainted=*/false);
     BOOST_CHECK_EQUAL(tx->hash(), txHash);  // 锁 D4 extraTransactionHash
     // rawtx 表 absent（D1：不保留）
-    auto rawEntry = readOne(*fixture->multiLayerStorage,
-        StateKey{SchedulerType::c_ethRawTxTable, bcos::concepts::bytebuffer::toView(txHash)});
+    auto rawEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+        bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
+            bcos::concepts::bytebuffer::toView(txHash)}));
     BOOST_CHECK(!rawEntry.has_value());
 }
 ```
-（`readOne`/`SchedulerType::c_ethRawTxTable`/`ledger::SYS_HASH_2_TX` 按该文件既有模式；若 `readOne` 是协程需 `co_await` 或 `syncWait`——对照该文件现有用法）
+（⚠️ 审查④修正：`cryptoSuite` 不存在于 fixture——用 `blockFactory->cryptoSuite()`；`payload` 未定义——用 `request.executionPayload.rawTransactions`；`readOne` 是协程 CPO——需 `fork()` + `syncWait`；`SchedulerType` 不在 scope——用 `OpScheduler::c_ethRawTxTable`；`ledger::` 需全限定；`txEntry->get()` 返回 `string_view`——需显式 `bytesConstRef`；4 个 0x04 向量（isthmus_setcode_7702/isthmus_setcode_7702_skips/jovian_setcode_7702/jovian_setcode_7702_skips）必须特判 absent）
 
 - [ ] **Step 3: 运行测试确认新断言绿**
 
 Run: `cmake --build build --target bcos-evm-opstack-tests -j 8 && ./build/bcos-evm/test/bcos-evm-opstack-tests --run_test=OpNewPayloadRpcE2eSuite`
-Expected: 全 PASS（含新落表断言；`jovian_deposit_only` 向量顺带覆盖 deposit 写侧）
+Expected: 全 PASS（含新落表断言；`jovian_deposit_only` 向量顺带覆盖 deposit 写侧；4 个 0x04 向量断言 absent）
 
 - [ ] **Step 4: Commit**
 
@@ -257,8 +281,18 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseOmitsOpFieldsWhenMetaEmpty)
     BOOST_CHECK(!result.isMember("l1Fee"));
 }
 ```
-Run: `cmake --build build --target test-bcos-rpc -j 8 && ./build/bcos-rpc/test/test-bcos-rpc --run_test=testWeb3Response`
+Run: `cmake --build build --target test-bcos-rpc -j 8 && ./build/bcos-rpc/test/test-bcos-rpc --run_test=Web3ResponseTest`
 Expected: FAIL（`l1GasPrice` 未输出）
+
+- [ ] **Step 1b: 补 from 断言（审查①要求）**
+
+在 `combineReceiptResponseEmitsOpExtensionFieldsFromMeta` 里加 `from` 断言——非 deposit OP 交易读侧 from 必须正确（D8 raw sender）：
+```cpp
+// D8：非 deposit from = checksum(web3Tx.sender() 的 raw 地址)。web3Tx.sender 需 ecrecover 后
+// fromHex 存 raw bytes；此处用已知签名+信封算期望地址，断言 result["from"]。
+// （若 sender 是 hex-string 双编码，这里会失败——正是审查①抓的 bug）
+BOOST_CHECK(result["from"].asString() == "<期望的 checksum 地址>");
+```
 
 - [ ] **Step 2: 实现 OP 字段输出**
 
@@ -286,46 +320,78 @@ if (auto meta = receipt.opStackMeta())
 
 - [ ] **Step 3: 运行测试确认绿**
 
-Run: `cmake --build build --target test-bcos-rpc -j 8 && ./build/bcos-rpc/test/test-bcos-rpc --run_test=testWeb3Response`
+Run: `cmake --build build --target test-bcos-rpc -j 8 && ./build/bcos-rpc/test/test-bcos-rpc --run_test=Web3ResponseTest`
 Expected: PASS（两个新用例绿）
 
 - [ ] **Step 4: 补读侧交易测试（spec §5-3/4/5）**
 
-`Web3ResponseTest.cpp` 加：
+`Web3ResponseTest.cpp` 加（⚠️ 审查③修正：`takeToTarsTransaction` 不填 extraTransactionHash，`combineTxResponse:45` 调 `tx.hash()` 会抛 `EmptyTransactionHash`——测试必须手动填；`Web3ResponseTest.cpp` 无 `makeReceipt`/`makeWeb3Tx` 帮助函数，需内联构造（对照 `combineReceiptResponseShapesReceipt` `:118-146`）；需 `#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>`；`txIndex`/`blockNumber`/`blockHash` 用字面量（如 `3`/`12`/`h256{}`））：
+
 ```cpp
-// deposit 查询：takeToTarsTransaction(deposit) → SYS_HASH_2_TX → createTransaction 读回 → combineTxResponse 最小输出
+// deposit 查询：takeToTarsTransaction(deposit) → combineTxResponse 最小输出
 BOOST_AUTO_TEST_CASE(combineTxResponseDepositMinimalFields)
 {
-    auto web3Deposit = makeDepositTx();  // TransactionType::Deposit, from/sourceHash/mint 已设
+    bcos::rpc::Web3Transaction web3Deposit;
+    web3Deposit.type = bcos::rpc::TransactionType::Deposit;
+    web3Deposit.from = bcos::Address{...};  // 或 fromHex
+    web3Deposit.sourceHash = ...;
+    web3Deposit.mint = ...;
+    web3Deposit.nonce = 0;
     auto tarsTx = web3Deposit.takeToTarsTransaction();
+    // 审查③修正：D4——手动填 extraTransactionHash，否则 combineTxResponse:45 抛 EmptyTransactionHash
+    tarsTx.extraTransactionHash.assign(h256{...}.begin(), h256{...}.end());  // 任意 32 字节
     bcostars::protocol::TransactionImpl txImpl([tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
     Json::Value result = Json::objectValue;
-    combineTxResponse(result, txImpl, txIndex, blockNumber, blockHash);
+    combineTxResponse(result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12,
+        bcos::crypto::HashType{});
     BOOST_CHECK(result.isMember("nonce"));   // deposit nonce=0
     BOOST_CHECK_EQUAL(result["type"].asString(), "0x7e");
-    // 无 accessList/blob 字段
+    // 无 accessList/blob 字段（0x7e 被 :68/:86 范围检查排除）
     BOOST_CHECK(!result.isMember("accessList"));
     BOOST_CHECK(!result.isMember("blobVersionedHashes"));
 }
 // 4844 blob 查询：blobVersionedHashes 分支
 BOOST_AUTO_TEST_CASE(combineTxResponseBlob4844)
 {
-    auto web3Tx = makeBlob4844Tx();  // type=EIP4844, blobVersionedHashes 已设
+    bcos::rpc::Web3Transaction web3Tx;
+    web3Tx.type = bcos::rpc::TransactionType::EIP4844;
+    web3Tx.maxFeePerBlobGas = ...;
+    web3Tx.blobVersionedHashes = {...};  // 1-2 个 h256
+    web3Tx.signatureR = ...;  // 32 字节
+    web3Tx.signatureS = ...;  // 32 字节
+    web3Tx.signatureV = 0;
     auto tarsTx = web3Tx.takeToTarsTransaction();
+    tarsTx.extraTransactionHash.assign(h256{...}.begin(), h256{...}.end());  // 审查③修正
     bcostars::protocol::TransactionImpl txImpl([tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
     Json::Value result = Json::objectValue;
-    combineTxResponse(result, txImpl, txIndex, blockNumber, blockHash);
+    combineTxResponse(result, txImpl, 3u, 12, bcos::crypto::HashType{});
     BOOST_CHECK(result.isMember("blobVersionedHashes"));
     BOOST_CHECK(result.isMember("maxFeePerBlobGas"));
 }
 ```
-Run: `cmake --build build --target test-bcos-rpc -j 8 && ./build/bcos-rpc/test/test-bcos-rpc --run_test=testWeb3Response`
+Run: `cmake --build build --target test-bcos-rpc -j 8 && ./build/bcos-rpc/test/test-bcos-rpc --run_test=Web3ResponseTest`
 Expected: PASS（deposit/4844 用例绿；deposit `r/s/v` 空行为在 `combineTxResponse:104-106` 对空 signatureData 已处理）
 
 - [ ] **Step 5: 补 happy-path 回归（spec §5-5）**
 
-`Web3EthMethodsTest.cpp` 的 RPCFixture 加 seeded-storage 成功用例——在现有 unknown-hash 负向用例（`:81-93`）旁，构造一个含 `SYS_HASH_2_TX` + `SYS_HASH_2_RECEIPT` 数据的 fixture，调 `eth_getTransactionReceipt`/`eth_getTransactionByHash`，断言返回非 null。按该文件现有 RPCFixture 的 seed 方式（对照 `Web3EthMethodsTest.cpp` 的 fixture 构造 + 既有 `makeReceipt`/`makeTx` 帮助函数）。
-Expected: PASS（happy-path 返回完整对象）
+`Web3EthMethodsTest.cpp` 加成功用例（⚠️ 审查③修正：RPCFixture 的 FakeLedger `asyncGetTransactionReceiptByHash` **恒返回 null receipt**（`FakeLedger.h:360-364`），seeding SYS_HASH_2_TX/RECEIPT 无效——需 **FakeLedger 子类** override `asyncGetTransactionReceiptByHash` 返回 seeded receipt + override/seed `asyncGetBatchTxsByHashList` 走 `m_txsHashToData`）：
+
+```cpp
+// 子类 FakeLedger：override asyncGetTransactionReceiptByHash 返回 seeded receipt，让 happy-path 可测
+class SeedableLedger : public bcos::test::FakeLedger
+{
+public:
+    protocol::TransactionReceipt::Ptr seededReceipt;
+    void asyncGetTransactionReceiptByHash(crypto::HashType const&, bool,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
+    {
+        callback(nullptr, seededReceipt);
+    }
+    // 其余方法继承 FakeLedger（asyncGetBatchTxsByHashList 走 m_txsHashToData 需 seed）
+};
+```
+在该文件 fixture 里用 SeedableLedger 替换 FakeLedger，seed `seededReceipt` + `storeTransactionsAndReceipts(...)` 填 `m_txsHashToData`，调 `eth_getTransactionReceipt`/`eth_getTransactionByHash` 断言非 null + 基础字段。
+Expected: PASS（happy-path 返回完整对象；`from` 正确——审查①要求的 from 断言加在这里）
 
 - [ ] **Step 6: Commit**
 
@@ -339,8 +405,8 @@ git commit --no-verify -m "feat(rpc): combineReceiptResponse 输出 opStackMeta 
 ### Task 5: 文档同步 + 全量回归
 
 **Files:**
-- Modify: `bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md:106`
-- Modify: `docs/opstack-opgeth-e2e-comparison.md:144/:416`
+- Modify: `bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md`（`:106` 及其余 3 处 stale 行）
+- Modify: `docs/opstack-opgeth-e2e-comparison.md`（`§1 阶段5 :144/:147`、`§2 :200`、`§8.4 :376/:386/:396/:406`、`§8.5 :411`）
 
 **Interfaces:**
 - Consumes: Task 1-4 全部交付
@@ -348,7 +414,7 @@ git commit --no-verify -m "feat(rpc): combineReceiptResponse 输出 opStackMeta 
 
 - [ ] **Step 1: 更新 DIVERGENCES.md**
 
-`:106` 附近记录 rawtx 写行为——改为「OP 交易转换后写 `SYS_HASH_2_TX`（方案 B）」，并加 0x04 (EIP-7702) 读侧 divergence 注记：
+⚠️ 审查④修正：rawtx 写行为记录在 **4 处**（不只 `:106`）——`:106`（交易行）、`:107`（差异点「SYS_HASH_2_TX 故意不写」）、`:128`（结构性差异 #3 索引隔离）、`:157`（阶段5 索引隔离）。全部改为「OP 交易转换后写 `SYS_HASH_2_TX`（方案 B）」，并加 0x04 (EIP-7702) 读侧 divergence 注记：
 ```markdown
 - **OP 交易落库（方案 B，2026-08-10）**：registerOpBlock 转换后写 SYS_HASH_2_TX（tars 编码，key=keccak 信封 hash），不写 s_eth_hash_2_rawtx。读侧 eth_getTransactionByHash/eth_getTransactionReceipt 可查。
 - **EIP-7702 (0x04) 读侧 divergence**：TransactionType 无 0x04 handler，0x04 交易跳过 SYS_HASH_2_TX 写表 → 读侧返回 null（块执行不受影响）。与 op-geth 的 divergence。
@@ -356,17 +422,17 @@ git commit --no-verify -m "feat(rpc): combineReceiptResponse 输出 opStackMeta 
 
 - [ ] **Step 2: 更新 comparison doc**
 
-`:144`/`:416` 的 rawtx 描述改为「OP 交易转换后写 SYS_HASH_2_TX（方案 B，2026-08-10）」，并更新 §8.4 gap 表「OP 块回执不可查」状态（若实施完成标记修复）。
+⚠️ 审查④修正：`:144` 是 阶段5 registerOpBlock 行（含 s_eth_hash_2_rawtx）✓，但 `:416` **不是** rawtx 描述（是「s_number_2_header 落盘欠账」）。实际 rawtx/索引隔离内容在：`§1 阶段5 :144/:147`、`§2 :200`（索引隔离 summary）、`§8.4 :376/:386`（索引隔离 接受决策）、`:396`（gap 表「OP 块回执不可查」）、`:406`（Go/No-Go）、`§8.5 :411`（待办移交「OP 块回执可查修复」）。全部同步更新：rawtx→SYS_HASH_2_TX + 「OP 块回执不可查」gap 标记修复（本实施完成）。
 
 - [ ] **Step 3: 全量回归**
 
 Run:
 ```bash
 cmake --build build --target test-bcos-rpc bcos-evm-opstack-tests -j 8
-./build/bcos-rpc/test/test-bcos-rpc --run_test=testWeb3Response,testWeb3Type,testWeb3EthMethods
+./build/bcos-rpc/test/test-bcos-rpc --run_test=Web3ResponseTest,testWeb3Type,Web3EthMethodsTest
 ./build/bcos-evm/test/bcos-evm-opstack-tests --run_test=OpNewPayloadRpcE2eSuite,OpL1EdgeGateSuite
 ```
-Expected: 全 PASS（普通交易/回执回归不破）
+Expected: 全 PASS（普通交易/回执回归不破；⚠️ 审查④：suite 名 `Web3ResponseTest`/`Web3EthMethodsTest` 是实际 BOOST suite 名，`testWeb3Type` 是对的）
 
 - [ ] **Step 4: Commit**
 

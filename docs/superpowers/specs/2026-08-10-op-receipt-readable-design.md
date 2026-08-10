@@ -76,9 +76,10 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     // D4: extraTransactionHash = keccak(完整信封)（读侧 tx.hash() 依赖）
     tarsTx.extraTransactionHash.assign(txHash.begin(), txHash.end());
     // 审查①修正：非 deposit 填 sender（takeToTarsTransaction 留空；读侧 from 读 tx.sender()）
+    // ⚠️ web3Tx.sender() 返回 "0x" 前缀 hex string（Web3Transaction.cpp:207-223）——必须 fromHex
+    //    还原成 raw 20 字节（读侧 toHex(tx.sender()) 期望 raw bytes），否则双编码成 84 字符垃圾。
     if (tarsTx.sender.empty())
-        tarsTx.sender.assign(web3Tx.sender().begin(), web3Tx.sender().end());  // 或 ecrecover
-    return tarsTx;
+        tarsTx.sender = bcos::fromHex(web3Tx.sender());
 }
 ```
 
