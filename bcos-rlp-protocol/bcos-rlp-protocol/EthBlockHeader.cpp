@@ -52,12 +52,19 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
             "EthBlockHeader: header is null");
     }
 
+    // Reset the destination first so reusing a header (previously holding higher-version
+    // optional fields) cannot leak stale values into this decode.
+    header->clear();
+
     EthBlockHeader ethHeader;
     if (auto err = toEthBlockHeader(ethHeader, _data))
     {
         return err;
     }
 
+    // The Ethereum header RLP carries only the parent hash, not the parent block number.
+    // parentInfo.blockNumber is therefore left at its default (0) after decode; callers that
+    // need it must fill it from the chain context.
     header->setParentInfo(ethHeader.data().parentInfo);
     header->setCoinbase(ethHeader.data().coinbase);
     header->setUncleHash(ethHeader.data().uncleHash);
@@ -164,8 +171,12 @@ bool EthBlockHeader::validateHeader(
     }
 
     // Mandatory fields, required by every Eth version.
+    // parentInfo: the Ethereum header RLP does not carry the parent block number, so
+    // parentInfo.blockNumber is only meaningful when filled in by the caller. The genesis
+    // block (number 0) has an empty parent hash by definition; only require a non-empty
+    // parent hash when this header is not the genesis block.
     auto parent = _header.parentInfo();
-    if (parent.blockNumber == 0 && parent.blockHash == bcos::crypto::HashType{})
+    if (_header.number() != 0 && parent.blockHash == bcos::crypto::HashType{})
     {
         return invalid("EthBlockHeader: missing or bad parentInfo.blockHash");
     }
@@ -381,6 +392,40 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesRef out)
 
     m_data.number = static_cast<int64_t>(_number);
     m_data.timestamp = static_cast<int64_t>(_timestamp);
+
+    // Reject positionally-misaligned inputs: Ethereum optional fork fields are appended
+    // cumulatively at the tail, so a later field can only be present if every earlier fork
+    // field is genuinely present. Without this check a truncated input would silently shift
+    // every later field down one slot (e.g. withdrawalsHash bytes parsed as baseFee), pass
+    // validation, and hash to something no Ethereum client would agree with.
+    auto prefixOk = [&] {
+        if (m_data.requestsHash.has_value() && !m_data.parentBeaconRoot.has_value())
+        {
+            return false;
+        }
+        if (m_data.parentBeaconRoot.has_value() && !m_data.excessBlobGas.has_value())
+        {
+            return false;
+        }
+        if (m_data.excessBlobGas.has_value() && !m_data.blobGasUsed.has_value())
+        {
+            return false;
+        }
+        if (m_data.blobGasUsed.has_value() && !m_data.withdrawalsHash.has_value())
+        {
+            return false;
+        }
+        if (m_data.withdrawalsHash.has_value() && !m_data.baseFee.has_value())
+        {
+            return false;
+        }
+        return true;
+    };
+    if (!prefixOk())
+    {
+        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
+            "EthBlockHeader: optional fork fields are not prefix-contiguous");
+    }
 
     // Derive the fork version from the presence of optional fields.
     if (m_data.requestsHash.has_value())

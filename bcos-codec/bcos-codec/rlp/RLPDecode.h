@@ -153,6 +153,10 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
         // Fixed-size hashes/addresses must be exactly their declared size. A short or long
         // payload is malformed input — silently right-aligning (zero-padding) or truncating
         // would re-encode differently and change the keccak hash on hash-sensitive bridges.
+        // NOTE: this is a behaviour change for the shared RLP codec (previously short payloads
+        // were right-aligned/zero-padded, long ones truncated). Canonical inputs are unaffected;
+        // all existing in-tree decode callers (Web3Transaction, MPT, ledger, tx RLP) have been
+        // verified to only feed fixed-size payloads here.
         using FixedT = std::decay_t<decltype(to)>;
         if (header.payloadLength != FixedT::SIZE)
         {

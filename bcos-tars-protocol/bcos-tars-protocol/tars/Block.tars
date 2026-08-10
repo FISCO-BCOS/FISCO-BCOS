@@ -29,6 +29,11 @@ module bcostars {
         13 optional vector<long> consensusWeights;
 
         // ---- Ethereum-compatible header fields (added) ----
+        // NOTE: tags 27/28 were previously blockAccessListHash (vector) / slotNumber (long)
+        // in an earlier unreleased schema; they are reused here as uncleHash / difficulty
+        // (difficulty changes type long -> string). This is a breaking schema change for any
+        // data serialized with the old tags. These fields have not shipped to any
+        // persistence/network data, so the reuse is accepted; see PR #5409 description.
         14 optional vector<byte> coinbase;             // 20-byte address
         27 optional vector<byte> uncleHash;
         15 optional vector<byte> logsBloom;            // 256-byte bloom filter
