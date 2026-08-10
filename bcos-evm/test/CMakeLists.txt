@@ -26,6 +26,7 @@ add_executable(bcos-evm-opstack-tests
     opstack/Op7702Test.cpp
     opstack/OpFloorGasTest.cpp
     opstack/OpReceiptEncodeTest.cpp
+    opstack/OpT8nReplayTest.cpp
 )
 target_link_libraries(bcos-evm-opstack-tests PRIVATE
     bcosevm::opstack
