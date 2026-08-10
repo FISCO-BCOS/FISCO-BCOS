@@ -70,7 +70,7 @@
 **版本差异影响对比口径**（经审查复核，见 §0.0 C-1）：
 - **两个 checkout 都没有** `engine_newPayloadV2/V3Deposits` 独立端点 → deposits **内联在 `Transactions` 数组**（首笔 L1 attributes deposit，0x7E）。
 - v1.101702.2 与 rc.3 在 NewPayloadV5/SlotNumber/Amsterdam 上**无差异**（rc.3 是 v1.101702.2 的祖先）。真实差异仅：(a) v1.101702.2 新增 `PostExecTxType`(0x4B) 使 `case DepositTxType` 下移 2 行（`transaction.go:228-229`）；(b) catalyst `api.go` 整体 +124 行。
-- **Amsterdam 两版都有，FISCO 无对应 → 对比停在 Jovian/Isthmus**。
+- **Amsterdam 两版都有，FISCO 无对应 → 对比停在 Jovian/Isthmus**（**用户裁定 2026-08-10：Amsterdam fork 内容不处理**，对标 Karst——V5/SlotNumber 不实现）。
 - 本方案正文 op-geth 锚点已由 4 个审查 agent **复核到 v1.101702.2**（行号迁移见 §0.0）。
 
 ### 0.3 已完成的交易级审计（不要重做）
@@ -348,7 +348,7 @@ Phase 6  结论: 差异矩阵定稿 + Karst 上线闸清单
 
 ### W6 外待办（记入）
 
-- **V4 端点桩**：`newPayloadV4` RPC 端点实现（生产 op-node 互通时修；**C1 决策 2026-08-10：端点补全前不广告 V4**）
+- **V4 端点桩**（Prague/ExecutionRequests，FISCO 已注册为 UnsupportedFork 桩）：生产 op-node 互通时补（**C1 决策 2026-08-10：补全前不广告 V4**）。**Amsterdam（V5/SlotNumber）用户裁定 2026-08-10 不处理**——V5 端点不注册、SlotNumber 语义不实现
 - **PBFT retry loop**：OP 模式 proposal 短路后无限重推（禁 sealer/抑制重推决策）
 - **V4 能力广播**：~~广告 V4 实为正确~~ **已降级（2026-08-10，C1，commit 124f105）**：`supportedOpCapabilities` 不再追加 V4（端点未注册,op-node 协商即 -38005 撞桩）；V4 端点补全后恢复广告
 - ~~**generator 重生成 golden**~~：**已就绪-按需执行（W8 T5 验证 `regen.sh` exit 0 可复现）**——触发条件（op-geth 版本变更/新向量/新 fork）未发生，无需动作；执行需 op-geth v1.101702.2 环境（PIN e8800cffe）
@@ -398,12 +398,13 @@ FISCO OP 执行器**核心执行路径（阶段 0/3/4）与 op-geth v1.101702.2 
 | B-2/B-4 正式迁移 | 低（W7 内完成） | 低 | 否 |
 | B-3 注记收紧 | 低（W7 内完成） | 低 | 否 |
 | deferred minors（cases/ gitignore、golden manifest 校验、首投 B 软断言） | 低 | 低 | 否 |
+| **Amsterdam fork**（NewPayloadV5/SlotNumber） | **用户裁定 2026-08-10：不处理**——FISCO 对拍基线停在 Jovian/Isthmus，Amsterdam 无对拍对象（对标 Karst 裁定）；V5 端点不注册、SlotNumber/Amsterdam 执行语义不实现 | 高（若做） | ~~潜在~~ → **已关闭** |
 
 2. **修复排期**（⛔ 用户裁定 2026-08-10 移除 Karst 专项）：
 ```
 （Karst 适配已裁定不处理）→ OP 块回执可查修复（剩余 🔴 项）→ 可上线评估
 ```
-3. **Go/No-Go**：~~**当前 No-Go**——FISCO 无法激活/表征 Karst…~~ **更新（2026-08-10）：Karst 阻塞已关闭**（用户裁定不处理）**+ OP 块回执不可查已修复**（方案 B：交易写 SYS_HASH_2_TX + 读侧 opStackMeta 字段输出）。剩余 🔴 = **无**。重新评估可上线的条件收敛为：① 方案 B 回归通过（W5 gate + test-bcos-rpc + bcos-evm-opstack-tests 全绿）② PBFT 共识层决策（§8.5，视上线形态）③ 按需重新对拍（不含 Karst）。
+3. **Go/No-Go**：~~**当前 No-Go**——FISCO 无法激活/表征 Karst…~~ **更新（2026-08-10）：Karst 阻塞已关闭**（用户裁定不处理）**+ OP 块回执不可查已修复**（方案 B：交易写 SYS_HASH_2_TX + 读侧 opStackMeta 字段输出）。剩余 🔴 = **无**。重新评估可上线的条件收敛为：① 方案 B 回归通过（W5 gate + test-bcos-rpc + bcos-evm-opstack-tests 全绿）② PBFT 共识层决策（§8.5，视上线形态）③ 按需重新对拍（不含 Karst/Amsterdam）。
 
 ### 待办移交（W7 之后）
 
