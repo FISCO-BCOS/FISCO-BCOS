@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // ---------------------------------------------------------------------
@@ -630,6 +631,13 @@ type caseSpec struct {
 	build func(fork string) inputCase
 }
 
+// bScopeSpecs names the B-scope bases (Task 3 F1): buildable for
+// corrupt/invalid-tx bases but NOT emitted by --write-cases / emitCases (the
+// T8n replayer has no consumer arm for them yet). legacy_transfer is the sole
+// bScope spec. Kept as a set (not a struct field) so the shared table's
+// positional literals stay untouched.
+var bScopeSpecs = map[string]bool{"legacy_transfer": true}
+
 var bothForks = []string{"isthmus", "jovian"}
 
 var caseSpecs = []caseSpec{
@@ -652,8 +660,8 @@ var caseSpecs = []caseSpec{
 		// B-scope base: a type-0 legacy tx with an EIP-155 protected signature
 		// (V = chainID*2+35/36). Serves as the base for corrupt/invalid-tx
 		// vectors and as a B-scope valid vector. ⚠️ The T8n replayer does not
-		// yet parse `_op_type "legacy"`; manifest registration is a consumer
-		// follow-up (task-3-report).
+		// yet parse `_op_type "legacy"`; the bScopeSpecs set gates it OUT of
+		// emitCases (Task 3 F1) until the replayer legacy arm lands.
 		c := caseFrame(fork, "legacy_transfer",
 			"attributes + one type-0 EIP-155 protected legacy value transfer",
 			defaultFeeParams(), 10_000_000)
@@ -1345,12 +1353,26 @@ func vectorName(fork, name string) string {
 	return fork + "_" + name
 }
 
+// emitableSpecs returns the caseSpecs that --write-cases emits: the shared
+// table minus bScopeSpecs entries (Task 3 F1: legacy_transfer must not be
+// emitted until the T8n replayer has a legacy consumer arm).
+func emitableSpecs() []caseSpec {
+	out := make([]caseSpec, 0, len(caseSpecs))
+	for _, spec := range caseSpecs {
+		if bScopeSpecs[spec.name] {
+			continue
+		}
+		out = append(out, spec)
+	}
+	return out
+}
+
 func emitCases(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	count := 0
-	for _, spec := range caseSpecs {
+	for _, spec := range emitableSpecs() {
 		for _, fork := range spec.forks {
 			c := spec.build(fork)
 			raw, err := json.MarshalIndent(&c, "", "  ")
@@ -1367,4 +1389,324 @@ func emitCases(dir string) error {
 	}
 	fmt.Printf("wrote %d case files to %s\n", count, dir)
 	return nil
+}
+
+// ---------------------------------------------------------------------
+// §4b invalid-tx kinds (Task 4). INDEPENDENT table — MUST NOT enter the shared
+// caseSpecs/emitCases (review R7): GenerateChainWithGenesis.AddTx rejects an
+// invalid tx outright, so a shared entry would make --write-cases emit an
+// .in.json the valid pipeline cannot regenerate. The invalid-tx generation
+// path (buildInvalidTxBlock) hand-rolls txRoot/blockHash instead.
+// ---------------------------------------------------------------------
+
+// invalidTxBuilder builds the invalid non-deposit tx (a *types.Transaction)
+// AND its block.transactions structured output object (the replayer's
+// loadBlockContext three-arm loader). The output object is authoritative: the
+// replayer reads the STRUCTURED fields to build the evmone tx and keeps _op_raw
+// as the signed EIP-2718 envelope for opValidate's L1-cost derivation.
+type invalidTxBuilder func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error)
+
+// invalidTxCaseSpec describes one §4b kind. consumer follows review R16:
+// decode-level kinds (blob) are consumer:"both" (engine decode message is the
+// validation_error_contains anchor); every other kind is consumer:"executor"
+// (the engine RTTI-bypass collapses the tx-level message to a generic one, so
+// the T8n throw assertion is the ONLY transaction-level semantic anchor).
+type invalidTxCaseSpec struct {
+	kind     string
+	forks    []string
+	consumer string // "executor" | "both"
+	opGeth   string // op-geth rejection message substring (weak anchor)
+	t8n      string // T8n throw message substring (validation_error_contains)
+	decode   string // FISCO raw-tx decode message (decode-level kinds only; blob)
+	build    func(fork string) (inputCase, invalidTxBuilder)
+}
+
+// invalidTxKinds returns the kind names for diagnostics.
+func invalidTxKinds() []string {
+	out := make([]string, len(invalidTxCaseSpecs))
+	for i := range invalidTxCaseSpecs {
+		out[i] = invalidTxCaseSpecs[i].kind
+	}
+	return out
+}
+
+// ptrBytes returns a *hexutil.Bytes for an inputTx SecretKey.
+func ptrBytes(b hexutil.Bytes) *hexutil.Bytes { return &b }
+
+var invalidTxCaseSpecs = []invalidTxCaseSpec{
+	// intrinsic_gas: EIP-1559 value transfer with gas=0 < 21000 intrinsic.
+	{"intrinsic_gas", bothForks, "executor", "intrinsic gas too low", "intrinsic gas too low", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_intrinsic_gas",
+			"deposit + gas=0 EIP-1559 tx (intrinsic gas too low)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			k := privKey(1)
+			to := recA
+			in := inputTx{
+				OpType: "eip1559", ChainID: hd256(chainID), Nonce: hd64(0), To: &to,
+				Value: hdu(0), Gas: hd64(0), // gas=0 → intrinsic gas too low
+				MaxFeePerGas: hdu(2_000_000_000), MaxPriorityFeePerGas: hdu(100_000_000),
+				Data: nil, SecretKey: &k,
+			}
+			return buildTx(&in, signer, cfg)
+		}
+	}},
+
+	// nonce_low: tx nonce 0 < account nonce 1 (pre-state raises the nonce).
+	{"nonce_low", bothForks, "executor", "nonce too low", "nonce too low", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_nonce_low",
+			"deposit + nonce-0 EIP-1559 tx against account nonce 1 (nonce too low)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		c.Pre[addrOfKey(1)] = types.Account{Balance: eth(100), Nonce: 1}
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			k := privKey(1)
+			to := recA
+			in := inputTx{
+				OpType: "eip1559", ChainID: hd256(chainID), Nonce: hd64(0), To: &to,
+				Value: hdu(0), Gas: hd64(21_000),
+				MaxFeePerGas: hdu(2_000_000_000), MaxPriorityFeePerGas: hdu(100_000_000),
+				Data: nil, SecretKey: &k,
+			}
+			return buildTx(&in, signer, cfg)
+		}
+	}},
+
+	// nonce_high: tx nonce 5 > account nonce 0.
+	{"nonce_high", bothForks, "executor", "nonce too high", "nonce too high", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_nonce_high",
+			"deposit + nonce-5 EIP-1559 tx against account nonce 0 (nonce too high)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			k := privKey(1)
+			to := recA
+			in := inputTx{
+				OpType: "eip1559", ChainID: hd256(chainID), Nonce: hd64(5), To: &to,
+				Value: hdu(0), Gas: hd64(21_000),
+				MaxFeePerGas: hdu(2_000_000_000), MaxPriorityFeePerGas: hdu(100_000_000),
+				Data: nil, SecretKey: &k,
+			}
+			return buildTx(&in, signer, cfg)
+		}
+	}},
+
+	// insufficient_funds: balance 1 ETH < value 2 ETH (+ gas + L1 cost).
+	{"insufficient_funds", bothForks, "executor", "insufficient funds for gas * price + value", "insufficient funds for gas * price + value", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_insufficient_funds",
+			"deposit + 2-ETH value transfer from a 1-ETH account (insufficient funds)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(1))
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			k := privKey(1)
+			to := recA
+			in := inputTx{
+				OpType: "eip1559", ChainID: hd256(chainID), Nonce: hd64(0), To: &to,
+				Value: hd256(eth(2)), Gas: hd64(21_000),
+				MaxFeePerGas: hdu(2_000_000_000), MaxPriorityFeePerGas: hdu(100_000_000),
+				Data: nil, SecretKey: &k,
+			}
+			return buildTx(&in, signer, cfg)
+		}
+	}},
+
+	// fee_cap_low: maxFeePerGas 0.5 gwei < baseFee 1 gwei (London preCheck).
+	{"fee_cap_low", bothForks, "executor", "max fee per gas less than block base fee", "max fee per gas less than block base fee", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_fee_cap_low",
+			"deposit + 0.5-gwei maxFeePerGas tx under 1-gwei base fee (fee cap less than base fee)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			k := privKey(1)
+			to := recA
+			in := inputTx{
+				OpType: "eip1559", ChainID: hd256(chainID), Nonce: hd64(0), To: &to,
+				Value: hdu(0), Gas: hd64(21_000),
+				MaxFeePerGas: hdu(500_000_000), MaxPriorityFeePerGas: hdu(100_000_000),
+				Data: nil, SecretKey: &k,
+			}
+			return buildTx(&in, signer, cfg)
+		}
+	}},
+
+	// sender_no_eoa: sender address carries code (EIP-3607).
+	{"sender_no_eoa", bothForks, "executor", "sender not an eoa", "sender not an eoa", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_sender_no_eoa",
+			"deposit + EIP-1559 tx from a contract account (sender not an eoa)",
+			defaultFeeParams(), 10_000_000)
+		c.Pre[addrOfKey(1)] = types.Account{Balance: eth(100), Code: revertCode}
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			k := privKey(1)
+			to := recA
+			in := inputTx{
+				OpType: "eip1559", ChainID: hd256(chainID), Nonce: hd64(0), To: &to,
+				Value: hdu(0), Gas: hd64(21_000),
+				MaxFeePerGas: hdu(2_000_000_000), MaxPriorityFeePerGas: hdu(100_000_000),
+				Data: nil, SecretKey: &k,
+			}
+			return buildTx(&in, signer, cfg)
+		}
+	}},
+
+	// setcode_create: EIP-7702 create (ErrSetCodeTxCreate). A real signed
+	// SetCodeTx envelope cannot express nil To (To() is always non-nil), so the
+	// STRUCTURED tx carries to:null (→ evmone CREATE_SET_CODE_TX) while the
+	// _op_raw envelope is a setcode tx to the zero address. op_geth anchor is
+	// documentation-only (the error is not reachable through a real envelope).
+	{"setcode_create", bothForks, "executor", "EIP-7702 transaction cannot be used to create contract", "set code transaction must not be a create transaction", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_setcode_create",
+			"deposit + EIP-7702 create tx (structured to:null → set code tx must not be a create)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			prv, from, err := parseKey(ptrBytes(privKey(1)))
+			if err != nil {
+				return nil, nil, err
+			}
+			auth, err := types.SignSetCode(prv, types.SetCodeAuthorization{
+				ChainID: *uint256.MustFromBig(chainID),
+				Address: recA,
+				Nonce:   0,
+			})
+			if err != nil {
+				return nil, nil, fmt.Errorf("setcode_create: SignSetCode: %w", err)
+			}
+			tx := types.MustSignNewTx(prv, signer, &types.SetCodeTx{
+				ChainID:   uint256.MustFromBig(chainID),
+				Nonce:     0,
+				GasTipCap: uint256.MustFromBig(big.NewInt(100_000_000)),
+				GasFeeCap: uint256.MustFromBig(big.NewInt(2_000_000_000)),
+				Gas:       100_000,
+				To:        common.Address{}, // envelope can't express nil To; structured to:null carries the create
+				Value:     uint256.NewInt(0),
+				Data:      nil,
+				AuthList:  []types.SetCodeAuthorization{auth},
+			})
+			rawBin, err := tx.MarshalBinary()
+			if err != nil {
+				return nil, nil, err
+			}
+			outJSON, err := json.Marshal(outputSetCodeTxCreate{
+				OpType:  "setcode",
+				OpRaw:   hexutil.Encode(rawBin),
+				ChainID: (*math.HexOrDecimal256)(chainID), Nonce: math.HexOrDecimal64(0),
+				To:                   nil, // → replayer builds to:nullopt → CREATE_SET_CODE_TX
+				Gas:                  math.HexOrDecimal64(100_000),
+				MaxFeePerGas:         (*math.HexOrDecimal256)(big.NewInt(2_000_000_000)),
+				MaxPriorityFeePerGas: (*math.HexOrDecimal256)(big.NewInt(100_000_000)),
+				Value:                (*math.HexOrDecimal256)(big.NewInt(0)),
+				Data:                 hexutil.Bytes{},
+				Sender:               from,
+				OpAuthorizationList: []outputAuthorization{{
+					ChainID: (*math.HexOrDecimal256)(chainID),
+					Address: recA,
+					Nonce:   math.HexOrDecimal64(0),
+					YParity: math.HexOrDecimal64(auth.V),
+					R:       (*math.HexOrDecimal256)(auth.R.ToBig()),
+					S:       (*math.HexOrDecimal256)(auth.S.ToBig()),
+				}},
+			})
+			return tx, outJSON, err
+		}
+	}},
+
+	// empty_auth_list: EIP-7702 tx with an EMPTY authorization list.
+	{"empty_auth_list", bothForks, "executor", "EIP-7702 transaction with empty auth list", "empty authorization list", "", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_empty_auth_list",
+			"deposit + EIP-7702 tx with empty auth list (empty authorization list)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			prv, from, err := parseKey(ptrBytes(privKey(1)))
+			if err != nil {
+				return nil, nil, err
+			}
+			tx := types.MustSignNewTx(prv, signer, &types.SetCodeTx{
+				ChainID:   uint256.MustFromBig(chainID),
+				Nonce:     0,
+				GasTipCap: uint256.MustFromBig(big.NewInt(100_000_000)),
+				GasFeeCap: uint256.MustFromBig(big.NewInt(2_000_000_000)),
+				Gas:       100_000,
+				To:        recA,
+				Value:     uint256.NewInt(0),
+				Data:      nil,
+				AuthList:  []types.SetCodeAuthorization{},
+			})
+			rawBin, err := tx.MarshalBinary()
+			if err != nil {
+				return nil, nil, err
+			}
+			outJSON, err := json.Marshal(outputSetCodeTx{
+				OpType:  "setcode",
+				OpRaw:   hexutil.Encode(rawBin),
+				ChainID: (*math.HexOrDecimal256)(chainID), Nonce: math.HexOrDecimal64(0),
+				To:                   recA,
+				Gas:                  math.HexOrDecimal64(100_000),
+				MaxFeePerGas:         (*math.HexOrDecimal256)(big.NewInt(2_000_000_000)),
+				MaxPriorityFeePerGas: (*math.HexOrDecimal256)(big.NewInt(100_000_000)),
+				Value:                (*math.HexOrDecimal256)(big.NewInt(0)),
+				Data:                 hexutil.Bytes{},
+				Sender:               from,
+				OpAuthorizationList:  []outputAuthorization{},
+			})
+			return tx, outJSON, err
+		}
+	}},
+
+	// blob: type-3 blob tx. op-geth OP rejects at txpool ("transaction type
+	// not supported") and at block validation ("data blobs present in block
+	// body"); FISCO rejects at raw-tx DECODE ("unsupported tx type byte 0x3").
+	// consumer:"both" (review R16) — the decode message is a reliable engine
+	// validationError surface.
+	{"blob", bothForks, "both", "data blobs present in block body", "unsupported tx type byte 0x3", "unsupported tx type byte 0x3", func(fork string) (inputCase, invalidTxBuilder) {
+		c := caseFrame(fork, "invalid_blob",
+			"deposit + type-3 blob tx (OP rejects blobs; FISCO decode fails)",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		return c, func(signer types.Signer, cfg *params.ChainConfig) (*types.Transaction, json.RawMessage, error) {
+			prv, from, err := parseKey(ptrBytes(privKey(1)))
+			if err != nil {
+				return nil, nil, err
+			}
+			blobHash := common.HexToHash("0x0101010101010101010101010101010101010101010101010101010101010101")
+			// The OP Isthmus signer EXPLICITLY unsets BlobTxType (it is an
+			// invalid-tx kind on OP chains), so sign the envelope with the
+			// Cancun signer instead — the tx is rejected at decode/block
+			// validation before signature validity is ever consulted.
+			blobSigner := types.NewCancunSigner(chainID)
+			tx := types.MustSignNewTx(prv, blobSigner, &types.BlobTx{
+				ChainID:    uint256.MustFromBig(chainID),
+				Nonce:      0,
+				GasTipCap:  uint256.MustFromBig(big.NewInt(100_000_000)),
+				GasFeeCap:  uint256.MustFromBig(big.NewInt(2_000_000_000)),
+				Gas:        100_000,
+				To:         recA,
+				Value:      uint256.NewInt(0),
+				Data:       nil,
+				BlobFeeCap: uint256.MustFromBig(big.NewInt(1_000_000_000)),
+				BlobHashes: []common.Hash{blobHash},
+				Sidecar:    nil, // block body blob txs must NOT carry a sidecar (block_validator.go:99)
+			})
+			rawBin, err := tx.MarshalBinary()
+			if err != nil {
+				return nil, nil, err
+			}
+			outJSON, err := json.Marshal(outputBlobTx{
+				OpType:  "blob",
+				OpRaw:   hexutil.Encode(rawBin),
+				ChainID: (*math.HexOrDecimal256)(chainID), Nonce: math.HexOrDecimal64(0),
+				To:                   &recA,
+				Gas:                  math.HexOrDecimal64(100_000),
+				MaxFeePerGas:         (*math.HexOrDecimal256)(big.NewInt(2_000_000_000)),
+				MaxPriorityFeePerGas: (*math.HexOrDecimal256)(big.NewInt(100_000_000)),
+				BlobFeeCap:           (*math.HexOrDecimal256)(big.NewInt(1_000_000_000)),
+				BlobHashes:           []common.Hash{blobHash},
+				Value:                (*math.HexOrDecimal256)(big.NewInt(0)),
+				Data:                 hexutil.Bytes{},
+				Sender:               from,
+			})
+			return tx, outJSON, err
+		}
+	}},
 }

@@ -147,7 +147,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
-	case *invalidMode == "corrupt" || *invalidMode == "static":
+	case *invalidMode == "corrupt" || *invalidMode == "static" || *invalidMode == "invalid-tx":
 		if err := runInvalidMode(*invalidMode, *baseStem, *invalidOut, *opGethCommit); err != nil {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
@@ -158,7 +158,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --probe-precompile <fork> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>] | --mode corrupt|static --base <stem> --out-dir <dir> [--op-geth-commit <sha>]")
+		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --probe-precompile <fork> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>] | --mode corrupt|static|invalid-tx --base <stem> --out-dir <dir> [--op-geth-commit <sha>]")
 		os.Exit(2)
 	}
 }
@@ -351,6 +351,47 @@ type outputLegacyTx struct {
 	Sender   common.Address        `json:"sender"`
 }
 
+// outputSetCodeTxCreate is the setcode_create invalid-tx output object
+// (Task 4). Unlike outputSetCodeTx, To is *common.Address so the vector can
+// carry `to: null` — the evmone opValidate CREATE_SET_CODE_TX trigger
+// (eth/state/state.cpp:356-357). The replayer's setcode loader reads to
+// verbatim (OpT8nReplayTest.cpp:541-543), so the structured object (not the
+// raw envelope) is what makes the create rejection reachable.
+type outputSetCodeTxCreate struct {
+	OpType               string                `json:"_op_type"`
+	OpRaw                string                `json:"_op_raw"`
+	ChainID              *math.HexOrDecimal256 `json:"chainId"`
+	Nonce                math.HexOrDecimal64   `json:"nonce"`
+	To                   *common.Address       `json:"to"`
+	Gas                  math.HexOrDecimal64   `json:"gas"`
+	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas"`
+	Value                *math.HexOrDecimal256 `json:"value"`
+	Data                 hexutil.Bytes         `json:"data"`
+	Sender               common.Address        `json:"sender"`
+	OpAuthorizationList  []outputAuthorization `json:"_op_authorization_list"`
+}
+
+// outputBlobTx is the blob invalid-tx output object (Task 4). The replayer has
+// no blob arm yet (consumer follow-up); the engine payload consumes the _op_raw
+// envelope directly, and this structured object carries the fields the future
+// blob loader would need (EIP-4844: blobFeeCap + blobHashes).
+type outputBlobTx struct {
+	OpType               string                `json:"_op_type"`
+	OpRaw                string                `json:"_op_raw"`
+	ChainID              *math.HexOrDecimal256 `json:"chainId"`
+	Nonce                math.HexOrDecimal64   `json:"nonce"`
+	To                   *common.Address       `json:"to"`
+	Gas                  math.HexOrDecimal64   `json:"gas"`
+	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas"`
+	BlobFeeCap           *math.HexOrDecimal256 `json:"blobFeeCap"`
+	BlobHashes           []common.Hash         `json:"blobHashes"`
+	Value                *math.HexOrDecimal256 `json:"value"`
+	Data                 hexutil.Bytes         `json:"data"`
+	Sender               common.Address        `json:"sender"`
+}
+
 type outputBlock struct {
 	Transactions []json.RawMessage `json:"transactions"`
 }
@@ -464,16 +505,26 @@ type outputVector struct {
 	OpExpected opExpected                       `json:"_op_expected"`
 }
 
-// invalidVectorDoc is the on-disk shape of a Task 3 invalid vector
+// invalidVectorDoc is the on-disk shape of a Task 3/4 invalid vector
 // (vectors/invalid_*.json). The engine consumer (OpNewPayloadRpcE2eTest,
 // w6test::loadInvalidSample) reads _info.hardfork / pre / _op_payload /
-// _op_expected.reject; env/block/postState are not produced (no replay
-// semantics on an invalid block).
+// _op_expected.reject. The Task 4 invalid-tx vectors ADD env + block
+// (omitempty, so corrupt/static vectors stay byte-identical): the T8n replayer
+// (OpT8nReplayTest::loadBlockContext) needs env + block.transactions (the
+// structured tx objects) to reach assertRejectThrow.
 type invalidVectorDoc struct {
-	Info       caseInfo                         `json:"_info"`
-	Pre        map[common.Address]outputAccount `json:"pre"`
-	OpPayload  map[string]interface{}           `json:"_op_payload"`
-	OpExpected invalidExpected                  `json:"_op_expected"`
+	Info caseInfo                         `json:"_info"`
+	Pre  map[common.Address]outputAccount `json:"pre"`
+	// Env/Block/PostState are *pointers* + omitempty: Go's omitempty does NOT
+	// elide a zero struct, so a value field would leak `env`/`block` into the
+	// Task 3 corrupt/static vectors and break byte-invariance. The Task 4
+	// invalid-tx vectors set them (the T8n replayer needs env + block; the
+	// setcode loader needs a present postState).
+	Env        *outputEnv             `json:"env,omitempty"`
+	Block      *outputBlock           `json:"block,omitempty"`
+	PostState  *types.GenesisAlloc    `json:"postState,omitempty"`
+	OpPayload  map[string]interface{} `json:"_op_payload"`
+	OpExpected invalidExpected        `json:"_op_expected"`
 }
 
 // invalidExpected is the lean _op_expected for invalid vectors: only the reject
@@ -1696,6 +1747,19 @@ func runInvalidMode(mode, baseStem, outDir, opGethCommit string) error {
 	if fork != "isthmus" && fork != "jovian" {
 		return fmt.Errorf("--mode=%s requires an isthmus/jovian base (OP Isthmus+ path), got fork %q", mode, fork)
 	}
+	// corrupt/static need the ASSEMBLED valid base block; invalid-tx does not
+	// (its kinds build their own case from the independent invalidTxCaseSpecs).
+	if mode == "invalid-tx" {
+		// baseStem = "fork_kind" (e.g. isthmus_intrinsic_gas). Each kind is an
+		// INDEPENDENT invalidTxCaseSpecs entry (review R7) — never shared
+		// caseSpecs/emitCases. Emits one invalid_<stem>.json.
+		doc, _, _, err := buildInvalidTxVector(name, fork)
+		if err != nil {
+			return fmt.Errorf("invalid-tx %s/%s: %w", fork, name, err)
+		}
+		return writeInvalidVector(outDir, "invalid_"+baseStem, doc, opGethCommit)
+	}
+
 	in, err := buildCaseFromSpecs(name, fork)
 	if err != nil {
 		return err
@@ -1780,6 +1844,279 @@ func splitVectorName(stem string) (fork, name string, err error) {
 
 func itoa(n int) string {
 	return fmt.Sprintf("%d", n)
+}
+
+// ---------------------------------------------------------------------
+// Task 4: invalid-tx mode (§4b). Independent from the shared caseSpecs table.
+// ---------------------------------------------------------------------
+
+// invalidTxSpec returns the §4b spec for a kind.
+func invalidTxSpec(kind string) (*invalidTxCaseSpec, error) {
+	for i := range invalidTxCaseSpecs {
+		if invalidTxCaseSpecs[i].kind == kind {
+			return &invalidTxCaseSpecs[i], nil
+		}
+	}
+	return nil, fmt.Errorf("invalidTxSpec: unknown kind %q (available: %v)", kind, invalidTxKinds())
+}
+
+// buildInvalidTxCase looks up a §4b kind+fork and builds the input case
+// (deposit + pre-state) plus the kind's invalid-tx builder.
+func buildInvalidTxCase(kind, fork string) (inputCase, invalidTxBuilder, error) {
+	spec, err := invalidTxSpec(kind)
+	if err != nil {
+		return inputCase{}, nil, err
+	}
+	for _, f := range spec.forks {
+		if f == fork {
+			in, builder := spec.build(fork)
+			return in, builder, nil
+		}
+	}
+	return inputCase{}, nil, fmt.Errorf("invalidTxSpec %q has no fork %q (available: %v)", kind, fork, spec.forks)
+}
+
+// buildGenesisForCase assembles the core.Genesis for an input case — the same
+// construction buildBlockVector/processBlockVector use (byte-invariant golden
+// path), factored out for the invalid-tx path (which cannot go through
+// GenerateChainWithGenesis: AddTx rejects invalid txs).
+func buildGenesisForCase(in *inputCase, cfg *params.ChainConfig) (*core.Genesis, error) {
+	genesisTime := uint64(in.Genesis.Timestamp)
+	denom := uint64(in.Genesis.EIP1559Denominator)
+	elasticity := uint64(in.Genesis.EIP1559Elasticity)
+	var minBaseFee *uint64
+	if cfg.IsJovian(genesisTime) {
+		if in.Genesis.MinBaseFee == nil {
+			return nil, fmt.Errorf("jovian case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
+		}
+		v := uint64(*in.Genesis.MinBaseFee)
+		minBaseFee = &v
+	}
+	var genesisBaseFee *big.Int
+	if in.Genesis.BaseFee != nil {
+		genesisBaseFee = (*big.Int)(in.Genesis.BaseFee)
+	}
+	return &core.Genesis{
+		Config:     cfg,
+		Timestamp:  genesisTime,
+		GasLimit:   uint64(in.Genesis.GasLimit),
+		BaseFee:    genesisBaseFee,
+		Difficulty: big.NewInt(0),
+		ExtraData:  eip1559.EncodeOptimismExtraData(cfg, genesisTime, denom, elasticity, minBaseFee),
+		Alloc:      in.Pre,
+	}, nil
+}
+
+// buildInvalidTxBlock assembles a STRUCTURALLY-valid block whose body contains
+// deposit + invalid (an invalid non-deposit tx). GenerateChain cannot AddTx an
+// invalid tx, so txRoot is hand-rolled (types.DeriveSha over the two txs) and
+// blockHash is recomputed from the header; stateRoot is a placeholder (the
+// block fails at execution, before any stateRoot comparison — FISCO only
+// reaches execution after the step-2 blockHash check). The header is fully
+// legal: extraData = EncodeOptimismExtraData (else VerifyHeaders rejects
+// first), baseFee recomputed from the parent (else InsertChain rejects with
+// "invalid baseFee" before the tx), withdrawalsRoot = EmptyWithdrawalsHash
+// (Isthmus+), requestsHash = EmptyRequestsHash, blobGasUsed/excessBlobGas = 0,
+// parentBeaconRoot set. The invalid tx is inserted AFTER the L1 attributes
+// deposit (position 0 would reject with "first tx is not the L1 attributes
+// deposit" — wrong anchor).
+func buildInvalidTxBlock(in *inputCase, cfg *params.ChainConfig, genesis *core.Genesis,
+	signer types.Signer, deposit, invalid *types.Transaction) (*types.Block, error) {
+	if in == nil || cfg == nil || genesis == nil {
+		return nil, fmt.Errorf("buildInvalidTxBlock: nil in/cfg/genesis")
+	}
+	if deposit == nil || invalid == nil {
+		return nil, fmt.Errorf("buildInvalidTxBlock: nil deposit/invalid tx")
+	}
+	if !deposit.IsDepositTx() {
+		return nil, fmt.Errorf("buildInvalidTxBlock: tx0 must be the L1 attributes deposit (got type %d)", deposit.Type())
+	}
+	genesisTime := uint64(in.Genesis.Timestamp)
+	blockTime := genesisTime + 10
+	denom := uint64(in.Genesis.EIP1559Denominator)
+	elasticity := uint64(in.Genesis.EIP1559Elasticity)
+	var minBaseFee *uint64
+	if cfg.IsJovian(blockTime) {
+		if in.Genesis.MinBaseFee == nil {
+			return nil, fmt.Errorf("jovian invalid-tx case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
+		}
+		v := uint64(*in.Genesis.MinBaseFee)
+		minBaseFee = &v
+	}
+	extra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, minBaseFee)
+
+	txs := []*types.Transaction{deposit, invalid}
+	txRoot := types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil))
+	parentBlock := genesis.ToBlock()
+	parentHash := parentBlock.Hash()
+	// Block 1 baseFee is recomputed from the parent (genesis) by the chain —
+	// a hardcoded parent BaseFee would fail InsertChain's "invalid baseFee"
+	// header check BEFORE reaching the invalid tx, mis-anchoring the rejection.
+	baseFee := eip1559.CalcBaseFee(cfg, parentBlock.Header(), blockTime)
+
+	header := &types.Header{
+		ParentHash:       parentHash,
+		UncleHash:        types.EmptyUncleHash,
+		Coinbase:         in.Coinbase,
+		Root:             types.EmptyRootHash, // placeholder — execution fails before stateRoot comparison
+		TxHash:           txRoot,
+		ReceiptHash:      types.EmptyReceiptsHash,
+		Bloom:            types.Bloom{},
+		Difficulty:       big.NewInt(0),
+		Number:           big.NewInt(1),
+		GasLimit:         genesis.GasLimit,
+		GasUsed:          0,
+		Time:             blockTime,
+		Extra:            extra,
+		MixDigest:        common.Hash{},
+		BaseFee:          baseFee,
+		WithdrawalsHash:  &types.EmptyWithdrawalsHash,
+		RequestsHash:     &types.EmptyRequestsHash,
+		BlobGasUsed:      new(uint64),
+		ExcessBlobGas:    new(uint64),
+		ParentBeaconRoot: &in.ParentBeaconBlockRoot,
+	}
+	// NewBlock requires non-nil empty withdrawals on the Isthmus+ path
+	// (HasOptimismWithdrawalsRoot → panic on nil), and recomputes TxHash /
+	// ReceiptHash / WithdrawalsHash from the body (all agree with our header).
+	body := &types.Body{Transactions: txs, Withdrawals: types.Withdrawals{}}
+	block := types.NewBlock(header, body, nil, trie.NewStackTrie(nil), cfg)
+	if block.Hash() != header.Hash() {
+		return nil, fmt.Errorf("buildInvalidTxBlock: NewBlock hash %s != header hash %s", block.Hash().Hex(), header.Hash().Hex())
+	}
+	return block, nil
+}
+
+// buildInvalidTxPayload assembles the ExecutionPayload JSON for an invalid-tx
+// block (same field units/conventions as buildOpPayload: timestamp in OP
+// seconds, every quantity a hex string). txs are the block's transactions in
+// order (deposit, invalid) — the raw envelopes the engine decodes.
+func buildInvalidTxPayload(header *types.Header, blockHash common.Hash, txs []*types.Transaction) (map[string]interface{}, error) {
+	if header.WithdrawalsHash == nil || header.BlobGasUsed == nil || header.ExcessBlobGas == nil || header.ParentBeaconRoot == nil {
+		return nil, fmt.Errorf("buildInvalidTxPayload: header missing WithdrawalsHash/BlobGasUsed/ExcessBlobGas/ParentBeaconRoot")
+	}
+	txHexes := make([]string, len(txs))
+	for i, tx := range txs {
+		b, err := tx.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("buildInvalidTxPayload: tx %d MarshalBinary: %w", i, err)
+		}
+		txHexes[i] = hexutil.Encode(b)
+	}
+	return map[string]interface{}{
+		"parentHash":            header.ParentHash.Hex(),
+		"feeRecipient":          strings.ToLower(header.Coinbase.Hex()),
+		"stateRoot":             header.Root.Hex(),
+		"receiptsRoot":          header.ReceiptHash.Hex(),
+		"logsBloom":             hexutil.Encode(header.Bloom[:]),
+		"prevRandao":            header.MixDigest.Hex(),
+		"blockNumber":           hexutil.EncodeUint64(header.Number.Uint64()),
+		"gasLimit":              hexutil.EncodeUint64(header.GasLimit),
+		"gasUsed":               hexutil.EncodeUint64(header.GasUsed),
+		"timestamp":             hexutil.EncodeUint64(header.Time),
+		"extraData":             hexutil.Encode(header.Extra),
+		"baseFeePerGas":         hexutil.EncodeBig(header.BaseFee),
+		"blockHash":             blockHash.Hex(),
+		"withdrawalsRoot":       header.WithdrawalsHash.Hex(),
+		"blobGasUsed":           hexutil.EncodeUint64(*header.BlobGasUsed),
+		"excessBlobGas":         hexutil.EncodeUint64(*header.ExcessBlobGas),
+		"parentBeaconBlockRoot": header.ParentBeaconRoot.Hex(),
+		"withdrawals":           []interface{}{},
+		"transactions":          txHexes,
+	}, nil
+}
+
+// buildInvalidTxReject fills the _op_expected.reject schema for a §4b kind.
+// consumer follows review R16: decode-level kinds carry the FISCO decode
+// message as validation_error_contains (a reliable engine surface); the rest
+// carry the T8n throw message (executor-only semantics — the engine
+// RTTI-bypass collapses it to a generic message, so the E2E runner must not
+// assert validation_error_contains on those).
+func buildInvalidTxReject(spec *invalidTxCaseSpec) *rejectExpected {
+	validationContains := spec.t8n
+	if spec.decode != "" {
+		validationContains = spec.decode
+	}
+	return &rejectExpected{
+		OpGeth: spec.opGeth,
+		Fisco: fiscoReject{
+			Consumer:                spec.consumer,
+			Classification:          "INVALID",
+			LatestValidHash:         json.RawMessage(`"parent"`),
+			ValidationErrorContains: validationContains,
+		},
+	}
+}
+
+// buildInvalidTxVector assembles the full on-disk invalid vector for a §4b
+// kind+fork, plus the built block and genesis (the Go tests verify txRoot /
+// blockHash / InsertChain rejection against them). The vector carries BOTH the
+// engine payload (_op_payload) AND the T8n replay surface (env + block).
+func buildInvalidTxVector(kind, fork string) (invalidVectorDoc, *types.Block, *core.Genesis, error) {
+	zero := invalidVectorDoc{}
+	spec, err := invalidTxSpec(kind)
+	if err != nil {
+		return zero, nil, nil, err
+	}
+	in, buildInvalid, err := buildInvalidTxCase(kind, fork)
+	if err != nil {
+		return zero, nil, nil, err
+	}
+	cfg, err := buildConfigForCase(&in)
+	if err != nil {
+		return zero, nil, nil, err
+	}
+	genesis, err := buildGenesisForCase(&in, cfg)
+	if err != nil {
+		return zero, nil, nil, err
+	}
+	blockTime := uint64(in.Genesis.Timestamp) + 10
+	signer := types.MakeSigner(cfg, big.NewInt(1), blockTime)
+	deposit, depositOut, err := buildTx(&in.Transactions[0], signer, cfg)
+	if err != nil {
+		return zero, nil, nil, fmt.Errorf("deposit: %w", err)
+	}
+	invalid, invalidOut, err := buildInvalid(signer, cfg)
+	if err != nil {
+		return zero, nil, nil, fmt.Errorf("invalid tx: %w", err)
+	}
+	blk, err := buildInvalidTxBlock(&in, cfg, genesis, signer, deposit, invalid)
+	if err != nil {
+		return zero, nil, nil, err
+	}
+	payload, err := buildInvalidTxPayload(blk.Header(), blk.Hash(), []*types.Transaction{deposit, invalid})
+	if err != nil {
+		return zero, nil, nil, err
+	}
+	env := outputEnv{
+		CurrentCoinbase:       strings.ToLower(in.Coinbase.Hex()),
+		CurrentNumber:         hexutil.EncodeUint64(1),
+		CurrentTimestamp:      hexutil.EncodeUint64(blockTime),
+		CurrentGasLimit:       hexutil.EncodeUint64(blk.GasLimit()),
+		CurrentBaseFee:        hexutil.EncodeBig(blk.BaseFee()),
+		CurrentRandom:         "0x0",
+		ParentBeaconBlockRoot: in.ParentBeaconBlockRoot.Hex(),
+		ParentHash:            blk.ParentHash().Hex(),
+	}
+	doc := invalidVectorDoc{
+		Info: caseInfo{
+			Hardfork: fork,
+			Description: fmt.Sprintf("%s: %s (invalid %s tx inserted after the L1 attributes deposit)",
+				spec.kind, spec.opGeth, spec.kind),
+		},
+		Pre:   emitPre(in.Pre),
+		Env:   &env,
+		Block: &outputBlock{Transactions: []json.RawMessage{depositOut, invalidOut}},
+		// The replayer's setcode loader hard-requires `postState` for any auth
+		// tuple; the rejected block applies no delegation, so the map is empty.
+		// Only setcode txs carry it (all other arms never read postState).
+		PostState: &types.GenesisAlloc{},
+		OpPayload: payload,
+		OpExpected: invalidExpected{
+			Reject: buildInvalidTxReject(spec),
+		},
+	}
+	return doc, blk, genesis, nil
 }
 
 // recomputeOpHeaderHash returns the canonical OP block hash: keccak256 of the
