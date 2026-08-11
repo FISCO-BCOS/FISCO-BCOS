@@ -558,26 +558,25 @@ void runInvalidVector(std::string const& id)
         }
         else  // -32603：两投——先投 canonical 子块（VALID，写 SYS_NUMBER_2_HASH 占用），再投 sibling
         {
-            if (sample.vector.isMember("_op_canonical"))
-            {
-                w6test::InvalidSample canonicalSample;
-                canonicalSample.vector["_info"]["hardfork"] = sample.hardfork;
-                canonicalSample.vector["_op_payload"] = sample.vector["_op_canonical"];
-                canonicalSample.jovian = sample.jovian;
-                auto canonicalParams = w6test::makeInvalidParamsJson(canonicalSample);
-                auto canonicalReq = bcos::rpc::parseNewPayloadRequest(canonicalParams,
-                    *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
-                auto canonicalStatus =
-                    bcos::task::syncWait(fixture->service.newPayload(canonicalReq, 4));
-                BOOST_REQUIRE_MESSAGE(
-                    static_cast<int>(canonicalStatus.status) ==
-                        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
-                    id << ": canonical expected VALID, got "
-                       << static_cast<int>(canonicalStatus.status)
-                       << (canonicalStatus.validationError ?
-                                  " : " + *canonicalStatus.validationError :
-                                  ""));
-            }
+            // canonical 兄弟必须随向量携带（Task 5 chain_fork_* carrier 同 schema）。缺 =
+            // 畸形语料：单投 sibling 是 VALID 不抛，静默跳过会给误导性失败——响亮点名 schema 违例。
+            BOOST_REQUIRE_MESSAGE(sample.vector.isMember("_op_canonical"),
+                id << ": -32603 vector must carry _op_canonical (two-pour canonical sibling)");
+            w6test::InvalidSample canonicalSample;
+            canonicalSample.vector["_info"]["hardfork"] = sample.hardfork;
+            canonicalSample.vector["_op_payload"] = sample.vector["_op_canonical"];
+            canonicalSample.jovian = sample.jovian;
+            auto canonicalParams = w6test::makeInvalidParamsJson(canonicalSample);
+            auto canonicalReq = bcos::rpc::parseNewPayloadRequest(canonicalParams,
+                *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+            auto canonicalStatus =
+                bcos::task::syncWait(fixture->service.newPayload(canonicalReq, 4));
+            BOOST_REQUIRE_MESSAGE(
+                static_cast<int>(canonicalStatus.status) ==
+                    static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+                id << ": canonical expected VALID, got " << static_cast<int>(canonicalStatus.status)
+                   << (canonicalStatus.validationError ? " : " + *canonicalStatus.validationError :
+                                                         ""));
             BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, 4)),
                 bcos::engine::OpExecutionInternalError);
         }
@@ -592,7 +591,13 @@ void runInvalidVector(std::string const& id)
     BOOST_CHECK_MESSAGE(static_cast<int>(status.status) ==
                             static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),
         id << ": expected INVALID, got " << static_cast<int>(status.status));
-    if (fisco["latest_valid_hash"].isNull())
+    // INVALID 向量必须声明 latest_valid_hash（"parent"|null）；缺 = 畸形语料，响亮失败
+    // 而非把缺字段读成 null 断言错东西（stateRoot 损坏返回 parent 会假失败且信息误导）。
+    if (!fisco.isMember("latest_valid_hash"))
+    {
+        BOOST_ERROR(id << ": malformed vector — fisco.latest_valid_hash missing for INVALID");
+    }
+    else if (fisco["latest_valid_hash"].isNull())
     {
         BOOST_CHECK_MESSAGE(
             !status.latestValidHash.has_value(), id << ": latestValidHash should be null");
@@ -613,8 +618,28 @@ void runInvalidVector(std::string const& id)
     }
 }
 
-/// manifest.txt 内 `invalid_*` 子集（Task 1 loadManifest 同款逻辑）。Task 3 语料落地前为空集 →
-/// InvalidVectorsFromManifest 零迭代（前向兼容钩子）。
+/// manifest 一行 → 无效向量 stem。⚠️ 必须剥掉 `.json` 后缀：manifest.txt 条目是 `xxx.json`，
+/// 而 `loadInvalidSample`（GoldenSample.h）会再拼 `OP_T8N_VECTORS_DIR + "/" + id + ".json"`——
+/// 不剥则 `vectors/invalid_xxx.json.json` 硬崩。返回空串表示该行不构成无效向量条目
+/// （注释/空白/非 `invalid_` 前缀）。
+std::string invalidStemFromManifestLine(std::string line)
+{
+    const auto b = line.find_first_not_of(" \t\r");
+    if (b == std::string::npos)
+        return {};
+    const auto e = line.find_last_not_of(" \t\r");
+    line = line.substr(b, e - b + 1);
+    if (line.empty() || line[0] == '#')
+        return {};
+    if (line.rfind("invalid_", 0) != 0)
+        return {};
+    if (line.size() > 5 && line.rfind(".json") == line.size() - 5)
+        line = line.substr(0, line.size() - 5);
+    return line;
+}
+
+/// manifest.txt 内 `invalid_*` 子集（Task 1 loadManifest 同款逻辑，条目存 stem 无 `.json`）。
+/// Task 3 语料落地前为空集 → InvalidVectorsFromManifest 零迭代（前向兼容钩子）。
 std::set<std::string> loadInvalidManifest()
 {
     std::set<std::string> names;
@@ -627,15 +652,9 @@ std::set<std::string> loadInvalidManifest()
     std::string line;
     while (std::getline(input, line))
     {
-        const auto b = line.find_first_not_of(" \t\r");
-        if (b == std::string::npos)
-            continue;
-        const auto e = line.find_last_not_of(" \t\r");
-        line = line.substr(b, e - b + 1);
-        if (line.empty() || line[0] == '#')
-            continue;
-        if (line.rfind("invalid_", 0) == 0)
-            names.insert(line);
+        auto stem = invalidStemFromManifestLine(line);
+        if (!stem.empty())
+            names.insert(stem);
     }
     return names;
 }
@@ -794,7 +813,8 @@ BOOST_AUTO_TEST_CASE(JovianTxReverted)
     runGoldenVector("jovian_tx_reverted");
 }
 
-// ── 引擎门 probe（Task 2 gate 1）：5 个预编译代表向量（over-cap/7702/Jovian/value/成功 output 五风险面）──
+// ── 引擎门 probe（Task 2 gate 1）：5 个预编译代表向量（over-cap/7702/Jovian/value/成功 output
+// 五风险面）──
 BOOST_AUTO_TEST_CASE(IsthmusPrecompileBn256PairNorm)
 {
     runGoldenVector("isthmus_precompile_bn256pair_norm");
@@ -844,7 +864,8 @@ BOOST_AUTO_TEST_CASE(JovianChainedAB)
     runChainedPair("jovianChainA", "jovianChainB");
 }
 // ── Task 4 补全：24 个 precompile 矩阵向量（brief 附录 A id→用例名映射）──
-// Task 2 的 5 个 probe（bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/ecrecover）
+// Task 2 的 5 个
+// probe（bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/ecrecover）
 // 已覆盖五风险面；此段补全其余 24 个，合计 29 个 precompile 用例。
 BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlake2f)
 {
@@ -980,6 +1001,23 @@ BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
     {
         runInvalidVector(id);
     }
+}
+
+// 回归（审查 Important）：manifest 条目是 `invalid_xxx.json`，loadInvalidSample 会再拼 `.json`。
+// invalidStemFromManifestLine 必须剥后缀——否则 runInvalidVector 得 `vectors/invalid_xxx.json.json`
+// → loadJsonFile 硬崩。证明 manifest→load 路径不再拼重。
+BOOST_AUTO_TEST_CASE(InvalidManifestStemStripsJsonSuffix)
+{
+    // 真实 manifest 行形状 → stem 无后缀（loadInvalidSample 拼回后 = 原文件名）
+    BOOST_CHECK_EQUAL(
+        invalidStemFromManifestLine("invalid_inline_stateRoot.json"), "invalid_inline_stateRoot");
+    BOOST_CHECK_EQUAL(
+        invalidStemFromManifestLine("  invalid_foo_static_3.json  "), "invalid_foo_static_3");
+    // 非 invalid_ 前缀 / 注释 / 空白 → 不进子集
+    BOOST_CHECK_EQUAL(invalidStemFromManifestLine("jovian_deposit_only.json"), "");
+    BOOST_CHECK_EQUAL(invalidStemFromManifestLine("# comment"), "");
+    BOOST_CHECK_EQUAL(invalidStemFromManifestLine("   "), "");
+    BOOST_CHECK_EQUAL(invalidStemFromManifestLine(""), "");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

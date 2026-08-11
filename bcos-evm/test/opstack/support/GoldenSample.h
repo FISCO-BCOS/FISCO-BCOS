@@ -9,9 +9,9 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <engine/bcos-engine/EngineServiceImpl.h>
 #include <json/json.h>
-#include <string>
 #include <fstream>
 #include <sstream>
+#include <string>
 
 namespace w6test
 {
@@ -32,14 +32,16 @@ struct GoldenSample
 {
     std::string id;
     Json::Value vector;  // vectors/<id>.json -> [<id>]（含 env/pre/_op_expected）
-    Json::Value golden;  // golden/engine/<id>.golden.json（含 rawTransactions/encodedHeaderHex/blockHash）
+    Json::Value golden;  // golden/engine/<id>.golden.json（含
+                         // rawTransactions/encodedHeaderHex/blockHash）
     bool jovian = false;
 };
 
 inline bool isJovianVector(Json::Value const& vec)
 {
     const auto hardfork = vec["_info"]["hardfork"].asString();
-    if (hardfork == "jovian") return true;
+    if (hardfork == "jovian")
+        return true;
     if (hardfork != "isthmus")
         throw std::runtime_error("_info.hardfork must be exactly isthmus|jovian, got " + hardfork);
     return false;
@@ -60,8 +62,8 @@ inline GoldenSample loadChainedSample(std::string const& name)
 {
     GoldenSample sample;
     sample.id = name;
-    sample.vector = loadJsonFile(
-        std::string(OP_T8N_GOLDEN_ENGINE_DIR) + "/chained/" + name + ".golden.json");
+    sample.vector =
+        loadJsonFile(std::string(OP_T8N_GOLDEN_ENGINE_DIR) + "/chained/" + name + ".golden.json");
     sample.golden = sample.vector;  // 扁平文档同时是 vector 与 golden
     sample.jovian = isJovianVector(sample.vector);
     return sample;
@@ -92,11 +94,15 @@ inline std::string quantityOf(bcos::u256 const& v)
 inline std::string hexOfBytes(bcos::bytes const& b)
 {
     std::string out = "0x";
-    for (auto byte : b) out += "0123456789abcdef"[byte >> 4], out += "0123456789abcdef"[byte & 0xf];
+    for (auto byte : b)
+        out += "0123456789abcdef"[byte >> 4], out += "0123456789abcdef"[byte & 0xf];
     return out;
 }
 
-inline std::string hexPrefixedH256(bcos::h256 const& h) { return h.hexPrefixed(); }
+inline std::string hexPrefixedH256(bcos::h256 const& h)
+{
+    return h.hexPrefixed();
+}
 
 /// 从 golden 构造 engine_newPayloadV4 params JSON：
 /// [ExecutionPayload, expectedBlobVersionedHashes=[], parentBeaconBlockRoot]。
@@ -113,7 +119,8 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     ep["feeRecipient"] = "0x" + bcos::toHex(header->coinbase());  // Address 是 contiguous range
     ep["stateRoot"] = hexPrefixedH256(header->stateRoot());
     ep["receiptsRoot"] = hexPrefixedH256(header->receiptsRoot());
-    ep["logsBloom"] = hexOfBytes(bcos::bytes(header->logsBloom().begin(), header->logsBloom().end()));
+    ep["logsBloom"] =
+        hexOfBytes(bcos::bytes(header->logsBloom().begin(), header->logsBloom().end()));
     ep["prevRandao"] = hexPrefixedH256(header->prevRandao());
     ep["blockNumber"] = quantityOf(bcos::u256(header->number()));
     ep["gasLimit"] = quantityOf(header->gasLimit());
@@ -121,17 +128,19 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     // timestamp：OP 秒（decodeOpHeader 存的是毫秒，÷1000）
     ep["timestamp"] = quantityOf(bcos::u256(header->timestamp() / 1000));
     ep["extraData"] = hexOfBytes(header->extraData().toBytes());  // extraData() 返回 bytesConstRef
-    ep["baseFeePerGas"] = quantityOf(*header->baseFee());  // baseFee() 返回 optional<u256>
+    ep["baseFeePerGas"] = quantityOf(*header->baseFee());         // baseFee() 返回 optional<u256>
     ep["blockHash"] = golden["blockHash"].asString();
     // OP 路径必须 present-and-empty（validateOpNewPayloadRequest EngineServiceImpl.cpp:301-303）
     ep["withdrawals"] = Json::Value(Json::arrayValue);
     Json::Value txs(Json::arrayValue);
-    for (auto const& raw : golden["rawTransactions"]) txs.append(raw.asString());
+    for (auto const& raw : golden["rawTransactions"])
+        txs.append(raw.asString());
     ep["transactions"] = txs;
     if (header->withdrawalsRoot())
         ep["withdrawalsRoot"] = hexPrefixedH256(*header->withdrawalsRoot());
-    ep["blobGasUsed"] = quantityOf(*header->blobGasUsed());      // optional<u256>，decodeOpHeader 恒填
-    ep["excessBlobGas"] = quantityOf(*header->excessBlobGas());  // optional<u256>，decodeOpHeader 恒填
+    ep["blobGasUsed"] = quantityOf(*header->blobGasUsed());  // optional<u256>，decodeOpHeader 恒填
+    ep["excessBlobGas"] =
+        quantityOf(*header->excessBlobGas());  // optional<u256>，decodeOpHeader 恒填
 
     Json::Value params(Json::arrayValue);
     params.append(ep);
