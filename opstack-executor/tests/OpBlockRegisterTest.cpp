@@ -220,6 +220,24 @@ BOOST_AUTO_TEST_CASE(HappyFiveTables)
     auto tx = blockFactory->transactionFactory()->createTransaction(
         txBytes, /*checkSig=*/false, /*checkHash=*/false, /*tainted=*/false);
     BOOST_CHECK_EQUAL(tx->hash(), txHash);
+
+    // 6. SYS_CURRENT_STATE[SYS_KEY_CURRENT_NUMBER] == blockNumberStr — eth_blockNumber parity
+    //    (Ledger::asyncPrewriteBlock also advances this row; without it eth_blockNumber stays 0).
+    auto curNumber = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER}));
+    BOOST_REQUIRE(curNumber.has_value());
+    BOOST_CHECK_EQUAL(curNumber->get(), blockNumberStr);
+
+    // 7. SYS_NUMBER_2_TXS[blockNumber] decodes to a block whose tx hashes match the receipt keys —
+    //    the legacy read path (getBlockData RECEIPTS/TRANSACTIONS_HASH) needs this metadata list.
+    auto txMetaEntry = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr}));
+    BOOST_REQUIRE(txMetaEntry.has_value());
+    auto metaBytes = bcos::bytesConstRef(
+        reinterpret_cast<bcos::byte const*>(txMetaEntry->get().data()), txMetaEntry->get().size());
+    auto metaBlock = blockFactory->createBlock(metaBytes);
+    BOOST_REQUIRE_EQUAL(metaBlock->transactionsMetaDataSize(), 1u);
+    BOOST_CHECK_EQUAL(metaBlock->transactionHash(0), txHash);
 }
 
 BOOST_AUTO_TEST_CASE(ReceiptCountMismatch)

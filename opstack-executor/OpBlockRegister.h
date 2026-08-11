@@ -63,7 +63,51 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
         std::move(headerEntry));
 
+    // ---- legacy-ledger read-path parity (ethereum executor `Ledger::asyncPrewriteBlock`): ----
+    // OP 之前只写 5 张表,eth RPC 的读路径依赖另外两张,缺了它们块虽 VALID 却不可查:
+    //   1. SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER —— eth_blockNumber 读它返回 0(块已提交但
+    //      head 没推进),与生产先例 Ledger.cpp:266-270 一致:entry = blockNumber 字符串。
+    //   2. SYS_NUMBER_2_TXS —— tx metadata(hash + to 列表,Block::encode 落盘);getBlockData
+    //      (RECEIPTS/TRANSACTIONS/TRANSACTIONS_HASH)先读它拿到 tx hash 列表再查 SYS_HASH_2_*,
+    //      缺了它 receipts/txs 读空、getBlockByNumber(1) 返回 null。格式与 Ledger.cpp:284-310
+    //      一致:createBlock + appendTransactionMetaData(hash, to) + block.encode()。
+    // 两处都走 storage2::writeOne(view, ...),与 OP 其它表同批 mergeView 落盘,key 编码一致。
+    bcos::storage::Entry numberEntry;
+    numberEntry.set(blockNumberStr);
+    co_await bcos::storage2::writeOne(view,
+        bcos::executor_v1::StateKey{bcos::ledger::SYS_CURRENT_STATE,
+            bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+        std::move(numberEntry));
+
     auto& hashImpl = *blockFactory.cryptoSuite()->hashImpl();
+    // 这里必须用 blockFactory.createBlock()(而非既有 blockFactory 的任何有状态对象):
+    // appendTransactionMetaData 期望一个空 block 承载 metadata。hash 用 hashImpl(已计算)或
+    // tars tx 的 hash() 均可;这里统一用 hashImpl.hash(rawEnvelope) —— 与 SYS_HASH_2_TX /
+    // SYS_HASH_2_RECEIPT 的 key 同一来源(见下方循环),保证 metadata 里的 hash 与按 hash
+    // 查 tx/receipt 的 key 逐字一致。to 取 tars tx 的 to()(envelopeToTars 失败的行跳过,
+    // 与 SYS_HASH_2_TX 的"转换失败跳过"语义一致,避免 metadata 与 tx 表不一致)。
+    auto transactionsBlock = blockFactory.createBlock();
+    for (std::size_t index = 0; index < rawTxBytes.size(); ++index)
+    {
+        const auto txHash = hashImpl.hash(rawTxBytes[index]);
+        std::string txTo;
+        if (auto tarsTx = envelopeToTars(rawTxBytes[index], txHash))
+        {
+            bcostars::protocol::TransactionImpl txImpl(
+                [tarsTx = std::move(*tarsTx)]() mutable { return &tarsTx; });
+            txTo = std::string(txImpl.to());
+        }
+        auto txMetaData = blockFactory.createTransactionMetaData(txHash, std::move(txTo));
+        transactionsBlock->appendTransactionMetaData(std::move(txMetaData));
+    }
+    bcos::bytes transactionsBuffer;
+    transactionsBlock->encode(transactionsBuffer);
+    bcos::storage::Entry number2TxEntry;
+    number2TxEntry.set(std::move(transactionsBuffer));
+    co_await bcos::storage2::writeOne(view,
+        bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr},
+        std::move(number2TxEntry));
+
     // processOpBlock 每 tx 恰产一 receipt;数量分叉是执行层坏不变量,响亮失败(内部错误,非对块的裁决)。
     if (rawTxBytes.size() != result.receipts.size())
     {
