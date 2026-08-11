@@ -51,3 +51,15 @@ target_compile_definitions(opstack-executor-block-tests PRIVATE
     OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/vectors"
     OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/golden/engine")
 add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
+
+# Extracted pure-function layer (OpRlpDecode.h / Storage2StateHelpers.h): direct unit tests
+# over the decode primitives and state-bridge helpers, no class-template instantiation.
+add_executable(opstack-executor-detail-tests
+    TestMain.cpp
+    OpRlpDecodeTest.cpp
+    Storage2StateHelpersTest.cpp
+)
+set_target_properties(opstack-executor-detail-tests PROPERTIES UNITY_BUILD OFF)
+target_link_libraries(opstack-executor-detail-tests PRIVATE
+    opstack-executor codec evmone::evmone intx::intx Boost::unit_test_framework bcos-utilities)
+add_test(NAME OpstackExecutorDetailTests COMMAND opstack-executor-detail-tests)
