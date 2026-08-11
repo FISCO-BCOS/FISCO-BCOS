@@ -611,6 +611,14 @@ private:
                         "c_opMode probe did not detect one"});
             }
         }
+        co_return co_await executePayload(request, version);
+    }
+
+    /// Unified block-execution dispatch: [OP] handleOpNewPayload, [generic] the pre-existing
+    /// body. Keeps handleNewPayload to version-gate + delegation for readability (behavior-neutral).
+    bcos::task::Task<PayloadStatus> executePayload(
+        const NewPayloadRequest& request, std::uint32_t version)
+    {
         // OP branch. Compile-time dispatch on `c_opMode`: the generic composition root never
         // instantiates `handleOpNewPayload`, and its own path below is the unconditional `else`,
         // i.e. byte-for-byte the pre-existing body.
