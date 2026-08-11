@@ -1,10 +1,10 @@
 #include "OpTestReceiptFactory.h"
 #include "TestPrinters.h"
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-evm/opstack/OpBlockExecute.h>
-#include <bcos-evm/opstack/OpBlockSeal.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpBlockSeal.h>
 #include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <sstream>
@@ -43,7 +43,8 @@ BOOST_AUTO_TEST_SUITE(OpReceiptEncodeSuite)
 // → 列表头 0xf9 01 0a（3B）。前缀 0x7e。总长 1+3+266 = 270。
 BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
 {
-    const auto enc = encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
+    const auto enc =
+        encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
     evmc::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
     expected += evmc::bytes(256, 0x00);
     expected += evmc::bytes{0xc0, 0x05, 0x01};
@@ -72,9 +73,8 @@ BOOST_AUTO_TEST_CASE(FailedDepositStatusIsEmptyString)
 BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
 {
     constexpr auto kAddr = 0x00000000000000000000000000000000000000aa_address;
-    evmone::state::Log evmoneLog{.addr = kAddr,
-        .data = evmc::bytes{0x68, 0x69},
-        .topics = {0x01_bytes32}};
+    evmone::state::Log evmoneLog{
+        .addr = kAddr, .data = evmc::bytes{0x68, 0x69}, .topics = {0x01_bytes32}};
 
     // Project the log onto a FISCO LogEntry (raw bytes, same mapping mapOpLogs uses).
     evmc::bytes32 topicVal = 0x01_bytes32;
@@ -84,7 +84,8 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
     auto dep = kOpTestReceiptFactory->createReceipt(
         bcos::u256(21000), std::string{}, logs, /*status=*/0, bcos::bytesConstRef{}, 1);
     dep->setCumulativeGasUsed("0x5208");
-    const auto bloomF = evmone::state::compute_bloom_filter(std::span<const evmone::state::Log>{&evmoneLog, 1});
+    const auto bloomF =
+        evmone::state::compute_bloom_filter(std::span<const evmone::state::Log>{&evmoneLog, 1});
     bcos::bytes bloom(bloomF.bytes, bloomF.bytes + sizeof(bloomF.bytes));
     dep->setLogsBloom(bcos::ref(bloom));
     bcos::protocol::OpStackReceiptMeta meta;
@@ -113,14 +114,14 @@ BOOST_AUTO_TEST_CASE(NormalReceiptMatchesEvmoneEncoding)
     ref.cumulative_gas_used = 42000;
     const auto expected = evmone::state::rlp_encode(ref);
 
-    auto r = kOpTestReceiptFactory->createReceipt(
-        bcos::u256(21000), std::string{}, std::vector<bcos::protocol::LogEntry>{}, /*status=*/0,
-        bcos::bytesConstRef{}, /*blockNumber=*/1);
+    auto r = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+        std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/1);
     r->setCumulativeGasUsed("0xa410");  // 42000
     bcos::bytes bloom(256, 0x00);
     r->setLogsBloom(bcos::ref(bloom));
-    const auto enc = encodeReceiptForRoot(
-        *r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    const auto enc =
+        encodeReceiptForRoot(*r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
 
     BOOST_CHECK_EQUAL(enc[0], 0x02);  // eip1559 typed 前缀
     BOOST_CHECK_EQUAL(enc, evmc::bytes(expected.begin(), expected.end()));
@@ -130,9 +131,8 @@ BOOST_AUTO_TEST_CASE(NormalReceiptMatchesEvmoneEncoding)
 BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
 {
     const auto makeFisco = [](uint64_t cumGas) {
-        auto r = kOpTestReceiptFactory->createReceipt(
-            bcos::u256(21000), std::string{}, std::vector<bcos::protocol::LogEntry>{}, /*status=*/0,
-            bcos::bytesConstRef{}, 1);
+        auto r = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+            std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
         std::ostringstream oss;
         oss << "0x" << std::hex << cumGas;
         r->setCumulativeGasUsed(oss.str());
@@ -159,15 +159,15 @@ BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
 // deposit 与普通 tx 必须产出不同叶子（前缀与尾部字段都不同）
 BOOST_AUTO_TEST_CASE(DepositAndNormalLeavesDiffer)
 {
-    const auto depEnc = encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
-    auto normal = kOpTestReceiptFactory->createReceipt(
-        bcos::u256(21000), std::string{}, std::vector<bcos::protocol::LogEntry>{}, /*status=*/0,
-        bcos::bytesConstRef{}, 1);
+    const auto depEnc =
+        encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
+    auto normal = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+        std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
     normal->setCumulativeGasUsed("0x5208");
     bcos::bytes bloom(256, 0x00);
     normal->setLogsBloom(bcos::ref(bloom));
-    const auto normalEnc =
-        encodeReceiptForRoot(*normal, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    const auto normalEnc = encodeReceiptForRoot(
+        *normal, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
     BOOST_CHECK_NE(depEnc, normalEnc);
 }
 
@@ -180,9 +180,8 @@ BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesEvmoneReferenceTrie)
     // FISCO receipt #0: deposit (status 0, cumGas 21000, nonce 5, version 1).
     auto dep = minimalDepositReceipt();
     // FISCO receipt #1: eip1559 (status 0, cumGas 42000).
-    auto normal = kOpTestReceiptFactory->createReceipt(
-        bcos::u256(21000), std::string{}, std::vector<bcos::protocol::LogEntry>{}, /*status=*/0,
-        bcos::bytesConstRef{}, 1);
+    auto normal = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
+        std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
     normal->setCumulativeGasUsed("0xa410");  // 42000
     bcos::bytes bloom(256, 0x00);
     normal->setLogsBloom(bcos::ref(bloom));
@@ -193,7 +192,8 @@ BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesEvmoneReferenceTrie)
     result.txTypes.push_back(static_cast<uint8_t>(kDepositTxType));
     result.txTypes.push_back(static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
 
-    const auto seal = bcos::evm::opstack::sealOpBlock(result, bcos::evm::opstack::isthmusConfig(), {});
+    const auto seal =
+        bcos::evm::opstack::sealOpBlock(result, bcos::evm::opstack::isthmusConfig(), {});
 
     // Reference: equivalent evmone receipts, same leaves via evmone rlp_encode, same trie.
     evmone::state::TransactionReceipt refDep;
@@ -201,10 +201,9 @@ BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesEvmoneReferenceTrie)
     refDep.status = EVMC_SUCCESS;
     refDep.cumulative_gas_used = 21000;
     refDep.logs_bloom_filter = evmone::state::BloomFilter{};
-    const auto depLeaf = evmc::bytes{0x7e} +
-                         evmone::rlp::encode_tuple(bool{true}, uint64_t{21000},
-                             evmone::bytes_view(refDep.logs_bloom_filter), refDep.logs,
-                             uint64_t{5}, uint64_t{1});
+    const auto depLeaf = evmc::bytes{0x7e} + evmone::rlp::encode_tuple(bool{true}, uint64_t{21000},
+                                                 evmone::bytes_view(refDep.logs_bloom_filter),
+                                                 refDep.logs, uint64_t{5}, uint64_t{1});
 
     evmone::state::TransactionReceipt refNormal;
     refNormal.type = evmone::state::Transaction::Type::eip1559;

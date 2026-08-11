@@ -10,12 +10,12 @@
 //   2. the static seam surface the engine reaches as dependent names
 //      (computeTxRoot / commitmentsOf / isIsthmusActiveAt / isJovianActiveAt);
 //   3. executeOpBlock's empty-block rejection (processOpBlock throws -> classified escape).
-#include <bcos-evm/engine/OpSchedulerImpl.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-task/Wait.h>
+#include <opstack-executor/OpSchedulerImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <stdexcept>
 #include <vector>
@@ -68,8 +68,8 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeOpHeader(
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     h->setNumber(number);
     h->setTimestamp(timestampMillis);
-    h->setParentInfo(bcos::protocol::ParentInfo{
-        .blockNumber = number - 1, .blockHash = bcos::h256{}});
+    h->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = bcos::h256{}});
     h->setCoinbase(bcos::Address{});
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
@@ -103,9 +103,9 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     // The receipt factory is never dereferenced on the paths this smoke test exercises (the seam
     // surface and the empty-block rejection both throw before receipt mapping), so nullptr is
     // enough here — it avoids dragging bcos-crypto into this module's test target.
-    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(
-        nullptr, 0x2105, bcos::evm::opstack::OpForkTimestamps{
-                              .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime});
+    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(nullptr, 0x2105,
+        bcos::evm::opstack::OpForkTimestamps{
+            .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime});
 
     // Fork predicates: threshold comparison stays on the OP side of the seam.
     BOOST_CHECK(scheduler.isIsthmusActiveAt(kIsthmusTime));
@@ -157,8 +157,8 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejected)
     // processOpBlock rejects an empty block; executeOpBlock's classification surfaces it as a
     // runtime_error subclass (OpConsensusError or OpStorageError, depending on the documented
     // RTTI-bypass behaviour at the -fno-rtti evmone boundary).
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(scheduler.executeOpBlock(view, *header, emptyTxs)), std::runtime_error);
+    BOOST_CHECK_THROW(bcos::task::syncWait(scheduler.executeOpBlock(view, *header, emptyTxs)),
+        std::runtime_error);
 }
 
 // C2 (W8 review): EIP-7702 authorization yParity is a uint8 in op-geth
@@ -177,8 +177,8 @@ BOOST_AUTO_TEST_CASE(OverWideAuthYParityIsConsensusError)
     // (readCanonicalScalar: payloadLength > maxBytes), not from the leading-zero or list checks.
     bcos::bytes wide{0x82, 0x01, 0x00};
     auto inWide = bcos::ref(wide);
-    BOOST_CHECK_EXCEPTION(engine::detail::decodeAuthYParityScalar(inWide),
-        engine::OpConsensusError, [](const engine::OpConsensusError& e) {
+    BOOST_CHECK_EXCEPTION(engine::detail::decodeAuthYParityScalar(inWide), engine::OpConsensusError,
+        [](const engine::OpConsensusError& e) {
             return std::string(e.what()).find("too wide") != std::string::npos;
         });
 

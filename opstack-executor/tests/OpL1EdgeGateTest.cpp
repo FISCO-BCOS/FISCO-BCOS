@@ -15,13 +15,13 @@
 #include "support/GoldenSample.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-evm/engine/OpEngineSeam.h>
-#include <bcos-evm/engine/OpSchedulerImpl.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <opstack-executor/OpEngineSeam.h>
+#include <opstack-executor/OpSchedulerImpl.h>
 // EngineHelper.h 的 parseNewPayloadRequest 声明引用 bcos::protocol::TransactionFactory&，但
 // EngineHelper.h 自身不声明该类型（生产靠 bcos-rpc unity-build 的 include 顺序）。单 TU 直编
 // 必须先把 TransactionFactory.h 引入，否则声明处即报错（OpNewPayloadRpcE2eTest.cpp:20 模式）。
