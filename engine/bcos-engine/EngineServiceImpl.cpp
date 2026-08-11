@@ -36,7 +36,7 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
     if (auto err = bcos::codec::rlp::decode(envRef, web3Tx); err)
     {
-        return std::nullopt;  // 未知类型（0x04）或损坏信封——不 throw（D7）
+        return std::nullopt;  // 仅损坏/未枚举类型信封——不 throw（D7）；0x04 已由 Web3Transaction 支持
     }
     auto tarsTx = web3Tx.takeToTarsTransaction();
     // D4: 读侧 tx.hash() 返回 extraTransactionHash；不填则抛 EmptyTransactionHash

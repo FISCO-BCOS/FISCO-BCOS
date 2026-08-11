@@ -1,5 +1,5 @@
 # Task 2 (op-validator-minimal-loop spec §7.1) engine-gate golden manifest.
-# One <id>.golden.json per vectors/<id>.json (same id, 34/34, set-equal to
+# One <id>.golden.json per vectors/<id>.json (same id, 63/63, set-equal to
 # cases/*.in.json -- checked at generation time). Each file carries exactly
 # the fields the corpus's own v3-block vectors are structurally missing:
 # blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/
