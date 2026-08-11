@@ -386,6 +386,7 @@ struct InlineInvalidSpec
     std::string validationContains = "";  // 可选 validation_error_contains
     std::uint32_t version = 4;            // -38005 用 3（version≠4 触发 UnsupportedFork）
     bool carryCanonical = false;          // -32603 携带未损坏 canonical 兄弟（两投）
+    std::string consumer = "engine";      // Task 4 gate 回归：executor 跳过消息断言
 };
 
 /// 从金样本派生内联无效向量。自洽损坏模型（spec §2a）：改头字段 → 重算 blockHash——
@@ -444,7 +445,7 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
     }
 
     auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
-    fisco["consumer"] = "engine";
+    fisco["consumer"] = spec.consumer;
     fisco["classification"] = spec.classification;
     if (spec.classification == "INVALID")
     {
@@ -506,6 +507,19 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
                                                 .carryCanonical = true,
                                             });
     }
+    // Task 4 gate 回归：executor-consumer 向量的 validation_error_contains 是 T8n 执行层
+    // throw 消息（"intrinsic gas too low"），引擎 RTTI-bypass 折叠成通用消息——若 runner
+    // 未按 consumer 跳过消息断言，此向量必红。INVALID 分类 + latest_valid_hash=parent 仍须断言。
+    if (id == "inline_invalid_executorStateRoot")
+    {
+        return buildInlineInvalidSample(id, InlineInvalidSpec{
+                                                .baseId = "jovian_deposit_only",
+                                                .corruptField = "stateRoot",
+                                                .classification = "INVALID",
+                                                .validationContains = "intrinsic gas too low",
+                                                .consumer = "executor",
+                                            });
+    }
     throw std::runtime_error("makeInlineInvalidSample: unknown inline id " + id);
 }
 
@@ -524,6 +538,10 @@ void runInvalidVector(std::string const& id)
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
     const auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
     const auto classification = fisco["classification"].asString();
+    // Task 4 consumer gate：executor-consumer 向量（非 decode 类）的 validation_error_contains
+    // 是 T8n 执行层 throw 消息——引擎 RTTI-bypass 把它折叠成通用消息，子串断言必然失配。
+    // consumer=="both"（blob）时 decode 消息是可靠 engine 面，仍须断言。缺省视 engine。
+    const auto consumer = fisco.get("consumer", "engine").asString();
 
     if (classification == "SYNCING")
     {
@@ -608,7 +626,7 @@ void runInvalidVector(std::string const& id)
             status.latestValidHash.has_value() && *status.latestValidHash == parentHash,
             id << ": latestValidHash should be parent");
     }
-    if (fisco.isMember("validation_error_contains"))
+    if (consumer != "executor" && fisco.isMember("validation_error_contains"))
     {
         const auto expected = fisco["validation_error_contains"].asString();
         BOOST_CHECK_MESSAGE(
@@ -992,6 +1010,13 @@ BOOST_AUTO_TEST_CASE(InvalidUnsupportedForkVersion3)
 BOOST_AUTO_TEST_CASE(InvalidSiblingForkRejected)
 {
     runInvalidVector("inline_invalid_siblingFork");
+}
+
+// Task 4 gate 回归：executor-consumer 向量跳过 validation_error_contains 断言（引擎
+// RTTI-bypass 折叠 T8n 消息），但 INVALID 分类 + latest_valid_hash=parent 仍须断言。
+BOOST_AUTO_TEST_CASE(ExecutorConsumerSkipsMessageAssertion)
+{
+    runInvalidVector("inline_invalid_executorStateRoot");
 }
 
 // Step 5：manifest 子集遍历（invalid_*.json）。Task 3 语料落地前为空集 → 零迭代（前向兼容）。

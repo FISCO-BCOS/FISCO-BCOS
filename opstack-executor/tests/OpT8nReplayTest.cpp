@@ -30,6 +30,7 @@
 #include <evmone/evmone.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockSeal.h>
+#include <opstack-executor/OpSchedulerImpl.h>  // decodeOneRawTx（blob decode-class reject 复现）
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>
@@ -463,6 +464,9 @@ struct BlockContext
     ParentOnlyBlockHashes hashes;
     std::vector<OpBlockTx> txs;
     uint64_t chainId = kCorpusChainId;
+    // decode-class reject（blob）：processOpBlock 走不到 raw-tx decode（txs 已是 OpBlockTx），
+    // 装载段用 decodeOneRawTx 复现真实 decode 拒绝并把消息记在这里，assertRejectThrow 直接断言。
+    std::optional<std::string> decodeRejectMessage;
 };
 
 bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
@@ -637,6 +641,77 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
             }
             auto envelope = test::from_json<bytes>(t.at("_op_raw"));
             txs.push_back({.tx = std::move(tx), .signedEnvelope = std::move(envelope)});
+        }
+        else if (opType == "legacy")
+        {
+            // Task 3 F1 legacy 臂：type-0 EIP-155 保护交易。单一 gasPrice（无
+            // maxFeePerGas/maxPriorityFeePerGas）；evmone legacy 的 priority==max==gasPrice。
+            state::Transaction tx;
+            tx.type = state::Transaction::Type::legacy;
+            tx.sender = test::from_json<evmc::address>(t.at("sender"));
+            tx.to = t.at("to").is_null() ?
+                        std::nullopt :
+                        std::optional{test::from_json<evmc::address>(t.at("to"))};
+            tx.nonce = test::from_json<uint64_t>(t.at("nonce"));
+            tx.gas_limit = test::from_json<int64_t>(t.at("gas"));
+            const auto gasPrice = parseU256(t.at("gasPrice"));
+            tx.max_gas_price = gasPrice;
+            tx.max_priority_gas_price = gasPrice;
+            tx.value = parseU256(t.at("value"));
+            tx.data = test::from_json<bytes>(t.at("data"));
+            tx.chain_id = test::from_json<uint64_t>(t.at("chainId"));
+            if (vectorChainId.has_value() && *vectorChainId != tx.chain_id)
+            {
+                BOOST_ERROR(id << ": inconsistent chainId across txs: " << hexU64(*vectorChainId)
+                               << " vs " << hexU64(tx.chain_id));
+                return false;
+            }
+            vectorChainId = tx.chain_id;
+            auto envelope = test::from_json<bytes>(t.at("_op_raw"));
+            txs.push_back({.tx = std::move(tx), .signedEnvelope = std::move(envelope)});
+        }
+        else if (opType == "blob")
+        {
+            // Task 4 blob 臂：type-0x3 blob 交易在 OP 链上 decode-class 拒绝。processOpBlock
+            // 走不到 raw-tx decode（txs 已是 OpBlockTx），用 decodeOneRawTx 复现真实 decode
+            // 拒绝并记录消息，assertRejectThrow 直接断言（消费端先行，review R16 consumer:both）。
+            const auto raw = test::from_json<bytes>(t.at("_op_raw"));
+            try
+            {
+                // decodeOneRawTx 在 bcos::evm::engine::detail，形参 bcos::bytes（vector）；
+                // raw 是 evmc::bytes（basic_string），逐字节转存。
+                const bcos::bytes rawVec(raw.begin(), raw.end());
+                (void)bcos::evm::engine::detail::decodeOneRawTx(
+                    rawVec, vectorChainId.value_or(kCorpusChainId));
+                BOOST_ERROR(id << ": blob raw envelope must be rejected at decode");
+                return false;
+            }
+            catch (const std::runtime_error& e)
+            {
+                // 注意：不得用 catch(std::exception)——libevmone(-fno-rtti) 带入 std::exception
+                // 的 hidden non-unique typeinfo，typed catch 对 runtime_error 子树不可靠绑定
+                // （OpSchedulerImpl.h:1083-1104 注释）；runtime_error 分支实测可绑（assertRejectThrow）。
+                out.decodeRejectMessage = std::string(e.what());
+            }
+            // 占位 tx：保持 deposit 后非 deposit 结构（decodeRejectMessage 分支不走
+            // processOpBlock，占位仅结构完整性）。
+            state::Transaction placeholder;
+            placeholder.type = state::Transaction::Type::blob;
+            placeholder.sender = test::from_json<evmc::address>(t.at("sender"));
+            placeholder.to = t.at("to").is_null() ?
+                                 std::nullopt :
+                                 std::optional{test::from_json<evmc::address>(t.at("to"))};
+            placeholder.gas_limit = test::from_json<int64_t>(t.at("gas"));
+            placeholder.value = parseU256(t.at("value"));
+            placeholder.data = test::from_json<bytes>(t.at("data"));
+            placeholder.max_gas_price = t.contains("maxFeePerGas") ?
+                                            parseU256(t.at("maxFeePerGas")) :
+                                            intx::uint256{};
+            placeholder.max_priority_gas_price = t.contains("maxPriorityFeePerGas") ?
+                                                     parseU256(t.at("maxPriorityFeePerGas")) :
+                                                     intx::uint256{};
+            placeholder.chain_id = vectorChainId.value_or(kCorpusChainId);
+            txs.push_back({.tx = std::move(placeholder), .signedEnvelope = std::move(raw)});
         }
         else
         {
@@ -990,6 +1065,20 @@ void assertRejectThrow(const std::string& id, const Json& v, evmc::VM& vm,
     BlockContext bc;
     if (!loadBlockContext(id, v, bc))
         return;
+    // decode-class reject（blob）：装载段已复现 decodeOneRawTx 拒绝并记录消息。processOpBlock
+    // 走不到该 decode（txs 已是 OpBlockTx），此处直接断言记录的消息（与 engine 面同串）。
+    if (bc.decodeRejectMessage.has_value())
+    {
+        const auto expected = v.at("_op_expected")
+                                  .at("reject")
+                                  .at("fisco")
+                                  .at("validation_error_contains")
+                                  .get<std::string>();
+        BOOST_CHECK_MESSAGE(bc.decodeRejectMessage->find(expected) != std::string::npos,
+            id << ": decode reject message missing '" << expected
+               << "', got: " << *bc.decodeRejectMessage);
+        return;
+    }
     evmone::test::TestState ts = test::from_json<test::TestState>(v.at("pre"));
     // applyDiff 回调与 replaySingleBlockInto 执行段同参（含回写 ts）；reject 后 ts 被丢弃。
     std::set<evmc::address> touchedAddrs;
@@ -1102,9 +1191,16 @@ BOOST_AUTO_TEST_CASE(Vectors)
         if (!present.contains(name))
             BOOST_ERROR("manifest lists " << name << " but file is missing");
     }
+    // Task 6（§4c item 3/12 排除，强制）：expectedBlobVersionedHashes / executionRequests 经
+    // GoldenSample loader 不可表达，生成器按 brief 仍发射文件但强制不入 manifest（task-3-report）。
+    // 集合相等豁免这两个已知未注册 static 面文件（后缀匹配，base 无关）。
+    const auto isUnregisteredStatic = [](std::string const& n) {
+        return (n.size() >= 13 && n.rfind("_static_3.json") == n.size() - 13) ||
+               (n.size() >= 14 && n.rfind("_static_12.json") == n.size() - 14);
+    };
     for (const auto& name : present)
     {
-        if (!manifest.contains(name))
+        if (!manifest.contains(name) && !isUnregisteredStatic(name))
             BOOST_ERROR("unmanifested vector file present: " << name);
     }
 
@@ -1245,6 +1341,127 @@ BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
         }
     })");
     assertRejectThrow("reject_executor_intrinsic", v, vm, receiptFactory);
+}
+
+// ── blob decode-class reject（Task 4，consumer:both）──────────────────────
+// blob 臂用 decodeOneRawTx 复现真实 decode 拒绝（processOpBlock 走不到 raw-tx decode），
+// 消息 = "unsupported tx type byte 0x3"（OpSchedulerImpl.h:893）。_op_raw 仅需 type-0x03
+// 首字节即命中 decode 分支（decode 在任何字段解析前检查 type byte）。
+BOOST_AUTO_TEST_CASE(RejectBlobDecode)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    auto receiptFactory = makeTestReceiptFactory();
+    DivergenceLedger ledger;
+    Json v = Json::parse(R"({
+        "_info": {"hardfork": "isthmus"},
+        "env": {
+            "currentNumber": 1, "currentTimestamp": "0x64",
+            "currentGasLimit": "0x989680", "currentBaseFee": "0x3b9aca00",
+            "currentCoinbase": "0x0000000000000000000000000000000000000000",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "pre": {
+            "0x0000000000000000000000000000000000000001": {
+                "balance": "0xde0b6b3a7640000", "nonce": "0x0", "code": "0x"
+            }
+        },
+        "block": {
+            "transactions": [
+                {
+                    "_op_type": "deposit",
+                    "_op_deposit": {
+                        "source_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "from": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001",
+                        "to": "0x4200000000000000000000000000000000000015",
+                        "mint": "0x0", "value": "0x0", "gas": "0x186a0",
+                        "is_system_tx": false
+                    },
+                    "data": "0x"
+                },
+                {
+                    "_op_type": "blob",
+                    "_op_raw": "0x03",
+                    "chainId": "0x2105", "nonce": "0x0",
+                    "to": "0xb0b0000000000000000000000000000000000001",
+                    "gas": "0x186a0", "maxFeePerGas": "0x77359400", "maxPriorityFeePerGas": "0x5f5e100",
+                    "value": "0x0", "data": "0x",
+                    "sender": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"
+                }
+            ]
+        },
+        "_op_expected": {
+            "reject": {
+                "op_geth": "data blobs present in block body",
+                "fisco": {
+                    "consumer": "both", "classification": "INVALID",
+                    "latest_valid_hash": "parent",
+                    "validation_error_contains": "unsupported tx type byte 0x3"
+                }
+            }
+        }
+    })");
+    assertRejectThrow("reject_blob_decode", v, vm, receiptFactory);
+}
+
+// ── legacy 臂装载（Task 3 F1）─────────────────────────────────────────────
+// 验证 _op_type "legacy" 装载出 type=legacy 交易且 gasPrice 同时填 max/priority（evmone legacy
+// 单价格语义）。_op_raw 仅结构占位（装载段不 decode）；golden 全路径由语料 isthmus/jovian_
+// legacy_transfer 向量覆盖（regen 后 Vectors 全量回放）。
+BOOST_AUTO_TEST_CASE(LegacyArmBuildsLegacyTx)
+{
+    Json v = Json::parse(R"({
+        "_info": {"hardfork": "isthmus"},
+        "env": {
+            "currentNumber": 1, "currentTimestamp": "0x64",
+            "currentGasLimit": "0x989680", "currentBaseFee": "0x3b9aca00",
+            "currentCoinbase": "0x0000000000000000000000000000000000000000",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "pre": {
+            "0x0000000000000000000000000000000000000001": {
+                "balance": "0xde0b6b3a7640000", "nonce": "0x0", "code": "0x"
+            }
+        },
+        "block": {
+            "transactions": [
+                {
+                    "_op_type": "deposit",
+                    "_op_deposit": {
+                        "source_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "from": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001",
+                        "to": "0x4200000000000000000000000000000000000015",
+                        "mint": "0x0", "value": "0x0", "gas": "0x186a0",
+                        "is_system_tx": false
+                    },
+                    "data": "0x"
+                },
+                {
+                    "_op_type": "legacy",
+                    "_op_raw": "0x01",
+                    "chainId": "0x2105", "nonce": "0x0",
+                    "to": "0xb0b0000000000000000000000000000000000001",
+                    "gas": "0x5208", "gasPrice": "0x4a817c800",
+                    "value": "0xde0b6b3a7640000", "data": "0x",
+                    "sender": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"
+                }
+            ]
+        }
+    })");
+    BlockContext bc;
+    BOOST_REQUIRE_MESSAGE(loadBlockContext("legacy_arm_load", v, bc), "legacy vector must load");
+    BOOST_REQUIRE_EQUAL(bc.txs.size(), 2u);
+    const auto* tx = std::get_if<state::Transaction>(&bc.txs[1].tx);
+    BOOST_REQUIRE_MESSAGE(tx != nullptr, "tx[1] must be a normal tx");
+    BOOST_CHECK(tx->type == state::Transaction::Type::legacy);
+    BOOST_CHECK_EQUAL(tx->chain_id, uint64_t{0x2105});
+    // legacy 单价格：max == priority == gasPrice
+    BOOST_CHECK(tx->max_gas_price == tx->max_priority_gas_price);
+    BOOST_CHECK(tx->max_gas_price == parseU256(Json::parse("\"0x4a817c800\"")));
+    BOOST_CHECK(bc.txs[1].signedEnvelope.size() > 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
