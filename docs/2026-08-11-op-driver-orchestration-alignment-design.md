@@ -5,6 +5,36 @@
 > (技术正确性/架构一致性/完整性与测试/实现可行性)后修订,**本版合并全部审查意见**,可进入 writing-plans。
 > 前置:docs/op-block-exec-scheduler-unification-design.md(engine 调用面统一 + 共识比对下沉,已实施)。
 
+## 实施记录(2026-08-11)
+
+按 `docs/2026-08-11-op-driver-orchestration-alignment-plan.md` 5 任务实施(Subagent-Driven,
+每任务两阶段审查 + 测试不可退步基线),提交链:`5c455a8a8`(OpExecutionInternalError 下沉
+bcos-framework)→ `9ad5884df`(opstackRegisterBlock 纯函数 + 转换器注入)→
+`6b660d6e1`(OpSchedulerImpl 两阶段 executeBlock/commitBlock)→ `ad5c03966`(engine newPayload
+三阶段 + 删 registerOpBlock)→(本文档 Task 5 提交为实施记录收尾)。
+
+**验证结果(全绿,零退步)**:
+- 全量构建 `cmake --build build -j8` 成功(仅既有 deprecation 警告 / ld 重复库 / macOS 版本警告)
+- 全量 `ctest --test-dir build`:**1930/1930 通过**(202.8s)
+- opstack-executor-tests(GTest)9/9
+- opstack-executor-block-tests 全绿(114 用例:t8n **127 向量**(执行零改动,executeOpBlock 保留)
+  + e2e **80**(OpNewPayloadRpcE2eSuite 74 + OpForkchoiceRpcE2eSuite 6,三阶段回归门)
+  + OpTwoPhaseSuite 5 + OpBlockRegisterSuite 4 + smoke/branch/L1-edge/receipt-encode)
+- opstack-executor-detail-tests 24/24(比对/RLP/storage-helper)
+- test-bcos-engine 11/11(EngineServiceTest 通用 newPayload)
+- test-transaction-scheduler 全绿(真实通用 engine 驱动 newPayload,最强通用路径回归)
+- bcos-evm-opstack-tests 受 BCOS_EVM_TESTS 门控未构建;其验证意图由 opstack-executor 链接 +
+  test-transaction-scheduler 的通用 engine 完整实例化覆盖
+
+**实测确认**:engine 头 seam 纯度 grep 全过(无 bcos-evm/opstack-executor 类型名拼写;
+`mergeView`/`notifyBlockNumber` 在 engine 侧仅剩注释描述,实际调用移入 commitBlock;`registerOpBlock`
+零残留;`opEnvelopeToTars` 前向声明保留;无裸 `OpSchedulerImpl<ViewType>` 别名)。
+
+**延后项(记入决策)**:概念形式 executeBlock 也被通用 buildPayload 引用(engine 头 L1252,Transaction
+范围),OP 组合根懒实例化不 odr-use 故不冲突;若将来 OP 化块构建会实例化 executeBlock 函数体而编译
+失败,本期不做 OP 化块构建。commit-stage 自抛 OpExecutionInternalError 无直接 e2e 断言(两轮倒水
+覆盖 engine 抛 -32603,可后续 OpTwoPhaseTest 失败注入补)。
+
 ## 背景与目标
 
 OP 块执行由 EngineService 的 OP 分支直接驱动(`newPayload → executeOpBlock → registerOpBlock → mergeView`
