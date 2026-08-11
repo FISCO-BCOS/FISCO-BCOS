@@ -633,10 +633,12 @@ type caseSpec struct {
 
 // bScopeSpecs names the B-scope bases (Task 3 F1): buildable for
 // corrupt/invalid-tx bases but NOT emitted by --write-cases / emitCases (the
-// T8n replayer has no consumer arm for them yet). legacy_transfer is the sole
-// bScope spec. Kept as a set (not a struct field) so the shared table's
-// positional literals stay untouched.
-var bScopeSpecs = map[string]bool{"legacy_transfer": true}
+// T8n replayer has no consumer arm for them yet). legacy_transfer WAS the sole
+// bScope spec; the replayer legacy arm landed in Task 6 (OpT8nReplayTest.cpp),
+// so the set is now EMPTY and legacy_transfer is emitted normally. Kept as a
+// set (not a struct field) so the shared table's positional literals stay
+// untouched; re-populate it if a future base outpaces its consumer arm.
+var bScopeSpecs = map[string]bool{}
 
 var bothForks = []string{"isthmus", "jovian"}
 
@@ -659,9 +661,9 @@ var caseSpecs = []caseSpec{
 	{"legacy_transfer", bothForks, func(fork string) inputCase {
 		// B-scope base: a type-0 legacy tx with an EIP-155 protected signature
 		// (V = chainID*2+35/36). Serves as the base for corrupt/invalid-tx
-		// vectors and as a B-scope valid vector. ⚠️ The T8n replayer does not
-		// yet parse `_op_type "legacy"`; the bScopeSpecs set gates it OUT of
-		// emitCases (Task 3 F1) until the replayer legacy arm lands.
+		// vectors and as a B-scope valid vector. Replayer legacy arm landed in
+		// Task 6 (OpT8nReplayTest.cpp legacy 臂), so it is emitted by
+		// --write-cases (bScopeSpecs is empty).
 		c := caseFrame(fork, "legacy_transfer",
 			"attributes + one type-0 EIP-155 protected legacy value transfer",
 			defaultFeeParams(), 10_000_000)

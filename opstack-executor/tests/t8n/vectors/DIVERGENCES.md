@@ -220,3 +220,20 @@
 <!-- ALLOWLIST vectorId=jovian_contract_create field=receipts[1].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
 <!-- ALLOWLIST vectorId=jovian_contract_create field=receipts[2].output entry=FINDING-create-output attribution=a status=PENDING-FIX want=0x600160005500 got=0x -->
 
+
+---
+
+## 结构性差异：同父双子分叉（Task 6，chain_fork 载体）
+
+**FISCO -32603 vs op-geth VALID**（已确认，结构性差异）。同一父块下、同高度两个不同 blockHash 的子块：
+
+- **op-geth**：`InsertChain` 接受侧链兄弟块（side chain）→ 新块 VALID，父块保持权威链。
+- **FISCO**：`newPayload` 对同一父块（`SYS_NUMBER_2_HASH` 已占用该高度）再次投同高度不同 hash 的块
+  → `OpExecutionInternalError`（-32603），latestValidHash=null。
+
+**载体**：`invalid_isthmus_chain_3_fork.json` / `invalid_jovian_chain_3_fork.json`（`_op_canonical` =
+canonical 子块 payload，`_op_payload` = sibling）。E2E 两投 runner（OpNewPayloadRpcE2eTest.cpp
+runInvalidVector -32603 分支）先投 canonical（VALID 写 SYS_NUMBER_2_HASH 占用）再投 sibling →
+抛 OpExecutionInternalError。
+
+**处置**：FISCO 侧保留该行为（PBFT 单一权威链语义），记为结构性差异，不修。

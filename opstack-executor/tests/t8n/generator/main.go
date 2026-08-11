@@ -2127,8 +2127,10 @@ func buildBlockVector(in *inputCase) (*blockVector, error) {
 
 // runChainMode implements --mode=chain:<N>[:fork|:break] (Task 5). n>=3 emits
 // the linear-chain vector (isthmus_chain_<n>.json + jovian_chain_<n>.json);
-// :fork emits the same-parent fork carrier (chain_fork, -32603 two-pour);
-// :break emits the unknown-parent SYNCING carrier.
+// :fork emits the same-parent fork carrier (invalid_<fork>_chain_<n>_fork, -32603
+// two-pour); :break emits the unknown-parent SYNCING carrier
+// (invalid_<fork>_chain_<n>_break). fork/break 带 invalid_ 前缀以便 E2E
+// InvalidVectorsFromManifest 消费（Task 5 交接决策）。
 func runChainMode(mode, outDir, opGethCommit string) error {
 	if outDir == "" {
 		return fmt.Errorf("--out-dir is required for --mode=chain")
@@ -2173,7 +2175,10 @@ func runChainMode(mode, outDir, opGethCommit string) error {
 			if err != nil {
 				return fmt.Errorf("%s fork carrier: %w", fork, err)
 			}
-			if err := writeInvalidVector(outDir, fmt.Sprintf("%s_chain_%d_fork", fork, n), doc, opGethCommit); err != nil {
+			// invalid_ 前缀：E2E InvalidVectorsFromManifest 按 invalidStemFromManifestLine
+			// 只消费 invalid_* 行（OpNewPayloadRpcE2eTest.cpp:634），fork/break 是 -32603/
+			// SYNCING 无效向量载体，必须前缀统一（Task 5 交接决策）。
+			if err := writeInvalidVector(outDir, fmt.Sprintf("invalid_%s_chain_%d_fork", fork, n), doc, opGethCommit); err != nil {
 				return err
 			}
 		case "break":
@@ -2181,7 +2186,7 @@ func runChainMode(mode, outDir, opGethCommit string) error {
 			if err != nil {
 				return fmt.Errorf("%s break: %w", fork, err)
 			}
-			if err := writeInvalidVector(outDir, fmt.Sprintf("%s_chain_%d_break", fork, n), doc, opGethCommit); err != nil {
+			if err := writeInvalidVector(outDir, fmt.Sprintf("invalid_%s_chain_%d_break", fork, n), doc, opGethCommit); err != nil {
 				return err
 			}
 		}

@@ -610,20 +610,20 @@ func TestInvalidTxCaseSpecsIndependentTable(t *testing.T) {
 	}
 }
 
-func TestLegacyTransferGatedFromEmitCases(t *testing.T) {
-	// Task 3 F1 handoff: legacy_transfer is a B-scope caseSpec (the T8n replayer
-	// has no legacy arm yet) and must NOT be emitted by --write-cases. emitableSpecs
-	// filters it out.
+func TestLegacyTransferEmittedFromEmitCases(t *testing.T) {
+	// Task 3 F1 → Task 6: legacy_transfer was a B-scope caseSpec gated OUT of
+	// --write-cases; the T8n replayer legacy arm landed (OpT8nReplayTest.cpp),
+	// so bScopeSpecs is empty and it must now be emitted (Task 6 B 范围承诺).
 	seen := false
 	for _, spec := range emitableSpecs() {
 		if spec.name == "legacy_transfer" {
 			seen = true
 		}
 	}
-	if seen {
-		t.Fatal("legacy_transfer must be gated out of emitCases (B-scope)")
+	if !seen {
+		t.Fatal("legacy_transfer must be emitted by emitCases after the replayer legacy arm landed")
 	}
-	// But it stays reachable as a base for corrupt/invalid-tx vectors.
+	// And it stays reachable as a base for corrupt/invalid-tx vectors.
 	if _, err := buildCaseFromSpecs("legacy_transfer", "isthmus"); err != nil {
 		t.Fatalf("legacy_transfer must remain a buildable base caseSpec: %v", err)
 	}
