@@ -15,9 +15,9 @@ find_package(evmone CONFIG REQUIRED)
 # The evmone port installs test/utils sources verbatim (headers AND .cpp) under
 # include/test/utils; compile the ones we use straight from the package instead of
 # carrying a vendored copy.
-# TODO(eth-utils-removal): 改为自研——rlp_encode→bcos-codec RLP,test_state→自研内存账本;
-# 届时删除本段包源编译、portfile 的 vcpkg_replace_string 补丁与下方 shim。
-# （mpt/mpt_hash 曾在此列，现已不随 port 安装，无需替换。）
+# TODO(eth-utils-removal): replace test_state with the in-house memory ledger, then drop this
+# package-source compile, the portfile vcpkg_replace_string patch, and the shim below.
+# (rlp_encode already migrated to bcos-codec + test target; mpt/mpt_hash no longer ship.)
 get_target_property(_evmone_include_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
 list(GET _evmone_include_dirs 0 _evmone_include_dir)
 cmake_path(NORMAL_PATH _evmone_include_dir)
@@ -66,23 +66,23 @@ add_library(bcos-evm-eth STATIC
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
-    # rlp_encode：已移出生产库——生产代码零引用（evmone::rlp:: / rlp_encode 符号 grep 空），
-    # 唯一消费者是 opstack-executor-block-tests 的 OpReceiptEncodeTest（ADL 调
-    # evmone::state::rlp_encode），已直接挂到该测试 target（opstack-executor/tests/CMakeLists.txt）。
+    # rlp_encode: removed from the production lib (zero production callers, grep+nm verified).
+    # Its only consumer is OpReceiptEncodeTest (ADL into evmone::state::rlp_encode), now compiled
+    # directly in the opstack-executor test target (opstack-executor/tests/CMakeLists.txt).
     #
-    # DEBT(eth-utils-removal): test_state 是 evmone 的内存**测试**账本。全部 11 个引用点都在
-    # bcos-evm/test/ 下，两个生产库一个都不引用（nm 核验），所以它出现在生产库
-    # bcos-evm-eth 里是不对的——bcosevm::eth 正是节点/执行器将要链接的那个库。
+    # DEBT(eth-utils-removal): test_state is evmone's in-memory test ledger; all 11 reference
+    # points are under bcos-evm/test/, and neither production lib references it (nm-verified),
+    # so compiling it into bcos-evm-eth — the lib nodes/executors link — is wrong.
     #
-    # 它没有被挪到测试 target，是因为那样解决不了根因：state::transition() 的声明是共享的，
-    # 测试 target 编译 test_state.cpp 时同样会撞上上游的 7 参数调用，签名问题原样存在。真正
-    # 的代价已经具体化过一次——为了让 chain id 参数保持「必需」而不是退回带默认值的
-    # optional（那会让不安全语义成为 API 默认），ports/evmone/portfile.cmake 不得不用
-    # vcpkg_replace_string 去改上游那一处调用点。一个上游测试助手就这样决定了共识函数的接口。
+    # It can't just move to a test target: state::transition()'s declaration is shared, so a
+    # test target hits the same upstream 7-arg signature problem. To keep the chain-id param
+    # required (not an optional default that bakes unsafe semantics into the API), the portfile
+    # has to vcpkg_replace_string an upstream call site — one test helper dictating a consensus
+    # function's interface.
     #
-    # 唯一干净的出口是块级 PR 里的自研内存账本：届时 test_state.{hpp,cpp} 不再需要安装，
-    # 这一行、portfile 的补丁、以及下方的 shim 一并删除。在那之前这是一笔明确记账的债务，
-    # 不是疏漏。
+    # The only clean exit is the block-level PR's in-house memory ledger: then test_state no
+    # longer ships, and this line, the portfile patch, and the shim below all go. Until then
+    # this is booked debt, not an oversight.
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
 # Shim first: ${CMAKE_CURRENT_SOURCE_DIR} is <repo>/bcos-evm, which contains a real test/
