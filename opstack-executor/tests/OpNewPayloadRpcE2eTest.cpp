@@ -137,9 +137,22 @@ bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
     };
 }
 
-using OpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
+using OpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType, MLS>;
 using OpEngineService =
     bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, OpScheduler>;
+
+/// Envelope -> tars converter for the two-phase commit path. A file-scope function (not an inline
+/// member lambda) so the fixture's member-init list can reference it by name — members initialize
+/// in declaration order, and a converter declared after the scheduler would read an unconstructed
+/// object. `bcos::engine::detail::opEnvelopeToTars`'s forward declaration is visible via
+/// EngineServiceImpl.h (included above). Not yet reached on the old single-phase engine path (the
+/// engine stays two-phase-unaware until alignment-plan Task 4), so wiring it here has no side
+/// effect today.
+std::optional<bcostars::Transaction> realConverter(
+    bcos::bytes const& env, bcos::crypto::HashType const& h)
+{
+    return bcos::engine::detail::opEnvelopeToTars(env, h);
+}
 
 struct OpE2eFixture
 {
@@ -155,12 +168,15 @@ struct OpE2eFixture
     StubMemPool memPool;
     StubExecutor executor;
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{makeReceiptFactory()};
-    OpScheduler scheduler;
+    // blockFactory must be declared before scheduler: members initialize in declaration order and
+    // the scheduler constructor takes blockFactory as an argument.
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
+    OpScheduler scheduler;
     OpEngineService service;
 
     explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
-      : scheduler(receiptFactory, kChainId, forkTimestamps),
+      : scheduler(receiptFactory, kChainId, forkTimestamps, blockFactory, multiLayerStorage,
+            realConverter),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4)
     {}

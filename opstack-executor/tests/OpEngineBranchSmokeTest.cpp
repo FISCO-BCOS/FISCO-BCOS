@@ -92,7 +92,7 @@ struct StubExecutor
 };
 
 using OpEngine = bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor,
-    bcos::evm::engine::OpSchedulerImpl<ViewType>>;
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS>>;
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpEngineBranchSmokeSuite)
@@ -107,9 +107,10 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
     MLS storage(checkpointBackend);
 
     constexpr uint64_t kIsthmusTime = 1000;
-    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(nullptr, 0x2105,
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS> scheduler(nullptr, 0x2105,
         bcos::evm::opstack::OpForkTimestamps{
-            .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1});
+            .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1},
+        nullptr, storage, {});
     StubMemPool memPool;
     StubExecutor executor;
     static auto blockFactory =

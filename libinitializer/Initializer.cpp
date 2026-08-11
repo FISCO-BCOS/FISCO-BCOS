@@ -483,8 +483,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                       "(decimal or 0x-prefixed hex)"));
         }
         auto opScheduler =
-            std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
-                m_protocolInitializer->blockFactory()->receiptFactory(), opChainId, forkTimestamps);
+            std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType,
+                GlobalStateStorage>>(m_protocolInitializer->blockFactory()->receiptFactory(),
+                opChainId, forkTimestamps, m_protocolInitializer->blockFactory(),
+                m_globalStateStorageInitializer->storage(),
+                [](bcos::bytes const& env, bcos::crypto::HashType const& h)
+                    -> std::optional<bcostars::Transaction> {
+                    return bcos::engine::detail::opEnvelopeToTars(env, h);
+                });
         // Fix the missing-ledger gap (alignment plan problem 2): the ethereum paths pass ledger;
         // without it the engine's local-payload persistence branch (m_ledger null) is dead.
         m_engineServiceInitializer = EngineServiceInitializer::build(

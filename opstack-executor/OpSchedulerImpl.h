@@ -20,6 +20,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -31,6 +32,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <evmone/evmone.h>
 #include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpBlockRegister.h>
 #include <opstack-executor/OpBlockSeal.h>
 #include <opstack-executor/OpRlpDecode.h>
 #include <opstack-executor/OpEngineSeam.h>
@@ -73,31 +75,38 @@ namespace detail
 /// OP scheduler component: dual signature, constructed once per [receiptFactory, chainId,
 /// fork-timestamps] combination (composition-root-owned; this class never reads chainId/fork
 /// thresholds from SystemConfigs itself).
-template <class Storage>
+template <class Storage, class OpenedStorage = Storage>
 class OpSchedulerImpl
 {
 public:
+    using ViewType = Storage;  // the spec/plan text calls the Storage template parameter ViewType
+
     OpSchedulerImpl(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory, uint64_t chainId,
-        bcos::evm::opstack::OpForkTimestamps forkTimestamps)
+        bcos::evm::opstack::OpForkTimestamps forkTimestamps,
+        bcos::protocol::BlockFactory::Ptr blockFactory, OpenedStorage& storage,
+        EnvelopeToTarsConverter envelopeToTars)
       : m_receiptFactory(std::move(receiptFactory)),
         m_chainId(chainId),
         m_forkTimestamps(forkTimestamps),
-        m_vm(evmc_create_evmone())
+        m_vm(evmc_create_evmone()),
+        m_blockFactory(std::move(blockFactory)),
+        m_storage(storage),
+        m_envelopeToTars(std::move(envelopeToTars))
     {}
 
     // ---- RPC block-number notification (alignment plan problem 3) ----
-    // The engine fires `notifyBlockNumber` after a VALID OP block is committed (mergeView). The
-    // callback is injected by the composition root (Initializer's
-    // m_setOpSchedulerBlockNumberNotifier). It lives on the engine's SchedulerType so the engine
-    // reaches it as a dependent name (same seam mechanism as executeOpBlock) without the engine
-    // library depending on RPC. The block-commit authority (the engine) does the firing; this
-    // class only holds the callback.
+    // The scheduler fires `notifyBlockNumber` inside `commitBlock` after the view is merged
+    // (originally the engine fired it after its own mergeView; the two-phase refactor moved the
+    // firing into the commit point). The callback is injected by the composition root
+    // (Initializer's m_setOpSchedulerBlockNumberNotifier). It lives on the engine's SchedulerType
+    // so the engine reaches it as a dependent name (same seam mechanism as executeOpBlock) without
+    // the engine library depending on RPC.
     void setBlockNumberNotifier(std::function<void(bcos::protocol::BlockNumber)> notifier)
     {
         m_blockNumberNotifier = std::move(notifier);
     }
 
-    /// Called by the engine's OP branch after the block is persisted (EngineServiceImpl.h).
+    /// Called by commitBlock after the view is merged (the two-phase commit point).
     void notifyBlockNumber(bcos::protocol::BlockNumber number)
     {
         if (m_blockNumberNotifier)
@@ -190,23 +199,22 @@ public:
     OpSchedulerImpl& operator=(OpSchedulerImpl&&) = delete;
     ~OpSchedulerImpl() = default;
 
-    /// Dummy signature satisfying scheduler_v1::TransactionScheduler (concept-check purpose only
-    /// — the concept is an unconditional compile-time constraint on EngineServiceImpl's
-    /// SchedulerType template parameter, independent of runtime reachability; OP mode never calls
-    /// this). Throws immediately, before any co_await/co_return: safe because bcos::task::Task's
-    /// promise_type uses std::suspend_always at initial_suspend (libtask/bcos-task/Task.h:55), so
-    /// the coroutine body does not run until the coroutine is actually resumed (syncWait/co_await);
-    /// unhandled_exception() (Task.h:63-71) is the standard propagation path for exceptions raised
-    /// inside a Task<T> coroutine body.
+    /// Two-phase phase 1: execute the block and stage the result into `m_pending` (ownership
+    /// transfer — the argument view is moved into the pending block; the caller must not touch it
+    /// after this returns). Still satisfies scheduler_v1::TransactionScheduler (the unconditional
+    /// concept constraint on EngineServiceImpl's SchedulerType template parameter — the signature
+    /// shape is unchanged from the old concept-only stub). ledgerConfig is accepted for the concept
+    /// only; OP execution does not consume it.
     task::Task<std::vector<bcos::protocol::TransactionReceipt::Ptr>> executeBlock(
-        Storage& /*storage*/, auto& /*executor*/,
-        bcos::protocol::BlockHeader const& /*blockHeader*/,
-        ::ranges::input_range auto const& /*transactions*/,
+        Storage& view, auto& /*executor*/, bcos::protocol::BlockHeader const& header,
+        ::ranges::input_range auto const& rawTxBytes,
         bcos::ledger::LedgerConfig const& /*ledgerConfig*/)
     {
-        throw std::logic_error(
-            "OpSchedulerImpl::executeBlock: not supported in OP mode; use executeOpBlock");
-        co_return {};  // unreachable; satisfies the coroutine's declared return type
+        auto result = co_await executeOpBlock(view, header, rawTxBytes);
+        std::vector<bcos::bytes> materialized(std::begin(rawTxBytes), std::end(rawTxBytes));
+        m_pending = PendingBlock{
+            std::move(view), std::move(materialized), std::move(result), header.number()};
+        co_return m_pending->result.receipts;
     }
 
     /// OP-mode entry point (called from handleNewPayload's OP branch). Steps:
@@ -343,12 +351,76 @@ public:
         };
     }
 
+    /// The channel through which the engine reads the staged commitments for the six-way compare
+    /// (called after executeBlock, before commitBlock). No pending result is an internal error —
+    /// the calling contract is that the engine always calls this after executeBlock.
+    OpExecuteBlockResult const& pendingExecuteResult() const
+    {
+        if (!m_pending)
+        {
+            BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{
+                                      "pendingExecuteResult: no pending executeBlock result"});
+        }
+        return m_pending->result;
+    }
+
+    /// The compare-INVALID branch calls this to clear the residue, avoiding holding a view with a
+    /// mutable layer over into the next block.
+    void resetPending() { m_pending.reset(); }
+
+    /// Two-phase phase 2: persist (write the block tables + atomically mergeView the view) then
+    /// fire the notifier. A seam method, not a SchedulerInterface override — the engine reaches it
+    /// only as a dependent name on its SchedulerType template parameter.
+    task::Task<void> commitBlock(
+        bcos::protocol::BlockHeader::Ptr header, bcos::crypto::HashType const& blockHash)
+    {
+        if (!m_pending)
+        {
+            BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{
+                                      "commitBlock: no pending executeBlock result"});
+        }
+        if (header->number() != m_pending->blockNumber)
+        {
+            BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{
+                                      "commitBlock: header block number does not match the pending "
+                                      "execution"});
+        }
+        try
+        {
+            co_await opstackRegisterBlock(m_pending->view, *header, blockHash, m_pending->rawTxBytes,
+                m_pending->result, *m_blockFactory, m_envelopeToTars);
+        }
+        catch (...)
+        {
+            m_pending.reset();  // a failed table write must not leave a mutable view into the next block
+            throw;
+        }
+        co_await m_storage.mergeView(std::move(m_pending->view));
+        m_pending.reset();
+        notifyBlockNumber(header->number());
+    }
+
 private:
+    struct PendingBlock
+    {
+        ViewType view;  // the executed mutable-layer view (ownership transferred from executeBlock)
+        std::vector<bcos::bytes> rawTxBytes;  // materialized wire envelopes for opstackRegisterBlock
+        OpExecuteBlockResult result;          // staged execution outcome for the engine's compare
+        bcos::protocol::BlockNumber blockNumber;  // header number the pending execution belongs to
+    };
+    std::optional<PendingBlock> m_pending;
+
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     uint64_t m_chainId;
     bcos::evm::opstack::OpForkTimestamps m_forkTimestamps;
     evmc::VM m_vm;  // evmc_create_evmone(), one instance per scheduler
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    OpenedStorage& m_storage;
+    EnvelopeToTarsConverter m_envelopeToTars;
 };
 
 }  // namespace bcos::evm::engine

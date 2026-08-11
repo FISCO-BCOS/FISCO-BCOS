@@ -103,9 +103,10 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     // The receipt factory is never dereferenced on the paths this smoke test exercises (the seam
     // surface and the empty-block rejection both throw before receipt mapping), so nullptr is
     // enough here — it avoids dragging bcos-crypto into this module's test target.
-    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(nullptr, 0x2105,
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS> scheduler(nullptr, 0x2105,
         bcos::evm::opstack::OpForkTimestamps{
-            .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime});
+            .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime},
+        nullptr, multiLayerStorage, {});
 
     // Fork predicates: threshold comparison stays on the OP side of the seam.
     BOOST_CHECK(scheduler.isIsthmusActiveAt(kIsthmusTime));
@@ -148,9 +149,10 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejected)
     view.newMutable();
 
     constexpr uint64_t kIsthmusTime = 1000;
-    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(nullptr, 0x2105,
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS> scheduler(nullptr, 0x2105,
         bcos::evm::opstack::OpForkTimestamps{
-            .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1});
+            .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1},
+        nullptr, multiLayerStorage, {});
 
     auto header = makeOpHeader(1, static_cast<int64_t>(kIsthmusTime) * 1000);
     std::vector<bcos::bytes> emptyTxs;

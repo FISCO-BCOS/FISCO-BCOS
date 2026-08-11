@@ -32,6 +32,7 @@ add_executable(opstack-executor-block-tests
     OpSchedulerImplSmokeTest.cpp
     OpBlockRegisterTest.cpp
     OpEngineBranchSmokeTest.cpp
+    OpTwoPhaseTest.cpp
     OpCallSchedulerTest.cpp
     support/SeedPreStateTest.cpp
     support/GoldenSampleTest.cpp
