@@ -3,7 +3,7 @@
 #pragma once
 
 // Shared error types for the OP scheduler. Split out of OpSchedulerImpl.h so the decode
-// layers (OpDecodePrimitives.h / OpTxDecode.h) can throw without depending on the class
+// layers (OpRlpDecode.h / OpTxDecode.h) can throw without depending on the class
 // template — and so neither side needs an include-order guarantee.
 
 #include <stdexcept>

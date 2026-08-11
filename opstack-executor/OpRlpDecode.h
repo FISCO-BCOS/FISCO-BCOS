@@ -7,7 +7,7 @@
 // composite decoders. These depend only on bcos-codec RLP + evmone/evmc/intx + protocol::BlockHeader
 // — deliberately NOT the evmone package's test headers (those live in OpTxDecode.h).
 
-#include <opstack-executor/OpSchedulerErrors.h>
+#include <opstack-executor/OpErrors.h>
 
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-evm/eth/state/block.hpp>

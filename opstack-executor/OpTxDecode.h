@@ -9,8 +9,8 @@
 // rlp::encode_tuple), so this layer carries no evmone test-header dependency.
 
 #include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpDecodePrimitives.h>
-#include <opstack-executor/OpSchedulerErrors.h>
+#include <opstack-executor/OpRlpDecode.h>
+#include <opstack-executor/OpErrors.h>
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/eth/RlpEncodeTuple.h>

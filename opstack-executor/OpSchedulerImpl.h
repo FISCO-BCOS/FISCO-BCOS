@@ -33,9 +33,9 @@
 #include <evmone/evmone.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockSeal.h>
-#include <opstack-executor/OpDecodePrimitives.h>
+#include <opstack-executor/OpRlpDecode.h>
 #include <opstack-executor/OpEngineSeam.h>
-#include <opstack-executor/OpSchedulerErrors.h>
+#include <opstack-executor/OpErrors.h>
 #include <opstack-executor/OpTxDecode.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
@@ -85,7 +85,7 @@ struct OpExecuteBlockResult
 namespace detail
 {
 // Decode primitives (conversions / RLP scalars / composite decoders) live in
-// OpDecodePrimitives.h; tx-type decoders + canonical round-trip in OpTxDecode.h.
+// OpRlpDecode.h; tx-type decoders + canonical round-trip in OpTxDecode.h.
 // (Group 4-5 moved out — the class template below references detail::decodeOneRawTx etc.)
 }  // namespace detail
 /// OP scheduler component: dual signature, constructed once per [receiptFactory, chainId,
