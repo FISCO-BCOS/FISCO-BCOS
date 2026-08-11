@@ -14,7 +14,8 @@
 /// Semantics: uses the INJECTION-style opValidate/opTransition with an orchestrator-supplied
 /// OpFeeParams (including the D-1 attributes-calldata DA-scalar override), a decrementing
 /// blockGasLeft, the chain id, and real block hashes — mirroring processOpBlock. It does NOT use
-/// the EEST-calibrated blockHeaderToBlockInfo (buildOpBlockInfo keeps timestamp verbatim).
+/// the EEST-calibrated blockHeaderToBlockInfo (buildOpBlockInfo builds the block context from the
+/// header itself, ms->s timestamp included — the production-path field set).
 ///
 /// Adapter reuse: the storage-backed StateView and state-diff writeback are shared with
 /// EthereumExecutor via ethereum-executor (PR #5366). This module links the ethereum-executor
@@ -37,6 +38,7 @@
 #include "ethereum-executor/BCOS2Evmone.h"
 #include "ethereum-executor/StorageStateView.h"
 #include "opstack-executor/OpBlockFinalize.h"
+#include "opstack-executor/OpRlpDecode.h"
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmc/evmc.hpp>
@@ -71,21 +73,32 @@ public:
     /// Access the EVM instance (needed for system_call functions).
     evmc::VM& vm() { return m_vm; }
 
-    /// OP-specific blockInfo: timestamp verbatim (OP headers store seconds; the EEST-calibrated
-    /// blockHeaderToBlockInfo would /1000 it to ~1970), gasLimit and baseFee injected by the
-    /// orchestrator (from payload.gasLimit / payload.baseFeePerGas, not LedgerConfig). Sets
-    /// number/timestamp/gas_limit/base_fee/coinbase; prev_randao and blob_gas_used default to zero.
+    /// OP block context for a single-tx call, mirroring the production block path's
+    /// `detail::toBlockInfo` (OpRlpDecode.h): FISCO tars store milliseconds and evmone wants
+    /// seconds (blockHash/execution surface is always in seconds), and prev_randao /
+    /// parent_beacon_block_root / blob_gas_used / extra_data come from the header — the fields a
+    /// contract can read. Unlike toBlockInfo the optional fields are read tolerantly (missing ->
+    /// zero/empty) so a minimal test header still builds; a persisted OP header supplies them all.
+    /// gasLimit and baseFeePerGas stay injected (orchestrator contract): the call sites pass the
+    /// header's own gasLimit / baseFee so the two agree.
     static evmone::state::BlockInfo buildOpBlockInfo(
         protocol::BlockHeader const& header, uint64_t gasLimit, uint64_t baseFeePerGas)
     {
+        namespace detail = bcos::evm::engine::detail;
         evmone::state::BlockInfo blk;
-        blk.number = header.number();
-        blk.timestamp = header.timestamp();
+        blk.number = static_cast<int64_t>(header.number());
+        blk.timestamp = static_cast<uint64_t>(header.timestamp()) / 1000;
         blk.gas_limit = static_cast<int64_t>(gasLimit);
         blk.base_fee = baseFeePerGas;
-        auto const& cb = header.coinbase();
-        if (cb.size() == sizeof(evmc_address))
+        if (auto const& cb = header.coinbase(); cb.size() == sizeof(evmc_address))
             std::copy_n(cb.begin(), sizeof(evmc_address), blk.coinbase.bytes);
+        blk.prev_randao = detail::toEvmcBytes32(header.prevRandao());
+        if (auto const& root = header.parentBeaconBlockRoot())
+            blk.parent_beacon_block_root = detail::toEvmcBytes32(*root);
+        if (auto const& bg = header.blobGasUsed())
+            blk.blob_gas_used = detail::narrowU256ToU64(*bg, "BlockInfo::blobGasUsed");
+        auto const& ed = header.extraData();
+        blk.extra_data = evmc::bytes(ed.begin(), ed.end());
         return blk;
     }
 
@@ -244,6 +257,7 @@ private:
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
+        namespace detail = bcos::evm::engine::detail;
 
         auto revOpt = ledgerConfig.evmcRevision();
         if (!revOpt.has_value())
@@ -254,8 +268,13 @@ private:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo =
-            buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
+        // Real baseFee from the header (matches processOpBlock's toBlockInfo; a missing field is
+        // tolerated as 0 so minimal test headers still pass). Effective gas price is
+        // base_fee + priority (OpTransition.cpp), so a hardcoded 0 here would under-price every
+        // EIP-1559 tx in a call vs. block execution.
+        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft),
+            detail::narrowU256ToU64(blockHeader.baseFee().value_or(bcos::u256{0}),
+                "BlockInfo::baseFee"));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
         auto envRef = transaction.extraTransactionBytes();
@@ -283,10 +302,13 @@ private:
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
+        namespace detail = bcos::evm::engine::detail;
 
         (void)ledgerConfig;
-        auto blockInfo =
-            buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
+        // Same real-baseFee rule as m_prepare: match processOpBlock's effective gas price.
+        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft),
+            detail::narrowU256ToU64(blockHeader.baseFee().value_or(bcos::u256{0}),
+                "BlockInfo::baseFee"));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
 

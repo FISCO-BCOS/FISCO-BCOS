@@ -44,6 +44,7 @@
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <cstdint>
 #include <evmc/evmc.hpp>
+#include <functional>
 #include <map>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
@@ -93,6 +94,25 @@ public:
         m_forkTimestamps(forkTimestamps),
         m_vm(evmc_create_evmone())
     {}
+
+    // ---- RPC block-number notification (alignment plan problem 3) ----
+    // The engine fires `notifyBlockNumber` after a VALID OP block is committed (mergeView). The
+    // callback is injected by the composition root (Initializer's
+    // m_setOpSchedulerBlockNumberNotifier). It lives on the engine's SchedulerType so the engine
+    // reaches it as a dependent name (same seam mechanism as executeOpBlock) without the engine
+    // library depending on RPC. The block-commit authority (the engine) does the firing; this
+    // class only holds the callback.
+    void setBlockNumberNotifier(std::function<void(bcos::protocol::BlockNumber)> notifier)
+    {
+        m_blockNumberNotifier = std::move(notifier);
+    }
+
+    /// Called by the engine's OP branch after the block is persisted (EngineServiceImpl.h).
+    void notifyBlockNumber(bcos::protocol::BlockNumber number)
+    {
+        if (m_blockNumberNotifier)
+            m_blockNumberNotifier(number);
+    }
 
     // ---- engine-facing seam surface ----
     //
@@ -338,6 +358,7 @@ private:
     uint64_t m_chainId;
     bcos::evm::opstack::OpForkTimestamps m_forkTimestamps;
     evmc::VM m_vm;  // evmc_create_evmone(), one instance per scheduler
+    std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
 };
 
 }  // namespace bcos::evm::engine

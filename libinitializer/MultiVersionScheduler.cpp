@@ -4,11 +4,21 @@
 
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::getScheduler()
 {
-    return *m_schedulers.at(m_currentIndex);
+    auto& scheduler = m_schedulers.at(m_currentIndex);
+    if (!scheduler)
+    {
+        // The OP slot (index 3) is only built in OP mode (executor_version >= 3); a non-OP node
+        // leaves it null and never selects it. Reaching it means a misconfigured version request —
+        // fail loudly rather than dereference null.
+        BOOST_THROW_EXCEPTION(std::logic_error(
+            "MultiVersionScheduler: executor version " + std::to_string(m_currentIndex) +
+            " has no scheduler (not built for this node configuration)"));
+    }
+    return *scheduler;
 }
 
 bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
-    std::array<scheduler::SchedulerInterface::Ptr, 3> schedulers)
+    std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers)
   : m_schedulers(std::move(schedulers)), m_currentIndex(0)
 {}
 
@@ -87,8 +97,8 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                                                  "(must be >= 0)"));
     }
     // Saturate the upper bound: any version >= the last scheduler index selects the
-    // newest executor (the v2 EthereumExecutor). This keeps the version space
-    // open-ended above 2 so a future executor version needs no array/schema change.
+    // newest executor (index 3, the OP scheduler). This keeps the version space
+    // open-ended above 3 so a future executor version needs no array/schema change.
     // The saturation itself is silent by design, but an unknown version above today's
     // set deserves a log line: on a binary that has no such version, "see an unknown
     // version, run the newest" means executing blocks under rules the chain did not

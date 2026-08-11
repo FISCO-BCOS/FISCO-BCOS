@@ -1207,6 +1207,11 @@ private:
         // after a restart the block tables are readable but the head pointer is not set --
         // deferred to the orchestration layer together with reorg-window orchestration.
         co_await m_globalStateStorage.get().mergeView(std::move(view));
+        // RPC block-number notification (alignment plan problem 3): the block is now committed,
+        // so announce the new head. The callback lives on the scheduler (set by the composition
+        // root's m_setOpSchedulerBlockNumberNotifier) — reached as a dependent name, same seam
+        // mechanism as executeOpBlock; the engine library carries no RPC dependency.
+        m_scheduler.get().notifyBlockNumber(static_cast<bcos::protocol::BlockNumber>(payload.blockNumber));
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
 

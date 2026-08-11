@@ -78,6 +78,7 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
+#include <opstack-executor/OpCallScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
@@ -451,7 +452,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // SFINAE probe (EngineServiceImpl.h:200-201) activates the OP branch (executeOpBlock drives OP
     // blocks via engine API). engineApiForV1Only (<2) and opStackMode (>=3) are mutually exclusive;
     // version 2 (pure EthereumExecutor) still has no Engine API. PBFT double-execution is gated
-    // separately (W3); MultiVersionScheduler is untouched.
+    // separately (W3). The MultiVersionScheduler OP slot (index 3) is filled below so RPC
+    // eth_call / state reads route through OP semantics instead of saturating to the v2
+    // ethereum scheduler (alignment plan, layer 2).
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
     if (opStackMode)
     {
@@ -482,9 +485,27 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(), opChainId, forkTimestamps);
+        // Fix the missing-ledger gap (alignment plan problem 2): the ethereum paths pass ledger;
+        // without it the engine's local-payload persistence branch (m_ledger null) is dead.
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            transactionExecutor, m_memPoolInitializer->memPool());
+            transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+        // OP RPC-facing scheduler (MultiVersionScheduler slot 3): eth_call / state reads with OP
+        // semantics via OpstackExecutor. Mirrors the ethereum flow's two-object split — the engine
+        // gets OpSchedulerImpl (block execution), the RPC scheduler gets this adapter (per-tx call).
+        auto opCallScheduler =
+            std::make_shared<bcos::executor_v1::opstack::OpCallScheduler<GlobalStateStorage>>(
+                m_protocolInitializer->blockFactory()->receiptFactory(),
+                m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkTimestamps,
+                m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage());
+        m_opSchedulerHolder = [opCallScheduler]() { return opCallScheduler; };
+        // RPC block-number notification (alignment plan problem 3): installs the callback into the
+        // engine's scheduler; the engine fires it after a VALID OP block commits.
+        m_setOpSchedulerBlockNumberNotifier = [opScheduler](
+                                                  std::function<void(bcos::protocol::BlockNumber)>
+                                                      notifier) {
+            opScheduler->setBlockNumberNotifier(std::move(notifier));
+        };
         // Compile-time proof that this production composition root activates the OP engine branch.
         // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerImpl<...>&（左值引用），若作
         // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），
@@ -506,11 +527,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
+    // Slot 3 (OP): the OpCallScheduler adapter, built only in OP mode. A non-OP node leaves it
+    // null — setVersion never reaches index 3 there, and MultiVersionScheduler::getScheduler
+    // fails loudly if a misconfigured request ever selects it.
+    auto opSchedulerForRpc = m_opSchedulerHolder ? m_opSchedulerHolder() : nullptr;
     m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder(), opSchedulerForRpc}));
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
@@ -805,6 +830,18 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     if (m_setEthereumSchedulerBlockNumberNotifier)
     {
         m_setEthereumSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
+
+    // executor_version>=3 (OP): the engine fires the notifier after a VALID OP block commits
+    // (EngineServiceImpl.h OP branch); without it RPC block-number subscribers never see OP
+    // blocks. The setter is only present in OP mode.
+    if (m_setOpSchedulerBlockNumberNotifier)
+    {
+        m_setOpSchedulerBlockNumberNotifier(
             [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
                 INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
                 _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
