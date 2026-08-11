@@ -60,19 +60,9 @@ namespace bcos::evm::engine
 /// PR #5385 gave the FISCO header tars slots for all 8 former OpBlockEnv fields (prevRandao/baseFee
 /// -> coinbase/baseFee/prevRandao/parentBeaconBlockRoot/gasLimit/extraData/blobGasUsed/parentHash
 /// -> parentInfo). The engine now fills one header object and `executeOpBlock`/`toBlockInfo` read
-/// the accessors directly.
-
-/// Six-way comparison surface: `seal`'s receiptsRoot/logsBloom/withdrawalsRoot
-/// (bcos::evm::opstack::OpBlockSeal, unchanged structure) plus three members below
-/// (stateRoot/gasUsed/txRoot) that are deliberately NOT folded into OpBlockSeal.
-struct OpExecuteBlockResult
-{
-    std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
-    bcos::evm::opstack::OpBlockSeal seal;
-    bcos::h256 stateRoot;
-    uint64_t gasUsed;
-    bcos::h256 txRoot;
-};
+/// the accessors directly. `OpExecuteBlockResult` lives in OpErrors.h (moved here from
+/// this header in the opstackRegisterBlock task so the pure-function sink and its unit tests
+/// can name it without instantiating the scheduler).
 
 namespace detail
 {
