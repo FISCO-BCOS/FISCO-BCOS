@@ -25,9 +25,11 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Classify.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Nibble.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/TrieNode.h>
@@ -106,6 +108,20 @@ inline bcos::storage::Entry makeEntry(std::string_view value)
     bcos::storage::Entry entry;
     entry.set(std::string(value));
     return entry;
+}
+
+/// Build a state trie holding @p accounts into @p storage; returns the state root.
+/// (Hoisted from the per-file copies in ProofGenerateTest.cpp / ProofVerifyTest.cpp.)
+template <typename Storage>
+bcos::h256 seedStateTrieFlushed(
+    Storage& storage, std::vector<std::pair<bcos::Address, Account>> const& accounts)
+{
+    std::map<bcos::h256, bcos::bytes> entries;
+    for (auto const& [addr, account] : accounts)
+    {
+        entries[accountKeyHash(addr)] = account.encode();
+    }
+    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
 }
 
 // ---------------------------------------------------------------------------

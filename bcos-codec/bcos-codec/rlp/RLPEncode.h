@@ -18,12 +18,12 @@
  * @date 2024/4/7
  */
 
-
 #pragma once
 #include "Common.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <concepts/bcos-concepts/Basic.h>
+#include <optional>
 #include <vector>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
@@ -101,14 +101,11 @@ inline void encode(bcos::bytes& to, bcos::FixedBytes<N> const& in) noexcept
     encode(to, bytesConstRef{in.data(), in.size()});
 }
 
+// only for list
+// forward declaration to make it visible in encode(span)
 template <typename T>
-inline void encodeItems(bcos::bytes& to, const std::span<const T>& v) noexcept;
-
-template <typename T>
-inline void encodeItems(bcos::bytes& to, const std::vector<T>& v) noexcept
-{
-    encodeItems(to, std::span<const T>{v.data(), v.size()});
-}
+    requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
+inline void encode(bcos::bytes& to, const std::vector<T>& v) noexcept;
 
 template <typename T>
 inline void encode(bcos::bytes& to, const std::span<const T>& v) noexcept
@@ -116,10 +113,12 @@ inline void encode(bcos::bytes& to, const std::span<const T>& v) noexcept
     const Header h{.isList = true, .payloadLength = lengthOfItems(v)};
     to.reserve(to.size() + lengthOfLength(h.payloadLength) + h.payloadLength);
     encodeHeader(to, h);
-    encodeItems(to, v);
+    for (auto& x : v)
+    {
+        encode(to, x);
+    }
 }
 
-// only for list
 template <typename T>
     requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
 inline void encode(bcos::bytes& to, const std::vector<T>& v) noexcept
@@ -127,37 +126,24 @@ inline void encode(bcos::bytes& to, const std::vector<T>& v) noexcept
     encode(to, std::span<const T>{v.data(), v.size()});
 }
 
-template <typename Arg1, typename Arg2>
-inline void encodeItems(bcos::bytes& to, const Arg1& arg1, const Arg2& arg2) noexcept
-{
-    encode(to, arg1);
-    encode(to, arg2);
-}
-
-template <typename Arg1, typename Arg2, typename... Args>
-inline void encodeItems(
-    bcos::bytes& to, const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
-{
-    encode(to, arg1);
-    encodeItems(to, arg2, args...);
-}
-
-template <typename Arg1, typename Arg2, typename... Args>
-inline void encode(
-    bcos::bytes& to, const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
-{
-    const Header h{.isList = true, .payloadLength = lengthOfItems(arg1, arg2, args...)};
-    to.reserve(to.size() + lengthOfLength(h.payloadLength) + h.payloadLength);
-    encodeHeader(to, h);
-    encodeItems(to, arg1, arg2, args...);
-}
-
+// encode std::optional
 template <typename T>
-inline void encodeItems(bcos::bytes& to, const std::span<const T>& v) noexcept
+inline void encode(bcos::bytes& to, const std::optional<T>& v) noexcept
 {
-    for (auto& x : v)
+    if (v.has_value())
     {
-        encode(to, x);
+        encode(to, *v);
     }
 }
+
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline void encode(bcos::bytes& to, const Args&... args) noexcept
+{
+    const Header h{.isList = true, .payloadLength = lengthOfItems(args...)};
+    to.reserve(to.size() + lengthOfLength(h.payloadLength) + h.payloadLength);
+    encodeHeader(to, h);
+    (encode(to, args), ...);
+}
+
 }  // namespace bcos::codec::rlp

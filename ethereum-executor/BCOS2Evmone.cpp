@@ -37,8 +37,15 @@ evmone::state::BlockInfo blockHeaderToBlockInfo(
     // evmone's Host::get_tx_context() maps block_prev_randao <- m_block.prev_randao
     // (there is no separate difficulty field in evmc_tx_context), so for pre-Paris
     // forks we must place the DIFFICULTY value into prev_randao for 0x44 to work.
+    //
+    // The prev_randao value comes from the block header (set by the consensus engine,
+    // e.g. SingleNodeConsensus from [consensus] prev_randao) rather than
+    // config.prevRandao(), which the production getLedgerConfig paths never populate.
     if (rev >= EVMC_PARIS)
-        info.prev_randao = config.prevRandao();
+    {
+        auto const& pr = header.prevRandao();
+        std::copy_n(pr.data(), sizeof(evmc::bytes32), info.prev_randao.bytes);
+    }
     else
         info.prev_randao =
             intx::be::store<evmc::bytes32>(intx::uint256(static_cast<uint64_t>(info.difficulty)));
@@ -236,7 +243,9 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
 
 bcos::u256 toBcosU256(intx::uint256 const& val)
 {
-    return bcos::u256(intx::to_string(val));
+    // Single canonical byte-copy conversion (see EVMSupport.h); no string
+    // round-trip on the old bridge's write path.
+    return evm::toBcosU256(val);
 }
 
 protocol::TransactionReceipt::Ptr evmoneReceiptToBcos(evmone::state::TransactionReceipt const& er,
