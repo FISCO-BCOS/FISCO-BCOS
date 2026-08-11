@@ -8,7 +8,7 @@
 //
 // Hard assertion discipline: A) dir *.json set == manifest.txt set; parse
 // failure / missing required field = named ADD_FAILURE; per-vector comparison
-// count recorded, 0 = FAILURE. B) required fields via j.at(); hardfork must be
+// count recorded, 0 = FAILURE. B) required fields via jAt(); hardfork must be
 // exactly ecotone|fjord|granite|holocene|isthmus|jovian (no default fork);
 // unknown _op_type / receipt count mismatch = FAILURE (no zip-min).
 // D) comparisons routed through checkField/checkOptional into DivergenceLedger;
@@ -28,6 +28,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <cxxabi.h>
 #include <evmone/evmone.h>
+#include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockSeal.h>
 #include <opstack-executor/OpSchedulerImpl.h>  // decodeOneRawTx (blob decode-class reject repro)
@@ -38,7 +39,6 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
-#include <nlohmann/json.hpp>
 #include <optional>
 #include <regex>
 #include <set>
@@ -49,7 +49,39 @@
 #include <vector>
 
 namespace fs = std::filesystem;
-using Json = nlohmann::json;
+// Non-conflicting alias for jsoncpp's value type (a bare `using Json = Json::Value`
+// would shadow the `Json` namespace and break Json::Reader/Json::Value).
+using JsonValue = Json::Value;
+
+// ── jsoncpp .at() equivalent ────────────────────────────────────────────────
+// nlohmann's .at(key) throws on a missing member; jsoncpp's operator[] silently
+// fabricates a null. Every required-field access in this replayer goes through
+// jAt so a missing field is a named failure, never a silent null read.
+inline const Json::Value& jAt(const Json::Value& v, const std::string& key)
+{
+    if (!v.isMember(key))
+        throw std::invalid_argument("missing required field: " + key);
+    return v[key];
+}
+
+// jsoncpp Reader-based parse (nlohmann Json::parse equivalent; string and stream).
+inline Json::Value jParse(const std::string& input)
+{
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(input, root))
+        throw std::runtime_error("JSON parse failed: " + reader.getFormattedErrorMessages());
+    return root;
+}
+
+inline Json::Value jParse(std::istream& input)
+{
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(input, root))
+        throw std::runtime_error("JSON parse failed: " + reader.getFormattedErrorMessages());
+    return root;
+}
 using namespace bcos::evm::opstack;
 using namespace evmone;
 
@@ -63,16 +95,20 @@ using namespace evmone;
 namespace evmone::test
 {
 template <typename T>
-T from_json(const nlohmann::json& j) = delete;
+T from_json(const Json::Value& j) = delete;
 
 template <>
-int64_t from_json<int64_t>(const nlohmann::json& j)
+int64_t from_json<int64_t>(const Json::Value& j)
 {
-    if (j.is_number_integer())
-        return j.get<int64_t>();
-    if (!j.is_string())
+    if (j.isIntegral())
+    {
+        if (j.isInt64())
+            return j.asInt64();
+        throw std::invalid_argument("from_json<int64_t>: integer out of range");
+    }
+    if (!j.isString())
         throw std::invalid_argument("from_json<int64_t>: must be integer or string of integer");
-    const auto s = j.get<std::string>();
+    const auto s = j.asString();
     size_t num_processed = 0;
     const auto v = static_cast<int64_t>(std::stoull(s, &num_processed, 0));
     if (num_processed == 0 || num_processed != s.size())
@@ -81,13 +117,17 @@ int64_t from_json<int64_t>(const nlohmann::json& j)
 }
 
 template <>
-uint64_t from_json<uint64_t>(const nlohmann::json& j)
+uint64_t from_json<uint64_t>(const Json::Value& j)
 {
-    if (j.is_number_integer())
-        return j.get<uint64_t>();
-    if (!j.is_string())
+    if (j.isIntegral())
+    {
+        if (j.isUInt64())
+            return j.asUInt64();
+        throw std::invalid_argument("from_json<uint64_t>: integer out of range");
+    }
+    if (!j.isString())
         throw std::invalid_argument("from_json<uint64_t>: must be integer or string of integer");
-    const auto s = j.get<std::string>();
+    const auto s = j.asString();
     size_t num_processed = 0;
     const auto v = static_cast<uint64_t>(std::stoull(s, &num_processed, 0));
     if (num_processed == 0 || num_processed != s.size())
@@ -96,21 +136,21 @@ uint64_t from_json<uint64_t>(const nlohmann::json& j)
 }
 
 template <>
-intx::uint256 from_json<intx::uint256>(const nlohmann::json& j)
+intx::uint256 from_json<intx::uint256>(const Json::Value& j)
 {
-    return intx::from_string<intx::uint256>(j.get<std::string>());
+    return intx::from_string<intx::uint256>(j.asString());
 }
 
 template <>
-evmone::bytes from_json<evmone::bytes>(const nlohmann::json& j)
+evmone::bytes from_json<evmone::bytes>(const Json::Value& j)
 {
-    return evmc::from_hex(j.get<std::string>()).value();
+    return evmc::from_hex(j.asString()).value();
 }
 
 template <>
-evmc::address from_json<evmc::address>(const nlohmann::json& j)
+evmc::address from_json<evmc::address>(const Json::Value& j)
 {
-    const auto v = evmc::from_hex<evmc::address>(j.get<std::string>());
+    const auto v = evmc::from_hex<evmc::address>(j.asString());
     if (!v.has_value())
         throw std::invalid_argument("from_json<address>: must be hexadecimal string");
     return *v;
@@ -119,9 +159,9 @@ evmc::address from_json<evmc::address>(const nlohmann::json& j)
 // Note: evmone::hash256 is a using-alias of evmc::bytes32, so this one specialization serves both
 // from_json<hash256> (header hashes) and from_json<bytes32> (storage keys/values).
 template <>
-evmc::bytes32 from_json<evmc::bytes32>(const nlohmann::json& j)
+evmc::bytes32 from_json<evmc::bytes32>(const Json::Value& j)
 {
-    const auto s = j.get<std::string>();
+    const auto s = j.asString();
     if (s == "0" || s == "0x0")  // Special case to handle "0". Required by exec-spec-tests.
         return evmc::bytes32{};
     const auto v = evmc::from_hex<evmc::bytes32>(s);
@@ -131,22 +171,25 @@ evmc::bytes32 from_json<evmc::bytes32>(const nlohmann::json& j)
 }
 
 template <>
-evmone::test::TestState from_json<evmone::test::TestState>(const nlohmann::json& j)
+evmone::test::TestState from_json<evmone::test::TestState>(const Json::Value& j)
 {
     evmone::test::TestState o;
-    assert(j.is_object());
-    for (const auto& [j_addr, j_acc] : j.items())
+    assert(j.isObject());
+    for (const auto& j_addr : j.getMemberNames())
     {
-        auto& acc = o[from_json<evmc::address>(nlohmann::json(j_addr))] = {
-            .nonce = from_json<uint64_t>(j_acc.at("nonce")),
-            .balance = from_json<intx::uint256>(j_acc.at("balance")),
-            .code = from_json<evmone::bytes>(j_acc.at("code"))};
-        if (const auto storage_it = j_acc.find("storage"); storage_it != j_acc.end())
+        const auto& j_acc = j[j_addr];
+        auto& acc = o[from_json<evmc::address>(Json::Value(j_addr))] = {
+            .nonce = from_json<uint64_t>(jAt(j_acc, "nonce")),
+            .balance = from_json<intx::uint256>(jAt(j_acc, "balance")),
+            .code = from_json<evmone::bytes>(jAt(j_acc, "code"))};
+        if (j_acc.isMember("storage"))
         {
-            for (const auto& [j_key, j_value] : storage_it->items())
+            const auto& storage = j_acc["storage"];
+            for (const auto& j_key : storage.getMemberNames())
             {
+                const auto& j_value = storage[j_key];
                 if (const auto value = from_json<evmc::bytes32>(j_value); !evmc::is_zero(value))
-                    acc.storage[from_json<evmc::bytes32>(nlohmann::json(j_key))] = value;
+                    acc.storage[from_json<evmc::bytes32>(Json::Value(j_key))] = value;
             }
         }
     }
@@ -196,9 +239,9 @@ std::string hexSlot(const evmc::bytes32& b)
     return hexU256(intx::be::load<intx::uint256>(b));
 }
 
-intx::uint256 parseU256(const Json& j)
+intx::uint256 parseU256(const JsonValue& j)
 {
-    return intx::from_string<intx::uint256>(j.get<std::string>());
+    return intx::from_string<intx::uint256>(j.asString());
 }
 
 // ── DivergenceLedger (brief block E) ────────────────────────────────────────
@@ -483,14 +526,14 @@ struct BlockContext
     std::optional<std::string> decodeRejectMessage;
 };
 
-bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
+bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext& out)
 {
     // _info.hardfork must be exactly ecotone|fjord|granite|holocene|isthmus|jovian,
     // anything else = FAILURE. No default fork (the default-Isthmus precedent is a
     // known hole, not ported). isJovian drives the blobGasUsed header gate and the
     // _op_da_footprint expectation — ecotone/fjord/granite/holocene are all false,
     // matching isthmus semantics (has_da_footprint true only on Jovian).
-    const auto hardfork = blk.at("_info").at("hardfork").get<std::string>();
+    const auto hardfork = jAt(jAt(blk, "_info"), "hardfork").asString();
     if (hardfork == "isthmus")
         out.cfg = &isthmusConfig();
     else if (hardfork == "jovian")
@@ -515,40 +558,40 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
     }
 
     // env (all 8 fields required) -> hand-built BlockInfo.
-    const auto& env = blk.at("env");
+    const auto& env = jAt(blk, "env");
     auto& bi = out.blk;
-    bi.number = test::from_json<int64_t>(env.at("currentNumber"));
-    bi.timestamp = test::from_json<int64_t>(env.at("currentTimestamp"));
-    bi.gas_limit = test::from_json<int64_t>(env.at("currentGasLimit"));
-    bi.base_fee = test::from_json<uint64_t>(env.at("currentBaseFee"));
-    bi.coinbase = test::from_json<evmc::address>(env.at("currentCoinbase"));
-    bi.prev_randao = test::from_json<hash256>(env.at("currentRandom"));
-    bi.parent_beacon_block_root = test::from_json<hash256>(env.at("parentBeaconBlockRoot"));
+    bi.number = test::from_json<int64_t>(jAt(env, "currentNumber"));
+    bi.timestamp = test::from_json<int64_t>(jAt(env, "currentTimestamp"));
+    bi.gas_limit = test::from_json<int64_t>(jAt(env, "currentGasLimit"));
+    bi.base_fee = test::from_json<uint64_t>(jAt(env, "currentBaseFee"));
+    bi.coinbase = test::from_json<evmc::address>(jAt(env, "currentCoinbase"));
+    bi.prev_randao = test::from_json<hash256>(jAt(env, "currentRandom"));
+    bi.parent_beacon_block_root = test::from_json<hash256>(jAt(env, "parentBeaconBlockRoot"));
 
     auto& hs = out.hashes;
     hs.blockNumber = bi.number;
-    hs.parentHash = test::from_json<hash256>(env.at("parentHash"));
+    hs.parentHash = test::from_json<hash256>(jAt(env, "parentHash"));
 
     // Three transaction arms (deposit / eip1559 / setcode). Unknown _op_type = FAILURE.
     auto& txs = out.txs;
     std::optional<uint64_t> vectorChainId;
-    for (const auto& t : blk.at("block").at("transactions"))
+    for (const auto& t : jAt(jAt(blk, "block"), "transactions"))
     {
-        const auto opType = t.at("_op_type").get<std::string>();
+        const auto opType = jAt(t, "_op_type").asString();
         if (opType == "deposit")
         {
-            const auto& d = t.at("_op_deposit");
+            const auto& d = jAt(t, "_op_deposit");
             DepositTx dep;
-            dep.source_hash = test::from_json<hash256>(d.at("source_hash"));
-            dep.from = test::from_json<evmc::address>(d.at("from"));
-            dep.to = d.at("to").is_null() ?
+            dep.source_hash = test::from_json<hash256>(jAt(d, "source_hash"));
+            dep.from = test::from_json<evmc::address>(jAt(d, "from"));
+            dep.to = jAt(d, "to").isNull() ?
                          std::nullopt :
-                         std::optional{test::from_json<evmc::address>(d.at("to"))};
-            dep.mint = d.contains("mint") ? std::optional{parseU256(d.at("mint"))} : std::nullopt;
-            dep.value = d.contains("value") ? parseU256(d.at("value")) : intx::uint256{0};
-            dep.gas_limit = test::from_json<int64_t>(d.at("gas"));
-            dep.is_system_tx = d.at("is_system_tx").get<bool>();
-            dep.data = test::from_json<bytes>(t.at("data"));
+                         std::optional{test::from_json<evmc::address>(jAt(d, "to"))};
+            dep.mint = d.isMember("mint") ? std::optional{parseU256(jAt(d, "mint"))} : std::nullopt;
+            dep.value = d.isMember("value") ? parseU256(jAt(d, "value")) : intx::uint256{0};
+            dep.gas_limit = test::from_json<int64_t>(jAt(d, "gas"));
+            dep.is_system_tx = jAt(d, "is_system_tx").asBool();
+            dep.data = test::from_json<bytes>(jAt(t, "data"));
             txs.push_back({.tx = std::move(dep), .signedEnvelope = {}});
         }
         else if (opType == "eip1559" || opType == "setcode")
@@ -556,29 +599,29 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
             state::Transaction tx;
             tx.type = opType == "setcode" ? state::Transaction::Type::set_code :
                                             state::Transaction::Type::eip1559;
-            tx.sender = test::from_json<evmc::address>(t.at("sender"));
-            tx.to = t.at("to").is_null() ?
+            tx.sender = test::from_json<evmc::address>(jAt(t, "sender"));
+            tx.to = jAt(t, "to").isNull() ?
                         std::nullopt :
-                        std::optional{test::from_json<evmc::address>(t.at("to"))};
-            tx.nonce = test::from_json<uint64_t>(t.at("nonce"));
-            tx.gas_limit = test::from_json<int64_t>(t.at("gas"));
-            tx.max_gas_price = parseU256(t.at("maxFeePerGas"));
-            tx.max_priority_gas_price = parseU256(t.at("maxPriorityFeePerGas"));
-            tx.value = parseU256(t.at("value"));
-            tx.data = test::from_json<bytes>(t.at("data"));
+                        std::optional{test::from_json<evmc::address>(jAt(t, "to"))};
+            tx.nonce = test::from_json<uint64_t>(jAt(t, "nonce"));
+            tx.gas_limit = test::from_json<int64_t>(jAt(t, "gas"));
+            tx.max_gas_price = parseU256(jAt(t, "maxFeePerGas"));
+            tx.max_priority_gas_price = parseU256(jAt(t, "maxPriorityFeePerGas"));
+            tx.value = parseU256(jAt(t, "value"));
+            tx.data = test::from_json<bytes>(jAt(t, "data"));
             // EIP-2930 access list (optional; no hits in the legacy 25 vectors, dormant path).
-            if (t.contains("accessList"))
+            if (t.isMember("accessList"))
             {
-                for (const auto& e : t.at("accessList"))
+                for (const auto& e : jAt(t, "accessList"))
                 {
                     std::vector<evmc::bytes32> keys;
-                    for (const auto& k : e.at("storageKeys"))
+                    for (const auto& k : jAt(e, "storageKeys"))
                         keys.push_back(test::from_json<hash256>(k));
                     tx.access_list.emplace_back(
-                        test::from_json<evmc::address>(e.at("address")), std::move(keys));
+                        test::from_json<evmc::address>(jAt(e, "address")), std::move(keys));
                 }
             }
-            tx.chain_id = test::from_json<uint64_t>(t.at("chainId"));
+            tx.chain_id = test::from_json<uint64_t>(jAt(t, "chainId"));
             if (vectorChainId.has_value() && *vectorChainId != tx.chain_id)
             {
                 BOOST_ERROR(id << ": inconsistent chainId across txs: " << hexU64(*vectorChainId)
@@ -595,19 +638,19 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
                 bool hasMarked = false;
                 bool hasUnmarked = false;
                 bool anchorOk = false;
-                for (const auto& a : t.at("_op_authorization_list"))
+                for (const auto& a : jAt(t, "_op_authorization_list"))
                 {
                     state::Authorization auth;
-                    auth.chain_id = parseU256(a.at("chainId"));
-                    auth.addr = test::from_json<evmc::address>(a.at("address"));
-                    auth.nonce = test::from_json<uint64_t>(a.at("nonce"));
-                    auth.r = parseU256(a.at("r"));
-                    auth.s = parseU256(a.at("s"));
-                    auth.v = parseU256(a.at("yParity"));
+                    auth.chain_id = parseU256(jAt(a, "chainId"));
+                    auth.addr = test::from_json<evmc::address>(jAt(a, "address"));
+                    auth.nonce = test::from_json<uint64_t>(jAt(a, "nonce"));
+                    auth.r = parseU256(jAt(a, "r"));
+                    auth.s = parseU256(jAt(a, "s"));
+                    auth.v = parseU256(jAt(a, "yParity"));
 
-                    const bool marked = a.contains("_op_signer_unrecoverable");
-                    if (marked && (!a.at("_op_signer_unrecoverable").is_boolean() ||
-                                      !a.at("_op_signer_unrecoverable").get<bool>()))
+                    const bool marked = a.isMember("_op_signer_unrecoverable");
+                    if (marked && (!jAt(a, "_op_signer_unrecoverable").isBool() ||
+                                      !jAt(a, "_op_signer_unrecoverable").asBool()))
                     {
                         BOOST_ERROR(id << ": _op_signer_unrecoverable must be literal true");
                         continue;
@@ -637,12 +680,13 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
                             // carry 0xef0100||tuple.addr delegation code in the vector
                             // postState (required only when this tx has marked tuples).
                             const auto authAddr = hexAddr(*auth.signer);
-                            const auto& post = blk.at("postState");
-                            if (post.contains(authAddr))
+                            const auto& post = jAt(blk, "postState");
+                            if (post.isMember(authAddr))
                             {
                                 const std::string wantCode =
                                     "0xef0100" + hexAddr(auth.addr).substr(2);
-                                if (post.at(authAddr).value("code", "") == wantCode)
+                                if (jAt(post, authAddr).get("code", Json::Value("")).asString() ==
+                                    wantCode)
                                     anchorOk = true;
                             }
                         }
@@ -656,7 +700,7 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
                     BOOST_ERROR(id << ": marked-tuple tx has no applied delegation anchor in "
                                       "postState");
             }
-            auto envelope = test::from_json<bytes>(t.at("_op_raw"));
+            auto envelope = test::from_json<bytes>(jAt(t, "_op_raw"));
             txs.push_back({.tx = std::move(tx), .signedEnvelope = std::move(envelope)});
         }
         else if (opType == "legacy")
@@ -665,18 +709,18 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
             // maxFeePerGas/maxPriorityFeePerGas); evmone legacy has priority==max==gasPrice.
             state::Transaction tx;
             tx.type = state::Transaction::Type::legacy;
-            tx.sender = test::from_json<evmc::address>(t.at("sender"));
-            tx.to = t.at("to").is_null() ?
+            tx.sender = test::from_json<evmc::address>(jAt(t, "sender"));
+            tx.to = jAt(t, "to").isNull() ?
                         std::nullopt :
-                        std::optional{test::from_json<evmc::address>(t.at("to"))};
-            tx.nonce = test::from_json<uint64_t>(t.at("nonce"));
-            tx.gas_limit = test::from_json<int64_t>(t.at("gas"));
-            const auto gasPrice = parseU256(t.at("gasPrice"));
+                        std::optional{test::from_json<evmc::address>(jAt(t, "to"))};
+            tx.nonce = test::from_json<uint64_t>(jAt(t, "nonce"));
+            tx.gas_limit = test::from_json<int64_t>(jAt(t, "gas"));
+            const auto gasPrice = parseU256(jAt(t, "gasPrice"));
             tx.max_gas_price = gasPrice;
             tx.max_priority_gas_price = gasPrice;
-            tx.value = parseU256(t.at("value"));
-            tx.data = test::from_json<bytes>(t.at("data"));
-            tx.chain_id = test::from_json<uint64_t>(t.at("chainId"));
+            tx.value = parseU256(jAt(t, "value"));
+            tx.data = test::from_json<bytes>(jAt(t, "data"));
+            tx.chain_id = test::from_json<uint64_t>(jAt(t, "chainId"));
             if (vectorChainId.has_value() && *vectorChainId != tx.chain_id)
             {
                 BOOST_ERROR(id << ": inconsistent chainId across txs: " << hexU64(*vectorChainId)
@@ -684,7 +728,7 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
                 return false;
             }
             vectorChainId = tx.chain_id;
-            auto envelope = test::from_json<bytes>(t.at("_op_raw"));
+            auto envelope = test::from_json<bytes>(jAt(t, "_op_raw"));
             txs.push_back({.tx = std::move(tx), .signedEnvelope = std::move(envelope)});
         }
         else if (opType == "blob")
@@ -693,7 +737,7 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
             // processOpBlock never reaches raw-tx decode (txs are already OpBlockTx), so
             // reproduce the real decode rejection via decodeOneRawTx, record the message,
             // and let assertRejectThrow assert it directly (consumer-first; review R16 consumer:both).
-            const auto raw = test::from_json<bytes>(t.at("_op_raw"));
+            const auto raw = test::from_json<bytes>(jAt(t, "_op_raw"));
             try
             {
                 // decodeOneRawTx lives in bcos::evm::engine::detail and takes
@@ -718,18 +762,18 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
             // is only for structural completeness).
             state::Transaction placeholder;
             placeholder.type = state::Transaction::Type::blob;
-            placeholder.sender = test::from_json<evmc::address>(t.at("sender"));
-            placeholder.to = t.at("to").is_null() ?
+            placeholder.sender = test::from_json<evmc::address>(jAt(t, "sender"));
+            placeholder.to = jAt(t, "to").isNull() ?
                                  std::nullopt :
-                                 std::optional{test::from_json<evmc::address>(t.at("to"))};
-            placeholder.gas_limit = test::from_json<int64_t>(t.at("gas"));
-            placeholder.value = parseU256(t.at("value"));
-            placeholder.data = test::from_json<bytes>(t.at("data"));
-            placeholder.max_gas_price = t.contains("maxFeePerGas") ?
-                                            parseU256(t.at("maxFeePerGas")) :
+                                 std::optional{test::from_json<evmc::address>(jAt(t, "to"))};
+            placeholder.gas_limit = test::from_json<int64_t>(jAt(t, "gas"));
+            placeholder.value = parseU256(jAt(t, "value"));
+            placeholder.data = test::from_json<bytes>(jAt(t, "data"));
+            placeholder.max_gas_price = t.isMember("maxFeePerGas") ?
+                                            parseU256(jAt(t, "maxFeePerGas")) :
                                             intx::uint256{};
-            placeholder.max_priority_gas_price = t.contains("maxPriorityFeePerGas") ?
-                                                     parseU256(t.at("maxPriorityFeePerGas")) :
+            placeholder.max_priority_gas_price = t.isMember("maxPriorityFeePerGas") ?
+                                                     parseU256(jAt(t, "maxPriorityFeePerGas")) :
                                                      intx::uint256{};
             placeholder.chain_id = vectorChainId.value_or(kCorpusChainId);
             txs.push_back({.tx = std::move(placeholder), .signedEnvelope = std::move(raw)});
@@ -748,8 +792,8 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
 /// A nullptr pre skips pre parsing (chain block i>0 pre:null inherits ts after the
 /// previous block's applyDiff writes). touchedAddrs/touchedSlots are per-block
 /// (block N's .uncovered must not see addresses touched in blocks 0..N-1).
-void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test::TestState& ts,
-    const Json* pre, DivergenceLedger& ledger, evmc::VM& vm,
+void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
+    evmone::test::TestState& ts, const JsonValue* pre, DivergenceLedger& ledger, evmc::VM& vm,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
 {
     VectorContext ctx{ledger, id};
@@ -812,14 +856,14 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
     const auto seal = sealOpBlock(result, cfg, mpStorage);
 
     // ── header six fields ────────────────────────────────────────────────────
-    const auto& h = blk.at("_op_expected").at("header");
-    ctx.checkField("gasUsed", hexU256(parseU256(h.at("gasUsed"))),
+    const auto& h = jAt(jAt(blk, "_op_expected"), "header");
+    ctx.checkField("gasUsed", hexU256(parseU256(jAt(h, "gasUsed"))),
         hexU64(static_cast<uint64_t>(result.gasUsed)));
-    ctx.checkField("receiptsRoot", hexHash(test::from_json<hash256>(h.at("receiptsRoot"))),
+    ctx.checkField("receiptsRoot", hexHash(test::from_json<hash256>(jAt(h, "receiptsRoot"))),
         hexHash(seal.receiptsRoot));
     // bloom is always compared as 512 hex chars (a zero bloom is an all-zero string, not absent).
     {
-        auto wantBloom = h.at("logsBloom").get<std::string>();
+        auto wantBloom = jAt(h, "logsBloom").asString();
         std::ranges::transform(wantBloom, wantBloom.begin(),
             [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         if (wantBloom.size() != 2 + 512 || !wantBloom.starts_with("0x"))
@@ -830,7 +874,7 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
         }
         ctx.checkField("logsBloom", wantBloom, hexBytes(evmc::bytes_view(seal.logsBloom)));
     }
-    ctx.checkField("withdrawalsRoot", hexHash(test::from_json<hash256>(h.at("withdrawalsRoot"))),
+    ctx.checkField("withdrawalsRoot", hexHash(test::from_json<hash256>(jAt(h, "withdrawalsRoot"))),
         hexHash(seal.withdrawalsRoot));
     // ── header.stateRoot (single leg: execution+engine vs op-geth consensus root) ─
     // Timing: the seal-stage ts is already the full post-finalize world state (same
@@ -838,14 +882,14 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
     // read ts, never write — safe to build the root here. Engine correctness
     // (evmone mpt_hash) is anchored upstream; not re-proven here. Red failures
     // should be attributed to execution/accounting or pre-alloc completeness first.
-    ctx.checkField("stateRoot", hexHash(test::from_json<hash256>(h.at("stateRoot"))),
+    ctx.checkField("stateRoot", hexHash(test::from_json<hash256>(jAt(h, "stateRoot"))),
         hexHash(bcos::evm::stateRootOf(TestStateLedger{ts})));
     // requestsHash: pre-Prague (ecotone/fjord/..., incl. ecotone_upgrade_fjord_activation)
     // vectors do not emit this key (op-geth t8n omitempty; only Prague has EIP-7685
     // requests), so the want side goes through checkOptional by presence.
     ctx.checkOptional("requestsHash",
-        h.contains("requestsHash") ?
-            std::optional{hexHash(test::from_json<hash256>(h.at("requestsHash")))} :
+        h.isMember("requestsHash") ?
+            std::optional{hexHash(test::from_json<hash256>(jAt(h, "requestsHash")))} :
             std::nullopt,
         seal.requestsHash.has_value() ? std::optional{hexHash(*seal.requestsHash)} : std::nullopt);
     // blobGasUsed: all six forks emit it in vectors (op-geth headers really carry 0x0,
@@ -854,7 +898,7 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
     // side is absent (seal.blobGasUsed semantics = Jovian DA-footprint header field;
     // pre-Isthmus has no such reuse bit, and the vector's 0x0 is informational only).
     {
-        const auto wantBlobGas = parseU256(h.at("blobGasUsed"));  // required (always emitted on Ecotone+)
+        const auto wantBlobGas = parseU256(jAt(h, "blobGasUsed"));  // required (always emitted on Ecotone+)
         const auto gotBlobGas =
             seal.blobGasUsed.has_value() ? std::optional{hexU64(*seal.blobGasUsed)} : std::nullopt;
         if (isJovian)
@@ -864,7 +908,7 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
     }
 
     // ── receipts ────────────────────────────────────────────────────────────
-    const auto& expReceipts = blk.at("_op_expected").at("receipts");
+    const auto& expReceipts = jAt(jAt(blk, "_op_expected"), "receipts");
     if (expReceipts.size() != result.receipts.size())
     {
         BOOST_ERROR(id << ": receipts count mismatch: expected " << expReceipts.size() << " got "
@@ -873,7 +917,7 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
     }
     for (size_t i = 0; i < expReceipts.size(); ++i)
     {
-        const auto& er = expReceipts[i];
+        const auto& er = expReceipts[static_cast<Json::ArrayIndex>(i)];
         const std::string p = "receipts[" + std::to_string(i) + "]";
 
         // Got-side unified view (plan A phase 2 API): FISCO TransactionReceipt::Ptr +
@@ -936,28 +980,27 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
                 gotDaFootprintGasScalar = hexU64(*meta->da_footprint_gas_scalar);
         }
 
-        ctx.checkField(p + ".type", hexU256(parseU256(er.at("type"))),
+        ctx.checkField(p + ".type", hexU256(parseU256(jAt(er, "type"))),
             hexU64(static_cast<uint64_t>(result.txTypes[i])));
-        ctx.checkField(p + ".status", hexU256(parseU256(er.at("status"))),
+        ctx.checkField(p + ".status", hexU256(parseU256(jAt(er, "status"))),
             receipt->status() == 0 ? "0x1" : "0x0");
-        ctx.checkField(p + ".gasUsed", hexU256(parseU256(er.at("gasUsed"))),
+        ctx.checkField(p + ".gasUsed", hexU256(parseU256(jAt(er, "gasUsed"))),
             hexU64(static_cast<uint64_t>(receipt->gasUsed())));
-        ctx.checkField(p + ".cumulativeGasUsed", hexU256(parseU256(er.at("cumulativeGasUsed"))),
+        ctx.checkField(p + ".cumulativeGasUsed", hexU256(parseU256(jAt(er, "cumulativeGasUsed"))),
             std::string{receipt->cumulativeGasUsed()});
-        ctx.checkField(p + ".logsCount", std::to_string(er.at("logsCount").get<int64_t>()),
+        ctx.checkField(p + ".logsCount", std::to_string(jAt(er, "logsCount").asInt64()),
             std::to_string(receipt->logEntries().size()));
         // Receipt output (tx return data): the generator always emits it (empty = "0x");
         // FISCO output() returns raw bytes, normalized to "0x"+lowercase hex by hexBytes.
         // Both-absent/both-present byte-exact compare — wrapper returndata truncation and
         // p256 32-byte-1 are both pinned by it.
         ctx.checkOptional(p + ".output",
-            er.contains("output") ? std::optional{er.at("output").get<std::string>()} :
-                                    std::nullopt,
+            er.isMember("output") ? std::optional{jAt(er, "output").asString()} : std::nullopt,
             std::optional{
                 hexBytes(evmc::bytes_view{receipt->output().data(), receipt->output().size()})});
 
         const auto optWant = [&](const char* key) -> std::optional<std::string> {
-            return er.contains(key) ? std::optional{hexU256(parseU256(er.at(key)))} : std::nullopt;
+            return er.isMember(key) ? std::optional{hexU256(parseU256(jAt(er, key)))} : std::nullopt;
         };
         ctx.checkOptional(p + "._op_deposit_nonce", optWant("_op_deposit_nonce"), gotDepNonce);
         ctx.checkOptional(p + "._op_deposit_receipt_version",
@@ -988,12 +1031,13 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
     // zero + all slots zero", and a missing got-side account is treated as a zero
     // account, so identity => pass. A present-but-empty got account also passes
     // (EIP-161 empty account == absent from trie).
-    const auto& post = blk.at("postState");
+    const auto& post = jAt(blk, "postState");
     std::set<evmc::address> postAddrs;
     static const test::TestAccount kZeroAccount{};
-    for (const auto& [addrStr, acc] : post.items())
+    for (const auto& addrStr : post.getMemberNames())
     {
-        const auto addr = test::from_json<evmc::address>(Json(addrStr));
+        const auto& acc = post[addrStr];
+        const auto addr = test::from_json<evmc::address>(Json::Value(addrStr));
         postAddrs.insert(addr);
         const auto ap = "postState." + hexAddr(addr);
 
@@ -1001,12 +1045,12 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
         const test::TestAccount& got = it != ts.end() ? it->second : kZeroAccount;
 
         ctx.checkField(
-            ap + ".balance", hexU256(parseU256(acc.at("balance"))), hexU256(got.balance));
+            ap + ".balance", hexU256(parseU256(jAt(acc, "balance"))), hexU256(got.balance));
         ctx.checkField(ap + ".nonce",
-            hexU64(acc.contains("nonce") ? test::from_json<uint64_t>(acc.at("nonce")) : 0),
+            hexU64(acc.isMember("nonce") ? test::from_json<uint64_t>(jAt(acc, "nonce")) : 0),
             hexU64(got.nonce));
         ctx.checkField(ap + ".code",
-            acc.contains("code") ? hexBytes(test::from_json<bytes>(acc.at("code"))) : "0x",
+            acc.isMember("code") ? hexBytes(test::from_json<bytes>(jAt(acc, "code"))) : "0x",
             hexBytes(got.code));
 
         // Slot union = vector-declared slots ∪ got non-zero slots ∪ replay write-set
@@ -1015,10 +1059,12 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
         // by the vector => want=0x0 turns red; final zero while unlisted => 0==absent
         // both-zero pass, i.e. "covered").
         std::map<evmc::bytes32, intx::uint256> wantStorage;
-        if (acc.contains("storage"))
+        if (acc.isMember("storage"))
         {
-            for (const auto& [slotStr, valJ] : acc.at("storage").items())
-                wantStorage[test::from_json<hash256>(Json(slotStr))] = parseU256(valJ);
+            const auto& storage = acc["storage"];
+            for (const auto& slotStr : storage.getMemberNames())
+                wantStorage[test::from_json<hash256>(Json::Value(slotStr))] =
+                    parseU256(storage[slotStr]);
         }
         std::set<evmc::bytes32> slots;
         for (const auto& [k, val] : wantStorage)
@@ -1068,11 +1114,11 @@ void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test:
 
 // ── Single-vector replay (flat vector: pre at top level; chain vectors call replayChainVector per block) ─
 
-void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger, evmc::VM& vm,
+void replayVector(const std::string& id, const JsonValue& v, DivergenceLedger& ledger, evmc::VM& vm,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
 {
     evmone::test::TestState ts;
-    replaySingleBlockInto(id, v, ts, &v.at("pre"), ledger, vm, receiptFactory);
+    replaySingleBlockInto(id, v, ts, &jAt(v, "pre"), ledger, vm, receiptFactory);
 }
 
 // ── reject branch ────────────────────────────────────────────────────────────
@@ -1080,15 +1126,17 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
 // consumes executor/both (engine direct-connect field-corruption classes are
 // consumed by OpNewPayloadRpcE2eTest, Task 2).
 
-bool hasReject(const Json& v)
+bool hasReject(const JsonValue& v)
 {
-    return v.contains("_op_expected") && v.at("_op_expected").contains("reject");
+    return v.isMember("_op_expected") && jAt(v, "_op_expected").isMember("reject");
 }
 
-std::string rejectConsumer(const Json& v)
+std::string rejectConsumer(const JsonValue& v)
 {
     // consumer defaults to executor (T8n is an execution-layer replayer; engine-class vectors explicitly write engine).
-    return v.at("_op_expected").at("reject").at("fisco").value("consumer", "executor");
+    return jAt(jAt(jAt(v, "_op_expected"), "reject"), "fisco")
+        .get("consumer", Json::Value("executor"))
+        .asString();
 }
 
 /// reject(executor/both) assertion: processOpBlock must throw std::runtime_error whose
@@ -1099,7 +1147,7 @@ std::string rejectConsumer(const Json& v)
 /// catches processOpBlock's empty-block rejection via BOOST_CHECK_THROW(..., std::runtime_error)
 /// and is green (FISCO-side throws use libc++ unique typeinfo, not the libevmone
 /// -fno-rtti hidden copy).
-void assertRejectThrow(const std::string& id, const Json& v, evmc::VM& vm,
+void assertRejectThrow(const std::string& id, const JsonValue& v, evmc::VM& vm,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
 {
     BlockContext bc;
@@ -1110,17 +1158,15 @@ void assertRejectThrow(const std::string& id, const Json& v, evmc::VM& vm,
     // are already OpBlockTx); assert the recorded message directly (same string as the engine side).
     if (bc.decodeRejectMessage.has_value())
     {
-        const auto expected = v.at("_op_expected")
-                                  .at("reject")
-                                  .at("fisco")
-                                  .at("validation_error_contains")
-                                  .get<std::string>();
+        const auto expected =
+            jAt(jAt(jAt(jAt(v, "_op_expected"), "reject"), "fisco"), "validation_error_contains")
+                .asString();
         BOOST_CHECK_MESSAGE(bc.decodeRejectMessage->find(expected) != std::string::npos,
             id << ": decode reject message missing '" << expected
                << "', got: " << *bc.decodeRejectMessage);
         return;
     }
-    evmone::test::TestState ts = test::from_json<test::TestState>(v.at("pre"));
+    evmone::test::TestState ts = test::from_json<test::TestState>(jAt(v, "pre"));
     // applyDiff callback matches the replaySingleBlockInto execute section (incl. ts write-back); ts is discarded after reject.
     std::set<evmc::address> touchedAddrs;
     std::map<evmc::address, std::set<evmc::bytes32>> touchedSlots;
@@ -1145,11 +1191,9 @@ void assertRejectThrow(const std::string& id, const Json& v, evmc::VM& vm,
     }
     catch (const std::runtime_error& e)
     {
-        const auto expected = v.at("_op_expected")
-                                  .at("reject")
-                                  .at("fisco")
-                                  .at("validation_error_contains")
-                                  .get<std::string>();
+        const auto expected =
+            jAt(jAt(jAt(jAt(v, "_op_expected"), "reject"), "fisco"), "validation_error_contains")
+                .asString();
         BOOST_CHECK_MESSAGE(std::string(e.what()).find(expected) != std::string::npos,
             id << ": throw message missing '" << expected << "', got: " << e.what());
         return;
@@ -1174,18 +1218,18 @@ void assertRejectThrow(const std::string& id, const Json& v, evmc::VM& vm,
 // answers blockNumber-1 (see above), so chain vectors must not contain txs that
 // read historical blockhashes (transfer-safe; review R13).
 
-void replayChainVector(const std::string& id, const Json& v, DivergenceLedger& ledger, evmc::VM& vm,
-    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+void replayChainVector(const std::string& id, const JsonValue& v, DivergenceLedger& ledger,
+    evmc::VM& vm, const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
 {
-    const auto& blocks = v.at("blocks");
+    const auto& blocks = jAt(v, "blocks");
     evmone::test::TestState chainState;
     for (std::size_t i = 0; i < blocks.size(); ++i)
     {
-        const auto& blk = blocks[i];
-        const Json* pre = nullptr;
-        if (blk.contains("pre") && !blk["pre"].is_null())
+        const auto& blk = blocks[static_cast<Json::ArrayIndex>(i)];
+        const JsonValue* pre = nullptr;
+        if (blk.isMember("pre") && !blk["pre"].isNull())
         {
-            chainState = test::from_json<test::TestState>(blk.at("pre"));
+            chainState = test::from_json<test::TestState>(jAt(blk, "pre"));
             pre = &blk["pre"];
         }
         replaySingleBlockInto(
@@ -1264,17 +1308,17 @@ BOOST_AUTO_TEST_CASE(Vectors)
         try
         {
             std::ifstream input(file);
-            const auto doc = Json::parse(input);
+            const auto doc = jParse(input);
             std::string id;
-            const Json* vec = nullptr;
-            for (const auto& [key, val] : doc.items())
+            const JsonValue* vec = nullptr;
+            for (const auto& key : doc.getMemberNames())
             {
                 if (key == "_op_test_vectors")
                     continue;
                 if (vec != nullptr)
                     throw std::runtime_error("more than one vector object in file");
                 id = key;
-                vec = &val;
+                vec = &doc[key];
             }
             if (vec == nullptr)
                 throw std::runtime_error("no vector object in file");
@@ -1282,9 +1326,9 @@ BOOST_AUTO_TEST_CASE(Vectors)
             if (id != stem)
                 throw std::runtime_error("vector id '" + id + "' != filename stem '" + stem + "'");
             // Warning — order: chain vectors have only blocks at top level, no
-            // _op_expected, so the reject check (v.at("_op_expected")) would throw
-            // out_of_range; must test blocks first.
-            if (vec->contains("blocks"))
+            // _op_expected, so the reject check (jAt(v, "_op_expected")) would throw
+            // invalid_argument; must test blocks first.
+            if (vec->isMember("blocks"))
             {
                 replayChainVector(id, *vec, ledger, vm, receiptFactory);
                 continue;
@@ -1321,7 +1365,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
 //    ("op block: invalid non-deposit tx: ...", OpBlockExecute.cpp:190) for an invalid
 //    non-deposit tx; assert throw + what() substring (review HIGH#5). Inline vector
 //    (not a corpus file, embedded directly here) — fields must satisfy loader
-//    requirements: deposit data at the tx top level (t.at("data")); from=OP_DEPOSITOR
+//    requirements: deposit data at the tx top level (jAt(t, "data")); from=OP_DEPOSITOR
 //    to=OP_L1_BLOCK (OpPredeploys.h / OpBlockExecute.cpp); mint/value/gas as hex strings.
 //    The second eip1559 tx must carry a real signed EIP-2718 _op_raw envelope
 //    (opValidate forces non-empty signedTxEnvelope, OpTransition.cpp:362); gas=0 ->
@@ -1335,10 +1379,9 @@ BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
     // ("DIVERGENCES.md missing"). assertRejectThrow does not consume the ledger
     // (reject vectors have no postState/exemption compares); kept for brief conformance.
     DivergenceLedger ledger;
-    // Hand-built vector uses Json::parse (nlohmann's Json::object{...} with nested
-    // initializer_lists has a compile ambiguity in this version — no viable conversion
-    // for basic_json(initializer_list_t); a raw string is more stable).
-    Json v = Json::parse(R"({
+    // Hand-built vector uses the jsoncpp Reader on a raw string (a Json::Value
+    // initializer-list tree would fight jsoncpp's aggregate Value constructors).
+    JsonValue v = jParse(R"({
         "_info": {"hardfork": "isthmus"},
         "env": {
             "currentNumber": 1, "currentTimestamp": "0x64",
@@ -1402,7 +1445,7 @@ BOOST_AUTO_TEST_CASE(RejectBlobDecode)
     auto vm = evmc::VM{evmc_create_evmone()};
     auto receiptFactory = makeTestReceiptFactory();
     DivergenceLedger ledger;
-    Json v = Json::parse(R"({
+    JsonValue v = jParse(R"({
         "_info": {"hardfork": "isthmus"},
         "env": {
             "currentNumber": 1, "currentTimestamp": "0x64",
@@ -1462,7 +1505,7 @@ BOOST_AUTO_TEST_CASE(RejectBlobDecode)
 // by the corpus isthmus/jovian_legacy_transfer vectors (replayed in full after regen).
 BOOST_AUTO_TEST_CASE(LegacyArmBuildsLegacyTx)
 {
-    Json v = Json::parse(R"({
+    JsonValue v = jParse(R"({
         "_info": {"hardfork": "isthmus"},
         "env": {
             "currentNumber": 1, "currentTimestamp": "0x64",
@@ -1511,7 +1554,7 @@ BOOST_AUTO_TEST_CASE(LegacyArmBuildsLegacyTx)
     BOOST_CHECK_EQUAL(tx->chain_id, uint64_t{0x2105});
     // legacy single-price: max == priority == gasPrice
     BOOST_CHECK(tx->max_gas_price == tx->max_priority_gas_price);
-    BOOST_CHECK(tx->max_gas_price == parseU256(Json::parse("\"0x4a817c800\"")));
+    BOOST_CHECK(tx->max_gas_price == parseU256(jParse("\"0x4a817c800\"")));
     BOOST_CHECK(bc.txs[1].signedEnvelope.size() > 0);
 }
 
