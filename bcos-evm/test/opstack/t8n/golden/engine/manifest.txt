@@ -52,3 +52,32 @@ isthmus_system_call_order_observable.golden.json
 #   chained/chainB.golden.json  chained/chainB.pre.json  chained/chainB.post.json
 #   chained/jovianChainA.golden.json  chained/jovianChainA.pre.json  chained/jovianChainA.post.json
 #   chained/jovianChainB.golden.json  chained/jovianChainB.pre.json  chained/jovianChainB.post.json
+isthmus_precompile_blake2f.golden.json
+isthmus_precompile_bn256add.golden.json
+isthmus_precompile_bn256mul.golden.json
+isthmus_precompile_bn256pair_norm.golden.json
+isthmus_precompile_bls_g1add.golden.json
+isthmus_precompile_bls_g1msm.golden.json
+isthmus_precompile_bls_g1msm_overcap.golden.json
+isthmus_precompile_bls_g2add.golden.json
+isthmus_precompile_bls_g2msm.golden.json
+isthmus_precompile_bls_g2msm_overcap.golden.json
+isthmus_precompile_bls_map_g1.golden.json
+isthmus_precompile_bls_map_g2.golden.json
+isthmus_precompile_bls_pairing.golden.json
+isthmus_precompile_bls_pairing_overcap.golden.json
+isthmus_precompile_ecrecover.golden.json
+isthmus_precompile_expmod.golden.json
+isthmus_precompile_identity.golden.json
+isthmus_precompile_point_evaluation.golden.json
+isthmus_precompile_ripemd160.golden.json
+isthmus_precompile_sha256.golden.json
+isthmus_precompile_wrap_63of64.golden.json
+isthmus_precompile_wrap_eip7702.golden.json
+isthmus_precompile_wrap_returndata.golden.json
+jovian_precompile_bls_g1msm_overcap.golden.json
+jovian_precompile_bls_g2msm_overcap.golden.json
+jovian_precompile_bls_pairing_overcap.golden.json
+jovian_precompile_bn256pair_overcap.golden.json
+jovian_precompile_wrap_value_overcap.golden.json
+jovian_precompile_wrap_value_revert.golden.json
