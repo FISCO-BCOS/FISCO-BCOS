@@ -66,8 +66,9 @@ add_library(bcos-evm-eth STATIC
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
-    # rlp_encode：块级回执建根（sealOpBlock 的 receipts-root leaf）用 evmone 编码作金值锚，
-    # 属生产依赖。
+    # rlp_encode：已移出生产库——生产代码零引用（evmone::rlp:: / rlp_encode 符号 grep 空），
+    # 唯一消费者是 opstack-executor-block-tests 的 OpReceiptEncodeTest（ADL 调
+    # evmone::state::rlp_encode），已直接挂到该测试 target（opstack-executor/tests/CMakeLists.txt）。
     #
     # DEBT(eth-utils-removal): test_state 是 evmone 的内存**测试**账本。全部 11 个引用点都在
     # bcos-evm/test/ 下，两个生产库一个都不引用（nm 核验），所以它出现在生产库
@@ -82,7 +83,6 @@ add_library(bcos-evm-eth STATIC
     # 唯一干净的出口是块级 PR 里的自研内存账本：届时 test_state.{hpp,cpp} 不再需要安装，
     # 这一行、portfile 的补丁、以及下方的 shim 一并删除。在那之前这是一笔明确记账的债务，
     # 不是疏漏。
-    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
 # Shim first: ${CMAKE_CURRENT_SOURCE_DIR} is <repo>/bcos-evm, which contains a real test/
@@ -115,7 +115,6 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 

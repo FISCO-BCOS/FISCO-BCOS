@@ -1,5 +1,12 @@
 find_package(GTest CONFIG REQUIRED)
 find_package(evmone REQUIRED)
+# rlp_encode.cpp was removed from the production bcos-evm-eth lib (zero production callers); the
+# only consumer is OpReceiptEncodeTest's ADL call into evmone::state::rlp_encode. EVMONE_TEST_UTILS_DIR
+# is defined in bcos-evm/CMakeLists.txt (sibling scope, not visible here), so re-derive it.
+get_target_property(_evmone_inc_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
+list(GET _evmone_inc_dirs 0 _evmone_inc_dir)
+cmake_path(NORMAL_PATH _evmone_inc_dir)
+set(EVMONE_TEST_UTILS_DIR "${_evmone_inc_dir}/test/utils")
 
 add_executable(opstack-executor-tests OpstackExecutorTest.cpp)
 target_link_libraries(opstack-executor-tests PRIVATE
@@ -27,9 +34,14 @@ add_executable(opstack-executor-block-tests
     OpEngineBranchSmokeTest.cpp
     support/SeedPreStateTest.cpp
     support/GoldenSampleTest.cpp
+    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
 )
 # 与既有 GTest target 同因：Web3Transaction + tars aggregate init 不宜 unity-build
 set_target_properties(opstack-executor-block-tests PROPERTIES UNITY_BUILD OFF)
+# rlp_encode.cpp: vendored evmone test util, compiled here (not in production lib). Same
+# -Wno-missing-field-initializers as the bcos-evm production build applied to upstream code.
+set_source_files_properties(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 target_link_libraries(opstack-executor-block-tests PRIVATE
     opstack-executor bcosevm::opstack Boost::unit_test_framework
     codec protocol-tars ledger engine bcos-utilities jsoncpp_static rpc)
