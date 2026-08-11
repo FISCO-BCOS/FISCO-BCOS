@@ -1,8 +1,8 @@
-#include <bcos-evm/opstack/OpBlockSeal.h>
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
-#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <opstack-executor/OpBlockSeal.h>
 #include <algorithm>
 #include <cstring>
 #include <functional>
@@ -86,8 +86,8 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
         // 与 accountStorageRoot（adapter/StateRootCompute.cpp:21-22，stateRoot 据此匹配 golden）
         // 对齐：这里先把 trim 值 rlp 编码成 leaf 字节串。
         bcos::bytes leaf;
-        bcos::codec::rlp::encode(leaf,
-            bcos::bytes(value.bytes + first, value.bytes + sizeof(value.bytes)));
+        bcos::codec::rlp::encode(
+            leaf, bcos::bytes(value.bytes + first, value.bytes + sizeof(value.bytes)));
         entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
     }
     auto result = bcos::ledger::mpt::computeTrieRoot(entries);
@@ -117,11 +117,9 @@ evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
     if (txType == static_cast<uint8_t>(kDepositTxType))
     {
         const auto& meta = r.opStackMeta();
-        const uint64_t nonce =
-            (meta && meta->deposit_nonce) ? *meta->deposit_nonce : uint64_t{0};
-        const uint64_t version = (meta && meta->deposit_receipt_version) ?
-                                     *meta->deposit_receipt_version :
-                                     uint64_t{0};
+        const uint64_t nonce = (meta && meta->deposit_nonce) ? *meta->deposit_nonce : uint64_t{0};
+        const uint64_t version =
+            (meta && meta->deposit_receipt_version) ? *meta->deposit_receipt_version : uint64_t{0};
         bcos::codec::rlp::encode(payload, nonce);
         bcos::codec::rlp::encode(payload, version);
     }
@@ -153,7 +151,8 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
         receiptsEntries.emplace_back(std::move(key), bcos::bytes{leaf.begin(), leaf.end()});
     }
     auto receiptsResult = bcos::ledger::mpt::computeTrieRootVarKey(receiptsEntries);
-    std::memcpy(seal.receiptsRoot.bytes, receiptsResult.root.data(), sizeof(seal.receiptsRoot.bytes));
+    std::memcpy(
+        seal.receiptsRoot.bytes, receiptsResult.root.data(), sizeof(seal.receiptsRoot.bytes));
 
     // Block-level logsBloom: bitwise-OR each receipt's 256-byte bloom (the FISCO receipt carries
     // its own logsBloom, set by the execution layer — same projection the evmone span overload
@@ -177,7 +176,8 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
         // Canyon+ withdrawals list is always empty → empty-trie root; the requests header field
         // does not exist in the CANCUN family. FISCO emptyRootHash() == keccak256(RLP("")).
         auto const emptyRoot = bcos::ledger::mpt::emptyRootHash();
-        std::memcpy(seal.withdrawalsRoot.bytes, emptyRoot.data(), sizeof(seal.withdrawalsRoot.bytes));
+        std::memcpy(
+            seal.withdrawalsRoot.bytes, emptyRoot.data(), sizeof(seal.withdrawalsRoot.bytes));
     }
 
     // Jovian block-header BlobGasUsed reuse slot (equivalent to CalcDAFootprint, see header

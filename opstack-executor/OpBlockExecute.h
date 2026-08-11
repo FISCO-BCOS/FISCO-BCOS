@@ -1,10 +1,10 @@
 #pragma once
 
-#include <bcos-evm/eth/state/transaction.hpp>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <array>
+#include <bcos-evm/eth/state/transaction.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -33,7 +33,7 @@ struct OpBlockTx
 struct OpBlockResult
 {
     std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
-    std::vector<uint8_t> txTypes;  // one EIP-2718 type byte per receipt, same order
+    std::vector<uint8_t> txTypes;           // one EIP-2718 type byte per receipt, same order
     int64_t gasUsed = 0;                    // = last tx's cumulative
     evmone::state::StateDiff finalizeDiff;  // end-of-block finalize output (already delivered via
                                             // applyDiff)

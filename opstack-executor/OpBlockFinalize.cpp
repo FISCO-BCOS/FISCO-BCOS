@@ -1,5 +1,5 @@
 #include <bcos-evm/adapter/StateDiffSanitize.h>
-#include <bcos-evm/opstack/OpBlockFinalize.h>
+#include <opstack-executor/OpBlockFinalize.h>
 #include <stdexcept>
 
 namespace bcos::evm::opstack

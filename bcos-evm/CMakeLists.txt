@@ -125,11 +125,7 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpPrecompiles.cpp
     bcos-evm/opstack/OpFeeParams.cpp
     bcos-evm/opstack/RollupCost.cpp
-    bcos-evm/opstack/OpTransition.cpp
-    # 块级执行层（op-validator-loop 移植）：processOpBlock / finalizeOpBlock / sealOpBlock。
-    bcos-evm/opstack/OpBlockExecute.cpp
-    bcos-evm/opstack/OpBlockFinalize.cpp
-    bcos-evm/opstack/OpBlockSeal.cpp)
+    bcos-evm/opstack/OpTransition.cpp)
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
