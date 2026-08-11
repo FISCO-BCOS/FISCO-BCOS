@@ -17,9 +17,8 @@ bcos-framework)→ `9ad5884df`(opstackRegisterBlock 纯函数 + 转换器注入)
 - 全量构建 `cmake --build build -j8` 成功(仅既有 deprecation 警告 / ld 重复库 / macOS 版本警告)
 - 全量 `ctest --test-dir build`:**1930/1930 通过**(202.8s)
 - opstack-executor-tests(GTest)9/9
-- opstack-executor-block-tests 全绿(114 用例:t8n **127 向量**(执行零改动,executeOpBlock 保留)
-  + e2e **80**(OpNewPayloadRpcE2eSuite 74 + OpForkchoiceRpcE2eSuite 6,三阶段回归门)
-  + OpTwoPhaseSuite 5 + OpBlockRegisterSuite 4 + smoke/branch/L1-edge/receipt-encode)
+- opstack-executor-block-tests 全绿(114 用例:覆盖 t8n 127 向量、e2e 80、OpTwoPhaseSuite 5、
+  OpBlockRegisterSuite 4、smoke/branch/L1-edge/receipt-encode)
 - opstack-executor-detail-tests 24/24(比对/RLP/storage-helper)
 - test-bcos-engine 11/11(EngineServiceTest 通用 newPayload)
 - test-transaction-scheduler 全绿(真实通用 engine 驱动 newPayload,最强通用路径回归)
@@ -271,8 +270,8 @@ co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nul
 - **风险中低**(审查后下调):registerOpBlock 数据来源改造(最易出错,需 e2e 全绿守块表写入正确,
   先纯函数单测钉死);模板第二参 + 构造参数变化(5 处实例化点,编译闸);转换器注入链路
   (Initializer 组装,opEnvelopeToTars 仍驻 engine,零迁移)。
-- **前向依赖注记**:概念形式 executeBlock 也被通用 buildPayload 引用(L1426,传 Transaction 范围);
-  OP 组合根下该调用在 `if constexpr (!c_opMode)` 内被丢弃,不实例化、不冲突;但**若将来 OP 化
+- **前向依赖注记**:概念形式 executeBlock 也被通用 buildPayload 引用(L1252,传 Transaction 范围);
+  OP 组合根懒实例化不 odr-use 故不冲突;但**若将来 OP 化
   块构建**,真实 executeBlock 期望 raw bytes 而 buildPayload 传 Transaction 范围 → 实例化即编译错。
   本期不做 OP 化块构建,记为决策记录。
 - **测试不可退步(强制)**:现有 t8n/e2e/detail-tests 全绿;新测试只加强。

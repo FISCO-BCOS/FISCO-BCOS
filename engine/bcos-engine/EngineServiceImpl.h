@@ -1095,7 +1095,7 @@ private:
         // ---- Step 4: execute(two-phase phase 1) ----
         view.newMutable();
         // OP 现状不消费 ledgerConfig(executeOpBlock 不带),仅供概念合规;获取路径沿用 buildPayload
-        // 的 ledger::getLedgerConfig(L1377-1378),按"配置生效到父块"语义取 payload.blockNumber-1。
+        // 的 ledger::getLedgerConfig(L1204),按"配置生效到父块"语义取 payload.blockNumber-1。
         bcos::ledger::LedgerConfig ledgerConfig;
         // payload.blockNumber 是 protocol::BlockNumber(int64),无需转换。
         co_await bcos::ledger::getLedgerConfig(

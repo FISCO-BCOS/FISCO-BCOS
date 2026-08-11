@@ -203,7 +203,7 @@ public:
     {
         callback(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
                      "OpCallScheduler: commitBlock is not supported in OP mode; block commit is "
-                     "engine-driven (registerOpBlock -> mergeView)"),
+                     "engine-driven (commitBlock -> opstackRegisterBlock)"),
             nullptr);
     }
 

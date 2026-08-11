@@ -169,9 +169,7 @@ using OpEngineService =
 /// member lambda) so the fixture's member-init list can reference it by name — members initialize
 /// in declaration order, and a converter declared after the scheduler would read an unconstructed
 /// object. `bcos::engine::detail::opEnvelopeToTars`'s forward declaration is visible via
-/// EngineServiceImpl.h (included above). Not yet reached on the old single-phase engine path (the
-/// engine stays two-phase-unaware until alignment-plan Task 4), so wiring it here has no side
-/// effect today.
+/// EngineServiceImpl.h (included above). Exercised by the three-phase commit path.
 std::optional<bcostars::Transaction> realConverter(
     bcos::bytes const& env, bcos::crypto::HashType const& h)
 {

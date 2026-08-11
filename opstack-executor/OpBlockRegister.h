@@ -24,12 +24,12 @@ namespace bcos::evm::engine
 using EnvelopeToTarsConverter = std::function<std::optional<bcostars::Transaction>(
     bcos::bytes const&, bcos::crypto::HashType const&)>;
 
-/// 写块表:等效 ethereum 的 ledger::prewriteBlockToBuffer。从 engine registerOpBlock
-/// (EngineServiceImpl.h:1204-1323)逐行搬移,数据来源改为显式参数。5 张表:
+/// 写块表:等效 ethereum 的 ledger::prewriteBlockToBuffer。从 engine 原 registerOpBlock
+/// 逐行搬移,数据来源改为显式参数。5 张表:
 ///   SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
 ///   SYS_HASH_2_RECEIPT / SYS_HASH_2_TX
-/// 失败分类:receipt 数量不变量 / null receipt / 存储写失败 -> OpExecutionInternalError
-/// (engine 屏障原样放行 -> -32603)。blockHash 由调用方显式传入(engine step 2 已校验
+/// 失败分类:receipt 数量不变量 / null receipt -> OpExecutionInternalError;写失败原样上抛
+/// (engine 屏障分类 -32603)。blockHash 由调用方显式传入(engine step 2 已校验
 /// == header.opHeaderHash(opHeaderConst()),不在此重算,避免常量漂移)。
 template <class ViewType>
 inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
