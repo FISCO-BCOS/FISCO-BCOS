@@ -326,6 +326,15 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     auto gasPrice = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_price, "0x0");
     ledgerConfig.setGasPrice(std::make_tuple(gasPrice.first, gasPrice.second));
 
+    // Excess blob gas (EIP-4844) — consumed only by the pure-Ethereum EthereumExecutor
+    // (executor_version=2) to derive the blob base fee. Persisted at genesis by
+    // Ledger::buildGenesisBlock from tx.excess_blob_gas; when absent the executor defaults
+    // to an excess of 0 (blob base fee 1).
+    if (auto excessBlobGas = sysConfig.get(ledger::SystemConfig::excess_blob_gas); excessBlobGas)
+    {
+        ledgerConfig.setExcessBlobGas(boost::lexical_cast<uint64_t>(excessBlobGas.value().first));
+    }
+
     // Get block header to retrieve timestamp
     auto blockNumberStr = std::to_string(blockNumber);
     if (auto entry = co_await storage2::readOne(

@@ -2,6 +2,7 @@
 /// @brief Type converters between BCOS protocol types and evmone state types.
 #pragma once
 
+#include "EthereumState.h"  // clearAccountStorage (single canonical definition)
 #include "StorageStateView.h"
 #include "bcos-evm/eth/state/state.hpp"
 #include "bcos-evm/eth/state/transaction.hpp"
@@ -20,7 +21,7 @@
 namespace bcos::executor_v1::eth
 {
 
-using ::bcos::executor_v1::eth::toIntxU256;
+using ::bcos::executor_v1::eth::evm::toIntxU256;
 
 // EIP-7840 blob schedule constants (target, max, base_fee_update_fraction).
 // Shared by EthereumExecutor (blob_gas_left for validation) and
@@ -55,40 +56,6 @@ protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& 
 // Defined in BCOS2Evmone.cpp; declared here because the template applyStateDiff
 // below (in this header) calls it.
 bcos::u256 toBcosU256(intx::uint256 const& val);
-
-/// Remove all storage slots of an account (keeps only the fixed account fields).
-/// Used when an account self-destructs: its full state (including storage) must
-/// be cleared so that a later CREATE/CREATE2 at the same address is not treated
-/// as an EIP-7610 collision.
-template <class Storage>
-task::Task<void> clearAccountStorage(
-    Storage& storage, bcos::ledger::account::EVMAccount<Storage>& acc)
-{
-    using namespace bcos::ledger;
-    using namespace bcos::ledger::account;
-    auto tableName = co_await acc.path();
-
-    std::vector<executor_v1::StateKey> keysToRemove;
-    auto it = co_await storage2::range(
-        storage, storage2::RANGE_SEEK, executor_v1::StateKey{tableName, std::string_view{}});
-    while (auto kv = co_await it.next())
-    {
-        auto const& [k, v] = *kv;
-        executor_v1::StateKeyView view(k);
-        if (view.m_table != tableName)
-            break;  // Left this account's table.
-        auto key = view.m_key;
-        if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
-            key != ACCOUNT_TABLE_FIELDS::CODE_HASH && key != ACCOUNT_TABLE_FIELDS::CODE &&
-            key != ACCOUNT_TABLE_FIELDS::ABI && key != ACCOUNT_TABLE_FIELDS::ALIVE &&
-            key != ACCOUNT_TABLE_FIELDS::FROZEN && key != ACCOUNT_TABLE_FIELDS::SHARD)
-        {
-            keysToRemove.emplace_back(k);
-        }
-    }
-    if (!keysToRemove.empty())
-        co_await storage2::removeSome(storage, keysToRemove);
-}
 
 template <class Storage>
 task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const& diff,

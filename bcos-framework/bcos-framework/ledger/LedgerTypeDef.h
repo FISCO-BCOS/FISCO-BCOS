@@ -65,6 +65,8 @@ constexpr static std::string_view INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "feature_r
 constexpr static std::string_view ENABLE_BALANCE_TRANSFER = magic_enum::enum_name(SystemConfig::balance_transfer);
 // system configuration for ethereum-executor EVM revision (executor_version=2)
 constexpr static std::string_view SYSTEM_KEY_EVMC_REVISION = magic_enum::enum_name(SystemConfig::evmc_revision);
+// system configuration for ethereum-executor excess blob gas (EIP-4844 blob base fee)
+constexpr static std::string_view SYSTEM_KEY_EXCESS_BLOB_GAS = magic_enum::enum_name(SystemConfig::excess_blob_gas);
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
@@ -72,7 +74,13 @@ constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
 // system config struct
 using SystemConfigEntry = std::tuple<std::string, bcos::protocol::BlockNumber>;
 
-const unsigned TX_GAS_LIMIT_MIN = 100000;
+// Minimum block gas limit for node-local startup / genesis validation. Lowered to
+// go-ethereum's MinGasLimit (5000) so EEST state tests with small block gas limits
+// (lowGasLimit: 80000) can be built at genesis; the previous 100000 floor rejected valid
+// sub-100k Ethereum blocks. This is node-local only — the consensus-side runtime floor
+// enforced by SystemConfigPrecompiled (bcos::precompiled::TX_GAS_LIMIT_MIN) deliberately
+// stays at 100000 so existing chains are unaffected.
+const unsigned TX_GAS_LIMIT_MIN = 5000;
 const unsigned RPBFT_EPOCH_SEALER_NUM_MIN = 1;
 const unsigned RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 // get consensus node list type

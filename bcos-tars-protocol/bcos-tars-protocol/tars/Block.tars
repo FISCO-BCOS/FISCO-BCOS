@@ -29,24 +29,31 @@ module bcostars {
         13 optional vector<long> consensusWeights;
 
         // ---- Ethereum-compatible header fields (added) ----
+        // NOTE: tags 27/28 were previously blockAccessListHash (vector) / slotNumber (long)
+        // in an earlier unreleased schema; they are reused here as uncleHash / difficulty
+        // (difficulty changes type long -> string). This is a breaking schema change for any
+        // data serialized with the old tags. These fields have not shipped to any
+        // persistence/network data, so the reuse is accepted; see PR #5409 description.
         14 optional vector<byte> coinbase;             // 20-byte address
+        27 optional vector<byte> uncleHash;
         15 optional vector<byte> logsBloom;            // 256-byte bloom filter
+        28 optional string difficulty;
         16 optional string gasLimit;                   // u256 as string
         18 optional vector<byte> prevRandao;           // 32-byte hash
+        31 optional vector<byte> nonce;
         21 optional string baseFee;                    // optional u256 as string
         22 optional vector<byte> withdrawalsHash;      // optional 32-byte hash
         23 optional string blobGasUsed;                // optional u256 as string
         24 optional string excessBlobGas;              // optional u256 as string
         25 optional vector<byte> parentBeaconRoot;     // optional 32-byte hash
         26 optional vector<byte> requestsHash;         // optional 32-byte hash
-        27 optional vector<byte> blockAccessListHash;  // optional 32-byte hash
-        28 optional long slotNumber = -1;             // optional, -1 means unset
     };
 
     struct BlockHeader {
         1 optional BlockHeaderData data;
         2 optional vector<byte> dataHash;
         3 optional vector<Signature> signatureList;
+        4 optional byte ethBlockVersion;  // EthBlockVersion: 0 = non-Eth, 1..5 = fork era
     };
 
     struct Block {

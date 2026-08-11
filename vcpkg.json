@@ -109,7 +109,8 @@
         "benchmark",
         "zlib",
         "tarscpp",
-        "hsm-crypto"
+        "hsm-crypto",
+        "ethereum-tests"
       ]
     },
     "etcd": {

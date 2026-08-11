@@ -19,6 +19,10 @@ bcos::protocol::Block::Ptr bcostars::protocol::BlockFactoryImpl::createBlock(
     auto block = std::make_shared<BlockImpl>();
     block->decode(_data, _calculateHash, _checkSig);
 
+    // For an Ethereum-standard header the hash is keccak256(rlp(header)); calculateHash()
+    // routes to the rlp-protocol bridge internally for Eth headers and to the Tars hash for
+    // non-Eth headers. Either way, when the hash is missing we compute it so callers that
+    // rely on createBlock leaving hash() usable (block sync, FIB-130 compare) work for both.
     if (block->inner().blockHeader.dataHash.empty())
     {
         block->blockHeader()->calculateHash(*m_cryptoSuite->hashImpl());

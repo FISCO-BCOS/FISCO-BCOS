@@ -60,6 +60,10 @@ namespace engine
 {
 class AnyEngineService;
 }
+namespace single_consensus
+{
+class SingleNodeConsensus;
+}
 namespace storage2
 {
 template <class Key, class ValueT>
@@ -92,6 +96,11 @@ public:
         return m_engineServiceInitializer;
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
+
+    std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
+    {
+        return m_singleNodeConsensus;
+    }
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
@@ -163,6 +172,7 @@ private:
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
+    std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage

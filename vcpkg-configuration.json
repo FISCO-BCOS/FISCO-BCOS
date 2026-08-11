@@ -24,6 +24,7 @@
     "./ports/group-sig",
     "./ports/paillier",
     "./ports/tikv-client-cpp",
-    "./ports/benchmark"
+    "./ports/benchmark",
+    "./ports-data/ethereum-tests"
   ]
 }
