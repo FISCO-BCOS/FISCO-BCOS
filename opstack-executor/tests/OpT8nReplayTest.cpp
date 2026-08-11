@@ -1,22 +1,22 @@
-// OpT8nReplayTest.cpp — M-B3+M6 Task 3：OP 块级差分回放 gate。
+// OpT8nReplayTest.cpp — M-B3+M6 Task 3: OP block-level differential replay gate.
 //
-// 消费 test/opstack/t8n/vectors/*.json（schema v3-block，op-geth
-// GenerateChain+InsertChain 金标准，生成器见 t8n/generator/），整块回放
-// processOpBlock → sealOpBlock，与 _op_expected（header 六字段 + 逐 receipt）
-// 和 postState（决策记录 8：双向 + applyDiff 写集覆盖）比对。
+// Replays test/opstack/t8n/vectors/*.json (schema v3-block, op-geth
+// GenerateChain+InsertChain golden, generator in t8n/generator/) block-by-block
+// through processOpBlock -> sealOpBlock, comparing header fields, per-receipt
+// fields, and postState (bidirectional + applyDiff write-set coverage) against
+// _op_expected.
 //
-// 硬断言纪律（plan rev.2 红队 1/2/7 强制）：
-//   A) 目录 *.json 文件名集合 == manifest.txt 集合（缺/多均 FAILURE）；
-//      JSON parse 失败/必填字段缺失 = ADD_FAILURE 点名文件（无静默 continue）；
-//      每向量比对计数 RecordProperty，计数 0 = FAILURE。
-//   B) 必填一律 j.at()；_info.hardfork 仅精确
-//      ecotone|fjord|granite|holocene|isthmus|jovian（禁默认档）；未知 _op_type =
-//      FAILURE；receipts 数不等 = FAILURE（禁 zip-min）。
-//   D) 比对全经 checkField/checkOptional 汇入 DivergenceLedger；checkOptional
-//      绝不 has_value() 门控（单侧缺席即 DIVERGE <absent>）；bloom 恒 512 hex；
-//      postState 双向 + 零槽 trie 规约（0 ≡ 缺席）+ 写集覆盖断言。
-//   E) 豁免唯一来源 = DIVERGENCES.md ALLOWLIST 四元组（仅 a:PENDING-FIX /
-//      c:SIGNED-OFF）；entry= 悬空 = FAILURE；本轮未命中的豁免条目 = FAILURE。
+// Hard assertion discipline: A) dir *.json set == manifest.txt set; parse
+// failure / missing required field = named ADD_FAILURE; per-vector comparison
+// count recorded, 0 = FAILURE. B) required fields via j.at(); hardfork must be
+// exactly ecotone|fjord|granite|holocene|isthmus|jovian (no default fork);
+// unknown _op_type / receipt count mismatch = FAILURE (no zip-min).
+// D) comparisons routed through checkField/checkOptional into DivergenceLedger;
+// checkOptional never gated on has_value() (one-sided absence = DIVERGE
+// <absent>); bloom always 512 hex; postState bidirectional with zero-slot trie
+// reduction (0 == absent) + write-set coverage. E) exemptions only from
+// DIVERGENCES.md ALLOWLIST tuples (a:PENDING-FIX / c:SIGNED-OFF); dangling
+// entry= or never-hit exemptions = FAILURE.
 
 #include "StateDiffWriteback.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -30,7 +30,7 @@
 #include <evmone/evmone.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockSeal.h>
-#include <opstack-executor/OpSchedulerImpl.h>  // decodeOneRawTx（blob decode-class reject 复现）
+#include <opstack-executor/OpSchedulerImpl.h>  // decodeOneRawTx (blob decode-class reject repro)
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>
@@ -53,11 +53,13 @@ using Json = nlohmann::json;
 using namespace bcos::evm::opstack;
 using namespace evmone;
 
-// ── evmone test::from_json 子集本地复刻 ───────────────────────────────────────
-// vcpkg evmone 包不 ship test/utils/statetest.hpp（声明 evmone 的 test::from_json<T>），
-// t8n gate 需要其中一小部分转换。在此声明主模板并定义所用特化，语义与 evmone
-// statetest_loader.cpp 逐字一致（整数支持 number 或 "0x" hex 字符串；bytes/address/
-// hash256 走 evmc::from_hex；TestState 按账户对象解析且零值槽剔除）。
+// ── Local subset re-implementation of evmone test::from_json ─────────────────
+// The vcpkg evmone package does not ship test/utils/statetest.hpp (which declares
+// evmone's test::from_json<T>); the t8n gate needs a few of its conversions.
+// Declare the primary template and define only the used specializations, with
+// semantics identical to evmone statetest_loader.cpp (ints accept number or "0x"
+// hex strings; bytes/address/hash256 via evmc::from_hex; TestState parses
+// account objects and drops zero-valued storage slots).
 namespace evmone::test
 {
 template <typename T>
@@ -154,9 +156,10 @@ evmone::test::TestState from_json<evmone::test::TestState>(const nlohmann::json&
 
 namespace
 {
-// ── 规范化打印（DIVERGE/ALLOWLIST want/got 的唯一书写形式）───────────────────
-// 数值：0x 前缀小写最简 hex（与生成器 hexutil.EncodeUint64/EncodeBig 同形）。
-// 哈希/地址：0x 定长小写。缺席端统一 "<absent>"。
+// ── Canonical printing (the only want/got form written by DIVERGE/ALLOWLIST) ─
+// Numeric: "0x"-prefixed lowercase minimal hex (same shape as generator
+// hexutil.EncodeUint64/EncodeBig). Hash/address: "0x" fixed-length lowercase.
+// The absent side is always "<absent>".
 
 constexpr const char* kAbsent = "<absent>";
 
@@ -187,7 +190,7 @@ std::string hexBytes(evmc::bytes_view b)
     return "0x" + evmc::hex(b);
 }
 
-// bytes32 槽键/槽值以数值最简 hex 书写（trie 语义下 0 ≡ 缺席，规范化后比对）。
+// bytes32 slot keys/values are written as minimal-numeric hex (trie semantics: 0 == absent, compared after normalization).
 std::string hexSlot(const evmc::bytes32& b)
 {
     return hexU256(intx::be::load<intx::uint256>(b));
@@ -198,7 +201,7 @@ intx::uint256 parseU256(const Json& j)
     return intx::from_string<intx::uint256>(j.get<std::string>());
 }
 
-// ── DivergenceLedger（brief 块 E）────────────────────────────────────────────
+// ── DivergenceLedger (brief block E) ────────────────────────────────────────
 
 struct AllowEntry
 {
@@ -210,7 +213,7 @@ struct AllowEntry
 class DivergenceLedger
 {
 public:
-    // 缺台账文件 = FAILURE（它是本 gate 的交付物之一，绝不许"缺文件 ≡ 全豁免/全空"歧义）。
+    // Missing ledger file = FAILURE (the ledger is a gate deliverable; a missing file must never imply all-exempt/all-empty).
     static DivergenceLedger load(const fs::path& path)
     {
         DivergenceLedger ledger;
@@ -220,7 +223,7 @@ public:
             BOOST_ERROR("DIVERGENCES.md missing: " << path);
             return ledger;
         }
-        // 与 DIVERGENCES.md「机器格式」节逐字对应。
+        // Mirrors the DIVERGENCES.md "machine format" section verbatim.
         static const std::regex linePattern(
             R"(<!--\s*ALLOWLIST\s+vectorId=(\S+)\s+field=(\S+)\s+entry=(\S+)\s+attribution=(\S+)\s+status=(\S+)\s+want=(\S+)\s+got=(\S+)\s*-->)");
         static const std::regex headingPattern(R"(^##\s+(\S+))");
@@ -240,8 +243,8 @@ public:
                 ledger.m_entries.push_back(std::move(e));
             }
         }
-        // entry= 悬空（无匹配 "## <ENTRY-ID>" 标题）= FAILURE：ALLOWLIST 行必须
-        // 挂在一个真实的 FINDING/条目章节下，孤行即无证据。
+        // Dangling entry= (no matching "## <ENTRY-ID>" heading) = FAILURE: an
+        // ALLOWLIST row must hang under a real FINDING/entry section; a lone row has no evidence.
         for (const auto& e : ledger.m_entries)
         {
             if (!headings.contains(e.entryId))
@@ -252,8 +255,9 @@ public:
         return ledger;
     }
 
-    // 分歧上报唯一入口：四元组全匹配且状态豁免 → KNOWN-DIVERGE（stdout + 计数）；
-    // 否则 ADD_FAILURE 翻红。四元组匹配防止同字段的新回归借旧豁免溜绿。
+    // Single divergence-reporting entry point: full 4-tuple match with exempt
+    // status -> KNOWN-DIVERGE (stdout + count); otherwise ADD_FAILURE. The
+    // 4-tuple match prevents new regressions on the same field riding old exemptions.
     void diverge(const std::string& vectorId, const std::string& field, const std::string& want,
         const std::string& got)
     {
@@ -272,7 +276,7 @@ public:
         BOOST_ERROR("DIVERGE " << vectorId << " " << field << " want=" << want << " got=" << got);
     }
 
-    // 本轮从未命中的豁免条目 = FAILURE（过期豁免即红——修复落地/向量重生成后必须清账）。
+    // An exemption never hit this run = FAILURE (stale exemption turns red; must be cleared after fix/vector regen).
     void finish() const
     {
         for (const auto& e : m_entries)
@@ -289,7 +293,7 @@ private:
     int m_knownCount = 0;
 };
 
-// ── 单向量比较上下文（比对计数 + 字段前缀）──────────────────────────────────
+// ── Per-vector comparison context (comparison count + field prefix) ─────────
 
 struct VectorContext
 {
@@ -304,8 +308,9 @@ struct VectorContext
             ledger.diverge(id, field, want, got);
     }
 
-    // checkOptional 语义（brief 块 D）：期望在场+实测缺席 → got=<absent>；
-    // 期望缺席+实测在场 → want=<absent>；双缺席 pass。禁止 has_value() 门控后才比。
+    // checkOptional semantics (brief block D): want present + got absent ->
+    // got=<absent>; want absent + got present -> want=<absent>; both absent pass.
+    // Never gate on has_value() before comparing.
     void checkOptional(const std::string& field, const std::optional<std::string>& want,
         const std::optional<std::string>& got)
     {
@@ -319,9 +324,10 @@ struct VectorContext
     }
 };
 
-// ── BlockHashes：仅对 number−1 返回 env.parentHash ──────────────────────────
-// （EIP-2935 系统调用在块 1 存的就是 genesis hash = env.parentHash；其余高度
-//  本语料决不查询，返回零值即可暴露任何越界查询——不静默给出伪 hash 链。）
+// ── BlockHashes: return env.parentHash only for number-1 ────────────────────
+// (EIP-2935 system call in block 1 stores the genesis hash = env.parentHash;
+// other heights are never queried by this corpus, so returning zero exposes any
+// out-of-range query instead of silently fabricating a hash chain.)
 
 struct ParentOnlyBlockHashes final : state::BlockHashes
 {
@@ -334,14 +340,16 @@ struct ParentOnlyBlockHashes final : state::BlockHashes
     }
 };
 
-// ── EIP-7702 authority 恢复 ──────────────────────────────────────────────────
-// 模块内 recoverAuthority（OpTransition.cpp:34-45）在匿名 namespace 未导出；
-// 按 brief 以导出件最小复现（同公式 keccak256(0x05 || rlp([chain_id,address,nonce]))
-// + evmmax secp256k1 ecrecover）。构建后断言 signer.has_value()——evmone/模块
-// transition 对未恢复 signer 的 tuple 是静默 skip（plan 风险 9），语料签名必须可恢复。
+// ── EIP-7702 authority recovery ─────────────────────────────────────────────
+// The in-module recoverAuthority (OpTransition.cpp:34-45) lives in an anonymous
+// namespace and is not exported; minimally re-implement it here (same formula
+// keccak256(0x05 || rlp([chain_id,address,nonce])) + evmmax secp256k1 ecrecover).
+// After building, assert signer.has_value() — evmone/module transition silently
+// skips tuples whose signer was not recovered, so corpus signatures must be recoverable.
 
-// ── structurallyUnrecoverable：secp256k1 结构合法性谓词（EIP-2/EIP-7702 malleability
-//    边界；不做 ecrecover，仅判定 r/s/v 数值是否落在可恢复域外）───────────────
+// ── structurallyUnrecoverable: secp256k1 structural-validity predicate ──────
+// (EIP-2/EIP-7702 malleability boundary; no ecrecover, only whether r/s/v fall
+// outside the recoverable domain.)
 
 inline const intx::uint256 kSecpN = intx::from_string<intx::uint256>(
     "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
@@ -363,7 +371,7 @@ std::optional<evmc::address> replayRecoverAuthority(const state::Authorization& 
         auth.v != 0);
 }
 
-// ── manifest.txt（'#' 注释与空行外，每行一个必须存在的向量文件名）────────────
+// ── manifest.txt: one required vector filename per line ('#' comments and blank lines ignored) ─
 
 std::set<std::string> loadManifest(const fs::path& path)
 {
@@ -390,24 +398,25 @@ std::set<std::string> loadManifest(const fs::path& path)
     return names;
 }
 
-// ── 语料 chain id ────────────────────────────────────────────────────────────
-// 生成器 buildChainConfig（generator/main.go）把全部 25 案钉在 8453（0x2105）。
-// 有普通 tx 的向量以 tx.chainId 为准（并断言全块一致）；deposit-only 向量无
-// chainId 载体，用该语料常量（不是"默认档"——是生成器同一常量的镜像，若语料
-// 换链 id，普通 tx 向量会先在一致性断言上翻红）。
+// ── Corpus chain id ──────────────────────────────────────────────────────────
+// The generator buildChainConfig (generator/main.go) pins all cases to 8453
+// (0x2105). Vectors with normal txs use tx.chainId (asserted consistent across
+// the block); deposit-only vectors carry no chainId, so this corpus constant is
+// used — a mirror of the generator's constant, not a fallback default.
 
 constexpr uint64_t kCorpusChainId = 0x2105;
 
-// ── 当前 API 适配辅助 ────────────────────────────────────────────────────────
-// 方案 A 阶段 2（cf8d1af70）后：processOpBlock 是 9 参（receiptFactory）、receipts 是
-// bcos::protocol::TransactionReceipt::Ptr、OP 字段经 opStackMeta()（bcos::u256 / uint64）。
-// bcos::u256 → "0x" + 小写无前导零 hex（与 setOpStackMeta 的 u256ToHex 同形）。
+// ── Current API adaptation helpers ───────────────────────────────────────────
+// After plan A phase 2 (cf8d1af70): processOpBlock takes 9 params
+// (receiptFactory), receipts are bcos::protocol::TransactionReceipt::Ptr, OP
+// fields come via opStackMeta() (bcos::u256 / uint64).
+// bcos::u256 -> "0x" + lowercase no-leading-zero hex (same shape as setOpStackMeta's u256ToHex).
 std::string hexU256Bcos(const bcos::u256& v)
 {
     return "0x" + v.str(0, std::ios_base::hex);
 }
 
-/// 与 W6 harness 同款 receiptFactory 构造（OpNewPayloadRpcE2eTest.cpp:93-95）。
+/// Same receiptFactory construction as the W6 harness (OpNewPayloadRpcE2eTest.cpp:93-95).
 bcos::protocol::TransactionReceiptFactory::Ptr makeTestReceiptFactory()
 {
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(
@@ -415,11 +424,12 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeTestReceiptFactory()
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr));
 }
 
-// ── TestState → stateRootOf Ledger 桥 ─────────────────────────────────────────
-// 当前 bcos::evm::stateRootOf<Ledger>（adapter/StateRootCompute.h）是模板：对任意暴露
-// `bool visitAccounts(Visitor) const` 的 Ledger 建 secure-trie。evmone::test::TestState 是
-// std::map 而非 Ledger，故在此暴露账户访问面。AccountView 镜像 MemoryLedger::AccountView
-// 的建根相关字段（addr/nonce/balance/codeHash/storage）；stateRootOf 只用这五者。
+// ── TestState -> stateRootOf Ledger bridge ───────────────────────────────────
+// bcos::evm::stateRootOf<Ledger> (adapter/StateRootCompute.h) is a template
+// building a secure trie over any Ledger exposing `bool visitAccounts(Visitor) const`.
+// evmone::test::TestState is a std::map, not a Ledger, so expose the account
+// visit surface here. AccountView mirrors MemoryLedger::AccountView's root-building
+// fields (addr/nonce/balance/codeHash/storage); stateRootOf uses only these five.
 struct TestStateLedger
 {
     const evmone::test::TestState& state;
@@ -452,9 +462,11 @@ struct TestStateLedger
     }
 };
 
-// ── 单块装载上下文（replaySingleBlockInto / assertRejectThrow 共用装载段）────────
-// 从 replayVector 原装载段（:456-643）纯搬移，不改变任何断言逻辑。失败（hardfork 非法 /
-// 链内 chainId 不一致 / 未知 _op_type）时 BOOST_ERROR 并返回 false，上层直接 return。
+// ── Single-block load context (shared by replaySingleBlockInto / assertRejectThrow) ──
+// Pure move of the load section from the original replayVector path (previously
+// :456-643), no assertion-logic change. On failure (invalid hardfork /
+// inconsistent intra-block chainId / unknown _op_type) it BOOST_ERRORs and
+// returns false; the caller returns directly.
 
 struct BlockContext
 {
@@ -464,17 +476,20 @@ struct BlockContext
     ParentOnlyBlockHashes hashes;
     std::vector<OpBlockTx> txs;
     uint64_t chainId = kCorpusChainId;
-    // decode-class reject（blob）：processOpBlock 走不到 raw-tx decode（txs 已是 OpBlockTx），
-    // 装载段用 decodeOneRawTx 复现真实 decode 拒绝并把消息记在这里，assertRejectThrow 直接断言。
+    // decode-class reject (blob): processOpBlock never reaches raw-tx decode
+    // (txs are already OpBlockTx), so the load section reproduces the real
+    // decode rejection via decodeOneRawTx and records the message here for
+    // assertRejectThrow to assert directly.
     std::optional<std::string> decodeRejectMessage;
 };
 
 bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
 {
-    // _info.hardfork：仅精确 ecotone|fjord|granite|holocene|isthmus|jovian，其他值 =
-    // FAILURE。禁止默认档（M-T 先例的默认 Isthmus 是已知洞，不移植）。isJovian 布尔驱动
-    // blobGasUsed header gate 与 _op_da_footprint 期望——ecotone/fjord/granite/holocene
-    // 全 false，语义与 isthmus 一致（has_da_footprint 仅 Jovian 真，预 Isthmus 双端缺席）。
+    // _info.hardfork must be exactly ecotone|fjord|granite|holocene|isthmus|jovian,
+    // anything else = FAILURE. No default fork (the default-Isthmus precedent is a
+    // known hole, not ported). isJovian drives the blobGasUsed header gate and the
+    // _op_da_footprint expectation — ecotone/fjord/granite/holocene are all false,
+    // matching isthmus semantics (has_da_footprint true only on Jovian).
     const auto hardfork = blk.at("_info").at("hardfork").get<std::string>();
     if (hardfork == "isthmus")
         out.cfg = &isthmusConfig();
@@ -499,7 +514,7 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
         return false;
     }
 
-    // env（8 字段全必填）→ BlockInfo 手建。
+    // env (all 8 fields required) -> hand-built BlockInfo.
     const auto& env = blk.at("env");
     auto& bi = out.blk;
     bi.number = test::from_json<int64_t>(env.at("currentNumber"));
@@ -514,7 +529,7 @@ bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
     hs.blockNumber = bi.number;
     hs.parentHash = test::from_json<hash256>(env.at("parentHash"));
 
-    // 交易三臂构建（deposit / eip1559 / setcode）。未知 _op_type = FAILURE。
+    // Three transaction arms (deposit / eip1559 / setcode). Unknown _op_type = FAILURE.
     auto& txs = out.txs;
     std::optional<uint64_t> vectorChainId;
     for (const auto& t : blk.at("block").at("transactions"))
