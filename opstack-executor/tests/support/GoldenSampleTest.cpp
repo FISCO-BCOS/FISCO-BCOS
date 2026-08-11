@@ -1,7 +1,7 @@
 // bcos-evm/test/opstack/support/GoldenSampleTest.cpp
 #include "GoldenSample.h"
-#include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-evm/opstack/OpForkSchedule.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -33,10 +33,11 @@ BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
     BOOST_REQUIRE(header != nullptr);
     // decodeOpHeader 是 encodeOpHeader 的严格逆；roundtrip 应逐字节一致
     auto c = bcos::engine::detail::opHeaderConst();
-    BOOST_CHECK(header->encodeOpHeader(c) ==
-        bcos::fromHex(sample.golden["encodedHeaderHex"].asString()));
+    BOOST_CHECK(
+        header->encodeOpHeader(c) == bcos::fromHex(sample.golden["encodedHeaderHex"].asString()));
     // opHeaderHash = keccak256(encodeOpHeader()) == golden.blockHash
-    BOOST_CHECK_EQUAL(header->opHeaderHash(c).hex(), std::string(sample.golden["blockHash"].asString()).substr(2));
+    BOOST_CHECK_EQUAL(header->opHeaderHash(c).hex(),
+        std::string(sample.golden["blockHash"].asString()).substr(2));
 }
 
 BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
@@ -65,7 +66,8 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
 
 BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
 {
-    // D4: golden manifest 自动校验——manifest.txt（非注释行）↔ vectors/*.json ↔ golden/engine/*.golden.json
+    // D4: golden manifest 自动校验——manifest.txt（非注释行）↔ vectors/*.json ↔
+    // golden/engine/*.golden.json
     // 三集合必须一致。防漏格（向量该生成未生成）/孤儿向量/清单漂移——regen.sh 的手动 diff 之外,
     // 测试运行时自动检查（语料改动不跑 regen 时也能暴露）。
     auto basenameSet = [](std::filesystem::path const& dir, std::string_view suffix) {
@@ -93,8 +95,8 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
             if (line.empty() || line[0] == '#')
                 continue;
             constexpr std::string_view kJsonSuffix = ".json";
-            if (line.size() > kJsonSuffix.size() &&
-                line.compare(line.size() - kJsonSuffix.size(), kJsonSuffix.size(), kJsonSuffix) == 0)
+            if (line.size() > kJsonSuffix.size() && line.compare(line.size() - kJsonSuffix.size(),
+                                                        kJsonSuffix.size(), kJsonSuffix) == 0)
                 line.resize(line.size() - kJsonSuffix.size());
             manifest.insert(line);
         }
@@ -103,14 +105,13 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
     auto vectors = basenameSet(OP_T8N_VECTORS_DIR, ".json");
     auto golden = basenameSet(OP_T8N_GOLDEN_ENGINE_DIR, ".golden.json");
 
-    BOOST_CHECK_MESSAGE(manifest == vectors,
-        "manifest.txt ↔ vectors/ basename 集合不一致（漏格/孤儿/漂移）");
+    BOOST_CHECK_MESSAGE(
+        manifest == vectors, "manifest.txt ↔ vectors/ basename 集合不一致（漏格/孤儿/漂移）");
     // golden/engine 是 engine-gate golden ritual 的子集：线 B（预编译矩阵）的 golden
     // 扩展是记录在案的延后义务（差分门不消费 golden/，不阻塞验收），故 vectors 可多于
     // golden。断言收紧为 golden ⊆ vectors：每个 golden 必须有对应 vector（无孤儿 golden），
     // 容忍 golden 延后向量（非反向遗漏）。
-    BOOST_CHECK_MESSAGE(
-        std::includes(vectors.begin(), vectors.end(), golden.begin(), golden.end()),
+    BOOST_CHECK_MESSAGE(std::includes(vectors.begin(), vectors.end(), golden.begin(), golden.end()),
         "golden/engine ↔ vectors/ 集合不一致（孤儿 golden / 缺对应 vector）");
 }
 

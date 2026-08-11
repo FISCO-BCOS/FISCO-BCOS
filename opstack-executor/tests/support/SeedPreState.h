@@ -1,21 +1,22 @@
 #pragma once
 // W6 自研 JSON(pre)→StateDiff 播种。本分支无 evmone test/utils/test_state.hpp（LedgerSeed.h 的
-// seedFromTestState 依赖它），这里用 jsoncpp 解析向量 pre，直接构 StateDiff 走 applyDiff(seeding=true)。
-#include <bcos-evm/eth/state/state_diff.hpp>
-#include <bcos-evm/ledger/Storage2Ledger.h>
+// seedFromTestState 依赖它），这里用 jsoncpp 解析向量 pre，直接构 StateDiff 走
+// applyDiff(seeding=true)。
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <opstack-executor/Storage2Ledger.h>
+#include <algorithm>  // std::copy
+#include <bcos-evm/eth/state/state_diff.hpp>
+#include <cstdint>  // std::uint64_t
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
-#include <algorithm>  // std::copy
-#include <cstdint>    // std::uint64_t
-#include <iterator>   // std::begin/std::end
+#include <iterator>  // std::begin/std::end
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <utility>    // std::move
-#include <vector>     // std::vector
+#include <utility>  // std::move
+#include <vector>   // std::vector
 
 namespace w6test
 {
@@ -74,8 +75,8 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
         entry.addr = jsonAddress(addrKey);
         entry.nonce = jsonU64(acct["nonce"].asString());
         entry.balance = jsonU256(acct["balance"].asString());
-        // 空 code（"0x" → 空字节）留 nullopt，与 LedgerSeed.h 契约③逐字对齐（R2-B：has_value 空 vector
-        // 会多写 CODE_BINARY/ABI 三行但 stateRoot 不可观察，此处仍按契约写）
+        // 空 code（"0x" → 空字节）留 nullopt，与 LedgerSeed.h 契约③逐字对齐（R2-B：has_value 空
+        // vector 会多写 CODE_BINARY/ABI 三行但 stateRoot 不可观察，此处仍按契约写）
         if (acct.isMember("code"))
         {
             auto const codeStr = acct["code"].asString();
@@ -102,7 +103,8 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
         bridge.applyDiff(diff, /*seeding=*/true);
         if (bridge.poisoned())
         {
-            throw std::runtime_error("seedPreState: ledger poisoned: " + std::string(bridge.firstError()));
+            throw std::runtime_error(
+                "seedPreState: ledger poisoned: " + std::string(bridge.firstError()));
         }
     }
     // C2 审查修正（P1 CRITICAL）：mergeBackStorage 合并最旧层（FIFO）。排空栈——seed 即落

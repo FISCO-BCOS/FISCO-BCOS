@@ -60,15 +60,11 @@ if(TARGET bcos-framework)
     target_include_directories(bcos-evm-opstack-tests PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-ledger)
-    # W6 Task 2: SeedPreStateTest uses jsoncpp (Json::Value/Json::Reader) for the
-    # vector-pre -> StateDiff seeder. The target did not link jsoncpp before; without
-    # this, Task 2's standalone build of bcos-evm-opstack-tests fails to link.
+    # W6 Task 2: SeedPreStateTest/GoldenSampleTest used jsoncpp (Json::Value) for the
+    # vector-pre -> StateDiff seeder; both moved to opstack-executor in the split. The
+    # find_package stays until the RPC harness tests (OpNewPayloadRpcE2eTest/OpL1EdgeGateTest,
+    # linked below) move in Task 4 — they pull EngineHelper's jsoncpp include chain.
     find_package(jsoncpp CONFIG REQUIRED)
-    target_sources(bcos-evm-opstack-tests PRIVATE
-        opstack/support/SeedPreStateTest.cpp
-        opstack/support/GoldenSampleTest.cpp
-    )
-    target_link_libraries(bcos-evm-opstack-tests PRIVATE jsoncpp_static)
     # W6 Task 4 L2 harness: real RPC parse path (parseNewPayloadRequest V4) over the 33 golden
     # vectors + the chained pair. EngineHelper's parse/combine/serialize symbols are resolved from
     # `librpc.a` — the rpc library is already pulled into this binary transitively via `engine`
@@ -88,8 +84,4 @@ if(TARGET bcos-framework)
         ${CMAKE_SOURCE_DIR}/bcos-ledger
         ${CMAKE_SOURCE_DIR}/bcos-rpc)
 endif()
-target_compile_definitions(bcos-evm-opstack-tests PRIVATE
-    OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/vectors"
-    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/golden/engine"
-)
 add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)
