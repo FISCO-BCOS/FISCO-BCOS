@@ -949,7 +949,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecor
 		return nil, nil, fmt.Errorf("InsertChain self-check FAILED (corpus/generator defect, do not bypass): %w", err)
 	}
 
-	out, golden, err := assembleOutput(in, cfg, signer, genesis, db, block, receipts, txs, outTxs)
+	out, golden, err := assembleOutput(in, cfg, signer, genesis, db, block, receipts, txs, outTxs, genesis.ToBlock().Root())
 	if err != nil {
 		return nil, nil, fmt.Errorf("vector %q: %w", id, err)
 	}
@@ -1151,7 +1151,10 @@ func probeReceiptFields(in *inputCase) error {
 // chained pair (processChainPair, Step 2): both need identical assembly
 // logic, just fed a different (in, db, block, receipts, txs, signer) tuple
 // per block.
-func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer, genesis *core.Genesis, db ethdb.Database, block *types.Block, receipts types.Receipts, txs []*types.Transaction, outTxs []json.RawMessage) (outputVector, *goldenRecord, error) {
+// startRoot is the re-execution origin for this block: genesis root for chain
+// block 0 / single-block vectors, blocks[i-1].Root() for chain block i (see
+// reexecuteOutputs).
+func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer, genesis *core.Genesis, db ethdb.Database, block *types.Block, receipts types.Receipts, txs []*types.Transaction, outTxs []json.RawMessage, startRoot common.Hash) (outputVector, *goldenRecord, error) {
 	header := block.Header()
 
 	// --- postState: decision-record-8 candidate set, all accounts, all slots,
@@ -1213,7 +1216,7 @@ func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer,
 	// chain maker discards ExecutionResult.ReturnData). Rejected if the replay
 	// does not reproduce the real receipts' gasUsed/status per tx.
 	outputs, err := reexecuteOutputs(cfg, genesis, db, header, txs, receipts,
-		in.Coinbase, in.ParentBeaconBlockRoot)
+		in.Coinbase, in.ParentBeaconBlockRoot, startRoot)
 	if err != nil {
 		return outputVector{}, nil, err
 	}
@@ -1500,7 +1503,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 	}
 
 	signerA := types.MakeSigner(cfg, blocks[0].Number(), blocks[0].Time())
-	outA, goldenA, err := assembleOutput(ins[0], cfg, signerA, genesis, db, blocks[0], receiptsAll[0], txSets[0], outSets[0])
+	outA, goldenA, err := assembleOutput(ins[0], cfg, signerA, genesis, db, blocks[0], receiptsAll[0], txSets[0], outSets[0], genesis.ToBlock().Root())
 	if err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("chain block A: %w", err)
 	}
@@ -1514,7 +1517,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block B: %w", err)
 	}
 	signerB := types.MakeSigner(cfg, blocks[1].Number(), blocks[1].Time())
-	outB, goldenB, err := assembleOutput(ins[1], cfg, signerB, genesis, db, blocks[1], receiptsAll[1], txSets[1], outSets[1])
+	outB, goldenB, err := assembleOutput(ins[1], cfg, signerB, genesis, db, blocks[1], receiptsAll[1], txSets[1], outSets[1], blocks[0].Root())
 	if err != nil {
 		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("chain block B: %w", err)
 	}
@@ -1723,7 +1726,7 @@ func buildBlockVector(in *inputCase) (*blockVector, error) {
 	if err := selfCheck(genesis, blocks); err != nil {
 		return nil, fmt.Errorf("InsertChain self-check FAILED (corpus/generator defect, do not bypass): %w", err)
 	}
-	vec, golden, err := assembleOutput(in, cfg, signer, genesis, db, block, receipts, txs, outTxs)
+	vec, golden, err := assembleOutput(in, cfg, signer, genesis, db, block, receipts, txs, outTxs, genesis.ToBlock().Root())
 	if err != nil {
 		return nil, fmt.Errorf("vector assembly: %w", err)
 	}
@@ -3248,19 +3251,24 @@ func (c chainCtxStub) GetHeaderByHash(common.Hash) *types.Header {
 // reexecuteOutputs replays a generated block's txs against a fresh state and
 // returns each tx's return data (the receipt output). The chain maker's AddTx
 // discards ExecutionResult.ReturnData, so the real receipts never carry output;
-// this replay reproduces the chain maker's pre-tx state (genesis root + EIP-2935
+// this replay reproduces the chain maker's pre-tx state (startRoot + EIP-2935
 // parent-hash + EIP-4788 beacon-root system calls, same order as GenerateChain)
 // and applies each tx via core.ApplyMessage, capturing ReturnData. Faithfulness
 // is enforced per tx: each replayed result's UsedGas and success/failure must
 // equal the real receipt's gasUsed/status, otherwise the emitted outputs are
 // rejected (a divergence between the replay and the actual block execution would
 // make the output field untrustworthy).
+//
+// startRoot is the per-block replay origin: the GENESIS root for a single-block
+// vector (or chain block 0), and blocks[i-1].Root() for chain block i -- chain
+// block B's pre-state IS block A's post-state, so a genesis-root replay would
+// see B's sender nonce as 0 and reject B's nonce-1 transfer ("nonce too high").
 func reexecuteOutputs(cfg *params.ChainConfig, genesis *core.Genesis, db ethdb.Database,
 	header *types.Header, txs []*types.Transaction, receipts types.Receipts,
-	coinbase common.Address, parentBeaconRoot common.Hash) ([][]byte, error) {
+	coinbase common.Address, parentBeaconRoot common.Hash, startRoot common.Hash) ([][]byte, error) {
 	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
 	defer tdb.Close()
-	statedb, err := state.New(genesis.ToBlock().Root(), state.NewDatabase(tdb, nil))
+	statedb, err := state.New(startRoot, state.NewDatabase(tdb, nil))
 	if err != nil {
 		return nil, fmt.Errorf("open re-execution state: %w", err)
 	}

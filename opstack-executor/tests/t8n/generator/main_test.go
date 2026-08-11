@@ -280,6 +280,40 @@ func TestStaticSurfaceAllItemsCarryFiscoMessage(t *testing.T) {
 	}
 }
 
+// TestChainPairReplayStartRoot is the Task-5 前置 regression: --chain-output-dir's
+// chain-pair block B replay started from the GENESIS root instead of block A's
+// post-state root, so block B's transfer (nonce 1) was replayed against nonce 0
+// -> "chain block B: replay tx 1: nonce too high". The fix threads a per-block
+// start root into reexecuteOutputs (block i replays from blocks[i-1].Root();
+// single-block vectors keep the genesis root).
+func TestChainPairReplayStartRoot(t *testing.T) {
+	for _, fork := range []string{"isthmus", "jovian"} {
+		outA, outB, goldenA, goldenB, err := processChainPair(fork)
+		if err != nil {
+			t.Fatalf("processChainPair(%s): %v", fork, err)
+		}
+		if goldenA == nil || goldenB == nil {
+			t.Fatalf("%s: nil golden record", fork)
+		}
+		sender := addrOfKey(1)
+		// Block A's post-state must carry the spent nonce (the chain-pair
+		// output is only trustworthy if the replay reproduced it).
+		if accA, ok := outA.PostState[sender]; !ok || accA.Nonce != 1 {
+			t.Fatalf("%s: block A postState sender nonce want 1, got %v (present %v)", fork, accA.Nonce, ok)
+		}
+		// Decision A2: block B's emitted pre IS block A's post-state. Block A's
+		// transfer consumed sender nonce 0, so block B's pre must show nonce 1
+		// (a genesis-root replay would show 0 -- the pre-existing bug).
+		acc, ok := outB.Pre[sender]
+		if !ok {
+			t.Fatalf("%s: block B pre missing sender %s", fork, sender.Hex())
+		}
+		if acc.Nonce != 1 {
+			t.Fatalf("%s: block B pre sender nonce want 1 (block A spent nonce 0), got %d", fork, acc.Nonce)
+		}
+	}
+}
+
 func TestRejectFieldOmitEmptyKeepsValidVectorBytes(t *testing.T) {
 	// The Reject field must be omitempty: a VALID vector's marshaled bytes must
 	// not contain a "reject" key (byte-invariance for the old 77 vectors).
