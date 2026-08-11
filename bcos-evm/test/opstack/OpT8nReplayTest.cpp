@@ -451,66 +451,69 @@ struct TestStateLedger
     }
 };
 
-// ── 单向量回放 ───────────────────────────────────────────────────────────────
+// ── 单块装载上下文（replaySingleBlockInto / assertRejectThrow 共用装载段）────────
+// 从 replayVector 原装载段（:456-643）纯搬移，不改变任何断言逻辑。失败（hardfork 非法 /
+// 链内 chainId 不一致 / 未知 _op_type）时 BOOST_ERROR 并返回 false，上层直接 return。
 
-void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger, evmc::VM& vm,
-    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+struct BlockContext
 {
-    VectorContext ctx{ledger, id};
+    const OpForkConfig* cfg = nullptr;
+    bool isJovian = false;
+    state::BlockInfo blk;
+    ParentOnlyBlockHashes hashes;
+    std::vector<OpBlockTx> txs;
+    uint64_t chainId = kCorpusChainId;
+};
 
+bool loadBlockContext(const std::string& id, const Json& blk, BlockContext& out)
+{
     // _info.hardfork：仅精确 ecotone|fjord|granite|holocene|isthmus|jovian，其他值 =
     // FAILURE。禁止默认档（M-T 先例的默认 Isthmus 是已知洞，不移植）。isJovian 布尔驱动
     // blobGasUsed header gate 与 _op_da_footprint 期望——ecotone/fjord/granite/holocene
     // 全 false，语义与 isthmus 一致（has_da_footprint 仅 Jovian 真，预 Isthmus 双端缺席）。
-    const auto hardfork = v.at("_info").at("hardfork").get<std::string>();
-    const OpForkConfig* cfg = nullptr;
-    bool isJovian = false;
+    const auto hardfork = blk.at("_info").at("hardfork").get<std::string>();
     if (hardfork == "isthmus")
-        cfg = &isthmusConfig();
+        out.cfg = &isthmusConfig();
     else if (hardfork == "jovian")
     {
-        cfg = &jovianConfig();
-        isJovian = true;
+        out.cfg = &jovianConfig();
+        out.isJovian = true;
     }
     else if (hardfork == "ecotone")
-        cfg = &ecotoneConfig();
+        out.cfg = &ecotoneConfig();
     else if (hardfork == "fjord")
-        cfg = &fjordConfig();
+        out.cfg = &fjordConfig();
     else if (hardfork == "granite")
-        cfg = &graniteConfig();
+        out.cfg = &graniteConfig();
     else if (hardfork == "holocene")
-        cfg = &holoceneConfig();
+        out.cfg = &holoceneConfig();
     else
     {
         BOOST_ERROR(id << ": _info.hardfork must be exactly "
                           "ecotone|fjord|granite|holocene|isthmus|jovian, got '"
                        << hardfork << "' (no default fork)");
-        return;
+        return false;
     }
 
     // env（8 字段全必填）→ BlockInfo 手建。
-    const auto& env = v.at("env");
-    state::BlockInfo blk;
-    blk.number = test::from_json<int64_t>(env.at("currentNumber"));
-    blk.timestamp = test::from_json<int64_t>(env.at("currentTimestamp"));
-    blk.gas_limit = test::from_json<int64_t>(env.at("currentGasLimit"));
-    blk.base_fee = test::from_json<uint64_t>(env.at("currentBaseFee"));
-    blk.coinbase = test::from_json<evmc::address>(env.at("currentCoinbase"));
-    blk.prev_randao = test::from_json<hash256>(env.at("currentRandom"));
-    blk.parent_beacon_block_root = test::from_json<hash256>(env.at("parentBeaconBlockRoot"));
+    const auto& env = blk.at("env");
+    auto& bi = out.blk;
+    bi.number = test::from_json<int64_t>(env.at("currentNumber"));
+    bi.timestamp = test::from_json<int64_t>(env.at("currentTimestamp"));
+    bi.gas_limit = test::from_json<int64_t>(env.at("currentGasLimit"));
+    bi.base_fee = test::from_json<uint64_t>(env.at("currentBaseFee"));
+    bi.coinbase = test::from_json<evmc::address>(env.at("currentCoinbase"));
+    bi.prev_randao = test::from_json<hash256>(env.at("currentRandom"));
+    bi.parent_beacon_block_root = test::from_json<hash256>(env.at("parentBeaconBlockRoot"));
 
-    ParentOnlyBlockHashes hashes;
-    hashes.blockNumber = blk.number;
-    hashes.parentHash = test::from_json<hash256>(env.at("parentHash"));
-
-    // pre → TestState（evmone 金 loader；账户四字段 balance/nonce/code 必填，
-    // storage 零值槽由 loader 按 trie 语义剔除）。
-    test::TestState ts = test::from_json<test::TestState>(v.at("pre"));
+    auto& hs = out.hashes;
+    hs.blockNumber = bi.number;
+    hs.parentHash = test::from_json<hash256>(env.at("parentHash"));
 
     // 交易三臂构建（deposit / eip1559 / setcode）。未知 _op_type = FAILURE。
-    std::vector<OpBlockTx> txs;
+    auto& txs = out.txs;
     std::optional<uint64_t> vectorChainId;
-    for (const auto& t : v.at("block").at("transactions"))
+    for (const auto& t : blk.at("block").at("transactions"))
     {
         const auto opType = t.at("_op_type").get<std::string>();
         if (opType == "deposit")
@@ -561,7 +564,7 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
             {
                 BOOST_ERROR(id << ": inconsistent chainId across txs: " << hexU64(*vectorChainId)
                                << " vs " << hexU64(tx.chain_id));
-                return;
+                return false;
             }
             vectorChainId = tx.chain_id;
             if (opType == "setcode")
@@ -613,7 +616,7 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
                             // 须携 0xef0100‖tuple.addr 委托码（仅当本 tx 含标记元组时才要求，
                             // 见下方 (4)）。
                             const auto authAddr = hexAddr(*auth.signer);
-                            const auto& post = v.at("postState");
+                            const auto& post = blk.at("postState");
                             if (post.contains(authAddr))
                             {
                                 const std::string wantCode =
@@ -638,10 +641,31 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
         else
         {
             BOOST_ERROR(id << ": unknown _op_type '" << opType << "'");
-            return;
+            return false;
         }
     }
-    const uint64_t chainId = vectorChainId.value_or(kCorpusChainId);
+    out.chainId = vectorChainId.value_or(kCorpusChainId);
+    return true;
+}
+
+/// 单块执行：blk 的 env/hardfork/transactions + ts（pre 已就绪或继承）。pre 为 nullptr 时跳过
+/// pre 解析（链式块 i>0 的 pre:null → 继承上一块 applyDiff 回写后的 ts）。touchedAddrs/
+/// touchedSlots 每块新建（block N 的 .uncovered 不能看到 block 0..N-1 触及的地址）。
+void replaySingleBlockInto(const std::string& id, const Json& blk, evmone::test::TestState& ts,
+    const Json* pre, DivergenceLedger& ledger, evmc::VM& vm,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+{
+    VectorContext ctx{ledger, id};
+    BlockContext bc;
+    if (!loadBlockContext(id, blk, bc))
+        return;
+    const auto& cfg = *bc.cfg;
+    const bool isJovian = bc.isJovian;
+
+    // pre → TestState（evmone 金 loader；账户四字段 balance/nonce/code 必填，storage 零值槽由
+    // loader 按 trie 语义剔除）。pre 为 nullptr 时继承调用方已就绪的 ts（链式块 i>0）。
+    if (pre != nullptr)
+        ts = test::from_json<test::TestState>(*pre);
 
     // 执行：applyDiff 回调既写回 TestState，也累计写集（决策记录 8 覆盖断言用）。
     std::set<evmc::address> touchedAddrs;
@@ -661,7 +685,8 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     OpBlockResult result;
     try
     {
-        result = processOpBlock(ts, blk, hashes, txs, *cfg, vm, chainId, receiptFactory, apply);
+        result = processOpBlock(
+            ts, bc.blk, bc.hashes, bc.txs, cfg, vm, bc.chainId, receiptFactory, apply);
     }
     catch (const std::exception& e)
     {
@@ -686,10 +711,10 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     const std::map<evmc::bytes32, evmc::bytes32> mpStorage =
         ts.contains(OP_L2_TO_L1_MESSAGE_PASSER) ? ts.at(OP_L2_TO_L1_MESSAGE_PASSER).storage :
                                                   std::map<evmc::bytes32, evmc::bytes32>{};
-    const auto seal = sealOpBlock(result, *cfg, mpStorage);
+    const auto seal = sealOpBlock(result, cfg, mpStorage);
 
     // ── header 六字段 ────────────────────────────────────────────────────────
-    const auto& h = v.at("_op_expected").at("header");
+    const auto& h = blk.at("_op_expected").at("header");
     ctx.checkField("gasUsed", hexU256(parseU256(h.at("gasUsed"))),
         hexU64(static_cast<uint64_t>(result.gasUsed)));
     ctx.checkField("receiptsRoot", hexHash(test::from_json<hash256>(h.at("receiptsRoot"))),
@@ -739,7 +764,7 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     }
 
     // ── receipts ────────────────────────────────────────────────────────────
-    const auto& expReceipts = v.at("_op_expected").at("receipts");
+    const auto& expReceipts = blk.at("_op_expected").at("receipts");
     if (expReceipts.size() != result.receipts.size())
     {
         BOOST_ERROR(id << ": receipts count mismatch: expected " << expReceipts.size() << " got "
@@ -820,9 +845,10 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
         // 原始字节，hexBytes 归一化为 "0x"+小写 hex。双缺席/双在场逐字节比对——wrapper 的
         // returndata 截断与 p256 的 32-byte-1 都由它钉死。
         ctx.checkOptional(p + ".output",
-            er.contains("output") ? std::optional{er.at("output").get<std::string>()} : std::nullopt,
-            std::optional{hexBytes(
-                evmc::bytes_view{receipt->output().data(), receipt->output().size()})});
+            er.contains("output") ? std::optional{er.at("output").get<std::string>()} :
+                                    std::nullopt,
+            std::optional{
+                hexBytes(evmc::bytes_view{receipt->output().data(), receipt->output().size()})});
 
         const auto optWant = [&](const char* key) -> std::optional<std::string> {
             return er.contains(key) ? std::optional{hexU256(parseU256(er.at(key)))} : std::nullopt;
@@ -854,7 +880,7 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     // 向量把「块后不存在的候选账户」发射为 {"balance":"0x0"}——比对语义即
     // 「四字段全零 + 全槽零」，实测侧账户缺失时以零账户视之，恒等 ⇒ pass；
     // 实测侧存在但为空同样 pass（EIP-161 空账户 ≡ trie 不存在）。
-    const auto& post = v.at("postState");
+    const auto& post = blk.at("postState");
     std::set<evmc::address> postAddrs;
     static const test::TestAccount kZeroAccount{};
     for (const auto& [addrStr, acc] : post.items())
@@ -927,8 +953,113 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     if (ctx.comparisons == 0)
         BOOST_ERROR(id << ": zero comparisons executed");
 }
-}  // namespace
 
+// ── 单向量回放（扁平向量：pre 顶层；链式向量由 replayChainVector 逐块调用）────────
+
+void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger, evmc::VM& vm,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+{
+    evmone::test::TestState ts;
+    replaySingleBlockInto(id, v, ts, &v.at("pre"), ledger, vm, receiptFactory);
+}
+
+// ── reject 分支（增强语料 §1a/§3b）────────────────────────────────────────────
+// 顶层 _op_expected.reject 存在 → 无效向量。T8n 端只消费 executor/both（engine 直连字段损坏
+// 类由 OpNewPayloadRpcE2eTest 消费，Task 2）。
+
+bool hasReject(const Json& v)
+{
+    return v.contains("_op_expected") && v.at("_op_expected").contains("reject");
+}
+
+std::string rejectConsumer(const Json& v)
+{
+    // consumer 缺省视为 executor（T8n 是执行层回放器；engine 类向量生成器会显式写 engine）。
+    return v.at("_op_expected").at("reject").at("fisco").value("consumer", "executor");
+}
+
+/// reject(executor/both) 断言：processOpBlock 必须抛 std::runtime_error 且 what() 含期望子串。
+/// 复用 loadBlockContext 装载（env→BlockInfo / ParentOnlyBlockHashes / transactions→OpBlockTx），
+/// 但跳过"执行成功断言"路径（header/receipts/postState 不比——reject 向量无该比对语义）。
+/// throw 侧经验证可被 typed-catch 接住：OpSchedulerImplSmokeTest.cpp:161 用 BOOST_CHECK_THROW(
+/// ..., std::runtime_error) 接 processOpBlock 空块拒绝，绿（FISCO 侧 throw 用 libc++ 唯一
+/// typeinfo，非 libevmone -fno-rtti hidden 拷贝）。
+void assertRejectThrow(const std::string& id, const Json& v, evmc::VM& vm,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+{
+    BlockContext bc;
+    if (!loadBlockContext(id, v, bc))
+        return;
+    evmone::test::TestState ts = test::from_json<test::TestState>(v.at("pre"));
+    // applyDiff 回调与 replaySingleBlockInto 执行段同参（含回写 ts）；reject 后 ts 被丢弃。
+    std::set<evmc::address> touchedAddrs;
+    std::map<evmc::address, std::set<evmc::bytes32>> touchedSlots;
+    const auto apply = [&](const state::StateDiff& d) {
+        for (const auto& m : d.modified_accounts)
+        {
+            touchedAddrs.insert(m.addr);
+            for (const auto& [k, val] : m.modified_storage)
+                touchedSlots[m.addr].insert(k);
+        }
+        for (const auto& a : d.deleted_accounts)
+            touchedAddrs.insert(a);
+        bcos::evm::applyStateDiffStrict(ts, d);
+    };
+    try
+    {
+        // ⚠️ 首笔 deposit 之后插入的非法 tx 才会抛 "invalid non-deposit tx"；
+        //    deposit-only 块不抛（合法执行）——向量必须含非法交易。
+        processOpBlock(
+            ts, bc.blk, bc.hashes, bc.txs, *bc.cfg, vm, bc.chainId, receiptFactory, apply);
+    }
+    catch (const std::runtime_error& e)
+    {
+        const auto expected = v.at("_op_expected")
+                                  .at("reject")
+                                  .at("fisco")
+                                  .at("validation_error_contains")
+                                  .get<std::string>();
+        BOOST_CHECK_MESSAGE(std::string(e.what()).find(expected) != std::string::npos,
+            id << ": throw message missing '" << expected << "', got: " << e.what());
+        return;
+    }
+    catch (...)
+    {
+        // typed-catch RTTI 兜底（机理见 replaySingleBlockInto 的 typed-catch 注释）——点名
+        // 动态类型，按 typed 分支同语义收尾（红仍红、流程不变）。
+        const auto* excType = abi::__cxa_current_exception_type();
+        BOOST_ERROR(id << ": threw non-runtime_error (typed catch bypassed, exception type: "
+                       << (excType ? excType->name() : "<unknown>") << ")");
+        return;
+    }
+    BOOST_ERROR(id << ": expected processOpBlock to reject, but it executed");
+}
+
+// ── 链式回放（增强语料 §1b/§3b）────────────────────────────────────────────
+// blocks[0] 播种 pre；blocks[i>0] 的 pre:null → 用上一块 post-state（applyDiff 回写后的 ts）。
+// chainState 以引用跨块传递（blocks[i>0] 跳过 pre 解析——pre:null 会命中 from_json 的
+// is_object 断言，故 pre 指针为 nullptr）。ParentOnlyBlockHashes 只回答 blockNumber-1（:325-334），
+// 链式向量不得含读历史 blockhash 的 tx（transfer 安全；审查 R13）。
+
+void replayChainVector(const std::string& id, const Json& v, DivergenceLedger& ledger, evmc::VM& vm,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+{
+    const auto& blocks = v.at("blocks");
+    evmone::test::TestState chainState;
+    for (std::size_t i = 0; i < blocks.size(); ++i)
+    {
+        const auto& blk = blocks[i];
+        const Json* pre = nullptr;
+        if (blk.contains("pre") && !blk["pre"].is_null())
+        {
+            chainState = test::from_json<test::TestState>(blk.at("pre"));
+            pre = &blk["pre"];
+        }
+        replaySingleBlockInto(
+            id + "[" + std::to_string(i) + "]", blk, chainState, pre, ledger, vm, receiptFactory);
+    }
+}
+}  // namespace
 // ── structurallyUnrecoverable 谓词边界单测（防退化恒真/恒假后标记逃逸复活）──
 BOOST_AUTO_TEST_SUITE(OpT8nReplay)
 
@@ -1008,6 +1139,21 @@ BOOST_AUTO_TEST_CASE(Vectors)
             const auto stem = file.stem().string();
             if (id != stem)
                 throw std::runtime_error("vector id '" + id + "' != filename stem '" + stem + "'");
+            // ⚠️ 顺序：chain 向量顶层只有 blocks、无 _op_expected——reject 判断
+            // （v.at("_op_expected")）会抛 out_of_range，必须先判 blocks。
+            if (vec->contains("blocks"))
+            {
+                replayChainVector(id, *vec, ledger, vm, receiptFactory);
+                continue;
+            }
+            if (hasReject(*vec))
+            {
+                const auto consumer = rejectConsumer(*vec);
+                if (consumer == "engine")
+                    continue;  // 字段损坏类：仅 OpNewPayloadRpcE2eTest（Task 2）
+                assertRejectThrow(id, *vec, vm, receiptFactory);  // executor/both
+                continue;
+            }
             replayVector(id, *vec, ledger, vm, receiptFactory);
         }
         catch (const std::exception& e)
@@ -1026,6 +1172,79 @@ BOOST_AUTO_TEST_CASE(Vectors)
 
     // E) 尾账：过期豁免即红 + KNOWN-DIVERGE 总数入 RecordProperty。
     ledger.finish();
+}
+
+// ── reject 分支（增强语料 §1a/§3b）：processOpBlock 对非法非 deposit tx 必须抛
+//    std::runtime_error("op block: invalid non-deposit tx: ...")（OpBlockExecute.cpp:190），
+//    断言 throw + what() 子串（审查 HIGH#5）。内联向量（非语料文件，本任务直接内嵌）——
+//    字段必须满足装载器硬要求（OpT8nReplayTest.cpp:513-643）：
+//    deposit 的 data 位于交易对象顶层（装载器 t.at("data")，非 _op_deposit 内）；
+//    from=OP_DEPOSITOR(0xdead...0001) to=OP_L1_BLOCK(0x...0015)（OpPredeploys.h:11/:22、
+//    OpBlockExecute.cpp:31）；mint/value/gas 一律 hex 字符串。
+//    第二笔 eip1559 必须带 _op_raw 真实签名 EIP-2718 信封（opValidate 强制 signedTxEnvelope
+//    非空，OpTransition.cpp:362）；gas=0 → validate_transaction 抛 INTRINSIC_GAS_TOO_LOW
+//    （eth/state/errors.hpp:51）→ processOpBlock 抛 "op block: invalid non-deposit tx:
+//    intrinsic gas too low"（OpBlockExecute.cpp:190）。
+BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    auto receiptFactory = makeTestReceiptFactory();
+    // ⚠️ DivergenceLedger 默认构造；load("") 会 BOOST_ERROR("DIVERGENCES.md missing")。
+    // assertRejectThrow 不消费 ledger（reject 向量无 postState/豁免比对），仅按 brief 保留。
+    DivergenceLedger ledger;
+    // 手造向量用 Json::parse（nlohmann 的 Json::object{...} 多层 initializer_list 在本版本
+    // 有编译歧义——basic_json(initializer_list_t) 无可行转换；raw string 直写 schema 更稳）。
+    Json v = Json::parse(R"({
+        "_info": {"hardfork": "isthmus"},
+        "env": {
+            "currentNumber": 1, "currentTimestamp": "0x64",
+            "currentGasLimit": "0x989680", "currentBaseFee": "0x3b9aca00",
+            "currentCoinbase": "0x0000000000000000000000000000000000000000",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "pre": {
+            "0x0000000000000000000000000000000000000001": {
+                "balance": "0xde0b6b3a7640000", "nonce": "0x0", "code": "0x"
+            }
+        },
+        "block": {
+            "transactions": [
+                {
+                    "_op_type": "deposit",
+                    "_op_deposit": {
+                        "source_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "from": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001",
+                        "to": "0x4200000000000000000000000000000000000015",
+                        "mint": "0x0", "value": "0x0", "gas": "0x186a0",
+                        "is_system_tx": false
+                    },
+                    "data": "0x"
+                },
+                {
+                    "_op_type": "eip1559",
+                    "_op_raw": "0x02f874822105808405f5e100847735940082520894b0b0000000000000000000000000000000000001880de0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714",
+                    "chainId": "0x2105", "nonce": "0x0",
+                    "to": "0xb0b0000000000000000000000000000000000001",
+                    "gas": "0x0", "maxFeePerGas": "0x77359400", "maxPriorityFeePerGas": "0x5f5e100",
+                    "value": "0x0", "data": "0x",
+                    "sender": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"
+                }
+            ]
+        },
+        "_op_expected": {
+            "reject": {
+                "op_geth": "intrinsic gas too low",
+                "fisco": {
+                    "consumer": "executor", "classification": "INVALID",
+                    "latest_valid_hash": "parent",
+                    "validation_error_contains": "invalid non-deposit tx"
+                }
+            }
+        }
+    })");
+    assertRejectThrow("reject_executor_intrinsic", v, vm, receiptFactory);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
