@@ -25,11 +25,11 @@
 // it computes take `OpBlockSeal`/raw-bytes ranges as parameters, not `OpExecuteBlockResult`;
 // `OpSchedulerImpl` supplies the field-projection.
 
-#include <bcos-evm/opstack/OpBlockSeal.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <opstack-executor/OpBlockSeal.h>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <iterator>
