@@ -26,10 +26,10 @@ public:
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl,
             GlobalStateStorage, ExecutorType, SchedulerType>;
-        auto holder =
-            std::make_shared<ConcreteModel<SchedulerType, ExecutorType, ConcreteEngineService>>(
-                std::move(storageInitializer), std::move(blockFactory), std::move(scheduler),
-                std::move(transactionExecutor), memPool, std::move(ledger), blockTxCountLimit);
+        auto holder = std::make_shared<
+            ConcreteModel<SchedulerType, ExecutorType, ConcreteEngineService>>(
+            std::move(storageInitializer), std::move(blockFactory), std::move(scheduler),
+            std::move(transactionExecutor), memPool, std::move(ledger), blockTxCountLimit);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);

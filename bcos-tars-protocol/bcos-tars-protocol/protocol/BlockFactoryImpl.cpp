@@ -8,7 +8,7 @@ bcostars::protocol::BlockFactoryImpl::BlockFactoryImpl(bcos::crypto::CryptoSuite
   : m_cryptoSuite(std::move(cryptoSuite)),
     m_blockHeaderFactory(std::move(blockHeaderFactory)),
     m_transactionFactory(std::move(transactionFactory)),
-    m_receiptFactory(std::move(receiptFactory)){};
+    m_receiptFactory(std::move(receiptFactory)) {};
 bcos::protocol::Block::Ptr bcostars::protocol::BlockFactoryImpl::createBlock()
 {
     return std::make_shared<BlockImpl>();

@@ -390,7 +390,8 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
     int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
+        versionConfig)
     {
         executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
@@ -490,7 +491,8 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
         bcos::protocol::BlockNumber blockNumber = -1;
         try
         {
-            blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
+            blockNumber =
+                boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {

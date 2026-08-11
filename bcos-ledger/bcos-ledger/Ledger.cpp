@@ -2148,8 +2148,8 @@ bool Ledger::buildGenesisBlock(
         if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
         {
             Entry gasPriceEntry;
-            gasPriceEntry.set(
-                bcos::storage::serialize::encode(SystemConfigEntry(genesis.m_txGasPrice, 0)));
+            gasPriceEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry(genesis.m_txGasPrice, 0)));
             sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
         }
 
@@ -2275,10 +2275,11 @@ bool Ledger::buildGenesisBlock(
         if (versionNumber >= BlockVersion::V3_18_0_VERSION && genesis.m_excessBlobGas.has_value())
         {
             Entry excessBlobGasEntry;
-            excessBlobGasEntry.set(bcos::storage::serialize::encode(
-                SystemConfigEntry{std::to_string(*genesis.m_excessBlobGas), 0}));
+            excessBlobGasEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{
+                std::to_string(*genesis.m_excessBlobGas), 0}));
             co_await storage2::writeOne(*m_stateStorage,
-                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS), excessBlobGasEntry);
+                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS),
+                excessBlobGasEntry);
         }
 
         // write consensus node list

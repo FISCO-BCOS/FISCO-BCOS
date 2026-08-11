@@ -486,7 +486,8 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
     int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
+        versionConfig)
     {
         executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);

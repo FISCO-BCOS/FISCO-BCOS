@@ -346,9 +346,9 @@ public:
                 co_return;
             }
 
-            m_evmReceipt =
-                evmone::state::transition(m_stateView, m_blockInfo, executor.get().blockHashes(),
-                    m_evmTx, m_rev, executor.get().vm(), m_txProps, nodeChainId());
+            m_evmReceipt = evmone::state::transition(m_stateView, m_blockInfo,
+                executor.get().blockHashes(), m_evmTx, m_rev, executor.get().vm(), m_txProps,
+                nodeChainId());
 
             // Apply the resulting state diff immediately so later transactions
             // in the same chunk observe it.

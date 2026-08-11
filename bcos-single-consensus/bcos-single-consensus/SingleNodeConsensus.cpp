@@ -38,8 +38,9 @@ class CallbackPromise
 public:
     void setValue(T value)
     {
-        std::call_once(
-            m_once, [this, v = std::move(value)]() mutable { m_promise.set_value(std::move(v)); });
+        std::call_once(m_once, [this, v = std::move(value)]() mutable {
+            m_promise.set_value(std::move(v));
+        });
     }
 
     T wait(std::atomic_bool const& _running,
@@ -155,9 +156,10 @@ void SingleNodeConsensus::resolveInitialHead()
 {
     auto headPromise =
         std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::BlockNumber>>>();
-    m_ledger->asyncGetBlockNumber([headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-        headPromise->setValue(std::make_tuple(std::move(_error), _number));
-    });
+    m_ledger->asyncGetBlockNumber(
+        [headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
+            headPromise->setValue(std::make_tuple(std::move(_error), _number));
+        });
     auto [headError, headNumber] = headPromise->wait(m_running);
     if (headError || headNumber < 0)
     {
@@ -194,10 +196,10 @@ bool SingleNodeConsensus::produceBlock()
     // multiply by 1000, which would make the block timestamp ~1.786e15 -> year 58577 in the
     // EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
-    std::uint64_t const timestamp =
-        m_fixedTimestamp > 0 ?
-            m_fixedTimestamp * 1000 + static_cast<std::uint64_t>(m_headNumber + 1) :
-            std::max(nowMs, m_lastTimestamp + 1);
+    std::uint64_t const timestamp = m_fixedTimestamp > 0 ?
+                                        m_fixedTimestamp * 1000 +
+                                            static_cast<std::uint64_t>(m_headNumber + 1) :
+                                        std::max(nowMs, m_lastTimestamp + 1);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
@@ -214,16 +216,17 @@ bool SingleNodeConsensus::produceBlock()
         .safeBlockHash = m_headHash,
         .finalizedBlockHash = m_headHash,
     };
-    auto fcResult = task::syncWait(
-        m_engineService.updateForkchoice(forkchoiceState, &payloadAttributes, c_engineApiVersion));
+    auto fcResult = task::syncWait(m_engineService.updateForkchoice(
+        forkchoiceState, &payloadAttributes, c_engineApiVersion));
     if (fcResult.payloadStatus.status != bcos::engine::PayloadValidationStatus::Valid ||
         !fcResult.payloadId)
     {
-        SINGLE_CONSENSUS_LOG(ERROR)
-            << LOG_DESC("updateForkchoice failed to build a payload")
-            << LOG_KV("status", static_cast<int>(fcResult.payloadStatus.status))
-            << LOG_KV("error",
-                   fcResult.payloadStatus.validationError.value_or("no payloadId returned"));
+        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("updateForkchoice failed to build a payload")
+                                    << LOG_KV("status",
+                                        static_cast<int>(fcResult.payloadStatus.status))
+                                    << LOG_KV("error",
+                                        fcResult.payloadStatus.validationError.value_or(
+                                            "no payloadId returned"));
         return false;
     }
 
@@ -252,13 +255,15 @@ bool SingleNodeConsensus::produceBlock()
     // and the eth_* RPC reads.
     bcos::engine::NewPayloadRequest request;
     request.executionPayload = std::move(executionPayload);
-    auto newPayloadStatus = task::syncWait(m_engineService.newPayload(request, c_engineApiVersion));
+    auto newPayloadStatus =
+        task::syncWait(m_engineService.newPayload(request, c_engineApiVersion));
     if (newPayloadStatus.status != bcos::engine::PayloadValidationStatus::Valid)
     {
-        SINGLE_CONSENSUS_LOG(ERROR)
-            << LOG_DESC("newPayload failed")
-            << LOG_KV("status", static_cast<int>(newPayloadStatus.status))
-            << LOG_KV("error", newPayloadStatus.validationError.value_or(""));
+        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("newPayload failed")
+                                    << LOG_KV("status",
+                                        static_cast<int>(newPayloadStatus.status))
+                                    << LOG_KV("error",
+                                        newPayloadStatus.validationError.value_or(""));
         return false;
     }
 
@@ -274,6 +279,6 @@ bool SingleNodeConsensus::produceBlock()
                                << LOG_KV("txs", request.executionPayload.transactions.size())
                                << LOG_KV("gasUsed", request.executionPayload.gasUsed.str())
                                << LOG_KV("stateRoot",
-                                      request.executionPayload.stateRoot.hexPrefixed());
+                                   request.executionPayload.stateRoot.hexPrefixed());
     return sealedTxBlock;
 }
