@@ -1195,8 +1195,9 @@ BOOST_AUTO_TEST_CASE(Vectors)
     // GoldenSample loader 不可表达，生成器按 brief 仍发射文件但强制不入 manifest（task-3-report）。
     // 集合相等豁免这两个已知未注册 static 面文件（后缀匹配，base 无关）。
     const auto isUnregisteredStatic = [](std::string const& n) {
-        return (n.size() >= 13 && n.rfind("_static_3.json") == n.size() - 13) ||
-               (n.size() >= 14 && n.rfind("_static_12.json") == n.size() - 14);
+        // "_static_3.json" = 14 chars, "_static_12.json" = 15 chars（后缀匹配，base 无关）
+        return (n.size() >= 14 && n.rfind("_static_3.json") == n.size() - 14) ||
+               (n.size() >= 15 && n.rfind("_static_12.json") == n.size() - 15);
     };
     for (const auto& name : present)
     {

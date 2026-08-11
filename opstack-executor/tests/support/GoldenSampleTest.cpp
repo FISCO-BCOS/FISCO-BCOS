@@ -103,6 +103,20 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
     }
 
     auto vectors = basenameSet(OP_T8N_VECTORS_DIR, ".json");
+    // §4c item 3/12（expectedBlobVersionedHashes/executionRequests）生成但强制不入 manifest
+    // （GoldenSample loader 不可表达）——集合相等豁免（Task 6，同 OpT8nReplayTest.cpp 的
+    // isUnregisteredStatic；条目去 .json 后缀）。"_static_3"=9 字符 / "_static_12"=10 字符。
+    const auto isUnregisteredStatic = [](std::string const& n) {
+        return (n.size() >= 9 && n.rfind("_static_3") == n.size() - 9) ||
+               (n.size() >= 10 && n.rfind("_static_12") == n.size() - 10);
+    };
+    for (auto it = vectors.begin(); it != vectors.end();)
+    {
+        if (isUnregisteredStatic(*it))
+            it = vectors.erase(it);
+        else
+            ++it;
+    }
     auto golden = basenameSet(OP_T8N_GOLDEN_ENGINE_DIR, ".golden.json");
 
     BOOST_CHECK_MESSAGE(

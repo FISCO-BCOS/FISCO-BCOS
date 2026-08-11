@@ -1045,6 +1045,90 @@ BOOST_AUTO_TEST_CASE(InvalidManifestStemStripsJsonSuffix)
     BOOST_CHECK_EQUAL(invalidStemFromManifestLine(""), "");
 }
 
+// ── Task 6 Step 2：覆盖矩阵断言（manifest 注册子集驱动）──────────────────
+// 遍历 manifest 内 invalid_* 向量 + Task 2 内联向量，断言必达集全部被覆盖（缺 → FAILURE）：
+//   每 classification（含 -38005——Task 2 version 向量满足；-32603 两投 runner 满足）、
+//   每 latest_valid_hash 值（"parent"|null）、每 §4c 静态项（除 item 3/12——loader 不可表达
+//   强制不入 manifest）、每 validation_error_contains 目标串。
+BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
+{
+    const auto names = loadInvalidManifest();
+    BOOST_REQUIRE_MESSAGE(!names.empty(), "coverage: manifest has no invalid_* vectors");
+    std::set<std::string> classifications;
+    std::set<std::string> lvh;  // "parent" | "null" | "absent"
+    std::set<int> staticItems;
+    std::set<std::string> errStrings;
+    for (auto const& id : names)
+    {
+        auto sample = w6test::loadInvalidSample(id);
+        auto const& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
+        classifications.insert(fisco["classification"].asString());
+        if (fisco.isMember("latest_valid_hash"))
+            lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
+                                                             fisco["latest_valid_hash"].asString());
+        else
+            lvh.insert("absent");
+        if (fisco.isMember("validation_error_contains"))
+            errStrings.insert(fisco["validation_error_contains"].asString());
+        const auto pos = id.rfind("_static_");
+        if (pos != std::string::npos)
+            staticItems.insert(std::stoi(id.substr(pos + 8)));
+    }
+    // Task 2 内联向量（-38005 / 两投 -32603 / SYNCING 由内联满足；不在 manifest）。
+    for (auto const* id : {"inline_invalid_stateRoot", "inline_invalid_parentUnknown",
+             "inline_invalid_unsupportedFork", "inline_invalid_siblingFork"})
+    {
+        auto sample = makeInlineInvalidSample(id);
+        auto const& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
+        classifications.insert(fisco["classification"].asString());
+        if (fisco.isMember("latest_valid_hash"))
+            lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
+                                                             fisco["latest_valid_hash"].asString());
+    }
+    // 必达：classification（四态全盖）
+    for (auto const* c : {"INVALID", "SYNCING", "-38005", "-32603"})
+        BOOST_CHECK_MESSAGE(classifications.count(c),
+            "coverage: classification '" << c << "' has no vector");
+    // 必达：latest_valid_hash（"parent" 与 null 两值）
+    for (auto const* h : {"parent", "null"})
+        BOOST_CHECK_MESSAGE(lvh.count(h),
+            "coverage: latest_valid_hash '" << h << "' has no vector");
+    // 必达：§4c 静态项 1..11（除 3/12——强制不入 manifest）
+    for (int n : {1, 2, 4, 5, 6, 7, 8, 9, 10, 11})
+        BOOST_CHECK_MESSAGE(staticItems.count(n),
+            "coverage: static item " << n << " has no vector");
+    BOOST_CHECK_MESSAGE(!staticItems.count(3),
+        "coverage: static item 3 must NOT be manifest-registered (loader 不可表达)");
+    BOOST_CHECK_MESSAGE(!staticItems.count(12),
+        "coverage: static item 12 must NOT be manifest-registered (loader 不可表达)");
+    // 必达：validation_error_contains 目标串全集（corrupt 字段 / 静态面 / invalid-tx 消息）
+    static const char* kRequiredErrors[] = {
+        "stateRoot", "gasUsed", "receiptsRoot",
+        "blockHash does not match the reconstructed block header",
+        "extraData must be exactly 9 bytes on the OP path (Isthmus)",
+        "extraData must be exactly 17 bytes on the OP path (Jovian)",
+        "executionPayload.rawTransactions is required on the OP path",
+        "withdrawals must be present and empty on the OP path",
+        "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV4",
+        "withdrawalsRoot is required on the OP path (Isthmus+)",
+        "excessBlobGas must be present and zero on the OP path",
+        "blobGasUsed must be zero before Jovian (OP Isthmus)",
+        "blockNumber must not be negative",
+        "gasLimit exceeds the maximum block gas limit (2^63-1)",
+        "DA footprint (blobGasUsed) exceeds the block gas limit",
+        "intrinsic gas too low", "nonce too low", "nonce too high",
+        "insufficient funds for gas * price + value",
+        "max fee per gas less than block base fee",
+        "sender not an eoa",
+        "set code transaction must not be a create transaction",
+        "empty authorization list",
+        "unsupported tx type byte 0x3",
+    };
+    for (auto const* s : kRequiredErrors)
+        BOOST_CHECK_MESSAGE(errStrings.count(s),
+            "coverage: validation_error_contains '" << s << "' has no vector");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
