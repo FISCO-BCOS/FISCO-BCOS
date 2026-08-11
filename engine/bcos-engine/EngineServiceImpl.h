@@ -158,7 +158,8 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
 
 /// OP 信封 → tars Transaction 转换（实现见 EngineServiceImpl.cpp；失败返回 nullopt，不 throw）。
-/// 填 extraTransactionHash（D4）与 sender（D8）。0x04 等未知类型返回 nullopt（D7）。
+/// 填 extraTransactionHash（D4）与 sender（D8）。0x04 (EIP-7702) 由 Web3Transaction RLP 解码
+/// 支持（上游 #5411 起一等类型）；仅损坏/未枚举信封返回 nullopt（D7）。
 /// 仅此处前向声明、实现放 .cpp：EngineServiceImpl.h 被 engine/test、libinitializer、bcos-evm
 /// opstack 测试等大量消费方包含，把 Web3Transaction.h 拉进来会拖入 jsoncpp + rpc Common +
 /// RPC_LOG 宏污染（D6）。`bcostars::Transaction` 经 LedgerMethods.h 已完整可见，无需再前向声明。
@@ -1321,9 +1322,12 @@ private:
         // yielding an all-default object whose hash does not equal the key it was stored under,
         // which nobody checks.
         //
-        // When `opEnvelopeToTars` returns nullopt (0x04 or any un-enumerated type byte, or a
-        // malformed envelope -- D7; 0x7E deposit is NOT unknown, it decodes via DepositTxHandler),
-        // the row is skipped: the block stays VALID and the tx is simply not queryable by hash.
+        // 0x04 (EIP-7702) is a first-class type supported by `opEnvelopeToTars` via the
+        // Web3Transaction RLP decode (upstream #5411), so it maps to tars and lands in
+        // SYS_HASH_2_TX like any other typed tx. Only a malformed or un-enumerated envelope
+        // makes `opEnvelopeToTars` return nullopt -- D7; 0x7E deposit is NOT unknown, it decodes
+        // via DepositTxHandler. On nullopt the row is skipped: the block stays VALID and the tx
+        // is simply not queryable by hash.
         // Known boundary, stated rather than hidden: `LedgerMethods.h:233-235` dereferences the
         // entry WITHOUT checking `has_value()`, so a missing row is UB on that path. That is a
         // pre-existing defect unrelated to OP (any block whose tx metadata outruns `SYS_HASH_2_TX`
@@ -1368,8 +1372,9 @@ private:
                     ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
                 std::move(receiptEntry));
 
-            // 方案 B：OP 交易转换后写 SYS_HASH_2_TX（复用普通交易通道）。原始信封转换失败
-            // （0x04 未知类型等）则跳过写表——读侧不可查但块仍有效（D7）。
+            // 方案 B：OP 交易转换后写 SYS_HASH_2_TX（复用普通交易通道）。0x04 (EIP-7702) 由
+            // opEnvelopeToTars 支持（Web3Transaction RLP 解码，上游 #5411 起一等类型），与其它
+            // typed tx 一样落表；仅损坏/未枚举信封转换失败才跳过写表——读侧不可查但块仍有效（D7）。
             if (auto tarsTx = detail::opEnvelopeToTars(rawTransactions[index], txHash))
             {
                 bcostars::protocol::TransactionImpl txImpl(

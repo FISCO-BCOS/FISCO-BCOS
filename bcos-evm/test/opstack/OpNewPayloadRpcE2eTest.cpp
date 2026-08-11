@@ -274,7 +274,6 @@ void runGoldenVector(std::string const& id)
         BOOST_CHECK_MESSAGE(
             tx->hash() == txHash, id << ": tx #" << i << " round-trip hash==txHash");
         // C2: 数据必须落 backend（m_latestBackend）——重启恢复语义（spec §6）。
-        // 当前实现只 pushView（内存层栈）,backend 读为空 → 此断言先红。
         auto backendEntry =
             bcos::task::syncWait(bcos::storage2::readOne(fixture->multiLayerStorage.latestBackend(),
                 bcos::executor_v1::StateKey{
@@ -517,6 +516,28 @@ BOOST_AUTO_TEST_CASE(JovianTxReverted)
     runGoldenVector("jovian_tx_reverted");
 }
 
+// ── 引擎门 probe（Task 2 gate 1）：5 个预编译代表向量（over-cap/7702/Jovian/value/成功 output 五风险面）──
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBn256PairNorm)
+{
+    runGoldenVector("isthmus_precompile_bn256pair_norm");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsPairingOvercap)
+{
+    runGoldenVector("isthmus_precompile_bls_pairing_overcap");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileWrapEip7702)
+{
+    runGoldenVector("isthmus_precompile_wrap_eip7702");
+}
+BOOST_AUTO_TEST_CASE(JovianPrecompileWrapValueOvercap)
+{
+    runGoldenVector("jovian_precompile_wrap_value_overcap");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileEcrecover)
+{
+    runGoldenVector("isthmus_precompile_ecrecover");
+}
+
 // 注：前 9 个样例 case 已覆盖 9 个向量；上面补全的 24 个 case 覆盖剩余 24 个，合计 33。
 // 全量清单（16 isthmus + 17 jovian）：
 //   isthmus: access_list, big_block_130tx, contract_create, contract_logs, deposit_failed,
@@ -544,8 +565,109 @@ BOOST_AUTO_TEST_CASE(JovianChainedAB)
 {
     runChainedPair("jovianChainA", "jovianChainB");
 }
-// 最终校验：36 用例 = 34 向量（33 + isthmus_system_call_order_observable）+ 2 链式对
-// （chainA/B + jovianChainA/B，覆盖 4 个链式样本）。
+// ── Task 4 补全：24 个 precompile 矩阵向量（brief 附录 A id→用例名映射）──
+// Task 2 的 5 个 probe（bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/ecrecover）
+// 已覆盖五风险面；此段补全其余 24 个，合计 29 个 precompile 用例。
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlake2f)
+{
+    runGoldenVector("isthmus_precompile_blake2f");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBn256Add)
+{
+    runGoldenVector("isthmus_precompile_bn256add");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBn256Mul)
+{
+    runGoldenVector("isthmus_precompile_bn256mul");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsG1Add)
+{
+    runGoldenVector("isthmus_precompile_bls_g1add");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsG1Msm)
+{
+    runGoldenVector("isthmus_precompile_bls_g1msm");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsG1MsmOvercap)
+{
+    runGoldenVector("isthmus_precompile_bls_g1msm_overcap");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsG2Add)
+{
+    runGoldenVector("isthmus_precompile_bls_g2add");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsG2Msm)
+{
+    runGoldenVector("isthmus_precompile_bls_g2msm");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsG2MsmOvercap)
+{
+    runGoldenVector("isthmus_precompile_bls_g2msm_overcap");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsMapG1)
+{
+    runGoldenVector("isthmus_precompile_bls_map_g1");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsMapG2)
+{
+    runGoldenVector("isthmus_precompile_bls_map_g2");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlsPairing)
+{
+    runGoldenVector("isthmus_precompile_bls_pairing");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileExpmod)
+{
+    runGoldenVector("isthmus_precompile_expmod");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileIdentity)
+{
+    runGoldenVector("isthmus_precompile_identity");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompilePointEvaluation)
+{
+    runGoldenVector("isthmus_precompile_point_evaluation");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileRipemd160)
+{
+    runGoldenVector("isthmus_precompile_ripemd160");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileSha256)
+{
+    runGoldenVector("isthmus_precompile_sha256");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileWrap63of64)
+{
+    runGoldenVector("isthmus_precompile_wrap_63of64");
+}
+BOOST_AUTO_TEST_CASE(IsthmusPrecompileWrapReturndata)
+{
+    runGoldenVector("isthmus_precompile_wrap_returndata");
+}
+BOOST_AUTO_TEST_CASE(JovianPrecompileBlsG1MsmOvercap)
+{
+    runGoldenVector("jovian_precompile_bls_g1msm_overcap");
+}
+BOOST_AUTO_TEST_CASE(JovianPrecompileBlsG2MsmOvercap)
+{
+    runGoldenVector("jovian_precompile_bls_g2msm_overcap");
+}
+BOOST_AUTO_TEST_CASE(JovianPrecompileBlsPairingOvercap)
+{
+    runGoldenVector("jovian_precompile_bls_pairing_overcap");
+}
+BOOST_AUTO_TEST_CASE(JovianPrecompileBn256PairOvercap)
+{
+    runGoldenVector("jovian_precompile_bn256pair_overcap");
+}
+BOOST_AUTO_TEST_CASE(JovianPrecompileWrapValueRevert)
+{
+    runGoldenVector("jovian_precompile_wrap_value_revert");
+}
+
+// 最终校验：65 用例 = 63 单向量 + 2 链式对（chainA/B + jovianChainA/B，覆盖 4 个链式样本）。
+// 63 单向量 = 34 基础向量（33 + isthmus_system_call_order_observable）
+//   + 29 precompile（Task 2 probe 5 + Task 4 补全 24）。
 
 BOOST_AUTO_TEST_SUITE_END()
 
