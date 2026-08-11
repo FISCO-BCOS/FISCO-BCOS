@@ -132,7 +132,7 @@ template <class ViewType>
 inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
     bcos::protocol::BlockHeader const& header, bcos::crypto::HashType const& blockHash,
     std::vector<bcos::bytes> const& rawTxBytes, bcos::evm::engine::OpExecuteBlockResult const& result,
-    bcos::protocol::BlockFactory const& blockFactory, EnvelopeToTarsConverter const& envelopeToTars);
+    bcos::protocol::BlockFactory& blockFactory, EnvelopeToTarsConverter const& envelopeToTars);
 ```
 
 - 逻辑逐行搬移自 engine `registerOpBlock`(写入判定、receipt 数量不变量、null receipt 检查、

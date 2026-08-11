@@ -84,26 +84,29 @@ git commit --no-verify -m "refactor(engine): move OpExecutionInternalError to bc
 - Consumes: Task 1 的 `bcos::engine::OpExecutionInternalError`;`bcos::evm::opstack::OpBlockSeal`(OpExecuteBlockResult.seal 成员)
 - Produces:
   - `using EnvelopeToTarsConverter = std::function<std::optional<bcostars::Transaction>(bcos::bytes const&, bcos::crypto::HashType const&)>;`(namespace `bcos::evm::engine`)
-  - `template <class ViewType> inline task::Task<void> opstackRegisterBlock(ViewType& view, bcos::protocol::BlockHeader const& header, bcos::crypto::HashType const& blockHash, std::vector<bcos::bytes> const& rawTxBytes, OpExecuteBlockResult const& result, bcos::protocol::BlockFactory const& blockFactory, EnvelopeToTarsConverter const& envelopeToTars);`(namespace `bcos::evm::engine`)
+  - `template <class ViewType> inline task::Task<void> opstackRegisterBlock(ViewType& view, bcos::protocol::BlockHeader const& header, bcos::crypto::HashType const& blockHash, std::vector<bcos::bytes> const& rawTxBytes, OpExecuteBlockResult const& result, bcos::protocol::BlockFactory& blockFactory, EnvelopeToTarsConverter const& envelopeToTars);`(namespace `bcos::evm::engine`)
   - `OpExecuteBlockResult`(自 OpSchedulerImpl.h:68-75 移入 OpErrors.h,namespace `bcos::evm::engine` 不变)
 
 - [ ] **Step 1: 移动 `OpExecuteBlockResult` 到 OpErrors.h**
 
-把 OpSchedulerImpl.h:68-75 的 `OpExecuteBlockResult` struct 移入 `opstack-executor/OpErrors.h`(namespace `bcos::evm::engine`,加在 OpStorageError 之后)。OpErrors.h 补 include:`<bcos-crypto/hash/hash.h>`(bcos::h256)、`<bcos-evm/opstack/OpBlockSeal.h>`(seal 成员)、`<bcos-framework/protocol/TransactionReceipt.h>`、`<vector>`。OpSchedulerImpl.h 删除本地定义(它已 include OpErrors.h,类型仍可见;`using ExecuteResult = OpExecuteBlockResult;` 别名不动)。
+把 OpSchedulerImpl.h:68-75 的 `OpExecuteBlockResult` struct 移入 `opstack-executor/OpErrors.h`(namespace `bcos::evm::engine`,加在 OpStorageError 之后)。OpErrors.h 补 include:`<bcos-utilities/FixedBytes.h>`(bcos::h256,FixedBytes.h:665)、`<opstack-executor/OpBlockSeal.h>`(seal 成员,namespace `bcos::evm::opstack`;**不是** bcos-evm/opstack/,后者无此文件)、`<bcos-framework/protocol/TransactionReceipt.h>`、`<vector>`。OpSchedulerImpl.h 删除本地定义(它已 include OpErrors.h,类型仍可见;`using ExecuteResult = OpExecuteBlockResult;` 别名不动)。
 
 - [ ] **Step 2: 新建 `opstack-executor/OpBlockRegister.h`**
 
 ```cpp
 #pragma once
 
-#include <bcos-framework/engine/Errors.h>
-#include <bcos-framework/executor/StateKey.h>
-#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-concepts/ByteBuffer.h>                      // bcos::concepts::bytebuffer::toView
+#include <bcos-framework/engine/Errors.h>                  // OpExecutionInternalError
+#include <bcos-framework/ledger/LedgerTypeDef.h>           // SYS_* 表常量(LedgerTypeDef.h:106-112)
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/storage/Entry.h>                  // bcos::storage::Entry
+#include <bcos-framework/storage2/Storage.h>               // storage2::writeOne
+#include <bcos-framework/transaction-executor/StateKey.h>  // bcos::executor_v1::StateKey
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>   // bcostars::Transaction + TransactionImpl(自带 tars Transaction.h)
 #include <bcos-task/Task.h>
-#include <opstack-executor/OpErrors.h>
+#include <opstack-executor/OpErrors.h>                     // OpExecuteBlockResult
 #include <boost/lexical_cast.hpp>
 #include <functional>
 #include <optional>
@@ -128,7 +131,7 @@ template <class ViewType>
 inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
     bcos::protocol::BlockHeader const& header, bcos::crypto::HashType const& blockHash,
     std::vector<bcos::bytes> const& rawTxBytes, OpExecuteBlockResult const& result,
-    bcos::protocol::BlockFactory const& blockFactory, EnvelopeToTarsConverter const& envelopeToTars)
+    bcos::protocol::BlockFactory& blockFactory, EnvelopeToTarsConverter const& envelopeToTars)
 {
     const auto blockNumberStr = boost::lexical_cast<std::string>(header.number());
 
@@ -204,29 +207,36 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
 }  // namespace bcos::evm::engine
 ```
 
-> 注:`bcos::storage::Entry` / `bcos::storage2::writeOne` / `bcos::executor_v1::StateKey` /
-> `bcos::ledger::SYS_*` / `bcos::concepts::bytebuffer::toView` 均来自 bcos-framework(已 link)。
-> 若 `LedgerTypeDef.h` 未暴露 `SYS_*` 常量名,改用 engine 原代码相同 include 路径
-> (EngineServiceImpl.h 的 include 列表)。
+> 注:5 个 `SYS_*` 常量全部在 `bcos-framework/ledger/LedgerTypeDef.h:106-112`(已核实,无需兜底)。
+> `bcos::storage::Entry` / `bcos::storage2::writeOne` / `bcos::executor_v1::StateKey` /
+> `bcos::concepts::bytebuffer::toView` 均来自 bcos-framework(已 link),include 见上。
+> `blockFactory` 参数必须**非 const**:`BlockFactory::cryptoSuite()`(BlockFactory.h:57)与
+> `CryptoSuite::hashImpl()`(CryptoSuite.h:45)均非 const 成员,const 引用上调用即编译失败。
 
 - [ ] **Step 3: 写失败测试(先红)**
 
 新建 `opstack-executor/tests/OpBlockRegisterTest.cpp`(Boos.Test,注册进 `opstack-executor-block-tests`):
 
 ```cpp
-#include <opstack-executor/OpBlockRegister.h>
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
-#include <bcos-protocol/TransactionReceipt.h>  // TransactionReceiptImpl 路径
-#include <bcos-protocol/BlockFactoryImpl.h>    // BlockHeaderFactoryImpl 同头族
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-task/Wait.h>                                  // syncWait
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
+#include <opstack-executor/OpBlockRegister.h>                // 置于 Entry/ByteBuffer/StateKey 之后
 // 复用 e2e 的 makeCryptoSuite/makeBlockFactory 等价 helper(keccak hashImpl,见
-// OpNewPayloadRpcE2eTest.cpp:80-128)。测试文件内自建一份,避免跨文件依赖。
+// OpNewPayloadRpcE2eTest.cpp:106-128)。测试文件内自建一份,避免跨文件依赖。
 
 namespace
 {
-using BackendMemStorage = bcos::storage::MemoryStorage;  // 依测试既有别名
-// ... 按 OpNewPayloadRpcE2eTest 的 MLS/ViewType 别名定义
+// 逐字复制 OpNewPayloadRpcE2eTest.cpp:41-75 的别名族(MutableStorage/BackendMemStorage/
+// CheckpointBackend/MLS/ViewType)——MemoryStorage 模板实参较长,以 e2e 文件为准,避免跨文件依赖。
+using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
+using ViewType = typename MLS::ViewType;
 }
 ```
 
@@ -292,6 +302,8 @@ git commit --no-verify -m "feat(opstack): sink registerOpBlock to opstackRegiste
 `opstack-executor/OpSchedulerImpl.h`:
 - include 区补:`#include <opstack-executor/OpBlockRegister.h>`、`#include <bcos-framework/engine/Errors.h>`(两者分别来自 Task 2 / Task 1)
 - L86 `template <class Storage>` → `template <class Storage, class OpenedStorage = Storage>`
+- 类内新增 `using ViewType = Storage;`(模板参名是 Storage,但 spec/本计划的 PendingBlock 与注释
+  都用 ViewType,必须显式别名,否则 `PendingBlock{ViewType view; ...}` 编译失败)
 - 构造 L90-96 扩为 6 参,初始化 `m_blockFactory`/`m_storage`/`m_envelopeToTars`
 - L98-104 notifier 注释改为:"The scheduler fires `notifyBlockNumber` inside `commitBlock` after the view is merged(originally the engine fired it after its own mergeView; the two-phase refactor moved the firing into the commit point)"
 
@@ -350,8 +362,16 @@ task::Task<void> commitBlock(bcos::protocol::BlockHeader::Ptr header,
                                   "commitBlock: header block number does not match the pending "
                                   "execution"});
     }
-    co_await opstackRegisterBlock(m_pending->view, *header, blockHash, m_pending->rawTxBytes,
-        m_pending->result, *m_blockFactory, m_envelopeToTars);
+    try
+    {
+        co_await opstackRegisterBlock(m_pending->view, *header, blockHash, m_pending->rawTxBytes,
+            m_pending->result, *m_blockFactory, m_envelopeToTars);
+    }
+    catch (...)
+    {
+        m_pending.reset();  // 写表失败不留残留 mutable 视图到下一块
+        throw;
+    }
     co_await m_storage.mergeView(std::move(m_pending->view));
     m_pending.reset();
     notifyBlockNumber(header->number());
@@ -390,14 +410,18 @@ task::Task<void> commitBlock(bcos::protocol::BlockHeader::Ptr header,
   - fixture(L144-166)**成员重排**同上(blockFactory 移到 scheduler 之前);
   - L162-163 构造 → `scheduler(receiptFactory, kChainId, forkTimestamps, blockFactory, multiLayerStorage, realConverter)`。
 
-两处 fixture 的 `realConverter` 均为 lambda 调 engine 的 `opEnvelopeToTars`(block-tests 已 link
-engine,前向声明在 EngineServiceImpl.h:168):
+`realConverter` 定义在**文件作用域**(命名空间级函数,置于 fixture 之前)——不能在成员列表里内联
+lambda:成员按声明序初始化,若 converter 成员声明在 scheduler 之后会引用未构造对象。block-tests
+已 link engine,前向声明在 EngineServiceImpl.h:168:
 ```cpp
-[](bcos::bytes const& env, bcos::crypto::HashType const& h) -> std::optional<bcostars::Transaction> {
+std::optional<bcostars::Transaction> realConverter(
+    bcos::bytes const& env, bcos::crypto::HashType const& h)
+{
     return bcos::engine::detail::opEnvelopeToTars(env, h);
 }
 ```
-engine 尚未三阶段化(直到 Task 4),此 converter 暂不被旧路径使用,无副作用。
+两处 fixture 的构造传 `realConverter`(函数指针 → std::function 隐式转换)。engine 尚未三阶段化
+(直到 Task 4),此 converter 暂不被旧路径使用,无副作用。
 
 - [ ] **Step 5: 更新生产实例化点**
 
@@ -418,7 +442,27 @@ auto opScheduler =
 - [ ] **Step 6: 两阶段单测(新建 `OpTwoPhaseTest.cpp`,注册进 block-tests)**
 
 Fixture 同 e2e(MLS + makeBlockFactory + real converter)。用例:
-- **HappyExecuteCommit**:`setBlockNumberNotifier` 计数;`executeBlock(view, exec, *header, txs, ledgerConfig)`(view=multiLayerStorage.fork()+newMutable,ledgerConfig 默认构造)→ 返回 receipts;`pendingExecuteResult()` 有值;`commitBlock(header, blockHash)`(blockHash 任意 h256)→ 返回后:MLS 新 fork 上 `SYS_NUMBER_2_HASH` 有值(证明 mergeView 落盘)、`pendingExecuteResult()` 抛 `OpExecutionInternalError`(m_pending 已清)、notifier 计数==1。
+- **HappyExecuteCommit**(可执行块的构造流程——零上下文工程师必需):复用 e2e 的 w6test 黄金向量
+  harness(见 OpNewPayloadRpcE2eTest.cpp 的 `w6test::loadVectorSample`/`seedPreState`/
+  `makeParamsJson`/`productionHeaderOf`,同一套):
+  1. `auto sample = w6test::loadVectorSample("isthmus_deposit_only")`(取 deposit-only 黄金向量);
+  2. `w6test::seedPreState(fixture.multiLayerStorage, sample.vector["pre"])`;
+  3. `auto goldenHeader = w6test::decodeGoldenHeader(sample);` +
+     `registerVerifiedBlock(fixture.multiLayerStorage, goldenHeader->parentInfo().blockHash, 0)`
+     (登记父块,让 `SYS_HASH_2_NUMBER` 有父哈希);
+  4. `auto request = bcos::rpc::parseNewPayloadRequest(w6test::makeParamsJson(sample),
+     *fixture.blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);`
+  5. `auto header = productionHeaderOf(fixture.blockFactory, request);`
+     `auto const& rawTxs = *request.executionPayload.rawTransactions;`
+  6. `auto view = fixture.multiLayerStorage.fork(); view.newMutable();`
+     `bcos::ledger::LedgerConfig ledgerConfig;`(默认构造;Task 4 起 engine 才取真值)
+  7. `auto receipts = syncWait(fixture.scheduler.executeBlock(view, fixture.executor, *header, rawTxs, ledgerConfig));`
+     → `pendingExecuteResult()` 有值;
+  8. `syncWait(fixture.scheduler.commitBlock(header, /*golden blockHash*/))` → 返回后:MLS 新 fork
+     上 `SYS_NUMBER_2_HASH` 有值(mergeView 落盘)、`pendingExecuteResult()` 抛
+     `OpExecutionInternalError`(m_pending 已清)、notifier 计数==1
+     (前置 `fixture.scheduler.setBlockNumberNotifier([&](auto) { ++notified; })`)。
+  (executor 用 e2e 的 StubExecutor;`fixture.scheduler` 为 `OpSchedulerImpl<ViewType, MLS>`。)
 - **CommitEmptyPending**:不 execute 直接 `commitBlock` → `OpExecutionInternalError`。
 - **CommitNumberMismatch**:execute(header number=1)→ `commitBlock` 传 number=2 的 header → `OpExecutionInternalError`。
 - **ChainedAfterCommit**:execute#1→commit→execute#2→commit(两次都过)。
@@ -466,12 +510,12 @@ view.newMutable();
 bcos::ledger::LedgerConfig ledgerConfig;
 // payload.blockNumber 是 protocol::BlockNumber(int64),无需转换。
 co_await bcos::ledger::getLedgerConfig(view, ledgerConfig, payload.blockNumber - 1, *m_blockFactory);
-std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
 try
 {
     // executeBlock 从参数 move view 进 m_pending——此后本分支不得再触碰 view(比对走
-    // pendingExecuteResult,提交走 commitBlock 内部)。
-    receipts = co_await m_scheduler.get().executeBlock(
+    // pendingExecuteResult,提交走 commitBlock 内部)。返回值丢弃(比对用 pendingExecuteResult),
+    // (void) 抑制 -Wunused-but-set-variable。
+    (void)co_await m_scheduler.get().executeBlock(
         view, m_executor.get(), *ethHeader, *payload.rawTransactions, ledgerConfig);
 }
 // 错误分类表不变(两 catch 体无 co_await——[expr.await]/2)
@@ -534,21 +578,42 @@ co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nul
 
 - [ ] **Step 5: 编译 + e2e 回归**
 
-Run: `cmake --build build --target init engine opstack-executor-block-tests`
-Expected: 编译通过(engine 头不再拼 executeOpBlock;`view` 在 executeBlock 后被 move,无后续引用)
+Run: `cmake --build build --target init engine opstack-executor-block-tests test-bcos-engine bcos-evm-opstack-tests`
+Expected: 编译通过(engine 头不再拼 executeOpBlock;`view` 在 executeBlock 后被 move,无后续引用;
+**重建 engine/evm 测试目标**——否则 Step 6 的 ctest 会跑陈旧二进制)
 Run: `ctest --test-dir build -R OpstackExecutorBlockTests`
 Expected: **e2e 80 例全绿**——这是三阶段重构的真正回归闸(74 newPayload + 6 forkchoice;比对
 INVALID、已知块短路、forkchoice 路径均不触发 notifier 的断言照旧)
 
 - [ ] **Step 6: 其余回归**
 
-Run: `ctest --test-dir build -R "OpstackExecutorDetailTests|BcosEvm|Engine"` + `./build/transaction-scheduler/tests/test-transaction-scheduler`(若有)
-Expected: detail-tests(比对纯函数)、test-bcos-engine(通用 scheduler)、test-transaction-scheduler(真实通用 engine)全绿——三阶段只动 OP 分支,通用路径字节级不变
+Run: `ctest --test-dir build -R "OpstackExecutorDetailTests|BcosEvm"` + `./build/engine/test/test-bcos-engine` + `./build/transaction-scheduler/tests/test-transaction-scheduler`(若有)
+Expected: detail-tests(比对纯函数)、test-bcos-engine(通用 scheduler,**显式二进制**——ctest 名按
+Boost suite 注册为 `EngineServiceSuite/*`,`-R "Engine"` 大小写敏感不可靠)、test-transaction-scheduler
+(真实通用 engine)全绿——三阶段只动 OP 分支,通用路径字节级不变
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: 新增 notifier 时序 e2e 用例(设计测试项补交付)**
+
+在 OpNewPayloadRpcE2eTest 新增 `NotifierFiresOnlyOnValidCommit`:
+```cpp
+BOOST_AUTO_TEST_CASE(NotifierFiresOnlyOnValidCommit)
+{
+    auto fixture = ...;  // 同既有 fixture,op_scheduler 已构造
+    int notified = 0;
+    fixture.scheduler.setBlockNumberNotifier([&](bcos::protocol::BlockNumber) { ++notified; });
+    // 1) stateRoot 损坏的 INVALID 向量(沿用 inline_invalid_stateRoot 模式)→ 比对 INVALID 分支
+    //    resetPending,不触发;
+    // 2) 重投已知块(VALID 入库后再次 newPayload 同块)→ 3b 短路,不触发;
+    // 3) 合法 deposit-only VALID 向量 → commitBlock 落盘后恰好一次。
+    // 断言:1/2 后 notified==0,3 后 notified==1。
+}
+```
+对照设计"比对 INVALID、已知块短路不触发 notifier"的测试项。
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add engine/bcos-engine/EngineServiceImpl.h
+git add engine/bcos-engine/EngineServiceImpl.h opstack-executor/tests/OpNewPayloadRpcE2eTest.cpp
 git commit --no-verify -m "feat(engine): three-phase OP newPayload (executeBlock -> compare -> commitBlock); drop registerOpBlock"
 ```
 
@@ -613,7 +678,9 @@ git commit --no-verify -m "docs(engine): record OP driver orchestration alignmen
 - **风险最高点**:Task 4 的三阶段改写(e2e 80 例即闸)。registerOpBlock 数据来源映射已在 Task 2
   单测钉死,engine 侧只删不写。
 - **前向依赖(记入决策)**:概念形式 executeBlock 也被通用 buildPayload 引用(L1426,Transaction
-  范围);OP 组合根下该调用在 `if constexpr (!c_opMode)` 内丢弃,不实例化、不冲突。本期不做
-  OP 化块构建。
+  范围)。安全机制是**懒实例化**:buildPayload 是懒实例化成员,OP 组合根从不 odr-use 它,函数体
+  不实例化——**不是** `if constexpr (!c_opMode)` 丢弃(L1426 不在任何 if-constexpr 内)。若将来对
+  OP 服务调 buildPayload,Transaction 范围会实例化 executeBlock 函数体而编译失败(记入决策,
+  本期不做 OP 化块构建)。
 - **已知不单测**:opstackRegisterBlock 的 writeOne 抛错传播路径(需自定义 throwing storage2
   backend,成本过高),由 engine 屏障既有 -32603 通道语义覆盖,代码审查确认不变。
