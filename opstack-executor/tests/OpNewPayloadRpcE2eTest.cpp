@@ -279,8 +279,8 @@ void runGoldenVector(std::string const& id)
     assertSevenFields(id, produced, goldenHeader, goldenBlockHash);
 
     // Plan-B write side: OP txs land in SYS_HASH_2_TX (tars encoding); s_eth_hash_2_rawtx
-    // is no longer written. newPayload's registerOpBlock converts each raw EIP-2718
-    // envelope to a tars Transaction and writes SYS_HASH_2_TX[txHash]
+    // is no longer written. newPayload's two-phase commit (commitBlock -> opstackRegisterBlock)
+    // converts each raw EIP-2718 envelope to a tars Transaction and writes SYS_HASH_2_TX[txHash]
     // (extraTransactionHash=txHash pins D4); the raw envelope is no longer stored in
     // s_eth_hash_2_rawtx (D1). 0x04 (EIP-7702) has been a first-class TransactionType
     // (EIP7702=4) since upstream #5411, so opEnvelopeToTars converts it and it lands in
@@ -346,7 +346,7 @@ void runChainedPair(std::string const& aId, std::string const& bId)
                             static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
         bId << ": first B should be SYNCING (parent A unknown)");
 
-    // Submit A: VALID (registerOpBlock writes SYS_HASH_2_NUMBER[hashA]=1)
+    // Submit A: VALID (commitBlock -> opstackRegisterBlock writes SYS_HASH_2_NUMBER[hashA]=1)
     auto statusA = bcos::task::syncWait(fixture->service.newPayload(requestA, 4));
     BOOST_REQUIRE_MESSAGE(static_cast<int>(statusA.status) ==
                               static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
@@ -1177,6 +1177,91 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
     for (auto const* s : kRequiredErrors)
         BOOST_CHECK_MESSAGE(errStrings.count(s),
             "coverage: validation_error_contains '" << s << "' has no vector");
+}
+
+// ── Task 4 (OP driver orchestration alignment): notifier timing ──
+// The block-number notifier is fired by the scheduler's commitBlock (two-phase phase 2)
+// AFTER the view is merged. It must fire ONLY on a genuine VALID commit — never on the
+// compare-INVALID branch (resetPending) and never on the step-3b known-block short-circuit.
+// Design task-4-brief Step 7; mirrors op-geth's "announce on block import, not on validation".
+BOOST_AUTO_TEST_CASE(NotifierFiresOnlyOnValidCommit)
+{
+    int notified = 0;
+    const auto armNotifier = [&](OpE2eFixture& f) {
+        f.scheduler.setBlockNumberNotifier(
+            [&notified](bcos::protocol::BlockNumber) { ++notified; });
+    };
+
+    // 1) stateRoot-corrupt INVALID vector (inline_invalid_stateRoot pattern): the step-5
+    //    compare rejects and calls resetPending — no commit, no notifier.
+    {
+        auto sample = makeInlineInvalidSample("inline_invalid_stateRoot");
+        auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+        armNotifier(*fixture);
+        w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+        registerVerifiedBlock(
+            fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
+        auto params = w6test::makeInvalidParamsJson(sample);
+        auto request = bcos::rpc::parseNewPayloadRequest(
+            params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+        auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+        BOOST_REQUIRE_MESSAGE(
+            static_cast<int>(status.status) ==
+                static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),
+            "NotifierFiresOnlyOnValidCommit: corrupt stateRoot expected INVALID, got "
+                << static_cast<int>(status.status));
+    }
+    BOOST_CHECK_EQUAL(notified, 0);  // compare-INVALID must not fire
+
+    // 2) Re-deliver a block that is already VALID-committed (validated before the notifier
+    //    was armed): step-3b short-circuits before execution/commit — no notifier.
+    {
+        auto sample = w6test::loadVectorSample("jovian_deposit_only");
+        auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+        w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+        const auto goldenHeader = w6test::decodeGoldenHeader(sample);
+        registerVerifiedBlock(
+            fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
+        auto params = w6test::makeParamsJson(sample);
+        auto request = bcos::rpc::parseNewPayloadRequest(
+            params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+        // First delivery (notifier NOT yet armed): VALID, committed.
+        auto first = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+        BOOST_REQUIRE_MESSAGE(
+            static_cast<int>(first.status) ==
+                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+            "NotifierFiresOnlyOnValidCommit: seed delivery expected VALID");
+        // Arm, then re-deliver the SAME block -> 3b short-circuit, no commit.
+        armNotifier(*fixture);
+        auto again = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+        BOOST_REQUIRE_MESSAGE(
+            static_cast<int>(again.status) ==
+                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+            "NotifierFiresOnlyOnValidCommit: re-delivery expected VALID");
+    }
+    BOOST_CHECK_EQUAL(notified, 0);  // known-block short-circuit must not fire
+
+    // 3) A fresh valid deposit-only block: commitBlock merges the view then fires the
+    //    notifier exactly once.
+    {
+        auto sample = w6test::loadVectorSample("jovian_deposit_only");
+        auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+        armNotifier(*fixture);
+        w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+        const auto goldenHeader = w6test::decodeGoldenHeader(sample);
+        registerVerifiedBlock(
+            fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
+        auto params = w6test::makeParamsJson(sample);
+        auto request = bcos::rpc::parseNewPayloadRequest(
+            params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+        auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+        BOOST_REQUIRE_MESSAGE(
+            static_cast<int>(status.status) ==
+                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+            "NotifierFiresOnlyOnValidCommit: fresh valid expected VALID, got "
+                << static_cast<int>(status.status));
+    }
+    BOOST_CHECK_EQUAL(notified, 1);  // exactly one commit across the whole case
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -191,13 +191,15 @@ public:
     /// ([expr.prim.req.simple]), so it does not odr-use (and therefore does not force
     /// instantiation of) the function body.
     ///
-    /// This does not separately verify that `executeOpBlock`'s first parameter (`Storage&`) is
+    /// This does not separately verify that `executeBlock`'s first parameter (`Storage&`) is
     /// exactly this class's `ViewType` -- redundant by construction: the enclosing class
     /// template's own `requires` clause already requires
     /// `scheduler_v1::TransactionScheduler<SchedulerType, ViewType, ExecutorType, ...>`, which
-    /// for `OpSchedulerImpl<Storage>` can only be satisfied (via its dummy `executeBlock`'s
-    /// `Storage&` parameter) when `Storage == ViewType` -- so any `SchedulerType` reaching this
-    /// point already has that identity pinned by the class's own instantiation constraint.
+    /// for `OpSchedulerImpl<Storage>` can only be satisfied (via its two-phase real
+    /// `executeBlock`'s `Storage&` parameter, which stages the executed view into the scheduler's
+    /// pending block for the later `commitBlock`) when `Storage == ViewType` -- so any
+    /// `SchedulerType` reaching this point already has that identity pinned by the class's own
+    /// instantiation constraint.
     static constexpr bool c_opMode =
         requires { &SchedulerType::template executeOpBlock<std::vector<bcos::bytes>>; };
 
@@ -812,15 +814,15 @@ private:
         // The `catch (...)` added around `executeOpBlock` in the first pass closed only ONE
         // window. Everything else in the OP branch still ran outside any handler: step 2's
         // `computeTxRoot` / `rebuildOpEthHeader` / `hash()`, step 5's `commitmentsOf` and the
-        // comparisons, and the whole of step 6's `registerOpBlock` -- whose `lexical_cast`,
-        // `Entry::set`, `ethHeader.encode()`, `receipt->encode()`, `hashImpl.hash()` and four
-        // `storage2::writeOne` calls can each raise something that is neither
-        // `OpExecutionInternalError` nor an execution-classified error (`bad_alloc`, a tars
-        // encoding error, ...). Such an escape would leave `handleOpNewPayload` entirely and
-        // surface at the caller's `co_await` as neither INVALID nor -32603 -- an outcome the
-        // error classification rules rule out. (The two
-        // `BOOST_THROW_EXCEPTION(OpExecutionInternalError)` calls inside `registerOpBlock` were
-        // never the problem: they arrive already classified, and the rethrow handler below
+        // comparisons, and the whole of step 6's `commitBlock` (whose `opstackRegisterBlock`
+        // table writes -- `lexical_cast`, `Entry::set`, `ethHeader.encode()`,
+        // `receipt->encode()`, `hashImpl.hash()` and the `storage2::writeOne` calls -- can each
+        // raise something that is neither `OpExecutionInternalError` nor an execution-classified
+        // error (`bad_alloc`, a tars encoding error, ...). Such an escape would leave
+        // `handleOpNewPayload` entirely and surface at the caller's `co_await` as neither INVALID
+        // nor -32603 -- an outcome the error classification rules rule out. (The
+        // `BOOST_THROW_EXCEPTION(OpExecutionInternalError)` calls inside `opstackRegisterBlock`
+        // were never the problem: they arrive already classified, and the rethrow handler below
         // preserves them verbatim.)
         //
         // The barrier is a wrapper rather than an outer try around the existing body so that the
@@ -1061,8 +1063,9 @@ private:
         // The criterion is one-directional: an occupied child height ALWAYS implies the parent is
         // not the tip (this is the direction used to refuse); an empty child height implies the
         // parent IS the tip only under the invariant that every hash in `SYS_HASH_2_NUMBER`
-        // occupies its own height in `SYS_NUMBER_2_HASH`. `registerOpBlock` below writes both,
-        // always together, as does the production precedent `BaselineScheduler.h:207-220` -- so on
+        // occupies its own height in `SYS_NUMBER_2_HASH`. `opstackRegisterBlock` (called by the
+        // step 6 `commitBlock`) writes both, always together, as does the production precedent
+        // `BaselineScheduler.h:207-220` -- so on
         // a real ledger the criterion is exact; a store where the two disagree (notably a test
         // fixture that seeds only `SYS_HASH_2_NUMBER`, a documented exemption) can present an
         // empty child height for a parent that is not the tip and slip through. The parent/child
@@ -1089,233 +1092,60 @@ private:
                     "this height, so the forked view's base state is not the payload's parent"});
         }
 
-        // ---- Step 4: execute ----
+        // ---- Step 4: execute(two-phase phase 1) ----
         view.newMutable();
-        // Reuse the same header rebuilt in step 2 (one header through validation/execution/
-        // persistence). ethHeader is a shared_ptr, safe across the co_await below. BlockEnv is now
-        // just protocol::BlockHeader.
-        std::optional<typename SchedulerType::ExecuteResult> executeResult;
+        // OP 现状不消费 ledgerConfig(executeOpBlock 不带),仅供概念合规;获取路径沿用 buildPayload
+        // 的 ledger::getLedgerConfig(L1377-1378),按"配置生效到父块"语义取 payload.blockNumber-1。
+        bcos::ledger::LedgerConfig ledgerConfig;
+        // payload.blockNumber 是 protocol::BlockNumber(int64),无需转换。
+        co_await bcos::ledger::getLedgerConfig(
+            view, ledgerConfig, payload.blockNumber - 1, *m_blockFactory);
         try
         {
-            executeResult.emplace(co_await m_scheduler.get().executeOpBlock(
-                view, *ethHeader, *payload.rawTransactions));
+            // executeBlock 从参数 move view 进 m_pending——此后本分支不得再触碰 view(比对走
+            // pendingExecuteResult,提交走 commitBlock 内部)。返回值丢弃(比对用 pendingExecuteResult),
+            // (void) 抑制 -Wunused-but-set-variable。
+            (void)co_await m_scheduler.get().executeBlock(
+                view, m_executor.get(), *ethHeader, *payload.rawTransactions, ledgerConfig);
         }
-        // Error classification table. The two catch bodies contain no `co_await` -- an
-        // await-expression may not appear inside a handler ([expr.await]/2).
+        // 错误分类表不变(两 catch 体无 co_await——[expr.await]/2)
         catch (const typename SchedulerType::ConsensusError& e)
         {
-            // A consensus-level rejection IS a verdict on the block: INVALID.
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("OP block execution rejected the payload: ") + e.what());
         }
         catch (const typename SchedulerType::StorageError& e)
         {
-            // A storage fault is NOT a verdict on the block: -32603, never INVALID. Reporting it
-            // as INVALID would make this node vote against a block it merely failed to read.
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     std::string("OP block execution hit a storage failure: ") + e.what()});
         }
         catch (...)
         {
-            // Unclassified escape. The two typed handlers above cover only what `executeOpBlock`
-            // explicitly classifies, and only part of that function is inside its own try: its
-            // raw-tx decode loop, its seal/stateRoot step and its txRoot/receipt step all run
-            // outside it, so a `std::bad_alloc`, an evmone-side `std::runtime_error`, or anything
-            // else can reach here as neither `ConsensusError` nor `StorageError`. Left uncaught
-            // it would escape `handleOpNewPayload` entirely and be re-thrown at the caller's
-            // `co_await` — neither INVALID nor -32603, i.e. the "a storage fault must never be
-            // reported as INVALID" rule would degrade into "no classification at all" on
-            // precisely the paths that lack one.
-            //
-            // This is not theoretical: evmone is built `-fno-rtti`, so `std::exception`'s
-            // typeinfo is not unique across the boundary; `OpSchedulerImpl` and `Storage2State`
-            // already pair every typed handler with a `catch (...)` for that reason, and this is
-            // the engine layer's counterpart for the execution call. It guards this one call;
-            // the rest of the OP branch is covered by `handleOpNewPayload`'s classification
-            // barrier.
-            //
-            // -32603 rather than INVALID is the safe default: an unknown local failure must not
-            // make this node vote against a block. The message deliberately carries a distinctive
-            // marker, because a bare `catch (...)` otherwise collapses every block-level rejection
-            // into one indistinguishable exception type and leaves tests no way to tell which
-            // path they exercised.
-            //
-            // No `co_await` here — an await-expression may not appear in a handler
-            // ([expr.await]/2); `BOOST_THROW_EXCEPTION` is the same shape the handler above uses.
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     "OP block execution threw an unclassified exception (typed classification "
                     "bypassed)"});
         }
 
-        // ---- Step 5: the eight-way comparison surface (sunk into the OP side) ----
-        // Comparison semantics live in the scheduler seam (mismatchedFieldOf), so this branch
-        // stays a thin dependent-name call — engine never spells any bcos-evm type.
-        const auto commitments = SchedulerType::commitmentsOf(*executeResult);
+        // ---- Step 5: 八项比对(pendingExecuteResult 拿 ExecuteResult → commitments)----
+        const auto& executeResult = m_scheduler.get().pendingExecuteResult();
+        const auto commitments = SchedulerType::commitmentsOf(executeResult);
         const auto announced =
             SchedulerType::announcedCommitmentsOf(payload, transactionsRoot, *ethHeader);
         if (auto mismatchedField = SchedulerType::mismatchedFieldOf(commitments, announced);
             mismatchedField.has_value())
         {
+            m_scheduler.get().resetPending();  // 不留残留视图到下一块
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                std::string("execution result does not match payload field: ") +
-                    *mismatchedField);
+                std::string("execution result does not match payload field: ") + *mismatchedField);
         }
 
-        // ---- Step 6: block registration, then publish the view ----
-        co_await registerOpBlock(view, payload, *ethHeader, *executeResult);
-        // `mergeView` atomically persists (pushView + mergeBackStorage combined): a single VALID
-        // block lands in the RocksDB backend. `SYS_CURRENT_STATE` head advance is still missing:
-        // after a restart the block tables are readable but the head pointer is not set --
-        // deferred to the orchestration layer together with reorg-window orchestration.
-        co_await m_globalStateStorage.get().mergeView(std::move(view));
-        // RPC block-number notification (alignment plan problem 3): the block is now committed,
-        // so announce the new head. The callback lives on the scheduler (set by the composition
-        // root's m_setOpSchedulerBlockNumberNotifier) — reached as a dependent name, same seam
-        // mechanism as executeOpBlock; the engine library carries no RPC dependency.
-        m_scheduler.get().notifyBlockNumber(static_cast<bcos::protocol::BlockNumber>(payload.blockNumber));
+        // ---- Step 6: commit(two-phase phase 2)----
+        // commitBlock 内部:opstackRegisterBlock 写 5 表 → mergeView 原子落盘 → notifyBlockNumber。
+        // 落盘错误经 handleOpNewPayload 屏障(OpExecutionInternalError 原样放行 → -32603)。
+        co_await m_scheduler.get().commitBlock(ethHeader, payload.blockHash);
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
-    }
-
-    /// Block registration (step 6, table-level manifest). Everything lands in the one
-    /// mutable layer the caller opened, so the caller's single `pushView` publishes it atomically.
-    ///
-    /// Key/value encodings for the two ledger tables are copied byte-for-byte from the production
-    /// precedent `transaction-scheduler/bcos-transaction-scheduler/BaselineScheduler.h:207-220`
-    /// (`SYS_NUMBER_2_HASH`: key = number as a decimal string, value = the hash's raw 32 bytes;
-    /// `SYS_HASH_2_NUMBER`: key = the hash's raw 32 bytes, value = number as a decimal string) --
-    /// which is also what makes step 3's `getBlockNumber(..., fromStorage)` lookup find them.
-    ///
-    /// `OpExecuteResult` is a deduced template parameter rather than the spelled-out
-    /// `typename SchedulerType::ExecuteResult` (build-verification fix): a member
-    /// function's *declaration* is instantiated together with the enclosing class, and only its
-    /// *body* is instantiated lazily. Naming an OP-only associated type in the signature would
-    /// therefore demand `SchedulerType::ExecuteResult` from every instantiation -- including the
-    /// generic composition root (`SchedulerSerialImpl`), which has no such member -- a hard error
-    /// no `if constexpr` can shield, because the discarded-statement rule governs bodies, not
-    /// signatures. Deduction moves the requirement to the call site, which lives inside
-    /// `if constexpr (c_opMode)` and so is only instantiated in OP mode. The engine's other
-    /// dependent OP names are all inside `handleOpNewPayload`'s body and were already fine.
-    template <class OpExecuteResult>
-    bcos::task::Task<void> registerOpBlock(ViewType& view, const ExecutionPayload& payload,
-        const bcos::protocol::BlockHeader& header, const OpExecuteResult& executeResult)
-    {
-        const auto blockNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
-
-        storage::Entry numberToHashEntry;
-        numberToHashEntry.set(payload.blockHash.asBytes());
-        co_await storage2::writeOne(view,
-            executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, blockNumberStr},
-            std::move(numberToHashEntry));
-
-        storage::Entry hashToNumberEntry;
-        hashToNumberEntry.set(blockNumberStr);
-        co_await storage2::writeOne(view,
-            executor_v1::StateKey{
-                ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(payload.blockHash)},
-            std::move(hashToNumberEntry));
-
-        // The OP header is persisted as a tars BlockHeader in the standard s_number_2_header
-        // table (same table/format as normal FISCO blocks, Ledger.cpp:234). dataHash is empty
-        // (deferred until the FISCO hash scheme lands), so BlockHeader::hash() on an OP header
-        // throws EmptyBlockHeaderHash -- this path does not call it; the OP hash goes through the
-        // codec. protocol::BlockHeader::encode() is `void encode(bytes&)` with an out-param
-        // (BlockHeader.h:50), not `bytes encode()` -- create the buffer first, then take it.
-        storage::Entry headerEntry;
-        bcos::bytes headerBuffer;
-        header.encode(headerBuffer);  // tars bytes (previously 21-field RLP)
-        headerEntry.set(std::move(headerBuffer));
-        co_await storage2::writeOne(view,
-            executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
-            std::move(headerEntry));
-
-        // Receipts through the existing receipt channel: same table, same key (tx hash) and same
-        // value (`TransactionReceipt::encode`) as `bcos-ledger/LedgerMethods.h:106-119`'s
-        // `prewriteBlockToBuffer`.
-        //
-        // The transaction body IS stored: each raw EIP-2718 envelope is mapped by
-        // `detail::opEnvelopeToTars` into a tars `bcostars::protocol::Transaction`
-        // (`extraTransactionHash` = txHash, `sender` filled) and written to the generic
-        // `SYS_HASH_2_TX` as its `TransactionImpl::encode` bytes -- the same table/key/value shape
-        // `LedgerMethods.h:121-155`'s `prewriteBlockToBuffer` uses for normal blocks. Storing a
-        // converted transaction rather than the raw envelope is load-bearing: `SYS_HASH_2_TX`
-        // readers (`Ledger.cpp:1440-1443`, `LedgerMethods.h:235-239`, lightnode, storage-tool)
-        // pass the bytes straight to `createTransaction(..., checkSig=false, checkHash=false)`,
-        // and an Ethereum envelope there does NOT fail loudly -- every `bcostars::Transaction`
-        // field is `optional` and tars' tag scanner swallows decode errors, yielding an
-        // all-default object whose hash does not equal the key it was stored under, which nobody
-        // checks.
-        //
-        // 0x04 (EIP-7702) is a first-class type supported by `opEnvelopeToTars` via the
-        // Web3Transaction RLP decode (upstream #5411), so it maps to tars and lands in
-        // SYS_HASH_2_TX like any other typed tx. Only a malformed or un-enumerated envelope
-        // makes `opEnvelopeToTars` return nullopt; 0x7E deposit is NOT unknown, it decodes via
-        // DepositTxHandler. On nullopt the row is skipped: the block stays VALID and the tx is
-        // simply not queryable by hash.
-        // Known boundary, stated rather than hidden: `LedgerMethods.h:233-235` dereferences the
-        // entry WITHOUT checking `has_value()`, so a missing row is UB on that path. That is a
-        // pre-existing defect unrelated to OP (any block whose tx metadata outruns `SYS_HASH_2_TX`
-        // hits it), and writing a fake transaction would not fix it -- it would replace a
-        // discoverable crash with an undiscoverable wrong answer. The old OP-specific
-        // `s_eth_hash_2_rawtx` write is removed (it had no readers).
-        //
-        // The tx hash below is keccak over the raw EIP-2718 envelope -- the ETH
-        // transaction-hash definition, and the only one available here: the OP path carries raw
-        // bytes, not `bcos::protocol::Transaction` objects. (This is also why OP mode requires a
-        // keccak256 `hashImpl` in its BlockFactory's crypto suite.)
-        auto const& rawTransactions = *payload.rawTransactions;
-        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-        // `processOpBlock` produces exactly one receipt per transaction. A divergence is a broken
-        // invariant in the execution layer, not a condition to paper over: truncating to the
-        // shorter of the two would silently drop receipts from the registry while still reporting
-        // the block VALID. Fail loudly instead -- and as an internal error, since it is this
-        // node's bug, not a verdict on the payload.
-        if (rawTransactions.size() != executeResult.receipts.size())
-        {
-            BOOST_THROW_EXCEPTION(
-                OpExecutionInternalError{} << bcos::errinfo_comment{
-                    "OP block execution returned a receipt count differing from the transaction "
-                    "count"});
-        }
-        for (std::size_t index = 0; index < rawTransactions.size(); ++index)
-        {
-            auto const& receipt = executeResult.receipts[index];
-            if (!receipt)
-            {
-                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                          "OP block execution returned a null receipt"});
-            }
-            bcos::bytes encodedReceipt;
-            receipt->encode(encodedReceipt);
-            const auto txHash = hashImpl.hash(rawTransactions[index]);
-
-            storage::Entry receiptEntry;
-            receiptEntry.set(std::move(encodedReceipt));
-            co_await storage2::writeOne(view,
-                executor_v1::StateKey{
-                    ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
-                std::move(receiptEntry));
-
-            // OP transactions are converted and written to SYS_HASH_2_TX (reusing the normal
-            // transaction channel). 0x04 (EIP-7702) is supported by opEnvelopeToTars
-            // (Web3Transaction RLP decode, a first-class type since upstream #5411) and lands
-            // like any other typed tx; only a malformed or un-enumerated envelope is skipped --
-            // unreadable on the read side but the block stays valid.
-            if (auto tarsTx = detail::opEnvelopeToTars(rawTransactions[index], txHash))
-            {
-                bcostars::protocol::TransactionImpl txImpl(
-                    [tarsTx = std::move(*tarsTx)]() mutable { return &tarsTx; });
-                bcos::bytes encodedTx;
-                txImpl.encode(encodedTx);
-                storage::Entry txEntry;
-                txEntry.set(std::move(encodedTx));
-                co_await storage2::writeOne(view,
-                    executor_v1::StateKey{
-                        ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)},
-                    std::move(txEntry));
-            }
-        }
     }
 
     PayloadID nextPayloadID() { return detail::encodePayloadSequence(m_nextPayloadSequence++); }
