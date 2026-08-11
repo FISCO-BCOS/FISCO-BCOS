@@ -27,7 +27,7 @@ namespace
 
 /// Narrow the FISCO receipt's gasUsed (u256) back to the int64 the gas pool/cumulative accounting
 /// uses. The execution layer only ever stores a small positive gas_used, but the "widen -> check ->
-/// narrow" discipline (Storage2Ledger.h precedent) applies: a corrupt receipt must not silently
+/// narrow" discipline (Storage2State.h precedent) applies: a corrupt receipt must not silently
 /// wrap blockGasLeft/cumulative.
 [[nodiscard]] int64_t narrowGasUsed(const bcos::u256& gasUsed)
 {

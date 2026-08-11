@@ -57,19 +57,19 @@ inline bcos::bytes trimmedBigEndian(bcos::bytesConstRef v)
     const std::map<evmc::bytes32, evmc::bytes32>& storage);
 
 /// Generic full-state MPT root: builds a secure-trie over any Ledger exposing
-/// `bool visitAccounts(Visitor) const` (the AccountVisitor contract shared by MemoryLedger and
-/// Storage2Ledger — payload nonce/balance/codeHash + a `.storage` slot map + a lazy `.code()`
+/// `bool visitAccounts(Visitor) const` (the AccountVisitor contract shared by MemoryState and
+/// Storage2State — payload nonce/balance/codeHash + a `.storage` slot map + a lazy `.code()`
 /// getter, `.addr` for the trie key). Account key = keccak256(addr), leaf =
 /// rlp(nonce, balance, storageRoot, codeHash) — field-for-field aligned with vendored
 /// mpt_hash.cpp:27-36. Correctness-first (rebuilds the whole trie on every call; incremental
 /// building is a non-goal). The lazy code() getter is never invoked here — state-root computation
 /// needs codeHash only, not code bytes (avoids an unconditional SYS_CODE_BINARY read per account
-/// on the Storage2Ledger backend).
+/// on the Storage2State backend).
 ///
 /// Poison contract: this function does not itself inspect `ledger.poisoned()` — a poisoned
 /// traversal's product is defined to be entirely void, and it is the *caller's* responsibility
 /// (the block-seal driver) to check poisoned() after calling this and discard the result
-/// wholesale if set, exactly as with every other Storage2Ledger read method. MemoryLedger's
+/// wholesale if set, exactly as with every other Storage2State read method. MemoryState's
 /// poisoned() is always false (the abstraction uniformly provides the query; backend asymmetry
 /// converges here), so this contract is a no-op for that backend.
 template <class Ledger>

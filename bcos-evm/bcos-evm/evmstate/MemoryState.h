@@ -10,12 +10,12 @@
 #include <map>
 #include <utility>
 
-namespace bcos::evm::ledger
+namespace bcos::evm::evmstate
 {
 /// In-memory ledger account representation.
 ///
 /// Storage never holds zero-valued slots (contract ②): a slot write of 0 deletes the entry.
-struct LedgerAccount
+struct StateAccount
 {
     uint64_t nonce{0};
     intx::uint256 balance;
@@ -29,7 +29,7 @@ struct LedgerAccount
 /// KEEP semantics: a present map key means the account exists, even when its value is entirely
 /// default (empty account) — existence and "all fields default" are distinct, unlike a design
 /// that folds an empty account into std::nullopt.
-class MemoryLedger final : public evmone::state::StateView
+class MemoryState final : public evmone::state::StateView
 {
 public:
     /// AccountView payload handed to the visitAccounts callback: state-root-relevant fields
@@ -61,18 +61,18 @@ public:
     /// including entries with no field actually changed — e.g. EIP-161 touch-only accounts).
     void applyDiff(const evmone::state::StateDiff& diff, bool seeding = false);
 
-    /// Uniform query surface across ledger backends: MemoryLedger never poisons, so this is always
-    /// false; Storage2Ledger provides the real poison-flag semantics.
+    /// Uniform query surface across ledger backends: MemoryState never poisons, so this is always
+    /// false; Storage2State provides the real poison-flag semantics.
     [[nodiscard]] bool poisoned() const noexcept { return false; }
 
     /// Visits every account in the ledger (AccountVisitor contract, same shape as
-    /// Storage2Ledger::visitAccounts — noexcept + returns bool). The visitor is invoked with an
+    /// Storage2State::visitAccounts — noexcept + returns bool). The visitor is invoked with an
     /// AccountView and must itself return bool; returning false aborts the traversal early
     /// (short-circuit). Actually (not just nominally) noexcept: the in-memory backend has no
     /// failure path to catch-and-poison — poisoned() is a hardcoded false for this backend (the
     /// abstraction uniformly provides the query; backend asymmetry converges here), unlike
-    /// Storage2Ledger's catch-then-poison noexcept. Consumers should still check poisoned() for
-    /// backend symmetry with Storage2Ledger (a generic caller shouldn't need to know which
+    /// Storage2State's catch-then-poison noexcept. Consumers should still check poisoned() for
+    /// backend symmetry with Storage2State (a generic caller shouldn't need to know which
     /// backend it has).
     template <class Visitor>
     bool visitAccounts(Visitor&& visitor) const noexcept
@@ -92,9 +92,9 @@ public:
     }
 
     /// Direct access to the underlying account map, for test/seed callers.
-    [[nodiscard]] std::map<evmc::address, LedgerAccount>& accounts() noexcept { return m_accounts; }
+    [[nodiscard]] std::map<evmc::address, StateAccount>& accounts() noexcept { return m_accounts; }
 
 private:
-    std::map<evmc::address, LedgerAccount> m_accounts;
+    std::map<evmc::address, StateAccount> m_accounts;
 };
-}  // namespace bcos::evm::ledger
+}  // namespace bcos::evm::evmstate

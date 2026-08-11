@@ -61,7 +61,7 @@ public:
             if (!entry.has_value())
                 return evmc::bytes32{};  // missing row = op-geth's pruned/unreachable semantics
 
-            // G3: value-length validation, mirroring Storage2Ledger::fetchAllStorage.
+            // G3: value-length validation, mirroring Storage2State::fetchAllStorage.
             const auto value = entry->get();
             if (value.size() != sizeof(evmc::bytes32::bytes))
             {
@@ -84,7 +84,7 @@ public:
 private:
     void poison(std::string msg) const noexcept
     {
-        // Records only the first error, never rethrows (mirrors Storage2Ledger::poison()).
+        // Records only the first error, never rethrows (mirrors Storage2State::poison()).
         try
         {
             if (m_error != nullptr && !*m_error)

@@ -1,12 +1,12 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
-#include <bcos-evm/ledger/MemoryLedger.h>
+#include <bcos-evm/evmstate/MemoryState.h>
 
 #include <stdexcept>
 
-namespace bcos::evm::ledger
+namespace bcos::evm::evmstate
 {
-std::optional<MemoryLedger::Account> MemoryLedger::get_account(
+std::optional<MemoryState::Account> MemoryState::get_account(
     const evmc::address& addr) const noexcept
 {
     const auto it = m_accounts.find(addr);
@@ -20,7 +20,7 @@ std::optional<MemoryLedger::Account> MemoryLedger::get_account(
         account.nonce, account.balance, evmone::keccak256(account.code), !account.storage.empty()};
 }
 
-evmc::bytes MemoryLedger::get_account_code(const evmc::address& addr) const noexcept
+evmc::bytes MemoryState::get_account_code(const evmc::address& addr) const noexcept
 {
     const auto it = m_accounts.find(addr);
     if (it == m_accounts.end())
@@ -29,7 +29,7 @@ evmc::bytes MemoryLedger::get_account_code(const evmc::address& addr) const noex
     return it->second.code;
 }
 
-evmc::bytes32 MemoryLedger::get_storage(
+evmc::bytes32 MemoryState::get_storage(
     const evmc::address& addr, const evmc::bytes32& key) const noexcept
 {
     const auto ait = m_accounts.find(addr);
@@ -41,10 +41,10 @@ evmc::bytes32 MemoryLedger::get_storage(
     return (it != storage.end()) ? it->second : evmc::bytes32{};
 }
 
-void MemoryLedger::applyDiff(const evmone::state::StateDiff& diff, bool seeding)
+void MemoryState::applyDiff(const evmone::state::StateDiff& diff, bool seeding)
 {
-    // `seeding` is accepted only to keep the interface uniform with Storage2Ledger::applyDiff
-    // (seedFromTestState calls `ledger.applyDiff(diff, true)` for both ledger types); MemoryLedger
+    // `seeding` is accepted only to keep the interface uniform with Storage2State::applyDiff
+    // (seedFromTestState calls `ledger.applyDiff(diff, true)` for both ledger types); MemoryState
     // has no empty-account guard, so the parameter has no behavior and is ignored.
     (void)seeding;
 
@@ -74,9 +74,9 @@ void MemoryLedger::applyDiff(const evmone::state::StateDiff& diff, bool seeding)
         const auto it = m_accounts.find(addr);
         if (it == m_accounts.end())
             throw std::runtime_error(
-                "MemoryLedger::applyDiff: deleted_accounts entry not found in ledger (ghost "
+                "MemoryState::applyDiff: deleted_accounts entry not found in ledger (ghost "
                 "delete, strict tripwire)");
         m_accounts.erase(it);
     }
 }
-}  // namespace bcos::evm::ledger
+}  // namespace bcos::evm::evmstate

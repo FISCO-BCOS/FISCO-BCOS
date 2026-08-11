@@ -1125,7 +1125,7 @@ private:
             // precisely the paths that lack one.
             //
             // This is not theoretical: evmone is built `-fno-rtti`, so `std::exception`'s
-            // typeinfo is not unique across the boundary; `OpSchedulerImpl` and `Storage2Ledger`
+            // typeinfo is not unique across the boundary; `OpSchedulerImpl` and `Storage2State`
             // already pair every typed handler with a `catch (...)` for that reason, and this is
             // the engine layer's counterpart for the execution call. It guards this one call;
             // the rest of the OP branch is covered by `handleOpNewPayload`'s classification

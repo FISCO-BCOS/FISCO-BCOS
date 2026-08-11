@@ -48,7 +48,7 @@ inline constexpr std::string_view SYS_ETH_HASH_2_RAWTX{"s_eth_hash_2_rawtx"};
 namespace detail
 {
 /// evmc::bytes32 -> bcos::h256 (the `FixedBytes(byte const*, size_t)` constructor, same
-/// conversion `Storage2Ledger.h`'s `applyModifiedEntry` uses for codeHash). Defined here rather
+/// conversion `Storage2State.h`'s `applyModifiedEntry` uses for codeHash). Defined here rather
 /// than in `OpSchedulerImpl.h` (which includes this header and uses this definition) so there is
 /// exactly one definition of this name in `bcos::evm::engine::detail`.
 inline bcos::h256 toBcosH256(const evmc::bytes32& hash)

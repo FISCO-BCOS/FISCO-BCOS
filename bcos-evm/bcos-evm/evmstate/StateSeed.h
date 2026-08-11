@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// LedgerSeed -- unified seeding: synthesizes a genesis StateDiff from the vector `pre`
+// StateSeed -- unified seeding: synthesizes a genesis StateDiff from the vector `pre`
 // (evmone::test::TestState) and lands it through the same applyDiff path. Works for both
-// MemoryLedger and Storage2Ledger (applyDiff is their common write-back interface), so seeding
+// MemoryState and Storage2State (applyDiff is their common write-back interface), so seeding
 // logic is not written per backend -- serialization/ensure-exists/contracts ②③ are delegated to
 // each backend's applyDiff; this file only reshapes TestState's map into a StateDiff.
 //
@@ -26,16 +26,16 @@
 // skipped by a wrong "no fields to write" optimization.
 //
 // `ledger.applyDiff(diff, /*seeding=*/true)` explicitly goes through seeding mode.
-// Storage2Ledger's guard treats "creating an EIP-161 empty account on the ledger" as a protocol
+// Storage2State's guard treats "creating an EIP-161 empty account on the ledger" as a protocol
 // violation (block-execution path would turn red -> -32603), but a completely empty account in
 // `pre` is a legitimate part of a genesis snapshot (the three backends share the KEEP contract)
 // and must be exempted -- this file declares "this applyDiff is seeding, not block execution"
-// via seeding=true. MemoryLedger has no such guard; the parameter is ignored.
+// via seeding=true. MemoryState has no such guard; the parameter is ignored.
 
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <test/utils/test_state.hpp>
 
-namespace bcos::evm::ledger
+namespace bcos::evm::evmstate
 {
 
 template <class Ledger>
@@ -59,4 +59,4 @@ void seedFromTestState(Ledger& ledger, const evmone::test::TestState& pre)
     ledger.applyDiff(diff, /*seeding=*/true);
 }
 
-}  // namespace bcos::evm::ledger
+}  // namespace bcos::evm::evmstate

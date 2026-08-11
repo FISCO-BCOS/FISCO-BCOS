@@ -1,12 +1,12 @@
 #pragma once
 // W6 in-house JSON(pre)->StateDiff seeding. This branch has no evmone
-// test/utils/test_state.hpp (which LedgerSeed.h's seedFromTestState depends on); here we
+// test/utils/test_state.hpp (which StateSeed.h's seedFromTestState depends on); here we
 // parse the vector pre with jsoncpp and build StateDiff directly, applying it via
 // applyDiff(seeding=true).
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
-#include <opstack-executor/Storage2Ledger.h>
+#include <opstack-executor/Storage2State.h>
 #include <algorithm>  // std::copy
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <cstdint>  // std::uint64_t
@@ -61,9 +61,9 @@ inline uint64_t jsonU64(std::string_view hex)
 }
 
 /// Seeds the vector pre (jsoncpp object, key=address hex, value={balance,nonce,code,storage})
-/// into MLS: fork -> Storage2Ledger::applyDiff(seeding=true) -> mergeView.
-/// `Storage2Ledger::applyDiff` (Storage2Ledger.h:275) signature confirmed; seeding=true
-/// exempts the EIP-161 empty-account guard (same contract as LedgerSeed.h).
+/// into MLS: fork -> Storage2State::applyDiff(seeding=true) -> mergeView.
+/// `Storage2State::applyDiff` (Storage2State.h:275) signature confirmed; seeding=true
+/// exempts the EIP-161 empty-account guard (same contract as StateSeed.h).
 template <class MLS>
 void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
 {
@@ -76,7 +76,7 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
         entry.addr = jsonAddress(addrKey);
         entry.nonce = jsonU64(acct["nonce"].asString());
         entry.balance = jsonU256(acct["balance"].asString());
-        // Empty code ("0x" -> empty bytes) stays nullopt, aligning with LedgerSeed.h's
+        // Empty code ("0x" -> empty bytes) stays nullopt, aligning with StateSeed.h's
         // contract (R2-B: a has_value empty vector writes extra CODE_BINARY/ABI rows but is
         // stateRoot-unobservable; still written per the contract here)
         if (acct.isMember("code"))
@@ -101,7 +101,7 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
     auto view = multiLayerStorage.fork();
     view.newMutable();
     {
-        bcos::evm::ledger::Storage2Ledger<typename MLS::ViewType> bridge(view);
+        bcos::evm::evmstate::Storage2State<typename MLS::ViewType> bridge(view);
         bridge.applyDiff(diff, /*seeding=*/true);
         if (bridge.poisoned())
         {

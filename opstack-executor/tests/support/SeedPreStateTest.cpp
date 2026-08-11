@@ -86,9 +86,9 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
 
     w6test::seedPreState(multiLayerStorage, pre);
 
-    // Verify: fork a new view and read back through the Storage2Ledger bridge
+    // Verify: fork a new view and read back through the Storage2State bridge
     auto view = multiLayerStorage.fork();
-    bcos::evm::ledger::Storage2Ledger<ViewType> bridge(view);
+    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
     const auto addr = w6test::jsonAddress("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");
     const auto acct = bridge.get_account(addr);
     BOOST_REQUIRE(acct.has_value());

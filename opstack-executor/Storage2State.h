@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Storage2Ledger — the real-ledger read bridge. Implements evmone::state::StateView over the
+// Storage2State — the real-ledger read bridge. Implements evmone::state::StateView over the
 // storage2 (MultiLayerStorage/StateKey/EVMAccount) key space: each read is
 // cache -> task::syncWait fetch -> normalize -> refill cache. One instance per block (no reset),
 // single-threaded only (mutable caches, no locks).
@@ -49,7 +49,7 @@
 #include <variant>
 #include <vector>
 
-namespace bcos::evm::ledger
+namespace bcos::evm::evmstate
 {
 
 /// Fixed length (32 bytes) of a raw storage-slot key in an account table, used to distinguish
@@ -58,17 +58,17 @@ namespace bcos::evm::ledger
 inline constexpr std::size_t kStorageSlotKeySize = sizeof(evmc_bytes32::bytes);
 
 template <class Storage>
-class Storage2Ledger final : public evmone::state::StateView
+class Storage2State final : public evmone::state::StateView
 {
 public:
     /// One instance per block; no reset().
-    explicit Storage2Ledger(Storage& storage) noexcept : m_storage(storage) {}
+    explicit Storage2State(Storage& storage) noexcept : m_storage(storage) {}
 
-    Storage2Ledger(const Storage2Ledger&) = delete;
-    Storage2Ledger(Storage2Ledger&&) = delete;
-    Storage2Ledger& operator=(const Storage2Ledger&) = delete;
-    Storage2Ledger& operator=(Storage2Ledger&&) = delete;
-    ~Storage2Ledger() override = default;
+    Storage2State(const Storage2State&) = delete;
+    Storage2State(Storage2State&&) = delete;
+    Storage2State& operator=(const Storage2State&) = delete;
+    Storage2State& operator=(Storage2State&&) = delete;
+    ~Storage2State() override = default;
 
     std::optional<Account> get_account(const evmc::address& addr) const noexcept override
     {
@@ -101,7 +101,7 @@ public:
         }
         catch (...)
         {
-            poison("Storage2Ledger::get_account: unknown exception");
+            poison("Storage2State::get_account: unknown exception");
         }
         return std::nullopt;
     }
@@ -132,7 +132,7 @@ public:
         }
         catch (...)
         {
-            poison("Storage2Ledger::get_account_code: unknown exception");
+            poison("Storage2State::get_account_code: unknown exception");
         }
         return {};
     }
@@ -165,7 +165,7 @@ public:
         }
         catch (...)
         {
-            poison("Storage2Ledger::get_storage: unknown exception");
+            poison("Storage2State::get_storage: unknown exception");
         }
         return {};
     }
@@ -229,7 +229,7 @@ public:
         catch (...)
         {
             poison(
-                "Storage2Ledger::applyDiff: unknown exception on the write-back path (not derived "
+                "Storage2State::applyDiff: unknown exception on the write-back path (not derived "
                 "from std::runtime_error/std::logic_error, or typed catch bypassed by the known "
                 "-fno-rtti RTTI issue; message unavailable)");
             throw;
@@ -240,7 +240,7 @@ public:
     /// getter (state-root computation never calls it — avoids an unconditional SYS_CODE_BINARY
     /// read per account) + the account's already-materialized, tombstone-filtered,
     /// poison-checked live storage slot map (see fetchAllStorage). Field names mirror
-    /// MemoryLedger::AccountView exactly so bcos::evm::stateRootOf<Ledger> works unmodified
+    /// MemoryState::AccountView exactly so bcos::evm::stateRootOf<Ledger> works unmodified
     /// against either backend.
     struct AccountView
     {
@@ -252,7 +252,7 @@ public:
 
         [[nodiscard]] evmc::bytes code() const noexcept { return m_bridge->get_account_code(addr); }
 
-        const Storage2Ledger* m_bridge;
+        const Storage2State* m_bridge;
     };
 
     /// Traverses every live account under the /apps/ namespace. noexcept + poison-flag contract
@@ -289,7 +289,7 @@ public:
         }
         catch (...)
         {
-            poison("Storage2Ledger::visitAccounts: unknown exception");
+            poison("Storage2State::visitAccounts: unknown exception");
         }
         return false;
     }
@@ -328,7 +328,7 @@ private:
             (!entry.code.has_value() || entry.code->empty()))
         {
             throw std::runtime_error(
-                "Storage2Ledger::applyDiff: EIP-161-empty account would be created in the ledger "
+                "Storage2State::applyDiff: EIP-161-empty account would be created in the ledger "
                 "by a diff entry that never bumped nonce (address table '" +
                 tableName + "', §6.4 D-6)");
         }
@@ -373,7 +373,7 @@ private:
                 if (co_await storage2::existsOne(
                         m_storage.get(), executor_v1::StateKeyView{tableName, keyView}))
                     throw std::runtime_error(
-                        "Storage2Ledger::applyDiff: zero-valued slot write left the row alive in "
+                        "Storage2State::applyDiff: zero-valued slot write left the row alive in "
                         "account table '" +
                         tableName +
                         "' (contract ② write-back leak: the bridge's write-back must never leave a "
@@ -408,7 +408,7 @@ private:
         if (!co_await storage2::existsOne(
                 m_storage.get(), executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, tableName)))
             throw std::runtime_error(
-                "Storage2Ledger::applyDiff: deleted_accounts entry not found in ledger (ghost "
+                "Storage2State::applyDiff: deleted_accounts entry not found in ledger (ghost "
                 "delete, strict tripwire)");
 
         // Contract ①: range-scan the account table's field rows and live slot rows, collecting
@@ -548,7 +548,7 @@ private:
 
             if (fieldKey.size() != kStorageSlotKeySize)
                 throw std::runtime_error(
-                    "Storage2Ledger::fetchAllStorage: unknown key in account table '" + tableName +
+                    "Storage2State::fetchAllStorage: unknown key in account table '" + tableName +
                     "' (neither a known ACCOUNT_TABLE_FIELDS name nor a 32-byte storage slot "
                     "key)");
 
@@ -557,7 +557,7 @@ private:
 
             if (content->size() != sizeof(evmc_bytes32::bytes))
                 throw std::length_error(
-                    "Storage2Ledger::visitAccounts: storage slot value size mismatch in account "
+                    "Storage2State::visitAccounts: storage slot value size mismatch in account "
                     "table '" +
                     tableName + "'");
 
@@ -729,7 +729,7 @@ private:
             static constexpr intx::uint256 maxUint64{std::numeric_limits<uint64_t>::max()};
             if (nonceValue > maxUint64)
                 throw std::overflow_error(
-                    "Storage2Ledger::fetchAccount: nonce exceeds uint64_t range (silent-"
+                    "Storage2State::fetchAccount: nonce exceeds uint64_t range (silent-"
                     "truncation guard, design §4.3)");
             account.nonce = static_cast<uint64_t>(nonceValue);
         }
@@ -742,7 +742,7 @@ private:
             auto view = codeHashEntry->get();
             if (view.size() != sizeof(account.code_hash.bytes))
                 throw std::length_error(
-                    "Storage2Ledger::fetchAccount: codeHash field size mismatch");
+                    "Storage2State::fetchAccount: codeHash field size mismatch");
             std::memcpy(account.code_hash.bytes, view.data(), view.size());
         }
 
@@ -841,7 +841,7 @@ private:
             // callers never treat corrupt data as a zero value.
             if (view.size() != sizeof(evmc_bytes32::bytes))
                 throw std::length_error(
-                    "Storage2Ledger::fetchStorage: storage slot value size mismatch in account "
+                    "Storage2State::fetchStorage: storage slot value size mismatch in account "
                     "table '" +
                     tableName + "'");
             evmc::bytes32 value{};
@@ -863,4 +863,4 @@ private:
     mutable std::string m_firstError;
 };
 
-}  // namespace bcos::evm::ledger
+}  // namespace bcos::evm::evmstate

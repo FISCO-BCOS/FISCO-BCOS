@@ -471,7 +471,7 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeTestReceiptFactory()
 // bcos::evm::stateRootOf<Ledger> (adapter/StateRootCompute.h) is a template
 // building a secure trie over any Ledger exposing `bool visitAccounts(Visitor) const`.
 // evmone::test::TestState is a std::map, not a Ledger, so expose the account
-// visit surface here. AccountView mirrors MemoryLedger::AccountView's root-building
+// visit surface here. AccountView mirrors MemoryState::AccountView's root-building
 // fields (addr/nonce/balance/codeHash/storage); stateRootOf uses only these five.
 struct TestStateLedger
 {

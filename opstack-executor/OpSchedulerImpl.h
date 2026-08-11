@@ -7,7 +7,7 @@
 // never calls it — throws immediately); `executeOpBlock` is the real OP-mode entry point, called
 // from handleNewPayload's OP branch.
 //
-// Layering: a pure template header under bcos-evm/bcos-evm/engine/, same shape as Storage2Ledger.h
+// Layering: a pure template header under bcos-evm/bcos-evm/engine/, same shape as Storage2State.h
 // — depends on bcos-framework (Storage template parameter is instantiated against
 // storage2/MultiLayerStorage::ViewType, protocol:: types) but is not itself part of the
 // bcos-evm-opstack static library (header-only, no .cpp).
@@ -35,7 +35,7 @@
 #include <opstack-executor/OpBlockSeal.h>
 #include <opstack-executor/OpEngineSeam.h>
 #include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/Storage2Ledger.h>
+#include <opstack-executor/Storage2State.h>
 #include <bcos-evm/eth/state/block.hpp>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
@@ -73,7 +73,7 @@ struct OpConsensusError : std::runtime_error
 };
 
 /// Thrown when the ledger bridge's poison flag is set (a storage2-layer failure, not a consensus
-/// violation — Storage2Ledger.h's poison-flag error channel contract). Maps to JSON-RPC -32603
+/// violation — Storage2State.h's poison-flag error channel contract). Maps to JSON-RPC -32603
 /// internal error on the caller side, never INVALID.
 struct OpStorageError : std::runtime_error
 {
@@ -102,7 +102,7 @@ namespace detail
 {
 
 // ---- bcos:: <-> evmc:: fixed-size conversions ----
-// Precedent: bcos-evm/bcos-evm/ledger/Storage2Ledger.h's applyModifiedEntry (codeHash: evmc
+// Precedent: bcos-evm/bcos-evm/ledger/Storage2State.h's applyModifiedEntry (codeHash: evmc
 // bytes32.bytes -> bcos::h256 via the FixedBytes(byte const*, size_t) constructor) and
 // addressFromTableName (raw memcpy into evmc::address.bytes).
 
@@ -126,7 +126,7 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
 
 /// bcos::u256 -> uint64_t, explicit bounds-checked narrowing — NOT a raw static_cast/convert_to.
 /// This repo has a documented silent-truncation incident with unchecked wide-integer narrowing
-/// (MEMORY costofprecompiled-int64-overflow); Storage2Ledger.h's fetchAccount nonce handling
+/// (MEMORY costofprecompiled-int64-overflow); Storage2State.h's fetchAccount nonce handling
 /// established the "widen -> explicit > max check -> narrow" discipline this mirrors.
 inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 {
@@ -942,13 +942,13 @@ public:
     /// OP-mode entry point (called from handleNewPayload's OP branch). Steps:
     ///   1. sort/decode rawTxBytes into OpBlockTx (deposit/eip1559/set_code dispatch,
     ///      detail::decodeOneRawTx);
-    ///   2. one Storage2Ledger<Storage> bridge instance for this block ("one per block");
+    ///   2. one Storage2State<Storage> bridge instance for this block ("one per block");
     ///   3. processOpBlock (bridge doubles as StateView and applyDiff sink);
     ///   4. poison-flag check (bridge.poisoned() -> OpStorageError; any other throw from
     ///      processOpBlock -> OpConsensusError — error-classification table; poisoned() is
-    ///      checked *first* because Storage2Ledger's read methods are noexcept and swallow
+    ///      checked *first* because Storage2State's read methods are noexcept and swallow
     ///      storage failures into the poison flag rather than propagating them, so it is
-    ///      authoritative over whatever processOpBlock did or threw — Storage2Ledger.h's
+    ///      authoritative over whatever processOpBlock did or threw — Storage2State.h's
     ///      poison-flag error channel contract);
     ///   5. sealOpBlock (needs the post-finalize MessagePasser storage snapshot) + stateRootOf,
     ///      both while the bridge is still alive ("compute before the bridge is destroyed");
@@ -967,7 +967,7 @@ public:
                 bcos::bytes(std::begin(rawItem), std::end(rawItem)), m_chainId));
 
         // Step 2: one bridge instance for this block.
-        bcos::evm::ledger::Storage2Ledger<Storage> bridge(storage);
+        bcos::evm::evmstate::Storage2State<Storage> bridge(storage);
 
         const auto blk = detail::toBlockInfo(env);
         // RecentBlockHashes lazily loads ancestor hashes; the seed {N-1: parentHash} is set in
@@ -1037,7 +1037,7 @@ public:
             if (accountView.addr == bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER)
             {
                 messagePasserStorage = accountView.storage;
-                return false;  // found it; not a poison condition (Storage2Ledger.h contract)
+                return false;  // found it; not a poison condition (Storage2State.h contract)
             }
             return true;
         });
