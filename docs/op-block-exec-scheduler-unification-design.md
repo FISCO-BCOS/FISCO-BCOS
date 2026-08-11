@@ -1,8 +1,27 @@
 # OP 块执行:engine 调用面统一 + 共识比对下沉(设计)
 
 > 日期:2026-08-11。分支 `worktree-op-alignment`(基于 feat-op-executor-e2e @ 0ba5256e0)。
-> 状态:设计已批准,经 4 个 sub agent 独立审查后修订(本版合并全部审查意见)。
+> 状态:设计已批准,经 4 个 sub agent 独立审查后修订(本版合并全部审查意见);**2026-08-11 实施完成**。
 > 对应 #23 方向的替代方案——不实施"块执行走 scheduler pipeline"。
+
+## 实施记录(2026-08-11)
+
+按 `docs/2026-08-11-op-block-exec-scheduler-unification-plan.md` 6 任务实施(Subagent-Driven,
+每任务两阶段审查 + 测试不可退步基线),提交链:`1abf61069`(mismatchedFieldOf)→
+`bb7c6070c`(announcedCommitmentsOf)→ `f37831267`(seam re-publish)→ `e87e52e8c`(engine
+比对瘦身)→ `94e29a660`(executePayload 收敛)。
+
+**验证结果(全绿,零退步)**:
+- opstack-executor-tests 9/9(GTest)
+- opstack-executor-block-tests 全绿(104 用例,含 t8n 127 向量 + e2e 套件,3/8 项比对错误串不变)
+- opstack-executor-detail-tests 24/24(原 12 + 新增 12,含 8 字段/顺序/optional 矩阵/字段名)
+- test-bcos-engine 11/11(EngineServiceTest 通用 newPayload)
+- test-transaction-scheduler 全绿(真实通用 engine 驱动 newPayload,最强通用路径回归)
+- bcos-evm-opstack-tests 受 BCOS_EVM_TESTS 门控未构建;其验证意图由 test-transaction-scheduler
+  的通用 engine 完整实例化覆盖
+
+**实测确认**:`toEthLogsBloom` 保留(`rebuildOpEthHeader` 第二调用者);blobGasUsed 窄化前提
+(validate 已界 ≤ UINT64_MAX)成立;`executePayload` 收敛 git diff 仅 +8/-0(搬移字节级相同)。
 > 前置:docs/opstack-scheduler-adapter-design.md §0(为什么 BaselineScheduler 承载不了 OP 块语义)。
 
 ## 背景与问题
