@@ -1,8 +1,9 @@
 // bcos-evm/test/opstack/OpNewPayloadRpcE2eTest.cpp
-// W6 L2 端到端真链对拍：真实 JSON params → EngineHelper::parseNewPayloadRequest(V4)
-// → EngineService<OpSchedulerImpl>.newPayload(4) → executeOpBlock → 七项断言 vs golden。
-// fixture 组合仿 val-loop EngineNewPayloadGateTest 的 GateFixture（member 顺序
-// storage→memPool→executor→receiptFactory→scheduler→blockFactory→service）。
+// W6 L2 end-to-end real-chain comparison: real JSON params ->
+// EngineHelper::parseNewPayloadRequest(V4) -> EngineService<OpSchedulerImpl>.newPayload(4)
+// -> executeOpBlock -> seven assertions vs golden. The fixture composition mirrors the
+// val-loop EngineNewPayloadGateTest GateFixture (member order storage->memPool->executor->
+// receiptFactory->scheduler->blockFactory->service).
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
 #include <bcos-concepts/ByteBuffer.h>
@@ -14,9 +15,10 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <opstack-executor/OpEngineSeam.h>
 #include <opstack-executor/OpSchedulerImpl.h>
-// EngineHelper.h 的 parseNewPayloadRequest 声明引用 bcos::protocol::TransactionFactory&，
-// 但 EngineHelper.h 自身不声明该类型（生产靠 bcos-rpc unity-build 的 include 顺序）。
-// 单 TU 直编必须先把 TransactionFactory.h 引入，否则声明处即报错。
+// EngineHelper.h's parseNewPayloadRequest declaration references
+// bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type
+// itself (production relies on bcos-rpc unity-build include order). A single-TU
+// direct compile must include TransactionFactory.h first or the declaration fails.
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -43,7 +45,7 @@ namespace memory_storage = bcos::storage2::memory_storage;
 namespace
 {
 
-// ── storage fixture（Task 2 测试同款）──
+// ── storage fixture (same as the Task 2 tests) ──
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
 struct TrivialCheckpointStorage
 {
@@ -72,7 +74,7 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-// ── 组合根 stand-ins（val-loop GateFixture 同款：OP 模式不经 memPool/executor）──
+// ── Composition-root stand-ins (val-loop GateFixture style: OP mode bypasses memPool/executor) ──
 struct StubMemPool
 {
 };
@@ -141,10 +143,12 @@ using OpEngineService =
 
 struct OpE2eFixture
 {
-    // 单桶 CONCURRENT backend：C2 修复后 seed/parent 经 mergeView 落 backend,stateRoot 计算
-    // 的 range(SYS_TABLES) 遍历依赖 backend 的 RANGE_SEEK 语义;多桶(默认
-    // hardware_concurrency*2+1 桶)下 MemoryStorage 的 range 只 seek 桶 0,桶 1+ 全量返回
-    // 非 SYS_TABLES 键 → visitAccounts 提前 break → stateRoot 为空根。单桶保证 range 正确。
+    // Single-bucket CONCURRENT backend: after the C2 fix, seed/parent lands in the
+    // backend via mergeView, and stateRoot's range(SYS_TABLES) scan relies on the
+    // backend's RANGE_SEEK semantics. With multiple buckets (default
+    // hardware_concurrency*2+1), MemoryStorage's range only seeks bucket 0, so buckets
+    // 1+ return non-SYS_TABLES keys, visitAccounts breaks early, and stateRoot is empty.
+    // A single bucket keeps the range correct.
     BackendMemStorage backendStorage{1};
     CheckpointBackend checkpointBackend{backendStorage};
     MLS multiLayerStorage{checkpointBackend};
@@ -162,10 +166,11 @@ struct OpE2eFixture
     {}
 };
 
-/// 产出的 header：生产映射重构（val-loop GateFixture 的 productionHeaderOf 模式）。
-/// `bcos::engine::detail::rebuildOpEthHeader`（EngineServiceImpl.cpp:470 附近：17 字段来自
-/// payload 逐字 + txRoot + 3 常量）；OP block hash 用 `opHeaderHash(c)` =
-/// keccak256(encodeOpHeader())，不得用 BlockHeader::hash()（dataHash 空/工厂 TARS 序回填）。
+/// Produced header: production-mapping reconstruction (val-loop GateFixture's
+/// productionHeaderOf pattern). `bcos::engine::detail::rebuildOpEthHeader`
+/// (EngineServiceImpl.cpp:470 or so: 17 fields verbatim from payload + txRoot + 3
+/// constants). OP block hash uses `opHeaderHash(c)` = keccak256(encodeOpHeader()), NOT
+/// BlockHeader::hash() (empty dataHash / factory TARS-order backfill).
 bcos::protocol::BlockHeader::Ptr productionHeaderOf(
     bcos::protocol::BlockFactory::Ptr const& blockFactory,
     bcos::engine::NewPayloadRequest const& request)
@@ -176,11 +181,11 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
         transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
-/// Parent 预登记（R3/R5 致命缺口 A 修复）：OP 路径 step-3 parentKnown
-/// 查 SYS_HASH_2_NUMBER 判 parent-known。33 个孤立向量都是 block 1，parent 必须以「受信创世」
-/// 预登记，否则 newPayload 返回 SYNCING。写入编码必须是生产同款：key=hash 原始 32 字节，
-/// value=number 十进制字符串（gate 测试
-/// registerVerifiedBlock，EngineNewPayloadGateTest.cpp:188-198）。
+/// Parent pre-registration (R3/R5 fatal-gap A fix): the OP path's step-3 parentKnown
+/// checks SYS_HASH_2_NUMBER. All 33 isolated vectors are block 1, so the parent must be
+/// pre-registered as a trusted genesis, otherwise newPayload returns SYNCING. The write
+/// encoding must match production: key = raw 32-byte hash, value = decimal number string
+/// (gate test registerVerifiedBlock, EngineNewPayloadGateTest.cpp:188-198).
 void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, int64_t number)
 {
     auto view = multiLayerStorage.fork();
@@ -190,19 +195,22 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(bcos::storage2::writeOne(view,
         StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(entry)));
-    // C2 审查修正（P1 CRITICAL）：mergeBackStorage 合并最旧层（FIFO）。排空栈——parent 预登记
-    // 即落 backend,后续每个块 push 前栈空 → mergeView 立即落盘,backend 断言才可能绿。
+    // C2 review fix (P1 CRITICAL): mergeBackStorage merges the oldest layer (FIFO).
+    // Drain the stack — parent pre-registration lands in the backend immediately, and
+    // with an empty stack before each block push, mergeView persists right away so the
+    // backend assertions can pass.
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
-// ── 七项断言 ──
+// ── seven assertions ──
 void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr const& produced,
     bcostars::protocol::BlockHeaderImpl::Ptr const& goldenHeader, bcos::h256 const& goldenBlockHash)
 {
     const auto c = bcos::engine::detail::opHeaderConst();
-    // 1. blockHash：produced opHeaderHash = keccak256(encodeOpHeader())，须等于 golden.blockHash
-    //    （op-geth 的 block.Hash() = keccak(RLP(21 字段)) 定义）。
-    // ⚠️ 本仓库 Boost.Test 宏不支持 `<< id << msg` 链式；统一 BOOST_CHECK_MESSAGE(id << msg)。
+    // 1. blockHash: produced opHeaderHash = keccak256(encodeOpHeader()) must equal
+    //    golden.blockHash (op-geth's block.Hash() = keccak(RLP(21 fields)) definition).
+    // Warning: this repo's Boost.Test macros do not support `<< id << msg` chaining;
+    // uniformly use BOOST_CHECK_MESSAGE(id << msg).
     BOOST_CHECK_MESSAGE(produced->opHeaderHash(c) == goldenBlockHash, id << ": blockHash");
     BOOST_CHECK_MESSAGE(produced->stateRoot() == goldenHeader->stateRoot(), id << ": stateRoot");
     BOOST_CHECK_MESSAGE(
@@ -211,26 +219,27 @@ void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr c
         produced->withdrawalsRoot() == goldenHeader->withdrawalsRoot(), id << ": withdrawalsRoot");
     BOOST_CHECK_MESSAGE(produced->gasUsed() == goldenHeader->gasUsed(), id << ": gasUsed");
     BOOST_CHECK_MESSAGE(produced->txsRoot() == goldenHeader->txsRoot(), id << ": txRoot");
-    // ⚠️ bytesConstRef(RefDataContainer) 的 operator== 是「指针+长度」浅比较，不是内容比较
-    // （RefDataContainer.h:84-87）。produced/golden 各自持有同一份 256 字节 bloom 于不同存储，
-    // 指针必不等 → 必须用 std::equal 做逐字节内容比较（encodeOpHeader 字节级断言已覆盖内容，
-    // 这里单独保留七字段之一的位置）。
+    // Warning: bytesConstRef(RefDataContainer)'s operator== is a "pointer+length"
+    // shallow compare, not a content compare (RefDataContainer.h:84-87). produced/golden
+    // hold the same 256-byte bloom in different storage, so the pointers always differ —
+    // must use std::equal for byte-wise content compare (encodeOpHeader byte-level
+    // assertion already covers content; this keeps the seven-field slot separately).
     BOOST_CHECK_MESSAGE(std::equal(produced->logsBloom().begin(), produced->logsBloom().end(),
                             goldenHeader->logsBloom().begin(), goldenHeader->logsBloom().end()),
         id << ": logsBloom");
-    // 主断言：encodeOpHeader 字节级全等（覆盖全部字段的 RLP 编码）
+    // Main assertion: byte-exact equality of encodeOpHeader (covers the full RLP encoding of all fields)
     BOOST_CHECK_MESSAGE(
         produced->encodeOpHeader(c) == goldenHeader->encodeOpHeader(c), id << ": encodeOpHeader");
 }
 
-/// 一个向量端到端：seed pre → register parent → makeParamsJson → parseNewPayloadRequest(V4)
-/// → newPayload(4) → 断言。
+/// One vector end-to-end: seed pre -> register parent -> makeParamsJson ->
+/// parseNewPayloadRequest(V4) -> newPayload(4) -> assertions.
 void runGoldenVector(std::string const& id)
 {
     auto sample = w6test::loadVectorSample(id);
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
     w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
-    // ⚠️ parent 预登记（缺口 A）：不登记 → SYNCING 而非 VALID。parentHash 从 golden header 解码
+    // Warning: parent pre-registration (gap A): without it -> SYNCING instead of VALID. parentHash is decoded from the golden header
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
 
@@ -239,32 +248,35 @@ void runGoldenVector(std::string const& id)
         params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
 
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-    // ⚠️ PayloadValidationStatus 是 enum class，无 operator<<；必须 static_cast<int> 比较
-    // （全代码库既有 engine 测试同款，EngineServiceTest.cpp:312 等）。
+    // Warning: PayloadValidationStatus is an enum class without operator<<; must compare
+    // via static_cast<int> (same as existing engine tests, e.g. EngineServiceTest.cpp:312).
     BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
                               static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
         id << ": expected VALID, got " << static_cast<int>(status.status)
            << (status.validationError ? " : " + *status.validationError : ""));
 
-    // produced header（生产映射重构）+ golden header（复用上面 parent 预登记时已解码的
-    // goldenHeader， 勿重复声明——同一函数块重定义 goldenHeader 是编译错误，R2-A 捕获）
+    // produced header (production-mapping reconstruction) + golden header (reuse the
+    // goldenHeader decoded above for parent registration; redeclaring it in the same
+    // block would be a compile error, caught by R2-A)
     auto produced = productionHeaderOf(fixture->blockFactory, request);
     const auto goldenBlockHash = bcos::h256(std::string(sample.golden["blockHash"].asString()));
     assertSevenFields(id, produced, goldenHeader, goldenBlockHash);
 
-    // 方案 B 写侧：OP 交易落 SYS_HASH_2_TX（tars 编码），s_eth_hash_2_rawtx 不再写。
-    // newPayload 的 registerOpBlock 把每笔 raw EIP-2718 信封转 tars Transaction 写
-    // SYS_HASH_2_TX[txHash]（extraTransactionHash=txHash 锁 D4），原始信封不再写 s_eth_hash_2_rawtx
-    // （D1）。0x04 (EIP-7702) 自上游 #5411 起是一等 TransactionType（EIP7702=4），
-    // opEnvelopeToTars 可转换 → 与其它 typed tx 一样落 SYS_HASH_2_TX（不再 absent，D7 已过时）。
-    BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // P3-1: 漏字段干净失败
+    // Plan-B write side: OP txs land in SYS_HASH_2_TX (tars encoding); s_eth_hash_2_rawtx
+    // is no longer written. newPayload's registerOpBlock converts each raw EIP-2718
+    // envelope to a tars Transaction and writes SYS_HASH_2_TX[txHash]
+    // (extraTransactionHash=txHash pins D4); the raw envelope is no longer stored in
+    // s_eth_hash_2_rawtx (D1). 0x04 (EIP-7702) has been a first-class TransactionType
+    // (EIP7702=4) since upstream #5411, so opEnvelopeToTars converts it and it lands in
+    // SYS_HASH_2_TX like any other typed tx (no longer absent; D7 is obsolete).
+    BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // P3-1: missing field fails cleanly
     auto const& rawTxs = *request.executionPayload.rawTransactions;
     auto& hashImpl = *fixture->blockFactory->cryptoSuite()->hashImpl();
     auto view = fixture->multiLayerStorage.fork();
     for (std::size_t i = 0; i < rawTxs.size(); ++i)
     {
         auto txHash = hashImpl.hash(rawTxs[i]);
-        // SYS_HASH_2_TX present + round-trip（tars 解码回 Transaction，hash==txHash 锁 D4）
+        // SYS_HASH_2_TX present + round-trip (tars decode back to Transaction, hash==txHash pins D4)
         auto txEntry = bcos::task::syncWait(
             bcos::storage2::readOne(view, bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
                                               bcos::concepts::bytebuffer::toView(txHash)}));
@@ -275,14 +287,14 @@ void runGoldenVector(std::string const& id)
             txBytes, /*checkSig=*/false, /*checkHash=*/false, /*tainted=*/false);
         BOOST_CHECK_MESSAGE(
             tx->hash() == txHash, id << ": tx #" << i << " round-trip hash==txHash");
-        // C2: 数据必须落 backend（m_latestBackend）——重启恢复语义（spec §6）。
+        // C2: data must land in the backend (m_latestBackend) — restart-recovery semantics.
         auto backendEntry =
             bcos::task::syncWait(bcos::storage2::readOne(fixture->multiLayerStorage.latestBackend(),
                 bcos::executor_v1::StateKey{
                     bcos::ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_CHECK_MESSAGE(
             backendEntry.has_value(), id << ": tx #" << i << " SYS_HASH_2_TX in backend");
-        // rawtx 表 absent（D1：不保留）
+        // rawtx table absent (D1: not retained)
         auto rawEntry = bcos::task::syncWait(
             bcos::storage2::readOne(view, bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
                                               bcos::concepts::bytebuffer::toView(txHash)}));
@@ -291,19 +303,20 @@ void runGoldenVector(std::string const& id)
     }
 }
 
-/// 链式双块（chainA/B，R2-C 核实流程）：只播 A 的 pre → 登记 A 的 parent(0) →
-/// 先投 B(SYNCING) → 投 A(VALID) → 再投 B(VALID)。FCU 刻意省略（见实现提示 #4）。
+/// Chained two-block (chainA/B, R2-C verified flow): seed only A's pre -> register A's
+/// parent(0) -> submit B first (SYNCING) -> submit A (VALID) -> submit B again (VALID).
+/// FCU deliberately omitted (see implementation hint #4).
 void runChainedPair(std::string const& aId, std::string const& bId)
 {
     auto sampleA = w6test::loadChainedSample(aId);
     auto sampleB = w6test::loadChainedSample(bId);
-    BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // 链式双块 fork 一致（isthmus 或 jovian）
+    BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // chained pair shares one fork (isthmus or jovian)
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sampleA.jovian));
 
-    // 只播 A 的 pre（B 的 pre 即 A 的 postState，绝不重播）
+    // Seed only A's pre (B's pre is A's postState; never re-seed)
     w6test::seedPreState(fixture->multiLayerStorage, sampleA.vector["pre"]);
     const auto goldenHeaderA = w6test::decodeGoldenHeader(sampleA);
-    // 登记 A 的 parent（受信创世 height 0）
+    // Register A's parent (trusted genesis height 0)
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeaderA->parentInfo().blockHash, 0);
 
     auto requestA = bcos::rpc::parseNewPayloadRequest(w6test::makeParamsJson(sampleA),
@@ -311,25 +324,25 @@ void runChainedPair(std::string const& aId, std::string const& bId)
     auto requestB = bcos::rpc::parseNewPayloadRequest(w6test::makeParamsJson(sampleB),
         *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
 
-    // 先投 B：parent(A) 未登记 → SYNCING
+    // Submit B first: parent(A) not yet registered -> SYNCING
     auto earlyB = bcos::task::syncWait(fixture->service.newPayload(requestB, 4));
     BOOST_CHECK_MESSAGE(static_cast<int>(earlyB.status) ==
                             static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
         bId << ": first B should be SYNCING (parent A unknown)");
 
-    // 投 A：VALID（registerOpBlock 写 SYS_HASH_2_NUMBER[hashA]=1）
+    // Submit A: VALID (registerOpBlock writes SYS_HASH_2_NUMBER[hashA]=1)
     auto statusA = bcos::task::syncWait(fixture->service.newPayload(requestA, 4));
     BOOST_REQUIRE_MESSAGE(static_cast<int>(statusA.status) ==
                               static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
         aId << ": A expected VALID, got " << static_cast<int>(statusA.status));
 
-    // 再投 B：parentKnown 命中 A → VALID
+    // Submit B again: parentKnown hits A -> VALID
     auto statusB = bcos::task::syncWait(fixture->service.newPayload(requestB, 4));
     BOOST_REQUIRE_MESSAGE(static_cast<int>(statusB.status) ==
                               static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
         bId << ": B expected VALID after A, got " << static_cast<int>(statusB.status));
 
-    // 各自七项断言（productionHeaderOf 从 request 重构，独立于执行）
+    // Seven assertions for each (productionHeaderOf rebuilt from request, independent of execution)
     auto producedA = productionHeaderOf(fixture->blockFactory, requestA);
     const auto goldenBlockHashA = bcos::h256(std::string(sampleA.golden["blockHash"].asString()));
     assertSevenFields(aId, producedA, goldenHeaderA, goldenBlockHashA);
@@ -339,12 +352,12 @@ void runChainedPair(std::string const& aId, std::string const& bId)
     assertSevenFields(bId, producedB, goldenHeaderB, goldenBlockHashB);
 }
 
-/// 播种 + newPayload 一个向量块,返回 {fixture, blockHash, blockNumber} 供 FCU 用例复用。
-/// 对照 runGoldenVector（:215-230）的流程,但保留 fixture 与块身份——updateForkchoice 直接
-/// 以该块做 head/safe/finalized 播种。⚠️ parseNewPayloadRequest 的真实签名是三参
-/// `bcos::rpc::parseNewPayloadRequest(params, txFactory, version)`（EngineHelper.h:68-70）；
-/// 任务 brief 里的一参 `bcos::engine::parseNewPayloadRequest(params)` 是过时草稿,这里按
-/// runGoldenVector 同款三参调用。
+/// Seeds and submits one vector block, returning {fixture, blockHash, blockNumber} for
+/// FCU case reuse. Mirrors runGoldenVector's flow but keeps the fixture and block
+/// identity — updateForkchoice seeds head/safe/finalized with that block. Warning:
+/// parseNewPayloadRequest's real signature is the 3-arg
+/// `bcos::rpc::parseNewPayloadRequest(params, txFactory, version)` (EngineHelper.h:68-70);
+/// the task brief's 1-arg `bcos::engine::parseNewPayloadRequest(params)` is a stale draft.
 std::tuple<std::unique_ptr<OpE2eFixture>, bcos::h256, bcos::protocol::BlockNumber>
 runVectorAndGetBlockHash(std::string const& id)
 {
@@ -364,29 +377,31 @@ runVectorAndGetBlockHash(std::string const& id)
         goldenHeader->number()};
 }
 
-// ═══════════════════ Task 2：无效向量 runner（分类驱动）═══════════════════
-// 消费端先行（原子性）：Task 2 自测用内联向量（不依赖 Task 3 语料文件），runner 同时兼容
-// 磁盘 invalid_*.json（Task 3 生成后落地）。reject schema 见 task-2-brief：fisco.consumer /
-// classification("INVALID"|"SYNCING"|"-38005"|"-32603") / latest_valid_hash("parent"|null) /
-// validation_error_contains(可选) / expect_throw("UnsupportedFork"|"OpExecutionInternalError") /
-// version(可选，-38005 置 3)。
+// ═══════════════════ Task 2: invalid-vector runner (classification-driven) ════
+// Consumer-first (atomicity): Task 2 self-tests use inline vectors (no dependence on
+// Task 3 corpus files); the runner also accepts on-disk invalid_*.json (landed after
+// Task 3 generation). Reject schema (task-2-brief): fisco.consumer / classification
+// ("INVALID"|"SYNCING"|"-38005"|"-32603") / latest_valid_hash("parent"|null) /
+// validation_error_contains(optional) / expect_throw("UnsupportedFork"|"OpExecutionInternalError") /
+// version(optional, -38005 sets 3).
 
-/// 从 `_op_payload.parentHash` 解析父哈希（INVALID 的 latestValidHash=parent 断言需要）。
+/// Parses the parent hash from `_op_payload.parentHash` (needed for INVALID's latestValidHash=parent assertion).
 bcos::h256 parseParentHashFromPayload(w6test::InvalidSample const& sample)
 {
     return bcos::h256(std::string(sample.vector["_op_payload"]["parentHash"].asString()));
 }
 
-/// 内联无效向量的构造规格：从现有金样本派生「自洽损坏」payload。
+/// Construction spec for an inline invalid vector: derives a "self-consistent corrupt"
+/// payload from an existing golden sample.
 struct InlineInvalidSpec
 {
-    std::string baseId;          // 金样本 base（合法 deposit/transfer 形状）
-    std::string corruptField;    // "stateRoot"|"parentHash"|"feeRecipient"|""（不损坏）
+    std::string baseId;          // golden-sample base (valid deposit/transfer shape)
+    std::string corruptField;    // "stateRoot"|"parentHash"|"feeRecipient"|"" (no corruption)
     std::string classification;  // "INVALID"|"SYNCING"|"-38005"|"-32603"
-    std::string validationContains = "";  // 可选 validation_error_contains
-    std::uint32_t version = 4;            // -38005 用 3（version≠4 触发 UnsupportedFork）
-    bool carryCanonical = false;          // -32603 携带未损坏 canonical 兄弟（两投）
-    std::string consumer = "engine";      // Task 4 gate 回归：executor 跳过消息断言
+    std::string validationContains = "";  // optional validation_error_contains
+    std::uint32_t version = 4;            // -38005 uses 3 (version!=4 triggers UnsupportedFork)
+    bool carryCanonical = false;          // -32603 carries an uncorrupted canonical sibling (two-pour)
+    std::string consumer = "engine";      // Task 4 gate regression: executor skips message assertion
 };
 
 /// 从金样本派生内联无效向量。自洽损坏模型（spec §2a）：改头字段 → 重算 blockHash——
