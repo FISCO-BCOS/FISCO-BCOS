@@ -143,4 +143,61 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     return params;
 }
 
+/// Task 2：无效向量样本。`vector` 是完整向量文档（含 `_info`/`pre`/`_op_payload`/
+/// `_op_expected.reject`，可选 `_op_canonical`——-32603 两投的 canonical 兄弟载体）。
+struct InvalidSample
+{
+    Json::Value vector;
+    bool jovian = false;
+    std::string hardfork;
+};
+
+/// 从 `_op_payload` 逐字构建 ExecutionPayload JSON（engine 直连 parseNewPayloadRequest 的输入）。
+/// 字段名/单位与 makeParamsJson 对齐（timestamp 秒；Quantity hex）；损坏值 + 重算 blockHash +
+/// base 真值（logsBloom/extraData/withdrawalsRoot 等）全部来自 `_op_payload`。
+/// - `withdrawals` 是 OP
+/// 路径固定要求（present-and-empty，EngineServiceImpl.cpp:332），向量未携带时补空数组；
+/// - `_op_payload` 里 `blobGasUsed`/`excessBlobGas` 的 null 不能进 ep——parseNewPayloadRequest 的
+///   `isMember` + `fromBigQuantity("")` 会抛；须删除；
+/// - `parentBeaconBlockRoot` 是 params[2]（非 ExecutionPayload 字段），不进 ep。
+inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
+{
+    auto const& op = sample.vector["_op_payload"];
+    Json::Value ep(Json::objectValue);
+    for (auto const& member : op.getMemberNames())
+    {
+        if (member == "parentBeaconBlockRoot")
+            continue;  // 非 ExecutionPayload 字段；经 params[2] 传入
+        ep[member] = op[member];
+    }
+    if (!ep.isMember("withdrawals"))
+        ep["withdrawals"] = Json::Value(Json::arrayValue);
+    if (!ep.isMember("transactions"))
+        ep["transactions"] = Json::Value(Json::arrayValue);  // 静态面 rawTransactions 缺失
+    if (ep.isMember("blobGasUsed") && ep["blobGasUsed"].isNull())
+        ep.removeMember("blobGasUsed");
+    if (ep.isMember("excessBlobGas") && ep["excessBlobGas"].isNull())
+        ep.removeMember("excessBlobGas");
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes = []
+    if (op.isMember("parentBeaconBlockRoot") && !op["parentBeaconBlockRoot"].isNull())
+        params.append(op["parentBeaconBlockRoot"]);
+    else
+        params.append(Json::Value(Json::nullValue));
+    return params;
+}
+
+/// 磁盘语料装载（Task 3 生成器产出 `invalid_*.json`；外层 `{ "<stem>": {...} }` 包装同现有）。
+inline InvalidSample loadInvalidSample(std::string const& id)
+{
+    InvalidSample sample;
+    auto root = loadJsonFile(std::string(OP_T8N_VECTORS_DIR) + "/" + id + ".json");
+    sample.vector = root[id];
+    sample.hardfork = sample.vector["_info"]["hardfork"].asString();
+    sample.jovian = isJovianVector(sample.vector);
+    return sample;
+}
+
 }  // namespace w6test

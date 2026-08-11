@@ -31,6 +31,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <fstream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -362,6 +364,282 @@ runVectorAndGetBlockHash(std::string const& id)
         goldenHeader->number()};
 }
 
+// ═══════════════════ Task 2：无效向量 runner（分类驱动）═══════════════════
+// 消费端先行（原子性）：Task 2 自测用内联向量（不依赖 Task 3 语料文件），runner 同时兼容
+// 磁盘 invalid_*.json（Task 3 生成后落地）。reject schema 见 task-2-brief：fisco.consumer /
+// classification("INVALID"|"SYNCING"|"-38005"|"-32603") / latest_valid_hash("parent"|null) /
+// validation_error_contains(可选) / expect_throw("UnsupportedFork"|"OpExecutionInternalError") /
+// version(可选，-38005 置 3)。
+
+/// 从 `_op_payload.parentHash` 解析父哈希（INVALID 的 latestValidHash=parent 断言需要）。
+bcos::h256 parseParentHashFromPayload(w6test::InvalidSample const& sample)
+{
+    return bcos::h256(std::string(sample.vector["_op_payload"]["parentHash"].asString()));
+}
+
+/// 内联无效向量的构造规格：从现有金样本派生「自洽损坏」payload。
+struct InlineInvalidSpec
+{
+    std::string baseId;          // 金样本 base（合法 deposit/transfer 形状）
+    std::string corruptField;    // "stateRoot"|"parentHash"|"feeRecipient"|""（不损坏）
+    std::string classification;  // "INVALID"|"SYNCING"|"-38005"|"-32603"
+    std::string validationContains = "";  // 可选 validation_error_contains
+    std::uint32_t version = 4;            // -38005 用 3（version≠4 触发 UnsupportedFork）
+    bool carryCanonical = false;          // -32603 携带未损坏 canonical 兄弟（两投）
+};
+
+/// 从金样本派生内联无效向量。自洽损坏模型（spec §2a）：改头字段 → 重算 blockHash——
+/// 用 productionHeaderOf 重建 OP 头（不读 payload.blockHash）后取 opHeaderHash 作为新 blockHash，
+/// 保证 step-2 blockHash 检查通过、字段级命中（step-5 比较 / parentKnown / step-3c）可达。
+w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInvalidSpec const& spec)
+{
+    auto base = w6test::loadVectorSample(spec.baseId);
+    auto blockFactory = makeBlockFactory();
+    auto params = w6test::makeParamsJson(base);
+    auto& ep = params[0u];
+
+    if (spec.corruptField == "stateRoot")
+    {
+        auto b = bcos::fromHex(ep["stateRoot"].asString());
+        b[0] ^= 0xff;
+        ep["stateRoot"] = "0x" + bcos::toHex(b);
+    }
+    else if (spec.corruptField == "parentHash")
+    {
+        ep["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000001";
+    }
+    else if (spec.corruptField == "feeRecipient")
+    {
+        auto b = bcos::fromHex(ep["feeRecipient"].asString());
+        b[0] ^= 0xff;
+        ep["feeRecipient"] = "0x" + bcos::toHex(b);
+    }
+    else if (!spec.corruptField.empty())
+    {
+        throw std::runtime_error(
+            "buildInlineInvalidSample: unknown corruptField " + spec.corruptField);
+    }
+
+    // 自洽：重算 blockHash（rebuild 头不含 payload.blockHash → opHeaderHash）
+    auto request = bcos::rpc::parseNewPayloadRequest(
+        params, *blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto header = productionHeaderOf(blockFactory, request);
+    ep["blockHash"] =
+        w6test::hexPrefixedH256(header->opHeaderHash(bcos::engine::detail::opHeaderConst()));
+
+    w6test::InvalidSample sample;
+    sample.hardfork = base.jovian ? "jovian" : "isthmus";
+    sample.jovian = base.jovian;
+    sample.vector["_info"]["hardfork"] = sample.hardfork;
+    sample.vector["pre"] = base.vector["pre"];
+    sample.vector["_op_payload"] = ep;
+    // V4 静态校验要求 parentBeaconBlockRoot（EngineServiceImpl.cpp:340）；params[2] 恒真值
+    sample.vector["_op_payload"]["parentBeaconBlockRoot"] = params[2u];
+    if (spec.carryCanonical)
+    {
+        // -32603 canonical 兄弟 = 未损坏的 base payload（同父同高度、不同 blockHash）
+        auto canonicalParams = w6test::makeParamsJson(base);
+        sample.vector["_op_canonical"] = canonicalParams[0u];
+        sample.vector["_op_canonical"]["parentBeaconBlockRoot"] = canonicalParams[2u];
+    }
+
+    auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
+    fisco["consumer"] = "engine";
+    fisco["classification"] = spec.classification;
+    if (spec.classification == "INVALID")
+    {
+        fisco["latest_valid_hash"] = "parent";
+    }
+    else if (spec.classification == "-38005")
+    {
+        fisco["latest_valid_hash"] = Json::Value(Json::nullValue);
+        fisco["expect_throw"] = "UnsupportedFork";
+        fisco["version"] = spec.version;
+    }
+    else if (spec.classification == "-32603")
+    {
+        fisco["latest_valid_hash"] = Json::Value(Json::nullValue);
+        fisco["expect_throw"] = "OpExecutionInternalError";
+    }
+    if (!spec.validationContains.empty())
+    {
+        fisco["validation_error_contains"] = spec.validationContains;
+    }
+    return sample;
+}
+
+/// 内联自测向量注册表（Task 2 自测；磁盘语料走 w6test::loadInvalidSample）。
+w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
+{
+    if (id == "inline_invalid_stateRoot")
+    {
+        return buildInlineInvalidSample(id, InlineInvalidSpec{
+                                                .baseId = "jovian_deposit_only",
+                                                .corruptField = "stateRoot",
+                                                .classification = "INVALID",
+                                                .validationContains = "stateRoot",
+                                            });
+    }
+    if (id == "inline_invalid_parentUnknown")
+    {
+        return buildInlineInvalidSample(id, InlineInvalidSpec{
+                                                .baseId = "jovian_deposit_only",
+                                                .corruptField = "parentHash",
+                                                .classification = "SYNCING",
+                                            });
+    }
+    if (id == "inline_invalid_unsupportedFork")
+    {
+        return buildInlineInvalidSample(id, InlineInvalidSpec{
+                                                .baseId = "jovian_deposit_only",
+                                                .corruptField = "",
+                                                .classification = "-38005",
+                                                .version = 3u,
+                                            });
+    }
+    if (id == "inline_invalid_siblingFork")
+    {
+        return buildInlineInvalidSample(id, InlineInvalidSpec{
+                                                .baseId = "jovian_deposit_only",
+                                                .corruptField = "feeRecipient",
+                                                .classification = "-32603",
+                                                .carryCanonical = true,
+                                            });
+    }
+    throw std::runtime_error("makeInlineInvalidSample: unknown inline id " + id);
+}
+
+/// 分类驱动 runner（Task 2 主交付）。关键分支：
+///  - SYNCING：跳过 registerVerifiedBlock（parent 未知是设计意图——登记后 parentKnown 通过
+///    不再是 SYNCING）
+///  - -38005/-32603：expect_throw 按 classification 选 UnsupportedFork / OpExecutionInternalError；
+///    version 从 fisco.version 读（-38005 置 3），调 newPayload(request, version)
+///  - -32603：两投——先投 canonical 子块（VALID，写 SYS_NUMBER_2_HASH 占用），再投同高度 sibling
+///    （canonical 从向量 `_op_canonical` 读；Task 5 chain_fork_* carrier 同 schema）
+///  - INVALID：断言 status + latestValidHash(=parent 或 null) + validationError 子串
+void runInvalidVector(std::string const& id)
+{
+    auto sample =
+        (id.rfind("inline_", 0) == 0) ? makeInlineInvalidSample(id) : w6test::loadInvalidSample(id);
+    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+    const auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
+    const auto classification = fisco["classification"].asString();
+
+    if (classification == "SYNCING")
+    {
+        // ⚠️ 不登记 parent——parentHash 损坏/断链向量的意图就是 parent 未知
+        w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+        auto params = w6test::makeInvalidParamsJson(sample);
+        auto request = bcos::rpc::parseNewPayloadRequest(
+            params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+        auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+        BOOST_CHECK_MESSAGE(static_cast<int>(status.status) ==
+                                static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
+            id << ": expected SYNCING, got " << static_cast<int>(status.status));
+        return;
+    }
+
+    // 非 SYNCING：先 seed pre + 登记 parent（parentHash 自洽损坏后是已知合法祖先）
+    w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    const auto parentHash = parseParentHashFromPayload(sample);
+    registerVerifiedBlock(fixture->multiLayerStorage, parentHash, 0);
+
+    if (classification == "-38005" || classification == "-32603")
+    {
+        auto params = w6test::makeInvalidParamsJson(sample);
+        const auto version = fisco.isMember("version") ? fisco["version"].asUInt() : 4u;
+        auto request =
+            bcos::rpc::parseNewPayloadRequest(params, *fixture->blockFactory->transactionFactory(),
+                static_cast<bcos::engine::ApiVersion>(version));
+        if (classification == "-38005")
+        {
+            BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, version)),
+                bcos::engine::UnsupportedFork);
+        }
+        else  // -32603：两投——先投 canonical 子块（VALID，写 SYS_NUMBER_2_HASH 占用），再投 sibling
+        {
+            if (sample.vector.isMember("_op_canonical"))
+            {
+                w6test::InvalidSample canonicalSample;
+                canonicalSample.vector["_info"]["hardfork"] = sample.hardfork;
+                canonicalSample.vector["_op_payload"] = sample.vector["_op_canonical"];
+                canonicalSample.jovian = sample.jovian;
+                auto canonicalParams = w6test::makeInvalidParamsJson(canonicalSample);
+                auto canonicalReq = bcos::rpc::parseNewPayloadRequest(canonicalParams,
+                    *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+                auto canonicalStatus =
+                    bcos::task::syncWait(fixture->service.newPayload(canonicalReq, 4));
+                BOOST_REQUIRE_MESSAGE(
+                    static_cast<int>(canonicalStatus.status) ==
+                        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+                    id << ": canonical expected VALID, got "
+                       << static_cast<int>(canonicalStatus.status)
+                       << (canonicalStatus.validationError ?
+                                  " : " + *canonicalStatus.validationError :
+                                  ""));
+            }
+            BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, 4)),
+                bcos::engine::OpExecutionInternalError);
+        }
+        return;
+    }
+
+    // INVALID（默认路径）
+    auto params = w6test::makeInvalidParamsJson(sample);
+    auto request = bcos::rpc::parseNewPayloadRequest(
+        params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+    BOOST_CHECK_MESSAGE(static_cast<int>(status.status) ==
+                            static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),
+        id << ": expected INVALID, got " << static_cast<int>(status.status));
+    if (fisco["latest_valid_hash"].isNull())
+    {
+        BOOST_CHECK_MESSAGE(
+            !status.latestValidHash.has_value(), id << ": latestValidHash should be null");
+    }
+    else
+    {
+        BOOST_CHECK_MESSAGE(
+            status.latestValidHash.has_value() && *status.latestValidHash == parentHash,
+            id << ": latestValidHash should be parent");
+    }
+    if (fisco.isMember("validation_error_contains"))
+    {
+        const auto expected = fisco["validation_error_contains"].asString();
+        BOOST_CHECK_MESSAGE(
+            status.validationError && status.validationError->find(expected) != std::string::npos,
+            id << ": validationError missing '" << expected
+               << "', got: " << (status.validationError ? *status.validationError : "<none>"));
+    }
+}
+
+/// manifest.txt 内 `invalid_*` 子集（Task 1 loadManifest 同款逻辑）。Task 3 语料落地前为空集 →
+/// InvalidVectorsFromManifest 零迭代（前向兼容钩子）。
+std::set<std::string> loadInvalidManifest()
+{
+    std::set<std::string> names;
+    std::ifstream input(std::string(OP_T8N_VECTORS_DIR) + "/manifest.txt");
+    if (!input.is_open())
+    {
+        BOOST_ERROR("manifest.txt missing");
+        return names;
+    }
+    std::string line;
+    while (std::getline(input, line))
+    {
+        const auto b = line.find_first_not_of(" \t\r");
+        if (b == std::string::npos)
+            continue;
+        const auto e = line.find_last_not_of(" \t\r");
+        line = line.substr(b, e - b + 1);
+        if (line.empty() || line[0] == '#')
+            continue;
+        if (line.rfind("invalid_", 0) == 0)
+            names.insert(line);
+    }
+    return names;
+}
+
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpNewPayloadRpcE2eSuite)
@@ -668,6 +946,41 @@ BOOST_AUTO_TEST_CASE(JovianPrecompileWrapValueRevert)
 // 最终校验：65 用例 = 63 单向量 + 2 链式对（chainA/B + jovianChainA/B，覆盖 4 个链式样本）。
 // 63 单向量 = 34 基础向量（33 + isthmus_system_call_order_observable）
 //   + 29 precompile（Task 2 probe 5 + Task 4 补全 24）。
+
+// ── Task 2：E2E 无效向量 runner（分类驱动）──
+// 内联自测向量（Task 2 不依赖 Task 3 语料文件）：分类驱动 runner 四分支全覆盖——
+//   INVALID（stateRoot 自洽损坏 + latestValidHash=parent + "stateRoot"）
+//   SYNCING（parentHash 断链 → 不登记 parent）
+//   -38005（Isthmus+ timestamp + version≠4 → UnsupportedFork）
+//   -32603（同父双子：先 canonical VALID 写 SYS_NUMBER_2_HASH 占用，再 sibling → 两投）
+BOOST_AUTO_TEST_CASE(InvalidStateRootRejected)
+{
+    runInvalidVector("inline_invalid_stateRoot");
+}
+
+BOOST_AUTO_TEST_CASE(InvalidParentUnknownSyncing)
+{
+    runInvalidVector("inline_invalid_parentUnknown");
+}
+
+BOOST_AUTO_TEST_CASE(InvalidUnsupportedForkVersion3)
+{
+    runInvalidVector("inline_invalid_unsupportedFork");
+}
+
+BOOST_AUTO_TEST_CASE(InvalidSiblingForkRejected)
+{
+    runInvalidVector("inline_invalid_siblingFork");
+}
+
+// Step 5：manifest 子集遍历（invalid_*.json）。Task 3 语料落地前为空集 → 零迭代（前向兼容）。
+BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
+{
+    for (auto const& id : loadInvalidManifest())
+    {
+        runInvalidVector(id);
+    }
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 
