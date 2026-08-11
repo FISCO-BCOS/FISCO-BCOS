@@ -16,6 +16,7 @@
 #include "EVMPrecompiles.h"
 #include "EVMSupport.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-utilities/BoostLog.h"
 #include <evmc/evmc.hpp>
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
@@ -93,15 +94,15 @@ inline intx::uint256 ethMaxPriorityGasPrice(
 {
     if (callParams.free)
         return 0;
-    if (auto mp = tx.maxPriorityFeePerGas(); mp.has_value())
-        return evm::toIntxU256(*mp);
-    // For legacy / access_list txs there is no separate priority-fee field: the
-    // whole gas price is the tip above the base fee. Mirror the old
-    // bcosTransactionToEvmone normalization (and evmone's RLP loaders), which
-    // set max_priority_gas_price = max_gas_price for these types, so the
-    // coinbase receives the tip (priority = gasPrice - base_fee).
+    // Legacy / access-list txs carry no priority-fee field in their signed RLP:
+    // the whole gas price is the tip above the base fee. Decide on the kind
+    // FIRST, so an unvalidated Tars mirror value (present-and-zero, reachable
+    // over P2P) cannot override it — the old bridge's `== 0` fixup had the
+    // same effect.
     if (tx.web3TypedTxKind() <= 1)
         return ethMaxGasPrice(tx, callParams);
+    if (auto mp = tx.maxPriorityFeePerGas(); mp.has_value())
+        return evm::toIntxU256(*mp);
     return 0;
 }
 
@@ -156,7 +157,11 @@ class EthereumHost : public evmc::Host
     EthBlockInfo const& m_block;
     BlockHashLookup m_blockHashLookup;
     protocol::Transaction const& m_tx;
-    EthCallParams const& m_callParams;
+    // By value, not by const-ref: the natural construction site for real
+    // (call == false) execution passes EthCallParams{} as a temporary, and a
+    // reference member would dangle past the full-expression. It is only two
+    // optionals + a bool.
+    EthCallParams m_callParams;
     std::vector<evm::Log> m_logs;
     // Stable copy of the tx blob hashes for get_tx_context (points into this).
     std::vector<bytes32> m_blobHashes;
@@ -645,10 +650,16 @@ bytes32 EthereumHost<Storage>::get_block_hash(int64_t block_number) const noexce
         }
         catch (...)
         {
-            // Never let a lookup failure cross the noexcept boundary.
+            // Never let a lookup failure cross the noexcept boundary. Zero is
+            // also a legal BLOCKHASH answer (out-of-window), so log: a storage
+            // failure would otherwise be indistinguishable from a legal miss.
+            BCOS_LOG(ERROR) << LOG_DESC("EthereumHost: block-hash lookup failed")
+                            << LOG_KV("blockNumber", block_number);
             return {};
         }
     }
+    BCOS_LOG(ERROR) << LOG_DESC("EthereumHost: block-hash lookup not injected")
+                    << LOG_KV("blockNumber", block_number);
     return {};
 }
 
