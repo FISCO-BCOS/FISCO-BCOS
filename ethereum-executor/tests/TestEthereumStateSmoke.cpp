@@ -15,6 +15,7 @@
 /// ctest actually runs it.
 
 #include "ethereum-executor/EVMSupport.h"
+#include "ethereum-executor/EthereumHost.h"
 #include "ethereum-executor/EthereumState.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
 
@@ -24,6 +25,14 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+
+// pr-3 adds EthereumHost.h as another orphan header: merely including it parses
+// the template but instantiates nothing, so CI would not catch a member-body
+// error. An explicit instantiation pulls every evmc::Host override into the
+// vtable plus the private non-virtuals (create / prepare_message / call), and
+// is cheaper than constructing an object (which needs an evmc::VM and a
+// protocol::Transaction).
+template class bcos::executor_v1::eth::EthereumHost<bcos::executor_v1::MutableStorage>;
 
 namespace
 {
