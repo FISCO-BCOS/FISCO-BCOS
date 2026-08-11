@@ -40,7 +40,9 @@ struct EthBlockInfo
     address coinbase;
     int64_t difficulty = 0;
     bytes32 prev_randao;
-    /// The EIP-1559 base fee, since London.
+    /// The EIP-1559 base fee. Zero before London — consumers gate on the
+    /// revision (get_tx_context here and split-4/4's fee accounting), so the
+    /// caller may pass the raw configured value.
     uint64_t base_fee = 0;
     /// Blob gas used / excess (EIP-4844).
     std::optional<uint64_t> blob_gas_used;
@@ -608,13 +610,19 @@ evmc::Result EthereumHost<Storage>::call(const evmc_message& orig_msg) noexcept
 template <class Storage>
 evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
 {
+    // EIP-1559 base fee, revision-adjusted here: pre-London blocks have no base
+    // fee, and the host must not report a nonzero one (GASPRICE). This is the
+    // same gate as split-4/4's fee accounting (EthereumTransition.h), so both
+    // consumers agree on the field's precondition.
+    const auto base_fee = (m_rev >= EVMC_LONDON) ? m_block.base_fee : 0;
+
     // TODO: The effective gas price is already computed in transaction validation.
     const auto max_gas_price = ethMaxGasPrice(m_tx, m_callParams);
     const auto max_priority_gas_price = ethMaxPriorityGasPrice(m_tx, m_callParams);
-    assert(max_gas_price >= m_block.base_fee || max_gas_price == 0);
+    assert(max_gas_price >= base_fee || max_gas_price == 0);
     const auto priority_gas_price =
-        std::min(max_priority_gas_price, max_gas_price - m_block.base_fee);
-    const auto effective_gas_price = m_block.base_fee + priority_gas_price;
+        std::min(max_priority_gas_price, max_gas_price - base_fee);
+    const auto effective_gas_price = base_fee + priority_gas_price;
 
     const auto sender = ethSender(m_tx);
 
@@ -627,7 +635,7 @@ evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
         m_block.gas_limit,
         m_block.prev_randao,
         0x01_bytes32,  // Chain ID is expected to be 1 (matches evmone).
-        evmc::uint256be{m_block.base_fee},
+        evmc::uint256be{base_fee},
         intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
         m_blobHashes.data(),
         m_blobHashes.size(),
