@@ -34,7 +34,6 @@
     "fakeit",
     "tbb",
     "jsoncpp",
-    "nlohmann-json",
     "jwt-cpp",
     "gmp",
     "curl",
