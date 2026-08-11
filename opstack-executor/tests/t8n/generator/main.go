@@ -47,6 +47,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -103,7 +104,7 @@ func main() {
 		// the ASSEMBLED valid product of a base case and re-emit it as an invalid
 		// vector). corrupt emits invalid_<base>_<field>.json for every §4a field;
 		// static emits invalid_<base>_static_<n>.json for every §4c item.
-		invalidMode = flag.String("mode", "", "corrupt|static: emit invalid vectors from a base case stem")
+		invalidMode = flag.String("mode", "", "corrupt|static|invalid-tx: emit invalid vectors from a base case stem; chain:<N>[:fork|:break]: emit a linear chain / fork / break vector")
 		baseStem    = flag.String("base", "isthmus_transfer_basic", "base case stem for --mode=corrupt/static (e.g. isthmus_transfer_basic)")
 		invalidOut  = flag.String("out-dir", "", "output dir for --mode=corrupt/static invalid vectors")
 	)
@@ -147,6 +148,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
+	case strings.HasPrefix(*invalidMode, "chain:"):
+		if err := runChainMode(*invalidMode, *invalidOut, *opGethCommit); err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
+			os.Exit(1)
+		}
 	case *invalidMode == "corrupt" || *invalidMode == "static" || *invalidMode == "invalid-tx":
 		if err := runInvalidMode(*invalidMode, *baseStem, *invalidOut, *opGethCommit); err != nil {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
@@ -158,7 +164,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --probe-precompile <fork> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>] | --mode corrupt|static|invalid-tx --base <stem> --out-dir <dir> [--op-geth-commit <sha>]")
+		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --probe-precompile <fork> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>] | --mode corrupt|static|invalid-tx --base <stem> --out-dir <dir> [--op-geth-commit <sha>] | --mode chain:<N>[:fork|:break] --out-dir <dir> [--op-geth-commit <sha>]")
 		os.Exit(2)
 	}
 }
@@ -455,9 +461,13 @@ type rejectExpected struct {
 // for the T8n processOpBlock throw path (task 1/2 vectors).
 type fiscoReject struct {
 	Consumer                string          `json:"consumer,omitempty"`
-	Classification          string          `json:"classification"`              // INVALID | SYNCING
+	Classification          string          `json:"classification"`              // INVALID | SYNCING | -32603 | -38005
 	LatestValidHash         json.RawMessage `json:"latest_valid_hash,omitempty"` // "parent" | null (INVALID only)
 	ValidationErrorContains string          `json:"validation_error_contains,omitempty"`
+	// ExpectThrow is the engine-throw class the E2E runner asserts via
+	// BOOST_CHECK_THROW (OpNewPayloadRpcE2eTest.cpp runInvalidVector):
+	// "OpExecutionInternalError" for the -32603 same-height fork two-pour.
+	ExpectThrow string `json:"expect_throw,omitempty"`
 }
 
 // outputAccount is the canonical EF state-test account shape:
@@ -525,6 +535,11 @@ type invalidVectorDoc struct {
 	PostState  *types.GenesisAlloc    `json:"postState,omitempty"`
 	OpPayload  map[string]interface{} `json:"_op_payload"`
 	OpExpected invalidExpected        `json:"_op_expected"`
+	// OpCanonical is the -32603 two-pour carrier (Task 2 handoff): the
+	// CANONICAL sibling's full ExecutionPayload (with parentBeaconBlockRoot),
+	// which the E2E runner pours FIRST and expects VALID. Only chain_fork_*
+	// vectors carry it.
+	OpCanonical map[string]interface{} `json:"_op_canonical,omitempty"`
 }
 
 // invalidExpected is the lean _op_expected for invalid vectors: only the reject
@@ -1591,6 +1606,380 @@ func runChainPair(outputDir, opGethCommit string) error {
 	return nil
 }
 
+// ---------------------------------------------------------------------
+// Task 5: chain mode (spec §1b). A NEW output shape: one GenerateChainWithGenesis
+// call for n>=3 blocks, emitted as `{ "blocks": [...] }` -- NOT the flat
+// per-block files of runChainPair (:1546). The replayer (OpT8nReplayTest.cpp
+// replayChainVector :1044) inherits the running chain state across blocks:
+// blocks[0] carries `pre`, blocks[i>0] emit NO pre (null/absent -- a real pre
+// object would reset the state). Each block MUST carry its own
+// _op_expected.header/receipts + postState (Task 1 handoff: replaySingleBlockInto
+// reads them with .at(), missing = out_of_range). Recipe constraint (review
+// R13): chain blocks must not read historical blockhashes (ParentOnlyBlockHashes
+// only answers number-1) -- the attributes-deposit + transfer recipe is safe.
+// ---------------------------------------------------------------------
+
+// chainBlockOutput is one block of the chain-mode vector. `pre` is a pointer +
+// omitempty so blocks[i>0] emit NO pre key (the replayer inherits chainState).
+type chainBlockOutput struct {
+	Info       caseInfo                          `json:"_info"`
+	Env        outputEnv                         `json:"env"`
+	Pre        *map[common.Address]outputAccount `json:"pre,omitempty"`
+	Block      outputBlock                       `json:"block"`
+	PostState  types.GenesisAlloc                `json:"postState"`
+	OpExpected opExpected                        `json:"_op_expected"`
+}
+
+// chainOutput is the chain-mode vector schema (spec §1b): a top-level `blocks`
+// array. The outer file wraps it in `_op_test_vectors` + the vector id, same
+// as every other vector.
+type chainOutput struct {
+	Blocks []chainBlockOutput `json:"blocks"`
+}
+
+// chainContext is the internal (non-JSON) chain result the fork/break arms
+// need: the raw generated blocks (txs come from block.Transactions()), the
+// genesis, the chain config and the genesis pre-state. processChainN's public
+// *chainOutput derives from it.
+type chainContext struct {
+	cfg        *params.ChainConfig
+	genesis    *core.Genesis
+	genesisPre types.GenesisAlloc
+	blocks     []*types.Block
+}
+
+// generateChainN builds an n-block linear chain (spec §1b): ONE
+// GenerateChainWithGenesis(n) call (real chain_makers parent-chaining -- block
+// i's pre-state IS block i-1's generated post-state), self-checked by
+// InsertChain-ing ALL n blocks together, then assembled per-block into the
+// chain vector. The per-block recipe is the chain-pair recipe (L1-attributes
+// deposit + a sender transfer with the real chained nonce from bg.TxNonce).
+func generateChainN(fork string, n int) (*chainOutput, *chainContext, error) {
+	if n < 3 {
+		return nil, nil, fmt.Errorf("generateChainN: n must be >= 3 (got %d)", n)
+	}
+	cfg, err := buildChainConfig(fork)
+	if err != nil {
+		return nil, nil, err
+	}
+	jovianCfg := fork == "jovian"
+	fp := defaultFeeParams()
+	if jovianCfg {
+		fp.daScalar = 400 // non-zero DA scalar: block DA footprint observable
+	}
+	const (
+		genesisTime = uint64(1000)
+		denom       = uint64(50)
+		elasticity  = uint64(6)
+		gasLimit    = uint64(10_000_000)
+	)
+	beaconRoot := common.HexToHash("0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c")
+	senderAddr := addrOfKey(1)
+	genesisPre := types.GenesisAlloc{
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(fork)},
+		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
+		senderAddr:        {Balance: eth(100)},
+	}
+	// Jovian requires a non-nil minBaseFee in EncodeOptimismExtraData (see
+	// processChainPair for the panic rationale).
+	var minBaseFee *uint64
+	knobs := genesisKnobs{
+		Timestamp:          math.HexOrDecimal64(genesisTime),
+		GasLimit:           math.HexOrDecimal64(gasLimit),
+		BaseFee:            hdu(1_000_000_000),
+		EIP1559Denominator: math.HexOrDecimal64(denom),
+		EIP1559Elasticity:  math.HexOrDecimal64(elasticity),
+	}
+	if jovianCfg {
+		v := uint64(0)
+		minBaseFee = &v
+		knobs.MinBaseFee = hd64(0)
+	}
+	genesis := &core.Genesis{
+		Config:     cfg,
+		Timestamp:  genesisTime,
+		GasLimit:   gasLimit,
+		BaseFee:    big.NewInt(1_000_000_000),
+		Difficulty: big.NewInt(0),
+		ExtraData:  eip1559.EncodeOptimismExtraData(cfg, genesisTime, denom, elasticity, minBaseFee),
+		Alloc:      genesisPre,
+	}
+
+	engine := beacon.New(ethash.NewFaker())
+	var (
+		db          ethdb.Database
+		blocks      []*types.Block
+		receiptsAll []types.Receipts
+	)
+	ins := make([]*inputCase, n)
+	txSets := make([][]*types.Transaction, n)
+	outSets := make([][]json.RawMessage, n)
+	if err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("GenerateChainWithGenesis panic: %v", r)
+			}
+		}()
+		db, blocks, receiptsAll = core.GenerateChainWithGenesis(genesis, engine, n, func(i int, bg *core.BlockGen) {
+			blockTime := bg.Timestamp() // chain_makers: parent.Time()+10, real per-block advance
+			blockExtra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, minBaseFee)
+			bg.SetCoinbase(sequencerVault)
+			bg.SetExtra(blockExtra)
+			bg.SetParentBeaconRoot(beaconRoot)
+			signer := bg.Signer() // == MakeSigner(cfg, bg.Number(), bg.Timestamp())
+
+			attr := fp.attributesTx(fmt.Sprintf("chainN_%d_%d", n, i), fork)
+			tx0, outTx0, terr := buildTx(&attr, signer, cfg)
+			if terr != nil {
+				panic(fmt.Errorf("block %d attributes tx: %w", i, terr))
+			}
+			bg.AddTx(tx0)
+
+			nonce := bg.TxNonce(senderAddr) // real chained nonce (0, 1, 2, ...)
+			transfer := transferTx(1, nonce, recA, eth(1), 21_000, nil)
+			tx1, outTx1, terr := buildTx(&transfer, signer, cfg)
+			if terr != nil {
+				panic(fmt.Errorf("block %d transfer tx: %w", i, terr))
+			}
+			bg.AddTx(tx1)
+
+			in := &inputCase{
+				Info: caseInfo{Hardfork: fork,
+					Description: fmt.Sprintf("linear chain of %d blocks (spec §1b), block %d/%d", n, i+1, n)},
+				Genesis:               knobs,
+				Coinbase:              sequencerVault,
+				ParentBeaconBlockRoot: beaconRoot,
+				Transactions:          []inputTx{attr, transfer},
+			}
+			if i == 0 {
+				in.Pre = genesisPre // block i>0's Pre is filled AFTER assembly, from i-1's postState
+			}
+			ins[i] = in
+			txSets[i] = []*types.Transaction{tx0, tx1}
+			outSets[i] = []json.RawMessage{outTx0, outTx1}
+		})
+		return nil
+	}(); err != nil {
+		return nil, nil, err
+	}
+	if len(blocks) != n {
+		return nil, nil, fmt.Errorf("expected %d generated blocks, got %d", n, len(blocks))
+	}
+
+	// Self-check: independent fresh DB, Process+ValidateState over ALL n blocks
+	// in sequence -- this IS the "经 InsertChain 头校验" the chain exists to
+	// exercise (real parent-child header linkage).
+	if err := selfCheck(genesis, blocks); err != nil {
+		return nil, nil, fmt.Errorf("chain InsertChain self-check FAILED: %w", err)
+	}
+
+	out := &chainOutput{Blocks: make([]chainBlockOutput, n)}
+	for i := range blocks {
+		// Decision A2 generalized: block i's pre IS block i-1's post-state
+		// (the existing ins[1].Pre = outA.PostState for the chain pair).
+		if i > 0 {
+			ins[i].Pre = out.Blocks[i-1].PostState
+		}
+		if err := assertL1BlockConsistency(cfg, ins[i]); err != nil {
+			return nil, nil, fmt.Errorf("block %d: %w", i, err)
+		}
+		if err := assertDepositsFirst(ins[i].Transactions); err != nil {
+			return nil, nil, fmt.Errorf("block %d: %w", i, err)
+		}
+		signer := types.MakeSigner(cfg, blocks[i].Number(), blocks[i].Time())
+		var startRoot common.Hash
+		if i == 0 {
+			startRoot = genesis.ToBlock().Root()
+		} else {
+			startRoot = blocks[i-1].Root() // replay origin = previous post-state (Task 5 前置 fix)
+		}
+		o, _, err := assembleOutput(ins[i], cfg, signer, genesis, db, blocks[i], receiptsAll[i], txSets[i], outSets[i], startRoot)
+		if err != nil {
+			return nil, nil, fmt.Errorf("chain block %d: %w", i, err)
+		}
+		var pre *map[common.Address]outputAccount
+		if i == 0 {
+			p := emitPre(ins[i].Pre)
+			pre = &p
+		}
+		out.Blocks[i] = chainBlockOutput{
+			Info: o.Info, Env: o.Env, Pre: pre, Block: o.Block,
+			PostState: o.PostState, OpExpected: o.OpExpected,
+		}
+	}
+	return out, &chainContext{
+		cfg: cfg, genesis: genesis, genesisPre: genesisPre, blocks: blocks,
+	}, nil
+}
+
+// processChainN is the public chain-mode entry (Task 5 interface): an n-block
+// linear chain vector. The fork/break arms use generateChainN directly for the
+// internal context.
+func processChainN(fork string, n int) (*chainOutput, error) {
+	out, _, err := generateChainN(fork, n)
+	return out, err
+}
+
+// genSiblingFork builds a SECOND child of the same parent at the same height as
+// firstChild (a SIBLING block): same parent (genesis), same height 1, but
+// different content (a larger transfer value) so its hash differs. op-geth
+// InsertChain ACCEPTS the sibling as a side chain -- the divergence recorded in
+// the fork carrier's op_geth anchor ("VALID (side chain)"). The FISCO engine
+// gate rejects the SECOND pour of the same height with -32603
+// OpExecutionInternalError (SYS_NUMBER_2_HASH collision, Task 2 two-pour).
+func genSiblingFork(firstChild *types.Block, cfg *params.ChainConfig, genesis *core.Genesis) (*types.Block, error) {
+	if firstChild == nil || cfg == nil || genesis == nil {
+		return nil, fmt.Errorf("genSiblingFork: nil firstChild/cfg/genesis")
+	}
+	if firstChild.NumberU64() != 1 {
+		return nil, fmt.Errorf("genSiblingFork: firstChild must be height 1 (child of genesis), got %d", firstChild.NumberU64())
+	}
+	jovianCfg := cfg.IsJovian(firstChild.Time())
+	fork := "isthmus"
+	if jovianCfg {
+		fork = "jovian"
+	}
+	fp := defaultFeeParams()
+	if jovianCfg {
+		fp.daScalar = 400
+	}
+	denom := uint64(50)
+	elasticity := uint64(6)
+	var minBaseFee *uint64
+	if jovianCfg {
+		v := uint64(0)
+		minBaseFee = &v
+	}
+	var beaconRoot common.Hash
+	if firstChild.Header().ParentBeaconRoot != nil {
+		beaconRoot = *firstChild.Header().ParentBeaconRoot
+	}
+	engine := beacon.New(ethash.NewFaker())
+	var (
+		db     ethdb.Database
+		blocks []*types.Block
+	)
+	if err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("GenerateChainWithGenesis panic: %v", r)
+			}
+		}()
+		db, blocks, _ = core.GenerateChainWithGenesis(genesis, engine, 1, func(i int, bg *core.BlockGen) {
+			blockTime := bg.Timestamp()
+			blockExtra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, minBaseFee)
+			bg.SetCoinbase(sequencerVault)
+			bg.SetExtra(blockExtra)
+			bg.SetParentBeaconRoot(beaconRoot)
+			signer := bg.Signer()
+			attr := fp.attributesTx("sibling_fork", fork)
+			tx0, _, terr := buildTx(&attr, signer, cfg)
+			if terr != nil {
+				panic(fmt.Errorf("sibling attributes tx: %w", terr))
+			}
+			bg.AddTx(tx0)
+			nonce := bg.TxNonce(addrOfKey(1))
+			// 2 ETH instead of the canonical 1 ETH -> different state root ->
+			// different block hash, same parent + height.
+			transfer := transferTx(1, nonce, recA, eth(2), 21_000, nil)
+			tx1, _, terr := buildTx(&transfer, signer, cfg)
+			if terr != nil {
+				panic(fmt.Errorf("sibling transfer tx: %w", terr))
+			}
+			bg.AddTx(tx1)
+		})
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+	_ = db // the sibling's generation DB is only needed for its own assembly; the carrier uses the block
+	if len(blocks) != 1 {
+		return nil, fmt.Errorf("expected 1 sibling block, got %d", len(blocks))
+	}
+	sibling := blocks[0]
+	if sibling.Hash() == firstChild.Hash() {
+		return nil, fmt.Errorf("sibling hash %s equals firstChild (recipe did not diverge)", sibling.Hash().Hex())
+	}
+	if sibling.ParentHash() != firstChild.ParentHash() {
+		return nil, fmt.Errorf("sibling parent %s != firstChild parent %s (must share parent)", sibling.ParentHash().Hex(), firstChild.ParentHash().Hex())
+	}
+	if sibling.NumberU64() != firstChild.NumberU64() {
+		return nil, fmt.Errorf("sibling number %d != firstChild number %d", sibling.NumberU64(), firstChild.NumberU64())
+	}
+	return sibling, nil
+}
+
+// buildForkVector assembles the chain_fork carrier (spec §1b fork arm): the
+// canonical child's full ExecutionPayload under _op_canonical (Task 2 handoff
+// field name -- the E2E runner pours it FIRST and expects VALID, writing
+// SYS_NUMBER_2_HASH[1]) and the sibling's payload under _op_payload (the SECOND
+// pour of the same height, which collides -> -32603 OpExecutionInternalError).
+// op_geth documents the divergence: op-geth ACCEPTS the side-chain sibling.
+func buildForkVector(fork string, canonical, sibling *types.Block, genesisPre types.GenesisAlloc) (invalidVectorDoc, error) {
+	if canonical == nil || sibling == nil {
+		return invalidVectorDoc{}, fmt.Errorf("buildForkVector: nil canonical/sibling")
+	}
+	return invalidVectorDoc{
+		Info: caseInfo{
+			Hardfork: fork,
+			Description: fmt.Sprintf("same-parent same-height fork: canonical %s + sibling %s (two-pour -32603)",
+				canonical.Hash().Hex(), sibling.Hash().Hex()),
+		},
+		Pre:         emitPre(genesisPre),
+		OpPayload:   buildPayloadFromHeader(sibling.Header(), sibling.Hash(), sibling.Transactions()),
+		OpCanonical: buildPayloadFromHeader(canonical.Header(), canonical.Hash(), canonical.Transactions()),
+		OpExpected: invalidExpected{
+			Reject: &rejectExpected{
+				OpGeth: "VALID (side chain)",
+				Fisco: fiscoReject{
+					Consumer:        "engine",
+					Classification:  "-32603",
+					LatestValidHash: json.RawMessage("null"),
+					ExpectThrow:     "OpExecutionInternalError",
+				},
+			},
+		},
+	}, nil
+}
+
+// genParentBreak builds the chain-break carrier (spec §1b break arm): the
+// chain's height-1 block re-emitted with parentHash pointing at an UNKNOWN
+// ancestor (0x...01), which classifies SYNCING (consumer: engine). The E2E
+// runner SKIPS parent registration for SYNCING vectors (OpNewPayloadRpcE2eTest
+// runInvalidVector) and asserts newPayload -> Syncing. The op_geth anchor is
+// the real InsertChain "unknown ancestor" rejection.
+func genParentBreak(fork string, block *types.Block, cfg *params.ChainConfig, genesis *core.Genesis, genesisPre types.GenesisAlloc) (invalidVectorDoc, error) {
+	if block == nil || cfg == nil || genesis == nil {
+		return invalidVectorDoc{}, fmt.Errorf("genParentBreak: nil block/cfg/genesis")
+	}
+	header := types.CopyHeader(block.Header())
+	header.ParentHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	blockHash := recomputeOpHeaderHash(header)
+	payload := buildPayloadFromHeader(header, blockHash, block.Transactions())
+	msg, err := captureInsertChainRejection(genesis, block.WithSeal(header))
+	if err != nil {
+		return invalidVectorDoc{}, fmt.Errorf("genParentBreak: InsertChain capture: %w", err)
+	}
+	return invalidVectorDoc{
+		Info: caseInfo{
+			Hardfork: fork,
+			Description: fmt.Sprintf("parent break: %s re-emitted with unknown parent 0x...01 (SYNCING)",
+				block.Hash().Hex()),
+		},
+		Pre:       emitPre(genesisPre),
+		OpPayload: payload,
+		OpExpected: invalidExpected{
+			Reject: &rejectExpected{
+				OpGeth: msg,
+				Fisco: fiscoReject{
+					Consumer:       "engine",
+					Classification: "SYNCING",
+				},
+			},
+		},
+	}, nil
+}
+
 func selfCheck(genesis *core.Genesis, blocks []*types.Block) error {
 	engine := beacon.New(ethash.NewFaker())
 	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, nil)
@@ -1734,6 +2123,98 @@ func buildBlockVector(in *inputCase) (*blockVector, error) {
 		in: in, cfg: cfg, signer: signer, genesis: genesis, block: block,
 		txs: txs, receipts: receipts, outTxs: outTxs, vec: vec, golden: golden,
 	}, nil
+}
+
+// runChainMode implements --mode=chain:<N>[:fork|:break] (Task 5). n>=3 emits
+// the linear-chain vector (isthmus_chain_<n>.json + jovian_chain_<n>.json);
+// :fork emits the same-parent fork carrier (chain_fork, -32603 two-pour);
+// :break emits the unknown-parent SYNCING carrier.
+func runChainMode(mode, outDir, opGethCommit string) error {
+	if outDir == "" {
+		return fmt.Errorf("--out-dir is required for --mode=chain")
+	}
+	rest := strings.TrimPrefix(mode, "chain:")
+	parts := strings.Split(rest, ":")
+	if len(parts) == 0 || parts[0] == "" {
+		return fmt.Errorf("--mode=chain:<N>[:fork|:break], got %q", mode)
+	}
+	n, err := strconv.Atoi(parts[0])
+	if err != nil || n < 3 {
+		return fmt.Errorf("--mode=chain:<N> requires N>=3, got %q", parts[0])
+	}
+	variant := ""
+	if len(parts) > 1 {
+		variant = parts[1]
+	}
+	if variant != "" && variant != "fork" && variant != "break" {
+		return fmt.Errorf("--mode=chain:<N>[:fork|:break], got variant %q", variant)
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
+	}
+	for _, fork := range []string{"isthmus", "jovian"} {
+		chain, ctx, err := generateChainN(fork, n)
+		if err != nil {
+			return fmt.Errorf("%s chain %d: %w", fork, n, err)
+		}
+		switch variant {
+		case "":
+			stem := fmt.Sprintf("%s_chain_%d", fork, n)
+			if err := writeChainVector(outDir, stem, chain, opGethCommit); err != nil {
+				return err
+			}
+		case "fork":
+			canonical := ctx.blocks[0] // height-1 child of genesis (the canonical first pour)
+			sibling, err := genSiblingFork(canonical, ctx.cfg, ctx.genesis)
+			if err != nil {
+				return fmt.Errorf("%s fork: %w", fork, err)
+			}
+			doc, err := buildForkVector(fork, canonical, sibling, ctx.genesisPre)
+			if err != nil {
+				return fmt.Errorf("%s fork carrier: %w", fork, err)
+			}
+			if err := writeInvalidVector(outDir, fmt.Sprintf("%s_chain_%d_fork", fork, n), doc, opGethCommit); err != nil {
+				return err
+			}
+		case "break":
+			doc, err := genParentBreak(fork, ctx.blocks[0], ctx.cfg, ctx.genesis, ctx.genesisPre)
+			if err != nil {
+				return fmt.Errorf("%s break: %w", fork, err)
+			}
+			if err := writeInvalidVector(outDir, fmt.Sprintf("%s_chain_%d_break", fork, n), doc, opGethCommit); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// writeChainVector writes one chain-mode vector as vectors/<stem>.json with the
+// same outer-wrapping convention as run() (a `_op_test_vectors` meta object plus
+// the single vector object keyed by the stem).
+func writeChainVector(outDir, stem string, chain *chainOutput, opGethCommit string) error {
+	meta, err := json.Marshal(struct {
+		Version         string `json:"version"`
+		Generator       string `json:"generator"`
+		GeneratorCommit string `json:"generator_commit"`
+	}{schemaVersion, "opt8n-ref", opGethCommit})
+	if err != nil {
+		return err
+	}
+	docBytes, err := json.Marshal(chain)
+	if err != nil {
+		return err
+	}
+	out := map[string]json.RawMessage{
+		"_op_test_vectors": meta,
+		stem:               docBytes,
+	}
+	outBytes, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	outBytes = append(outBytes, '\n')
+	return os.WriteFile(filepath.Join(outDir, stem+".json"), outBytes, 0o644)
 }
 
 // runInvalidMode dispatches the --mode=corrupt / --mode=static CLI paths. Both
@@ -2336,17 +2817,25 @@ func fiscoExtraDataMessage(cfg *params.ChainConfig, blockTime uint64) string {
 // from a (possibly corrupt) header. Field names/units follow makeParamsJson
 // (GoldenSample.h): timestamp in OP seconds; every quantity a hex string.
 func buildOpPayload(base *blockVector, header *types.Header, blockHash common.Hash) map[string]interface{} {
+	return buildPayloadFromHeader(header, blockHash, base.txs)
+}
+
+// buildPayloadFromHeader assembles the full ExecutionPayload JSON from a
+// (possibly corrupt) header + its tx list. Shared by buildOpPayload (the
+// blockVector path) and the Task 5 chain fork/break carriers (which have raw
+// *types.Block and no blockVector).
+func buildPayloadFromHeader(header *types.Header, blockHash common.Hash, txs []*types.Transaction) map[string]interface{} {
 	if header.WithdrawalsHash == nil || header.BlobGasUsed == nil || header.ExcessBlobGas == nil {
 		// Cannot happen on the isthmus/jovian path (assembleOutput asserts the
 		// first two; buildGoldenRecord asserts ExcessBlobGas == 0) -- guard for
 		// a nil-deref-free error surface.
-		panic("buildOpPayload: header missing WithdrawalsHash/BlobGasUsed/ExcessBlobGas")
+		panic("buildPayloadFromHeader: header missing WithdrawalsHash/BlobGasUsed/ExcessBlobGas")
 	}
-	txHexes := make([]string, len(base.txs))
-	for i, tx := range base.txs {
+	txHexes := make([]string, len(txs))
+	for i, tx := range txs {
 		b, err := tx.MarshalBinary()
 		if err != nil {
-			panic("buildOpPayload: tx MarshalBinary: " + err.Error())
+			panic("buildPayloadFromHeader: tx MarshalBinary: " + err.Error())
 		}
 		txHexes[i] = hexutil.Encode(b)
 	}

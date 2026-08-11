@@ -15,7 +15,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
@@ -311,6 +314,180 @@ func TestChainPairReplayStartRoot(t *testing.T) {
 		if acc.Nonce != 1 {
 			t.Fatalf("%s: block B pre sender nonce want 1 (block A spent nonce 0), got %d", fork, acc.Nonce)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------
+// Task 5 TDD tests — chain mode (N>=3 linear chain + same-parent fork + parent
+// break). ⚠️ Every test references at least one function that is UNDEFINED
+// before the implementation lands (processChainN / generateChainN /
+// genSiblingFork / buildForkVector / genParentBreak). Before Step 3 this file
+// fails to COMPILE (real red); after implementation it goes green.
+// ---------------------------------------------------------------------
+
+func TestChain3Blocks(t *testing.T) {
+	for _, fork := range []string{"isthmus", "jovian"} {
+		out, err := processChainN(fork, 3)
+		if err != nil {
+			t.Fatalf("processChainN(%s, 3): %v", fork, err)
+		}
+		if out == nil || len(out.Blocks) != 3 {
+			t.Fatalf("%s: chain must have 3 blocks, got %d", fork, len(out.Blocks))
+		}
+		sender := addrOfKey(1)
+		for i, blk := range out.Blocks {
+			// Every block must carry its own _op_expected.header + receipts and
+			// postState (Task 1 handoff contract -- replaySingleBlockInto reads
+			// them with .at(), missing = out_of_range).
+			h := blk.OpExpected.Header
+			if h.GasUsed == "" || h.ReceiptsRoot == "" || h.StateRoot == "" || h.WithdrawalsRoot == "" {
+				t.Fatalf("%s block %d: incomplete header expectation %+v", fork, i, h)
+			}
+			if len(blk.OpExpected.Receipts) != 2 {
+				t.Fatalf("%s block %d: want 2 receipts (deposit + transfer), got %d", fork, i, len(blk.OpExpected.Receipts))
+			}
+			// State accumulates across the chain: block i's postState carries
+			// sender nonce i+1 (block 0 transfer spends nonce 0, block 1 spends 1,
+			// block 2 spends 2).
+			acc, ok := blk.PostState[sender]
+			if !ok {
+				t.Fatalf("%s block %d: postState missing sender %s", fork, i, sender.Hex())
+			}
+			if acc.Nonce != uint64(i+1) {
+				t.Fatalf("%s block %d: sender postState nonce want %d, got %d", fork, i, i+1, acc.Nonce)
+			}
+			// pre present ONLY on block 0 (the replayer inherits the running
+			// chain state for blocks i>0).
+			if i == 0 {
+				if blk.Pre == nil {
+					t.Fatalf("%s block 0 must carry pre", fork)
+				}
+			} else if blk.Pre != nil {
+				t.Fatalf("%s block %d must NOT carry pre (replayer inherits chain state)", fork, i)
+			}
+		}
+	}
+}
+
+func TestSiblingForkIsDivergence(t *testing.T) {
+	// Build the chain to obtain the canonical height-1 child (block 0).
+	_, ctx, err := generateChainN("isthmus", 3)
+	if err != nil {
+		t.Fatalf("generateChainN: %v", err)
+	}
+	canonical := ctx.blocks[0]
+	sibling, err := genSiblingFork(canonical, ctx.cfg, ctx.genesis)
+	if err != nil {
+		t.Fatalf("genSiblingFork: %v", err)
+	}
+	// Same parent + same height, different hash.
+	if sibling.Hash() == canonical.Hash() {
+		t.Fatalf("sibling must diverge from canonical, both %s", canonical.Hash().Hex())
+	}
+	if sibling.ParentHash() != canonical.ParentHash() {
+		t.Fatalf("sibling parent %s != canonical parent %s (must share parent)", sibling.ParentHash().Hex(), canonical.ParentHash().Hex())
+	}
+	if sibling.NumberU64() != canonical.NumberU64() {
+		t.Fatalf("sibling number %d != canonical number %d (must share height)", sibling.NumberU64(), canonical.NumberU64())
+	}
+	// ⚠️ Minimal experiment (review-required): op-geth InsertChain must ACCEPT
+	// the side-chain sibling -- the divergence recorded as "VALID (side chain)".
+	// First insert the canonical child, then the sibling as a side chain. (In a
+	// plain beacon-engine NewBlockChain with no explicit forkChoiceUpdate, geth
+	// moves its local head to the last-inserted same-height block; that internal
+	// artifact is NOT asserted -- only the nil acceptance, which is the divergence.)
+	engine := beacon.New(ethash.NewFaker())
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), ctx.genesis, engine, nil)
+	if err != nil {
+		t.Fatalf("NewBlockChain: %v", err)
+	}
+	defer chain.Stop()
+	if _, err := chain.InsertChain(types.Blocks{canonical}); err != nil {
+		t.Fatalf("InsertChain canonical: %v", err)
+	}
+	if _, err := chain.InsertChain(types.Blocks{sibling}); err != nil {
+		t.Fatalf("expected op-geth accept (side chain), got: %v", err)
+	}
+}
+
+func TestForkCarrierSchema(t *testing.T) {
+	_, ctx, err := generateChainN("isthmus", 3)
+	if err != nil {
+		t.Fatalf("generateChainN: %v", err)
+	}
+	canonical := ctx.blocks[0]
+	sibling, err := genSiblingFork(canonical, ctx.cfg, ctx.genesis)
+	if err != nil {
+		t.Fatalf("genSiblingFork: %v", err)
+	}
+	doc, err := buildForkVector("isthmus", canonical, sibling, ctx.genesisPre)
+	if err != nil {
+		t.Fatalf("buildForkVector: %v", err)
+	}
+	// Task 2 handoff: the -32603 carrier MUST carry _op_canonical (the E2E
+	// runner's two-pour reads it -- OpNewPayloadRpcE2eTest.cpp:563).
+	if doc.OpCanonical == nil {
+		t.Fatal("fork carrier missing _op_canonical")
+	}
+	if doc.OpPayload == nil {
+		t.Fatal("fork carrier missing _op_payload")
+	}
+	// _op_canonical must be the canonical child's payload (blockHash matches).
+	if ch, ok := doc.OpCanonical["blockHash"].(string); !ok || ch != canonical.Hash().Hex() {
+		t.Fatalf("_op_canonical blockHash want %s, got %v", canonical.Hash().Hex(), doc.OpCanonical["blockHash"])
+	}
+	// _op_payload must be the sibling's payload.
+	if ph, ok := doc.OpPayload["blockHash"].(string); !ok || ph != sibling.Hash().Hex() {
+		t.Fatalf("_op_payload blockHash want %s, got %v", sibling.Hash().Hex(), doc.OpPayload["blockHash"])
+	}
+	rej := rejectOf(doc)
+	if rej == nil {
+		t.Fatal("fork carrier missing reject")
+	}
+	if rej.Fisco.Classification != "-32603" {
+		t.Fatalf("classification want -32603, got %q", rej.Fisco.Classification)
+	}
+	if rej.Fisco.ExpectThrow != "OpExecutionInternalError" {
+		t.Fatalf("expect_throw want OpExecutionInternalError, got %q", rej.Fisco.ExpectThrow)
+	}
+	if string(rej.Fisco.LatestValidHash) != "null" {
+		t.Fatalf("-32603 latest_valid_hash want null, got %s", rej.Fisco.LatestValidHash)
+	}
+	if rej.OpGeth != "VALID (side chain)" {
+		t.Fatalf("op_geth want 'VALID (side chain)', got %q", rej.OpGeth)
+	}
+}
+
+func TestParentBreakSyncs(t *testing.T) {
+	_, ctx, err := generateChainN("isthmus", 3)
+	if err != nil {
+		t.Fatalf("generateChainN: %v", err)
+	}
+	doc, err := genParentBreak("isthmus", ctx.blocks[0], ctx.cfg, ctx.genesis, ctx.genesisPre)
+	if err != nil {
+		t.Fatalf("genParentBreak: %v", err)
+	}
+	rej := rejectOf(doc)
+	if rej == nil {
+		t.Fatal("break vector missing reject")
+	}
+	if rej.Fisco.Classification != "SYNCING" {
+		t.Fatalf("classification want SYNCING, got %q", rej.Fisco.Classification)
+	}
+	if rej.Fisco.Consumer != "engine" {
+		t.Fatalf("consumer want engine, got %q", rej.Fisco.Consumer)
+	}
+	if len(rej.Fisco.LatestValidHash) != 0 {
+		t.Fatalf("SYNCING must omit latest_valid_hash, got %s", rej.Fisco.LatestValidHash)
+	}
+	// payload parentHash must be the unknown ancestor (0x...01).
+	ph, ok := doc.OpPayload["parentHash"].(string)
+	if !ok || ph != "0x0000000000000000000000000000000000000000000000000000000000000001" {
+		t.Fatalf("break payload parentHash want unknown ancestor, got %v", ph)
+	}
+	// op-geth anchor: the real InsertChain "unknown ancestor" rejection.
+	if !strings.Contains(rej.OpGeth, "unknown ancestor") {
+		t.Fatalf("op_geth want 'unknown ancestor' substring, got %q", rej.OpGeth)
 	}
 }
 
