@@ -44,7 +44,7 @@ evmc::bytes32 MemoryState::get_storage(
 void MemoryState::applyDiff(const evmone::state::StateDiff& diff, bool seeding)
 {
     // `seeding` is accepted only to keep the interface uniform with Storage2State::applyDiff
-    // (seedFromTestState calls `ledger.applyDiff(diff, true)` for both ledger types); MemoryState
+    // (SeedPreState calls `ledger.applyDiff(diff, true)` for both ledger types); MemoryState
     // has no empty-account guard, so the parameter has no behavior and is ignored.
     (void)seeding;
 

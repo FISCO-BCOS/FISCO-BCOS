@@ -26,12 +26,10 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-ledger/mpt/Classify.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Overloaded.h>
-#include <boost/algorithm/hex.hpp>
-#include <algorithm>
-#include <array>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <opstack-executor/Storage2StateDetail.h>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/state/state_view.hpp>
@@ -52,10 +50,6 @@
 namespace bcos::evm::evmstate
 {
 
-/// Fixed length (32 bytes) of a raw storage-slot key in an account table, used to distinguish
-/// slot keys (evmc::bytes32) from the known short field names in ACCOUNT_TABLE_FIELDS during the
-/// has_storage range-seek probe.
-inline constexpr std::size_t kStorageSlotKeySize = sizeof(evmc_bytes32::bytes);
 
 template <class Storage>
 class Storage2State final : public evmone::state::StateView
@@ -189,7 +183,7 @@ public:
     /// already rejected at decode/processOpBlock), so none must ever be answered INVALID. The
     /// whole body is wrapped in one try/catch so every present and future throw point inherits
     /// that invariant; catch(...) guarantees the flag is set even when the known -fno-rtti
-    /// typed-catch bypass loses the message. `seeding` (true only for seedFromTestState, a
+    /// typed-catch bypass loses the message. `seeding` (true only for SeedPreState, a
     /// genesis snapshot) exempts the new-EIP-161-empty-account guard, which is otherwise on for
     /// the execution path.
     void applyDiff(const evmone::state::StateDiff& diff, bool seeding = false)
@@ -322,7 +316,7 @@ private:
         // created with erase_if_empty, e.g. zero-value CALL touch or authorization-list
         // get_or_insert) to deleted_accounts, so only a default get_or_insert that ends empty can
         // reach here — exactly the path this guard pins. `seeding` (true only for
-        // seedFromTestState, a genesis snapshot) exempts it; the execution path always runs with
+        // SeedPreState, a genesis snapshot) exempts it; the execution path always runs with
         // the guard on.
         if (!seeding && createdNew && entry.nonce == 0 && entry.balance == 0 &&
             (!entry.code.has_value() || entry.code->empty()))
@@ -446,76 +440,6 @@ private:
             m_storageCache, [&addr](const auto& item) { return item.first.first == addr; });
     }
 
-    /// Value-variant discrimination (Critical): storage2 logical deletion means range() merges do
-    /// NOT filter tombstones — a raw range item's value is the full
-    /// `storage2::StorageValueType<Value>` variant (NOT_EXISTS_TYPE/DELETED_TYPE/Value), and the
-    /// traversal must skip the two tombstone alternatives itself, or a block-internal delete
-    /// would resurrect into the state root. Returns the live content view, or nullopt for a
-    /// tombstone (either alternative) — the caller never needs to distinguish "never existed"
-    /// from "logically deleted", both mean "not part of this traversal".
-    template <class RawValue>
-    static std::optional<std::string_view> liveContent(const RawValue& rawValue)
-    {
-        return std::visit(
-            bcos::overloaded{[](const storage2::NOT_EXISTS_TYPE&)
-                                 -> std::optional<std::string_view> { return std::nullopt; },
-                [](const storage2::DELETED_TYPE&) -> std::optional<std::string_view> {
-                    return std::nullopt;
-                },
-                [](const auto& entry) -> std::optional<std::string_view> { return entry.get(); }},
-            rawValue);
-    }
-
-    /// Whether fieldKey is one of the ACCOUNT_TABLE_FIELDS full set
-    /// (CODE_HASH/CODE/BALANCE/ABI/NONCE/ALIVE/FROZEN/SHARD) — these rows are already read by
-    /// fetchAccount (or, for CODE, intentionally never read — see the file header comment on why
-    /// this bridge doesn't revive the legacy CODE field) and must not be misclassified as a
-    /// 32-byte storage slot key during the account-table range scan.
-    static bool isKnownAccountField(std::string_view fieldKey)
-    {
-        using Fields = bcos::ledger::ACCOUNT_TABLE_FIELDS;
-        return fieldKey == Fields::CODE_HASH || fieldKey == Fields::CODE ||
-               fieldKey == Fields::BALANCE || fieldKey == Fields::ABI ||
-               fieldKey == Fields::NONCE || fieldKey == Fields::ALIVE ||
-               fieldKey == Fields::FROZEN || fieldKey == Fields::SHARD;
-    }
-
-    /// Zero-valued slot rule: under Ethereum semantics "slot value == 0 ≡ slot does not exist",
-    /// so a 32-byte all-zero row must be treated as absent by every predicate (fetchAllStorage
-    /// skips it, probeHasStorage does not set has_storage for it). Content that is not exactly 32
-    /// bytes is conservatively treated as present (has_storage=true, i.e. refuse CREATE on it in
-    /// the EIP-7610 direction — not silently demoted to "zero/absent"); real length validation +
-    /// throw/poison stays on the authoritative read paths (fetchStorage / fetchAllStorage).
-    static bool isZeroSlotValue(std::string_view content) noexcept
-    {
-        return content.size() == sizeof(evmc_bytes32::bytes) &&
-               std::all_of(content.begin(), content.end(), [](char byte) { return byte == '\0'; });
-    }
-
-    /// Decodes the address embedded in a "/apps/<hex(addr)>" SYS_TABLES key, or nullopt when the
-    /// table is not an account table at all.
-    ///
-    /// Reuses the mainline MPT classifier `bcos::ledger::mpt::parseAccountTable`
-    /// (Classify.h:95-117: `/apps/` prefix + exactly 40 trailing hex chars, no-throw) rather than
-    /// reimplementing the rule: the `/apps/` namespace necessarily also holds non-account tables
-    /// (`/apps/<name>_accessAuth` authorization tables, BFS link tables
-    /// `/apps/<contractName>/<version>`). This function used to unhex those row-by-row and throw,
-    /// which poisoned every OP block on a production ledger and permanently dead-locked the node.
-    /// Reusing one classifier also keeps mainline MPT root and OP stateRoot agreeing on which
-    /// tables count as accounts (two copies of one rule is how the repo's yParity incident
-    /// happened). Classify.h is header-only (inline, depends only on bcos-utilities), so no link
-    /// edge to `ledger` is needed.
-    static std::optional<evmc::address> addressFromTableName(std::string_view tableKey)
-    {
-        auto parsed = bcos::ledger::mpt::parseAccountTable(tableKey);
-        if (!parsed.has_value())
-            return std::nullopt;
-        evmc::address addr{};
-        static_assert(sizeof(addr.bytes) == bcos::Address::SIZE,
-            "evmc::address and bcos::Address must both be 20 bytes for this memcpy");
-        std::memcpy(addr.bytes, parsed->data(), sizeof(addr.bytes));
-        return addr;
-    }
 
     /// Full account-table scan for visitAccounts: classifies every live row under tableName as
     /// one of ACCOUNT_TABLE_FIELDS (skipped — read separately by fetchAccount) / a 32-byte raw
@@ -656,41 +580,6 @@ private:
         }
     }
 
-    /// Account table path: unconditionally "/apps/" + hex_lower(addr) (feature_raw_address=off
-    /// precondition, see the file header). Verbatim same shape as the mainline MPT's
-    /// `bcos::ledger::mpt::accountTableName` (Classify.h:83-90) and strictly inverse to the
-    /// `parseAccountTable` reused above.
-    ///
-    /// The 8 `c_systemTxsAddress` addresses (0x1000/0x1003/0x1005/0x100b/0x1010/0x10001/0x10003/
-    /// 0x10004, PrecompiledTypeDef.h:143-149) are ORDINARY accounts here and must be collected
-    /// unconditionally — they are ordinary addresses on the Ethereum side, and this function used
-    /// to return false for them, which poisoned on any EVM touch (BALANCE/EXTCODESIZE/CALL, even a
-    /// bare access-list mention, or evmone putting read-only touched accounts into modified) and
-    /// permanently dead-locked the node on a perfectly legal block.
-    ///
-    /// Current semantics (three answers, all identical): read from `/apps/<40hex>` (missing table
-    /// -> nullopt = Ethereum empty account, matching op-geth); write to the same `/apps/<40hex>`
-    /// (must bypass EVMAccount's own /sys/ routing — see applyModifiedEntry); and it enters the
-    /// stateRoot iff that table exists, same rule as any other account — so visitAccounts needs no
-    /// extra guard. Treating system addresses as always-empty instead would silently drop balances
-    /// (an unobservable root divergence replacing a loud -32603) and would disagree with mainline
-    /// MPT, which has no system-address branch and already commits `/apps/...1000` as a plain
-    /// account. FISCO's own `/sys/<40hex>` control plane stays invisible to the OP execution world
-    /// (disjoint key spaces, no overwrite risk).
-    static std::string accountTableName(const evmc::address& addr)
-    {
-        std::array<char, sizeof(addr.bytes) * 2> hex{};  // NOLINT
-        boost::algorithm::hex_lower(
-            std::string_view(reinterpret_cast<const char*>(addr.bytes), sizeof(addr.bytes)),
-            hex.data());
-        std::string_view hexView(hex.data(), hex.size());
-
-        std::string tableName;
-        tableName.reserve(bcos::ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
-        tableName.append(bcos::ledger::SYS_DIRECTORY::USER_APPS);
-        tableName.append(hexView);
-        return tableName;
-    }
 
     /// `computeHasStorage=false` skips the `probeHasStorage` range scan. The KEEP contract for
     /// `has_storage` (present-but-empty is NOT nullopt) is untouched: this changes only WHETHER
