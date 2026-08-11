@@ -21,7 +21,6 @@
 //   * nested syncWait is safe only inside the x_state-serialized engine execution segment, where
 //     the storage2 backends complete synchronously in-thread (no true async suspension).
 
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -36,7 +35,6 @@
 #include <cstring>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
-#include <iterator>
 #include <limits>
 #include <map>
 #include <optional>
@@ -44,7 +42,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace bcos::evm::evmstate

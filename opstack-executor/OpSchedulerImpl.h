@@ -16,7 +16,6 @@
 // reused across blocks; thread-safety rests on the engine execution segment being serialized under
 // x_state, not on any locking inside this class.
 
-#include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
@@ -28,7 +27,6 @@
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <evmone/evmone.h>
 #include <opstack-executor/OpBlockExecute.h>
@@ -39,26 +37,18 @@
 #include <opstack-executor/OpTxDecode.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
-#include <bcos-evm/eth/state/block.hpp>
-#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/state/state_view.hpp>
 #include <bcos-evm/eth/state/system_contracts.hpp>
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <cstdint>
-#include <cstring>
 #include <evmc/evmc.hpp>
-#include <evmone_precompiles/secp256k1.hpp>
-#include <intx/intx.hpp>
-#include <limits>
 #include <map>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace bcos::evm::engine
