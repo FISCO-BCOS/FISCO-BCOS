@@ -243,7 +243,9 @@ evmone::state::Transaction bcosTransactionToEvmone(protocol::Transaction const& 
 
 bcos::u256 toBcosU256(intx::uint256 const& val)
 {
-    return bcos::u256(intx::to_string(val));
+    // Single canonical byte-copy conversion (see EVMSupport.h); no string
+    // round-trip on the old bridge's write path.
+    return evm::toBcosU256(val);
 }
 
 protocol::TransactionReceipt::Ptr evmoneReceiptToBcos(evmone::state::TransactionReceipt const& er,
