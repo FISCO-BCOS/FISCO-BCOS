@@ -20,6 +20,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
+#include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
@@ -123,6 +124,21 @@ public:
     {
         return bcos::evm::engine::commitmentsOf(
             result.seal, result.stateRoot, result.gasUsed, result.txRoot);
+    }
+
+    /// Projection/comparison pair for the engine's eight-field commitments check. Re-published
+    /// as static members so the engine reaches them as dependent names, keeping
+    /// EngineServiceImpl.h free of any bcos-evm type spelling (seam purity).
+    using CommitmentsT = bcos::evm::engine::OpBlockCommitments;
+    static CommitmentsT announcedCommitmentsOf(const bcos::engine::ExecutionPayload& payload,
+        const bcos::h256& transactionsRoot, const bcos::protocol::BlockHeader& ethHeader)
+    {
+        return bcos::evm::engine::announcedCommitmentsOf(payload, transactionsRoot, ethHeader);
+    }
+    static std::optional<std::string> mismatchedFieldOf(
+        const CommitmentsT& computed, const CommitmentsT& announced)
+    {
+        return bcos::evm::engine::mismatchedFieldOf(computed, announced);
     }
 
     /// transactionsRoot over raw EIP-2718 envelopes — the engine needs it *before* execution to
