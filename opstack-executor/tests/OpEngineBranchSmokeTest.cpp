@@ -12,7 +12,6 @@
 // the point.
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
-#include <bcos-evm/engine/OpSchedulerImpl.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
@@ -20,6 +19,7 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Wait.h>
+#include <opstack-executor/OpSchedulerImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <stdexcept>
 

@@ -24,7 +24,6 @@
 
 #pragma once
 
-#include "bcos-evm/opstack/OpBlockFinalize.h"
 #include "bcos-evm/opstack/OpFeeParams.h"
 #include "bcos-evm/opstack/OpForkSchedule.h"
 #include "bcos-evm/opstack/OpTransition.h"
@@ -37,6 +36,7 @@
 #include "bcos-task/TBBWait.h"
 #include "ethereum-executor/BCOS2Evmone.h"
 #include "ethereum-executor/StorageStateView.h"
+#include "opstack-executor/OpBlockFinalize.h"
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmc/evmc.hpp>
@@ -105,7 +105,7 @@ public:
         // injection params, so the stages run with default injection (zero fee / zero blockGasLeft
         // / zero chainId / no block hashes); the orchestrator's executeTransaction path threads
         // the real injection params through the same three stages.
-        bcos::evm::opstack::OpTxProperties m_props;  // set by prepare()
+        bcos::evm::opstack::OpTxProperties m_props;   // set by prepare()
         protocol::TransactionReceipt::Ptr m_receipt;  // set by execute()
         evmone::state::StateDiff m_diff;              // writeback deferred to finish()
 
@@ -135,7 +135,8 @@ public:
         }
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
-            co_return co_await executor.m_finish(storage, blockHeader, ledgerConfig, m_receipt, m_diff);
+            co_return co_await executor.m_finish(
+                storage, blockHeader, ledgerConfig, m_receipt, m_diff);
         }
     };
 
@@ -253,8 +254,8 @@ private:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo = buildOpBlockInfo(
-            blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
+        auto blockInfo =
+            buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
         auto envRef = transaction.extraTransactionBytes();
@@ -284,8 +285,8 @@ private:
         namespace eth = bcos::executor_v1::eth;
 
         (void)ledgerConfig;
-        auto blockInfo = buildOpBlockInfo(
-            blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
+        auto blockInfo =
+            buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
 

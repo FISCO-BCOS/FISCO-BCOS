@@ -6,13 +6,16 @@ find_package(TBB CONFIG REQUIRED)
 
 add_library(opstack-executor
     OpstackExecutor.cpp
+    OpBlockExecute.cpp
+    OpBlockSeal.cpp
+    OpBlockFinalize.cpp
 )
 target_include_directories(opstack-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/opstack-executor>)
 target_link_libraries(opstack-executor PUBLIC
     bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol
-    evmone::evmone intx::intx TBB::tbb)
+    ledger evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 
 if (TESTS)

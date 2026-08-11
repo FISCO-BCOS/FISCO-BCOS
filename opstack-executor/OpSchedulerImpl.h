@@ -23,14 +23,9 @@
 
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
-#include <bcos-evm/engine/OpEngineSeam.h>
-#include <bcos-evm/ledger/RecentBlockHashes.h>
-#include <bcos-evm/ledger/Storage2Ledger.h>
-#include <bcos-evm/opstack/OpBlockExecute.h>
-#include <bcos-evm/opstack/OpBlockSeal.h>
-#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
@@ -41,14 +36,17 @@
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <evmone/evmone.h>
+#include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpBlockSeal.h>
+#include <opstack-executor/OpEngineSeam.h>
+#include <opstack-executor/RecentBlockHashes.h>
+#include <opstack-executor/Storage2Ledger.h>
 #include <bcos-evm/eth/state/block.hpp>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/state/state_view.hpp>
 #include <bcos-evm/eth/state/system_contracts.hpp>
 #include <bcos-evm/eth/state/transaction.hpp>
-#include <test/utils/rlp.hpp>
-#include <test/utils/rlp_encode.hpp>
 #include <cstdint>
 #include <cstring>
 #include <evmc/evmc.hpp>
@@ -61,6 +59,8 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <test/utils/rlp.hpp>
+#include <test/utils/rlp_encode.hpp>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -294,14 +294,15 @@ inline void throwOnDecodeError(bcos::Error::UniquePtr&& err)
 // **Contract, pinned by tests (do not relax):** on THIS branch all three layers are implemented
 // (readCanonicalScalar/readFixedWidth/decodeBoolField for (1), the shared decoder for (2),
 // assertCanonicalRoundTrip for (3), and the computeOpTxRoot == DeriveSha reasoning above), but the
-// dedicated end-to-end test cases — the B4-2 per-field cases (NonCanonicalLeadingZeroScalarIsConsensusError
-// … ZeroByteBoolFieldIsConsensusError), the C1 length-prefix case
-// (NonCanonicalOuterFramingIsRejectedAtDecode), the whole-envelope round-trip invariant
-// (RoundTripInvariantReproducesDepositBytesExactly /
+// dedicated end-to-end test cases — the B4-2 per-field cases
+// (NonCanonicalLeadingZeroScalarIsConsensusError … ZeroByteBoolFieldIsConsensusError), the C1
+// length-prefix case (NonCanonicalOuterFramingIsRejectedAtDecode), the whole-envelope round-trip
+// invariant (RoundTripInvariantReproducesDepositBytesExactly /
 // RoundTripInvariantReproducesNonDepositBytesExactly / RoundTripInvariantFiresOnMismatch), and the
-// raw-bytes-txRoot == re-encoded-DeriveSha equivalence (TxRootEqualsReencodedDeriveShaForCanonicalInput) —
-// live on the source branch in `bcos-evm/test/opstack/OpSchedulerImplTest.cpp` and were NOT ported
-// here. What pins this branch's decoder contract instead:
+// raw-bytes-txRoot == re-encoded-DeriveSha equivalence
+// (TxRootEqualsReencodedDeriveShaForCanonicalInput) — live on the source branch in
+// `bcos-evm/test/opstack/OpSchedulerImplTest.cpp` and were NOT ported here. What pins this branch's
+// decoder contract instead:
 //   - the length-prefix rule (2) is asserted by `decodeRejectsNonCanonicalLengthPrefix` in
 //     `bcos-codec/test/unittests/RLPTest.cpp` (W8 C1 port of a37517327);
 //   - the OP seam surface / empty-block rejection / C2 width guard are asserted in

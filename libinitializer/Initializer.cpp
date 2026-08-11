@@ -54,7 +54,6 @@
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-evm/engine/OpSchedulerImpl.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -79,6 +78,7 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
+#include <opstack-executor/OpSchedulerImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
 #include <txpool/validator/TxValidator.h>
