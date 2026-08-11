@@ -40,6 +40,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
@@ -85,11 +86,6 @@ DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
 /// to return and the failure is reported explicitly rather than as `UnknownPayload` (which would
 /// falsely suggest an expired/unknown id).
 DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
-
-/// JSON-RPC -32603 "Internal error": an OP block execution failure the error-classification table
-/// attributes to the storage layer rather than to the block. Must never be reported as INVALID --
-/// a storage fault is not a consensus verdict on the payload.
-DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
 namespace detail
 {
