@@ -1145,59 +1145,18 @@ private:
                     "bypassed)"});
         }
 
-        // ---- Step 5: the six-way comparison surface ----
-        // Exactly six: receiptsRoot / logsBloom / withdrawalsRoot from the seal, stateRoot /
-        // gasUsed / txRoot from the execution result. The two extra comparisons after them are not
-        // part of the six -- see `OpBlockCommitments`. `validationError` names the offending
-        // field.
+        // ---- Step 5: the eight-way comparison surface (sunk into the OP side) ----
+        // Comparison semantics live in the scheduler seam (mismatchedFieldOf), so this branch
+        // stays a thin dependent-name call — engine never spells any bcos-evm type.
         const auto commitments = SchedulerType::commitmentsOf(*executeResult);
-        std::optional<std::string> mismatchedField;
-        if (commitments.receiptsRoot != payload.receiptsRoot)
-        {
-            mismatchedField = "receiptsRoot";
-        }
-        else if (commitments.logsBloom != detail::toEthLogsBloom(payload.logsBloom))
-        {
-            mismatchedField = "logsBloom";
-        }
-        else if (commitments.withdrawalsRoot != *payload.withdrawalsRoot)
-        {
-            mismatchedField = "withdrawalsRoot";
-        }
-        else if (commitments.stateRoot != payload.stateRoot)
-        {
-            mismatchedField = "stateRoot";
-        }
-        else if (commitments.gasUsed != payload.gasUsed)
-        {
-            mismatchedField = "gasUsed";
-        }
-        else if (commitments.txRoot != transactionsRoot)
-        {
-            // Structurally equal by construction today (both come from `computeOpTxRoot` over the
-            // same `rawTransactions`), and kept anyway: it is the guard that would fire the day
-            // execution starts deriving txRoot from its own *parsed* interpretation of the
-            // transactions instead of from the wire bytes.
-            mismatchedField = "transactionsRoot";
-        }
-        else if (commitments.blobGasUsed.has_value() &&
-                 u256(*commitments.blobGasUsed) != *payload.blobGasUsed)
-        {
-            // Jovian+ only (engaged iff the fork repurposes the slot as the DA footprint,
-            // compared via the seal). Pre-Jovian the slot is pinned to 0 by step 2.
-            mismatchedField = "blobGasUsed";
-        }
-        else if (commitments.requestsHash.has_value() &&
-                 *commitments.requestsHash != ethHeader->requestsHash().value())
-        {
-            // Catches drift between this library's copy of the OP empty-requests constant (used
-            // to reconstruct the header above) and the OP side's own `OP_EMPTY_REQUESTS_HASH`.
-            mismatchedField = "requestsHash";
-        }
-        if (mismatchedField.has_value())
+        const auto announced =
+            SchedulerType::announcedCommitmentsOf(payload, transactionsRoot, *ethHeader);
+        if (auto mismatchedField = SchedulerType::mismatchedFieldOf(commitments, announced);
+            mismatchedField.has_value())
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                std::string("execution result does not match payload field: ") + *mismatchedField);
+                std::string("execution result does not match payload field: ") +
+                    *mismatchedField);
         }
 
         // ---- Step 6: block registration, then publish the view ----
