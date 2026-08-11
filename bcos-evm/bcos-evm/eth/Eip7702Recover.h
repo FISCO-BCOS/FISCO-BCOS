@@ -12,6 +12,7 @@
 // additionally had no test coverage of its own; sharing this implementation puts it under the
 // opstack 7702 suite.
 
+#include <bcos-evm/eth/RlpEncodeTuple.h>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state.hpp>
 #include <bcos-evm/eth/state/transaction.hpp>
@@ -21,7 +22,6 @@
 #include <evmone_precompiles/secp256k1.hpp>
 #include <optional>
 #include <span>
-#include <test/utils/rlp.hpp>
 #include <utility>
 
 namespace bcos::evm::eth
@@ -36,8 +36,7 @@ inline constexpr uint8_t kSetCodeMagic = 0x05;
 /// signing hash = keccak256(0x05 || rlp([chain_id, address, nonce]))
 inline std::optional<evmc::address> recoverAuthority(const evmone::state::Authorization& auth)
 {
-    auto msg = evmone::bytes{kSetCodeMagic} +
-               evmone::rlp::encode_tuple(auth.chain_id, auth.addr, auth.nonce);
+    auto msg = evmone::bytes{kSetCodeMagic} + detail::encodeTuple(auth.chain_id, auth.addr, auth.nonce);
     const auto h = evmone::keccak256(msg);
     const auto r = intx::be::store<evmc::bytes32>(auth.r);
     const auto s = intx::be::store<evmc::bytes32>(auth.s);
