@@ -8,10 +8,11 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * @file Web3EthCallBlockTagTest.cpp
- * @brief eth_call blockTag routing (M13.2): latest-family tags stay on
- *        SchedulerInterface::call, historical tags go through callAtBlock with the resolved
- *        height, and the callAtBlock default implementation keeps schedulers that only
- *        implement call() working.
+ * @brief eth_call blockTag routing (M13.2): latest-family tags (latest / pending) stay on
+ *        SchedulerInterface::call, historical tags — including safe / finalized, which
+ *        resolve to latest - depth (configurable) — go through callAtBlock with the
+ *        resolved height, and the callAtBlock default implementation keeps schedulers that
+ *        only implement call() working.
  */
 
 #include "../common/RPCFixture.h"
@@ -93,12 +94,15 @@ BOOST_AUTO_TEST_CASE(latestFamilyTagsStayOnTheLatestCall)
     auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
     auto web3 = buildWeb3Rpc(recording);
 
-    for (auto tag : {R"("latest")", R"("pending")", R"("safe")", R"("finalized")"})
+    // "latest" / "pending" are the head. "safe" / "finalized" are NOT: they resolve to
+    // committed historical blocks (latest - safeBlockDepth / finalizedBlockDepth) and are
+    // covered in historicalTagsRouteThroughCallAtBlock.
+    for (auto tag : {R"("latest")", R"("pending")"})
     {
         auto resp = request(web3, tag);
         BOOST_CHECK_MESSAGE(resp.isMember("result"), "tag " + std::string(tag));
     }
-    BOOST_CHECK_EQUAL(recording->m_latestCalls, 4);
+    BOOST_CHECK_EQUAL(recording->m_latestCalls, 2);
     BOOST_CHECK(recording->m_historicalCalls.empty());
 }
 
@@ -111,11 +115,18 @@ BOOST_AUTO_TEST_CASE(historicalTagsRouteThroughCallAtBlock)
     BOOST_CHECK(resp.isMember("result"));
     auto respEarliest = request(web3, R"("earliest")");
     BOOST_CHECK(respEarliest.isMember("result"));
+    // safe / finalized are historical too: latest(19) - default safeDepth(1) / finalizedDepth(2).
+    auto respSafe = request(web3, R"("safe")");
+    BOOST_CHECK(respSafe.isMember("result"));
+    auto respFinalized = request(web3, R"("finalized")");
+    BOOST_CHECK(respFinalized.isMember("result"));
 
     BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
-    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 2U);
+    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 4U);
     BOOST_CHECK_EQUAL(recording->m_historicalCalls[0], 1);
     BOOST_CHECK_EQUAL(recording->m_historicalCalls[1], 0);
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[2], 18);  // safe = latest(19) - 1
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[3], 17);  // finalized = latest(19) - 2
 }
 
 BOOST_AUTO_TEST_CASE(numericTagAtTheTipIsLatest)

@@ -29,7 +29,13 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
+#include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
+#include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
@@ -150,6 +156,40 @@ task::Task<void> EthEndpoint::blockNumber(const Json::Value&, Json::Value& respo
     Json::Value result = toQuantity(number);
     buildJsonContent(result, response);
 }
+
+/// Historical state-read error code (eth_getStorageAt / getBalance / getTransactionCount /
+/// getCode): a historical block whose MPT state root is not available on this node (MPT never
+/// enabled, or the block predates MPT activation).
+constexpr int32_t EthHistoricalStateUnavailable = -32004;
+
+/// Resolve a historical block's committed MPT state root, applying the same checks as
+/// getProof (generateProof's BlockNotCommitted): the block must exist, the node must have a
+/// local MPT node reader, and the state root must be present in MPT node storage. Throws a
+/// JsonRpcException on any failure — a historical query is never silently served from the
+/// latest state. The empty root has no node row, so it is treated as "root not committed"
+/// exactly like getProof.
+bcos::task::Task<bcos::h256> resolveHistoricalMptRoot(
+    bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
+    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
+{
+    auto const block = co_await ledger::getBlockData(ledger, blockNumber, bcos::ledger::HEADER);
+    if (!block || !block->blockHeader()) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+    }
+    auto const stateRoot = block->blockHeader()->stateRoot();
+    if (!mptReader) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
+    }
+    if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
+    }
+    co_return stateRoot;
+}
+
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
 {
     // params: address(DATA), blockNumber(QTY|TAG)
@@ -161,31 +201,63 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
-    // TODO)): blockNumber is ignored nowadays
     auto const blockTag = toView(request[1U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getBalance" << LOG_KV("address", address)
-                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber)
+                        << LOG_KV("isLatest", isLatest);
     }
     auto const ledger = m_nodeService->ledger();
     u256 balance = 0;
-    if (auto const entry = co_await ledger::getStorageAt(
-            *ledger, addressStr, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
-        entry.has_value())
+    if (isLatest)
     {
-        auto const balanceStr = std::string(entry.value().get());
-        balance = u256(balanceStr);
+        if (auto const entry = co_await ledger::getStorageAt(
+                *ledger, addressStr, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
+            entry.has_value())
+        {
+            auto const balanceStr = std::string(entry.value().get());
+            balance = u256(balanceStr);
+        }
+        else
+        {
+            WEB3_LOG(TRACE) << LOG_DESC("getBalance failed, return 0 by defualt")
+                            << LOG_KV("address", address);
+        }
     }
     else
     {
-        WEB3_LOG(TRACE) << LOG_DESC("getBalance failed, return 0 by defualt")
-                        << LOG_KV("address", address);
+        // Historical state: the account's balance from the block's committed MPT root. An
+        // absent account reads as zero — Ethereum semantics at a committed root.
+        auto const mptReader = m_nodeService->mptNodeReader();
+        auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
+        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
+        auto const account = co_await view.readAccount(
+            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        if (account)
+        {
+            balance = account->balance;
+        }
     }
     Json::Value result = toQuantity(std::move(balance));
     buildJsonContent(result, response);
 }
+/// Render a stored slot value (raw big-endian bytes in the account table) as the spec's
+/// fixed-width 32-byte DATA: left-padded with zeros to a full word, exactly like geth's
+/// common.BytesToHash(value).Hex(). Storage rows carry the 32-byte value in practice
+/// (EVMAccount::setStorage), but this keeps the RPC output deterministic at 32 bytes even
+/// if a row was written narrower. A value wider than 32 bytes is corrupt; the low 32 bytes
+/// (the numeric value) are kept, never a wider-than-spec output.
+static std::string storageValueToData(std::string_view value)
+{
+    bcos::bytes word(32, 0);
+    auto const copyLen = (std::min)(value.size(), word.size());
+    std::copy_n(
+        value.data(), copyLen, word.end() - static_cast<std::ptrdiff_t>(copyLen));
+    return toHex(word, "0x");
+}
+
 task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Value& response)
 {
     // params: address(DATA), position(QTY), blockNumber(QTY|TAG)
@@ -204,30 +276,113 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         positionStr.insert(0, "0");
     }
-    const auto positionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
-    // TODO)): blockNumber is ignored nowadays
+    // A QUANTITY position is at most 256 bits (32 bytes = 64 hex digits); anything wider is
+    // an invalid param per the spec. Note the std::string FixedBytes overload silently
+    // truncates wider input via fromHex, so reject explicitly before decoding.
+    FixedBytes<32> positionBytes;
+    try
+    {
+        if (positionStr.size() > 64) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage position"));
+        }
+        positionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage position"));
+    }
+
     auto const blockTag = toView(request[2U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getStorageAt" << LOG_KV("address", address)
                         << LOG_KV("pos", positionStr) << LOG_KV("blockTag", blockTag)
-                        << LOG_KV("blockNumber", blockNumber);
+                        << LOG_KV("blockNumber", blockNumber) << LOG_KV("isLatest", isLatest);
     }
     auto const ledger = m_nodeService->ledger();
-    Json::Value result;
-    if (auto const entry = co_await ledger::getStorageAt(
-            *ledger, addressStr, positionBytes.toRawString(), /*blockNumber*/ 0);
-        entry.has_value())
+
+    // System-contract addresses (0x1000 range, etc.) are stored under the "/sys/" prefix by
+    // EVMAccount; user accounts under "/apps/". Picking the right prefix here keeps
+    // eth_getStorageAt consistent with both the genesis alloc import and the v2 executor
+    // (which both go through EVMAccount) — same logic as Ledger::getStorageAt.
+    auto const tablePrefix =
+        precompiled::contains(bcos::precompiled::c_systemTxsAddress, std::string_view{addressStr}) ?
+            ledger::SYS_DIRECTORY::SYS_APPS :
+            ledger::SYS_DIRECTORY::USER_APPS;
+    auto const contractTableName = getContractTableName(tablePrefix, addressStr);
+
+    // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.
+    constexpr const char* c_emptyStorageValue =
+        "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+    if (isLatest)
     {
-        auto const value = entry.value().get();
-        result = toHex(value, "0x");
+        // Latest state: fork a fresh view of GlobalStorageState and read the flat KV — a
+        // consistent point-in-time snapshot (in-flight pending layers -> cache -> committed
+        // backend). The provider is unset on nodes with no local state storage (tars-built
+        // NodeService); those fall back to the ledger, which serves the same committed plane.
+        Json::Value result;
+        auto const& stateStorageProvider = m_nodeService->stateStorageProvider();
+        if (stateStorageProvider)
+        {
+            auto const stateStorage = stateStorageProvider();
+            if (stateStorage)
+            {
+                if (auto const entry = co_await bcos::storage2::readOne(*stateStorage,
+                        executor_v1::StateKey{contractTableName, positionBytes.toRawString()});
+                    entry.has_value())
+                {
+                    result = storageValueToData(entry.value().get());
+                }
+                else
+                {
+                    result = c_emptyStorageValue;
+                }
+                buildJsonContent(result, response);
+                co_return;
+            }
+        }
+        if (auto const entry = co_await ledger::getStorageAt(
+                *ledger, addressStr, positionBytes.toRawString(), /*blockNumber*/ 0);
+            entry.has_value())
+        {
+            result = storageValueToData(entry.value().get());
+        }
+        else
+        {
+            result = c_emptyStorageValue;
+        }
+        buildJsonContent(result, response);
+        co_return;
     }
-    else
+
+    // Historical state: served from the MPT at the block's committed state root (same checks
+    // as getProof / getBalance / getTransactionCount / getCode).
+    auto const mptReader = m_nodeService->mptNodeReader();
+    auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
+
+    // Query the slot through the MPT at that root: account leaf -> storageRoot -> slot leaf
+    // (slotKeyHash(slot)). Absent account, empty storage trie, or absent slot all read zero —
+    // Ethereum semantics at a committed root.
+    bcos::u256 value = 0;
     {
-        // empty value
-        result = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
+        if (auto const account = co_await view.readAccount(
+                bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+            account && account->storageRoot != bcos::ledger::mpt::emptyRootHash())
+        {
+            bcos::ledger::mpt::Trie trie{*mptReader, account->storageRoot};
+            auto const slot = co_await trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes));
+            if (slot)
+            {
+                value = bcos::ledger::mpt::decodeStorageValue(bcos::ref(*slot));
+            }
+        }
     }
+    // Render like the flat path: a fixed-width 32-byte hex value.
+    Json::Value result = toHex(bcos::h256{value}.ref(), "0x");
     buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Json::Value& response)
@@ -241,13 +396,13 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
-    // TODO)): blockNumber is ignored nowadays
     auto const blockTag = toView(request[1U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getTransactionCount" << LOG_KV("address", address)
-                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber)
+                        << LOG_KV("isLatest", isLatest);
     }
     if (blockTag == PendingBlock)
     {
@@ -266,11 +421,28 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
 
     auto const ledger = m_nodeService->ledger();
     u256 nonce = 0;
-    if (auto const entry = co_await ledger::getStorageAt(
-            *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
-        entry.has_value())
+    if (isLatest)
     {
-        nonce = u256(entry.value().get());
+        if (auto const entry = co_await ledger::getStorageAt(
+                *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
+            entry.has_value())
+        {
+            nonce = u256(entry.value().get());
+        }
+    }
+    else
+    {
+        // Historical state: the account's nonce from the block's committed MPT root. An
+        // absent account reads as zero — Ethereum semantics at a committed root.
+        auto const mptReader = m_nodeService->mptNodeReader();
+        auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
+        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
+        auto const account = co_await view.readAccount(
+            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        if (account)
+        {
+            nonce = account->nonce;
+        }
     }
     Json::Value result = toQuantity(nonce);
     buildJsonContent(result, response);
@@ -341,54 +513,82 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     }
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
-    // TODO)): blockNumber is ignored nowadays
     auto const blockTag = toView(request[1u]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getCode" << LOG_KV("address", address)
-                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
+                        << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber)
+                        << LOG_KV("isLatest", isLatest);
     }
-    auto const scheduler = m_nodeService->scheduler();
+
     bcos::bytes code;
-    struct Awaitable
+    if (isLatest)
     {
-        bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
-        std::string& m_address;
-        bcos::bytes& m_code;
-        Error::Ptr m_error = nullptr;
-        constexpr static bool await_ready() noexcept { return false; }
-        void await_suspend(std::coroutine_handle<> handle) noexcept
+        auto const scheduler = m_nodeService->scheduler();
+        struct Awaitable
         {
-            m_scheduler->getCode(m_address, [this, handle](auto&& error, auto&& code) {
-                if (error)
-                {
-                    m_error = std::move(error);
-                }
-                else
-                {
-                    m_code = std::move(code);
-                }
-                handle.resume();
-            });
-        }
-        void await_resume()
-        {
-            if (m_error)
+            bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
+            std::string& m_address;
+            bcos::bytes& m_code;
+            Error::Ptr m_error = nullptr;
+            constexpr static bool await_ready() noexcept { return false; }
+            void await_suspend(std::coroutine_handle<> handle) noexcept
             {
-                BOOST_THROW_EXCEPTION(*m_error);
+                m_scheduler->getCode(m_address, [this, handle](auto&& error, auto&& code) {
+                    if (error)
+                    {
+                        m_error = std::move(error);
+                    }
+                    else
+                    {
+                        m_code = std::move(code);
+                    }
+                    handle.resume();
+                });
+            }
+            void await_resume()
+            {
+                if (m_error)
+                {
+                    BOOST_THROW_EXCEPTION(*m_error);
+                }
+            }
+        };
+        // Note: Awaitable must be declared as a local variable,
+        // and then co_await the local variable,
+        // otherwise the object managed by the Awaitable variable will become invalid.
+        Awaitable awaitable{
+            .m_scheduler = scheduler,
+            .m_address = addressStr,
+            .m_code = code,
+        };
+        co_await awaitable;
+    }
+    else
+    {
+        // Historical state: the account's code from the block's committed MPT root, resolved
+        // through its codeHash into the content-addressed code store (s_code_binary rows are
+        // valid for any block). An account with no leaf, or with the empty code hash, has no
+        // code.
+        auto const ledger = m_nodeService->ledger();
+        auto const mptReader = m_nodeService->mptNodeReader();
+        auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
+        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
+        auto const account = co_await view.readAccount(
+            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        if (account && account->codeHash != bcos::ledger::mpt::emptyCodeHash())
+        {
+            auto const stateStorage = ledger->getStateStorage();
+            std::string const codeHashStr = account->codeHash.toRawString();
+            if (auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
+                    executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
+                codeEntry.has_value())
+            {
+                code.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
             }
         }
-    };
-    // Note: Awaitable must be declared as a local variable,
-    // and then co_await the local variable,
-    // otherwise the object managed by the Awaitable variable will become invalid.
-    Awaitable awaitable{
-        .m_scheduler = scheduler,
-        .m_address = addressStr,
-        .m_code = code,
-    };
-    co_await awaitable;
+    }
     Json::Value result = toHexStringWithPrefix(code);
     buildJsonContent(result, response);
     co_return;
@@ -867,8 +1067,11 @@ task::Task<void> EthEndpoint::newFilter(const Json::Value& request, Json::Value&
     // params: filter(FILTER)
     // result: filterId(QTY)
     const Json::Value& jParams = request[0U];
+    auto const ledger = m_nodeService->ledger();
+    auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(jParams);
+    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
+        m_nodeService->finalizedBlockDepth());
     Json::Value result = co_await m_filterSystem->newFilter(params);
     buildJsonContent(result, response);
 }
@@ -913,8 +1116,11 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& r
     // params: filter(FILTER)
     // result: logs(ARRAY)
     const Json::Value& jParams = request[0U];
+    auto const ledger = m_nodeService->ledger();
+    auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(jParams);
+    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
+        m_nodeService->finalizedBlockDepth());
     Json::Value result = co_await m_filterSystem->getLogs(params);
     buildJsonContent(result, response);
 }
@@ -923,7 +1129,8 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
-    auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag);
+    auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
+        m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }
 

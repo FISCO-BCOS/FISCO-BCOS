@@ -30,7 +30,8 @@ using namespace bcos::rpc;
 
 // return (actual block number, isLatest block)
 std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
-    protocol::BlockNumber latest, std::string_view blockTag)
+    protocol::BlockNumber latest, std::string_view blockTag, protocol::BlockNumber safeDepth,
+    protocol::BlockNumber finalizedDepth)
 {
     if (blockTag.data() == nullptr || blockTag.empty())
     {
@@ -40,8 +41,18 @@ std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     {
         return std::make_tuple(0, false);
     }
-    if (blockTag == LatestBlock || blockTag == SafeBlock || blockTag == FinalizedBlock ||
-        blockTag == PendingBlock)
+    // safe / finalized are committed historical blocks, latest - depth (clamped at 0).
+    if (blockTag == SafeBlock)
+    {
+        return std::make_tuple(
+            (std::max)(latest - safeDepth, protocol::BlockNumber{0}), false);
+    }
+    if (blockTag == FinalizedBlock)
+    {
+        return std::make_tuple(
+            (std::max)(latest - finalizedDepth, protocol::BlockNumber{0}), false);
+    }
+    if (blockTag == LatestBlock || blockTag == PendingBlock)
     {
         return std::make_tuple(latest, true);
     }

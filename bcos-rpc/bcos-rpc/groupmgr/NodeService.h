@@ -31,10 +31,12 @@
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <functional>
 #include <servant/Application.h>
 #include <utility>
 
@@ -108,6 +110,38 @@ public:
     }
     std::shared_ptr<MPTNodeReader> mptNodeReader() const noexcept { return m_mptNodeReader; }
 
+    /// Type-erased read handle over the LATEST state plane of GlobalStateStorage
+    /// (eth_getStorageAt's fork-a-view path): StateKey -> Entry, no MPT types.
+    using StateStorage =
+        bcos::storage2::AnyStorage<bcos::executor_v1::StateKey, bcos::executor_v1::StateValue>;
+
+    /// Forks a fresh latest view of GlobalStateStorage and returns a handle that OWNS the
+    /// forked view. Each call is a consistent point-in-time snapshot: the immutable pending
+    /// layers of in-flight blocks, then the cache, then the committed backend. The concrete
+    /// storage is borrowed from the Initializer, so the provider must not outlive it (AIR
+    /// wiring in AirNodeInitializer; a tars-built NodeService leaves it unset).
+    using StateStorageProvider = std::function<std::shared_ptr<StateStorage>()>;
+
+    void setStateStorageProvider(StateStorageProvider _provider) noexcept
+    {
+        m_stateStorageProvider = std::move(_provider);
+    }
+    StateStorageProvider const& stateStorageProvider() const noexcept
+    {
+        return m_stateStorageProvider;
+    }
+
+    /// blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
+    /// point to (wired from [web3_rpc] safe_block_depth / finalized_block_depth by the AIR
+    /// initializer; defaults match Ethereum's common 1 / 2).
+    void setSafeBlockDepth(protocol::BlockNumber _depth) noexcept { m_safeBlockDepth = _depth; }
+    protocol::BlockNumber safeBlockDepth() const noexcept { return m_safeBlockDepth; }
+    void setFinalizedBlockDepth(protocol::BlockNumber _depth) noexcept
+    {
+        m_finalizedBlockDepth = _depth;
+    }
+    protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
+
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -129,6 +163,14 @@ private:
     /// MPT node reader handle (owns its adapter, borrows the underlying storage); see
     /// setMPTNodeReader() for the lifetime contract.
     std::shared_ptr<MPTNodeReader> m_mptNodeReader;
+
+    /// Latest-state view provider (owns each forked view, borrows the GlobalStateStorage);
+    /// see setStateStorageProvider() for the lifetime contract.
+    StateStorageProvider m_stateStorageProvider;
+
+    /// blockTag semantics: "safe"/"finalized" point latest - depth blocks behind.
+    protocol::BlockNumber m_safeBlockDepth = 1;
+    protocol::BlockNumber m_finalizedBlockDepth = 2;
 
     /// Raw pointer to the single-node-consensus mempool (see setMemPool for lifetime).
     bcos::txpool::MemPoolImpl* m_memPool = nullptr;

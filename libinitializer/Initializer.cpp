@@ -1592,6 +1592,26 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 
+std::function<std::shared_ptr<
+    bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+Initializer::stateStorageProvider()
+{
+    if (!m_globalStateStorageInitializer)
+    {
+        return {};
+    }
+    // Captures a shared_ptr (not `this`): the provider outlives this Initializer's
+    // stateStorageProvider() call by design (it rides on the RPC NodeService), and the
+    // GlobalStateStorageInitializer owns the storage the forked views borrow.
+    auto storageInitializer = m_globalStateStorageInitializer;
+    return [storageInitializer]() {
+        // Fresh fork per call: a consistent point-in-time latest snapshot. Reads ride the
+        // immutable pending layers (in-flight blocks), the LRU cache, then the committed
+        // backend.
+        return forkLatestStateView(storageInitializer->storage().fork());
+    };
+}
+
 std::string Initializer::getConsensusStorageDBPath(bool _airVersion) const
 {
     std::string consensusStorageDBPath =

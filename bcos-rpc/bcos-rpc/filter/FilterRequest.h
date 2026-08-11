@@ -78,7 +78,8 @@ public:
         m_topics[_index].insert(std::move(_topic));
     }
     void setBlockHash(const std::string& _hash) { m_blockHash = _hash; }
-    void fromJson(const Json::Value& jParams, protocol::BlockNumber latest = 0);
+    void fromJson(const Json::Value& jParams, protocol::BlockNumber latest = 0,
+        protocol::BlockNumber safeDepth = 1, protocol::BlockNumber finalizedDepth = 2);
     bool checkBlockRange();
 
     virtual int32_t InvalidParamsCode() = 0;

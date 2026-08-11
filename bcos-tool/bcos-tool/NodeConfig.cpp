@@ -643,6 +643,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         cors_allowed_headers=Content-Type, Authorization, X-Requested-With
         cors_max_age=86400
         sync_transaction=false
+        ; how many blocks behind latest the safe/finalized blockTag point to
+        ; safe_block_depth=1
+        ; finalized_block_depth=2
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -683,6 +686,8 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_web3CorsMaxAge = corsMaxAge;
     m_web3CorsAllowCredentials = corsAllowCredentials;
     m_web3SyncTransaction = _pt.get<bool>("web3_rpc.sync_transaction", false);
+    m_web3SafeBlockDepth = _pt.get<uint32_t>("web3_rpc.safe_block_depth", 1);
+    m_web3FinalizedBlockDepth = _pt.get<uint32_t>("web3_rpc.finalized_block_depth", 2);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
@@ -695,7 +700,19 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("corsAllowedHeaders", corsAllowedHeaders)
                          << LOG_KV("corsMaxAge", corsMaxAge)
                          << LOG_KV("corsAllowCredentials", corsAllowCredentials)
-                         << LOG_KV("syncTransaction", m_web3SyncTransaction);
+                         << LOG_KV("syncTransaction", m_web3SyncTransaction)
+                         << LOG_KV("safeBlockDepth", m_web3SafeBlockDepth)
+                         << LOG_KV("finalizedBlockDepth", m_web3FinalizedBlockDepth);
+}
+
+uint32_t NodeConfig::web3SafeBlockDepth() const
+{
+    return m_web3SafeBlockDepth;
+}
+
+uint32_t NodeConfig::web3FinalizedBlockDepth() const
+{
+    return m_web3FinalizedBlockDepth;
 }
 
 void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)

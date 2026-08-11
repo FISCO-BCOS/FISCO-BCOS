@@ -184,6 +184,11 @@ public:
     bool web3CorsAllowCredentials() const;
     bool web3SyncTransaction() const;
 
+    // blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
+    // point to (Ethereum-consistent default: 1 / 2).
+    uint32_t web3SafeBlockDepth() const;
+    uint32_t web3FinalizedBlockDepth() const;
+
     // thread pool configuration
     size_t ioThreadCount() const;
     size_t tbbThreadCount() const;
@@ -482,6 +487,9 @@ private:
     int32_t m_web3CorsMaxAge = 86400;
     bool m_web3CorsAllowCredentials = true;
     bool m_web3SyncTransaction = false;
+    // blockTag semantics: "safe"/"finalized" point latest - depth blocks behind (defaults 1/2).
+    uint32_t m_web3SafeBlockDepth = 1;
+    uint32_t m_web3FinalizedBlockDepth = 2;
 
     // thread pool configuration
     size_t m_ioThreadCount{};
