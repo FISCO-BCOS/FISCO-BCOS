@@ -31,6 +31,7 @@ add_executable(opstack-executor-block-tests
     OpNewPayloadRpcE2eTest.cpp
     OpSchedulerImplSmokeTest.cpp
     OpEngineBranchSmokeTest.cpp
+    OpCallSchedulerTest.cpp
     support/SeedPreStateTest.cpp
     support/GoldenSampleTest.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
@@ -58,8 +59,9 @@ add_executable(opstack-executor-detail-tests
     TestMain.cpp
     OpRlpDecodeTest.cpp
     Storage2StateHelpersTest.cpp
+    OpMismatchedFieldTest.cpp
 )
 set_target_properties(opstack-executor-detail-tests PROPERTIES UNITY_BUILD OFF)
 target_link_libraries(opstack-executor-detail-tests PRIVATE
-    opstack-executor codec evmone::evmone intx::intx Boost::unit_test_framework bcos-utilities)
+    opstack-executor codec evmone::evmone intx::intx Boost::unit_test_framework bcos-utilities protocol-tars)
 add_test(NAME OpstackExecutorDetailTests COMMAND opstack-executor-detail-tests)
