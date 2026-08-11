@@ -417,6 +417,25 @@ func transferTx(key byte, nonce uint64, to common.Address, value *big.Int, gas u
 	}
 }
 
+// legacyTransferTx builds a type-0 legacy tx with an EIP-155 protected
+// signature (B-scope base). gasPrice is the single per-gas price; 2 gwei is
+// above the 1 gwei base fee of every caseFrame so the transfer is payable.
+func legacyTransferTx(key byte, nonce uint64, to common.Address, value *big.Int, gas uint64, data hexutil.Bytes) inputTx {
+	k := privKey(key)
+	toCopy := to
+	return inputTx{
+		OpType:    "legacy",
+		ChainID:   hd256(chainID),
+		Nonce:     hd64(nonce),
+		To:        &toCopy,
+		Value:     hd256(value),
+		Gas:       hd64(gas),
+		GasPrice:  hdu(2_000_000_000), // 2 gwei
+		Data:      data,
+		SecretKey: &k,
+	}
+}
+
 // caseFrame assembles the shared skeleton: genesis knobs, coinbase, beacon
 // root, and the baseline pre (L1Block slots seeded from fp; the
 // L2ToL1MessagePasser always on record per plan Step 2).
@@ -626,6 +645,20 @@ var caseSpecs = []caseSpec{
 			defaultFeeParams(), 10_000_000)
 		fund(&c, 1, eth(100))
 		c.Transactions = append(c.Transactions, transferTx(1, 0, recA, eth(1), 21_000, nil))
+		return c
+	}},
+
+	{"legacy_transfer", bothForks, func(fork string) inputCase {
+		// B-scope base: a type-0 legacy tx with an EIP-155 protected signature
+		// (V = chainID*2+35/36). Serves as the base for corrupt/invalid-tx
+		// vectors and as a B-scope valid vector. ⚠️ The T8n replayer does not
+		// yet parse `_op_type "legacy"`; manifest registration is a consumer
+		// follow-up (task-3-report).
+		c := caseFrame(fork, "legacy_transfer",
+			"attributes + one type-0 EIP-155 protected legacy value transfer",
+			defaultFeeParams(), 10_000_000)
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, legacyTransferTx(1, 0, recA, eth(1), 21_000, nil))
 		return c
 	}},
 

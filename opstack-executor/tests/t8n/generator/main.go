@@ -99,6 +99,13 @@ func main() {
 		probePrecomp   = flag.String("probe-precompile", "", "dev probe: verify every precompile valid-input helper against the real op-geth precompile Run (core/vm.PrecompiledContractsOsaka), then build+generate the bn256-add probe frame and dump its receipts (line-B Task 0 infra), then exit")
 		goldenOutput   = flag.String("golden-output", "", "Task 2 (engine gate golden ritual): also emit blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/encodedHeaderHex for this vector to this path (vectors/ itself is untouched)")
 		chainOutputDir = flag.String("chain-output-dir", "", "Task 2 Step 2: generate the off-line 1->2 chained golden pair (GenerateChainWithGenesis n=2, InsertChain-validated) into this directory and exit")
+		// Task 3 corrupt/static modes: independent of --write-cases (they take
+		// the ASSEMBLED valid product of a base case and re-emit it as an invalid
+		// vector). corrupt emits invalid_<base>_<field>.json for every §4a field;
+		// static emits invalid_<base>_static_<n>.json for every §4c item.
+		invalidMode = flag.String("mode", "", "corrupt|static: emit invalid vectors from a base case stem")
+		baseStem    = flag.String("base", "isthmus_transfer_basic", "base case stem for --mode=corrupt/static (e.g. isthmus_transfer_basic)")
+		invalidOut  = flag.String("out-dir", "", "output dir for --mode=corrupt/static invalid vectors")
 	)
 	flag.Parse()
 
@@ -140,13 +147,18 @@ func main() {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
+	case *invalidMode == "corrupt" || *invalidMode == "static":
+		if err := runInvalidMode(*invalidMode, *baseStem, *invalidOut, *opGethCommit); err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
+			os.Exit(1)
+		}
 	case *inputPath != "" && *outputPath != "":
 		if err := run(*inputPath, *outputPath, *opGethCommit, *goldenOutput); err != nil {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --probe-precompile <fork> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
+		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --probe-receipt-fields <case.in.json> | --probe-spec | --probe-genesis-number | --probe-precompile <fork> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>] | --mode corrupt|static --base <stem> --out-dir <dir> [--op-geth-commit <sha>]")
 		os.Exit(2)
 	}
 }
@@ -230,7 +242,11 @@ type inputTx struct {
 	Gas                  *math.HexOrDecimal64  `json:"gas,omitempty"`
 	MaxFeePerGas         *math.HexOrDecimal256 `json:"maxFeePerGas,omitempty"`
 	MaxPriorityFeePerGas *math.HexOrDecimal256 `json:"maxPriorityFeePerGas,omitempty"`
-	Data                 hexutil.Bytes         `json:"data,omitempty"`
+	// GasPrice is the type-0 (legacy) arm's per-gas price (EIP-1559 arms use
+	// maxFeePerGas/maxPriorityFeePerGas). omitempty: absent on all pre-existing
+	// cases, must not re-emit as null.
+	GasPrice *math.HexOrDecimal256 `json:"gasPrice,omitempty"`
+	Data     hexutil.Bytes         `json:"data,omitempty"`
 	// EIP-2930 access list, same shape as the output field (omitempty, iron
 	// rule: absent on the old 25 cases, must not re-emit as null).
 	AccessList []outputAccessTuple   `json:"accessList,omitempty"`
@@ -317,6 +333,24 @@ type outputSetCodeTx struct {
 	OpAuthorizationList  []outputAuthorization `json:"_op_authorization_list"`
 }
 
+// outputLegacyTx is the type-0 (EIP-155 protected) arm's output object. Unlike
+// the EIP-1559 arms it carries a single `gasPrice` (no maxFeePerGas /
+// maxPriorityFeePerGas). ⚠️ The T8n replayer does not yet parse `_op_type
+// "legacy"` (OpT8nReplayTest.cpp:513-644); the legacy vectors must not be
+// manifest-registered until that consumer arm lands (see task-3-report).
+type outputLegacyTx struct {
+	OpType   string                `json:"_op_type"`
+	OpRaw    string                `json:"_op_raw"`
+	ChainID  *math.HexOrDecimal256 `json:"chainId"`
+	Nonce    math.HexOrDecimal64   `json:"nonce"`
+	To       *common.Address       `json:"to"`
+	Gas      math.HexOrDecimal64   `json:"gas"`
+	GasPrice *math.HexOrDecimal256 `json:"gasPrice"`
+	Value    *math.HexOrDecimal256 `json:"value"`
+	Data     hexutil.Bytes         `json:"data"`
+	Sender   common.Address        `json:"sender"`
+}
+
 type outputBlock struct {
 	Transactions []json.RawMessage `json:"transactions"`
 }
@@ -359,6 +393,30 @@ type expectedReceipt struct {
 type opExpected struct {
 	Header   expectedHeader    `json:"header"`
 	Receipts []expectedReceipt `json:"receipts"`
+	// Reject is present ONLY on invalid vectors (Task 3 corrupt/static modes).
+	// omitempty keeps the old 77 valid vectors byte-for-byte stable under
+	// regeneration (review E11).
+	Reject *rejectExpected `json:"reject,omitempty"`
+}
+
+// rejectExpected is the _op_expected.reject schema (task-2/3 brief): the
+// op-geth anchor message (weak, documentation-only) plus the FISCO consumer
+// contract that the C++ runners (OpNewPayloadRpcE2eTest / OpT8nReplayTest)
+// actually assert against. Field presence is the contract -- every
+// non-omitempty field is required on an invalid vector.
+type rejectExpected struct {
+	OpGeth string      `json:"op_geth"`
+	Fisco  fiscoReject `json:"fisco"`
+}
+
+// fiscoReject is the FISCO-side expectation. Consumer is "engine" for the
+// newPayload gate (field/static corruptions, this task) and "executor"/"both"
+// for the T8n processOpBlock throw path (task 1/2 vectors).
+type fiscoReject struct {
+	Consumer                string          `json:"consumer,omitempty"`
+	Classification          string          `json:"classification"`              // INVALID | SYNCING
+	LatestValidHash         json.RawMessage `json:"latest_valid_hash,omitempty"` // "parent" | null (INVALID only)
+	ValidationErrorContains string          `json:"validation_error_contains,omitempty"`
 }
 
 // outputAccount is the canonical EF state-test account shape:
@@ -404,6 +462,24 @@ type outputVector struct {
 	Block      outputBlock                      `json:"block"`
 	PostState  types.GenesisAlloc               `json:"postState"`
 	OpExpected opExpected                       `json:"_op_expected"`
+}
+
+// invalidVectorDoc is the on-disk shape of a Task 3 invalid vector
+// (vectors/invalid_*.json). The engine consumer (OpNewPayloadRpcE2eTest,
+// w6test::loadInvalidSample) reads _info.hardfork / pre / _op_payload /
+// _op_expected.reject; env/block/postState are not produced (no replay
+// semantics on an invalid block).
+type invalidVectorDoc struct {
+	Info       caseInfo                         `json:"_info"`
+	Pre        map[common.Address]outputAccount `json:"pre"`
+	OpPayload  map[string]interface{}           `json:"_op_payload"`
+	OpExpected invalidExpected                  `json:"_op_expected"`
+}
+
+// invalidExpected is the lean _op_expected for invalid vectors: only the reject
+// schema is emitted.
+type invalidExpected struct {
+	Reject *rejectExpected `json:"reject"`
 }
 
 // ---------------------------------------------------------------------
@@ -1478,6 +1554,664 @@ func selfCheck(genesis *core.Genesis, blocks []*types.Block) error {
 }
 
 // ---------------------------------------------------------------------
+// Task 3: corrupt / static modes (self-consistent corruption + §4c static
+// surface). These are INDEPENDENT modes -- they take the ASSEMBLED valid
+// product of a base case (buildBlockVector) and re-emit it as an invalid
+// vector; they never run inside --write-cases (the old 77 case files stay
+// byte-for-byte untouched).
+// ---------------------------------------------------------------------
+
+// blockVector is the full context of one generated, self-checked block: the
+// assembled output vector PLUS the block objects the corrupt/static modes need
+// to rebuild a corrupt block and capture its InsertChain rejection.
+type blockVector struct {
+	in       *inputCase
+	cfg      *params.ChainConfig
+	signer   types.Signer
+	genesis  *core.Genesis
+	block    *types.Block
+	txs      []*types.Transaction
+	receipts types.Receipts
+	outTxs   []json.RawMessage
+	vec      outputVector
+	golden   *goldenRecord
+}
+
+// buildBlockVector replicates the processBlockVector front half (genesis -> tx
+// build -> GenerateChainWithGenesis -> selfCheck) and returns the full block
+// context. It deliberately COPIES that logic rather than sharing it:
+// processBlockVector is the byte-invariant golden path and must not be
+// disturbed; this is the same "copy the front half" pattern probeReceiptFields
+// already uses (main.go:847).
+func buildBlockVector(in *inputCase) (*blockVector, error) {
+	// ── copied from processBlockVector front half (main.go:436-517) ──
+	cfg, err := buildConfigForCase(in)
+	if err != nil {
+		return nil, err
+	}
+	if err := assertL1BlockConsistency(cfg, in); err != nil {
+		return nil, fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
+	}
+	if err := assertDepositsFirst(in.Transactions); err != nil {
+		return nil, err
+	}
+	genesisTime := uint64(in.Genesis.Timestamp)
+	blockTime := genesisTime + 10
+	denom := uint64(in.Genesis.EIP1559Denominator)
+	elasticity := uint64(in.Genesis.EIP1559Elasticity)
+	var minBaseFee *uint64
+	if cfg.IsJovian(blockTime) {
+		if in.Genesis.MinBaseFee == nil {
+			return nil, fmt.Errorf("jovian case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
+		}
+		v := uint64(*in.Genesis.MinBaseFee)
+		minBaseFee = &v
+	}
+	var genesisBaseFee *big.Int
+	if in.Genesis.BaseFee != nil {
+		genesisBaseFee = (*big.Int)(in.Genesis.BaseFee)
+	}
+	genesis := &core.Genesis{
+		Config:     cfg,
+		Timestamp:  genesisTime,
+		GasLimit:   uint64(in.Genesis.GasLimit),
+		BaseFee:    genesisBaseFee,
+		Difficulty: big.NewInt(0),
+		ExtraData:  eip1559.EncodeOptimismExtraData(cfg, genesisTime, denom, elasticity, minBaseFee),
+		Alloc:      in.Pre,
+	}
+	signer := types.MakeSigner(cfg, big.NewInt(1), blockTime)
+	var (
+		txs    []*types.Transaction
+		outTxs []json.RawMessage
+	)
+	for i := range in.Transactions {
+		tx, outTx, err := buildTx(&in.Transactions[i], signer, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("tx %d: %w", i, err)
+		}
+		txs = append(txs, tx)
+		outTxs = append(outTxs, outTx)
+	}
+	blockExtra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, minBaseFee)
+	engine := beacon.New(ethash.NewFaker())
+	var (
+		db          ethdb.Database
+		blocks      []*types.Block
+		receiptsAll []types.Receipts
+	)
+	if err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("GenerateChainWithGenesis panic: %v", r)
+			}
+		}()
+		db, blocks, receiptsAll = core.GenerateChainWithGenesis(genesis, engine, 1, func(i int, b *core.BlockGen) {
+			b.SetCoinbase(in.Coinbase)
+			b.SetExtra(blockExtra)
+			b.SetParentBeaconRoot(in.ParentBeaconBlockRoot)
+			for _, tx := range txs {
+				b.AddTx(tx)
+			}
+		})
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+	if len(blocks) != 1 {
+		return nil, fmt.Errorf("expected 1 generated block, got %d", len(blocks))
+	}
+	block, receipts := blocks[0], receiptsAll[0]
+	header := block.Header()
+	if header.Time != blockTime || header.Number.Uint64() != 1 {
+		return nil, fmt.Errorf("unexpected generated header number/time: %d/%d", header.Number.Uint64(), header.Time)
+	}
+	if len(receipts) != len(txs) {
+		return nil, fmt.Errorf("receipt/tx count mismatch: %d vs %d", len(receipts), len(txs))
+	}
+	if err := selfCheck(genesis, blocks); err != nil {
+		return nil, fmt.Errorf("InsertChain self-check FAILED (corpus/generator defect, do not bypass): %w", err)
+	}
+	vec, golden, err := assembleOutput(in, cfg, signer, genesis, db, block, receipts, txs, outTxs)
+	if err != nil {
+		return nil, fmt.Errorf("vector assembly: %w", err)
+	}
+	return &blockVector{
+		in: in, cfg: cfg, signer: signer, genesis: genesis, block: block,
+		txs: txs, receipts: receipts, outTxs: outTxs, vec: vec, golden: golden,
+	}, nil
+}
+
+// runInvalidMode dispatches the --mode=corrupt / --mode=static CLI paths. Both
+// load the base case from the caseSpecs table (no filesystem dependency; the
+// base stem is "fork_name", split on the first underscore).
+func runInvalidMode(mode, baseStem, outDir, opGethCommit string) error {
+	if outDir == "" {
+		return fmt.Errorf("--out-dir is required for --mode=%s", mode)
+	}
+	fork, name, err := splitVectorName(baseStem)
+	if err != nil {
+		return err
+	}
+	if fork != "isthmus" && fork != "jovian" {
+		return fmt.Errorf("--mode=%s requires an isthmus/jovian base (OP Isthmus+ path), got fork %q", mode, fork)
+	}
+	in, err := buildCaseFromSpecs(name, fork)
+	if err != nil {
+		return err
+	}
+	base, err := buildBlockVector(&in)
+	if err != nil {
+		return fmt.Errorf("build base %q: %w", baseStem, err)
+	}
+	switch mode {
+	case "corrupt":
+		for _, field := range []string{"stateRoot", "gasUsed", "receiptsRoot", "parentHash", "extraData", "blockHash"} {
+			doc, _, err := corruptVector(base, field)
+			if err != nil {
+				return fmt.Errorf("corrupt %s: %w", field, err)
+			}
+			stem := "invalid_" + baseStem + "_" + field
+			if err := writeInvalidVector(outDir, stem, doc, opGethCommit); err != nil {
+				return err
+			}
+		}
+		return nil
+	case "static":
+		// The §4c items that need a Jovian base (DA-footprint, item 11) derive
+		// from the canonical jovian_transfer_basic; the rest use the passed base.
+		jovIn, err := buildCaseFromSpecs("transfer_basic", "jovian")
+		if err != nil {
+			return err
+		}
+		jovBase, err := buildBlockVector(&jovIn)
+		if err != nil {
+			return fmt.Errorf("build jovian base: %w", err)
+		}
+		for _, item := range staticSurfaceItems {
+			b := base
+			stemBase := baseStem
+			if item.fork == "jovian" {
+				b = jovBase
+				stemBase = "jovian_transfer_basic"
+			}
+			doc, err := emitStaticSurfaceVector(b, item)
+			if err != nil {
+				return fmt.Errorf("static %s: %w", item.name, err)
+			}
+			stem := "invalid_" + stemBase + "_static_" + itoa(item.n)
+			if err := writeInvalidVector(outDir, stem, doc, opGethCommit); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown --mode %q", mode)
+	}
+}
+
+// buildCaseFromSpecs finds a caseSpec by name+fork and builds the input case.
+// Used by both the CLI modes and the Go tests.
+func buildCaseFromSpecs(name, fork string) (inputCase, error) {
+	for _, spec := range caseSpecs {
+		if spec.name != name {
+			continue
+		}
+		for _, f := range spec.forks {
+			if f == fork {
+				return spec.build(fork), nil
+			}
+		}
+		return inputCase{}, fmt.Errorf("caseSpec %q has no fork %q (available: %v)", name, fork, spec.forks)
+	}
+	return inputCase{}, fmt.Errorf("caseSpec %q not found in caseSpecs", name)
+}
+
+// splitVectorName splits a vector stem "fork_name" into its fork prefix and the
+// remaining name. Fork names contain no underscores, so the first underscore is
+// the boundary (e.g. isthmus_transfer_basic -> isthmus/transfer_basic).
+func splitVectorName(stem string) (fork, name string, err error) {
+	i := strings.IndexByte(stem, '_')
+	if i < 0 {
+		return "", "", fmt.Errorf("stem %q has no fork prefix (want fork_name)", stem)
+	}
+	return stem[:i], stem[i+1:], nil
+}
+
+func itoa(n int) string {
+	return fmt.Sprintf("%d", n)
+}
+
+// recomputeOpHeaderHash returns the canonical OP block hash: keccak256 of the
+// RLP-encoded header (op-geth types.Header.Hash(), core/types/block.go:124).
+// This is what makes a corruption SELF-CONSISTENT -- the payload blockHash is
+// re-derived from the corrupt header, so the engine gate's step-2 blockHash
+// check passes and the rejection lands on the corrupted FIELD (step-5/six-way).
+func recomputeOpHeaderHash(h *types.Header) common.Hash {
+	return h.Hash()
+}
+
+// corruptVector applies the §4a per-field corrupt recipe to a valid generated
+// block and returns the invalid vector document plus the rebuilt corrupt block
+// (for captureInsertChainRejection). The blockHash field is the documented
+// exception: no corrupt block is produced (InsertChain would ACCEPT it -- the
+// block's own hash stays self-consistent) and the anchor is the engine-API
+// "blockhash mismatch" message recorded directly.
+func corruptVector(base *blockVector, field string) (invalidVectorDoc, *types.Block, error) {
+	if base == nil || base.block == nil || base.genesis == nil || base.golden == nil {
+		return invalidVectorDoc{}, nil, fmt.Errorf("corruptVector: nil base/block/genesis/golden")
+	}
+	header := base.block.Header()
+	corruptHeader := types.CopyHeader(header)
+	blockHash := common.Hash{}
+	recompute := true
+
+	switch field {
+	case "stateRoot":
+		flipHashByte(&corruptHeader.Root)
+	case "gasUsed":
+		corruptHeader.GasUsed = corruptGasUsedValue(header.GasLimit, header.GasUsed)
+	case "receiptsRoot":
+		flipHashByte(&corruptHeader.ReceiptHash)
+	case "parentHash":
+		// Unknown-ancestor recipe: the parent becomes a hash nothing in the
+		// chain answers to -> SYNCING on the FISCO side, "unknown ancestor" on
+		// the op-geth InsertChain side.
+		corruptHeader.ParentHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+	case "extraData":
+		// Shape break (size), NO blockHash recompute: the static shape check
+		// (FISCO validateOpNewPayloadRequest / op-geth ValidateHoloceneExtraData)
+		// fires before any blockHash comparison, so the payload keeps the
+		// ORIGINAL golden blockHash.
+		recompute = false
+		blockHash = common.HexToHash(base.golden.BlockHash)
+		corruptHeader.Extra = corruptExtraData(base.cfg, header.Time)
+	case "blockHash":
+		// payload.blockHash corruption, NO recompute, NO capture block.
+		recompute = false
+		bh := common.HexToHash(base.golden.BlockHash)
+		flipHashByte(&bh)
+		blockHash = bh
+		corruptHeader = nil
+	default:
+		return invalidVectorDoc{}, nil, fmt.Errorf("corruptVector: unknown field %q", field)
+	}
+	if recompute {
+		blockHash = recomputeOpHeaderHash(corruptHeader)
+	}
+
+	// Rebuild the corrupt block: base block (built with types.NewBlock per the
+	// brief) + WithSeal to swap in the corrupt header while keeping the body.
+	// WithSeal is safe where NewBlockWithHeader is not: it preserves the
+	// transactions (NewBlockWithHeader would drop them).
+	var corruptBlock *types.Block
+	if corruptHeader != nil {
+		corruptBlock = base.block.WithSeal(corruptHeader)
+	}
+
+	rej, err := buildRejectForCorruptField(base, field, corruptBlock)
+	if err != nil {
+		return invalidVectorDoc{}, nil, err
+	}
+
+	payloadHeader := header
+	if corruptHeader != nil {
+		payloadHeader = corruptHeader
+	}
+	payload := buildOpPayload(base, payloadHeader, blockHash)
+
+	doc := invalidVectorDoc{
+		Info: caseInfo{
+			Hardfork:    base.vec.Info.Hardfork,
+			Description: base.vec.Info.Description + " (corrupt " + field + ")",
+		},
+		Pre:       base.vec.Pre,
+		OpPayload: payload,
+		OpExpected: invalidExpected{
+			Reject: rej,
+		},
+	}
+	return doc, corruptBlock, nil
+}
+
+func flipHashByte(h *common.Hash) {
+	b := h[:]
+	b[0] ^= 0xff
+}
+
+// corruptGasUsedValue returns a gasUsed value that is <= gasLimit and differs
+// from the actual value, so the corruption lands in the "invalid gas used"
+// bucket (op-geth block_validator.go:154) instead of the gasLimit bound check.
+func corruptGasUsedValue(gasLimit, actual uint64) uint64 {
+	v := gasLimit
+	if v == actual {
+		if v == 0 {
+			return 0 // cannot corrupt below 0; caller asserts rejection elsewhere
+		}
+		v--
+	}
+	return v
+}
+
+// corruptExtraData breaks the Holocene+ extraData shape: it returns a wrong
+// length (8 bytes for Isthmus, 16 for Jovian) whose version byte is correct so
+// the failure is unambiguous -- "should be 9/17 bytes". op-geth anchor:
+// "invalid optimism extraData: holocene extraData should be 9 bytes, got 8"
+// (Isthmus) / "Jovian extraData should be 17 bytes, got 16" (Jovian). FISCO:
+// "extraData must be exactly 9/17 bytes on the OP path (Isthmus/Jovian)".
+func corruptExtraData(cfg *params.ChainConfig, blockTime uint64) []byte {
+	if cfg.IsJovian(blockTime) {
+		return []byte{0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} // 16B, version 0x01
+	}
+	return []byte{0x00, 0, 0, 0, 0, 0, 0, 0} // 8B, version 0x00
+}
+
+// buildRejectForCorruptField fills the _op_expected.reject schema for a corrupt
+// field. For every field EXCEPT blockHash it captures the REAL op-geth
+// InsertChain rejection message (the weak op_geth anchor) and derives the FISCO
+// classification from the recipe.
+func buildRejectForCorruptField(base *blockVector, field string, corruptBlock *types.Block) (*rejectExpected, error) {
+	switch field {
+	case "stateRoot", "gasUsed", "receiptsRoot":
+		if corruptBlock == nil {
+			return nil, fmt.Errorf("corrupt %s: nil capture block", field)
+		}
+		msg, err := captureInsertChainRejection(base.genesis, corruptBlock)
+		if err != nil {
+			return nil, fmt.Errorf("corrupt %s: InsertChain capture: %w", field, err)
+		}
+		return &rejectExpected{
+			OpGeth: msg,
+			Fisco: fiscoReject{
+				Consumer:                "engine",
+				Classification:          "INVALID",
+				LatestValidHash:         json.RawMessage(`"parent"`),
+				ValidationErrorContains: field,
+			},
+		}, nil
+	case "parentHash":
+		if corruptBlock == nil {
+			return nil, fmt.Errorf("corrupt parentHash: nil capture block")
+		}
+		msg, err := captureInsertChainRejection(base.genesis, corruptBlock)
+		if err != nil {
+			return nil, fmt.Errorf("corrupt parentHash: InsertChain capture: %w", err)
+		}
+		// SYNCING: parent unknown is the design intent; no latest_valid_hash, no
+		// validation_error (the FISCO runner asserts SYNCING status only).
+		return &rejectExpected{
+			OpGeth: msg,
+			Fisco: fiscoReject{
+				Consumer:       "engine",
+				Classification: "SYNCING",
+			},
+		}, nil
+	case "extraData":
+		if corruptBlock == nil {
+			return nil, fmt.Errorf("corrupt extraData: nil capture block")
+		}
+		msg, err := captureInsertChainRejection(base.genesis, corruptBlock)
+		if err != nil {
+			return nil, fmt.Errorf("corrupt extraData: InsertChain capture: %w", err)
+		}
+		return &rejectExpected{
+			OpGeth: msg,
+			Fisco: fiscoReject{
+				Consumer:                "engine",
+				Classification:          "INVALID",
+				LatestValidHash:         json.RawMessage("null"),
+				ValidationErrorContains: fiscoExtraDataMessage(base.cfg, base.block.Header().Time),
+			},
+		}, nil
+	case "blockHash":
+		// No InsertChain capture: the block's own hash stays self-consistent, so
+		// InsertChain ACCEPTS it. The anchor is the engine-API ExecutableDataToBlock
+		// message (beacon/engine/types.go:281). FISCO rebuilds the header and
+		// rejects with "blockHash does not match the reconstructed block header"
+		// (EngineServiceImpl.h:895-899), INVALID + latestValidHash=null.
+		return &rejectExpected{
+			OpGeth: "blockhash mismatch",
+			Fisco: fiscoReject{
+				Consumer:                "engine",
+				Classification:          "INVALID",
+				LatestValidHash:         json.RawMessage("null"),
+				ValidationErrorContains: "blockHash does not match the reconstructed block header",
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("buildRejectForCorruptField: unknown field %q", field)
+	}
+}
+
+// fiscoExtraDataMessage returns the FISCO validateOpNewPayloadRequest substring
+// that matches the corruptExtraData shape break (EngineServiceImpl.cpp:430-452).
+func fiscoExtraDataMessage(cfg *params.ChainConfig, blockTime uint64) string {
+	if cfg.IsJovian(blockTime) {
+		return "extraData must be exactly 17 bytes on the OP path (Jovian)"
+	}
+	return "extraData must be exactly 9 bytes on the OP path (Isthmus)"
+}
+
+// buildOpPayload assembles the full ExecutionPayload JSON for an invalid vector
+// from a (possibly corrupt) header. Field names/units follow makeParamsJson
+// (GoldenSample.h): timestamp in OP seconds; every quantity a hex string.
+func buildOpPayload(base *blockVector, header *types.Header, blockHash common.Hash) map[string]interface{} {
+	if header.WithdrawalsHash == nil || header.BlobGasUsed == nil || header.ExcessBlobGas == nil {
+		// Cannot happen on the isthmus/jovian path (assembleOutput asserts the
+		// first two; buildGoldenRecord asserts ExcessBlobGas == 0) -- guard for
+		// a nil-deref-free error surface.
+		panic("buildOpPayload: header missing WithdrawalsHash/BlobGasUsed/ExcessBlobGas")
+	}
+	txHexes := make([]string, len(base.txs))
+	for i, tx := range base.txs {
+		b, err := tx.MarshalBinary()
+		if err != nil {
+			panic("buildOpPayload: tx MarshalBinary: " + err.Error())
+		}
+		txHexes[i] = hexutil.Encode(b)
+	}
+	return map[string]interface{}{
+		"parentHash":            header.ParentHash.Hex(),
+		"feeRecipient":          strings.ToLower(header.Coinbase.Hex()),
+		"stateRoot":             header.Root.Hex(),
+		"receiptsRoot":          header.ReceiptHash.Hex(),
+		"logsBloom":             hexutil.Encode(header.Bloom[:]),
+		"prevRandao":            header.MixDigest.Hex(),
+		"blockNumber":           hexutil.EncodeUint64(header.Number.Uint64()),
+		"gasLimit":              hexutil.EncodeUint64(header.GasLimit),
+		"gasUsed":               hexutil.EncodeUint64(header.GasUsed),
+		"timestamp":             hexutil.EncodeUint64(header.Time),
+		"extraData":             hexutil.Encode(header.Extra),
+		"baseFeePerGas":         hexutil.EncodeBig(header.BaseFee),
+		"blockHash":             blockHash.Hex(),
+		"withdrawalsRoot":       header.WithdrawalsHash.Hex(),
+		"blobGasUsed":           hexutil.EncodeUint64(*header.BlobGasUsed),
+		"excessBlobGas":         hexutil.EncodeUint64(*header.ExcessBlobGas),
+		"parentBeaconBlockRoot": header.ParentBeaconRoot.Hex(),
+		"withdrawals":           []interface{}{},
+		"transactions":          txHexes,
+	}
+}
+
+// captureInsertChainRejection runs a corrupt block through a fresh
+// core.NewBlockChain (4-arg, matching this checkout's selfCheck precedent at
+// main.go:1464) + InsertChain and returns the rejection message. A corrupt
+// block that is ACCEPTED is a hard error (iron-rule mirror violation: the
+// corruption recipe silently failed to produce a rejection).
+func captureInsertChainRejection(genesis *core.Genesis, block *types.Block) (string, error) {
+	engine := beacon.New(ethash.NewFaker())
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, nil)
+	if err != nil {
+		return "", fmt.Errorf("NewBlockChain: %w", err)
+	}
+	defer chain.Stop()
+	if _, err := chain.InsertChain(types.Blocks{block}); err == nil {
+		return "", fmt.Errorf("corrupt block ACCEPTED (iron-rule mirror violation)")
+	} else {
+		return err.Error(), nil
+	}
+}
+
+// ---------------------------------------------------------------------
+// §4c static surface (--mode=static)
+// ---------------------------------------------------------------------
+
+// staticItem is one §4c static-validation malformation. mutate rewrites the
+// base payload; fiscoMessage is the EXACT substring the FISCO
+// validateOpNewPayloadRequest (EngineServiceImpl.cpp:310-508) returns, which the
+// E2E runner asserts via validation_error_contains. fork selects the base block
+// (isthmus|jovian) -- item 11 (Jovian DA footprint) needs a Jovian base.
+type staticItem struct {
+	n            int
+	name         string
+	fork         string
+	mutate       func(payload map[string]interface{}) error
+	fiscoMessage string
+}
+
+// staticSurfaceItems enumerates the 12 §4c items. ⚠️ Expressibility through the
+// Task 2 loader (GoldenSample.h makeInvalidParamsJson) + parseNewPayloadRequest
+// is the constraint that decides whether an item actually reaches its FISCO
+// message in the E2E runner:
+//   - items 3 (expectedBlobVersionedHashes non-empty) and 12 (executionRequests
+//     non-empty) CANNOT be expressed: the loader hardcodes params[1] = [] and
+//     parseNewPayloadRequest never parses executionRequests. They are emitted
+//     per the brief but must NOT be manifest-registered until the loader/RPC
+//     parse is extended (see task-3-report).
+//   - item 1 (rawTransactions missing) is expressed as `transactions: null`
+//     (NOT omission -- the loader substitutes an empty array for a missing
+//     member, which would convert the case into a blockHash mismatch).
+//   - item 8 (blockNumber negative) is expressed as 0x8000000000000000, which
+//     fromQuantity parses as uint64 and the cast to int64 wraps negative.
+var staticSurfaceItems = []staticItem{
+	{1, "rawTransactions_missing", "isthmus", func(p map[string]interface{}) error {
+		p["transactions"] = nil
+		return nil
+	}, "executionPayload.rawTransactions is required on the OP path"},
+	{2, "withdrawals_nonempty", "isthmus", func(p map[string]interface{}) error {
+		p["withdrawals"] = []map[string]interface{}{
+			{"index": "0x0", "validatorIndex": "0x0", "amount": "0x1", "address": "0x0000000000000000000000000000000000000001"},
+		}
+		return nil
+	}, "withdrawals must be present and empty on the OP path"},
+	{3, "expectedBlobVersionedHashes_nonempty", "isthmus", func(p map[string]interface{}) error {
+		p["expectedBlobVersionedHashes"] = []string{"0x0000000000000000000000000000000000000000000000000000000000000001"}
+		return nil
+	}, "expectedBlobVersionedHashes must be an empty array on the OP path"},
+	{4, "parentBeaconBlockRoot_missing", "isthmus", func(p map[string]interface{}) error {
+		delete(p, "parentBeaconBlockRoot")
+		return nil
+	}, "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV4"},
+	{5, "withdrawalsRoot_missing", "isthmus", func(p map[string]interface{}) error {
+		delete(p, "withdrawalsRoot")
+		return nil
+	}, "withdrawalsRoot is required on the OP path (Isthmus+)"},
+	{6, "excessBlobGas_nonzero", "isthmus", func(p map[string]interface{}) error {
+		p["excessBlobGas"] = "0x1"
+		return nil
+	}, "excessBlobGas must be present and zero on the OP path"},
+	{7, "isthmus_blobGasUsed_nonzero", "isthmus", func(p map[string]interface{}) error {
+		p["blobGasUsed"] = "0x1"
+		return nil
+	}, "blobGasUsed must be zero before Jovian (OP Isthmus)"},
+	{8, "blockNumber_negative", "isthmus", func(p map[string]interface{}) error {
+		p["blockNumber"] = "0x8000000000000000" // uint64 2^63 wraps to negative int64
+		return nil
+	}, "blockNumber must not be negative"},
+	{9, "gasLimit_overlimit", "isthmus", func(p map[string]interface{}) error {
+		p["gasLimit"] = "0xffffffffffffffff" // 2^64-1 > 2^63-1
+		return nil
+	}, "gasLimit exceeds the maximum block gas limit (2^63-1)"},
+	{10, "extraData_shape", "isthmus", func(p map[string]interface{}) error {
+		p["extraData"] = "0x0000000000000000" // 8 bytes, not 9
+		return nil
+	}, "extraData must be exactly 9 bytes on the OP path (Isthmus)"},
+	{11, "jovian_da_footprint_over_gaslimit", "jovian", func(p map[string]interface{}) error {
+		p["blobGasUsed"] = "0x2000000" // 2^25 = 33554432 > 10M gasLimit
+		return nil
+	}, "DA footprint (blobGasUsed) exceeds the block gas limit"},
+	{12, "executionRequests_nonempty", "isthmus", func(p map[string]interface{}) error {
+		p["executionRequests"] = []map[string]interface{}{
+			{"type": "0x0", "data": "0xdeadbeef"},
+		}
+		return nil
+	}, "executionRequests must be absent or empty on the OP path"},
+}
+
+// buildBasePayload assembles the FULL valid payload of a base block (all base
+// true values + the original golden blockHash). The §4c items start from here
+// and malform one field.
+func buildBasePayload(base *blockVector) map[string]interface{} {
+	return buildOpPayload(base, base.block.Header(), common.HexToHash(base.golden.BlockHash))
+}
+
+// emitStaticSurfaceVector builds the invalid vector document for one §4c static
+// item: base payload + the item's malformation + the FISCO static reject schema.
+// All static items reject at validateOpNewPayloadRequest -> INVALID +
+// latestValidHash=null.
+func emitStaticSurfaceVector(base *blockVector, item staticItem) (invalidVectorDoc, error) {
+	if base == nil || base.block == nil || base.golden == nil {
+		return invalidVectorDoc{}, fmt.Errorf("emitStaticSurfaceVector: nil base")
+	}
+	payload := buildBasePayload(base)
+	if item.mutate != nil {
+		if err := item.mutate(payload); err != nil {
+			return invalidVectorDoc{}, err
+		}
+	}
+	return invalidVectorDoc{
+		Info: caseInfo{
+			Hardfork:    base.vec.Info.Hardfork,
+			Description: base.vec.Info.Description + " (static " + item.name + ")",
+		},
+		Pre:       base.vec.Pre,
+		OpPayload: payload,
+		OpExpected: invalidExpected{
+			Reject: &rejectExpected{
+				OpGeth: item.fiscoMessage,
+				Fisco: fiscoReject{
+					Consumer:                "engine",
+					Classification:          "INVALID",
+					LatestValidHash:         json.RawMessage("null"),
+					ValidationErrorContains: item.fiscoMessage,
+				},
+			},
+		},
+	}, nil
+}
+
+// writeInvalidVector writes one invalid vector as vectors/invalid_*.json with
+// the same outer-wrapping convention as run() (a `_op_test_vectors` meta object
+// plus the single vector object keyed by the stem).
+func writeInvalidVector(outDir, stem string, doc invalidVectorDoc, opGethCommit string) error {
+	meta, err := json.Marshal(struct {
+		Version         string `json:"version"`
+		Generator       string `json:"generator"`
+		GeneratorCommit string `json:"generator_commit"`
+	}{schemaVersion, "opt8n-ref", opGethCommit})
+	if err != nil {
+		return err
+	}
+	docBytes, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	out := map[string]json.RawMessage{
+		"_op_test_vectors": meta,
+		stem:               docBytes,
+	}
+	outBytes, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	outBytes = append(outBytes, '\n')
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(outDir, stem+".json"), outBytes, 0o644)
+}
+
+// ---------------------------------------------------------------------
 // L1Block slot <-> calldata consistency (iron rule 2)
 //
 // Calldata layout (rollup_cost.go extractL1GasParamsPostEcotone /
@@ -1770,6 +2504,52 @@ func buildTx(in *inputTx, signer types.Signer, cfg *params.ChainConfig) (*types.
 			Data:                 in.Data,
 			AccessList:           outAccessList,
 			Sender:               from,
+		})
+		return tx, outJSON, err
+
+	case "legacy":
+		// Type-0 legacy tx with an EIP-155 protected signature (B scope base for
+		// corrupt/invalid-tx vectors). Signing with the standard MakeSigner
+		// signer (Isthmus/London on this chain) routes LegacyTxType through the
+		// EIP155Signer arm (transaction_signing.go:299-300), producing
+		// V = chainID*2+35/36. GasPrice is the sole per-gas price; a legacy tx on
+		// an EIP-1559 chain is valid as long as gasPrice >= baseFee.
+		prv, from, err := parseKey(in.SecretKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		chainID, nonce, gas, value, _, _ := txScalars(in)
+		gasPrice := big.NewInt(0)
+		if in.GasPrice != nil {
+			gasPrice = (*big.Int)(in.GasPrice)
+		}
+		txdata := &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: gasPrice,
+			Gas:      gas,
+			To:       in.To,
+			Value:    value,
+			Data:     []byte(in.Data),
+		}
+		tx, err := types.SignNewTx(prv, signer, txdata)
+		if err != nil {
+			return nil, nil, fmt.Errorf("signing legacy tx: %w", err)
+		}
+		rawBin, err := tx.MarshalBinary() // iron rule: _op_raw = tx.MarshalBinary()
+		if err != nil {
+			return nil, nil, err
+		}
+		outJSON, err := json.Marshal(outputLegacyTx{
+			OpType:   "legacy",
+			OpRaw:    hexutil.Encode(rawBin),
+			ChainID:  (*math.HexOrDecimal256)(chainID),
+			Nonce:    math.HexOrDecimal64(nonce),
+			To:       in.To,
+			Gas:      math.HexOrDecimal64(gas),
+			GasPrice: (*math.HexOrDecimal256)(gasPrice),
+			Value:    (*math.HexOrDecimal256)(value),
+			Data:     in.Data,
+			Sender:   from,
 		})
 		return tx, outJSON, err
 
