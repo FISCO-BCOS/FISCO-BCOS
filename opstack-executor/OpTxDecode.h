@@ -4,28 +4,152 @@
 
 // OP raw-tx envelope decoders (split out of OpSchedulerImpl.h). Group 4-5: the per-type
 // tx decoders (deposit / eip1559 / setcode / access-list / legacy) plus the canonical
-// whole-envelope round-trip. These are the only OP decode layer that touches the evmone
-// package's test headers (<test/utils/rlp.hpp> / <test/utils/rlp_encode.hpp>), used for
-// canonical re-encoding.
+// whole-envelope round-trip. Canonical re-encoding uses the production bcos-codec RLP encoder
+// (encodeTuple below — a byte-for-byte equivalent of evmone's test-only rlp::encode_tuple), so
+// this layer carries no evmone test-header dependency.
 
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpDecodePrimitives.h>
 #include <opstack-executor/OpSchedulerErrors.h>
 
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <bcos-utilities/Common.h>
 #include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <string>
-#include <test/utils/rlp.hpp>
-#include <test/utils/rlp_encode.hpp>
 #include <utility>
 #include <variant>
 
 namespace bcos::evm::engine::detail
 {
+// ---- canonical re-encode helpers (bcos-codec RLP) ----
+//
+// Byte-for-byte equivalents of the evmone *test-only* RLP encoder (test/utils/rlp.hpp +
+// test/utils/rlp_encode.hpp), rebuilt on the production bcos-codec encoder so this production
+// layer carries no evmone test-header dependency. `encodeTuple` mirrors evmone::rlp::encode_tuple
+// (a list header + each element's canonical RLP); the element dispatch (`encodeRlp`) covers
+// exactly the types the decoders round-trip — unsigned scalars, intx::uint256, fixed-width evmc
+// bytes, and the access/authorization lists. Equivalence to evmone is asserted by the 125-vector
+// golden corpus plus the whole-envelope `assertCanonicalRoundTrip` below.
+
+/// RLP integer scalar for intx::uint256 (bcos-codec has no intx overload): 0 -> 0x80, otherwise
+/// minimal big-endian + length prefix — identical to evmone::rlp::encode(const intx::uint256&).
+inline void encodeRlp(bcos::bytes& to, const intx::uint256& x)
+{
+    if (x == 0)
+    {
+        to.push_back(bcos::codec::rlp::BYTES_HEAD_BASE);
+        return;
+    }
+    uint8_t be[sizeof(intx::uint256)]{};
+    intx::be::store(be, x);
+    size_t first = 0;
+    while (be[first] == 0)
+        ++first;
+    const size_t len = sizeof(intx::uint256) - first;
+    if (len == 1 && be[first] < bcos::codec::rlp::BYTES_HEAD_BASE)
+    {
+        to.push_back(be[first]);
+        return;
+    }
+    bcos::codec::rlp::encodeHeader(to, {.isList = false, .payloadLength = len});
+    to.insert(to.end(), be + first, be + sizeof(intx::uint256));
+}
+
+/// Unsigned integer scalars (bcos-codec's UnsignedByte path already matches evmone for these).
+/// Promoted to uint64_t first: the uint8_t path would instantiate the byte overload of
+/// bcos::toCompactBigEndian, which is declared inline in the header but defined in a .cpp —
+/// -Werror,-Wundefined-inline fires in any TU that instantiates it. uint64_t is byte-identical
+/// RLP for every scalar the decoders produce (evmone promotes uint8_t to uint64_t the same way).
+inline void encodeRlp(bcos::bytes& to, std::unsigned_integral auto v) noexcept
+{
+    bcos::codec::rlp::encode(to, static_cast<uint64_t>(v));
+}
+
+inline void encodeRlp(bcos::bytes& to, evmc::bytes_view v)
+{
+    bcos::codec::rlp::encode(to, bcos::bytesConstRef(v.data(), v.size()));
+}
+
+inline void encodeRlp(bcos::bytes& to, const evmc::bytes& b)
+{
+    encodeRlp(to, evmc::bytes_view(b.data(), b.size()));
+}
+
+inline void encodeRlp(bcos::bytes& to, const evmc::address& a)
+{
+    encodeRlp(to, evmc::bytes_view(a));
+}
+
+inline void encodeRlp(bcos::bytes& to, const evmc::bytes32& h)
+{
+    encodeRlp(to, evmc::bytes_view(h));
+}
+
+inline void encodeRlp(bcos::bytes& to, const std::vector<evmc::bytes32>& keys)
+{
+    bcos::bytes payload;
+    for (const auto& key : keys)
+        encodeRlp(payload, key);
+    bcos::codec::rlp::encodeHeader(to, {.isList = true, .payloadLength = payload.size()});
+    to.insert(to.end(), payload.begin(), payload.end());
+}
+
+/// Access list: rlp([ [address, [storageKey...]], ... ]) — each pair encodes as an RLP list of
+/// (address, keys-list), matching evmone's pair overload.
+inline void encodeRlp(bcos::bytes& to, const evmone::state::AccessList& al)
+{
+    bcos::bytes payload;
+    for (const auto& [addr, keys] : al)
+    {
+        bcos::bytes item;
+        encodeRlp(item, addr);
+        encodeRlp(item, keys);
+        bcos::codec::rlp::encodeHeader(payload, {.isList = true, .payloadLength = item.size()});
+        payload.insert(payload.end(), item.begin(), item.end());
+    }
+    bcos::codec::rlp::encodeHeader(to, {.isList = true, .payloadLength = payload.size()});
+    to.insert(to.end(), payload.begin(), payload.end());
+}
+
+/// EIP-7702 authorization list: rlp([ [chainId, address, nonce, v, r, s], ... ]) — same field
+/// order as evmone::state::rlp_encode(const Authorization&).
+inline void encodeRlp(bcos::bytes& to, const evmone::state::AuthorizationList& al)
+{
+    bcos::bytes payload;
+    for (const auto& auth : al)
+    {
+        bcos::bytes item;
+        encodeRlp(item, auth.chain_id);
+        encodeRlp(item, auth.addr);
+        encodeRlp(item, auth.nonce);
+        encodeRlp(item, auth.v);
+        encodeRlp(item, auth.r);
+        encodeRlp(item, auth.s);
+        bcos::codec::rlp::encodeHeader(payload, {.isList = true, .payloadLength = item.size()});
+        payload.insert(payload.end(), item.begin(), item.end());
+    }
+    bcos::codec::rlp::encodeHeader(to, {.isList = true, .payloadLength = payload.size()});
+    to.insert(to.end(), payload.begin(), payload.end());
+}
+
+/// evmone::rlp::encode_tuple equivalent: RLP-list-encodes the heterogeneous args. Returns
+/// evmc::bytes so call sites keep `evmc::bytes{0x02} + encodeTuple(...)` concatenation intact.
+template <typename... Args>
+inline evmc::bytes encodeTuple(const Args&... args)
+{
+    bcos::bytes payload;
+    (encodeRlp(payload, args), ...);
+    bcos::bytes out;
+    bcos::codec::rlp::encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
+    out.insert(out.end(), payload.begin(), payload.end());
+    return evmc::bytes(out.begin(), out.end());
+}
+
 /// DepositTx (OpDepositTx.h field order, cross-checked against Task 3's encode side,
 /// bcos-rpc TxHandler.cpp DepositTxHandler::encode): [sourceHash, from, to, mint, value, gas,
 /// isSystemTransaction, data] — no signature (`from` is explicit); `signedEnvelope` stays
@@ -105,10 +229,9 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint6
     tx.v = static_cast<uint8_t>(yParity);
 
     const auto signingPreimage =
-        evmc::bytes{0x02} + evmone::rlp::encode_tuple(tx.chain_id, tx.nonce,
-                                tx.max_priority_gas_price, tx.max_gas_price,
-                                static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value,
-                                tx.data, tx.access_list);
+        evmc::bytes{0x02} + encodeTuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price,
+                                tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit),
+                                toAddressView(tx.to), tx.value, tx.data, tx.access_list);
     tx.sender = recoverTxSender(signingPreimage, yParity, tx.r, tx.s);
 
     return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
@@ -152,10 +275,10 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint6
     tx.v = static_cast<uint8_t>(yParity);
 
     const auto signingPreimage =
-        evmc::bytes{0x04} + evmone::rlp::encode_tuple(tx.chain_id, tx.nonce,
-                                tx.max_priority_gas_price, tx.max_gas_price,
-                                static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value,
-                                tx.data, tx.access_list, tx.authorization_list);
+        evmc::bytes{0x04} + encodeTuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price,
+                                tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit),
+                                toAddressView(tx.to), tx.value, tx.data, tx.access_list,
+                                tx.authorization_list);
     tx.sender = recoverTxSender(signingPreimage, yParity, tx.r, tx.s);
 
     return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
@@ -196,9 +319,9 @@ inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, ui
     tx.v = static_cast<uint8_t>(yParity);
 
     const auto signingPreimage =
-        evmc::bytes{0x01} + evmone::rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_gas_price,
-                                static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value,
-                                tx.data, tx.access_list);
+        evmc::bytes{0x01} + encodeTuple(tx.chain_id, tx.nonce, tx.max_gas_price,
+                                static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to),
+                                tx.value, tx.data, tx.access_list);
     tx.sender = recoverTxSender(signingPreimage, yParity, tx.r, tx.s);
 
     return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
@@ -244,7 +367,7 @@ inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64
     {
         parity = v - 27;
         tx.chain_id = 0;
-        signingPreimage = evmone::rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+        signingPreimage = encodeTuple(tx.nonce, tx.max_gas_price,
             static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value, tx.data);
     }
     else if (v >= 35)
@@ -255,7 +378,7 @@ inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64
         if (derivedChainId != intx::uint256{chainId})
             throw OpConsensusError("OpSchedulerImpl: raw tx decode: chain id mismatch (legacy)");
         tx.chain_id = chainId;
-        signingPreimage = evmone::rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+        signingPreimage = encodeTuple(tx.nonce, tx.max_gas_price,
             static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value, tx.data,
             tx.chain_id, uint64_t{0}, uint64_t{0});
     }
@@ -285,22 +408,22 @@ inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64
 /// is named, unlike member bodies — an OP dependent name must not leak into a signature the
 /// generic composition root also instantiates).
 /// Re-encodes a decoded OpBlockTx canonically from its parsed fields, so the caller can compare it
-/// byte-for-byte with the raw envelope. Uses evmone's canonical RLP for every type (no bcos-codec
-/// type conversions): deposits are rebuilt as `0x7e || rlp([...8 fields])` (the isSystemTransaction
-/// bool re-emits via the `uint64 0/1` shape, whose RLP — empty string / 0x01 — matches the wire
-/// bool exactly); legacy reconstructs the full v (pre-155 27+parity, EIP-155 chainId*2+35+parity)
-/// that `tx.v`'s uint8 cannot hold; the three signed typed forms round-trip through
-/// `evmone::state::rlp_encode`.
+/// byte-for-byte with the raw envelope. Uses the production bcos-codec RLP encoder (encodeTuple —
+/// byte-for-byte equivalent of evmone's canonical RLP) for every type: deposits are rebuilt as
+/// `0x7e || rlp([...8 fields])` (the isSystemTransaction bool re-emits via the `uint64 0/1` shape,
+/// whose RLP — empty string / 0x01 — matches the wire bool exactly); legacy reconstructs the full
+/// v (pre-155 27+parity, EIP-155 chainId*2+35+parity) that `tx.v`'s uint8 cannot hold; the three
+/// signed typed forms (0x01/0x02/0x04) round-trip through the type byte + encodeTuple field tuple
+/// (field order identical to evmone::state::rlp_encode(const Transaction&)).
 inline bcos::bytes canonicalEnvelopeBytes(const bcos::evm::opstack::OpBlockTx& btx)
 {
     if (std::holds_alternative<bcos::evm::opstack::DepositTx>(btx.tx))
     {
         const auto& d = std::get<bcos::evm::opstack::DepositTx>(btx.tx);
-        auto body =
-            evmone::rlp::encode_tuple(evmc::bytes_view(d.source_hash), evmc::bytes_view(d.from),
-                d.to.has_value() ? evmc::bytes_view(*d.to) : evmc::bytes_view{}, d.mint.value_or(0),
-                d.value, static_cast<uint64_t>(d.gas_limit),
-                static_cast<uint64_t>(d.is_system_tx ? 1 : 0), d.data);
+        auto body = encodeTuple(evmc::bytes_view(d.source_hash), evmc::bytes_view(d.from),
+            d.to.has_value() ? evmc::bytes_view(*d.to) : evmc::bytes_view{}, d.mint.value_or(0),
+            d.value, static_cast<uint64_t>(d.gas_limit),
+            static_cast<uint64_t>(d.is_system_tx ? 1 : 0), d.data);
         bcos::bytes out;
         out.reserve(body.size() + 1);
         out.push_back(0x7e);
@@ -312,12 +435,38 @@ inline bcos::bytes canonicalEnvelopeBytes(const bcos::evm::opstack::OpBlockTx& b
     {
         const auto fullV = (tx.chain_id == 0) ? intx::uint256{27} + tx.v :
                                                 intx::uint256{tx.chain_id} * 2 + 35 + tx.v;
-        auto e = evmone::rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+        auto e = encodeTuple(tx.nonce, tx.max_gas_price,
             static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to), tx.value, tx.data, fullV,
             tx.r, tx.s);
         return {e.begin(), e.end()};
     }
-    auto e = evmone::state::rlp_encode(tx);  // 0x01/0x02/0x04 with their EIP-2718 type prefix
+    // 0x01/0x02/0x04 typed forms: EIP-2718 type byte + the full field tuple (incl. v,r,s) —
+    // mirrors evmone::state::rlp_encode(const Transaction&). Blob (0x03) never reaches here:
+    // decodeOneRawTx rejects it before decoding.
+    evmc::bytes e;
+    switch (tx.type)
+    {
+    case evmone::state::Transaction::Type::access_list:
+        e = evmc::bytes{0x01} + encodeTuple(tx.chain_id, tx.nonce, tx.max_gas_price,
+                                     static_cast<uint64_t>(tx.gas_limit), toAddressView(tx.to),
+                                     tx.value, tx.data, tx.access_list, tx.v, tx.r, tx.s);
+        break;
+    case evmone::state::Transaction::Type::eip1559:
+        e = evmc::bytes{0x02} + encodeTuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price,
+                                     tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit),
+                                     toAddressView(tx.to), tx.value, tx.data, tx.access_list, tx.v,
+                                     tx.r, tx.s);
+        break;
+    case evmone::state::Transaction::Type::set_code:
+        e = evmc::bytes{0x04} + encodeTuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price,
+                                     tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit),
+                                     toAddressView(tx.to), tx.value, tx.data, tx.access_list,
+                                     tx.authorization_list, tx.v, tx.r, tx.s);
+        break;
+    default:
+        throw OpConsensusError(
+            "OpSchedulerImpl: canonical re-encode: unsupported typed transaction");
+    }
     return {e.begin(), e.end()};
 }
 

@@ -57,8 +57,6 @@
 #include <span>
 #include <stdexcept>
 #include <string>
-#include <test/utils/rlp.hpp>
-#include <test/utils/rlp_encode.hpp>
 #include <utility>
 #include <variant>
 #include <vector>
