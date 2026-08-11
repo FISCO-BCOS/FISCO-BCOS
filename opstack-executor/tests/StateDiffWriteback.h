@@ -4,8 +4,9 @@
 
 #include <evmc/hex.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
-// TODO(eth-utils-removal): TestState(eth/utils)→自研内存账本;applyStateDiff/
-// applyStateDiffStrict 形参与下方三条写回契约(删除/清槽/条件覆写)原样保留。
+// TODO(eth-utils-removal): TestState(eth/utils) -> in-house in-memory ledger; the
+// applyStateDiff/applyStateDiffStrict signatures and the three write-back contracts below
+// (delete / clear slot / conditional overwrite) are preserved unchanged.
 #include <test/utils/test_state.hpp>
 #include <stdexcept>
 
@@ -26,7 +27,7 @@ inline void applyStateDiff(evmone::test::TestState& state, const evmone::state::
     state.apply(diff);
 }
 
-/// Consumer-side tripwire (spec §3.4): delete-of-nonexistent is precisely the ghost signature
+/// Consumer-side tripwire: delete-of-nonexistent is precisely the ghost signature
 /// (in the test context the write-back target ≡ view and is applied synchronously; the EIP-6780
 /// class is already stripped at the production site, and cross-tx duplicate deletes are stripped
 /// by the post-prior-tx view sanitize — zero false positives). Any future exit that misses

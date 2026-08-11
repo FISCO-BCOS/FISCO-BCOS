@@ -59,7 +59,7 @@ protected:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::IOServicePool::Ptr m_ioServicePool;
-    /// OP 模式（executor_version>=3）：PBFT 不得执行区块（Engine API executeOpBlock 是唯一驱动）。
+    /// OP mode (executor_version>=3): PBFT must not execute blocks (Engine API executeOpBlock is the sole driver).
     bool m_opStackMode = false;
 };
 }  // namespace bcos::consensus

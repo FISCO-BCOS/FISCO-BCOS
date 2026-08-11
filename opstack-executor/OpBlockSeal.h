@@ -11,8 +11,7 @@ using evmc::literals::operator""_bytes32;
 
 /// OP Isthmus+ block-header requestsHash is a fixed value = sha256("") (op-geth EmptyRequestsHash,
 /// hashes.go:43-44; on the build side worker.go:283-290 calls CalcRequestsHash on an empty list, on
-/// the validation side block_validator.go:177-184 always matches Process's nil requests — pinned by
-/// spec §4.2 rev.2).
+/// the validation side block_validator.go:177-184 always matches Process's nil requests).
 inline constexpr auto OP_EMPTY_REQUESTS_HASH =
     0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855_bytes32;
 
@@ -54,7 +53,7 @@ struct OpBlockSeal
 [[nodiscard]] OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage);
 
-/// receipts-root leaf encoding rebuilt from a bcos::protocol::TransactionReceipt (方案 A 阶段 2 —
+/// receipts-root leaf encoding rebuilt from a bcos::protocol::TransactionReceipt (plan A phase 2 —
 /// replaces the former OpDepositReceipt/OpTxReceipt-based encoders). `txType` is the EIP-2718
 /// type byte that produced the receipt (kDepositTxType for deposits, else the Transaction::Type
 /// value) — the FISCO receipt interface has no tx-type slot, so the caller threads it through

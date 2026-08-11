@@ -1,7 +1,8 @@
 #pragma once
-// W6 自研 JSON(pre)→StateDiff 播种。本分支无 evmone test/utils/test_state.hpp（LedgerSeed.h 的
-// seedFromTestState 依赖它），这里用 jsoncpp 解析向量 pre，直接构 StateDiff 走
-// applyDiff(seeding=true)。
+// W6 in-house JSON(pre)->StateDiff seeding. This branch has no evmone
+// test/utils/test_state.hpp (which LedgerSeed.h's seedFromTestState depends on); here we
+// parse the vector pre with jsoncpp and build StateDiff directly, applying it via
+// applyDiff(seeding=true).
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
@@ -59,10 +60,10 @@ inline uint64_t jsonU64(std::string_view hex)
     return static_cast<uint64_t>(intx::from_string<intx::uint256>(std::string(hex)));
 }
 
-/// 把向量 pre（jsoncpp object，key=地址 hex，value={balance,nonce,code,storage}）
-/// 播进 MLS：fork → Storage2Ledger::applyDiff(seeding=true) → mergeView。
-/// `Storage2Ledger::applyDiff`（Storage2Ledger.h:275）签名确认；seeding=true 豁免
-/// EIP-161 空账户守卫（LedgerSeed.h 同款契约）。
+/// Seeds the vector pre (jsoncpp object, key=address hex, value={balance,nonce,code,storage})
+/// into MLS: fork -> Storage2Ledger::applyDiff(seeding=true) -> mergeView.
+/// `Storage2Ledger::applyDiff` (Storage2Ledger.h:275) signature confirmed; seeding=true
+/// exempts the EIP-161 empty-account guard (same contract as LedgerSeed.h).
 template <class MLS>
 void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
 {
@@ -75,8 +76,9 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
         entry.addr = jsonAddress(addrKey);
         entry.nonce = jsonU64(acct["nonce"].asString());
         entry.balance = jsonU256(acct["balance"].asString());
-        // 空 code（"0x" → 空字节）留 nullopt，与 LedgerSeed.h 契约③逐字对齐（R2-B：has_value 空
-        // vector 会多写 CODE_BINARY/ABI 三行但 stateRoot 不可观察，此处仍按契约写）
+        // Empty code ("0x" -> empty bytes) stays nullopt, aligning with LedgerSeed.h's
+        // contract (R2-B: a has_value empty vector writes extra CODE_BINARY/ABI rows but is
+        // stateRoot-unobservable; still written per the contract here)
         if (acct.isMember("code"))
         {
             auto const codeStr = acct["code"].asString();
@@ -107,8 +109,10 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
                 "seedPreState: ledger poisoned: " + std::string(bridge.firstError()));
         }
     }
-    // C2 审查修正（P1 CRITICAL）：mergeBackStorage 合并最旧层（FIFO）。排空栈——seed 即落
-    // backend,后续每个块 push 前栈空 → mergeView 立即落盘,backend 断言才可能绿。
+    // C2 review fix (P1 CRITICAL): mergeBackStorage merges the oldest layer (FIFO).
+    // Drain the stack — the seed lands in the backend immediately, and with an empty
+    // stack before each block push, mergeView persists right away so the backend
+    // assertions can pass.
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 

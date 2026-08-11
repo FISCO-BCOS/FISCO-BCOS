@@ -1,9 +1,10 @@
 // bcos-evm-ref/bcos-evm-ref/adapter/StateRootCompute.h
 #pragma once
 
-// 建根引擎用 FISCO bcos-ledger/mpt 的 computeTrieRoot(替代退役 evmone mpt_hash/MPT)。
-// 字节等价判定:33 向量 gate 的 stateRoot 单腿比对族必须保持全绿(computeTrieRoot 与
-// evmone mpt_hash 对同 key 集产出逐字节相同的 root)。
+// Root building uses FISCO bcos-ledger/mpt's computeTrieRoot (replacing the retired evmone
+// mpt_hash/MPT). Byte-equivalence guarantee: the 33-vector gate's stateRoot comparison family
+// must stay all-green (computeTrieRoot and evmone mpt_hash produce byte-identical roots for the
+// same key set).
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-ledger/mpt/HashBuilder.h>
@@ -27,7 +28,7 @@ inline bcos::bytes trimmedBigEndian(bcos::bytesConstRef v)
 }
 
 /// Full-state MPT root (correctness version: rebuilds the entire root every time; scalable
-/// incremental building is TA-1d, a non-goal here).
+/// incremental building is a non-goal here).
 /// Engine = FISCO bcos-ledger/mpt computeTrieRoot — builds a secure-trie over any Ledger exposing
 /// `visitAccounts`, the same construction the retired evmone mpt_hash used (account tree +
 /// per-account storage trie); byte-identical root.
@@ -38,11 +39,10 @@ inline bcos::bytes trimmedBigEndian(bcos::bytesConstRef v)
 /// IntermediateRoot ordering):
 ///   processOpBlock → applyDiff per-transaction write-back → block-tail finalize → this function
 ///   → sealOpBlock.
-/// Anti-circularity invariant (OP spec Isthmus exec-engine): during execution this block's
-/// stateRoot does not yet exist and is structurally impossible to expose to the EVM — a
-/// documented invariant, no runtime defense.
+/// Anti-circularity invariant: during execution this block's stateRoot does not yet exist and is
+/// structurally impossible to expose to the EVM — a documented invariant, no runtime defense.
 
-/// Per-account storage-trie root (design §6): secure-trie over one account's live slot map, key
+/// Per-account storage-trie root: secure-trie over one account's live slot map, key
 /// = keccak256(slot), value = rlp(trim(value)) — the exact same construction as
 /// bcos-evm/opstack/OpBlockSeal.cpp::opStorageRoot (itself aligned with the private helper in
 /// vendored mpt_hash.cpp:13-24). The logic is duplicated here rather than called through
@@ -51,27 +51,27 @@ inline bcos::bytes trimmedBigEndian(bcos::bytesConstRef v)
 /// layer) header calling into opstack/ would be a backward dependency; (2) opStorageRoot's exact
 /// line range in OpBlockSeal.cpp is tracked by the op_storage_root entry in
 /// scripts/upstream-diff/manifest.tsv — turning it into a delegating wrapper would perturb that
-/// golden without a genuine upstream-diff reason. Design §6's "可复用/提炼共用" is satisfied by
-/// reusing the *logic* (verified identical construction), not the symbol.
+/// golden without a genuine upstream-diff reason. Reusability is satisfied by reusing the *logic*
+/// (verified identical construction), not the symbol.
 [[nodiscard]] evmone::hash256 accountStorageRoot(
     const std::map<evmc::bytes32, evmc::bytes32>& storage);
 
-/// Generic full-state MPT root (design §6): builds a secure-trie over any Ledger exposing
+/// Generic full-state MPT root: builds a secure-trie over any Ledger exposing
 /// `bool visitAccounts(Visitor) const` (the AccountVisitor contract shared by MemoryLedger and
 /// Storage2Ledger — payload nonce/balance/codeHash + a `.storage` slot map + a lazy `.code()`
 /// getter, `.addr` for the trie key). Account key = keccak256(addr), leaf =
 /// rlp(nonce, balance, storageRoot, codeHash) — field-for-field aligned with vendored
 /// mpt_hash.cpp:27-36. Correctness-first (rebuilds the whole trie on every call; incremental
-/// building is TA-1d, a non-goal, design §6 "性能边界"). The lazy code() getter is never invoked
-/// here — state-root computation needs codeHash only, not code bytes (avoids an unconditional
-/// SYS_CODE_BINARY read per account on the Storage2Ledger backend).
+/// building is a non-goal). The lazy code() getter is never invoked here — state-root computation
+/// needs codeHash only, not code bytes (avoids an unconditional SYS_CODE_BINARY read per account
+/// on the Storage2Ledger backend).
 ///
-/// Poison contract (design §6/§4.3): this function does not itself inspect `ledger.poisoned()`
-/// — a poisoned traversal's product is defined to be entirely void ("遍历产物全部作废"), and it
-/// is the *caller's* responsibility (the block-seal driver) to check poisoned() after calling
-/// this and discard the result wholesale if set, exactly as with every other Storage2Ledger read
-/// method. MemoryLedger's poisoned() is always false (design §6: "抽象层统一提供该查询,后端不
-/// 对称由此收敛"), so this contract is a no-op for that backend.
+/// Poison contract: this function does not itself inspect `ledger.poisoned()` — a poisoned
+/// traversal's product is defined to be entirely void, and it is the *caller's* responsibility
+/// (the block-seal driver) to check poisoned() after calling this and discard the result
+/// wholesale if set, exactly as with every other Storage2Ledger read method. MemoryLedger's
+/// poisoned() is always false (the abstraction uniformly provides the query; backend asymmetry
+/// converges here), so this contract is a no-op for that backend.
 template <class Ledger>
 [[nodiscard]] evmone::hash256 stateRootOf(const Ledger& ledger)
 {

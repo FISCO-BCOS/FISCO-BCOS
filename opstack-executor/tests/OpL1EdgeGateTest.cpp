@@ -22,9 +22,11 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <opstack-executor/OpEngineSeam.h>
 #include <opstack-executor/OpSchedulerImpl.h>
-// EngineHelper.h 的 parseNewPayloadRequest 声明引用 bcos::protocol::TransactionFactory&，但
-// EngineHelper.h 自身不声明该类型（生产靠 bcos-rpc unity-build 的 include 顺序）。单 TU 直编
-// 必须先把 TransactionFactory.h 引入，否则声明处即报错（OpNewPayloadRpcE2eTest.cpp:20 模式）。
+// EngineHelper.h's parseNewPayloadRequest declaration references
+// bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type
+// itself (production relies on bcos-rpc unity-build include order). A single-TU direct
+// compile must include TransactionFactory.h first or the declaration fails
+// (OpNewPayloadRpcE2eTest.cpp:20 pattern).
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -38,7 +40,7 @@
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
 
-// D-4: TestState 模式（照 OpTransitionTest.cpp）
+// D-4: TestState pattern (following OpTransitionTest.cpp)
 #include "OpPredeploysSeed.h"
 #include "OpTestReceiptFactory.h"
 #include "TestPrinters.h"
@@ -58,7 +60,7 @@ using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
 
-// D-4 的 TestState/opstack 命名（照 OpTransitionTest.cpp:16-20）
+// D-4's TestState/opstack names (following OpTransitionTest.cpp:16-20)
 using namespace bcos::evm::opstack;
 using namespace bcos::evm::opstack::testutil;
 using namespace evmone;
@@ -67,8 +69,8 @@ using intx::operator""_u256;
 
 namespace
 {
-// ── storage fixture（OpNewPayloadRpcE2eTest 匿名 namespace fixture 的副本：anonymous
-//    namespace 不可跨 TU，B-5b 需自建）──
+// ── storage fixture (copy of OpNewPayloadRpcE2eTest's anonymous-namespace fixture; an
+//    anonymous namespace cannot cross TUs, so B-5b builds its own) ──
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
 struct TrivialCheckpointStorage
 {
@@ -186,36 +188,37 @@ struct OpE2eFixture
 
 BOOST_AUTO_TEST_SUITE(OpL1EdgeGateSuite)
 
-// B-5b：Jovian 下 blobGasUsed（DA footprint 槽）> gasLimit → Step 2 静态校验 INVALID +
-// validationError 含 "DA footprint"。DA 检查带 jovianActive 门控（EngineServiceImpl.cpp:442），
-// 故 fixture 必须用 jovian 时间戳；Step 2 早于 parentKnown/执行，故不需 seedPreState /
-// registerVerifiedBlock。
+// B-5b: under Jovian, blobGasUsed (the DA-footprint slot) > gasLimit -> Step 2 static
+// validation INVALID + validationError contains "DA footprint". The DA check is gated on
+// jovianActive (EngineServiceImpl.cpp:442), so the fixture must use jovian timestamps;
+// Step 2 runs before parentKnown/execution, so no seedPreState / registerVerifiedBlock needed.
 BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
 {
     auto sample = w6test::loadVectorSample("jovian_da_mix");
     auto params = w6test::makeParamsJson(sample);
-    // 读 golden header 的 gasLimit，override blobGasUsed = gasLimit+1
+    // Read the golden header's gasLimit; override blobGasUsed = gasLimit+1
     const auto gasLimit = w6test::decodeGoldenHeader(sample)->gasLimit();
-    // ⚠️ 勿用 (gasLimit+1).str(16)——十进制位数非 hex（GoldenSample.h:85-90 已警示）；quantityOf
-    // 正确。
+    // Warning: do not use (gasLimit+1).str(16) — decimal digits are not hex
+    // (GoldenSample.h:85-90 warns); quantityOf is correct.
     params[0u]["blobGasUsed"] = w6test::quantityOf(gasLimit + 1);
 
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(true));
     auto request = bcos::rpc::parseNewPayloadRequest(
         params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-    // PayloadValidationStatus 是 enum class，无 operator<<；须 static_cast<int> 比较。
+    // PayloadValidationStatus is an enum class without operator<<; must compare via static_cast<int>.
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(status.validationError.has_value());
-    // ⚠️ 实际串含 (blobGasUsed)：检查 "DA footprint"（勿 "DA footprint exceeds"）。
+    // Warning: the real string includes (blobGasUsed); check "DA footprint" (not "DA footprint exceeds").
     BOOST_CHECK(status.validationError->find("DA footprint") != std::string::npos);
 }
 
-// D-4：opValidate 注入 fee F → props.fee 冻结快照 → 改 L1Block slot1 为显著不同的 F' →
-// opTransition 仍按 props（F）计价/开回执，而非重读存储（F'）。
-// 签名照 OpTransitionTest.cpp 的 OperatorFeeConservesWhenCfgDisagreesWithProps（:337-397），
-// 差异在：该条改 cfg，本条改 storage slot。
+// D-4: opValidate injects fee F -> props.fee frozen snapshot -> mutate L1Block slot1 to a
+// markedly different F' -> opTransition still prices/receipts from props (F), not by
+// re-reading storage (F'). Signature follows OpTransitionTest.cpp's
+// OperatorFeeConservesWhenCfgDisagreesWithProps (:337-397); the difference is that that
+// case mutates cfg, this one mutates a storage slot.
 BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
@@ -227,7 +230,7 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
         .storage = {},
         .code = {}};
     ts[dest] = {};
-    // ⚠️ seedOpPredeploys 返回 void，不能 auto ts = seedOpPredeploys(...)
+    // Warning: seedOpPredeploys returns void; cannot auto ts = seedOpPredeploys(...)
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
 
@@ -247,23 +250,23 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     tx.value = intx::uint256{0};
     tx.nonce = 0;
 
-    // 注入 fee F：l1_base_fee 取 1 gwei（非零），base_fee_scalar 1100 → props.l1_cost 非零。
+    // Inject fee F: l1_base_fee = 1 gwei (non-zero), base_fee_scalar 1100 -> props.l1_cost non-zero.
     OpFeeParams F{.l1_base_fee = 1000000000_u256,
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
         .operator_fee_scalar = 0,
         .operator_fee_constant = 0};
-    std::vector<uint8_t> env(120, 0x11);  // 非空 envelope：flz 非零 → l1_cost 非零
+    std::vector<uint8_t> env(120, 0x11);  // non-empty envelope: flz non-zero -> l1_cost non-zero
 
-    // opValidate 返回 std::variant<OpTxProperties, std::error_code>，须 std::get<OpTxProperties>。
+    // opValidate returns std::variant<OpTxProperties, std::error_code>; must std::get<OpTxProperties>.
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), F, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
     BOOST_REQUIRE_MESSAGE(props.l1_cost > intx::uint256{0}, "test is vacuous unless l1_cost > 0");
 
-    // OpFeeParams 无 operator==（非 defaulted 聚合 C++20 不生成）→ 逐字段比较快照与注入值。
+    // OpFeeParams has no operator== (non-defaulted aggregate, not generated in C++20) -> compare the snapshot to the injected values field-by-field.
     BOOST_CHECK(props.fee.l1_base_fee == F.l1_base_fee);
     BOOST_CHECK(props.fee.base_fee_scalar == F.base_fee_scalar);
     BOOST_CHECK(props.fee.blob_base_fee_scalar == F.blob_base_fee_scalar);
@@ -272,8 +275,9 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     BOOST_CHECK(props.fee.operator_fee_constant == F.operator_fee_constant);
     BOOST_CHECK(props.fee.da_footprint_gas_scalar == F.da_footprint_gas_scalar);
 
-    // 改 slot1（l1_base_fee 槽）为显著不同的 F'：7 vs 1e9。若 opTransition 重读存储，
-    // l1_cost 会缩到 ~7/1e9，回执 l1_fee 断言即红（slot3 packed 改法繁琐，slot1 单改够）。
+    // Mutate slot1 (the l1_base_fee slot) to a markedly different F': 7 vs 1e9. If
+    // opTransition re-read storage, l1_cost would shrink to ~7/1e9 and the receipt l1_fee
+    // assertion would go red (slot3 packed mutation is fiddly; a single slot1 change suffices).
     auto key = [](uint8_t s) {
         evmc::bytes32 k{};
         k.bytes[31] = s;
@@ -287,19 +291,19 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     };
     ts[OP_L1_BLOCK].storage[key(1)] = low8(7);  // F'.l1_base_fee = 7
 
-    // opTransition 消费 props（不重读存储），签名照 OpTransition.h:134-139。
+    // opTransition consumes props (does not re-read storage); signature per OpTransition.h:134-139.
     evmone::state::StateDiff diff;
     const auto txR = opTransition(
         ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
 
-    // 回执 opStackMeta l1_fee == 按 F 计算值（props.l1_cost），而非按 F'（照
-    // OpTransitionTest.cpp:146-149）。
+    // Receipt opStackMeta l1_fee == value computed from F (props.l1_cost), not F'
+    // (following OpTransitionTest.cpp:146-149).
     const auto& meta = txR->opStackMeta();
     BOOST_REQUIRE(meta.has_value());
     BOOST_REQUIRE(meta->l1_fee.has_value());
     BOOST_CHECK_EQUAL(*meta->l1_fee, bcosU256FromIntx(props.l1_cost));
-    // 强化：l1_gas_price 同样来自快照 F 而非重读存储（deriveOpReceiptMeta OpTransition.cpp:214）。
+    // Strengthen: l1_gas_price likewise comes from the F snapshot, not re-read storage (deriveOpReceiptMeta OpTransition.cpp:214).
     BOOST_REQUIRE(meta->l1_gas_price.has_value());
     BOOST_CHECK_EQUAL(*meta->l1_gas_price, bcosU256FromIntx(F.l1_base_fee));
 }

@@ -2,24 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OpSchedulerImpl — dual-signature OP scheduler component (op-validator-minimal-loop design
-// §4, task-4-brief.md). Two independently-motivated signatures on one class:
-//   - `executeBlock`  : satisfies scheduler_v1::TransactionScheduler purely for the
-//     engine/bcos-engine EngineServiceImpl compile-time concept check (design §2 "组件形态" —
-//     the concept is unconditional, independent of whether the OP branch is runtime-reachable);
-//     OP mode never calls it. Throws immediately.
-//   - `executeOpBlock`: the real OP-mode entry point, called from handleNewPayload's OP branch
-//     (T5b, out of this task's scope — this task delivers the component only).
+// OpSchedulerImpl — dual-signature OP scheduler component. `executeBlock` satisfies the
+// scheduler_v1::TransactionScheduler concept check only (the concept is unconditional; OP mode
+// never calls it — throws immediately); `executeOpBlock` is the real OP-mode entry point, called
+// from handleNewPayload's OP branch.
 //
-// Layering (design §3 "模块布局"): a pure template header under bcos-evm/bcos-evm/engine/,
-// same shape as bcos-evm/bcos-evm/ledger/Storage2Ledger.h — depends on bcos-framework (Storage
-// template parameter is instantiated against storage2/MultiLayerStorage::ViewType, protocol::
-// types) but is not itself part of the bcos-evm-opstack static library (header-only, no .cpp).
+// Layering: a pure template header under bcos-evm/bcos-evm/engine/, same shape as Storage2Ledger.h
+// — depends on bcos-framework (Storage template parameter is instantiated against
+// storage2/MultiLayerStorage::ViewType, protocol:: types) but is not itself part of the
+// bcos-evm-opstack static library (header-only, no .cpp).
 //
-// vm ownership: evmc::VM (evmone) is a per-scheduler member, constructed once
-// (evmc_create_evmone()) and reused across blocks — design §4.1 "vm 归属"; thread-safety rests
-// on the engine execution segment being serialized under x_state (design §4.4), not on any
-// locking inside this class.
+// vm ownership: one evmc::VM (evmone) per scheduler, constructed once (evmc_create_evmone()) and
+// reused across blocks; thread-safety rests on the engine execution segment being serialized under
+// x_state, not on any locking inside this class.
 
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
@@ -68,33 +63,32 @@
 namespace bcos::evm::engine
 {
 
-/// Thrown for anything OP block execution classifies as a consensus-level rejection (spec §4.3
-/// error table): malformed/undecodable raw tx bytes, processOpBlock's own semantic throws
+/// Thrown for anything OP block execution classifies as a consensus-level rejection (error
+/// table): malformed/undecodable raw tx bytes, processOpBlock's own semantic throws
 /// (empty block, first tx not the L1 attributes deposit, gas-pool overrun, ...). Maps to INVALID
-/// on the caller side (T5b), never -32603.
+/// on the caller side, never -32603.
 struct OpConsensusError : std::runtime_error
 {
     using std::runtime_error::runtime_error;
 };
 
 /// Thrown when the ledger bridge's poison flag is set (a storage2-layer failure, not a consensus
-/// violation — Storage2Ledger.h's "毒旗错误通道" contract). Maps to JSON-RPC -32603 internal
-/// error on the caller side (T5b), never INVALID.
+/// violation — Storage2Ledger.h's poison-flag error channel contract). Maps to JSON-RPC -32603
+/// internal error on the caller side, never INVALID.
 struct OpStorageError : std::runtime_error
 {
     using std::runtime_error::runtime_error;
 };
 
-/// OP block execution environment (design §4.2) was folded into `protocol::BlockHeader` when
+/// OP block execution environment was folded into `protocol::BlockHeader` when
 /// PR #5385 gave the FISCO header tars slots for all 8 former OpBlockEnv fields (prevRandao/baseFee
 /// -> coinbase/baseFee/prevRandao/parentBeaconBlockRoot/gasLimit/extraData/blobGasUsed/parentHash
 /// -> parentInfo). The engine now fills one header object and `executeOpBlock`/`toBlockInfo` read
-/// the accessors directly (spec 2026-08-05-opstack-blockheader-fisco-adaptation-design.md §4.2).
+/// the accessors directly.
 
-/// Six-way comparison surface (design §4.1 "六项比对面"): `seal`'s
-/// receiptsRoot/logsBloom/withdrawalsRoot (bcos::evm::opstack::OpBlockSeal, unchanged structure)
-/// plus three members below (stateRoot/gasUsed/txRoot) that are deliberately NOT folded into
-/// OpBlockSeal — rev.3's correction of rev.2's "merge into seal" miscount (design §4.1).
+/// Six-way comparison surface: `seal`'s receiptsRoot/logsBloom/withdrawalsRoot
+/// (bcos::evm::opstack::OpBlockSeal, unchanged structure) plus three members below
+/// (stateRoot/gasUsed/txRoot) that are deliberately NOT folded into OpBlockSeal.
 struct OpExecuteBlockResult
 {
     std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
@@ -126,9 +120,9 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
     return out;
 }
 
-// `toBcosH256` (evmc::bytes32 -> bcos::h256) moved to OpEngineSeam.h (task-5b): that header is
-// included above and needs the same conversion, and two identical inline definitions of one name
-// in `bcos::evm::engine::detail` would be a redefinition error. Call sites below are unchanged.
+// `toBcosH256` (evmc::bytes32 -> bcos::h256) moved to OpEngineSeam.h: that header is included
+// above and needs the same conversion, and two identical inline definitions of one name in
+// `bcos::evm::engine::detail` would be a redefinition error. Call sites below are unchanged.
 
 /// bcos::u256 -> uint64_t, explicit bounds-checked narrowing — NOT a raw static_cast/convert_to.
 /// This repo has a documented silent-truncation incident with unchecked wide-integer narrowing
@@ -144,26 +138,14 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 }
 
 /// uint64_t -> int64_t, explicit bounds-checked narrowing — same "widen -> explicit check ->
-/// narrow" discipline as `narrowU256ToU64` above, applied to the wire-decoded gas_limit scalar
-/// (coordinator review C4). DepositTx::gas_limit / evmone::state::Transaction::gas_limit are
-/// both `int64_t`; a canonical 8-byte RLP scalar (e.g. `0xFFFFFFFFFFFFFFFF`) decodes to a
-/// `uint64_t` that silently becomes *negative* under a raw `static_cast<int64_t>`. Traced attack
-/// chain for the deposit path specifically (`dep.gas_limit`): `validate_transaction` rejects the
-/// negative gas_limit as below the intrinsic-gas floor -> `runDeposit` (OpDepositTx.cpp) only
-/// special-cases `GAS_LIMIT_REACHED`, so this falls into the generic failed-deposit branch and
-/// sets `receipt.gas_used = dep.gas_limit` (still negative) -> `OpBlockExecute.cpp`'s
-/// `blockGasLeft -= gas_used` then *raises* the remaining block gas pool by roughly 2^63,
-/// letting later transactions in the same block exceed the real gasLimit, while `gasUsed` itself
-/// wraps to a huge-but-plausible `uint64_t` on the `OpExecuteBlockResult` projection — an
-/// attacker supplying the same wrapped value on the payload side would pass the six-way
-/// comparison surface and get a block VALID that op-geth rejects outright (`GasPool.SubGas`
-/// returns `ErrGasLimitReached`, and `state_transition.go`'s failed-deposit branch explicitly
-/// excludes that error from the "still charge, still succeed" path — the whole block is invalid).
-/// `fieldName` (coordinator review M-2): mirrors `narrowU256ToU64`'s own `fieldName` parameter
-/// above — without it, all three call sites (deposit/eip1559/setcode) produced the exact same
-/// message ("gas limit exceeds int64_t range"), which is also what I-1's fix-vs-no-fix message
-/// assertion in OpSchedulerImplTest.cpp (live on the source branch, NOT ported here) needs to
-/// distinguish per call site.
+/// narrow" discipline as `narrowU256ToU64` above, applied to the wire-decoded gas_limit scalar.
+/// DepositTx::gas_limit / evmone::state::Transaction::gas_limit are both `int64_t`; a canonical
+/// 8-byte RLP scalar (e.g. `0xFFFFFFFFFFFFFFFF`) decodes to a `uint64_t` that silently becomes
+/// *negative* under a raw `static_cast<int64_t>`. On the deposit path that negative value would
+/// survive into `blockGasLeft -= gas_used` and *raise* the remaining block gas pool by ~2^63,
+/// letting later txs exceed the real gasLimit while gasUsed wraps to a plausible uint64_t — a
+/// block op-geth rejects outright (`GasPool.SubGas` -> `ErrGasLimitReached`). `fieldName`
+/// distinguishes the per-call-site message (deposit/eip1559/setcode).
 inline int64_t narrowGasLimit(uint64_t v, const char* fieldName)
 {
     if (v > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
@@ -174,20 +156,13 @@ inline int64_t narrowGasLimit(uint64_t v, const char* fieldName)
 }
 
 /// EIP-2 signature-malleability guard (r,s in [1, n-1], s <= n/2). `evmmax::secp256k1::ecrecover`
-/// implements ECRECOVER-PRECOMPILE semantics, which only require `0 < r,s < n` — real Ethereum
-/// signers additionally reject high-s (op-geth's `crypto.ValidateSignatureValues`, invoked with
-/// `homestead=true` from `transaction_signing.go`, crypto/crypto.go:244-248). Without this check,
-/// an attacker can rewrite a legitimately-signed transaction's `(r,s,yParity)` to
-/// `(r, n-s, 1-yParity)`: sender recovery and execution outcome are unchanged, but the raw bytes
-/// (hence txRoot/blockHash) differ from the canonical signing — this scheduler would accept the
-/// rewritten block as VALID where op-geth rejects the whole block. Mirrors
-/// bcos-evm/test/opstack/T8nReplayHarness.h's `structurallyUnrecoverable` predicate (same
-/// four-way r/s bound check), applied here to the *outer* transaction's own signature rather
-/// than an EIP-7702 authorization tuple — same underlying curve constant
-/// (`evmmax::secp256k1::Curve::ORDER`) already used for exactly this bound in
-/// bcos-evm/bcos-evm/eth/state/state.cpp:21/117 and OpTransition.cpp:28/71 (both for
-/// authorization tuples; this codebase never previously validated the *outer* tx signature this
-/// way, because nothing before this task decoded an outer tx signature from raw bytes at all).
+/// only requires `0 < r,s < n`; real Ethereum signers additionally reject high-s
+/// (op-geth `crypto.ValidateSignatureValues`, homestead=true). Without this check an attacker
+/// can rewrite a legitimately-signed `(r,s,yParity)` to `(r, n-s, 1-yParity)`: sender recovery
+/// and execution outcome are unchanged but the raw bytes (hence txRoot/blockHash) differ — this
+/// scheduler would accept the rewritten block as VALID where op-geth rejects it. Applied to the
+/// *outer* transaction's own signature (same four-way bound and curve constant as the EIP-7702
+/// authorization-tuple checks in state.cpp / OpTransition.cpp).
 inline void requireLowSSignature(const intx::uint256& r, const intx::uint256& s)
 {
     constexpr auto kSecpOrder = evmmax::secp256k1::Curve::ORDER;
@@ -202,7 +177,8 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
 {
     evmone::state::BlockInfo blk;
     blk.number = static_cast<int64_t>(env.number());
-    // FISCO tars 存毫秒,evmone 要秒(spec §7:blockHash/执行面永远秒)。
+    // FISCO tars store milliseconds; evmone wants seconds (blockHash/execution surface is always
+    // in seconds).
     blk.timestamp = static_cast<uint64_t>(env.timestamp()) / 1000;
     blk.gas_limit = narrowU256ToU64(env.gasLimit(), "BlockInfo::gasLimit");
     blk.base_fee = narrowU256ToU64(env.baseFee().value(), "BlockInfo::baseFee");
@@ -214,10 +190,9 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
     return blk;
 }
 
-// ---- raw tx envelope decode (design §4.3 step 1 "分拣": deposit 0x7E / eip1559 0x02 / setcode
-// 0x04 — the same three shapes T8nReplayHarness.h's `_op_type` dispatch and processOpBlock's
-// OpBlockTx variant already understand; no legacy/access_list(0x01)/blob(0x03) support, matching
-// the t8n corpus). ----
+// ---- raw tx envelope decode (sorting step: deposit 0x7E / access_list 0x01 / eip1559 0x02 /
+// setcode 0x04 / legacy (>= 0xc0); blob (0x03) is deliberately unsupported — L2 blocks carry no
+// blob txs). ----
 //
 // Decode primitives reused from bcos-codec/rlp/RLPDecode.h — the same already-compiled,
 // production decode path bcos-rpc/web3jsonrpc/model/Web3Transaction.cpp's decodeTransaction()
@@ -242,76 +217,38 @@ inline void throwOnDecodeError(bcos::Error::UniquePtr&& err)
         // which returns an empty/opaque string here, whereas errorMessage() carries the RLP
         // decoder's own diagnostic ("Non-canonical length prefix: leading zero byte", etc.). This
         // makes an OP raw-tx decode failure attributable to the specific canonical-encoding rule
-        // that fired (C1, final review batch B) rather than a bare "decode failed".
+        // that fired rather than a bare "decode failed".
         throw OpConsensusError(
             std::string("OpSchedulerImpl: raw tx decode failed: ") + err->errorMessage());
 }
 
-// ---- canonical-encoding strictness (final review B4-2) ----
+// ---- canonical-encoding strictness ----
 //
-// Go's `rlp` (which produced every byte this decoder will ever legitimately see, via
-// `tx.MarshalBinary()`) rejects non-canonical encodings outright: `ErrCanonInt` for a leading zero
-// byte or a single `0x00`, "input string too long for uint64", "input string too short/long for
-// common.Address|common.Hash", "rlp: invalid boolean value". The primitives in
-// `bcos-codec/rlp/RLPDecode.h` are permissive by comparison — `fromBigEndian` silently keeps only
-// the low 8 bytes of an over-long uint64 payload, and `FixedBytes`' constructor right-pads a short
-// payload and truncates a long one. Those per-field defaults are fine for their other consumers, so
-// per-field strictness stays OP-local (layer 1 — the readCanonicalScalar/readFixedWidth/
-// decodeBoolField primitives below); length-prefix strictness, by contrast, lives in the SHARED
-// decoder's `decodeHeader`, where rejecting a non-minimal leading-zero length prefix applies to ALL
-// consumers (W8 C1, ported from a37517327), not just this path.
+// Go's `rlp` (which produced every byte this decoder will ever legitimately see) rejects
+// non-canonical encodings outright; bcos-codec/rlp/RLPDecode.h is permissive by comparison
+// (fromBigEndian keeps the low 8 bytes of an over-long uint64, FixedBytes right-pads/truncates),
+// so strictness is layered:
+//   (1) per-field, OP-local in the primitives below — readCanonicalScalar/readFixedWidth/
+//       decodeBoolField reject leading-zero scalars, over-wide integers, wrong-width address/hash
+//       fields, and non-0x01 bools;
+//   (2) length prefix, in the SHARED decoder's decodeHeader — a non-minimal leading-zero length
+//       prefix is rejected for all consumers;
+//   (3) whole-envelope round-trip — `assertCanonicalRoundTrip` decodes, re-encodes canonically,
+//       and requires byte-identity with the raw envelope, a defense-in-depth backstop that fails
+//       closed on any residual non-canonicality (1)/(2) miss.
 //
-// The sharpest consequence of NOT doing this: a deposit envelope carries no signature, so nothing
-// else cross-checks its fields. A 19-byte `from`/`to` or a 33-byte `sourceHash` would have been
-// silently padded/truncated into a DIFFERENT account and executed as if it were the one the bytes
-// named.
+// The stakes: a deposit envelope carries no signature, so nothing else cross-checks its fields —
+// a 19-byte `from`/`to` or a 33-byte `sourceHash` would otherwise be silently padded/truncated
+// into a DIFFERENT account. And `computeOpTxRoot` hashes the raw wire bytes while op-geth's
+// `DeriveSha` re-encodes each tx canonically; for non-canonical input the two would diverge, so
+// this strictness also keeps the block hash in agreement. With all three layers, non-canonical
+// input does not survive decoding.
 //
-// It also closes a blockHash-derivation gap: `computeOpTxRoot` (OpEngineSeam.h) hashes the raw
-// wire bytes, whereas op-geth's `DeriveSha` re-encodes each transaction canonically from the
-// parsed struct. For canonical input the two agree; for non-canonical input they do not, so
-// without this check the two implementations could compute different block hashes for the same
-// payload.
-//
-// Scope of what "canonical" is enforced by, and where (final review batch B — the earlier claim
-// that "non-canonical input never survives decoding" was too strong; C1 disproved it by finding a
-// leading-zero length prefix that DID survive, producing a divergent txRoot):
-//   (1) per-field strictness — the readCanonicalScalar/readFixedWidth/decodeBoolField primitives
-//       below reject leading-zero scalars, over-wide integers, wrong-width fixed fields, and
-//       non-canonical bools (the B4-2 cases enumerated above);
-//   (2) length-prefix strictness — the SHARED decoder (bcos-codec/rlp/RLPDecode.h) rejects a
-//       non-minimal (leading-zero) long-form length prefix; W8 C1 ported the approved upstream fix
-//       (a37517327) here, so the exact class C1 found no longer survives decoding on this branch;
-//   (3) a whole-envelope re-encode invariant — `assertCanonicalRoundTrip` (below) decodes, then
-//       re-encodes the parsed struct canonically and requires it to be byte-identical to the raw
-//       envelope. This is defense-in-depth INDEPENDENT of (1)/(2): it catches any residual
-//       non-canonicality a field decoder might normalise away and re-encode differently — the
-//       "decode dropped/rewrote bytes yet stayed self-consistent" class that (1)/(2) do not
-//       target — and turns "non-canonical input does not survive decoding" from a prose claim
-//       into a runtime invariant checked on every transaction.
-// With all three, non-canonical input does not survive decoding, and the raw-bytes txRoot equals
-// op-geth's re-encoded DeriveSha for everything that does.
-//
-// **Contract, pinned by tests (do not relax):** on THIS branch all three layers are implemented
-// (readCanonicalScalar/readFixedWidth/decodeBoolField for (1), the shared decoder for (2),
-// assertCanonicalRoundTrip for (3), and the computeOpTxRoot == DeriveSha reasoning above), but the
-// dedicated end-to-end test cases — the B4-2 per-field cases
-// (NonCanonicalLeadingZeroScalarIsConsensusError … ZeroByteBoolFieldIsConsensusError), the C1
-// length-prefix case (NonCanonicalOuterFramingIsRejectedAtDecode), the whole-envelope round-trip
-// invariant (RoundTripInvariantReproducesDepositBytesExactly /
-// RoundTripInvariantReproducesNonDepositBytesExactly / RoundTripInvariantFiresOnMismatch), and the
-// raw-bytes-txRoot == re-encoded-DeriveSha equivalence
-// (TxRootEqualsReencodedDeriveShaForCanonicalInput) — live on the source branch in
-// `bcos-evm/test/opstack/OpSchedulerImplTest.cpp` and were NOT ported here. What pins this branch's
-// decoder contract instead:
-//   - the length-prefix rule (2) is asserted by `decodeRejectsNonCanonicalLengthPrefix` in
-//     `bcos-codec/test/unittests/RLPTest.cpp` (W8 C1 port of a37517327);
-//   - the OP seam surface / empty-block rejection / C2 width guard are asserted in
-//     `bcos-evm/test/opstack/OpSchedulerImplSmokeTest.cpp` (ConstructAndSeamSurface /
-//     EmptyBlockRejected / OverWideAuthYParityIsConsensusError).
-// A change that relaxes decoding strictness should still be expected to turn the source-branch
-// suite red first; the 33-vector t8n corpus (ledger in t8n/vectors/DIVERGENCES.md, generated by
-// t8n/generator, replayed by OpT8nReplay.Vectors on the source branch) is the corpus-scale proof
-// that the invariant never false-rejects canonical op-geth bytes.
+// The dedicated end-to-end test cases for these rules live on the source branch (not ported here);
+// this branch's contract is pinned by the shared length-prefix test in bcos-codec's RLPTest.cpp
+// and by OpSchedulerImplSmokeTest.cpp. A change that relaxes strictness should turn the
+// source-branch suite red first, and the 33-vector t8n corpus is the proof the invariant never
+// false-rejects canonical op-geth bytes.
 
 /// Reads one RLP string payload, requiring it to be a canonical unsigned scalar: no leading zero
 /// byte, no wider than `maxBytes`. Returns a view of the payload and advances `in` past it.
@@ -729,17 +666,17 @@ inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, ui
 }
 
 /// Legacy tx (no EIP-2718 type byte; the envelope IS the RLP list): [nonce, gasPrice, gasLimit, to,
-/// value, data, v, r, s] — field order per rlp_encode.cpp:23-26. Handles BOTH forms (§6.4 item n):
+/// value, data, v, r, s] — field order per rlp_encode.cpp:23-26. Handles BOTH forms:
 ///   * pre-EIP-155: v ∈ {27,28}, parity = v-27, signing preimage = rlp([nonce,gasPrice,gasLimit,to,
 ///     value,data]) (6 items).
 ///   * EIP-155: v = chainId*2 + 35 + parity, signing preimage = rlp([...6 fields, chainId, 0, 0])
 ///     (9 items). The derived chainId must equal the scheduler's chainId (same cross-check/scope as
-///     the typed decoders, C2).
-/// `v` is read as a canonical scalar (decodeU256Scalar → no leading zero, width-bounded), so the
-/// v-canonicality demanded by §6.4 item n is enforced identically to the other types — a
-/// non-minimal v cannot silently produce a divergent txRoot. txRoot itself is taken over the raw
-/// wire bytes (computeOpTxRoot, OpEngineSeam.h), so `tx.v`'s uint8 width does not bound the legacy
-/// v space; the full v lives in `signedEnvelope` and only parity/chainId are extracted here.
+///     the typed decoders).
+/// `v` is read as a canonical scalar (decodeU256Scalar → no leading zero, width-bounded), so
+/// v-canonicality is enforced identically to the other types — a non-minimal v cannot silently
+/// produce a divergent txRoot. txRoot itself is taken over the raw wire bytes (computeOpTxRoot,
+/// OpEngineSeam.h), so `tx.v`'s uint8 width does not bound the legacy v space; the full v lives in
+/// `signedEnvelope` and only parity/chainId are extracted here.
 inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
@@ -793,23 +730,21 @@ inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64
     return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
 }
 
-/// Dispatches on the EIP-2718 type byte (design §4.3 step 1 "分拣"). The OP validator accepts every
-/// transaction type op-geth's own `DecodeTransactions` does: deposit (0x7e), the three typed
-/// signed shapes (0x01 access-list, 0x02 eip1559, 0x04 set-code), and the untyped legacy form
-/// (first byte ≥ 0xc0, an RLP list header). Blob (0x03) stays out on purpose — L2 blocks carry no
-/// blob txs. Earlier this list was only {0x7e, 0x02, 0x04}, on the mistaken premise that "these
-/// are the only shapes the variant understands"; the execution variant (OpBlockExecute.h) has in
-/// fact always carried legacy/access_list too (state.cpp:460-475) — the old set merely mirrored the
-/// t8n corpus's three `_op_type` values, i.e. test coverage, not a capability boundary (1-1).
+/// Dispatches on the EIP-2718 type byte. The OP validator accepts every transaction type op-geth's
+/// own `DecodeTransactions` does: deposit (0x7e), the three typed signed shapes (0x01 access-list,
+/// 0x02 eip1559, 0x04 set-code), and the untyped legacy form (first byte ≥ 0xc0, an RLP list
+/// header). Blob (0x03) stays out on purpose — L2 blocks carry no blob txs. Earlier this list was
+/// only {0x7e, 0x02, 0x04}, on the mistaken premise that "these are the only shapes the variant
+/// understands"; the execution variant (OpBlockExecute.h) has in fact always carried
+/// legacy/access_list too (state.cpp:460-475) — the old set merely mirrored the t8n corpus's three
+/// `_op_type` values, i.e. test coverage, not a capability boundary.
 ///
-/// `chainId` is threaded straight through to the two typed-tx decoders (C2, coordinator review)
-/// — deposit has no chain_id field and does not take the parameter. This function stays a free
-/// function in `detail`, not a member of `OpSchedulerImpl`, precisely so this parameter never
-/// touches the class template's own member-function signatures (which are eagerly instantiated
-/// whenever `OpSchedulerImpl<Storage>` is named, unlike member bodies — see the "engine-facing
-/// seam surface" block on the class below, and engine's `EngineServiceImpl.h` c_opMode comment,
-/// task-5b, for the "OP dependent name must not leak into a signature the generic composition
-/// root also instantiates" failure mode this avoids).
+/// `chainId` is threaded straight through to the two typed-tx decoders — deposit has no chain_id
+/// field and does not take the parameter. This function stays a free function in `detail`, not a
+/// member of `OpSchedulerImpl`, precisely so this parameter never touches the class template's own
+/// member-function signatures (which are eagerly instantiated whenever `OpSchedulerImpl<Storage>`
+/// is named, unlike member bodies — an OP dependent name must not leak into a signature the
+/// generic composition root also instantiates).
 /// Re-encodes a decoded OpBlockTx canonically from its parsed fields, so the caller can compare it
 /// byte-for-byte with the raw envelope. Uses evmone's canonical RLP for every type (no bcos-codec
 /// type conversions): deposits are rebuilt as `0x7e || rlp([...8 fields])` (the isSystemTransaction
@@ -847,15 +782,15 @@ inline bcos::bytes canonicalEnvelopeBytes(const bcos::evm::opstack::OpBlockTx& b
     return {e.begin(), e.end()};
 }
 
-/// Whole-envelope canonical-encoding invariant (失实1 / final review batch B): decode → re-encode →
-/// byte-compare against the original wire bytes, rejecting any mismatch. Defense-in-depth
-/// INDEPENDENT of the per-field (B4-2) and length-prefix (C1) checks — it fails closed if a future
-/// decoder change ever lets a non-canonical byte through, keeping `computeOpTxRoot`'s "hash the raw
-/// bytes == op-geth DeriveSha" equivalence a runtime-checked invariant rather than a prose promise.
-/// Cost is one re-encode per tx, negligible beside the ecrecover each decoder already runs, so it
-/// stays enabled in all builds (a debug-only guard would compile out of this Release consensus path
-/// — exactly where it must hold). Proven free of false-rejects by the 33-vector golden corpus and
-/// the t8n legs, whose real op-geth bytes all round-trip.
+/// Whole-envelope canonical-encoding invariant: decode → re-encode → byte-compare against the
+/// original wire bytes, rejecting any mismatch. Defense-in-depth INDEPENDENT of the per-field and
+/// length-prefix checks — it fails closed if a future decoder change ever lets a non-canonical
+/// byte through, keeping `computeOpTxRoot`'s "hash the raw bytes == op-geth DeriveSha" equivalence
+/// a runtime-checked invariant rather than a prose promise. Cost is one re-encode per tx,
+/// negligible beside the ecrecover each decoder already runs, so it stays enabled in all builds
+/// (a debug-only guard would compile out of this Release consensus path — exactly where it must
+/// hold). Proven free of false-rejects by the 33-vector golden corpus and the t8n legs, whose
+/// real op-geth bytes all round-trip.
 inline void assertCanonicalRoundTrip(
     const bcos::bytes& rawEntry, const bcos::evm::opstack::OpBlockTx& decoded)
 {
@@ -899,9 +834,9 @@ inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64
 
 }  // namespace detail
 
-/// OP scheduler component (design §2 "组件形态"): dual signature, constructed once per
-/// [receiptFactory, chainId, fork-timestamps] combination (composition-root-owned, design §4.2
-/// decision D2 — this class never reads chainId/fork thresholds from SystemConfigs itself).
+/// OP scheduler component: dual signature, constructed once per [receiptFactory, chainId,
+/// fork-timestamps] combination (composition-root-owned; this class never reads chainId/fork
+/// thresholds from SystemConfigs itself).
 template <class Storage>
 class OpSchedulerImpl
 {
@@ -914,33 +849,32 @@ public:
         m_vm(evmc_create_evmone())
     {}
 
-    // ---- engine-facing seam surface (task-5b, design §6.1) ----
+    // ---- engine-facing seam surface ----
     //
-    // `engine/bcos-engine/EngineServiceImpl.h`'s newPayload OP branch reaches every one of the
-    // names below as a **dependent name on its `SchedulerType` template parameter**
-    // (`typename SchedulerType::BlockEnv`, `SchedulerType::computeTxRoot(...)`, ...). That is the
-    // only channel available: engine must not `#include` anything from bcos-evm (库纯净, see the
-    // `c_opMode` comment in EngineServiceImpl.h), and dependent names are looked up at
-    // instantiation — inside `if constexpr (c_opMode)`, in a TU that has already included this
-    // header. See `OpEngineSeam.h`'s file comment for the full rationale; the definitions live
-    // there, this block only re-publishes them under the class scope the engine can reach.
+    // The engine's newPayload OP branch reaches every name below as a **dependent name on its
+    // `SchedulerType` template parameter** (`typename SchedulerType::BlockEnv`,
+    // `SchedulerType::computeTxRoot(...)`, ...) — the only channel available: engine must not
+    // `#include` anything from bcos-evm (library purity, see the `c_opMode` comment in
+    // EngineServiceImpl.h), and dependent names are looked up at instantiation, inside
+    // `if constexpr (c_opMode)`, in a TU that has already included this header. The definitions
+    // live in `OpEngineSeam.h`; this block only re-publishes them under the class scope the
+    // engine can reach.
 
-    /// The block-execution environment the engine fills in from the payload (design §4.2) — the
-    /// FISCO `protocol::BlockHeader` itself (PR #5385 gave every former OpBlockEnv field a tars
-    /// slot; spec 2026-08-05-opstack-blockheader-fisco-adaptation-design.md §4.2).
+    /// The block-execution environment the engine fills in from the payload — the FISCO
+    /// `protocol::BlockHeader` itself (PR #5385 gave every former OpBlockEnv field a tars slot).
     using BlockEnv = bcos::protocol::BlockHeader;
-    /// What `executeOpBlock` returns (design §4.1).
+    /// What `executeOpBlock` returns.
     using ExecuteResult = OpExecuteBlockResult;
-    /// Consensus-level rejection -> engine maps to INVALID (design §4.3 error table).
+    /// Consensus-level rejection -> engine maps to INVALID.
     using ConsensusError = OpConsensusError;
-    /// Storage-layer failure -> engine maps to JSON-RPC -32603, never INVALID (design §4.3).
+    /// Storage-layer failure -> engine maps to JSON-RPC -32603, never INVALID.
     using StorageError = OpStorageError;
-    /// c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX（s_eth_hash_2_rawtx）。方案 B（2026-08-10）后不再写——
-    /// registerOpBlock 改经 opEnvelopeToTars 写 SYS_HASH_2_TX。常量保留，仅供读侧测试断言 rawtx 表
-    /// absent（D1，OpNewPayloadRpcE2eTest）。
+    /// c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX (s_eth_hash_2_rawtx). No longer written since
+    /// plan B (2026-08-10): registerOpBlock writes SYS_HASH_2_TX via opEnvelopeToTars instead.
+    /// The constant is kept only for read-side test assertions that the rawtx table is absent.
     static constexpr std::string_view c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX;
 
-    /// The six-way comparison surface (+ the two §5.1 seal outputs) in bcos:: types.
+    /// The six-way comparison surface (plus the two seal-only outputs) in bcos:: types.
     static OpBlockCommitments commitmentsOf(const OpExecuteBlockResult& result)
     {
         return bcos::evm::engine::commitmentsOf(
@@ -955,17 +889,16 @@ public:
         return computeOpTxRoot(rawTxBytes);
     }
 
-    /// Isthmus activation predicate for the engine's -38005 timestamp x version gate (design
-    /// §6.1 step 1). The threshold comparison deliberately lives on this side of the seam, next
-    /// to `configAt`, rather than being reimplemented in the engine.
+    /// Isthmus activation predicate for the engine's -38005 timestamp x version gate. The
+    /// threshold comparison deliberately lives on this side of the seam, next to `configAt`,
+    /// rather than being reimplemented in the engine.
     ///
-    /// It is a *separate* function from `configAt` on purpose (task-4 review item M4):
-    /// `configAt` cannot answer this question — it resolves sub-`isthmusTime` timestamps to the
-    /// Isthmus config as well (documented in OpForkSchedule.h: "Timestamps below isthmusTime also
-    /// resolve to Isthmus"), because the minimal loop has no pre-Isthmus config to fall back to.
-    /// The version gate, by contrast, must reject pre-Isthmus timestamps outright (-38005 on any
-    /// version, batch D-5 ruling), so it needs the raw threshold. Both read the same injected
-    /// `m_forkTimestamps.isthmusTime`, so there is
+    /// It is a *separate* function from `configAt` on purpose: `configAt` cannot answer this
+    /// question — it resolves sub-`isthmusTime` timestamps to the Isthmus config as well
+    /// (documented in OpForkSchedule.h: "Timestamps below isthmusTime also resolve to Isthmus"),
+    /// because the minimal loop has no pre-Isthmus config to fall back to. The version gate, by
+    /// contrast, must reject pre-Isthmus timestamps outright (-38005 on any version), so it needs
+    /// the raw threshold. Both read the same injected `m_forkTimestamps.isthmusTime`, so there is
     /// still exactly one source of truth for the value.
     [[nodiscard]] bool isIsthmusActiveAt(uint64_t timestamp) const noexcept
     {
@@ -974,9 +907,8 @@ public:
 
     /// Jovian activation predicate. The engine needs it for one fork-dependent static check: the
     /// header's `blobGasUsed` slot must be 0 under Isthmus, but from Jovian on the same slot is
-    /// repurposed as the DA footprint and is validated by seal comparison instead (design §5.1 /
-    /// OpBlockSeal.h:31-38). Same "threshold comparison stays on this side" reasoning as
-    /// `isIsthmusActiveAt`.
+    /// repurposed as the DA footprint and is validated by seal comparison instead (OpBlockSeal.h).
+    /// Same "threshold comparison stays on this side" reasoning as `isIsthmusActiveAt`.
     [[nodiscard]] bool isJovianActiveAt(uint64_t timestamp) const noexcept
     {
         return timestamp >= m_forkTimestamps.jovianTime;
@@ -988,16 +920,14 @@ public:
     OpSchedulerImpl& operator=(OpSchedulerImpl&&) = delete;
     ~OpSchedulerImpl() = default;
 
-    /// Dummy signature satisfying scheduler_v1::TransactionScheduler (concept-check purpose
-    /// only — the concept is an unconditional compile-time constraint on EngineServiceImpl's
-    /// SchedulerType template parameter, independent of runtime reachability; OP mode never
-    /// calls this, design §2). Throws immediately, before any co_await/co_return: safe because
-    /// bcos::task::Task's promise_type uses std::suspend_always at initial_suspend
-    /// (libtask/bcos-task/Task.h:55), so the coroutine body does not run until the coroutine is
-    /// actually resumed (syncWait/co_await); unhandled_exception() (Task.h:63-71) is the
-    /// standard propagation path for exceptions raised inside a Task<T> coroutine body, and is
-    /// already relied upon elsewhere in this codebase for throwing scheduler/executor
-    /// implementations.
+    /// Dummy signature satisfying scheduler_v1::TransactionScheduler (concept-check purpose only
+    /// — the concept is an unconditional compile-time constraint on EngineServiceImpl's
+    /// SchedulerType template parameter, independent of runtime reachability; OP mode never calls
+    /// this). Throws immediately, before any co_await/co_return: safe because bcos::task::Task's
+    /// promise_type uses std::suspend_always at initial_suspend (libtask/bcos-task/Task.h:55), so
+    /// the coroutine body does not run until the coroutine is actually resumed (syncWait/co_await);
+    /// unhandled_exception() (Task.h:63-71) is the standard propagation path for exceptions raised
+    /// inside a Task<T> coroutine body.
     task::Task<std::vector<bcos::protocol::TransactionReceipt::Ptr>> executeBlock(
         Storage& /*storage*/, auto& /*executor*/,
         bcos::protocol::BlockHeader const& /*blockHeader*/,
@@ -1009,31 +939,28 @@ public:
         co_return {};  // unreachable; satisfies the coroutine's declared return type
     }
 
-    /// OP-mode entry point (design §4.3 "执行六步"; called from handleNewPayload's OP branch,
-    /// T5b — not delivered by this task). Steps:
+    /// OP-mode entry point (called from handleNewPayload's OP branch). Steps:
     ///   1. sort/decode rawTxBytes into OpBlockTx (deposit/eip1559/set_code dispatch,
     ///      detail::decodeOneRawTx);
-    ///   2. one Storage2Ledger<Storage> bridge instance for this block ("一块一实例", design
-    ///      §4.1);
+    ///   2. one Storage2Ledger<Storage> bridge instance for this block ("one per block");
     ///   3. processOpBlock (bridge doubles as StateView and applyDiff sink);
     ///   4. poison-flag check (bridge.poisoned() -> OpStorageError; any other throw from
-    ///      processOpBlock -> OpConsensusError — design §4.3 error-classification table;
-    ///      poisoned() is checked *first* because Storage2Ledger's read methods are noexcept and
-    ///      swallow storage failures into the poison flag rather than propagating them, so it is
-    ///      authoritative over whatever processOpBlock did or threw — Storage2Ledger.h's "毒旗
-    ///      错误通道" contract);
+    ///      processOpBlock -> OpConsensusError — error-classification table; poisoned() is
+    ///      checked *first* because Storage2Ledger's read methods are noexcept and swallow
+    ///      storage failures into the poison flag rather than propagating them, so it is
+    ///      authoritative over whatever processOpBlock did or threw — Storage2Ledger.h's
+    ///      poison-flag error channel contract);
     ///   5. sealOpBlock (needs the post-finalize MessagePasser storage snapshot) + stateRootOf,
-    ///      both while the bridge is still alive ("桥销毁前算毕", design §4.1);
+    ///      both while the bridge is still alive ("compute before the bridge is destroyed");
     ///   6. txRoot over the caller-supplied rawTxBytes (independent of step 1's parsed
     ///      interpretation — txRoot commits to the exact wire bytes) + gasUsed, folded into the
-    ///      six-way comparison surface (OpExecuteBlockResult, design §4.1).
+    ///      six-way comparison surface (OpExecuteBlockResult).
     task::Task<OpExecuteBlockResult> executeOpBlock(
         Storage& storage, BlockEnv const& env, ::ranges::input_range auto const& rawTxBytes)
     {
         // Step 1: sort/decode. m_chainId is passed as a plain uint64_t argument (not a new
         // parameter on this method, and not an OP-specific type) — see decodeOneRawTx's comment
-        // on why the OP dependent-name-in-signature hazard does not apply here (C2, coordinator
-        // review).
+        // on why the OP dependent-name-in-signature hazard does not apply here.
         std::vector<bcos::evm::opstack::OpBlockTx> txs;
         for (auto const& rawItem : rawTxBytes)
             txs.push_back(detail::decodeOneRawTx(
@@ -1043,13 +970,15 @@ public:
         bcos::evm::ledger::Storage2Ledger<Storage> bridge(storage);
 
         const auto blk = detail::toBlockInfo(env);
-        // D1: RecentBlockHashes 懒加载祖先 hash, 种子 {N-1: parentHash} 在构造函数内。
-        // hashErr 是本块毒旗通道 (storage 故障 -> OpStorageError, 非 INVALID, G2)。
+        // RecentBlockHashes lazily loads ancestor hashes; the seed {N-1: parentHash} is set in
+        // the constructor. hashErr is this block's poison channel (storage fault ->
+        // OpStorageError, not INVALID).
         std::optional<std::string> hashErr;
         detail::RecentBlockHashes<Storage> hashes(
             storage, blk.number, detail::toEvmcBytes32(env.parentInfo().blockHash), &hashErr);
 
-        // tars 存毫秒,fork 配置吃秒(spec §7:blockHash/执行面永远秒)。
+        // tars stores milliseconds; fork configs consume seconds (blockHash/execution surface is
+        // always in seconds).
         const auto& cfg = bcos::evm::opstack::configAt(
             static_cast<uint64_t>(env.timestamp()) / 1000, m_forkTimestamps);
 
@@ -1066,15 +995,15 @@ public:
         }
         catch (const std::exception& e)
         {
-            // Batch D-4 + D-2 classification: this typed catch binds only the NON-runtime_error
-            // families — std::bad_alloc (direct std::exception child, D-4) and the
-            // std::logic_error family (which system_contracts.cpp now throws for a fatal
-            // system-call failure, D-2). Every std::runtime_error and its subclasses — including
-            // all of processOpBlock's block-level consensus rejections — escape this catch via
-            // the RTTI bypass explained in the catch(...) clause below and are handled THERE as
-            // OpConsensusError → INVALID. So whatever binds here is by construction a LOCAL fault
-            // (allocation failure / internal invariant), which §4.3 says must never vote against
-            // the block → OpStorageError (-32603), not OpConsensusError.
+            // This typed catch binds only the NON-runtime_error families — std::bad_alloc
+            // (direct std::exception child) and the std::logic_error family (which
+            // system_contracts.cpp throws for a fatal system-call failure). Every
+            // std::runtime_error and its subclasses — including all of processOpBlock's
+            // block-level consensus rejections — escape this catch via the RTTI bypass explained
+            // in the catch(...) clause below and are handled THERE as OpConsensusError → INVALID.
+            // So whatever binds here is by construction a LOCAL fault (allocation failure /
+            // internal invariant), which must never vote against the block → OpStorageError
+            // (-32603), not OpConsensusError.
             if (bridge.poisoned() || hashErr.has_value())
                 throw OpStorageError(
                     hashErr.has_value() ? *hashErr : std::string(bridge.firstError()));
@@ -1082,24 +1011,12 @@ public:
         }
         catch (...)
         {
-            // Typed-catch RTTI bypass (the same phenomenon bcos-evm/test/opstack/
-            // T8nReplayHarness.h already documents and works around, in its own two `catch (...)`
-            // clauses). NOTE: the original investigation write-up is NOT in this branch -- it was
-            // written on the unrelated `feat-evm-mb1-block-execution` branch (commit d0937e8a1) at
-            // `bcos-evm-ref/docs/audits/2026-07-12-typed-catch-rtti-investigation.md` and was never
-            // carried over, so the `docs/audits/...` path this comment used to cite resolved to
-            // nothing here. The mechanism is therefore restated in full below rather than
-            // delegated to a link: libevmone.a (-fno-rtti) brings in a
-            // hidden non-unique typeinfo for std::exception, so `catch (const std::exception&)`
-            // above does NOT reliably bind std::runtime_error thrown by evmone/opstack-linked
-            // code (or, empirically, by *any* std::runtime_error surfacing through this call —
-            // confirmed via a diagnostic build: both processOpBlock's own "first tx is not the
-            // L1 attributes deposit" throw and a ThrowingStorage-injected failure propagating
-            // through Storage2Ledger::applyDiff's write-back path escaped the typed catch above
-            // as an uncaught St13runtime_error). Without this fallback, both of those cases would
-            // propagate out of executeOpBlock as raw, unclassified exceptions instead of
-            // OpConsensusError/OpStorageError — silently breaking the INVALID vs -32603 dispatch
-            // T5b/T6 build on top of this classification (design §4.3). Re-applies the *same*
+            // Typed-catch RTTI bypass (same phenomenon documented and worked around in
+            // T8nReplayHarness.h): the -fno-rtti libevmone.a brings a hidden non-unique typeinfo
+            // for std::exception, so `catch (const std::exception&)` above does NOT reliably bind
+            // std::runtime_error thrown by evmone/opstack-linked code. Without this fallback those
+            // throws would propagate out of executeOpBlock as raw, unclassified exceptions,
+            // silently breaking the INVALID vs -32603 dispatch. Re-applies the *same*
             // poisoned()-first classification without relying on typeid matching; the original
             // message is unrecoverable here (no typed handle on the caught object).
             if (bridge.poisoned() || hashErr.has_value())
@@ -1133,23 +1050,18 @@ public:
             throw OpStorageError(std::string(bridge.firstError()));
 
         // Step 6: txRoot (trie key = canonical RLP encoding of the index, trie value = the raw
-        // tx bytes as-is — MPT::insert's value parameter is the leaf payload, not re-wrapped by
-        // the caller, same contract stateRootOf<Ledger>'s account leaves rely on via
-        // encode_tuple) + gasUsed. NOTE (B4-2 review M-3): this used to be described as "the
-        // op-geth DeriveSha convention", which is not accurate — `DeriveSha` re-encodes each
-        // transaction canonically from the parsed struct, while this hashes the wire bytes. The
-        // two coincide only because the decoders above reject every non-canonical encoding —
-        // per-field strictness (B4-2), the shared length-prefix fix (C1), AND the whole-envelope
-        // `assertCanonicalRoundTrip` invariant (final review batch B); see `computeOpTxRoot`'s
-        // comment in OpEngineSeam.h for the full statement of that dependency (this is the second
-        // copy of the same claim — keep them in step). The trie
-        // construction itself moved to `OpEngineSeam.h`'s `computeOpTxRoot` (task-5b) because the
-        // engine's newPayload OP branch must derive the same value *before* execution, for the
+        // tx bytes as-is) + gasUsed. NOTE: this is NOT op-geth's `DeriveSha` convention —
+        // `DeriveSha` re-encodes each transaction canonically from the parsed struct while this
+        // hashes the wire bytes; the two coincide only because the decoders above reject every
+        // non-canonical encoding (per-field strictness, the shared length-prefix fix, and the
+        // whole-envelope `assertCanonicalRoundTrip` invariant — see `computeOpTxRoot`'s comment in
+        // OpEngineSeam.h). The trie construction lives in `OpEngineSeam.h`'s `computeOpTxRoot` so
+        // the engine's newPayload OP branch can derive the same value *before* execution, for the
         // header reconstruction the blockHash check depends on — same function, two call sites, no
         // second implementation.
         const auto txRoot = computeOpTxRoot(rawTxBytes);
 
-        // 方案 A 阶段 2: the execution layer already produced bcos::protocol::TransactionReceipt
+        // Plan A phase 2: the execution layer already produced bcos::protocol::TransactionReceipt
         // objects (OP metadata in opStackMeta, effective gas price on the top-level field), so no
         // mapOpReceipt projection happens here — the result receipts ARE the framework receipts.
         co_return OpExecuteBlockResult{
@@ -1165,7 +1077,7 @@ private:
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     uint64_t m_chainId;
     bcos::evm::opstack::OpForkTimestamps m_forkTimestamps;
-    evmc::VM m_vm;  // evmc_create_evmone(), one instance per scheduler (design §4.1).
+    evmc::VM m_vm;  // evmc_create_evmone(), one instance per scheduler
 };
 
 }  // namespace bcos::evm::engine

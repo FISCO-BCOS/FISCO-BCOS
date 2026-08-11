@@ -29,7 +29,7 @@ namespace bcos
 {
 namespace consensus
 {
-/// OP 模式短路回调错误码：区别于 invalid proposal 的 -1。
+/// OP-mode short-circuit callback error code; distinct from -1 for an invalid proposal.
 constexpr int64_t c_opModeExecutionDisabled = -2;
 
 class StateMachine : public StateMachineInterface, public std::enable_shared_from_this<StateMachine>
@@ -60,7 +60,7 @@ protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::Strand m_strand;
-    /// OP 模式（executor_version>=3）：PBFT 不得执行区块（Engine API executeOpBlock 是唯一驱动）。
+    /// OP mode (executor_version>=3): PBFT must not execute blocks (Engine API executeOpBlock is the sole driver).
     bool m_opStackMode = false;
 };
 }  // namespace consensus

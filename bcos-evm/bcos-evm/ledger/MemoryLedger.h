@@ -20,15 +20,15 @@ struct LedgerAccount
     uint64_t nonce{0};
     intx::uint256 balance;
     evmc::bytes code;
-    std::map<evmc::bytes32, evmc::bytes32> storage;  // 不存零值(契约②)
+    std::map<evmc::bytes32, evmc::bytes32> storage;  // zero-valued slots are not stored (contract ②)
 };
 
 /// Self-developed in-memory ledger backend (C-route step 1 replacement for
 /// evmone::test::TestState).
 ///
-/// KEEP semantics (design §3/§4.4): a present map key means the account exists, even when its
-/// value is entirely default (empty account) — existence and "all fields default" are distinct,
-/// unlike a design that folds an empty account into std::nullopt.
+/// KEEP semantics: a present map key means the account exists, even when its value is entirely
+/// default (empty account) — existence and "all fields default" are distinct, unlike a design
+/// that folds an empty account into std::nullopt.
 class MemoryLedger final : public evmone::state::StateView
 {
 public:
@@ -55,24 +55,25 @@ public:
     evmc::bytes32 get_storage(
         const evmc::address& addr, const evmc::bytes32& key) const noexcept override;
 
-    /// Applies a StateDiff. Single strict form (design §5): no "raw" variant is offered — a
-    /// deleted_accounts entry absent from the ledger is a tripwire (std::runtime_error), and every
+    /// Applies a StateDiff. Single strict form: no "raw" variant is offered — a deleted_accounts
+    /// entry absent from the ledger is a tripwire (std::runtime_error), and every
     /// modified_accounts entry unconditionally ensures the account exists (ensure-exists,
     /// including entries with no field actually changed — e.g. EIP-161 touch-only accounts).
     void applyDiff(const evmone::state::StateDiff& diff, bool seeding = false);
 
-    /// Uniform query surface across ledger backends (design §6): MemoryLedger never poisons, so
-    /// this is always false; Storage2Ledger provides the real poison-flag semantics.
+    /// Uniform query surface across ledger backends: MemoryLedger never poisons, so this is always
+    /// false; Storage2Ledger provides the real poison-flag semantics.
     [[nodiscard]] bool poisoned() const noexcept { return false; }
 
-    /// Visits every account in the ledger (design §6 AccountVisitor contract, same shape as
+    /// Visits every account in the ledger (AccountVisitor contract, same shape as
     /// Storage2Ledger::visitAccounts — noexcept + returns bool). The visitor is invoked with an
     /// AccountView and must itself return bool; returning false aborts the traversal early
     /// (short-circuit). Actually (not just nominally) noexcept: the in-memory backend has no
-    /// failure path to catch-and-poison — poisoned() is a hardcoded false for this backend
-    /// (design §6 "抽象层统一提供该查询,后端不对称由此收敛"), unlike Storage2Ledger's
-    /// catch-then-poison noexcept. Consumers should still check poisoned() for backend symmetry
-    /// with Storage2Ledger (a generic caller shouldn't need to know which backend it has).
+    /// failure path to catch-and-poison — poisoned() is a hardcoded false for this backend (the
+    /// abstraction uniformly provides the query; backend asymmetry converges here), unlike
+    /// Storage2Ledger's catch-then-poison noexcept. Consumers should still check poisoned() for
+    /// backend symmetry with Storage2Ledger (a generic caller shouldn't need to know which
+    /// backend it has).
     template <class Visitor>
     bool visitAccounts(Visitor&& visitor) const noexcept
     {

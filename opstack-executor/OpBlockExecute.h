@@ -22,12 +22,12 @@ struct OpBlockTx
     evmc::bytes signedEnvelope;  // empty for deposit
 };
 
-/// Block execution result. receipts keep their original in-block order (M-B2's receipts-root /
+/// Block execution result. receipts keep their original in-block order (the receipts-root /
 /// block-level bloom depend on this order; cumulative_gas_used is already filled in interleaved
 /// order). Each receipt is a bcos::protocol::TransactionReceipt directly produced by the execution
-/// layer (方案 A 阶段 2) — the OP metadata (l1/operator/DA, or deposit_nonce/version) rides in its
-/// opStackMeta, so no evmone receipt wrapper survives here. txTypes[i] carries the EIP-2718 type
-/// byte that produced receipts[i] (kDepositTxType for deposits, else the Transaction::Type
+/// layer (plan A phase 2) — the OP metadata (l1/operator/DA, or deposit_nonce/version) rides in
+/// its opStackMeta, so no evmone receipt wrapper survives here. txTypes[i] carries the EIP-2718
+/// type byte that produced receipts[i] (kDepositTxType for deposits, else the Transaction::Type
 /// value): the FISCO receipt interface has no tx-type slot, and sealOpBlock's EncodeIndex
 /// receipts-root leaf needs the typed prefix (op-geth Receipts.EncodeIndex semantics).
 struct OpBlockResult
@@ -39,7 +39,7 @@ struct OpBlockResult
                                             // applyDiff)
 };
 
-/// Execute a whole block (spec §4.1 ordering): system_call_block_start → first L1 attributes
+/// Execute a whole block (execution ordering): system_call_block_start → first L1 attributes
 /// deposit → loadOpFeeParams → per-transaction (gas pool / cumulative / per-transaction write-back)
 /// → finalizeOpBlock. Write-back callback: invoked immediately after each diff segment is produced;
 /// the view read by the next step must already reflect it.
@@ -57,7 +57,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff);
 
-// ---- Jovian L1-attributes block shape (batch C, spec §6.4) ----
+// ---- Jovian L1-attributes block shape ----
 // op-geth pins these in `core/types/rollup_cost.go`: the first (L1 attributes) deposit's calldata
 // is `IsthmusL1AttributesLen` (176) bytes on the Jovian *activation* block (the DA-footprint gas
 // scalar is not set yet) and `JovianL1AttributesLen` (178) bytes with `JovianL1AttributesSelector`

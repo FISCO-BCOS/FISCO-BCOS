@@ -17,17 +17,11 @@ namespace
 {
 [[nodiscard]] bool isL1AttributesTx(const DepositTx& dep) noexcept
 {
-    // stricter-than-spec (spec §6 decision point 2, user ruling): validate by content. Spec
-    // constants for cross-checking against op-node derive/l1_block_info.go:40 (DEPOSITOR); op-geth
-    // EL does not perform this validation (responsibility pushed down to the CL layer).
-    //
-    // Impact assessment (2026-08-03 audit D3): this check is unreachable on a real chain —
-    // op-node's attributes.go:188-190 unconditionally prepends the L1-info deposit
-    // (`From=0xdead...0001`, `To=L1BlockAddr`, l1_block_info.go:572-573), which exactly satisfies
-    // both conditions, with all upgrade txs (incl. Jovian L1Block deployment) following it. The
-    // only way to trigger a DIVERGENT verdict (FISCO INVALID where op-geth would execute) is a
-    // hand-crafted payload fed directly to engine_newPayload, bypassing op-node. Keep this stricter
-    // check: it rejects malformed blocks op-geth accepts, at zero cost on legitimate payloads.
+    // Stricter-than-spec: validate the L1 attributes deposit by content. op-geth's EL does not
+    // perform this validation (pushed down to the CL layer); op-node always prepends a deposit
+    // that satisfies both conditions, so a divergent verdict is only reachable via a hand-crafted
+    // payload fed directly to engine_newPayload. Keep the check: it rejects malformed blocks
+    // op-geth accepts, at zero cost on legitimate payloads.
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
 }
 
@@ -102,23 +96,22 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff)
 {
-    // §4.1 step 1: pre-block system call (4788/2935; revision-gating and silent skip on missing
-    // code are both handled inside evmone).
+    // Step 1: pre-block system call (4788/2935; revision-gating and silent skip on missing code
+    // are both handled inside evmone).
     applyDiff(bcos::evm::sanitizeStateDiff(
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
-    // §4.1 step 2 precondition: the first tx must be the L1 attributes deposit (stricter-than-spec,
-    // spec §6 decision point 1/2).
+    // Step 2 precondition: the first tx must be the L1 attributes deposit (stricter-than-spec).
     if (txs.empty())
         throw std::runtime_error("op block: missing L1 attributes deposit (empty block)");
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
     if (firstDep == nullptr || !isL1AttributesTx(*firstDep))
         throw std::runtime_error("op block: first tx is not the L1 attributes deposit");
 
-    // §4.1 step 2 precondition (batch C, spec §6.4): Jovian L1-attributes block shape — attributes
-    // selector/length (C-3) and the activation block's deposits-only rule (C-4). No-op pre-Jovian.
-    // Placed before the per-tx loop so an activation block carrying a user tx is refused before any
-    // of it executes, mirroring op-geth's `CalcDAFootprint` in block validation.
+    // Step 2 precondition: Jovian L1-attributes block shape — attributes selector/length (C-3)
+    // and the activation block's deposits-only rule (C-4). No-op pre-Jovian. Placed before the
+    // per-tx loop so an activation block carrying a user tx is refused before any of it executes,
+    // mirroring op-geth's `CalcDAFootprint` in block validation.
     validateJovianBlockShape(txs, cfg);
 
     OpBlockResult result;
@@ -151,24 +144,26 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             seenNonDeposit = true;
             if (!feeLoaded)
             {
-                // §4.1 step 2: fee params are read from the storage slot values after this block's
+                // Step 2: fee params are read from the storage slot values after this block's
                 // attributes tx executes; deferred lazily to the first normal tx, equivalent to
                 // op-geth's per-block cache (rollup_cost.go:162-164/:199-207).
                 fee = loadOpFeeParams(view);
-                // D-1 (spec §6.4): Jovian DA footprint gas scalar 的权威来源是首笔 L1 attributes
-                // deposit 的 calldata[176:178]（op-geth ExtractDAFootprintGasScalar,
-                // rollup_cost.go:555），不是 L1Block slot8 —— attributes deposit 失败时
-                // EVM 回滚存储写入, slot8 保持上一块旧值而 calldata 始终携带本块正确值。
-                // 激活块 (data.size()==176) 强制 0 (op-geth CalcDAFootprint:571-577)；
-                // 正常块 (data.size()>=178) 取固定偏移 [176:178] (非 len-2)。
+                // The Jovian DA footprint gas scalar's authoritative source is the first L1
+                // attributes deposit's calldata[176:178] (op-geth ExtractDAFootprintGasScalar,
+                // rollup_cost.go:555), not L1Block slot8: if the attributes deposit fails, the EVM
+                // rolls back the storage write so slot8 keeps the previous block's stale value,
+                // while calldata always carries this block's correct value. An activation block
+                // (data.size()==176) forces 0 (op-geth CalcDAFootprint:571-577); a normal block
+                // (data.size()>=178) reads the fixed offset [176:178] (not len-2).
                 if (cfg.has_da_footprint)
                 {
                     const auto& attrData = std::get<DepositTx>(txs[0].tx).data;
                     if (attrData.size() == IsthmusL1AttributesLen)
                     {
-                        // C-4 下激活块无用户 tx, 本分支结构不可达; 若未来放宽 C-4, op-geth
-                        // 在此会拒块 (CalcDAFootprint 对 Isthmus 长度要求 deposits-only,
-                        // rollup_cost.go:572-575), 非置 0。
+                        // Under C-4 the activation block has no user tx, so this branch is
+                        // structurally unreachable; if C-4 were ever relaxed, op-geth would reject
+                        // the block here (CalcDAFootprint requires deposits-only for Isthmus
+                        // length, rollup_cost.go:572-575) rather than set 0.
                         fee.da_footprint_gas_scalar = 0;
                     }
                     else if (attrData.size() >= JovianL1AttributesLen)
@@ -203,7 +198,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         }
     }
 
-    // §4.1 step 4: end-of-block finalize (D-10 wiring closure point).
+    // Step 4: end-of-block finalize.
     result.finalizeDiff = finalizeOpBlock(view, cfg, block.coinbase);
     applyDiff(result.finalizeDiff);
 

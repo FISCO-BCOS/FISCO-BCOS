@@ -36,11 +36,12 @@ bcos::protocol::TransactionReceipt::Ptr minimalDepositReceipt(int32_t status = 0
 
 BOOST_AUTO_TEST_SUITE(OpReceiptEncodeSuite)
 
-// 手工逐字节推导的 golden fixture（断言数值纪律：推导即锚，最终字节权威归 M-B3 差分）。
-// RLP 列表项：status 成功 → 0x01（1B）；cumGas 21000=0x5208 → 0x82 52 08（3B）；
-// bloom 256 零字节 → 0xb9 0x0100 + 00×256（259B）；logs [] → 0xc0（1B）；
-// nonce 5 → 0x05（1B）；version 1 → 0x01（1B）。载荷 = 1+3+259+1+1+1 = 266 = 0x010a
-// → 列表头 0xf9 01 0a（3B）。前缀 0x7e。总长 1+3+266 = 270。
+// Hand-derived golden fixture byte-by-byte (assertion-numerics discipline: derivation is
+// the anchor; final byte authority belongs to M-B3 differential). RLP list items:
+// status success -> 0x01 (1B); cumGas 21000=0x5208 -> 0x82 52 08 (3B); bloom 256 zero
+// bytes -> 0xb9 0x0100 + 00x256 (259B); logs [] -> 0xc0 (1B); nonce 5 -> 0x05 (1B);
+// version 1 -> 0x01 (1B). Payload = 1+3+259+1+1+1 = 266 = 0x010a -> list header 0xf9 01 0a
+// (3B). Prefix 0x7e. Total 1+3+266 = 270.
 BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
 {
     const auto enc =
@@ -52,12 +53,13 @@ BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
     BOOST_CHECK_EQUAL(enc, expected);
 }
 
-// 失败 deposit：status 项 = 空串 0x80（op-geth statusEncoding 失败分支）。
-// rev.2 勘正：0x80 与成功的 0x01 同为 1 字节（RLP 单字节优化对空串产 0x80 无内容），
-// 载荷不变仍 266 = 0x010a、总长仍 270——仅第 5 字节 0x01→0x80。
+// Failed deposit: status item = empty string 0x80 (op-geth statusEncoding failure branch).
+// rev.2 correction: 0x80 and the success 0x01 are both 1 byte (RLP single-byte
+// optimization yields 0x80 for the empty string, no content); payload stays 266 = 0x010a
+// and total stays 270 — only byte 5 changes 0x01 -> 0x80.
 BOOST_AUTO_TEST_CASE(FailedDepositStatusIsEmptyString)
 {
-    auto dep = minimalDepositReceipt(/*status=*/1);  // FISCO 非 0 = 失败
+    auto dep = minimalDepositReceipt(/*status=*/1);  // FISCO non-zero = failed
     const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
     evmc::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x80, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
     expected += evmc::bytes(256, 0x00);
@@ -66,10 +68,12 @@ BOOST_AUTO_TEST_CASE(FailedDepositStatusIsEmptyString)
     BOOST_CHECK_EQUAL(enc, expected);
 }
 
-// 带 log 的 deposit：logs 段（含 vector 列表 wrapper）以 evmone 独立编码为锚整段比对；
-// 尾 2 字节 = {nonce, version}。总长关系锚（rev.2 红队补强，堵 wrapper 丢失盲区）：
-// 空 logs 版总长 270，其中 logs 项占 1 字节（0xc0）→ 总长 = 269 + |rlp(logs)|
-// （bloom 编码长度与内容无关恒 259；nonce 7 与 5 同为 1 字节）。
+// Deposit with logs: the logs segment (incl. the vector-list wrapper) is compared as a
+// whole against evmone's independent encoding; the tail 2 bytes are {nonce, version}.
+// Total-length anchor (rev.2 red-team hardening, closing the wrapper-loss blind spot):
+// the empty-logs version totals 270, where the logs item is 1 byte (0xc0) -> total =
+// 269 + |rlp(logs)| (bloom encoding length is content-independent, always 259; nonce 7
+// and 5 are both 1 byte).
 BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
 {
     constexpr auto kAddr = 0x00000000000000000000000000000000000000aa_address;
@@ -95,7 +99,7 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
 
     const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
     BOOST_CHECK_EQUAL(enc[0], 0x7e);
-    // evmone 的 vector<Log> 列表编码（独立路径）须整段出现——覆盖列表 wrapper 字节
+    // evmone's vector<Log> list encoding (independent path) must appear whole — covers the list wrapper bytes
     const auto logsBytes = evmone::rlp::encode(std::vector<evmone::state::Log>{evmoneLog});
     BOOST_CHECK_NE(enc.find(logsBytes), evmc::bytes::npos);
     BOOST_REQUIRE_EQUAL(enc.size(), 269u + logsBytes.size());
@@ -103,8 +107,9 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
     BOOST_CHECK_EQUAL(enc[enc.size() - 1], 0x01);  // version
 }
 
-// 普通 tx：逐字节等价于 evmone rlp_encode（含 typed 前缀）——由 FISCO receipt 重建，
-// 且必须与 evmone 对同形 evmone receipt 的编码一致。
+// Normal tx: byte-for-byte equivalent to evmone rlp_encode (incl. the typed prefix) —
+// rebuilt from a FISCO receipt and must match evmone's encoding of the same-shaped
+// evmone receipt.
 BOOST_AUTO_TEST_CASE(NormalReceiptMatchesEvmoneEncoding)
 {
     // evmone reference: eip1559, success, cumGas 42000, empty logs, zero bloom.
@@ -123,11 +128,11 @@ BOOST_AUTO_TEST_CASE(NormalReceiptMatchesEvmoneEncoding)
     const auto enc =
         encodeReceiptForRoot(*r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
 
-    BOOST_CHECK_EQUAL(enc[0], 0x02);  // eip1559 typed 前缀
+    BOOST_CHECK_EQUAL(enc[0], 0x02);  // eip1559 typed prefix
     BOOST_CHECK_EQUAL(enc, evmc::bytes(expected.begin(), expected.end()));
 }
 
-// legacy（无 typed 前缀）+ access_list 前缀亦与 evmone 逐字节一致
+// legacy (no typed prefix) + access_list prefixes are also byte-identical to evmone
 BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
 {
     const auto makeFisco = [](uint64_t cumGas) {
@@ -156,7 +161,7 @@ BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
     compareToEvmone(accessList, evmone::state::Transaction::Type::access_list);
 }
 
-// deposit 与普通 tx 必须产出不同叶子（前缀与尾部字段都不同）
+// Deposit and normal txs must produce different leaves (prefix and tail fields both differ)
 BOOST_AUTO_TEST_CASE(DepositAndNormalLeavesDiffer)
 {
     const auto depEnc =
@@ -171,10 +176,12 @@ BOOST_AUTO_TEST_CASE(DepositAndNormalLeavesDiffer)
     BOOST_CHECK_NE(depEnc, normalEnc);
 }
 
-// 端到端 receiptsRoot 等价（33 向量 gate 的叶子层证明）：从 FISCO receipts 用
-// sealOpBlock 建根，必须与「等价 evmone receipts 用 evmone rlp_encode 建根」逐位一致。
-// sealOpBlock 的三棵子树里只有 receiptsRoot 的叶子编码在此重构（trie 构造原样），所以
-// 这一条 + NormalReceiptMatchesEvmoneEncoding 合起来钉住 receiptsRoot 字节等价。
+// End-to-end receiptsRoot equivalence (leaf-level proof for the 33-vector gate): building
+// the root from FISCO receipts via sealOpBlock must be bit-identical to building it from
+// equivalent evmone receipts via evmone rlp_encode. Of sealOpBlock's three subtrees, only
+// the receiptsRoot leaf encoding is reconstructed here (trie construction unchanged), so
+// this case + NormalReceiptMatchesEvmoneEncoding together pin the receiptsRoot byte
+// equivalence.
 BOOST_AUTO_TEST_CASE(SealReceiptsRootMatchesEvmoneReferenceTrie)
 {
     // FISCO receipt #0: deposit (status 0, cumGas 21000, nonce 5, version 1).

@@ -14,8 +14,9 @@
 #include <bcos-evm/eth/state/errors.hpp>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <cassert>
-// TODO(eth-utils-removal): 本文件多段照抄自
-// evmone test/state/state.cpp(官方 v0.21.0),替换即照抄面重写,须重验等价性宣称。
+// TODO(eth-utils-removal): several sections of this file are copied verbatim from
+// evmone test/state/state.cpp (official v0.21.0); replacing them means rewriting the copied
+// surface and re-verifying the equivalence claims.
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <limits>
@@ -111,7 +112,7 @@ inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(const OpReceiptMeta& met
     if (meta.l1_blob_base_fee)
         out.l1_blob_base_fee = intxToBcosU256(*meta.l1_blob_base_fee);
     if (meta.l1_base_fee_scalar)
-        out.l1_base_fee_scalar = *meta.l1_base_fee_scalar;  // uint32 -> uint64 标量直接赋值
+        out.l1_base_fee_scalar = *meta.l1_base_fee_scalar;  // uint32 -> uint64 scalar, direct assignment
     if (meta.l1_blob_base_fee_scalar)
         out.l1_blob_base_fee_scalar = *meta.l1_blob_base_fee_scalar;
     if (meta.operator_fee_scalar)
@@ -131,7 +132,7 @@ inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(const OpReceiptMeta& met
 
 /// FISCO status convention: 0 == success (precompiled contracts / BlockExecutive.cpp precedent).
 /// evmc_status_code's finer-grained failure taxonomy collapses to a single non-zero code, the same
-/// "只映射 status" scope OpReceiptMap.h specified.
+/// "status-only mapping" scope OpReceiptMap.h specified.
 inline int32_t toFiscoStatus(evmc_status_code status) noexcept
 {
     return status == EVMC_SUCCESS ? 0 : 1;
@@ -396,9 +397,9 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
 
     OpTxProperties props{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
         flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula, cfg.has_da_footprint};
-    // Ecotone 公式下快照 envelope 的 bedrockCalldataGasUsed（zeroes*4 + ones*16），供
-    // deriveOpReceiptMeta 读取 l1_gas_used——保持 no-cfg 不变量。Fjord+ 保持 nullopt，
-    // l1_gas_used 走 flz_len 的 Fjord 公式。
+    // Under the Ecotone formula, snapshot the envelope's bedrockCalldataGasUsed (zeroes*4 +
+    // ones*16) for deriveOpReceiptMeta to read as l1_gas_used -- preserving the no-cfg invariant.
+    // Under Fjord+ it stays nullopt; l1_gas_used uses the Fjord formula on flz_len.
     props.ecotone_calldata_gas_used =
         cfg.has_ecotone_l1_formula ?
             std::optional<uint64_t>{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)} :

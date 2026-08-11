@@ -99,8 +99,8 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         type = static_cast<TransactionType>(tx.web3TypedTxKind());
     }
     result["type"] = toQuantity(static_cast<uint64_t>(type));
-    // OP 扩展字段（对照 op-geth MarshalReceipt api.go:1779-1814）。空 opStackMeta →
-    // 无输出（不能输出 全零/默认值）；每个字段独立判空，写链不 throw（D7）。
+    // OP extension fields (aligned with op-geth MarshalReceipt). Empty opStackMeta → no output
+    // (never zero/default values); each field is null-checked independently and never throws (D7).
     if (auto meta = receipt.opStackMeta())
     {
         if (meta->l1_gas_price)
@@ -122,12 +122,12 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         if (meta->da_footprint_gas_scalar)
             result["daFootprintGasScalar"] = toQuantity(*meta->da_footprint_gas_scalar);
         if (meta->da_footprint)
-            result["blobGasUsed"] = toQuantity(*meta->da_footprint);  // Jovian 复用
+            result["blobGasUsed"] = toQuantity(*meta->da_footprint);  // Jovian reuses da_footprint
         if (meta->deposit_nonce)
             result["depositNonce"] = toQuantity(*meta->deposit_nonce);
         if (meta->deposit_receipt_version)
             result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
         if (meta->operator_fee)
-            result["operatorFee"] = toQuantity(*meta->operator_fee);  // FISCO 扩展
+            result["operatorFee"] = toQuantity(*meta->operator_fee);  // FISCO extension
     }
 }

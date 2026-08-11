@@ -14,7 +14,8 @@ std::optional<MemoryLedger::Account> MemoryLedger::get_account(
         return std::nullopt;
 
     const auto& account = it->second;
-    // KEEP: 存在但空的账户仍返回值(design §3/§4.4),has_storage 动态口径对齐 TestState。
+    // KEEP: a present-but-empty account still returns a value; has_storage's dynamic semantics
+    // align with TestState.
     return Account{
         account.nonce, account.balance, evmone::keccak256(account.code), !account.storage.empty()};
 }
@@ -42,23 +43,24 @@ evmc::bytes32 MemoryLedger::get_storage(
 
 void MemoryLedger::applyDiff(const evmone::state::StateDiff& diff, bool seeding)
 {
-    // `seeding` 仅为与 Storage2Ledger::applyDiff 的接口统一而收(seedFromTestState 对两类
-    // Ledger 同一句 `ledger.applyDiff(diff, true)`);MemoryLedger 无 D-6 空账户守卫,该参数
-    // 无行为,忽略。
+    // `seeding` is accepted only to keep the interface uniform with Storage2Ledger::applyDiff
+    // (seedFromTestState calls `ledger.applyDiff(diff, true)` for both ledger types); MemoryLedger
+    // has no empty-account guard, so the parameter has no behavior and is ignored.
     (void)seeding;
 
     for (const auto& m : diff.modified_accounts)
     {
-        // 账户 ensure-exists(design §5):无条件确保 entry 存在,即便本次无字段实际变化
-        // (EIP-161 touch-only 账户 / 完全空账户播种)——不得优化为"无字段可写则跳过"。
+        // ensure-exists: unconditionally ensure the entry exists, even when no field actually
+        // changes (EIP-161 touch-only accounts / fully-empty account seeding) -- must not optimize
+        // to "skip when no field is writable".
         auto& account = m_accounts[m.addr];
         account.nonce = m.nonce;
         account.balance = m.balance;
-        if (m.code.has_value())  // 契约③:code 无值不覆写
+        if (m.code.has_value())  // contract ③: a missing code value does not overwrite
             account.code = *m.code;
         for (const auto& [key, value] : m.modified_storage)
         {
-            if (value)  // 契约②:槽值为 0 = 删槽,不写零值
+            if (value)  // contract ②: a slot value of 0 deletes the slot; zero values are not written
                 account.storage.insert_or_assign(key, value);
             else
                 account.storage.erase(key);
@@ -67,7 +69,8 @@ void MemoryLedger::applyDiff(const evmone::state::StateDiff& diff, bool seeding)
 
     for (const auto& addr : diff.deleted_accounts)
     {
-        // strict 单形态(design §5):tripwire 内置,不提供 raw 版——view 中不存在即使用错误。
+        // Single strict form: tripwire built in, no raw variant -- an absent view entry is a
+        // usage error.
         const auto it = m_accounts.find(addr);
         if (it == m_accounts.end())
             throw std::runtime_error(

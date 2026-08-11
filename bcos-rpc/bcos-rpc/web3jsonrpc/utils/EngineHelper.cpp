@@ -68,26 +68,22 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     if (ep.isMember("transactions") && !ep["transactions"].isNull())
     {
         payload.transactions.reserve(ep["transactions"].size());
-        payload.rawTransactions.emplace();  // OP 路径唯一交易载体：原始 EIP-2718 字节
+        payload.rawTransactions.emplace();  // OP path: rawTransactions is the sole tx carrier (raw EIP-2718 bytes)
         payload.rawTransactions->reserve(ep["transactions"].size());
         for (auto const& tx : ep["transactions"])
         {
             auto txData = fromHex(tx.asString());
-            payload.rawTransactions->push_back(txData);  // 无条件保留，OP 载体与 decode 解耦
+            payload.rawTransactions->push_back(txData);  // keep unconditionally: OP carrier is decoupled from decode
             try
             {
                 payload.transactions.push_back(transactionFactory.decodeTransaction(ref(txData)));
             }
             catch (...)
             {
-                // decodeTransaction 对 EIP-2718/0x7E 抛 TarsDecodeMismatch（TransactionImpl::decode
-                // = tars serialize::decode，把 RLP 当 tars 线格式解析即抛）。OP 路径不需要
-                // decoded transactions，跳过失败笔；rawTransactions 已无条件保留。
-                // ⚠️ 必须 catch(...) 而非 catch(std::exception const&)：在链接 evmone(-fno-rtti) 的
-                // 二进制里（如 bcos-evm-opstack-tests），evmone 带入 std::exception 的隐藏 non-unique
-                // typeinfo，typed catch 无法可靠绑定 tars 的 TarsDecodeMismatch(runtime_error 子树)——
-                // 与 bcos-evm/OpSchedulerImpl.h executeOpBlock 的 catch(...) 注释记录同一 RTTI 现象。
-                // W6 L2 harness 直编本文件即暴露该问题；catch(...) 严格更强且贴合"跳过失败笔"意图。
+                // OP path needs no decoded transactions (rawTransactions already preserved); decode
+                // throws TarsDecodeMismatch for EIP-2718/0x7E, so failed entries are skipped. Must
+                // catch(...) not catch(std::exception const&): evmone(-fno-rtti) makes std::exception's
+                // typeinfo non-unique so a typed catch cannot bind TarsDecodeMismatch.
             }
         }
     }

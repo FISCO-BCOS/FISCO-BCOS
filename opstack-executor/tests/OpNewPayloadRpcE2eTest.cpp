@@ -404,9 +404,11 @@ struct InlineInvalidSpec
     std::string consumer = "engine";      // Task 4 gate regression: executor skips message assertion
 };
 
-/// 从金样本派生内联无效向量。自洽损坏模型（spec §2a）：改头字段 → 重算 blockHash——
-/// 用 productionHeaderOf 重建 OP 头（不读 payload.blockHash）后取 opHeaderHash 作为新 blockHash，
-/// 保证 step-2 blockHash 检查通过、字段级命中（step-5 比较 / parentKnown / step-3c）可达。
+/// Derives an inline invalid vector from a golden sample. Self-consistent corruption
+/// model: mutate a header field -> recompute blockHash — rebuild the OP header with
+/// productionHeaderOf (does not read payload.blockHash) and take opHeaderHash as the
+/// new blockHash, so the step-2 blockHash check passes and field-level hits (step-5
+/// compare / parentKnown / step-3c) stay reachable.
 w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInvalidSpec const& spec)
 {
     auto base = w6test::loadVectorSample(spec.baseId);
@@ -436,7 +438,7 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
             "buildInlineInvalidSample: unknown corruptField " + spec.corruptField);
     }
 
-    // 自洽：重算 blockHash（rebuild 头不含 payload.blockHash → opHeaderHash）
+    // Self-consistent: recompute blockHash (the rebuilt header excludes payload.blockHash -> opHeaderHash)
     auto request = bcos::rpc::parseNewPayloadRequest(
         params, *blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
     auto header = productionHeaderOf(blockFactory, request);
@@ -449,11 +451,11 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
     sample.vector["_info"]["hardfork"] = sample.hardfork;
     sample.vector["pre"] = base.vector["pre"];
     sample.vector["_op_payload"] = ep;
-    // V4 静态校验要求 parentBeaconBlockRoot（EngineServiceImpl.cpp:340）；params[2] 恒真值
+    // V4 static validation requires parentBeaconBlockRoot (EngineServiceImpl.cpp:340); params[2] always holds the real value
     sample.vector["_op_payload"]["parentBeaconBlockRoot"] = params[2u];
     if (spec.carryCanonical)
     {
-        // -32603 canonical 兄弟 = 未损坏的 base payload（同父同高度、不同 blockHash）
+        // -32603 canonical sibling = the uncorrupted base payload (same parent/height, different blockHash)
         auto canonicalParams = w6test::makeParamsJson(base);
         sample.vector["_op_canonical"] = canonicalParams[0u];
         sample.vector["_op_canonical"]["parentBeaconBlockRoot"] = canonicalParams[2u];
@@ -484,7 +486,7 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
     return sample;
 }
 
-/// 内联自测向量注册表（Task 2 自测；磁盘语料走 w6test::loadInvalidSample）。
+/// Inline self-test vector registry (Task 2 self-test; on-disk corpus uses w6test::loadInvalidSample).
 w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
 {
     if (id == "inline_invalid_stateRoot")
@@ -522,9 +524,11 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
                                                 .carryCanonical = true,
                                             });
     }
-    // Task 4 gate 回归：executor-consumer 向量的 validation_error_contains 是 T8n 执行层
-    // throw 消息（"intrinsic gas too low"），引擎 RTTI-bypass 折叠成通用消息——若 runner
-    // 未按 consumer 跳过消息断言，此向量必红。INVALID 分类 + latest_valid_hash=parent 仍须断言。
+    // Task 4 gate regression: an executor-consumer vector's validation_error_contains is
+    // a T8n execution-layer throw message ("intrinsic gas too low"), which the engine's
+    // RTTI-bypass folds into a generic message — if the runner does not skip the message
+    // assertion per consumer, this vector would go red. INVALID classification +
+    // latest_valid_hash=parent must still be asserted.
     if (id == "inline_invalid_executorStateRoot")
     {
         return buildInlineInvalidSample(id, InlineInvalidSpec{
@@ -538,14 +542,16 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
     throw std::runtime_error("makeInlineInvalidSample: unknown inline id " + id);
 }
 
-/// 分类驱动 runner（Task 2 主交付）。关键分支：
-///  - SYNCING：跳过 registerVerifiedBlock（parent 未知是设计意图——登记后 parentKnown 通过
-///    不再是 SYNCING）
-///  - -38005/-32603：expect_throw 按 classification 选 UnsupportedFork / OpExecutionInternalError；
-///    version 从 fisco.version 读（-38005 置 3），调 newPayload(request, version)
-///  - -32603：两投——先投 canonical 子块（VALID，写 SYS_NUMBER_2_HASH 占用），再投同高度 sibling
-///    （canonical 从向量 `_op_canonical` 读；Task 5 chain_fork_* carrier 同 schema）
-///  - INVALID：断言 status + latestValidHash(=parent 或 null) + validationError 子串
+/// Classification-driven runner (Task 2 main deliverable). Key branches:
+///  - SYNCING: skips registerVerifiedBlock (unknown parent is the intent — registering
+///    would let parentKnown pass and it would no longer be SYNCING)
+///  - -38005/-32603: expect_throw picks UnsupportedFork / OpExecutionInternalError by
+///    classification; version read from fisco.version (-38005 sets 3), call
+///    newPayload(request, version)
+///  - -32603: two-pour — submit the canonical child first (VALID, writes SYS_NUMBER_2_HASH
+///    occupancy), then the same-height sibling (canonical read from vector `_op_canonical`;
+///    Task 5 chain_fork_* carriers use the same schema)
+///  - INVALID: assert status + latestValidHash(=parent or null) + validationError substring
 void runInvalidVector(std::string const& id)
 {
     auto sample =
@@ -553,14 +559,16 @@ void runInvalidVector(std::string const& id)
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
     const auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
     const auto classification = fisco["classification"].asString();
-    // Task 4 consumer gate：executor-consumer 向量（非 decode 类）的 validation_error_contains
-    // 是 T8n 执行层 throw 消息——引擎 RTTI-bypass 把它折叠成通用消息，子串断言必然失配。
-    // consumer=="both"（blob）时 decode 消息是可靠 engine 面，仍须断言。缺省视 engine。
+    // Task 4 consumer gate: for executor-consumer vectors (non-decode class), the
+    // validation_error_contains is a T8n execution-layer throw message, which the engine's
+    // RTTI-bypass folds into a generic message, so a substring assertion would always
+    // mismatch. For consumer=="both" (blob) the decode message is a reliable engine-side
+    // string and must still be asserted. Default treated as engine.
     const auto consumer = fisco.get("consumer", "engine").asString();
 
     if (classification == "SYNCING")
     {
-        // ⚠️ 不登记 parent——parentHash 损坏/断链向量的意图就是 parent 未知
+        // Warning: do not register the parent — a corrupted/broken parentHash vector intends parent unknown
         w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
         auto params = w6test::makeInvalidParamsJson(sample);
         auto request = bcos::rpc::parseNewPayloadRequest(
@@ -572,7 +580,7 @@ void runInvalidVector(std::string const& id)
         return;
     }
 
-    // 非 SYNCING：先 seed pre + 登记 parent（parentHash 自洽损坏后是已知合法祖先）
+    // Non-SYNCING: seed pre + register parent first (after self-consistent corruption, parentHash is a known valid ancestor)
     w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto parentHash = parseParentHashFromPayload(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, parentHash, 0);
@@ -589,10 +597,12 @@ void runInvalidVector(std::string const& id)
             BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, version)),
                 bcos::engine::UnsupportedFork);
         }
-        else  // -32603：两投——先投 canonical 子块（VALID，写 SYS_NUMBER_2_HASH 占用），再投 sibling
+        else  // -32603: two-pour — submit canonical child first (VALID, writes SYS_NUMBER_2_HASH occupancy), then sibling
         {
-            // canonical 兄弟必须随向量携带（Task 5 chain_fork_* carrier 同 schema）。缺 =
-            // 畸形语料：单投 sibling 是 VALID 不抛，静默跳过会给误导性失败——响亮点名 schema 违例。
+            // The canonical sibling must travel with the vector (Task 5 chain_fork_*
+            // carriers share the schema). Missing = malformed corpus: a single sibling
+            // submit is VALID and does not throw, so a silent skip would give a
+            // misleading failure — fail loudly with a named schema violation.
             BOOST_REQUIRE_MESSAGE(sample.vector.isMember("_op_canonical"),
                 id << ": -32603 vector must carry _op_canonical (two-pour canonical sibling)");
             w6test::InvalidSample canonicalSample;
@@ -616,7 +626,7 @@ void runInvalidVector(std::string const& id)
         return;
     }
 
-    // INVALID（默认路径）
+    // INVALID (default path)
     auto params = w6test::makeInvalidParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(
         params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
@@ -624,8 +634,9 @@ void runInvalidVector(std::string const& id)
     BOOST_CHECK_MESSAGE(static_cast<int>(status.status) ==
                             static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),
         id << ": expected INVALID, got " << static_cast<int>(status.status));
-    // INVALID 向量必须声明 latest_valid_hash（"parent"|null）；缺 = 畸形语料，响亮失败
-    // 而非把缺字段读成 null 断言错东西（stateRoot 损坏返回 parent 会假失败且信息误导）。
+    // An INVALID vector must declare latest_valid_hash ("parent"|null); missing =
+    // malformed corpus, fail loudly rather than reading the missing field as null and
+    // asserting the wrong thing (stateRoot corruption returning parent would false-fail misleadingly).
     if (!fisco.isMember("latest_valid_hash"))
     {
         BOOST_ERROR(id << ": malformed vector — fisco.latest_valid_hash missing for INVALID");
@@ -651,10 +662,11 @@ void runInvalidVector(std::string const& id)
     }
 }
 
-/// manifest 一行 → 无效向量 stem。⚠️ 必须剥掉 `.json` 后缀：manifest.txt 条目是 `xxx.json`，
-/// 而 `loadInvalidSample`（GoldenSample.h）会再拼 `OP_T8N_VECTORS_DIR + "/" + id + ".json"`——
-/// 不剥则 `vectors/invalid_xxx.json.json` 硬崩。返回空串表示该行不构成无效向量条目
-/// （注释/空白/非 `invalid_` 前缀）。
+/// One manifest line -> invalid-vector stem. Warning: must strip the `.json` suffix —
+/// manifest.txt entries are `xxx.json`, and `loadInvalidSample` (GoldenSample.h) re-appends
+/// `OP_T8N_VECTORS_DIR + "/" + id + ".json"`, so not stripping would hard-crash on
+/// `vectors/invalid_xxx.json.json`. Returns an empty string when the line is not an
+/// invalid-vector entry (comment/blank/non-`invalid_` prefix).
 std::string invalidStemFromManifestLine(std::string line)
 {
     const auto b = line.find_first_not_of(" \t\r");
@@ -671,8 +683,9 @@ std::string invalidStemFromManifestLine(std::string line)
     return line;
 }
 
-/// manifest.txt 内 `invalid_*` 子集（Task 1 loadManifest 同款逻辑，条目存 stem 无 `.json`）。
-/// Task 3 语料落地前为空集 → InvalidVectorsFromManifest 零迭代（前向兼容钩子）。
+/// The `invalid_*` subset of manifest.txt (same logic as Task 1 loadManifest; entries are
+/// stored as stems without `.json`). Empty before Task 3 corpus lands -> zero iterations
+/// of InvalidVectorsFromManifest (forward-compat hook).
 std::set<std::string> loadInvalidManifest()
 {
     std::set<std::string> names;
@@ -741,14 +754,15 @@ BOOST_AUTO_TEST_CASE(IsthmusBigBlock130tx)
     runGoldenVector("isthmus_big_block_130tx");
 }
 
-// B-7：单 fork isthmus 的 system-call 顺序可观测向量（W5 审查 A#1 定 id）。顺序错 →
-// L1 读者 REVERT → stateRoot 失配 → VALID 断言+七项断言变红。
+// B-7: single-fork isthmus system-call-order observable vector (id set by W5 review A#1).
+// Wrong order -> L1 reader REVERT -> stateRoot mismatch -> VALID assertion + seven-field
+// assertions turn red.
 BOOST_AUTO_TEST_CASE(SystemCallOrderObservable)
 {
     runGoldenVector("isthmus_system_call_order_observable");
 }
 
-// ── 全部 33 向量（16 isthmus + 17 jovian），每个一行 ──
+// ── all 33 vectors (16 isthmus + 17 jovian), one per line ──
 BOOST_AUTO_TEST_CASE(IsthmusAccessList)
 {
     runGoldenVector("isthmus_access_list");
@@ -846,8 +860,8 @@ BOOST_AUTO_TEST_CASE(JovianTxReverted)
     runGoldenVector("jovian_tx_reverted");
 }
 
-// ── 引擎门 probe（Task 2 gate 1）：5 个预编译代表向量（over-cap/7702/Jovian/value/成功 output
-// 五风险面）──
+// ── Engine-gate probe (Task 2 gate 1): 5 representative precompile vectors ─────────
+// (five risk faces: over-cap / 7702 / Jovian / value / successful output)
 BOOST_AUTO_TEST_CASE(IsthmusPrecompileBn256PairNorm)
 {
     runGoldenVector("isthmus_precompile_bn256pair_norm");
@@ -869,8 +883,8 @@ BOOST_AUTO_TEST_CASE(IsthmusPrecompileEcrecover)
     runGoldenVector("isthmus_precompile_ecrecover");
 }
 
-// 注：前 9 个样例 case 已覆盖 9 个向量；上面补全的 24 个 case 覆盖剩余 24 个，合计 33。
-// 全量清单（16 isthmus + 17 jovian）：
+// Note: the first 9 sample cases cover 9 vectors; the 24 above-completed cases cover the
+// remaining 24, totaling 33. Full list (16 isthmus + 17 jovian):
 //   isthmus: access_list, big_block_130tx, contract_create, contract_logs, deposit_failed,
 //            deposit_mint, deposit_only, empty_account_cleanup, fee_env_observer,
 //            message_passer_write, setcode_7702, setcode_7702_skips, system_contracts_real,
@@ -879,27 +893,28 @@ BOOST_AUTO_TEST_CASE(IsthmusPrecompileEcrecover)
 //            deposit_only, empty_account_cleanup, fee_env_observer, first_block,
 //            message_passer_write, setcode_7702, setcode_7702_skips, system_contracts_real,
 //            transfer_basic, transfer_multi, tx_reverted
-// 样例 case（9）：JovianDepositOnly/JovianTransferMulti/JovianDaMix/JovianFirstBlock/
+// Sample cases (9): JovianDepositOnly/JovianTransferMulti/JovianDaMix/JovianFirstBlock/
 //   IsthmusDepositOnly/IsthmusTransferMulti/IsthmusSetcode7702/IsthmusTxReverted/IsthmusBigBlock130tx
-// 补全 case（24）：其余全部。⚠️ 命名冲突注意：BOOST_AUTO_TEST_CASE 名不可重复——
-// 补全段的 24 个 case 名已刻意避开前 9 个样例 case 名（R2-D 实测：与既有 107 个 case 名、
-// 计划内 33 个 case 名均零冲突）。
-// 链式双块：一个 case（runChainedPair）同流执行 chainA+chainB（先 B SYNCING → A VALID → B VALID）。
+// Completion cases (24): all the rest. Warning: BOOST_AUTO_TEST_CASE names must not repeat —
+// the 24 completion-case names deliberately avoid the 9 sample-case names (verified by
+// R2-D: zero collisions with the existing 107 case names or the planned 33).
+// Chained pair: one case (runChainedPair) runs chainA+chainB in one flow (B SYNCING -> A VALID -> B VALID).
 BOOST_AUTO_TEST_CASE(ChainedAB)
 {
     runChainedPair("chainA", "chainB");
 }
 
-// B-5c：jovian 链式对。runChainedPair 内断言 block2 VALID = step 3a-2 baseFee 一致性校验
-// 通过即验证 max 分支（baseFee 按父块推导 + 上取整封顶）。
+// B-5c: jovian chained pair. runChainedPair's block2 VALID assertion = step 3a-2 baseFee
+// consistency check passing, which exercises the max branch (baseFee derived from the
+// parent block + capped by rounding up).
 BOOST_AUTO_TEST_CASE(JovianChainedAB)
 {
     runChainedPair("jovianChainA", "jovianChainB");
 }
-// ── Task 4 补全：24 个 precompile 矩阵向量（brief 附录 A id→用例名映射）──
-// Task 2 的 5 个
-// probe（bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/ecrecover）
-// 已覆盖五风险面；此段补全其余 24 个，合计 29 个 precompile 用例。
+// ── Task 4 completion: 24 precompile matrix vectors (brief appendix A id->case mapping) ──
+// Task 2's 5 probes (bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/
+// ecrecover) already covered the five risk faces; this section completes the remaining 24,
+// totaling 29 precompile cases.
 BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlake2f)
 {
     runGoldenVector("isthmus_precompile_blake2f");
@@ -997,16 +1012,17 @@ BOOST_AUTO_TEST_CASE(JovianPrecompileWrapValueRevert)
     runGoldenVector("jovian_precompile_wrap_value_revert");
 }
 
-// 最终校验：65 用例 = 63 单向量 + 2 链式对（chainA/B + jovianChainA/B，覆盖 4 个链式样本）。
-// 63 单向量 = 34 基础向量（33 + isthmus_system_call_order_observable）
-//   + 29 precompile（Task 2 probe 5 + Task 4 补全 24）。
+// Final tally: 65 cases = 63 single vectors + 2 chained pairs (chainA/B + jovianChainA/B,
+// covering 4 chained samples). 63 single = 34 base vectors (33 +
+// isthmus_system_call_order_observable) + 29 precompile (Task 2 probes 5 + Task 4 completion 24).
 
-// ── Task 2：E2E 无效向量 runner（分类驱动）──
-// 内联自测向量（Task 2 不依赖 Task 3 语料文件）：分类驱动 runner 四分支全覆盖——
-//   INVALID（stateRoot 自洽损坏 + latestValidHash=parent + "stateRoot"）
-//   SYNCING（parentHash 断链 → 不登记 parent）
-//   -38005（Isthmus+ timestamp + version≠4 → UnsupportedFork）
-//   -32603（同父双子：先 canonical VALID 写 SYS_NUMBER_2_HASH 占用，再 sibling → 两投）
+// ── Task 2: E2E invalid-vector runner (classification-driven) ──
+// Inline self-test vectors (Task 2 does not depend on Task 3 corpus files): the
+// classification-driven runner covers all four branches —
+//   INVALID (stateRoot self-consistent corruption + latestValidHash=parent + "stateRoot")
+//   SYNCING (parentHash broken chain -> do not register parent)
+//   -38005 (Isthmus+ timestamp + version!=4 -> UnsupportedFork)
+//   -32603 (same-parent twins: canonical VALID writes SYS_NUMBER_2_HASH occupancy, then sibling -> two-pour)
 BOOST_AUTO_TEST_CASE(InvalidStateRootRejected)
 {
     runInvalidVector("inline_invalid_stateRoot");
@@ -1027,14 +1043,15 @@ BOOST_AUTO_TEST_CASE(InvalidSiblingForkRejected)
     runInvalidVector("inline_invalid_siblingFork");
 }
 
-// Task 4 gate 回归：executor-consumer 向量跳过 validation_error_contains 断言（引擎
-// RTTI-bypass 折叠 T8n 消息），但 INVALID 分类 + latest_valid_hash=parent 仍须断言。
+// Task 4 gate regression: executor-consumer vectors skip the validation_error_contains
+// assertion (engine RTTI-bypass folds T8n messages), but INVALID classification +
+// latest_valid_hash=parent must still be asserted.
 BOOST_AUTO_TEST_CASE(ExecutorConsumerSkipsMessageAssertion)
 {
     runInvalidVector("inline_invalid_executorStateRoot");
 }
 
-// Step 5：manifest 子集遍历（invalid_*.json）。Task 3 语料落地前为空集 → 零迭代（前向兼容）。
+// Step 5: manifest subset iteration (invalid_*.json). Empty before Task 3 corpus lands -> zero iterations (forward compat).
 BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
 {
     for (auto const& id : loadInvalidManifest())
@@ -1043,28 +1060,30 @@ BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
     }
 }
 
-// 回归（审查 Important）：manifest 条目是 `invalid_xxx.json`，loadInvalidSample 会再拼 `.json`。
-// invalidStemFromManifestLine 必须剥后缀——否则 runInvalidVector 得 `vectors/invalid_xxx.json.json`
-// → loadJsonFile 硬崩。证明 manifest→load 路径不再拼重。
+// Regression (review Important): manifest entries are `invalid_xxx.json`, and
+// loadInvalidSample re-appends `.json`. invalidStemFromManifestLine must strip the suffix —
+// otherwise runInvalidVector gets `vectors/invalid_xxx.json.json` -> loadJsonFile hard crash.
+// Proves the manifest->load path no longer double-appends.
 BOOST_AUTO_TEST_CASE(InvalidManifestStemStripsJsonSuffix)
 {
-    // 真实 manifest 行形状 → stem 无后缀（loadInvalidSample 拼回后 = 原文件名）
+    // Real manifest line shape -> stem without suffix (loadInvalidSample re-appends to the original filename)
     BOOST_CHECK_EQUAL(
         invalidStemFromManifestLine("invalid_inline_stateRoot.json"), "invalid_inline_stateRoot");
     BOOST_CHECK_EQUAL(
         invalidStemFromManifestLine("  invalid_foo_static_3.json  "), "invalid_foo_static_3");
-    // 非 invalid_ 前缀 / 注释 / 空白 → 不进子集
+    // non-invalid_ prefix / comment / blank -> not in the subset
     BOOST_CHECK_EQUAL(invalidStemFromManifestLine("jovian_deposit_only.json"), "");
     BOOST_CHECK_EQUAL(invalidStemFromManifestLine("# comment"), "");
     BOOST_CHECK_EQUAL(invalidStemFromManifestLine("   "), "");
     BOOST_CHECK_EQUAL(invalidStemFromManifestLine(""), "");
 }
 
-// ── Task 6 Step 2：覆盖矩阵断言（manifest 注册子集驱动）──────────────────
-// 遍历 manifest 内 invalid_* 向量 + Task 2 内联向量，断言必达集全部被覆盖（缺 → FAILURE）：
-//   每 classification（含 -38005——Task 2 version 向量满足；-32603 两投 runner 满足）、
-//   每 latest_valid_hash 值（"parent"|null）、每 §4c 静态项（除 item 3/12——loader 不可表达
-//   强制不入 manifest）、每 validation_error_contains 目标串。
+// ── Task 6 Step 2: coverage-matrix assertion (manifest-registered subset driven) ─────
+// Iterates manifest invalid_* vectors + Task 2 inline vectors, asserting every required
+// set member is covered (missing -> FAILURE): each classification (incl. -38005 — satisfied
+// by the Task 2 version vector; -32603 satisfied by the two-pour runner), each
+// latest_valid_hash value ("parent"|null), each static item (except 3/12 — inexpressible
+// through the loader, forced out of manifest), each validation_error_contains target string.
 BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
 {
     const auto names = loadInvalidManifest();
@@ -1089,7 +1108,7 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         if (pos != std::string::npos)
             staticItems.insert(std::stoi(id.substr(pos + 8)));
     }
-    // Task 2 内联向量（-38005 / 两投 -32603 / SYNCING 由内联满足；不在 manifest）。
+    // Task 2 inline vectors (-38005 / two-pour -32603 / SYNCING satisfied inline; not in manifest).
     for (auto const* id : {"inline_invalid_stateRoot", "inline_invalid_parentUnknown",
              "inline_invalid_unsupportedFork", "inline_invalid_siblingFork"})
     {
@@ -1100,23 +1119,23 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
             lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
                                                              fisco["latest_valid_hash"].asString());
     }
-    // 必达：classification（四态全盖）
+    // Required: classification (all four states covered)
     for (auto const* c : {"INVALID", "SYNCING", "-38005", "-32603"})
         BOOST_CHECK_MESSAGE(classifications.count(c),
             "coverage: classification '" << c << "' has no vector");
-    // 必达：latest_valid_hash（"parent" 与 null 两值）
+    // Required: latest_valid_hash (both "parent" and null values)
     for (auto const* h : {"parent", "null"})
         BOOST_CHECK_MESSAGE(lvh.count(h),
             "coverage: latest_valid_hash '" << h << "' has no vector");
-    // 必达：§4c 静态项 1..11（除 3/12——强制不入 manifest）
+    // Required: static items 1..11 (except 3/12 — forced out of manifest)
     for (int n : {1, 2, 4, 5, 6, 7, 8, 9, 10, 11})
         BOOST_CHECK_MESSAGE(staticItems.count(n),
             "coverage: static item " << n << " has no vector");
     BOOST_CHECK_MESSAGE(!staticItems.count(3),
-        "coverage: static item 3 must NOT be manifest-registered (loader 不可表达)");
+        "coverage: static item 3 must NOT be manifest-registered (loader inexpressible)");
     BOOST_CHECK_MESSAGE(!staticItems.count(12),
-        "coverage: static item 12 must NOT be manifest-registered (loader 不可表达)");
-    // 必达：validation_error_contains 目标串全集（corrupt 字段 / 静态面 / invalid-tx 消息）
+        "coverage: static item 12 must NOT be manifest-registered (loader inexpressible)");
+    // Required: full set of validation_error_contains target strings (corrupt fields / static faces / invalid-tx messages)
     static const char* kRequiredErrors[] = {
         "stateRoot", "gasUsed", "receiptsRoot",
         "blockHash does not match the reconstructed block header",
@@ -1147,16 +1166,17 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
-// ── FCU 端到端 6 用例（/loop 审计缺口：真实 updateForkchoice OP 语义零覆盖）──
-// 对照 op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated 判定：
-//   head 已知 → VALID + LatestValidHash=head（api.go:316-322 valid()）
-//   head 未知 → STATUS_SYNCING（api.go:238 网络拉取）
-//   OP + attributes → -38003（checkOptimismPayloadAttributes 拒绝对,本仓库
-//   UnsupportedOpPayloadAttributes） 单调性 finalized>head → -38002（api.go safe/finalized
-//   校验,本仓库 InvalidForkchoiceState :263-280） head 递增必须恰好 +1（:318-323） 无 attributes →
-//   head/safe/finalized 推进（updateTrackedBlockNumbers :1520-1525）
+// ── FCU end-to-end 6 cases (/loop audit gap: zero coverage of real updateForkchoice OP semantics) ──
+// Mirrors op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated semantics:
+//   head known -> VALID + LatestValidHash=head (api.go:316-322 valid())
+//   head unknown -> STATUS_SYNCING (api.go:238 network pull)
+//   OP + attributes -> -38003 (checkOptimismPayloadAttributes rejects; here
+//   UnsupportedOpPayloadAttributes)  monotonicity finalized>head -> -38002 (api.go
+//   safe/finalized checks; here InvalidForkchoiceState :263-280)  head increment must be
+//   exactly +1 (:318-323)  no attributes -> head/safe/finalized advance
+//   (updateTrackedBlockNumbers :1520-1525)
 
-// ① head 已知 → VALID + LatestValidHash=head（对照 op-geth valid()）
+// ① head known -> VALID + LatestValidHash=head (mirrors op-geth valid())
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -1170,11 +1190,11 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
     BOOST_CHECK_EQUAL(*state.latestValidHash, blockHash);
 }
 
-// ② head 未知 → SYNCING（对照 op-geth STATUS_SYNCING；getBlockNumber 无值 → :253-262）
+// ② head unknown -> SYNCING (mirrors op-geth STATUS_SYNCING; getBlockNumber has no value -> :253-262)
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
 {
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(/*jovian=*/false));
-    bcos::h256 unknownHash(0xdeadbeef);  // 未登记任何块
+    bcos::h256 unknownHash(0xdeadbeef);  // no block registered
     auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
         bcos::engine::ForkchoiceState{unknownHash, unknownHash, unknownHash}, nullptr,
         /*version=*/3));
@@ -1183,8 +1203,9 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
         static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
 }
 
-// ③ OP attributes → -38003（UnsupportedOpPayloadAttributes；对照 op-geth attributes 拒绝）。
-// 注意：forkchoice 状态更新先生效、构建才被拒（EngineServiceImpl.h:356-359 设计 §6.2）。
+// ③ OP attributes -> -38003 (UnsupportedOpPayloadAttributes; mirrors op-geth attribute rejection).
+// Note: the forkchoice state update takes effect first, then the build is rejected
+// (EngineServiceImpl.h:356-359).
 BOOST_AUTO_TEST_CASE(ForkchoiceAttributesRejected)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -1196,40 +1217,41 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttributesRejected)
         bcos::engine::UnsupportedOpPayloadAttributes);
 }
 
-// ④ finalized > head → InvalidForkchoiceState（-38002 单调性；对照 updateForkchoice :263-280）
+// ④ finalized > head -> InvalidForkchoiceState (-38002 monotonicity; mirrors updateForkchoice :263-280)
 BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
-    // 手动登记一个更高编号"已知"块供 finalized 用（registerVerifiedBlock 写 SYS_HASH_2_NUMBER）
+    // Manually register a higher-numbered "known" block for finalized (registerVerifiedBlock writes SYS_HASH_2_NUMBER)
     bcos::h256 higherBlock("0x9999999999999999999999999999999999999999999999999999999999999999");
     registerVerifiedBlock(fixture->multiLayerStorage, higherBlock, number + 2);
-    // finalized(编号 number+2) > head(编号 number) → :269-274 抛 InvalidForkchoiceState
+    // finalized (number+2) > head (number) -> throws InvalidForkchoiceState at :269-274
     BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
                           bcos::engine::ForkchoiceState{blockHash, blockHash, higherBlock}, nullptr,
                           /*version=*/3)),
         bcos::engine::InvalidForkchoiceState);
 }
 
-// ⑤ head 递增必须恰好 +1：跳号（缺中间块）→ 冲突；严格 +1 → VALID（对照 :318-323）
+// ⑤ head increment must be exactly +1: skipping (missing middle block) -> conflict; strict +1 -> VALID (mirrors :318-323)
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
 {
     auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
-    // 第一次 FCU(head=块1) → VALID（tracked head 设为块1,编号 n1）
+    // First FCU(head=block1) -> VALID (tracked head set to block1, number n1)
     auto [s1, p1] = bcos::task::syncWait(fixture->service.updateForkchoice(
         bcos::engine::ForkchoiceState{blockHash1, blockHash1, blockHash1}, nullptr,
         /*version=*/3));
     (void)p1;
     BOOST_CHECK_EQUAL(static_cast<int>(s1.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
-    // 跳号：直接 FCU 指向编号 n1+2 的已登记块（未登记 n1+1）→ :318-323 "must increase by
-    // exactly 1" 抛 InvalidForkchoiceState（抛在 m_trackedHeadBlock 赋值前,tracked 仍为 n1）
+    // Skipping: FCU straight to the registered block n1+2 (n1+1 not registered) ->
+    // :318-323 "must increase by exactly 1" throws InvalidForkchoiceState (thrown before
+    // m_trackedHeadBlock is assigned; tracked remains n1)
     bcos::h256 jumpBlock("0x8888888888888888888888888888888888888888888888888888888888888888");
     registerVerifiedBlock(fixture->multiLayerStorage, jumpBlock, n1 + 2);
     BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
                           bcos::engine::ForkchoiceState{jumpBlock, jumpBlock, jumpBlock}, nullptr,
                           /*version=*/3)),
         bcos::engine::InvalidForkchoiceState);
-    // 严格 +1：登记编号 n1+1 的块 → VALID（tracked head 从 n1 递增到 n1+1）
+    // Strict +1: register block n1+1 -> VALID (tracked head advances from n1 to n1+1)
     bcos::h256 nextBlock("0x7777777777777777777777777777777777777777777777777777777777777777");
     registerVerifiedBlock(fixture->multiLayerStorage, nextBlock, n1 + 1);
     auto [s2, p2] = bcos::task::syncWait(fixture->service.updateForkchoice(
@@ -1239,8 +1261,8 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
 }
 
-// ⑥ 无 attributes → head 推进（getSafe/Finalized 反映；对照 updateForkchoice :334-338 +
-// updateTrackedBlockNumbers :1520-1525）
+// ⑥ no attributes -> head advance (getSafe/Finalized reflect it; mirrors updateForkchoice
+// :334-338 + updateTrackedBlockNumbers :1520-1525)
 BOOST_AUTO_TEST_CASE(ForkchoiceNoAttributesHeadAdvance)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -1249,7 +1271,7 @@ BOOST_AUTO_TEST_CASE(ForkchoiceNoAttributesHeadAdvance)
     (void)payloadId;
     BOOST_CHECK_EQUAL(static_cast<int>(state.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
-    // safe/finalized 同步到 FCU 传入的编号（内存态;FCU 无持久化）
+    // safe/finalized sync to the FCU-passed numbers (in-memory; FCU has no persistence)
     auto safe = fixture->service.getSafeBlockNumber();
     auto finalized = fixture->service.getFinalizedBlockNumber();
     BOOST_REQUIRE(safe.has_value());

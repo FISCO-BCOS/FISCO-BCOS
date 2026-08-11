@@ -1,9 +1,12 @@
-// Task 4 gate 1: 零费用 spike 可行性。在「无 L1Block predeploy → loadOpFeeParams 读零槽」的前提下，
-// 验证真实 opValidate/opTransition 路径对 evmone test::TestState 可用。
-// 四测全绿 → spike 成立（Task 5 进入条件）；任一失败 → spike 不成立（Phase 1 收敛为纯基线）。
+// Task 4 gate 1: zero-fee spike feasibility. Under the premise "no L1Block predeploy ->
+// loadOpFeeParams reads zero slots", verifies the real opValidate/opTransition path works
+// on evmone test::TestState.
+// All four tests green -> spike holds (Task 5 entry condition); any failure -> spike does
+// not hold (Phase 1 converges to a pure baseline).
 //
-// 注：本文件是独立 TU，blk()/baseTx() 从 OpValidateTest.cpp 拷入并按 OpTransitionTest.cpp 模式适配
-// （blk() 增 coinbase = OP_SEQUENCER_FEE_VAULT，令 priority tip 落到可断言的具名金库）。
+// Note: this file is an independent TU; blk()/baseTx() are copied from OpValidateTest.cpp
+// and adapted to the OpTransitionTest.cpp pattern (blk() adds coinbase =
+// OP_SEQUENCER_FEE_VAULT so the priority tip lands in an assertable named vault).
 #include "OpTestReceiptFactory.h"
 #include "StateDiffWriteback.h"
 #include "TestPrinters.h"
@@ -27,7 +30,7 @@ namespace
 {
 constexpr auto kSender = 0x1000000000000000000000000000000000000001_address;
 constexpr auto kRecipient = 0x2000000000000000000000000000000000000002_address;
-constexpr auto kSenderBalance = 1000000000000000000_u256;  // 1 ETH（显式 wei；_ether 字面量不存在）
+constexpr auto kSenderBalance = 1000000000000000000_u256;  // 1 ETH (explicit wei; no _ether literal)
 
 state::BlockInfo blk()
 {
@@ -36,7 +39,7 @@ state::BlockInfo blk()
     b.gas_limit = 30000000;
     b.base_fee = 7;
     b.coinbase =
-        OP_SEQUENCER_FEE_VAULT;  // 适配：priority tip 计入 sequencer 金库（OpTransitionTest 同款）
+        OP_SEQUENCER_FEE_VAULT;  // adaptation: priority tip lands in the sequencer vault (same as OpTransitionTest)
     return b;
 }
 
@@ -55,7 +58,7 @@ state::Transaction baseTx()
 
 BOOST_AUTO_TEST_SUITE(OpZeroFeeSpikeTests)
 
-// 1) 零槽 → 零费用：TestState 不插入 OP_L1_BLOCK → loadOpFeeParams 全零
+// 1) zero slots -> zero fees: TestState does not insert OP_L1_BLOCK -> loadOpFeeParams is all zero
 BOOST_AUTO_TEST_CASE(loadOpFeeParams_reads_zero_without_L1Block)
 {
     evmone::test::TestState ts;
@@ -69,7 +72,7 @@ BOOST_AUTO_TEST_CASE(loadOpFeeParams_reads_zero_without_L1Block)
     BOOST_CHECK_EQUAL(fee.da_footprint_gas_scalar, 0u);
 }
 
-// 2) 零费用参数 → 零 cost：flzLen>0 路径
+// 2) zero fee params -> zero costs: flzLen>0 path
 BOOST_AUTO_TEST_CASE(zero_fee_params_produce_zero_costs)
 {
     evmone::test::TestState ts;
@@ -79,40 +82,40 @@ BOOST_AUTO_TEST_CASE(zero_fee_params_produce_zero_costs)
     BOOST_CHECK_EQUAL(computeOperatorCost(fee, /*gas=*/21000, isthmus), 0);
 }
 
-// 3) opValidate 零费用余额检查通过：普通转账（sender 1 ETH），dummy 非空 envelope
+// 3) opValidate zero-fee balance check passes: plain transfer (sender 1 ETH), dummy non-empty envelope
 BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance};  // 必须插入 sender，否则 get_account 缺失 balance=0
-                                                // 必拒
+    ts[kSender] = {.balance = kSenderBalance};  // sender must be inserted; otherwise get_account returns balance=0
+                                                // and the balance check rejects
     auto isthmus = isthmusConfig();
     auto block = blk();
     auto tx = baseTx();
-    evmc::bytes envelope{0x02};  // dummy 非空即可，无需真实签名
+    evmc::bytes envelope{0x02};  // dummy non-empty suffices; no real signature needed
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(props));
 }
 
-// 4) 端到端：opTransition 执行 + .apply(diff) 写回 + post 断言——gate 才真正验证 spike 前提
+// 4) End-to-end: opTransition executes + .apply(diff) write-back + post assertions — only here does the gate truly verify the spike premise
 BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
 {
     evmone::test::TestState ts;
     ts[kSender] = {.balance = kSenderBalance};
     ts[kRecipient] = {};
     auto isthmus = isthmusConfig();
-    auto vm = evmc::VM{evmc_create_evmone()};  // opTransition 签名取 evmc::VM&（evmone::VM 是 C
-                                               // 结构体派生类，不适用）
+    auto vm = evmc::VM{evmc_create_evmone()};  // opTransition signature takes evmc::VM& (evmone::VM is a C
+                                               // struct-derived class, not applicable)
     auto block = blk();
     test::TestBlockHashes hashes;
     auto tx = baseTx();
-    tx.to = kRecipient;  // 使「recipient 余额 +value」断言有意义（baseTx 无 to=CREATE）
+    tx.to = kRecipient;  // makes the "recipient balance +value" assertion meaningful (baseTx has no to=CREATE)
     tx.value = intx::uint256{12345};
     evmc::bytes envelope{0x02};
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(props));
     auto const& p = std::get<OpTxProperties>(props);
 
-    // 零费用前提（validate 侧）：无 L1Block → l1_cost / operator_cost 均为 0。
+    // Zero-fee premise (validate side): no L1Block -> l1_cost / operator_cost are both 0.
     BOOST_CHECK_EQUAL(p.l1_cost, intx::uint256{0});
     BOOST_CHECK_EQUAL(p.operator_cost_at_gas_limit, intx::uint256{0});
 
@@ -122,11 +125,11 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
-    // ---- 断言值推导（自 blk()/baseTx()/OpTransition.cpp:237-323）----
-    //   blk().base_fee = 7；tx.max_gas_price = 1000，tx.max_priority_gas_price = 10
+    // ---- assertion-value derivation (from blk()/baseTx()/OpTransition.cpp:237-323) ----
+    //   blk().base_fee = 7; tx.max_gas_price = 1000, tx.max_priority_gas_price = 10
     //   priority = min(max_priority, max_gas - base_fee) = min(10, 993) = 10
     //   effective_gas_price = base_fee + priority = 17
-    //   纯 EOA 转账（空 calldata）→ gas_used = intrinsic = 21000（EIP-7623 floor 亦 21000）
+    //   plain EOA transfer (empty calldata) -> gas_used = intrinsic = 21000 (EIP-7623 floor also 21000)
     const auto gasUsed = intx::uint256{static_cast<uint64_t>(txR->gasUsed())};
     BOOST_CHECK_EQUAL(gasUsed, intx::uint256{21000});
     const auto priority = std::min(intx::uint256{tx.max_priority_gas_price},
@@ -135,17 +138,19 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
     BOOST_CHECK_EQUAL(priority, intx::uint256{10});
     BOOST_CHECK_EQUAL(effective, intx::uint256{17});
 
-    // sender 净扣款 = gas_used * effective + value（L1/operator 均为 0；value 在 host.call
-    // 内转移）。
+    // sender net debit = gas_used * effective + value (L1/operator both 0; value is
+    // transferred inside host.call).
     BOOST_CHECK_EQUAL(
         ts.at(kSender).balance, kSenderBalance - gasUsed * effective - intx::uint256{tx.value});
-    // recipient 收到转移的 value。
+    // recipient receives the transferred value.
     BOOST_CHECK_EQUAL(ts.at(kRecipient).balance, intx::uint256{tx.value});
-    // base_fee 部分燃烧入 OP_BASE_FEE_VAULT；tip 入 coinbase（sequencer 金库）。
+    // the base_fee portion burns into OP_BASE_FEE_VAULT; the tip goes to coinbase (sequencer vault).
     BOOST_CHECK_EQUAL(ts.at(OP_BASE_FEE_VAULT).balance, gasUsed * intx::uint256{block.base_fee});
     BOOST_CHECK_EQUAL(ts.at(OP_SEQUENCER_FEE_VAULT).balance, gasUsed * priority);
-    // 零 L1/operator 费：两金库被 touch 但 credit 0 → build_diff 视作空账户删除、被
-    // sanitizeStateDiff 剥离（view 中无此账户）→ 写回后不存在。这正是「零费用」的状态可见形态。
+    // Zero L1/operator fee: both vaults are touched but credited 0 -> build_diff treats
+    // them as empty-account deletions, stripped by sanitizeStateDiff (absent from the
+    // view) -> they do not exist after write-back. This is the observable state shape of
+    // "zero fees".
     BOOST_CHECK(ts.find(OP_L1_FEE_VAULT) == ts.end());
     BOOST_CHECK(ts.find(OP_OPERATOR_FEE_VAULT) == ts.end());
 }

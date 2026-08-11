@@ -41,8 +41,9 @@ struct OpTxProperties
     // forced to 0) and transition under Jovian would otherwise report a da_footprint_gas_scalar
     // for a transaction the Ecotone L1 formula priced, with da_footprint computed from flz_len 0.
     bool has_da_footprint = false;
-    // Ecotone 公式下的 calldataGasUsed（= zeroes*4 + ones*16）；Fjord+ 下不填（用 flz_len 走 Fjord 公式）。
-    // validate 时快照（envelope 在此可用），transition 时 deriveOpReceiptMeta 读取——保持 no-cfg 不变量。
+    // calldataGasUsed under the Ecotone formula (= zeroes*4 + ones*16); not filled under Fjord+
+    // (flz_len drives the Fjord formula). Snapshot at validate time (the envelope is available
+    // here); read by deriveOpReceiptMeta at transition -- preserving the no-cfg invariant.
     std::optional<uint64_t> ecotone_calldata_gas_used = std::nullopt;
 };
 
@@ -126,7 +127,7 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
 
 /// Fork evmone::state::transition (evmone state.cpp:561-649): buyGas adds l1Cost +
 /// operatorCost(gasLimit); Host replaced with OpHost; tail routes base/l1/operator fees to vaults.
-/// Produces a bcos::protocol::TransactionReceipt directly (方案 A 阶段 2): status/gasUsed/logs
+/// Produces a bcos::protocol::TransactionReceipt directly (option A phase 2): status/gasUsed/logs
 /// are projected onto the FISCO receipt, the OP metadata (l1/operator/DA fields) is carried via
 /// setOpStackMeta, and the effective gas price lands on the receipt's top-level effectiveGasPrice.
 /// The state diff is returned through `outStateDiff` (the FISCO receipt interface has no field

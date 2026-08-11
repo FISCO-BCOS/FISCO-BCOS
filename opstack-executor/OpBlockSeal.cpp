@@ -79,12 +79,12 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
         {
             ++first;
         }
-        // ⚠️ op-geth 的 storage-trie leaf value = rlp(trimmed value)（trie/secure_trie.go
-        // UpdateStorage: v,_ := rlp.EncodeToBytes(value) 后再入 trie），即 leaf 内是
-        // rlp(trim) 的字节串，相对 trim 是二次 RLP。本函数旧实现把 raw trim 直接当 leaf value，
-        // 单槽时产出 d00be84d… 而非 op-geth 的 02dffd0c…（W6 L2 message_passer_write 暴露）。
-        // 与 accountStorageRoot（adapter/StateRootCompute.cpp:21-22，stateRoot 据此匹配 golden）
-        // 对齐：这里先把 trim 值 rlp 编码成 leaf 字节串。
+        // op-geth's storage-trie leaf value is rlp(trimmed value) (trie/secure_trie.go
+        // UpdateStorage: v,_ := rlp.EncodeToBytes(value) enters the trie), i.e. a SECOND RLP
+        // wrapping of the trimmed bytes. The old implementation used the raw trimmed bytes as the
+        // leaf value, producing d00be84d... instead of op-geth's 02dffd0c... on single-slot
+        // accounts (exposed by the L2 message_passer_write case). Aligned with accountStorageRoot
+        // (adapter/StateRootCompute.cpp:21-22): rlp-encode the trimmed value into the leaf first.
         bcos::bytes leaf;
         bcos::codec::rlp::encode(
             leaf, bcos::bytes(value.bytes + first, value.bytes + sizeof(value.bytes)));
@@ -164,8 +164,7 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
             seal.logsBloom.bytes[i] |= bloom[i];
     }
 
-    // withdrawalsRoot / requestsHash: semantics switch starting at Isthmus (pinned by spec §4.2
-    // rev.2).
+    // withdrawalsRoot / requestsHash: semantics switch starting at Isthmus.
     if (cfg.fork >= OpFork::Isthmus)
     {
         seal.withdrawalsRoot = opStorageRoot(messagePasserStorage);

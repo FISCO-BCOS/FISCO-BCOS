@@ -56,7 +56,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
 {
     if (m_opStackMode)
     {
-        // OP 模式：区块执行由 Engine API 的 executeOpBlock 驱动；PBFT 不得双执行。
+        // OP mode: block execution is driven by the Engine API's executeOpBlock; PBFT must not execute twice.
         CONSENSUS_LOG(INFO) << LOG_DESC("PBFT executeBlock gated in OP mode (W3)")
                             << LOG_KV("proposalIndex", _proposal ? _proposal->index() : -1);
         if (_onExecuteFinished)

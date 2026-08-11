@@ -64,32 +64,31 @@ DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 
-// ---- OP-mode exceptions (task-5b, design §6.1/§6.2/§6.3) ----
+// ---- OP-mode exceptions ----
 // These carry the JSON-RPC error codes the Engine API assigns to these conditions. The mapping
-// exception-type -> code is not implemented anywhere yet on purpose: `engine_newPayloadV4` /
-// `engine_getPayloadV4` RPC endpoint registration is out of scope for this cycle (spec §6.3/§6.4
-// 欠账台账, 裁定 A6), so the OP branch is exercised by direct `EngineServiceImpl` calls and the
-// code is documentation-of-intent for whoever wires `bcos-rpc`'s EngineEndpoint later. The
-// existing generic exceptions above are in exactly the same position (no code mapping in-repo).
+// exception-type -> code is intentionally not implemented yet: `engine_newPayloadV4` /
+// `engine_getPayloadV4` RPC endpoint registration is out of scope for this cycle, so the OP
+// branch is exercised by direct `EngineServiceImpl` calls and the code is
+// documentation-of-intent for whoever wires `bcos-rpc`'s EngineEndpoint later. The existing
+// generic exceptions above are in exactly the same position (no code mapping in-repo).
 
 /// JSON-RPC -38005 "Unsupported fork": the payload timestamp's fork and the called method version
-/// disagree (design §6.1 step 1) -- Isthmus+ payloads may only arrive on V4, pre-Isthmus
-/// timestamps may not use V4.
+/// disagree -- Isthmus+ payloads may only arrive on V4, pre-Isthmus timestamps may not use V4.
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 
 /// JSON-RPC -38003 "Invalid payload attributes": an OP-mode forkchoiceUpdated carried payload
-/// attributes. Attribute-driven block building is not supported this cycle; per design §6.2 the
-/// forkchoice state update itself still takes effect (head advances), only the build is refused.
+/// attributes. Attribute-driven block building is not supported this cycle; the forkchoice state
+/// update itself still takes effect (head advances), only the build is refused.
 DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
 
-/// `getPayload` in OP mode: block *building* is not OP-ized this cycle (design §6.3), so there is
-/// no OP payload to return and the failure is reported explicitly rather than as `UnknownPayload`
-/// (which would falsely suggest an expired/unknown id).
+/// `getPayload` in OP mode: block *building* is not OP-ized this cycle, so there is no OP payload
+/// to return and the failure is reported explicitly rather than as `UnknownPayload` (which would
+/// falsely suggest an expired/unknown id).
 DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
 
 /// JSON-RPC -32603 "Internal error": an OP block execution failure the error-classification table
-/// (design §4.3/§6.1 step 4) attributes to the storage layer rather than to the block. Must never
-/// be reported as INVALID -- a storage fault is not a consensus verdict on the payload.
+/// attributes to the storage layer rather than to the block. Must never be reported as INVALID --
+/// a storage fault is not a consensus verdict on the payload.
 DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
 namespace detail
@@ -100,10 +99,10 @@ bcos::h256 syntheticHash(std::string_view seed);
 
 std::vector<std::string> supportedCapabilities();
 
-/// OP-mode capability list (task-5a, spec §6.3): `supportedCapabilities()` plus the V4
-/// entries. Selected via `if constexpr` on `EngineServiceImpl::c_opMode` in
-/// `exchangeCapabilities` below -- never reached by the generic composition root, so the
-/// generic path's capability list stays byte-for-byte the pre-existing 10 entries.
+/// OP-mode capability list: `supportedCapabilities()` plus the V4 entries. Selected via
+/// `if constexpr` on `EngineServiceImpl::c_opMode` in `exchangeCapabilities` below -- never
+/// reached by the generic composition root, so the generic path's capability list stays
+/// byte-for-byte the pre-existing 10 entries.
 std::vector<std::string> supportedOpCapabilities();
 
 bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
@@ -114,7 +113,7 @@ std::optional<std::string> validatePayloadAttributes(
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
-// ---- OP-mode helpers (task-5b, design §6.1 step 2) ----
+// ---- OP-mode helpers ----
 
 /// Bounds-checked u256 -> uint64 narrowing (nullopt when out of range). Explicit rather than a
 /// bare `convert_to`/`static_cast`: this repo has a documented silent-truncation incident with
@@ -126,19 +125,20 @@ std::optional<std::uint64_t> narrowU256ToU64(const u256& value);
 /// protocol::BlockHeader::logsBloom representation).
 bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 
-/// OP static validation (design §6.1 step 2, everything except the blockHash comparison, which
-/// needs the caller-derived transactionsRoot). Returns a field-naming validationError string on
-/// rejection. `jovianActive` selects the fork-dependent `blobGasUsed` rule (§5.1).
+/// OP static validation (everything except the blockHash comparison, which needs the
+/// caller-derived transactionsRoot). Returns a field-naming validationError string on rejection.
+/// `jovianActive` selects the fork-dependent `blobGasUsed` rule.
 std::optional<std::string> validateOpNewPayloadRequest(
     const NewPayloadRequest& request, bool jovianActive);
 
-/// Compute expected baseFeePerGas from the parent header (design §6.4 D-3).
+/// Compute expected baseFeePerGas from the parent header.
 /// Mirrors op-geth consensus/misc/eip1559/eip1559.go:CalcBaseFee, including Holocene extraData
 /// elasticity/denominator, Jovian blobGasUsed substitution, and Jovian minBaseFee floor.
 /// `parentIsJovian`/`parentIsIsthmus` derive from the parent's own timestamp — matching op-geth's
 /// `config.IsJovian(parent.Time)` / `config.IsOptimismHolocene(parent.Time)`. Reads the parent
 /// header's accessors: `extraData()` (Holocene/Jovian params), `gasLimit()`, `gasUsed()`,
-/// `blobGasUsed()`, `baseFee()` (审查修正:不读 timestamp;optional 字段须 `.value()`)。
+/// `blobGasUsed()`, `baseFee()` (review fix: does not read timestamp; optional fields must use
+/// `.value()`).
 bcos::u256 calcOpBaseFee(
     const bcos::protocol::BlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus);
 
@@ -148,8 +148,8 @@ bcos::u256 calcOpBaseFee(
 /// the protocol::BlockHeader OP capability takes.
 bcos::protocol::BlockHeader::OpHeaderConst opHeaderConst();
 
-/// Reconstructs the 21-field ETH/OP header from the payload (design §6.1 step 2 / §5.1) as a
-/// FISCO `protocol::BlockHeader` (tars) with 18 fields filled; the 3 post-merge constants are
+/// Reconstructs the 21-field ETH/OP header from the payload as a FISCO `protocol::BlockHeader`
+/// (tars) with 18 fields filled; the 3 post-merge constants are
 /// supplied separately via `opHeaderConst()` when encoding/hashing. `opHeaderHash` (codec) is what
 /// the payload's `blockHash` is checked against, and `header->encode()` (tars) is what the block
 /// registration stores. Precondition: `validateOpNewPayloadRequest` accepted the request.
@@ -157,12 +157,14 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
 
-/// OP 信封 → tars Transaction 转换（实现见 EngineServiceImpl.cpp；失败返回 nullopt，不 throw）。
-/// 填 extraTransactionHash（D4）与 sender（D8）。0x04 (EIP-7702) 由 Web3Transaction RLP 解码
-/// 支持（上游 #5411 起一等类型）；仅损坏/未枚举信封返回 nullopt（D7）。
-/// 仅此处前向声明、实现放 .cpp：EngineServiceImpl.h 被 engine/test、libinitializer、bcos-evm
-/// opstack 测试等大量消费方包含，把 Web3Transaction.h 拉进来会拖入 jsoncpp + rpc Common +
-/// RPC_LOG 宏污染（D6）。`bcostars::Transaction` 经 LedgerMethods.h 已完整可见，无需再前向声明。
+/// OP envelope -> tars Transaction conversion (implemented in EngineServiceImpl.cpp; returns
+/// nullopt on failure, does not throw). Fills extraTransactionHash and sender. 0x04 (EIP-7702)
+/// is decoded via Web3Transaction RLP (a first-class type since upstream #5411); only a malformed
+/// or un-enumerated envelope yields nullopt. Forward-declared here with the implementation in the
+/// .cpp because EngineServiceImpl.h is included by many consumers (engine/test, libinitializer,
+/// bcos-evm opstack tests) and pulling in Web3Transaction.h would drag in jsoncpp + rpc Common +
+/// RPC_LOG macro pollution. `bcostars::Transaction` is fully visible via LedgerMethods.h, so no
+/// extra forward declaration is needed.
 std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytes const& env, bcos::crypto::HashType const& txHash);
 }  // namespace detail
@@ -178,28 +180,20 @@ class EngineServiceImpl
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
-    /// opMode compile-time judgment (spec §6.3, 裁定 B1; task-5a review fix I2): probes for
-    /// `SchedulerType::executeOpBlock` via an unevaluated `requires`-expression -- no runtime
-    /// bool, matching this class's existing all-template style. Only `OpSchedulerImpl` (task 4)
-    /// defines a member function with this name; every SchedulerType used by the generic
-    /// composition root today (StubScheduler/BloomScheduler in EngineServiceTest.cpp,
-    /// SchedulerSerialImpl in production) does not, so `c_opMode` is false for all of them and
-    /// the generic path is byte-for-byte unaffected (task-5a zero-drift constraint).
+    /// Compile-time OP-mode probe (no runtime bool, matching this class's all-template style):
+    /// detects `SchedulerType::executeOpBlock` via an unevaluated `requires`-expression. Only the
+    /// OP scheduler defines that member, so `c_opMode` is false for every scheduler used by the
+    /// generic composition root (StubScheduler/BloomScheduler in EngineServiceTest.cpp,
+    /// SchedulerSerialImpl in production) and the generic path is byte-for-byte unaffected.
     ///
     /// Takes the *address* of the member function template rather than calling it, pinning an
     /// explicit template argument only for the sole `auto`-deduced parameter (`executeOpBlock`'s
-    /// third, `::ranges::input_range auto const& rawTxBytes`); the second parameter
-    /// (`bcos::evm::engine::OpBlockEnv const&` on the real OP scheduler) is a fixed,
-    /// non-dependent part of the declaration itself and needs no argument *value* to resolve --
-    /// unlike a call expression, `&SchedulerType::template executeOpBlock<...>` never needs
-    /// engine/bcos-engine to name `OpBlockEnv`, so this stays free of any bcos-evm dependency
-    /// (task-5a "库纯净" constraint) without an extra sink type. `std::vector<bcos::bytes>` is
-    /// the type `OpSchedulerImpl::executeOpBlock`'s `rawTxBytes` parameter is actually
-    /// instantiated with elsewhere (matches `::ranges::input_range`). Address-of is an
-    /// unevaluated operand inside a requires-expression ([expr.prim.req.simple]), so this does
-    /// not odr-use (and therefore does not force instantiation of) the function body -- only its
-    /// declaration needs to typecheck, same non-triggering-instantiation guarantee `sizeof`/
-    /// `decltype`/`std::declval` rely on elsewhere in this codebase.
+    /// third, `::ranges::input_range auto const& rawTxBytes`); the fixed `OpBlockEnv`-typed second
+    /// parameter needs no argument *value* to resolve, so no bcos-evm type needs to be named here
+    /// (library-purity constraint). `std::vector<bcos::bytes>` matches how the real scheduler is
+    /// instantiated. Address-of is an unevaluated operand inside a requires-expression
+    /// ([expr.prim.req.simple]), so it does not odr-use (and therefore does not force
+    /// instantiation of) the function body.
     ///
     /// This does not separately verify that `executeOpBlock`'s first parameter (`Storage&`) is
     /// exactly this class's `ViewType` -- redundant by construction: the enclosing class
@@ -241,10 +235,10 @@ public:
         std::vector<std::string> remoteCapabilities)
     {
         (void)remoteCapabilities;
-        // opMode compile-time branch (task-5a, spec §6.3): selects the capability list at
-        // compile time via `if constexpr` on `c_opMode` -- not a runtime bool -- so the generic
-        // composition root's codegen for this function is exactly what it was before this task
-        // (the `else` branch, unconditionally).
+        // opMode compile-time branch: selects the capability list at compile time via
+        // `if constexpr` on `c_opMode` -- not a runtime bool -- so the generic composition
+        // root's codegen for this function is exactly what it was before (the `else` branch,
+        // unconditionally).
         if constexpr (c_opMode)
         {
             co_return detail::supportedOpCapabilities();
@@ -266,12 +260,12 @@ public:
         }
         if (payloadAttributes != nullptr)
         {
-            // OP mode skips this pre-check entirely (design §6.2): the OP answer to *any*
-            // attributes object -- well-formed or not -- is -38003, and it must be given only
-            // AFTER the forkchoice state has been updated ("forkchoiceState 更新不回滚,head 照常
-            // 推进,仅不开启 build"). Returning an Invalid payloadStatus here would abort the
-            // update instead. The refusal is raised further down, at the point where the generic
-            // path would start building. `if constexpr` keeps the generic path's codegen
+            // OP mode skips this pre-check entirely: the OP answer to *any* attributes object --
+            // well-formed or not -- is -38003, and it must be given only AFTER the forkchoice
+            // state has been updated (the forkchoice update is not rolled back, the head advances
+            // normally, only block building is not started). Returning an Invalid payloadStatus
+            // here would abort the update instead. The refusal is raised further down, where the
+            // generic path would start building. `if constexpr` keeps the generic path's codegen
             // byte-for-byte unchanged.
             if constexpr (!c_opMode)
             {
@@ -330,15 +324,15 @@ public:
         // The lock is released before any co_await to avoid holding a mutex
         // across a coroutine suspension point (which is UB under POSIX).
         //
-        // Scope note (task-5b review M5): this rule is this function's, not the class's. The OP
-        // `newPayload` branch (`handleOpNewPayload` below) deliberately DOES hold `x_state` across
-        // `co_await`s — that is required by the op-validator-loop design §4.4 coroutine contract
-        // (safety premise 2, "engine 执行段被 x_state 锁串行"), which grants the permission
+        // Scope note: this rule is this function's, not the class's. The OP `newPayload` branch
+        // (`handleOpNewPayload` below) deliberately DOES hold `x_state` across `co_await`s --
+        // required by the op-validator-loop coroutine contract (safety premise 2: the engine
+        // execution segment is serialized by the x_state lock), which grants the permission
         // conditionally: every storage2 backend in play completes synchronously in-thread, so no
-        // coroutine ever resumes on another thread. §4.4's invalidation criterion explicitly
-        // covers both that usage and the pre-existing lock-across-`co_await` TODO in
-        // `handleNewPayload`'s generic path. The two are consistent, not contradictory: this
-        // comment states the default, §4.4 states the audited exception.
+        // coroutine ever resumes on another thread. That contract's invalidation criterion
+        // explicitly covers both that usage and the pre-existing lock-across-`co_await` TODO in
+        // `handleNewPayload`'s generic path. The two are consistent: this comment states the
+        // default, the coroutine contract states the audited exception.
         {
             std::unique_lock lock(x_state);
             if (m_trackedHeadBlock.has_value())
@@ -389,17 +383,16 @@ public:
         }
         if constexpr (c_opMode)
         {
-            // Design §6.2: an OP validator's L1-derivation path *does* send forkchoiceUpdated
-            // with OP-extended attributes (noTxPool=true + derived transactions) whenever
-            // consolidation fails or there is no unsafe block -- "验证者不发 attributes" is not
-            // true. Attribute-driven building is not supported this cycle (it is the same road as
-            // OP-izing getPayload, both on the §6.4 op-node 实连前置欠账台账), so the answer is
-            // -38003.
+            // An OP validator's L1-derivation path *does* send forkchoiceUpdated with
+            // OP-extended attributes (noTxPool=true + derived transactions) whenever consolidation
+            // fails or there is no unsafe block -- "the validator does not send attributes" is not
+            // true. Attribute-driven building is not supported this cycle (the same road as
+            // OP-izing getPayload), so the answer is -38003.
             //
             // Placement is the whole point: everything above -- the storage lookups, the
             // monotonicity checks, and the tracked-head/safe/finalized update under `x_state` --
-            // has already run and is *kept*. Per spec the forkchoice update is not rolled back;
-            // only the build is refused.
+            // has already run and is *kept*. The forkchoice update is not rolled back; only the
+            // build is refused.
             BOOST_THROW_EXCEPTION(
                 UnsupportedOpPayloadAttributes{} << bcos::errinfo_comment{
                     "Payload attributes are not supported in OP mode (block building is not "
@@ -518,13 +511,12 @@ private:
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
     };
 
-    /// Version-gate upper bound is member state, not a compile-time/static constant (task-5a,
-    /// spec §6.3, decision table "V4 放宽门控"): the generic composition root leaves
-    /// `m_maxEngineVersion` at its default (V3, identical to the pre-existing `static` bound --
-    /// zero drift); only the OP composition root passes `maxEngineVersion = 4` at construction.
-    /// The lower bound (V1) stays a compile-time constant -- only the upper bound is a runtime
-    /// (per-instance, constructor-time-fixed) gate, matching the decision's literal wording
-    /// ("版本上界成员化").
+    /// Version-gate upper bound is member state, not a compile-time/static constant: the generic
+    /// composition root leaves `m_maxEngineVersion` at its default (V3, identical to the
+    /// pre-existing `static` bound -- zero drift); only the OP composition root passes
+    /// `maxEngineVersion = 4` at construction. The lower bound (V1) stays a compile-time constant
+    /// -- only the upper bound is a runtime (per-instance, constructor-time-fixed) gate ("version
+    /// upper bound is member state").
     bool isVersionSupported(std::uint32_t version) const
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
@@ -551,13 +543,13 @@ private:
         }
         if constexpr (c_opMode)
         {
-            // Design §6.3 (裁定 A6): `getPayloadV4`'s stated behaviour is "OP 模式下返回明确错误
-            // (出块未 OP 化)". The refusal is unconditional in OP mode rather than V4-only,
-            // because the *cause* is version-independent: OP mode never builds a payload at all
-            // (the attributes path above refuses with -38003), so the cache is always empty and
-            // every version would otherwise answer the misleading `UnknownPayload`. Full V4
-            // response shaping (executionRequests etc.) ships with attributes-driven building on
-            // the §6.4 欠账台账.
+            // `getPayloadV4`'s stated behaviour is "return an explicit error in OP mode (block
+            // building is not OP-ized)". The refusal is unconditional in OP mode rather than
+            // V4-only, because the *cause* is version-independent: OP mode never builds a payload
+            // at all (the attributes path above refuses with -38003), so the cache is always
+            // empty and every version would otherwise answer the misleading `UnknownPayload`.
+            // Full V4 response shaping (executionRequests etc.) ships together with
+            // attributes-driven building.
             BOOST_THROW_EXCEPTION(
                 OpPayloadBuildingUnsupported{} << bcos::errinfo_comment{
                     "getPayload is not supported in OP mode (block building is not OP-ized)"});
@@ -596,27 +588,19 @@ private:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
-        // ---- opMode silent-failure guardrail (final review B4-3) ----
+        // ---- opMode silent-failure guardrail ----
         //
-        // `c_opMode` is a SFINAE probe on `executeOpBlock`'s exact signature shape. Changing
-        // `rawTxBytes` to a concrete type, adding a second `auto` parameter, or adding an overload
-        // each make the `requires` evaluate to false **silently, with no diagnostic** -- and the
-        // consequence is not "OP support disappears", it is far worse: the V4 request falls
-        // through to the generic path, where `validateExecutionPayload` accepts an OP payload
-        // (version >= 2 with a present, empty withdrawals list), `parentKnown` is satisfied by the
-        // in-memory forkchoice head that op-node just set, and the request is answered
-        // **VALID with the payload's own self-reported blockHash without the block ever being
-        // executed**. A validator that rubber-stamps is worse than one that refuses.
-        //
-        // The only thing standing between that and reality was `maxEngineVersion` defaulting to
-        // 3 -- but the OP composition root passes 4 explicitly, so if `c_opMode` collapsed there,
-        // that 4 becomes the key that unlocks the rubber stamp. Hence: a non-OP build refuses V4
-        // outright, independently of `maxEngineVersion`.
+        // `c_opMode` is a SFINAE probe on `executeOpBlock`'s exact signature shape. If the probe
+        // ever silently collapses (signature change), a V4 request would fall through to the
+        // generic path, where an OP payload is accepted and answered VALID with its self-reported
+        // blockHash without the block ever being executed -- a validator that rubber-stamps is
+        // worse than one that refuses. Hence a non-OP build refuses V4 outright, independently of
+        // `maxEngineVersion`.
         //
         // Zero behavioural drift for the generic composition root as configured today: it leaves
-        // `maxEngineVersion` at 3, so `isVersionSupported(4)` above already threw the same
-        // exception type before this statement was reachable. This is defence in depth for the
-        // mis-configuration, not a new rule for the existing one.
+        // `maxEngineVersion` at 3, so `isVersionSupported(4)` already threw the same exception
+        // before this statement was reachable. Defence in depth for the mis-configuration, not a
+        // new rule for the existing one.
         if constexpr (!c_opMode)
         {
             if (version >= static_cast<std::uint32_t>(ApiVersion::V3) + 1)
@@ -627,9 +611,9 @@ private:
                         "c_opMode probe did not detect one"});
             }
         }
-        // OP branch (task-5b, design §6.1). Compile-time dispatch on `c_opMode` (task-5a): the
-        // generic composition root never instantiates `handleOpNewPayload`, and its own path
-        // below is the unconditional `else`, i.e. byte-for-byte the pre-existing body.
+        // OP branch. Compile-time dispatch on `c_opMode`: the generic composition root never
+        // instantiates `handleOpNewPayload`, and its own path below is the unconditional `else`,
+        // i.e. byte-for-byte the pre-existing body.
         if constexpr (c_opMode)
         {
             co_return co_await handleOpNewPayload(request, version);
@@ -704,10 +688,12 @@ private:
 
             // If this payload was built locally (via updateForkchoice), commit the view's
             // state changes to storage. Externally received payloads have no view to commit.
-            // mergeView()（C2 修复,commit 589d15dd8）已消除 mergeBackStorage throw 泄漏 mutable
-            // layer 的风险（OP 路径 EngineServiceImpl.h:1165 已用它）。剩余 TODO：avoid holding
-            // x_state across a co_await——OP 路径仍持 x_state 跨 mergeView 内部 co_await（spec §3.1
-            // 承认）;本通用路径仍为两步 pushView+mergeBackStorage（语义等价,可改 mergeView 快随）。
+            // mergeView() (commit 589d15dd8) removed the risk of leaking a mutable layer when
+            // mergeBackStorage throws (the OP path at EngineServiceImpl.h:1165 uses it too).
+            // Remaining TODO: avoid holding x_state across a co_await -- the OP path still holds
+            // x_state across mergeView's internal co_await (acknowledged); this generic path
+            // still does the two-step pushView+mergeBackStorage (semantically equivalent, can
+            // switch to mergeView later).
             auto it = m_payloadCache.find(payloadId);
             if (it != m_payloadCache.end() && it->second.view)
             {
@@ -772,14 +758,12 @@ private:
         }
     }
 
-    /// newPayload OP branch (design §6.1, task-5b). Only ever instantiated when `c_opMode` is
-    /// true -- i.e. when `SchedulerType` is the OP scheduler -- which is what makes every
-    /// `SchedulerType::`-qualified name below legal without this library depending on bcos-evm:
-    /// they are dependent names, resolved at instantiation in a translation unit that included
-    /// the OP scheduler header (see `bcos-evm/bcos-evm/engine/OpEngineSeam.h`'s file comment for
-    /// the seam's full rationale, and `c_opMode` above for the purity constraint).
-    ///
-    /// The six numbered steps below are design §6.1's six steps, in order.
+    /// newPayload OP branch. Only ever instantiated when `c_opMode` is true -- i.e. when
+    /// `SchedulerType` is the OP scheduler -- which is what makes every `SchedulerType::`-qualified
+    /// name below legal without this library depending on bcos-evm: they are dependent names,
+    /// resolved at instantiation in a translation unit that included the OP scheduler header (see
+    /// `bcos-evm/bcos-evm/engine/OpEngineSeam.h`'s file comment for the seam's full rationale, and
+    /// `c_opMode` above for the purity constraint).
     ///
     /// This function is the version gate plus a **classification barrier**: it guarantees that
     /// every way out of the OP branch is one of the classified outcomes (a `PayloadStatus`,
@@ -792,14 +776,14 @@ private:
         auto const& payload = request.executionPayload;
 
         // ---- Step 1: timestamp x version gate (-38005) ----
-        // The OP engine branch is scoped to Isthmus/Jovian only (design §1 目标版本 row; batch D-5
-        // ruling): a pre-Isthmus timestamp is answered -38005 *unconditionally*, on any version.
-        // Isthmus+ payloads must then arrive on V4 (Isthmus+ 禁 V3).
+        // The OP engine branch is scoped to Isthmus/Jovian only: a pre-Isthmus timestamp is
+        // answered -38005 *unconditionally*, on any version. Isthmus+ payloads must then arrive
+        // on V4 (Isthmus+ payloads are not allowed on V3).
         // `isIsthmusActiveAt` lives on the scheduler so the threshold comparison stays on the OP
-        // side next to `configAt` (design §4.2 "不重复实现阈值比较"). It is deliberately not
-        // `configAt` itself: that function resolves sub-`isthmusTime` timestamps to the Isthmus
-        // config too (OpForkSchedule.h's own note; task-4 review item M4), so it cannot answer
-        // "is this payload pre-Isthmus?" -- the exact question this gate asks.
+        // side next to `configAt` (do not re-implement the threshold comparison). It is
+        // deliberately not `configAt` itself: that function resolves sub-`isthmusTime` timestamps
+        // to the Isthmus config too (see OpForkSchedule.h's own note), so it cannot answer "is
+        // this payload pre-Isthmus?" -- the exact question this gate asks.
         //
         // Deliberately OUTSIDE the barrier below: `UnsupportedFork` (-38005) is itself a
         // classified outcome and must reach the caller unchanged, not be re-labelled.
@@ -819,7 +803,7 @@ private:
                     "Isthmus+ payloads require engine_newPayloadV4 (JSON-RPC -38005)"});
         }
 
-        // ---- Classification barrier (final review batch-2 second pass, I-1) ----
+        // ---- Classification barrier ----
         //
         // The `catch (...)` added around `executeOpBlock` in the first pass closed only ONE
         // window. Everything else in the OP branch still ran outside any handler: step 2's
@@ -828,11 +812,12 @@ private:
         // `Entry::set`, `ethHeader.encode()`, `receipt->encode()`, `hashImpl.hash()` and four
         // `storage2::writeOne` calls can each raise something that is neither
         // `OpExecutionInternalError` nor an execution-classified error (`bad_alloc`, a tars
-        // encoding error, ...). Such an escape left `handleOpNewPayload` entirely and surfaced at
-        // the caller's `co_await` as neither INVALID nor -32603 -- the outcome design §4.3 rules
-        // out. (The two `BOOST_THROW_EXCEPTION(OpExecutionInternalError)` calls inside
-        // `registerOpBlock` were never the problem: they arrive already classified, and the
-        // rethrow handler below preserves them verbatim.)
+        // encoding error, ...). Such an escape would leave `handleOpNewPayload` entirely and
+        // surface at the caller's `co_await` as neither INVALID nor -32603 -- an outcome the
+        // error classification rules rule out. (The two
+        // `BOOST_THROW_EXCEPTION(OpExecutionInternalError)` calls inside `registerOpBlock` were
+        // never the problem: they arrive already classified, and the rethrow handler below
+        // preserves them verbatim.)
         //
         // The barrier is a wrapper rather than an outer try around the existing body so that the
         // version gate above stays outside it, and so the already-classified paths keep their own
@@ -853,8 +838,8 @@ private:
             // -32603 rather than INVALID, for the same reason as the execution-phase fallback: an
             // unknown local failure must not make this node vote against a block. The marker
             // distinguishes this barrier from that fallback, so a test can tell which window an
-            // escape came through (batch-1 lesson: a bare `catch (...)` otherwise collapses every
-            // refusal into one indistinguishable type).
+            // escape came through (a bare `catch (...)` otherwise collapses every refusal into
+            // one indistinguishable type).
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     "OP newPayload threw an unclassified exception outside block execution "
@@ -862,7 +847,7 @@ private:
         }
     }
 
-    /// Design §6.1 steps 2-6. Never called outside `handleOpNewPayload`'s classification barrier;
+    /// Never called outside `handleOpNewPayload`'s classification barrier;
     /// the signature carries no OP-dependent name, so the declaration instantiates harmlessly for
     /// the generic composition root while the body (which is full of them) only instantiates in
     /// OP mode.
@@ -872,10 +857,10 @@ private:
 
         // ---- Step 2: static validation + blockHash ----
         // All rejections here carry latestValidHash = null: they happen before parentKnown, so no
-        // ancestor has been established as valid yet (design §6.1 step 5, "blockHash 失配桶恒
-        // null"). Note the status is `Invalid`, never `InvalidBlockHash` -- that Engine API status
+        // ancestor has been established as valid yet (the blockHash-mismatch bucket is always
+        // null). Note the status is `Invalid`, never `InvalidBlockHash` -- that Engine API status
         // has been deprecated since Shanghai and the OP branch does not use it (the enumerator
-        // stays in Types.h for the generic path; deviation ledger entry).
+        // stays in Types.h for the generic path).
         if (auto validationError = detail::validateOpNewPayloadRequest(
                 request, m_scheduler.get().isJovianActiveAt(payload.timestamp));
             validationError.has_value())
@@ -885,13 +870,14 @@ private:
         // `ExecutionPayload` carries no transactionsRoot, so it is derived from the raw envelopes
         // here -- the same derivation `executeOpBlock` performs internally (one shared function,
         // `OpEngineSeam.h`'s `computeOpTxRoot`), which is what lets the blockHash check stay
-        // genuinely static (before parentKnown and before execution, as §6.1 orders it).
+        // genuinely static (before parentKnown and before execution).
         const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
         const auto ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
             payload, transactionsRoot, *request.parentBeaconBlockRoot);
-        // OP hash = keccak(RLP(21 字段)),经 protocol::BlockHeader 的 OP 能力
-        // (opHeaderConst 注入 3 个 post-merge 常量)。不得用 BlockHeader::hash()——tars dataHash
-        // 为空会抛 EmptyBlockHeaderHash,且若工厂回填则会是 TARS 序 hash(spec §6 已知坑)。
+        // OP hash = keccak(RLP(21 fields)), via the protocol::BlockHeader OP capability
+        // (opHeaderConst injects the 3 post-merge constants). Must not use BlockHeader::hash() --
+        // an empty tars dataHash throws EmptyBlockHeaderHash, and if the factory back-fills it the
+        // result would be the tars-order hash (a known pitfall).
         if (ethHeader->opHeaderHash(detail::opHeaderConst()) != payload.blockHash)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
@@ -899,21 +885,20 @@ private:
         }
 
         // From here on the storage/execution segment runs under `x_state`, which is safety
-        // premise 2 of the design's coroutine contract (§4.4: "engine 执行段被 x_state 锁串行").
-        // The lock is held across `co_await`s -- sanctioned by that same section, whose premise 1
-        // is that every storage2 backend in play completes synchronously in-thread (memory
-        // MultiLayerStorage / blocking RocksDB reads), so the nested awaits degenerate into plain
-        // stack recursion and no coroutine ever resumes on another thread. §4.4's invalidation
-        // criterion explicitly covers this lock-across-co_await usage as well: if any backend
-        // ever completes asynchronously, this must be redesigned.
+        // premise 2 of the design's coroutine contract: the engine execution segment is serialized
+        // by the x_state lock. The lock is held across `co_await`s -- sanctioned by that same
+        // contract, whose premise 1 is that every storage2 backend in play completes synchronously
+        // in-thread (memory MultiLayerStorage / blocking RocksDB reads), so the nested awaits
+        // degenerate into plain stack recursion and no coroutine ever resumes on another thread.
+        // The contract's invalidation criterion explicitly covers this lock-across-co_await usage
+        // as well: if any backend ever completes asynchronously, this must be redesigned.
         std::unique_lock lock(x_state);
 
         // ---- Step 3: parentKnown, via storage (not the in-memory map) ----
-        // OP semantics (design §6.1 step 3, rev.2): op-node relies on SYNCING to drive its own
-        // sync, and the answer must reflect what is actually persisted, so the query goes to
-        // `SYS_HASH_2_NUMBER` through the ledger accessor rather than to `m_blockHashToPayloadId`
-        // (which the generic path uses and which the OP branch never populates). Nothing is
-        // written on this path.
+        // OP semantics: op-node relies on SYNCING to drive its own sync, and the answer must
+        // reflect what is actually persisted, so the query goes to `SYS_HASH_2_NUMBER` through the
+        // ledger accessor rather than to `m_blockHashToPayloadId` (which the generic path uses and
+        // which the OP branch never populates). Nothing is written on this path.
         auto view = m_globalStateStorage.get().fork();
         auto parentBlockNumber = co_await bcos::ledger::getBlockNumber(
             view, payload.parentHash, bcos::ledger::fromStorage);
@@ -922,74 +907,51 @@ private:
             co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
         // Past this point the parent IS a verified ancestor -- that is precisely the operational
-        // definition design §6.1 step 5 (裁定 C2) gives "parent 已验证": present in
-        // `SYS_HASH_2_NUMBER`, a table only the VALID branch below writes. So every INVALID from
-        // here on reports `latestValidHash = parentHash`.
+        // definition of "parent verified": present in `SYS_HASH_2_NUMBER`, a table only the VALID
+        // branch below writes. So every INVALID from here on reports `latestValidHash =
+        // parentHash`.
         const auto latestValidHash = std::make_optional(payload.parentHash);
 
-        // Parent/child number continuity (task-5b review I2). Not spelled out among §6.1's six
-        // steps, but load-bearing here: `parentBlockNumber` is already in hand, and both
-        // registration indices written in step 6 (`SYS_NUMBER_2_HASH` and the ETH header table)
-        // are keyed BY NUMBER. Without this check a payload naming a verified parent but carrying
-        // an arbitrary `blockNumber` would silently overwrite an existing height's index entries
-        // -- a corrupted chain index, not merely a rejected block. Classified with steps 4/5
-        // (INVALID + latestValidHash = parent) because the parent is established valid.
+        // Parent/child number continuity. Load-bearing here: `parentBlockNumber` is already in
+        // hand, and both registration indices written in step 6 (`SYS_NUMBER_2_HASH` and the ETH
+        // header table) are keyed BY NUMBER. Without this check a payload naming a verified parent
+        // but carrying an arbitrary `blockNumber` would silently overwrite an existing height's
+        // index entries -- a corrupted chain index, not merely a rejected block. Classified with
+        // steps 4/5 (INVALID + latestValidHash = parent) because the parent is established valid.
         if (payload.blockNumber != *parentBlockNumber + 1)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("blockNumber must be exactly one greater than the parent's"));
         }
 
-        // ---- Step 3a: timestamp strictly increases (final review B4-1) ----
+        // ---- Step 3a: timestamp strictly increases ----
         //
         // op-geth rejects this twice over: `eth/catalyst/api.go:891-894`
         // (`block.Time() <= parent.Time()` -> invalid, latestValidHash = parent) and
         // `consensus/beacon/consensus.go:253-256` (`errInvalidTimestamp`).
         //
-        // Why it matters more here than "a block with a silly clock": in this loop the timestamp
-        // is the FORK SELECTOR. `OpSchedulerImpl` picks its `OpForkConfig` with
-        // `configAt(fiscoHeader.timestamp(), ...)`, and step 1's -38005 gate reads the same field.
-        // Without monotonicity, block N+1 can name a timestamp EARLIER than block N and thereby
-        // roll the active fork backwards (Jovian -> Isthmus), changing DA accounting and baseFee
-        // semantics mid-chain.
+        // Here the timestamp is also the FORK SELECTOR: `OpSchedulerImpl` picks its
+        // `OpForkConfig` with `configAt(fiscoHeader.timestamp(), ...)` and step 1's -38005 gate
+        // reads the same field, so without monotonicity a payload could roll the active fork
+        // backwards (Jovian -> Isthmus), changing DA accounting and baseFee semantics mid-chain.
         //
-        // This is also the first read of `s_eth_block_header`. Until now that table was written
-        // and never read anywhere in the tree, which is the shared root cause of several
-        // parent/child rules being absent: the Holocene baseFee consistency check and the
-        // gasLimit change bound (both still parked in spec §6.4) need exactly this — the parent's
-        // decoded header — and now have somewhere to stand.
+        // Keyed by NUMBER (op-geth keys by HASH, `api.go:887`); equivalent only while
+        // number -> header is injective, which step 3c guarantees today (at most one block per
+        // height). Whoever lifts step 3c must re-key this read by hash in the same change.
         //
-        // Keyed by NUMBER, where op-geth keys by HASH (`api.go:887` looks the parent up by
-        // `block.ParentHash()`). That is only equivalent while number -> header is injective,
-        // which today is guaranteed by step 3c refusing any payload whose parent is not the chain
-        // tip: at most one block is ever registered per height. **This is a real dependency, not
-        // a coincidence** (review M-5): the moment a reorg window is opened -- i.e. the moment
-        // step 3c is relaxed, which is exactly what the arbitrary-parent base state item in spec
-        // §6.4 would do -- two blocks can share a height and this lookup starts comparing against
-        // the WRONG parent header. Whoever lifts that restriction must re-key this read by hash
-        // (which needs a hash -> header index that does not exist yet) in the same change.
+        // Deliberately ordered BEFORE step 3b's already-known-block short-circuit, unlike op-geth
+        // (known-block first at `api.go:872-876`, timestamp after) -- observationally equivalent,
+        // since a re-delivered block necessarily passed this check when first accepted.
         //
-        // Ordering (review M-7): this check sits BEFORE step 3b's already-known-block
-        // short-circuit, whereas op-geth does the known-block return first (`api.go:872-876`) and
-        // the timestamp check after (`:891-894`). The two orders are observationally equivalent
-        // here -- a block already registered by this loop necessarily passed this same check when
-        // it was first accepted, so re-running it on a re-delivery can only pass -- but the
-        // difference is deliberate and worth naming, because step 3b's own comment claims its
-        // placement is load-bearing: 3b must precede 3c (a re-delivered block always occupies its
-        // own child height and would otherwise trip the non-tip refusal), while 3a is free on
-        // either side of 3b. If 3a ever becomes non-idempotent, move it after 3b to match op-geth.
-        //
-        // Missing parent header => SKIP, deliberately (this is the genesis/first-block case, and
-        // the behaviour is part of the contract, not an oversight): a trusted starting point is
-        // established by seeding `SYS_HASH_2_NUMBER` alone -- both the test fixtures and any
-        // future production bootstrap do that -- so the very first block after it has no stored
-        // parent header to compare against. Rejecting on absence would make the loop unable to
-        // accept its own first block. Every block registered BY this loop does store its header,
-        // so the check is live for every subsequent block.
+        // Missing parent header => SKIP, deliberately (the genesis/first-block case): a trusted
+        // starting point is established by seeding `SYS_HASH_2_NUMBER` alone, so the first block
+        // after it has no stored parent header to compare against. Every block registered BY this
+        // loop does store its header, so the check is live for every subsequent block.
         const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
-        // 迁移后父头从标准表 s_number_2_header 以 tars BlockHeader 读取(spec D3),取代退役的
-        // s_eth_block_header RLP 读路。Entry::get() 返回 string_view(Entry.h:332),createBlockHeader
-        // 无 string_view 重载——显式拷进 bytes(审查 B2)。
+        // The parent header is read from the standard s_number_2_header table as a tars
+        // BlockHeader, replacing the retired s_eth_block_header RLP read path. Entry::get()
+        // returns a string_view (Entry.h:332) and createBlockHeader has no string_view overload
+        // -- copy explicitly into bytes.
         if (auto parentHeaderEntry = co_await storage2::readOne(view,
                 executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
             parentHeaderEntry.has_value())
@@ -1005,23 +967,27 @@ private:
             catch (const std::exception& e)
             {
                 // Our own stored bytes failed to parse: a local storage/consistency fault, not a
-                // verdict on the incoming payload (design §4.3's rule cuts both ways).
+                // verdict on the incoming payload (the error-classification rule cuts both ways).
                 BOOST_THROW_EXCEPTION(
                     OpExecutionInternalError{} << bcos::errinfo_comment{
                         std::string("stored parent block header is undecodable: ") + e.what()});
             }
             // tars
-            // 解码宽松:截断流可能静默填默认值。本表按高度为键且由本循环写入,高度失配即本地故障。
+            // Tars decoding is lenient: a truncated stream may silently fill defaults. This table
+            // is keyed by height and written only by this loop, so a height mismatch is a local
+            // fault.
             if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
             {
                 BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
                                           "stored parent block header height mismatch"});
             }
-            // 注意:createBlockHeader(bytesConstRef) 在 dataHash 为空时会用 TARS 序 hasher 自动
-            // 回填(BlockHeaderFactoryImpl.cpp:21-37)——该值不是 OP hash。本步只读
-            // timestamp/baseFee/extraData/gasLimit/gasUsed/blobGasUsed,不读 hash(),故不受影响;
-            // 这是 D6 dataHash 推迟(spec §6)的已知后果,任何未来读 OP 头的消费者不得调用 hash()。
-            // 单调性:payload 秒→毫秒,与父头(毫秒)同单位比较(spec §7)。
+            // Note: createBlockHeader(bytesConstRef) auto back-fills dataHash with the tars-order
+            // hasher when it is empty (BlockHeaderFactoryImpl.cpp:21-37) -- that value is NOT the
+            // OP hash. This step only reads timestamp/baseFee/extraData/gasLimit/gasUsed/
+            // blobGasUsed, never hash(), so it is unaffected; this is a known consequence of
+            // deferred dataHash, and any future consumer of OP headers must not call hash().
+            // Monotonicity: payload seconds -> milliseconds, compared in the same unit as the
+            // parent header (milliseconds).
             if (static_cast<uint64_t>(payload.timestamp) * 1000 <=
                 static_cast<uint64_t>(parentHeader->timestamp()))
             {
@@ -1035,8 +1001,8 @@ private:
             // from the timestamp check above, and fork membership is determined from
             // the parent's own timestamp — matching op-geth's
             // config.IsJovian(parent.Time) / config.IsOptimismHolocene(parent.Time).
-            // See §6.4 D-3. fork 判定转回秒(与 payload 秒、配置阈值一致;与上面的毫秒比较方向相反,
-            // spec §7 陷阱)。
+            // Fork determination switches back to seconds (consistent with the payload seconds and
+            // the config thresholds; the reverse direction of the milliseconds comparison above).
             {
                 auto expectedBaseFee = detail::calcOpBaseFee(*parentHeader,
                     m_scheduler.get().isJovianActiveAt(
@@ -1052,7 +1018,7 @@ private:
             }
         }
 
-        // ---- Step 3b: already-known block -> VALID short-circuit (final review B2-2(a)) ----
+        // ---- Step 3b: already-known block -> VALID short-circuit ----
         //
         // op-geth does exactly this (`eth/catalyst/api.go:872-876`): a payload whose block is
         // already in the chain returns VALID without re-executing. Re-delivery is a routine
@@ -1081,29 +1047,23 @@ private:
             co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
         }
 
-        // ---- Step 3c: the parent must be the current chain tip (final review B2-2(b)) ----
+        // ---- Step 3c: the parent must be the current chain tip ----
         //
         // `fork()` above hands back the top of the layer stack -- the CURRENT tip's state -- not
         // the state as of `payload.parentHash`. Whenever those differ, execution would silently
         // run against the wrong base state and produce a result that cannot match the payload,
         // reported as INVALID: a wrong verdict dressed up as a consensus judgement.
         //
-        // Detecting it needs no new bookkeeping -- but the criterion is one-directional, and the
-        // comment here previously claimed an "iff" it does not have (final review batch-2 second
-        // pass, I-2):
-        //   (<=) an occupied child height ALWAYS implies the parent is not the tip. This is
-        //        unconditional, and it is the direction this check relies on to refuse;
-        //   (=>) an empty child height implies the parent IS the tip only under an invariant that
-        //        is nowhere else stated: **every hash in `SYS_HASH_2_NUMBER` occupies its own
-        //        height in `SYS_NUMBER_2_HASH`** (the two tables agree). `registerOpBlock` below
-        //        writes both, always together, as does the production precedent
-        //        `BaselineScheduler.h:207-220` -- so on a real ledger the invariant holds and the
-        //        criterion is exact. A store where the two disagree (notably a TEST FIXTURE that
-        //        seeds only `SYS_HASH_2_NUMBER`, an explicitly documented exemption) can present
-        //        an empty child height for a parent that is not the tip, and this check will let
-        //        it through. The parent/child number continuity check above does not close that
-        //        gap: a parent seeded at height 5 with a payload at height 6 satisfies it.
-        // The invariant is recorded in spec §6.4 alongside the arbitrary-parent base-state debt.
+        // The criterion is one-directional: an occupied child height ALWAYS implies the parent is
+        // not the tip (this is the direction used to refuse); an empty child height implies the
+        // parent IS the tip only under the invariant that every hash in `SYS_HASH_2_NUMBER`
+        // occupies its own height in `SYS_NUMBER_2_HASH`. `registerOpBlock` below writes both,
+        // always together, as does the production precedent `BaselineScheduler.h:207-220` -- so on
+        // a real ledger the criterion is exact; a store where the two disagree (notably a test
+        // fixture that seeds only `SYS_HASH_2_NUMBER`, a documented exemption) can present an
+        // empty child height for a parent that is not the tip and slip through. The parent/child
+        // number continuity check above does not close that gap: a parent seeded at height 5 with
+        // a payload at height 6 satisfies it.
         //
         // (A block already occupying the child height that IS this payload was short-circuited
         // immediately above, so reaching here with an occupied height means a genuine
@@ -1112,8 +1072,8 @@ private:
         // Answering `OpExecutionInternalError` (-32603) rather than INVALID is the honest
         // reply: this node cannot evaluate the block, which is a capability limit, not a verdict.
         // Serving arbitrary-parent base state needs a `blockHash -> MLS layer` mapping that does
-        // not exist today; that is architecture work, parked in spec §6.4 (this cycle delivers
-        // the explicit refusal, not the capability).
+        // not exist today; that is architecture work, parked (this cycle delivers the explicit
+        // refusal, not the capability).
         const auto childNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
         if (auto occupiedHeight = co_await storage2::readOne(
                 view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, childNumberStr});
@@ -1127,16 +1087,17 @@ private:
 
         // ---- Step 4: execute ----
         view.newMutable();
-        // 复用 step 2 重建的同一枚头(spec:一个 header 贯穿校验/执行/落盘)。ethHeader 是
-        // shared_ptr,跨越下方 co_await 安全。BlockEnv 现在就是 protocol::BlockHeader。
+        // Reuse the same header rebuilt in step 2 (one header through validation/execution/
+        // persistence). ethHeader is a shared_ptr, safe across the co_await below. BlockEnv is now
+        // just protocol::BlockHeader.
         std::optional<typename SchedulerType::ExecuteResult> executeResult;
         try
         {
             executeResult.emplace(co_await m_scheduler.get().executeOpBlock(
                 view, *ethHeader, *payload.rawTransactions));
         }
-        // Error classification table (design §4.3/§6.1 step 4). The two catch bodies contain no
-        // `co_await` -- an await-expression may not appear inside a handler ([expr.await]/2).
+        // Error classification table. The two catch bodies contain no `co_await` -- an
+        // await-expression may not appear inside a handler ([expr.await]/2).
         catch (const typename SchedulerType::ConsensusError& e)
         {
             // A consensus-level rejection IS a verdict on the block: INVALID.
@@ -1153,31 +1114,28 @@ private:
         }
         catch (...)
         {
-            // Unclassified escape (final review B2-1). The two typed handlers above cover only
-            // what `executeOpBlock` explicitly classifies, and only part of that function is
-            // inside its own try: its raw-tx decode loop, its seal/stateRoot step and its
-            // txRoot/receipt step all run outside it, so a `std::bad_alloc`, an evmone-side
-            // `std::runtime_error`, or anything else can reach here as neither
-            // `ConsensusError` nor `StorageError`. Left uncaught it would escape
-            // `handleOpNewPayload` entirely and be re-thrown at the caller's `co_await` — the
-            // outcome would be neither INVALID nor -32603, i.e. the design §4.3 rule "a storage
-            // fault must never be reported as INVALID" would degrade into "no classification at
-            // all" on precisely the paths that lack one.
+            // Unclassified escape. The two typed handlers above cover only what `executeOpBlock`
+            // explicitly classifies, and only part of that function is inside its own try: its
+            // raw-tx decode loop, its seal/stateRoot step and its txRoot/receipt step all run
+            // outside it, so a `std::bad_alloc`, an evmone-side `std::runtime_error`, or anything
+            // else can reach here as neither `ConsensusError` nor `StorageError`. Left uncaught
+            // it would escape `handleOpNewPayload` entirely and be re-thrown at the caller's
+            // `co_await` — neither INVALID nor -32603, i.e. the "a storage fault must never be
+            // reported as INVALID" rule would degrade into "no classification at all" on
+            // precisely the paths that lack one.
             //
-            // There is a second, concrete reason this cannot be treated as theoretical: this
-            // repo has a known typed-catch RTTI bypass (evmone is built `-fno-rtti`, so
-            // `std::exception`'s typeinfo is not unique across the boundary). `OpSchedulerImpl`
-            // and `Storage2Ledger` already pair every typed handler with a `catch (...)` for
-            // that reason, and this is the engine layer's counterpart for the execution call.
-            // It does NOT by itself make the layer complete -- the first pass claimed that and
-            // was wrong (final review I-1): it guards this one call, and the rest of the OP
-            // branch is covered by `handleOpNewPayload`'s classification barrier.
+            // This is not theoretical: evmone is built `-fno-rtti`, so `std::exception`'s
+            // typeinfo is not unique across the boundary; `OpSchedulerImpl` and `Storage2Ledger`
+            // already pair every typed handler with a `catch (...)` for that reason, and this is
+            // the engine layer's counterpart for the execution call. It guards this one call;
+            // the rest of the OP branch is covered by `handleOpNewPayload`'s classification
+            // barrier.
             //
             // -32603 rather than INVALID is the safe default: an unknown local failure must not
-            // make this node vote against a block. The message deliberately carries a
-            // distinctive marker, because a bare `catch (...)` otherwise collapses every
-            // block-level rejection into one indistinguishable exception type and leaves tests
-            // no way to tell which path they exercised (batch-1 review lesson).
+            // make this node vote against a block. The message deliberately carries a distinctive
+            // marker, because a bare `catch (...)` otherwise collapses every block-level rejection
+            // into one indistinguishable exception type and leaves tests no way to tell which
+            // path they exercised.
             //
             // No `co_await` here — an await-expression may not appear in a handler
             // ([expr.await]/2); `BOOST_THROW_EXCEPTION` is the same shape the handler above uses.
@@ -1188,11 +1146,10 @@ private:
         }
 
         // ---- Step 5: the six-way comparison surface ----
-        // Exactly six (design §4.1/§6.1 "六项比对面"): receiptsRoot / logsBloom / withdrawalsRoot
-        // from the seal, stateRoot / gasUsed / txRoot from the execution result. The two extra
-        // comparisons after them are design §5.1's, not part of the six -- see
-        // `OpBlockCommitments`. `validationError` names the offending field (design §6.1 step 4
-        // "validationError 点名字段").
+        // Exactly six: receiptsRoot / logsBloom / withdrawalsRoot from the seal, stateRoot /
+        // gasUsed / txRoot from the execution result. The two extra comparisons after them are not
+        // part of the six -- see `OpBlockCommitments`. `validationError` names the offending
+        // field.
         const auto commitments = SchedulerType::commitmentsOf(*executeResult);
         std::optional<std::string> mismatchedField;
         if (commitments.receiptsRoot != payload.receiptsRoot)
@@ -1226,8 +1183,8 @@ private:
         else if (commitments.blobGasUsed.has_value() &&
                  u256(*commitments.blobGasUsed) != *payload.blobGasUsed)
         {
-            // Jovian+ only (engaged iff the fork repurposes the slot as the DA footprint --
-            // design §5.1 "由 seal 比对承接"). Pre-Jovian the slot is pinned to 0 by step 2.
+            // Jovian+ only (engaged iff the fork repurposes the slot as the DA footprint,
+            // compared via the seal). Pre-Jovian the slot is pinned to 0 by step 2.
             mismatchedField = "blobGasUsed";
         }
         else if (commitments.requestsHash.has_value() &&
@@ -1245,15 +1202,15 @@ private:
 
         // ---- Step 6: block registration, then publish the view ----
         co_await registerOpBlock(view, payload, *ethHeader, *executeResult);
-        // `mergeView` 原子落盘（C2 修复,spec 2026-08-10-op-block-persist-mergeview-design.md）：
-        // pushView + mergeBackStorage 合一,单块 VALID 即落 RocksDB backend。`SYS_CURRENT_STATE`
-        // head 推进仍缺失（裁定 A4）：重启后块表可读但 head 指针无,留 orchestration 层与
-        // reorg 窗口编排同批（§6.4 欠账台账）。
+        // `mergeView` atomically persists (pushView + mergeBackStorage combined): a single VALID
+        // block lands in the RocksDB backend. `SYS_CURRENT_STATE` head advance is still missing:
+        // after a restart the block tables are readable but the head pointer is not set --
+        // deferred to the orchestration layer together with reorg-window orchestration.
         co_await m_globalStateStorage.get().mergeView(std::move(view));
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
 
-    /// Block registration (design §6.1 step 6, table-level manifest). Everything lands in the one
+    /// Block registration (step 6, table-level manifest). Everything lands in the one
     /// mutable layer the caller opened, so the caller's single `pushView` publishes it atomically.
     ///
     /// Key/value encodings for the two ledger tables are copied byte-for-byte from the production
@@ -1263,7 +1220,7 @@ private:
     /// which is also what makes step 3's `getBlockNumber(..., fromStorage)` lookup find them.
     ///
     /// `OpExecuteResult` is a deduced template parameter rather than the spelled-out
-    /// `typename SchedulerType::ExecuteResult` (build-verification fix, task-5b): a member
+    /// `typename SchedulerType::ExecuteResult` (build-verification fix): a member
     /// function's *declaration* is instantiated together with the enclosing class, and only its
     /// *body* is instantiated lazily. Naming an OP-only associated type in the signature would
     /// therefore demand `SchedulerType::ExecuteResult` from every instantiation -- including the
@@ -1291,14 +1248,15 @@ private:
                 ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(payload.blockHash)},
             std::move(hashToNumberEntry));
 
-        // OP 头以 tars BlockHeader 落盘标准表 s_number_2_header(spec D3:一等公民,与 FISCO 正常块
-        // Ledger.cpp:234 同表同格式)。dataHash 为空(spec D6 推迟:FISCO hash 方案落地前不写),
-        // BlockHeader::hash() 在 OP 头上是 EmptyBlockHeaderHash——本路径不调用它,OP hash 经 codec。
-        // protocol::BlockHeader::encode() 是 void encode(bytes&) 的 out-param(BlockHeader.h:50,
-        // 审查 B1),不是 bytes encode()——先建 buffer 再取。
+        // The OP header is persisted as a tars BlockHeader in the standard s_number_2_header
+        // table (same table/format as normal FISCO blocks, Ledger.cpp:234). dataHash is empty
+        // (deferred until the FISCO hash scheme lands), so BlockHeader::hash() on an OP header
+        // throws EmptyBlockHeaderHash -- this path does not call it; the OP hash goes through the
+        // codec. protocol::BlockHeader::encode() is `void encode(bytes&)` with an out-param
+        // (BlockHeader.h:50), not `bytes encode()` -- create the buffer first, then take it.
         storage::Entry headerEntry;
         bcos::bytes headerBuffer;
-        header.encode(headerBuffer);  // tars 字节(原为 21 字段 RLP)
+        header.encode(headerBuffer);  // tars bytes (previously 21-field RLP)
         headerEntry.set(std::move(headerBuffer));
         co_await storage2::writeOne(view,
             executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
@@ -1308,26 +1266,25 @@ private:
         // value (`TransactionReceipt::encode`) as `bcos-ledger/LedgerMethods.h:106-119`'s
         // `prewriteBlockToBuffer`.
         //
-        // The transaction body IS stored (方案 B, spec §6.4): each raw EIP-2718 envelope is mapped
-        // by `detail::opEnvelopeToTars` (task-1 helper) into a tars
-        // `bcostars::protocol::Transaction`
-        // (`extraTransactionHash` = txHash per D4, `sender` filled per D8) and written to the
-        // generic `SYS_HASH_2_TX` as its `TransactionImpl::encode` bytes -- the same
-        // table/key/value shape `LedgerMethods.h:121-155`'s `prewriteBlockToBuffer` uses for normal
-        // blocks. Storing a converted transaction rather than the raw envelope is load-bearing:
-        // `SYS_HASH_2_TX` readers (`Ledger.cpp:1440-1443`, `LedgerMethods.h:235-239`, lightnode,
-        // storage-tool) pass the bytes straight to `createTransaction(..., checkSig=false,
-        // checkHash=false)`, and an Ethereum envelope there does NOT fail loudly -- every
-        // `bcostars::Transaction` field is `optional` and tars' tag scanner swallows decode errors,
-        // yielding an all-default object whose hash does not equal the key it was stored under,
-        // which nobody checks.
+        // The transaction body IS stored: each raw EIP-2718 envelope is mapped by
+        // `detail::opEnvelopeToTars` into a tars `bcostars::protocol::Transaction`
+        // (`extraTransactionHash` = txHash, `sender` filled) and written to the generic
+        // `SYS_HASH_2_TX` as its `TransactionImpl::encode` bytes -- the same table/key/value shape
+        // `LedgerMethods.h:121-155`'s `prewriteBlockToBuffer` uses for normal blocks. Storing a
+        // converted transaction rather than the raw envelope is load-bearing: `SYS_HASH_2_TX`
+        // readers (`Ledger.cpp:1440-1443`, `LedgerMethods.h:235-239`, lightnode, storage-tool)
+        // pass the bytes straight to `createTransaction(..., checkSig=false, checkHash=false)`,
+        // and an Ethereum envelope there does NOT fail loudly -- every `bcostars::Transaction`
+        // field is `optional` and tars' tag scanner swallows decode errors, yielding an
+        // all-default object whose hash does not equal the key it was stored under, which nobody
+        // checks.
         //
         // 0x04 (EIP-7702) is a first-class type supported by `opEnvelopeToTars` via the
         // Web3Transaction RLP decode (upstream #5411), so it maps to tars and lands in
         // SYS_HASH_2_TX like any other typed tx. Only a malformed or un-enumerated envelope
-        // makes `opEnvelopeToTars` return nullopt -- D7; 0x7E deposit is NOT unknown, it decodes
-        // via DepositTxHandler. On nullopt the row is skipped: the block stays VALID and the tx
-        // is simply not queryable by hash.
+        // makes `opEnvelopeToTars` return nullopt; 0x7E deposit is NOT unknown, it decodes via
+        // DepositTxHandler. On nullopt the row is skipped: the block stays VALID and the tx is
+        // simply not queryable by hash.
         // Known boundary, stated rather than hidden: `LedgerMethods.h:233-235` dereferences the
         // entry WITHOUT checking `has_value()`, so a missing row is UB on that path. That is a
         // pre-existing defect unrelated to OP (any block whose tx metadata outruns `SYS_HASH_2_TX`
@@ -1343,9 +1300,9 @@ private:
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
         // `processOpBlock` produces exactly one receipt per transaction. A divergence is a broken
         // invariant in the execution layer, not a condition to paper over: truncating to the
-        // shorter of the two (task-5b review M2) would silently drop receipts from the registry
-        // while still reporting the block VALID. Fail loudly instead -- and as an internal error,
-        // since it is this node's bug, not a verdict on the payload.
+        // shorter of the two would silently drop receipts from the registry while still reporting
+        // the block VALID. Fail loudly instead -- and as an internal error, since it is this
+        // node's bug, not a verdict on the payload.
         if (rawTransactions.size() != executeResult.receipts.size())
         {
             BOOST_THROW_EXCEPTION(
@@ -1372,9 +1329,11 @@ private:
                     ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
                 std::move(receiptEntry));
 
-            // 方案 B：OP 交易转换后写 SYS_HASH_2_TX（复用普通交易通道）。0x04 (EIP-7702) 由
-            // opEnvelopeToTars 支持（Web3Transaction RLP 解码，上游 #5411 起一等类型），与其它
-            // typed tx 一样落表；仅损坏/未枚举信封转换失败才跳过写表——读侧不可查但块仍有效（D7）。
+            // OP transactions are converted and written to SYS_HASH_2_TX (reusing the normal
+            // transaction channel). 0x04 (EIP-7702) is supported by opEnvelopeToTars
+            // (Web3Transaction RLP decode, a first-class type since upstream #5411) and lands
+            // like any other typed tx; only a malformed or un-enumerated envelope is skipped --
+            // unreadable on the read side but the block stays valid.
             if (auto tarsTx = detail::opEnvelopeToTars(rawTransactions[index], txHash))
             {
                 bcostars::protocol::TransactionImpl txImpl(

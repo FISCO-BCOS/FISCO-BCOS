@@ -62,19 +62,20 @@ BOOST_AUTO_TEST_SUITE(SeedPreStateSuite)
 
 BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
 {
-    // 一个最小 pre：3 个账户（含带 storage 的合约账户 + 完全空账户）
+    // A minimal pre: 3 accounts (incl. a contract account with storage + a fully empty account)
     Json::Value pre(Json::objectValue);
-    // 0x4200000000000000000000000000000000000015 — L1 block 合约，带 2 个 storage 槽
+    // 0x4200000000000000000000000000000000000015 — L1 block contract with 2 storage slots
     pre["0x4200000000000000000000000000000000000015"] = Json::objectValue;
     pre["0x4200000000000000000000000000000000000015"]["balance"] = "0x0";
     pre["0x4200000000000000000000000000000000000015"]["nonce"] = "0x1";
     pre["0x4200000000000000000000000000000000000015"]["code"] = "0x";
-    // ⚠️ storage 值必须是满 32 字节（66 hex）——jsonBytes32 对短值抛 runtime_error
-    // （R2-B 捕获：真实向量全部 66 字符，此处测试字面量曾用 "0x1234" 导致 Step 5 必红）。
+    // Warning: storage values must be full 32 bytes (66 hex) — jsonBytes32 throws
+    // runtime_error on short values (caught by R2-B: real vectors are all 66 chars; this
+    // test literal once used "0x1234", which made Step 5 go red).
     pre["0x4200000000000000000000000000000000000015"]["storage"]
        ["0x0000000000000000000000000000000000000000000000000000000000000001"] =
            "0x0000000000000000000000000000000000000000000000000000000000001234";
-    // 0x7e5f... — 普通 EOA，带 balance
+    // 0x7e5f... — a normal EOA with a balance
     pre["0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"]["balance"] = "0x56bc75e2d63100000";
     pre["0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"]["nonce"] = "0x0";
     pre["0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"]["code"] = "0x";
@@ -85,7 +86,7 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
 
     w6test::seedPreState(multiLayerStorage, pre);
 
-    // 验证：fork 新 view，经 Storage2Ledger 桥读回
+    // Verify: fork a new view and read back through the Storage2Ledger bridge
     auto view = multiLayerStorage.fork();
     bcos::evm::ledger::Storage2Ledger<ViewType> bridge(view);
     const auto addr = w6test::jsonAddress("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");

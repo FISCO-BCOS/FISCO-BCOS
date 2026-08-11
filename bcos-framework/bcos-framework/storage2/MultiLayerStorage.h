@@ -408,7 +408,6 @@ public:
 
         task::Task<RangeValue> next()
         {
-            // 基于合并排序，找到所有迭代器的最小值，推进迭代器并返回值
             // Based on merge sort, find the minimum value of all iterators, advance the
             // iterator and return its value
             auto iterators = m_iterators | ::ranges::views::filter([](auto const& rangeValue) {
@@ -550,14 +549,13 @@ public:
         m_storages.push_front(std::move(view.m_mutableStorage));
     }
 
-    /// C2 落盘修复（spec 2026-08-10-op-block-persist-mergeview-design.md）：pushView + mergeBackStorage
-    /// 合一——先入栈再合并最旧层（m_storages.back()，FIFO）。规避 mergeBackStorage 抛 throw 时 mutable
-    /// layer 泄漏：push 已入栈、merge 失败时层保留供下次重试（降级语义,异常向上传播由调用方定类）。
-    /// 实现 EngineServiceImpl.h:671 的 TODO。`view.m_mutableStorage` 为空时 no-op（与 pushView guard 一致）。
+    /// mergeView = pushView + mergeBackStorage combined: push first, then merge the oldest layer
+    /// (m_storages.back(), FIFO). If mergeBackStorage throws, the pushed layer stays queued for
+    /// retry (degraded semantics, exception propagation decided by caller). No-op on empty mutable.
     task::Task<void> mergeView(ViewType view)
     {
         if (!view.m_mutableStorage)
-            co_return;  // ⚠️ 审查修正：协程内须 co_return（return; 编译失败）——防空栈 mergeBackStorage
+            co_return;  // review fix: coroutine must use co_return (return; fails to compile) — avoid merging an empty stack
         pushView(std::move(view));
         co_await mergeBackStorage();
     }

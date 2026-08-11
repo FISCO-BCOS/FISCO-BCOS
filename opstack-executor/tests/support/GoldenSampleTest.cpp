@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(LoadVectorAndGolden)
 {
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
     BOOST_CHECK_EQUAL(sample.id, "jovian_deposit_only");
-    // vector 有 env/pre/_op_expected；golden 有 rawTransactions/encodedHeaderHex/blockHash
+    // vector has env/pre/_op_expected; golden has rawTransactions/encodedHeaderHex/blockHash
     BOOST_CHECK(sample.vector.isMember("pre"));
     BOOST_CHECK(sample.vector.isMember("env"));
     BOOST_CHECK(sample.golden.isMember("rawTransactions"));
@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
     auto header = w6test::decodeGoldenHeader(sample);
     BOOST_REQUIRE(header != nullptr);
-    // decodeOpHeader 是 encodeOpHeader 的严格逆；roundtrip 应逐字节一致
+    // decodeOpHeader is encodeOpHeader's strict inverse; the roundtrip must be byte-identical
     auto c = bcos::engine::detail::opHeaderConst();
     BOOST_CHECK(
         header->encodeOpHeader(c) == bcos::fromHex(sample.golden["encodedHeaderHex"].asString()));
@@ -55,21 +55,22 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
     BOOST_CHECK(ep.isMember("transactions"));
     BOOST_CHECK(ep.isMember("blockHash"));
     BOOST_CHECK(ep.isMember("withdrawalsRoot"));
-    // OP 路径 withdrawals 必须 present-and-empty（validateOpNewPayloadRequest 硬要求）
+    // OP path requires withdrawals present-and-empty (validateOpNewPayloadRequest hard requirement)
     BOOST_CHECK(ep.isMember("withdrawals"));
     BOOST_CHECK(ep["withdrawals"].isArray());
     BOOST_CHECK_EQUAL(ep["withdrawals"].size(), 0);
     BOOST_CHECK(ep["timestamp"].asString().size() >= 3);  // "0x..."
-    // rawTransactions 原样进 transactions（parse 层 decode 容错跳过，raw 无条件保留）
-    BOOST_CHECK_EQUAL(ep["transactions"].size(), 1);  // jovian_deposit_only 1 笔 deposit
+    // rawTransactions go into transactions verbatim (parse-layer decode is fault-tolerant; raw is always retained)
+    BOOST_CHECK_EQUAL(ep["transactions"].size(), 1);  // jovian_deposit_only has 1 deposit
 }
 
 BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
 {
-    // D4: golden manifest 自动校验——manifest.txt（非注释行）↔ vectors/*.json ↔
-    // golden/engine/*.golden.json
-    // 三集合必须一致。防漏格（向量该生成未生成）/孤儿向量/清单漂移——regen.sh 的手动 diff 之外,
-    // 测试运行时自动检查（语料改动不跑 regen 时也能暴露）。
+    // D4: automatic golden-manifest validation — manifest.txt (non-comment lines) ↔
+    // vectors/*.json ↔ golden/engine/*.golden.json must be consistent. Guards against
+    // missing vectors (should have been generated), orphan vectors, and manifest drift —
+    // beyond regen.sh's manual diff, this is checked at test runtime (catches corpus
+    // changes even when regen is not rerun).
     auto basenameSet = [](std::filesystem::path const& dir, std::string_view suffix) {
         std::set<std::string> names;
         for (auto const& entry : std::filesystem::directory_iterator(dir))
@@ -84,7 +85,7 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
         return names;
     };
 
-    // manifest.txt：非注释、非空行 → basename（去 .json 后缀）
+    // manifest.txt: non-comment, non-blank lines -> basename (suffix .json stripped)
     std::set<std::string> manifest;
     {
         std::ifstream in(std::string(OP_T8N_VECTORS_DIR) + "/manifest.txt");
@@ -103,9 +104,10 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
     }
 
     auto vectors = basenameSet(OP_T8N_VECTORS_DIR, ".json");
-    // §4c item 3/12（expectedBlobVersionedHashes/executionRequests）生成但强制不入 manifest
-    // （GoldenSample loader 不可表达）——集合相等豁免（Task 6，同 OpT8nReplayTest.cpp 的
-    // isUnregisteredStatic；条目去 .json 后缀）。"_static_3"=9 字符 / "_static_12"=10 字符。
+    // Static items 3/12 (expectedBlobVersionedHashes/executionRequests) are generated but
+    // forced out of the manifest (inexpressible through the GoldenSample loader) — set
+    // equality exempts them (Task 6, same as OpT8nReplayTest.cpp's isUnregisteredStatic;
+    // entries have .json stripped). "_static_3"=9 chars / "_static_12"=10 chars.
     const auto isUnregisteredStatic = [](std::string const& n) {
         return (n.size() >= 9 && n.rfind("_static_3") == n.size() - 9) ||
                (n.size() >= 10 && n.rfind("_static_12") == n.size() - 10);
@@ -120,13 +122,14 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
     auto golden = basenameSet(OP_T8N_GOLDEN_ENGINE_DIR, ".golden.json");
 
     BOOST_CHECK_MESSAGE(
-        manifest == vectors, "manifest.txt ↔ vectors/ basename 集合不一致（漏格/孤儿/漂移）");
-    // golden/engine 是 engine-gate golden ritual 的子集：线 B（预编译矩阵）的 golden
-    // 扩展是记录在案的延后义务（差分门不消费 golden/，不阻塞验收），故 vectors 可多于
-    // golden。断言收紧为 golden ⊆ vectors：每个 golden 必须有对应 vector（无孤儿 golden），
-    // 容忍 golden 延后向量（非反向遗漏）。
+        manifest == vectors, "manifest.txt vs vectors/ basename sets mismatch (missing/orphan/drifted)");
+    // golden/engine is a subset of the engine-gate golden ritual: the line-B
+    // (precompile-matrix) golden extension is a recorded deferred obligation (the
+    // differential gate does not consume golden/, does not block acceptance), so vectors
+    // may exceed golden. The assertion is tightened to golden ⊆ vectors: every golden must
+    // have a corresponding vector (no orphan golden), while deferred vectors are tolerated.
     BOOST_CHECK_MESSAGE(std::includes(vectors.begin(), vectors.end(), golden.begin(), golden.end()),
-        "golden/engine ↔ vectors/ 集合不一致（孤儿 golden / 缺对应 vector）");
+        "golden/engine vs vectors/ sets mismatch (orphan golden / missing vector)");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
