@@ -30,4 +30,11 @@ namespace bcos::rpc
 {
 void combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs = false);
+
+/// OP-aware block hash. OP headers (Isthmus+ always carry `withdrawalsRoot`; FISCO non-OP
+/// headers never do) hash as keccak(encodeOpHeader) with the post-merge protocol constants — the
+/// hash the OP block tables (`s_number_2_hash`) and op-node agree on — instead of the tars
+/// `dataHash` fallback (which the read path re-derives as a FISCO tars hash). Shared by
+/// `combineBlockResponse` and `getTransactionByBlockNumberAndIndex` so both read paths agree.
+bcos::crypto::HashType opAwareBlockHash(const bcos::protocol::BlockHeader& header);
 }  // namespace bcos::rpc

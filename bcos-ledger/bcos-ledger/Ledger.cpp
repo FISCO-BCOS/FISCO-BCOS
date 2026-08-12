@@ -152,9 +152,14 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
             SYS_DIRECTORY::SYS_APPS :
             SYS_DIRECTORY::USER_APPS;
     auto const contractTableName = getContractTableName(tablePrefix, _address);
-    auto const stateStorage = getStateStorage();
+    // Read the account state straight off `m_stateStorage` (the storage2 view both the OP
+    // executor's Storage2State and the v2 executor write through), NOT `getStateStorage()`:
+    // the latter wraps `m_stateStorage` in a KeyPageStorage when keyPageSize>0, and that page
+    // overlay cannot see rows the OP executor wrote flat via storage2 (executeOpBlock's
+    // fetchAccount reads them fine; getBalance/getStorageAt came back empty — R3). `blockNumber`
+    // is ignored here, so latest-state is the honest read either way.
     co_return co_await bcos::storage2::readOne(
-        *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
+        *m_stateStorage, executor_v1::StateKeyView{contractTableName, _key});
 }
 
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,

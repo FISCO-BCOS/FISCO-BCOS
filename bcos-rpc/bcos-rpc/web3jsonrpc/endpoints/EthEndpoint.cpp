@@ -817,7 +817,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        auto blockHash = block->blockHeader()->hash();
+        // OP headers hash as keccak(encodeOpHeader), not the tars dataHash fallback — same fix
+        // as combineBlockResponse (R1).
+        auto blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)
