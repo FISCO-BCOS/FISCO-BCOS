@@ -151,6 +151,30 @@ def a2_exec(rpc, sender):
     check("eth_call empty-code contract returns 0x", out2 == "0x", str(out2))
 
 
+def a4_scope(rpc):
+    print("A.4 in/out-of-scope")
+    # Spec §3 A.4: stub methods are IMPLEMENTED but excluded (return sentinels, no error); a
+    # -32601 method-not-found would mean the stub is missing. Declared gaps must NOT be
+    # implemented (present → the scope claim is stale).
+    for m, arg in [("eth_coinbase", []), ("eth_mining", []), ("eth_hashrate", []),
+                   ("eth_accounts", []), ("eth_sendTransaction", []), ("eth_sign", []),
+                   ("eth_signTransaction", []),
+                   ("eth_getUncleCountByBlockNumber", ["0x0"]),
+                   ("eth_getUncleByBlockNumberAndIndex", ["0x0", "0x0"]), ("eth_subscribe", [])]:
+        try:
+            rpc.call(m, arg)
+            check(f"{m} stub present", True)
+        except AssertionError as e:
+            check(f"{m} stub present", "-32601" not in str(e), str(e)[:70])
+    for m in ["eth_feeHistory", "eth_protocolVersion", "engine_exchangeTransitionConfigurationV1",
+              "engine_getPayloadBodiesV1", "engine_getPayloadBodiesV2", "engine_getClientVersionV1"]:
+        try:
+            rpc.call(m, [])
+            check(f"{m} declared-gap", False, "expected method-not-found")
+        except AssertionError as e:
+            check(f"{m} declared-gap", "-32601" in str(e), str(e)[:70])
+
+
 def a3_web3_net(rpc):
     print("A.3 web3/net")
     v = rpc.call("web3_clientVersion")
@@ -178,7 +202,8 @@ def main():
     erpc = RpcClient(args.host, args.engine_port, jwt_secret_hex=jwt_hex)
     groups = {"a1": [lambda: a1_engine_surface(erpc)],
               "a2": [lambda: a2_chain(rpc), lambda: a2_blocks(rpc), lambda: a2_accounts(rpc, args.sender), lambda: a2_exec(rpc, args.sender)],
-              "a3": [lambda: a3_web3_net(rpc)]}
+              "a3": [lambda: a3_web3_net(rpc)],
+              "a4": [lambda: a4_scope(rpc)]}
     if args.only:
         for fn in groups[args.only]:
             fn()
