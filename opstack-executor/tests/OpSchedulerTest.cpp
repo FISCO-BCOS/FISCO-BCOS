@@ -28,6 +28,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>  // 迁移 call 用例（Task 5c fix round 1）
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -280,6 +281,108 @@ struct Fixture
         seedSender(multiLayerStorage, kSender, hashImpl);
     }
 };
+
+// ── call/getCode 用例迁移（Task 5c fix round 1，逐字来自被删 OpBlockSchedulerTest）──
+// OpScheduler 吸收 OpBlockScheduler 的 call/getCode 纯虚实现后，原 OpBlockSchedulerTest 的
+// RPC 面用例（StatusAndResetNoOp / GetCodeEmpty / CallInvalidReturnsError /
+// CallHappyPathInjectsRealBaseFee）迁入本套件，驱动对象换成 OpScheduler（f.scheduler）。
+const bcos::Address kCallSender{"0x1000000000000000000000000000000000000000"};
+
+/// A genesis header carrying every field coCallLatest's buildOpBlockInfo/toBlockInfo reads
+/// （baseFee=1e9 是 CallHappyPath 注入断言的目标值）。
+std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeCallGenesisHeader()
+{
+    auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    h->setNumber(0);
+    h->setTimestamp(1000000);
+    h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0, .blockHash = bcos::h256{}});
+    h->setCoinbase(bcos::Address{});
+    h->setStateRoot(bcos::h256{});
+    h->setTxsRoot(bcos::h256{});
+    h->setReceiptsRoot(bcos::h256{});
+    h->setGasLimit(bcos::u256(30000000));
+    h->setGasUsed(bcos::u256(0));
+    h->setExtraData(bcos::bytes{});
+    h->setPrevRandao(bcos::h256{});
+    h->setBaseFee(bcos::u256(1000000000));
+    h->setWithdrawalsRoot(bcos::h256{});
+    h->setBlobGasUsed(bcos::u256(0));
+    h->setExcessBlobGas(bcos::u256(0));
+    h->setParentBeaconBlockRoot(bcos::h256{});
+    h->setRequestsHash(bcos::h256{});
+    return h;
+}
+
+/// Seed the minimal OP ledger the RPC call()/read paths need: current head (SYS_CURRENT_STATE)
+/// and the block-0 header (getBlockData(HEADER) reads SYS_NUMBER_2_BLOCK_HEADER by number).
+void seedCallGenesis(MLS& mls, bcos::protocol::BlockHeader::Ptr const& genesisHeader)
+{
+    auto view = mls.fork();
+    view.newMutable();
+    {
+        bcos::storage::Entry e;
+        e.set(boost::lexical_cast<std::string>(genesisHeader->number()));
+        bcos::task::syncWait(bcos::storage2::writeOne(view,
+            StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+            std::move(e)));
+    }
+    {
+        bcos::bytes buf;
+        genesisHeader->encode(buf);
+        bcos::storage::Entry e;
+        e.set(std::move(buf));
+        bcos::task::syncWait(bcos::storage2::writeOne(view,
+            StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER,
+                boost::lexical_cast<std::string>(genesisHeader->number())},
+            std::move(e)));
+    }
+    bcos::task::syncWait(mls.mergeView(std::move(view)));
+}
+
+/// Build an EIP-1559 (type 2) web3 tx wrapped as a tars Transaction::Ptr（lambda-holder 形式）。
+/// EIP-1559 是刻意的（round-3 C2）：EIP-2930/legacy tx with maxPriorityFeePerGas=0 会触发
+/// BCOS2Evmone 的 access_list override（max_priority=max_gas），effectiveGasPrice =
+/// maxFeePerGas 而非 baseFee——假阳性；EIP-1559 保持 max_priority=0，effectiveGasPrice ==
+/// baseFee 精确（注入敏感）。
+bcos::protocol::Transaction::Ptr buildWeb3Tx(
+    bcos::u256 maxFeePerGas, bcos::u256 maxPriorityFeePerGas)
+{
+    bcos::rpc::Web3Transaction w3{};
+    w3.type = bcos::rpc::TransactionType::EIP1559;
+    w3.chainId = 5;
+    w3.nonce = 0;
+    w3.maxFeePerGas = maxFeePerGas;
+    w3.maxPriorityFeePerGas = maxPriorityFeePerGas;
+    w3.gasLimit = 5000000;
+    w3.to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
+    w3.value = bcos::u256(0);
+    w3.signatureV = 0;
+    w3.signatureR = bcos::bytes(32, 0x01);
+    w3.signatureS = bcos::bytes(32, 0x02);
+    auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+    auto const txHash = w3.txHash();
+    tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tarsHolder]() { return tarsHolder.get(); });
+    // The dummy r/s cannot recover a sender; force it so opValidate sees the funded account.
+    tx->clearSenderAndHash();
+    tx->forceSender(kCallSender.asBytes());
+    return tx;
+}
+
+/// Fund an EOA so opValidate passes（同 seedSender 的 create()+setCode(empty) 存在性模式）。
+void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr const& hashImpl,
+    bcos::u256 const& balance)
+{
+    auto view = mls.fork();
+    view.newMutable();
+    bcos::ledger::account::EVMAccount account(view, addr, /*rawAddress=*/false);
+    bcos::task::syncWait(account.create());
+    bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
+    bcos::task::syncWait(account.setNonce("0"));
+    bcos::task::syncWait(account.setBalance(balance));
+    bcos::task::syncWait(mls.mergeView(std::move(view)));
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSuite)
@@ -510,6 +613,83 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
         BOOST_REQUIRE_MESSAGE(
             txEntry.has_value(), "SYS_HASH_2_TX must be written for tx " << txHash.hex());
     }
+}
+
+// ── RPC 面用例迁移（Task 5c fix round 1，逐字来自被删 OpBlockSchedulerTest；驱动对象换成
+//    OpScheduler——f.scheduler 是 TestOpScheduler<OpScheduler>，call/getCode/status/reset 继承）──
+
+/// 骨架默认 no-op status/reset（OpBlockScheduler 同语义）。
+BOOST_AUTO_TEST_CASE(StatusAndResetNoOp)
+{
+    Fixture f;
+    f.scheduler->status([&](bcos::Error::Ptr err, bcos::protocol::Session::ConstPtr) {
+        BOOST_REQUIRE(err == nullptr);
+    });
+    f.scheduler->reset([&](bcos::Error::Ptr err) { BOOST_REQUIRE(err == nullptr); });
+}
+
+/// 未知地址 → 空 code，无错误（getCode 只读 features，不走 getLedgerConfig，OP 头空 dataHash
+/// 不触碰 BlockHeader::hash()）。
+BOOST_AUTO_TEST_CASE(GetCodeEmpty)
+{
+    Fixture f;
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+    bool called = false;
+    f.scheduler->getCode(
+        "0x0000000000000000000000000000000000000001", [&](bcos::Error::Ptr err, bcos::bytes code) {
+            called = true;
+            BOOST_REQUIRE(err == nullptr);
+            BOOST_REQUIRE(code.empty());
+        });
+    BOOST_REQUIRE(called);
+}
+
+/// 无效调用（maxFeePerGas=1 < baseFee(1e9) trips evmone validate FEE_CAP_LESS_THAN_BLOCKS；未
+/// 资金 sender 亦 trip balance check）→ JSON-RPC Error，绝不 status-0 receipt。
+BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
+{
+    Fixture f;
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+    auto tx = buildWeb3Tx(/*maxFeePerGas=*/1, /*maxPriorityFeePerGas=*/0);
+    bool called = false;
+    f.scheduler->call(
+        std::move(tx), [&](bcos::Error::Ptr err, bcos::protocol::TransactionReceipt::Ptr) {
+            called = true;
+            BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC)，绝不 status-0 receipt
+        });
+    BOOST_REQUIRE(called);
+}
+
+/// 调度器级 call 链路（OpScheduler::call → coCallLatest → buildOpBlockInfo）的 baseFee 注入对拍
+/// （Task 5/dual-path #34）：maxPriorityFeePerGas=0（EIP-1559，BCOS2Evmone access_list override
+/// 不触发）→ effectiveGasPrice == base_fee + min(0, maxFee-base_fee) == base_fee 精确。pre-fix
+/// buildOpBlockInfo 注入 base_fee=0 → egp "0x0"；post-fix header baseFee(1e9) 透出——证明 Task 4
+/// buildOpBlockInfo baseFee 修复在调度器级 call 链路生效。
+BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
+{
+    Fixture f;
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+    fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
+
+    auto tx = buildWeb3Tx(
+        /*maxFeePerGas=*/bcos::u256(30'000'000'000ULL), /*maxPriorityFeePerGas=*/0);
+
+    bcos::protocol::TransactionReceipt::Ptr got;
+    bcos::Error::Ptr err;
+    f.scheduler->call(
+        std::move(tx), [&](bcos::Error::Ptr e, bcos::protocol::TransactionReceipt::Ptr r) {
+            err = std::move(e);
+            got = std::move(r);
+        });
+    BOOST_REQUIRE_MESSAGE(
+        err == nullptr, "eth_call must succeed, got error: " << (err ? err->errorMessage() : ""));
+    BOOST_REQUIRE(got != nullptr);
+    // effectiveGasPrice 是 hex 字符串（"0x...", TransactionReceipt.h:75）。解析成 u256 并断言
+    // == header baseFee(1e9)——精确（EIP-1559 + maxPriority=0 → effectiveGasPrice == baseFee）。
+    const auto egp = bcos::u256(std::string(got->effectiveGasPrice()));
+    const auto baseFee = bcos::u256(1'000'000'000);
+    BOOST_CHECK_MESSAGE(
+        egp == baseFee, "effectiveGasPrice " << egp << " must equal header baseFee " << baseFee);
 }
 
 /// execute hook 抛 OpConsensusError（0x03 envelope 经 decodeOneRawTx 确定性抛）→ 骨架 classify →
