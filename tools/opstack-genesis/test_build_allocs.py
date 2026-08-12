@@ -325,6 +325,17 @@ def test_zero_governance_owner_rejected(tmp_path):
         build_allocs.build_allocs(config, str(contracts), base)
 
 
+def test_same_admin_and_owner_rejected(tmp_path):
+    # The module contract says the two authorities are never the same role;
+    # the tool must enforce it, not just document it.
+    contracts = _base_contracts(tmp_path)
+    base = _load_base(tmp_path)
+    config = _config(_system_config_predeploy())
+    config["governance_owner"] = PROXY_ADMIN
+    with pytest.raises(ValueError, match="different"):
+        build_allocs.build_allocs(config, str(contracts), base)
+
+
 def test_reserved_namespace_rejected(tmp_path):
     contracts = _base_contracts(tmp_path)
     base = _load_base(tmp_path)

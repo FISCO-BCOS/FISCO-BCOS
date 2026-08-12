@@ -398,6 +398,12 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
         raise ValueError(
             f"{name}: proxy_admin / governance_owner must not be the zero "
             f"address (a zero owner bricks governance at genesis)")
+    if address_int(governance_owner) == address_int(proxy_admin):
+        raise ValueError(
+            f"{name}: proxy_admin and governance_owner must be different "
+            f"entities (upgrade authority vs config/validator write "
+            f"authority; see the two-authority split in the module doc)")
+
     proxy_address = address_int(predeploy["address"])
     implementation_address = address_int(proxy_spec["implementation"])
     for label, addr in (("address", proxy_address),
