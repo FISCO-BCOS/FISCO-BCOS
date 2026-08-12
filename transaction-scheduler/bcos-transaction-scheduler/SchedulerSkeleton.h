@@ -116,6 +116,17 @@ public:
     }
 
 protected:
+    // 默认可构造（FakeDerived 等派生 stub 用；真实状态留空）。派生构造器可显式接线。
+    SchedulerSkeleton() = default;
+    // 共享编排机制状态接线（Task 3b：BaselineScheduler 构造器调用；OP 用 wire stub）。
+    SchedulerSkeleton(MultiLayerStorage& multiLayerStorage, protocol::BlockFactory& blockFactory,
+        Ledger& ledger, protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory)
+      : m_multiLayerStorage(&multiLayerStorage),
+        m_blockFactory(&blockFactory),
+        m_ledger(&ledger),
+        m_transactionSubmitResultFactory(&transactionSubmitResultFactory)
+    {}
+
     // CRTP 非虚分派（A4）
     Derived& derived() noexcept { return static_cast<Derived&>(*this); }
 

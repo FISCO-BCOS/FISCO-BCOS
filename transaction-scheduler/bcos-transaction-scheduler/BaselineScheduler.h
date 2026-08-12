@@ -3,6 +3,7 @@
 #include "BaselineSchedulerMPTHelpers.h"
 #include "HistoricalCallStorage.h"
 #include "MPTNodeStorage.h"
+#include "SchedulerSkeleton.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-executor/src/Common.h"
@@ -39,7 +40,6 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -53,8 +53,6 @@
 
 namespace bcos::scheduler_v1
 {
-#define BASELINE_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BASELINE_SCHEDULER")
-
 DERIVE_BCOS_EXCEPTION(NotFoundTransactionError);
 
 /**
@@ -267,57 +265,22 @@ template <class MultiLayerStorage,
         std::vector<protocol::Transaction::ConstPtr>>
         SchedulerImpl,
     class Ledger>
-class BaselineScheduler : public scheduler::SchedulerInterface
+class BaselineScheduler
+  : public SchedulerSkeleton<MultiLayerStorage, Executor, SchedulerImpl, Ledger,
+        BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>>
 {
+    using SchedulerBase = SchedulerSkeleton<MultiLayerStorage, Executor, SchedulerImpl, Ledger,
+        BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>>;
+
 private:
-    std::reference_wrapper<MultiLayerStorage> m_multiLayerStorage;
+    // ethereum-specific state kept in the derived class (used only by the CRTP hooks
+    // and the call/storage-read methods below); the shared orchestration state
+    // (m_multiLayerStorage / m_blockFactory / m_ledger / m_results / mutexes / notifier /
+    // m_asyncGroup / m_mptCommitObserver / counters) lives in SchedulerSkeleton.
     std::reference_wrapper<std::remove_reference_t<SchedulerImpl>> m_schedulerImpl;
     std::reference_wrapper<Executor> m_executor;
-    std::reference_wrapper<protocol::BlockFactory> m_blockFactory;
-    std::reference_wrapper<Ledger> m_ledger;
     std::reference_wrapper<txpool::TxPoolInterface> m_txpool;
-    std::reference_wrapper<protocol::TransactionSubmitResultFactory>
-        m_transactionSubmitResultFactory;
-    std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
-    std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
-        std::function<void(Error::Ptr)>)>
-        m_transactionNotifier;
     std::reference_wrapper<crypto::Hash const> m_hashImpl;
-
-    // FIB-101 / FIB-102: Each counter is owned by exactly one mutex and is read /
-    // written only while that mutex is held. Plain integers are sufficient — no
-    // atomics needed. m_lastExecutedBlockNumber is owned by m_executeMutex;
-    // m_lastCommittedBlockNumber is owned by m_commitMutex.
-    int64_t m_lastExecutedBlockNumber{-1};
-    std::mutex m_executeMutex;
-    int64_t m_lastCommittedBlockNumber{-1};
-    std::mutex m_commitMutex;
-    tbb::task_group m_asyncGroup;
-
-    struct ExecuteResult
-    {
-        protocol::ConstTransactionsPtr m_transactions;
-        std::vector<protocol::TransactionReceipt::Ptr> m_receipts;
-        protocol::BlockHeader::Ptr m_executedBlockHeader;
-        protocol::Block::Ptr m_block;
-        bool m_sysBlock{};
-        /// Engaged when the block was executed with an MPT state root (shouldBuildMPT).
-        /// CommitObserver payload ONLY: coCommitBlock hands the whole delta to the observer
-        /// after the merge lands. Nothing else reads it — node PERSISTENCE goes through the
-        /// block's mutable layer into mergeBackStorage as ordinary state rows
-        /// (MPTNodeStorage.h), and the NEXT block reads its parent root from the published
-        /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
-        /// consensus-path data flows through.
-        std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
-    };
-    std::deque<std::shared_ptr<ExecuteResult>> m_results;
-    std::mutex m_resultsMutex;
-
-    /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
-    /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
-    /// Written only before block flow starts (wiring time), read on the commit path.
-    std::shared_ptr<ledger::mpt::CommitObserver> m_mptCommitObserver =
-        std::make_shared<ledger::mpt::NoopCommitObserver>();
 
     /**
      * Build the block's Ethereum MPT state root over the execute view — the view whose top
@@ -357,7 +320,7 @@ private:
         if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
         {
             auto parentBlock = co_await ledger::getBlockData(
-                view, blockNumber - 1, ledger::HEADER, m_blockFactory.get());
+                view, blockNumber - 1, ledger::HEADER, *this->m_blockFactory);
             parentStateRoot = parentBlock->blockHeader()->stateRoot();
         }
         // else: scenario-A activation boundary (parent committed an XOR root) — empty trie.
@@ -370,488 +333,163 @@ private:
         co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
     }
 
-    /**
-     * Executes a block and returns a tuple containing an error (if any), the block header, and
-     * a boolean indicating success.
-     *
-     * @param block The block to execute.
-     * @param verify Whether to verify the block before executing it.
-     * @return A tuple containing an error (if any), the block header, and a boolean indicating
-     * success.
-     */
-    task::Task<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool>> coExecuteBlock(
-        bcos::protocol::Block::Ptr block, bool verify)
+    // ================================================================
+    // 5 CRTP hooks（PUBLIC：CRTP 非虚分派需要基类（SchedulerSkeleton）经 derived() 访问
+    // 派生定义——派生私有成员基类不可访问，故 hook 与 classifyException 置 public）。
+    // ================================================================
+public:
+    /// ① 交易来源：现有自由函数 getTransactions(txpool, block)（BaselineScheduler.cpp:3-17，
+    ///    协程）。适配器忽略 view，传 m_txpool.get()；cfg 在 getTransactions 之后加载
+    ///    （骨架 coExecuteBlock 保持现状顺序）。
+    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
+        protocol::Block& block, typename MultiLayerStorage::ViewType&)
     {
-        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-            ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
-        try
-        {
-            auto blockHeader = block->blockHeader();
-            BASELINE_SCHEDULER_LOG(INFO)
-                << "Execute block: " << blockHeader->number() << " | " << verify << " | "
-                << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
-
-            // Fast path: if the block has already been executed (consensus and sync
-            // may both drive the same height), serve the cached result without
-            // taking m_executeMutex. m_results is owned by m_resultsMutex.
-            {
-                std::unique_lock resultsLock(m_resultsMutex);
-                if (!m_results.empty())
-                {
-                    auto number = blockHeader->number();
-                    auto frontNumber = m_results.front()->m_executedBlockHeader->number();
-                    auto backNumber = m_results.back()->m_executedBlockHeader->number();
-                    if (number <= frontNumber && number >= backNumber)
-                    {
-                        BASELINE_SCHEDULER_LOG(INFO)
-                            << "Block has been executed, return result directly";
-                        auto& result = m_results.at(frontNumber - number);
-                        co_return {nullptr, result->m_executedBlockHeader, result->m_sysBlock};
-                    }
-                }
-            }
-
-            // FIB-102: m_lastExecutedBlockNumber is owned by m_executeMutex; the
-            // continuity check below must run while this lock is held to avoid
-            // the write-here / read-elsewhere race that the original code had.
-            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
-            if (!executeLock.owns_lock())
-            {
-                auto message = std::string{"Another block is executing!"};
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
-            }
-
-            // FIB-102: TOCTOU re-check of the discontinuity condition under
-            // m_executeMutex. Reads of m_lastExecutedBlockNumber happen here only.
-            // Cache hits are already handled by the no-lock fast path above; this
-            // branch only logs the cache window for diagnostics before returning
-            // the discontinuity error.
-            if (m_lastExecutedBlockNumber != -1 &&
-                blockHeader->number() - m_lastExecutedBlockNumber != 1)
-            {
-                auto message =
-                    fmt::format("Discontinuous execute block number! expect: {} input: {}",
-                        m_lastExecutedBlockNumber + 1, blockHeader->number());
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
-            }
-
-            // FIB-103: Backpressure — refuse new executions when the pending-result
-            // queue is at capacity, preventing unbounded growth of m_results /
-            // view stack when commits stall or never arrive.
-            static constexpr size_t MAX_PENDING_RESULTS = 16;
-            {
-                std::unique_lock resultsLock(m_resultsMutex);
-                if (m_results.size() >= MAX_PENDING_RESULTS)
-                {
-                    auto message =
-                        fmt::format("Too many pending execution results: {}", m_results.size());
-                    BASELINE_SCHEDULER_LOG(WARNING) << message;
-                    co_return {
-                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                        nullptr, false};
-                }
-            }
-
-            auto now = current();
-            auto view = m_multiLayerStorage.get().fork();
-            view.newMutable();
-            auto transactions = co_await getTransactions(m_txpool.get(), *block);
-            if (::ranges::any_of(transactions, [](auto const& tx) { return tx == nullptr; }))
-            {
-                auto message = fmt::format(
-                    "Not found transactions in txpool for block: {}", blockHeader->number());
-                BASELINE_SCHEDULER_LOG(ERROR) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
-                    nullptr, false};
-            }
-            auto ledgerConfig =
-                co_await ledger::getLedgerConfig(view, blockHeader->number(), m_blockFactory.get());
-            // Execute writes must land in the view's mutable layer: finishExecute
-            // computes the state root from it and commit merges it into the backend.
-            auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
-                *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
-
-            // MPT state root (spec §5.6): built at EXECUTE time, not commit time — the block
-            // header's stateRoot is set and hashed in finishExecute below and that hash is what
-            // PBFT signs, so a commit-time build could never reach the header. The trie-node
-            // rows land in this view's mutable layer (persisted by commit's mergeBackStorage
-            // like any state row); the delta rides in ExecuteResult for the CommitObserver and
-            // the next block's parent root.
-            std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
-            std::optional<h256> mptStateRoot;
-            if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
-            {
-                // Reaching here means an MPT IS being built, so the flag-matrix rule the
-                // build depends on has to hold. Re-checked per block rather than at startup
-                // only: a mid-chain activation of either flag is invisible to the boot-time
-                // guard (LedgerInitializer). Inside the branch, so shouldBuildMPT stays a
-                // pure predicate AND is evaluated once.
-                rejectRawAddressWithMPT(ledgerConfig->features(), blockHeader->number());
-                try
-                {
-                    mptDelta.emplace(co_await buildMPTStateRoot(view, *blockHeader, *ledgerConfig));
-                    mptStateRoot = mptDelta->stateRoot;
-                }
-                catch (std::exception& e)
-                {
-                    // No fallback to the XOR root: a silent state-root scheme switch is a
-                    // fork — a halted chain is diagnosable, a forked one is not. The
-                    // rethrow surfaces through coExecuteBlock's catch as an execute error.
-                    BASELINE_SCHEDULER_LOG(ERROR)
-                        << "MPT state root build failed, refusing XOR fallback, block="
-                        << blockHeader->number() << " | " << boost::diagnostic_information(e);
-                    if (blockHeader->number() == 1)
-                    {
-                        // The known scenario-B gap has exactly this shape, and a bare
-                        // missing-node error from the trie core cannot say so: an L2 genesis
-                        // built from a NON-EMPTY alloc writes the genesis stateRoot but not
-                        // the trie nodes behind it, so block 1's incremental build cannot
-                        // resolve the parent trie. Name it instead of leaving operators to
-                        // guess.
-                        BASELINE_SCHEDULER_LOG(ERROR)
-                            << "Block 1 build failure on an L2 chain: if genesis was created "
-                               "with a non-empty alloc, its trie nodes were never persisted "
-                               "(known limitation) — only empty-alloc genesis chains block 1 "
-                               "today";
-                    }
-                    throw;
-                }
-            }
-
-            auto executedBlockHeader =
-                m_blockFactory.get().blockHeaderFactory()->populateBlockHeader(blockHeader);
-            bool sysBlock = false;
-            co_await finishExecute(mutableStorage(view), ::ranges::views::all(receipts),
-                *executedBlockHeader, *block, ::ranges::views::all(transactions), sysBlock,
-                m_hashImpl.get(), ledgerConfig->features(), mptStateRoot);
-
-            if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
-            {
-                auto message = fmt::format("Sync block error, mismatch block hash: {} | {}",
-                    executedBlockHeader->hash().hex(), blockHeader->hash().hex());
-                if (executedBlockHeader->stateRoot() != blockHeader->stateRoot())
-                {
-                    message.append(fmt::format(", state root: {} | {}",
-                        executedBlockHeader->stateRoot().hex(), blockHeader->stateRoot().hex()));
-                }
-                if (executedBlockHeader->txsRoot() != blockHeader->txsRoot())
-                {
-                    message.append(fmt::format(", tx root: {} | {}",
-                        executedBlockHeader->txsRoot().hex(), blockHeader->txsRoot().hex()));
-                }
-                if (executedBlockHeader->receiptsRoot() != blockHeader->receiptsRoot())
-                {
-                    message.append(fmt::format(", receipt root: {} | {}",
-                        executedBlockHeader->receiptsRoot().hex(),
-                        blockHeader->receiptsRoot().hex()));
-                }
-                BASELINE_SCHEDULER_LOG(ERROR) << message;
-
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
-                    nullptr, false};
-            }
-
-            auto executeResult = std::make_shared<ExecuteResult>(
-                ExecuteResult{.m_transactions = std::make_shared<protocol::ConstTransactions>(
-                                  std::move(transactions)),
-                    .m_receipts = std::move(receipts),
-                    .m_executedBlockHeader = executedBlockHeader,
-                    .m_block = std::move(block),
-                    .m_sysBlock = sysBlock,
-                    .m_mptDelta = std::move(mptDelta)});
-
-            // FIB-103 / FIB-104: Commit the execution result in a strict order:
-            // push the view first (so we have a rollback target), then push the
-            // result; if push_front throws pop the view back. The view stack and
-            // m_results both belong to m_resultsMutex's invariant, so they share
-            // this critical section. The earlier backpressure check under
-            // m_resultsMutex is sufficient — m_executeMutex prevents any other
-            // execute from pushing in between, and commit can only shrink the
-            // queue, so the size cannot exceed MAX_PENDING_RESULTS here.
-            {
-                std::unique_lock resultsLock(m_resultsMutex);
-                assert(m_results.size() < MAX_PENDING_RESULTS);
-
-                m_multiLayerStorage.get().pushView(std::move(view));
-                try
-                {
-                    m_results.push_front(std::move(executeResult));
-                }
-                catch (...)
-                {
-                    m_multiLayerStorage.get().popFrontStorage();
-                    throw;
-                }
-            }
-            // FIB-102: Update m_lastExecutedBlockNumber only after the queue write
-            // succeeds. Owned by m_executeMutex (still held via executeLock).
-            m_lastExecutedBlockNumber = blockHeader->number();
-
-            BASELINE_SCHEDULER_LOG(INFO)
-                << "Execute block finished: " << executedBlockHeader->number() << " | "
-                << static_cast<protocol::BlockVersion>(executedBlockHeader->version())
-                << " | blockHash: " << executedBlockHeader->hash()
-                << " | stateRoot: " << executedBlockHeader->stateRoot()
-                << " | txRoot: " << executedBlockHeader->txsRoot()
-                << " | receiptRoot: " << executedBlockHeader->receiptsRoot()
-                << " | gasUsed: " << executedBlockHeader->gasUsed() << " | sysBlock: " << sysBlock
-                << " | elapsed: " << (current() - now) << "ms";
-
-            co_return {nullptr, std::move(executedBlockHeader), sysBlock};
-        }
-        catch (std::exception& e)
-        {
-            auto message =
-                fmt::format("Execute block failed! {}", boost::diagnostic_information(e));
-            BASELINE_SCHEDULER_LOG(ERROR) << message;
-
-            co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
-                nullptr, false};
-        }
+        return scheduler_v1::getTransactions(m_txpool.get(), block);
     }
 
-    /**
-     * Commits a block to the ledger and returns an error object and a ledger configuration
-     * object.
-     *
-     * @param header A shared pointer to the block header to be committed.
-     * @return A task that returns a tuple containing an error object and a ledger configuration
-     * object.
-     */
-    task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> coCommitBlock(
-        protocol::BlockHeader::Ptr header)
+    /// ② 执行内核：m_schedulerImpl.executeBlock → 包 SchedulerExecuteResult 富结果
+    ///    （v3 P1-2：m_transactions 供 commit 的 prewriteBlockToBuffer + notifier 用）。
+    task::Task<SchedulerExecuteResult> execute(typename MultiLayerStorage::ViewType& view,
+        protocol::BlockHeader const& header,
+        std::vector<protocol::Transaction::ConstPtr> const& transactions,
+        ledger::LedgerConfig const& ledgerConfig)
     {
-        ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-            ittapi::ITT_DOMAINS::instance().COMMIT_BLOCK);
-        try
+        auto receipts = co_await m_schedulerImpl.get().executeBlock(
+            view, m_executor.get(), header, ::ranges::views::indirect(transactions), ledgerConfig);
+        SchedulerExecuteResult result;
+        result.receipts = std::move(receipts);
+        result.m_transactions = std::make_shared<protocol::ConstTransactions>(transactions);
+        co_return result;
+    }
+
+    /// ③ finish：MPT 前置（buildMPTStateRoot，随 hook 迁自 coExecuteBlock:485-527）+
+    ///    populateBlockHeader + 自由函数 finishExecute（calculateHash 在内）。
+    task::Task<protocol::BlockHeader::Ptr> finishExecute(typename MultiLayerStorage::ViewType& view,
+        SchedulerExecuteResult& result, protocol::BlockHeader const& blockHeader,
+        protocol::Block& block, std::vector<protocol::Transaction::ConstPtr> const& transactions,
+        ledger::LedgerConfig const& ledgerConfig, bool& sysBlock)
+    {
+        // MPT state root (spec §5.6): built at EXECUTE time, not commit time — the block
+        // header's stateRoot is set and hashed in the free finishExecute below and that hash
+        // is what PBFT signs, so a commit-time build could never reach the header. The
+        // trie-node rows land in this view's mutable layer (persisted by commit's
+        // mergeBackStorage like any state row); the delta rides in result.m_mptDelta for
+        // the CommitObserver and the next block's parent root.
+        std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
+        std::optional<h256> mptStateRoot;
+        if (shouldBuildMPT(ledgerConfig.features(), blockHeader.number()))
         {
-            BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << header->number();
-
-            // FIB-101: m_lastCommittedBlockNumber is owned by m_commitMutex; all
-            // reads and writes happen below while we hold this lock.
-            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
-            if (!commitLock.owns_lock())
+            // Reaching here means an MPT IS being built, so the flag-matrix rule the build
+            // depends on has to hold. Re-checked per block rather than at startup only: a
+            // mid-chain activation of either flag is invisible to the boot-time guard
+            // (LedgerInitializer). Inside the branch, so shouldBuildMPT stays a pure
+            // predicate AND is evaluated once.
+            rejectRawAddressWithMPT(ledgerConfig.features(), blockHeader.number());
+            try
             {
-                auto message = std::string{"Another block is committing!"};
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr};
+                mptDelta.emplace(co_await buildMPTStateRoot(view, blockHeader, ledgerConfig));
+                mptStateRoot = mptDelta->stateRoot;
             }
-
-            // FIB-101: The genesis system-contract deploy block (number 0) is
-            // committed exactly once, during initSysContract() at node startup.
-            // buildGenesisBlock() has already written current-number=0, so the
-            // ledger bootstrap below reads 0 and the already-committed / continuity
-            // checks would wrongly reject this legitimate genesis commit (0 <= 0,
-            // and 0 - 0 != 1). Block 0 only ever reaches here at init, so skip the
-            // bootstrap-anchored validation for it; m_lastCommittedBlockNumber is
-            // still advanced to 0 after the merge succeeds below.
-            if (!isSysContractDeploy(header->number()))
+            catch (std::exception& e)
             {
-                // FIB-101: Bootstrap from the ledger on the very first commit so
-                // that continuity / already-committed checks are anchored correctly.
-                if (m_lastCommittedBlockNumber == -1)
+                // No fallback to the XOR root: a silent state-root scheme switch is a fork —
+                // a halted chain is diagnosable, a forked one is not. The rethrow surfaces
+                // through coExecuteBlock's catch as an execute error.
+                BASELINE_SCHEDULER_LOG(ERROR)
+                    << "MPT state root build failed, refusing XOR fallback, block="
+                    << blockHeader.number() << " | " << boost::diagnostic_information(e);
+                if (blockHeader.number() == 1)
                 {
-                    m_lastCommittedBlockNumber =
-                        co_await ledger::getCurrentBlockNumber(m_ledger.get());
+                    // The known scenario-B gap has exactly this shape, and a bare
+                    // missing-node error from the trie core cannot say so: an L2 genesis
+                    // built from a NON-EMPTY alloc writes the genesis stateRoot but not
+                    // the trie nodes behind it, so block 1's incremental build cannot
+                    // resolve the parent trie. Name it instead of leaving operators to
+                    // guess.
+                    BASELINE_SCHEDULER_LOG(ERROR)
+                        << "Block 1 build failure on an L2 chain: if genesis was created "
+                           "with a non-empty alloc, its trie nodes were never persisted "
+                           "(known limitation) — only empty-alloc genesis chains block 1 "
+                           "today";
                 }
-
-                // FIB-101: Reject blocks that have already been committed (out-of-order
-                // or duplicate commits from concurrent consensus / sync paths).
-                if (m_lastCommittedBlockNumber != -1 &&
-                    header->number() <= m_lastCommittedBlockNumber)
-                {
-                    auto message = fmt::format("Block already committed: {}! latest: {}",
-                        header->number(), m_lastCommittedBlockNumber);
-
-                    BASELINE_SCHEDULER_LOG(INFO) << message;
-                    co_return {BCOS_ERROR_UNIQUE_PTR(
-                                   scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr};
-                }
-                if (m_lastCommittedBlockNumber != -1 &&
-                    header->number() - m_lastCommittedBlockNumber != 1)
-                {
-                    auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                        header->number(), m_lastCommittedBlockNumber + 1);
-
-                    BASELINE_SCHEDULER_LOG(INFO) << message;
-                    co_return {BCOS_ERROR_UNIQUE_PTR(
-                                   scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr};
-                }
+                throw;
             }
-
-            {
-                std::unique_lock resultsLock(m_resultsMutex);
-                if (m_results.empty())
-                {
-                    auto message = std::string{"Unexpected empty results!"};
-                    BASELINE_SCHEDULER_LOG(INFO) << message;
-                    co_return {
-                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
-                        nullptr};
-                }
-
-                auto resultBlockNumber = m_results.back()->m_executedBlockHeader->number();
-                if (resultBlockNumber != header->number())
-                {
-                    auto message = fmt::format(
-                        "Commit block does not match pending execution result: input: {} pending: "
-                        "{}",
-                        header->number(), resultBlockNumber);
-                    BASELINE_SCHEDULER_LOG(INFO) << message;
-                    co_return {BCOS_ERROR_UNIQUE_PTR(
-                                   scheduler::SchedulerError::InvalidBlockNumber, message),
-                        nullptr};
-                }
-            }
-
-            auto now = current();
-            std::shared_ptr<ExecuteResult> result;
-            {
-                std::unique_lock resultsLock(m_resultsMutex);
-                result = m_results.back();
-            }
-
-            Bloom logsBloom;
-            for (auto& receipt : result->m_receipts)
-            {
-                orBloom(logsBloom, receipt->logsBloom());
-            }
-            result->m_block->setBlockHeader(header);
-            result->m_block->setLogsBloom({logsBloom.data(), logsBloom.size()});
-
-            // FIB-104: Single unified prewrite — header, hash mappings, nonces,
-            // current block number, tx metadata, transactions, and receipts all
-            // flow into prewriteStorage. The subsequent mergeBackStorage commit is
-            // therefore atomic at the storage layer: either every piece of data
-            // is visible after the merge, or none is. Replaces the previous
-            // prewriteBlock + storeTransactionsAndReceipts pair (FIB-104.1).
-            typename MultiLayerStorage::MutableStorage prewriteStorage;
-            if (result->m_block->blockHeader()->number() != 0)
-            {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                co_await ledger::prewriteBlockToBuffer(
-                    m_ledger.get(), result->m_transactions, result->m_block, prewriteStorage);
-            }
-
-            // FIB-104: mergeBackStorage is a heavy IO step (RocksDB / cache
-            // write). Holding m_resultsMutex across it would needlessly serialize
-            // coExecuteBlock against commit IO. The pop_back must follow a
-            // successful merge so that on failure the pending entry is retained
-            // for retry, but it does not have to share the same critical section.
-            //
-            // During the brief gap between mergeBackStorage's internal
-            // m_storages.pop_back and our m_results.pop_back, coExecuteBlock may
-            // see m_results.size() one larger than m_storages.size(); this is
-            // harmless because (a) fork() snapshots m_storages directly under its
-            // own mutex, (b) backpressure is only over-conservative by one, and
-            // (c) m_results.back() cannot change here — m_commitMutex guarantees
-            // a single committer.
-            // MPT node persistence needs no code here: the block's trie-node rows were written
-            // into its mutable layer at execute time as ordinary "/mpt/" state rows
-            // (MPTNodeStorage.h), so the single mergeBackStorage below lands flat state and
-            // trie nodes in one backend merge — one WriteBatch, one Write
-            // (RocksDBStorage2::merge). delta.obsoletedNodes / intraBlockObsoleted are NOT
-            // consumed here: they are candidates for the future pathdb pruning spec only, no
-            // deletes are issued (MPTDeltaLayer.h contract).
-            {
-                ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                co_await m_multiLayerStorage.get().mergeBackStorage(prewriteStorage);
-            }
-
-            // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
-            // has landed and BEFORE m_lastCommittedBlockNumber advances, so the delta the
-            // observer sees is exactly the persisted state. Only MPT blocks fire it. The
-            // contract requires implementations not to throw and not to block; deliberately
-            // no try/catch here — swallowing an observer bug would hide it forever.
-            if (result->m_mptDelta)
-            {
-                m_mptCommitObserver->onCommit(header->number(), *result->m_mptDelta);
-            }
-
-            {
-                std::unique_lock resultsLock(m_resultsMutex);
-                if (m_results.empty() ||
-                    m_results.back()->m_executedBlockHeader->number() != header->number())
-                {
-                    BOOST_THROW_EXCEPTION(
-                        std::runtime_error("Pending execution result changed during commit!"));
-                }
-                m_results.pop_back();
-            }
-
-            auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
-            ledgerConfig->setHash(header->hash());
-
-            // FIB-101: Advance the committed counter only after the merge succeeds.
-            m_lastCommittedBlockNumber = header->number();
-
-            BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
-                                         << " | elapsed: " << (current() - now) << "ms";
-            commitLock.unlock();
-
-            m_asyncGroup.run([&, result = std::move(result), blockHash = ledgerConfig->hash(),
-                                 blockNumber = ledgerConfig->blockNumber()]() {
-                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
-                    ittapi::ITT_DOMAINS::instance().NOTIFY_RESULTS);
-
-                auto submitResults =
-                    ::ranges::views::zip(
-                        ::ranges::views::iota(0), *result->m_transactions, result->m_receipts) |
-                    ::ranges::views::transform(
-                        [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
-                            auto&& [index, transaction, receipt] = input;
-
-                            auto submitResult =
-                                m_transactionSubmitResultFactory.get().createTxSubmitResult();
-                            submitResult->setStatus(receipt->status());
-                            submitResult->setTxHash(transaction->hash());
-                            submitResult->setBlockHash(blockHash);
-                            submitResult->setTransactionIndex(static_cast<int64_t>(index));
-                            submitResult->setNonce(std::string(transaction->nonce()));
-                            submitResult->setTransactionReceipt(receipt);
-                            submitResult->setSender(std::string(transaction->sender()));
-                            submitResult->setTo(std::string(transaction->to()));
-                            submitResult->setType(transaction->type());
-
-                            return submitResult;
-                        }) |
-                    ::ranges::to<std::vector>();
-
-                auto submitResultsPtr = std::make_shared<bcos::protocol::TransactionSubmitResults>(
-                    std::move(submitResults));
-                m_blockNumberNotifier(blockNumber);
-                m_transactionNotifier(
-                    blockNumber, std::move(submitResultsPtr), [](const Error::Ptr& error) {
-                        if (error)
-                        {
-                            BASELINE_SCHEDULER_LOG(WARNING)
-                                << "Push block notify error!"
-                                << boost::diagnostic_information(*error);
-                        }
-                    });
-            });
-
-            co_return {Error::Ptr{}, std::move(ledgerConfig)};
         }
-        catch (std::exception& e)
+        result.m_mptDelta = std::move(mptDelta);
+
+        auto executedBlockHeader = this->m_blockFactory->blockHeaderFactory()->populateBlockHeader(
+            protocol::BlockHeader::ConstPtr{&blockHeader, [](protocol::BlockHeader const*) {}});
+        co_await scheduler_v1::finishExecute(mutableStorage(view),
+            ::ranges::views::all(result.receipts), *executedBlockHeader, block,
+            ::ranges::views::all(transactions), sysBlock, m_hashImpl.get(), ledgerConfig.features(),
+            mptStateRoot);
+        co_return executedBlockHeader;
+    }
+
+    /// ④ verify（v3 P1-1 + Task 3b I-2）：verify 标志穿入，返回 Error::Ptr 保真
+    ///    InvalidBlocks（不经 classify 变 UnknownError）。
+    task::Task<Error::Ptr> verifyResult(protocol::BlockHeader::Ptr executedHeader,
+        protocol::BlockHeader const& blockHeader, bool verify)
+    {
+        if (verify && (executedHeader->hash() != blockHeader.hash()))
         {
-            auto message = fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
+            auto message = fmt::format("Sync block error, mismatch block hash: {} | {}",
+                executedHeader->hash().hex(), blockHeader.hash().hex());
+            if (executedHeader->stateRoot() != blockHeader.stateRoot())
+            {
+                message.append(fmt::format(", state root: {} | {}",
+                    executedHeader->stateRoot().hex(), blockHeader.stateRoot().hex()));
+            }
+            if (executedHeader->txsRoot() != blockHeader.txsRoot())
+            {
+                message.append(fmt::format(", tx root: {} | {}", executedHeader->txsRoot().hex(),
+                    blockHeader.txsRoot().hex()));
+            }
+            if (executedHeader->receiptsRoot() != blockHeader.receiptsRoot())
+            {
+                message.append(fmt::format(", receipt root: {} | {}",
+                    executedHeader->receiptsRoot().hex(), blockHeader.receiptsRoot().hex()));
+            }
             BASELINE_SCHEDULER_LOG(ERROR) << message;
-
-            co_return {
-                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr};
+            co_return BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message);
         }
+        co_return nullptr;
+    }
+
+    /// ⑤ commit：prewriteBlockToBuffer → 返回 prewriteStorage（v3 P1-3：非 execute view——
+    ///    execute view 已在 coExecuteBlock pushView；骨架唯一一次 mergeBackStorage）。
+    task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> commit(
+        typename MultiLayerStorage::ViewType&, protocol::BlockHeader::Ptr header,
+        SchedulerExecuteResult const& result)
+    {
+        Bloom logsBloom;
+        for (auto& receipt : result.receipts)
+        {
+            orBloom(logsBloom, receipt->logsBloom());
+        }
+        result.m_block->setBlockHeader(header);
+        result.m_block->setLogsBloom({logsBloom.data(), logsBloom.size()});
+
+        // FIB-104: Single unified prewrite — header, hash mappings, nonces, current block
+        // number, tx metadata, transactions, and receipts all flow into prewriteStorage.
+        // The subsequent (skeleton) mergeBackStorage commit is therefore atomic at the
+        // storage layer: either every piece of data is visible after the merge, or none is.
+        auto prewriteStorage = std::make_shared<typename MultiLayerStorage::MutableStorage>();
+        if (result.m_block->blockHeader()->number() != 0)
+        {
+            ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                ittapi::ITT_DOMAINS::instance().SET_BLOCK);
+            co_await ledger::prewriteBlockToBuffer(
+                *this->m_ledger, result.m_transactions, result.m_block, *prewriteStorage);
+        }
+
+        co_return prewriteStorage;
+    }
+
+    // A3：异常分类——ethereum 现状恒 UnknownError（P0-4：SchedulerError 是普通 enum）。
+    scheduler::SchedulerError classifyException(std::exception_ptr) const override
+    {
+        return scheduler::SchedulerError::UnknownError;
     }
 
 public:
@@ -860,67 +498,31 @@ public:
         txpool::TxPoolInterface& txPool,
         protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
         crypto::Hash const& hashImpl)
-      : m_multiLayerStorage(multiLayerStorage),
+      : SchedulerBase(multiLayerStorage, blockFactory, ledger, transactionSubmitResultFactory),
         m_schedulerImpl(schedulerImpl),
         m_executor(executor),
-        m_blockFactory(blockFactory),
-        m_ledger(ledger),
         m_txpool(txPool),
-        m_transactionSubmitResultFactory(transactionSubmitResultFactory),
         m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
     BaselineScheduler(BaselineScheduler&&) = delete;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
     BaselineScheduler& operator=(BaselineScheduler&&) = delete;
-    ~BaselineScheduler() noexcept override { m_asyncGroup.wait(); }
-
-    void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
-            callback) override
-    {
-        task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
-                       decltype(callback) callback) -> task::Task<void> {
-            std::apply(callback, co_await self->coExecuteBlock(std::move(block), verify));
-        }(this, std::move(block), verify, std::move(callback)));
-    }
-
-    void commitBlock(protocol::BlockHeader::Ptr header,
-        std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr)> callback) override
-    {
-        task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
-                       decltype(callback) callback) -> task::Task<void> {
-            std::apply(callback, co_await self->coCommitBlock(std::move(blockHeader)));
-        }(this, std::move(header), std::move(callback)));
-    }
-
-    void status([[maybe_unused]] std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)>
-            callback) override
-    {
-        callback({}, {});
-    }
-
-    void call(protocol::Transaction::Ptr transaction,
-        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
-    {
-        task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
-                       decltype(callback) callback) -> task::Task<void> {
-            callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
-        }(this, std::move(transaction), std::move(callback)));
-    }
+    // m_asyncGroup 排空由 SchedulerSkeleton::~SchedulerSkeleton 承担。
+    ~BaselineScheduler() noexcept override = default;
 
     /// The pre-existing latest-state call, verbatim: fork the live view and execute on top
     /// of it. Shared by call() and by callAtBlock() when the requested height IS the latest.
     task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
         protocol::Transaction::Ptr transaction)
     {
-        auto view = m_multiLayerStorage.get().fork();
+        auto view = this->m_multiLayerStorage->fork();
         view.newMutable();
         auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
         auto ledgerConfig =
-            co_await ledger::getLedgerConfig(view, blockNumber, m_blockFactory.get());
+            co_await ledger::getLedgerConfig(view, blockNumber, *this->m_blockFactory);
         auto block =
-            co_await ledger::getBlockData(view, blockNumber, ledger::HEADER, m_blockFactory.get());
+            co_await ledger::getBlockData(view, blockNumber, ledger::HEADER, *this->m_blockFactory);
         co_return co_await m_executor.get().executeTransaction(
             view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
     }
@@ -946,7 +548,7 @@ public:
                        decltype(callback) callback) -> task::Task<void> {
             try
             {
-                auto latestView = self->m_multiLayerStorage.get().fork();
+                auto latestView = self->m_multiLayerStorage->fork();
                 auto latestNumber =
                     co_await ledger::getCurrentBlockNumber(latestView, ledger::fromStorage);
                 if (blockNumber > latestNumber)
@@ -963,7 +565,7 @@ public:
                     co_return;
                 }
                 auto ledgerConfig = co_await ledger::getLedgerConfig(
-                    latestView, blockNumber, self->m_blockFactory.get());
+                    latestView, blockNumber, *self->m_blockFactory);
                 if (!ledgerConfig->features().get(
                         ledger::Features::Flag::feature_l2_ethereum_compat))
                 {
@@ -978,7 +580,7 @@ public:
                     co_return;
                 }
                 auto block = co_await ledger::getBlockData(
-                    latestView, blockNumber, ledger::HEADER, self->m_blockFactory.get());
+                    latestView, blockNumber, ledger::HEADER, *self->m_blockFactory);
                 auto stateRoot = block->blockHeader()->stateRoot();
                 if (stateRoot == crypto::HashType{})
                 {
@@ -1010,9 +612,13 @@ public:
         }(this, std::move(transaction), blockNumber, std::move(callback)));
     }
 
-    void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override
+    void call(protocol::Transaction::Ptr transaction,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
-        callback(nullptr);
+        task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
+                       decltype(callback) callback) -> task::Task<void> {
+            callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
+        }(this, std::move(transaction), std::move(callback)));
     }
 
     void getCode(
@@ -1020,11 +626,11 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork();
+            auto view = self->m_multiLayerStorage->fork();
             auto contractAddress = unhexAddress(contract);
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
             auto ledgerConfig =
-                co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
+                co_await ledger::getLedgerConfig(view, blockNumber, *self->m_blockFactory);
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
@@ -1045,11 +651,11 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = self->m_multiLayerStorage.get().fork();
+            auto view = self->m_multiLayerStorage->fork();
             auto contractAddress = unhexAddress(contract);
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
             auto ledgerConfig =
-                co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
+                co_await ledger::getLedgerConfig(view, blockNumber, *self->m_blockFactory);
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
@@ -1067,34 +673,27 @@ public:
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
         std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) override
     {
-        auto view = m_multiLayerStorage.get().fork();
-        auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, m_blockFactory.get());
+        auto view = this->m_multiLayerStorage->fork();
+        auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, *this->m_blockFactory);
 
         ledger::account::EVMAccount account(view, address,
             ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
         co_return co_await account.storageEntry(key);
     }
 
-    void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
-        [[maybe_unused]] bool verify,
-        [[maybe_unused]] std::function<void(Error::Ptr)> callback) override
-    {
-        callback(nullptr);
-    }
-
-    void stop() override {};
+    void stop() override{};
 
     void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier)
     {
-        m_transactionNotifier = std::move(txNotifier);
+        this->m_transactionNotifier = std::move(txNotifier);
     }
 
     void registerBlockNumberNotifier(
         std::function<void(bcos::protocol::BlockNumber)> blockNumberNotifier)
     {
-        m_blockNumberNotifier = std::move(blockNumberNotifier);
+        this->m_blockNumberNotifier = std::move(blockNumberNotifier);
     }
 
     /// Replace the MPT commit observer (CommitObserver.h). Call at wiring time, before block
@@ -1104,7 +703,7 @@ public:
     {
         if (observer)
         {
-            m_mptCommitObserver = std::move(observer);
+            this->m_mptCommitObserver = std::move(observer);
         }
     }
 
