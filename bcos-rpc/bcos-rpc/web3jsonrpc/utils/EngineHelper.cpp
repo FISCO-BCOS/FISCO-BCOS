@@ -18,6 +18,7 @@
  */
 
 #include "EngineHelper.h"
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -60,6 +61,28 @@ bcos::bytes parseRawTransactionElement(
         return reject();
     }
 }
+
+// The Engine API speaks Unix seconds (execution-apis spec; op-node sends seconds), while
+// FISCO-BCOS block headers store milliseconds (the executor divides by 1000 before handing
+// the timestamp to the EVM, see BCOS2Evmone.cpp blockHeaderToBlockInfo). Convert at the RPC
+// boundary only: parse multiplies by 1000, serialize divides by 1000; everything behind the
+// boundary (PayloadAttributes / ExecutionPayload / block headers) stays in milliseconds.
+constexpr uint64_t c_millisPerSecond = 1000;
+
+uint64_t engineSecondsToInternalMillis(uint64_t seconds)
+{
+    if (seconds > std::numeric_limits<uint64_t>::max() / c_millisPerSecond)
+    {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+            "timestamp exceeds representable range: " + std::to_string(seconds)));
+    }
+    return seconds * c_millisPerSecond;
+}
+
+uint64_t internalMillisToEngineSeconds(uint64_t millis)
+{
+    return millis / c_millisPerSecond;
+}
 }  // namespace
 
 bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
@@ -79,7 +102,8 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .transactions = {},
         .extraData = {},
         .feeRecipient = parseAddress(ep["feeRecipient"].asString()),
-        .timestamp = fromQuantity(std::string(ep["timestamp"].asString())),
+        .timestamp =
+            engineSecondsToInternalMillis(fromQuantity(std::string(ep["timestamp"].asString()))),
         .blockNumber =
             static_cast<bcos::protocol::BlockNumber>(fromQuantity(ep["blockNumber"].asString())),
         .withdrawals = std::nullopt,
@@ -216,7 +240,8 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     bcos::engine::PayloadAttributes attrs{
         .prevRandao = parseH256(pa["prevRandao"].asString()),
         .suggestedFeeRecipient = parseAddress(pa["suggestedFeeRecipient"].asString()),
-        .timestamp = fromQuantity(std::string(pa["timestamp"].asString())),
+        .timestamp =
+            engineSecondsToInternalMillis(fromQuantity(std::string(pa["timestamp"].asString()))),
         .withdrawals = std::nullopt,
         .parentBeaconBlockRoot = std::nullopt,
         .transactions = std::nullopt,
@@ -328,7 +353,9 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
 Json::Value bcos::rpc::serializePayloadAttributes(bcos::engine::PayloadAttributes const& attrs)
 {
     Json::Value pa(Json::objectValue);
-    pa["timestamp"] = toQuantity(attrs.timestamp);
+    // Inverse of parsePayloadAttributes: attrs.timestamp is internal milliseconds,
+    // the Engine-facing JSON carries Unix seconds.
+    pa["timestamp"] = toQuantity(internalMillisToEngineSeconds(attrs.timestamp));
     pa["prevRandao"] = attrs.prevRandao.hexPrefixed();
     pa["suggestedFeeRecipient"] = attrs.suggestedFeeRecipient.hexPrefixed();
     if (attrs.withdrawals.has_value())
@@ -412,7 +439,7 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     ep["blockNumber"] = toQuantity(payload.blockNumber);
     ep["gasLimit"] = toQuantity(payload.gasLimit);
     ep["gasUsed"] = toQuantity(payload.gasUsed);
-    ep["timestamp"] = toQuantity(payload.timestamp);
+    ep["timestamp"] = toQuantity(internalMillisToEngineSeconds(payload.timestamp));
     ep["extraData"] = toHexStringWithPrefix(payload.extraData);
     ep["baseFeePerGas"] = toQuantity(payload.baseFeePerGas);
     ep["blockHash"] = payload.blockHash.hexPrefixed();

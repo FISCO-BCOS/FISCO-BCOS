@@ -73,6 +73,8 @@ struct PayloadAttributes
     // Required by PayloadAttributesV1/V2/V3/V4.
     h256 prevRandao;
     Address suggestedFeeRecipient;
+    // Internal milliseconds, matching BlockHeader::timestamp(); the RPC boundary
+    // converts from/to Engine-API Unix seconds (EngineHelper.cpp).
     std::uint64_t timestamp = 0;
 
     // Required by PayloadAttributesV2/V3/V4.
@@ -131,6 +133,8 @@ struct ExecutionPayload
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
+    // Internal milliseconds, matching BlockHeader::timestamp(); the RPC boundary
+    // converts from/to Engine-API Unix seconds (EngineHelper.cpp).
     std::uint64_t timestamp = 0;
     bcos::protocol::BlockNumber blockNumber = 0;
 
