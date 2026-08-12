@@ -290,6 +290,28 @@ BOOST_AUTO_TEST_CASE(ChainIdScheduledChangeThrows)
         std::runtime_error);
 }
 
+// Same invariant, other side of the schedule gate: a chain_id entry whose
+// enableNumber is still in the FUTURE must also throw. The old loader would
+// have silently skipped it (schedule gate) and re-keyed the chain when the
+// block height caught up — "regardless of schedule state" means exactly that
+// this case fails loudly too.
+BOOST_AUTO_TEST_CASE(ChainIdFutureScheduledChangeAlsoThrows)
+{
+    FakeSlotStorage storage;
+    putSlot(storage, "chain_id", chainIdLow192(901), /*enableNumber=*/200);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
+    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
+    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
+
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    LedgerConfig out;
+    BOOST_CHECK_THROW(task::syncWait([&]() -> task::Task<void> {
+        co_await loader.loadIntoLedgerConfig(/*blockNumber=*/50, out);  // 50 < 200
+        co_return;
+    }()),
+        std::runtime_error);
+}
+
 BOOST_AUTO_TEST_CASE(ChainIdZeroThrowsEip155)
 {
     FakeSlotStorage storage;

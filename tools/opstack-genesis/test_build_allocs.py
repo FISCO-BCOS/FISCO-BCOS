@@ -325,6 +325,81 @@ def test_zero_governance_owner_rejected(tmp_path):
         build_allocs.build_allocs(config, str(contracts), base)
 
 
+def test_placeholder_addresses_rejected(tmp_path):
+    # The template's 0x...dEaD placeholder is not the zero address, so it
+    # slips past a non-zero check — but it has no known private key either;
+    # shipping it locks governance forever. Reject it explicitly, everywhere
+    # an authority or identity address is consumed.
+    contracts = _base_contracts(tmp_path)
+    base = _load_base(tmp_path)
+    placeholder = "0x000000000000000000000000000000000000dEaD"
+
+    config = _config(_system_config_predeploy())
+    config["governance_owner"] = placeholder
+    with pytest.raises(ValueError, match="placeholder"):
+        build_allocs.build_allocs(config, str(contracts), base)
+
+    config = _config(_system_config_predeploy())
+    config["proxy_admin"] = placeholder
+    with pytest.raises(ValueError, match="placeholder"):
+        build_allocs.build_allocs(config, str(contracts), base)
+
+    _write_artifact(contracts, "L2ValidatorSet.sol", "L2ValidatorSet", "0xbeef")
+    validators = [{"address": placeholder, "consensus_public_key": "0x" + "bb" * 20}]
+    with pytest.raises(ValueError, match="placeholder"):
+        build_allocs.build_allocs(
+            _config(_validator_set_predeploy(validators)), str(contracts), base)
+
+
+def test_zero_validator_address_rejected(tmp_path):
+    # Mirrors L2ValidatorSet._add's `require(a != address(0))`.
+    contracts = _base_contracts(tmp_path)
+    _write_artifact(contracts, "L2ValidatorSet.sol", "L2ValidatorSet", "0xbeef")
+    base = _load_base(tmp_path)
+    validators = [{"address": "0x" + "00" * 20, "consensus_public_key": "0x" + "bb" * 20}]
+    with pytest.raises(ValueError, match="L2ValidatorSet.*zero address"):
+        build_allocs.build_allocs(
+            _config(_validator_set_predeploy(validators)), str(contracts), base)
+
+
+def test_quoted_hex_config_values_parse_as_hex(tmp_path):
+    # A quoted YAML value like "0x03120000" arrives as a string; it must parse
+    # as hex, not crash int() or be re-read as decimal.
+    contracts = _base_contracts(tmp_path)
+    base = _load_base(tmp_path)
+    predeploy = _system_config_predeploy(
+        system_config={"compatibility_version": "0x03120000"})
+    allocs = build_allocs.build_allocs(_config(predeploy), str(contracts), base)
+    storage = {a["address"]: a for a in allocs}[SYSTEM_CONFIG_ADDR.lower()]["storage"]
+    slot = int.from_bytes(build_allocs.keccak256(
+        b"compatibility_version" + (101).to_bytes(32, "big")), "big")
+    assert storage[slot] == 0x03120000
+
+
+def test_quoted_decimal_config_value_rejected(tmp_path):
+    # A quoted decimal ("100") would silently re-read as hex 256 under a lax
+    # parser; config values are consensus parameters, so it must fail loud.
+    contracts = _base_contracts(tmp_path)
+    base = _load_base(tmp_path)
+    predeploy = _system_config_predeploy(system_config={"gas_limit": "100"})
+    with pytest.raises(ValueError, match="0x-prefixed"):
+        build_allocs.build_allocs(_config(predeploy), str(contracts), base)
+
+
+def test_placeholder_fee_address_rejected(tmp_path):
+    contracts = _base_contracts(tmp_path)
+    _write_artifact(contracts, "L2ValidatorSet.sol", "L2ValidatorSet", "0xbeef")
+    base = _load_base(tmp_path)
+    validators = [{
+        "address": "0x1111111111111111111111111111111111111111",
+        "fee_address": "0x000000000000000000000000000000000000dEaD",
+        "consensus_public_key": "0x" + "bb" * 20,
+    }]
+    with pytest.raises(ValueError, match="fee_address"):
+        build_allocs.build_allocs(
+            _config(_validator_set_predeploy(validators)), str(contracts), base)
+
+
 def test_same_admin_and_owner_rejected(tmp_path):
     # The module contract says the two authorities are never the same role;
     # the tool must enforce it, not just document it.
@@ -488,10 +563,8 @@ def test_alloc_json_emission_matches_geth_shape(tmp_path):
         "0x" + format(int(GOVERNANCE_OWNER, 16), "064x")
 
 
-def test_template_config_builds(tmp_path):
-    # The checked-in template must stay loadable end-to-end: synthesize an
-    # artifact for each self-written predeploy, a base account for every
-    # expected predeploy, and run the full pipeline.
+def _template_pipeline(tmp_path):
+    """Load the checked-in template + synthetic artifacts/base for it."""
     template = Path(__file__).parent / "chain-config.template.yaml"
     import yaml
     config = yaml.safe_load(template.read_text())
@@ -502,14 +575,28 @@ def test_template_config_builds(tmp_path):
     base = {expected["address"]: {"code": "0x60ff"}
             for expected in config["expected_predeploys"]}
     base[config["proxy_code_source"]] = {"code": PROXY_CODE}
-    base_accounts = _load_base(tmp_path, base=base)
-    # The template's dEaD governance_owner placeholder must be replaced in a
-    # real config; substitute a real address here.
+    return config, contracts, _load_base(tmp_path, base=base)
+
+
+def test_template_config_builds_after_placeholder_replaced(tmp_path):
+    # The checked-in template must run end-to-end ONCE the operator replaced
+    # the governance placeholder with a real address.
+    config, contracts, base_accounts = _template_pipeline(tmp_path)
     config["governance_owner"] = GOVERNANCE_OWNER
     allocs = build_allocs.build_allocs(config, str(contracts), base_accounts)
     # every base account + 2 accounts per self-written proxied predeploy
     assert len(allocs) == len(base_accounts) + 2 * len(config["predeploys"])
     build_allocs.emit_ini(allocs)
+
+
+def test_template_config_verbatim_is_rejected(tmp_path):
+    # Running the template VERBATIM must fail: its governance_owner is the
+    # 0x...dEaD placeholder, and accepting it would mint a chain whose
+    # governance is locked forever. This test pins the placeholder rejection
+    # to the actual template content.
+    config, contracts, base_accounts = _template_pipeline(tmp_path)
+    with pytest.raises(ValueError, match="placeholder"):
+        build_allocs.build_allocs(config, str(contracts), base_accounts)
 
 
 # --- immutables guard --------------------------------------------------------

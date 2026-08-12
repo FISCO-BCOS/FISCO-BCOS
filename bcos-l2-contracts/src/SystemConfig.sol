@@ -73,10 +73,15 @@ contract SystemConfig is ISystemConfig, OwnableUpgradeable {
         return (e.value, e.enableNumber);
     }
 
+    /// @dev keccak256 of the only runtime-writable key. Computed at compile
+    ///      time; constants occupy no storage slot, so the storage-layout
+    ///      fixture is unaffected.
+    bytes32 private constant WRITABLE_KEY_HASH = keccak256("block_tx_count_limit");
+
     /// @dev Whitelist of runtime-writable keys — see the contract @dev note
     ///      for why chain_id / gas_limit / compatibility_version /
     ///      feature_flags (and every unknown key) are genesis-frozen.
     function _isWritableKey(string calldata key) internal pure returns (bool) {
-        return keccak256(bytes(key)) == keccak256("block_tx_count_limit");
+        return keccak256(bytes(key)) == WRITABLE_KEY_HASH;
     }
 }

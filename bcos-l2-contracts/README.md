@@ -36,7 +36,8 @@ boundary; tracked in the integration plan). The L2 upper layers read a key's slo
 directly (no EVM) via `keccak256(utf8(key) ‖ be32(baseSlot))`, where `baseSlot`
 is the slot of `_config` (101, after the OZ upgradeable base; pinned by PR-7's
 storage-layout gate). `getValueByKey` is the EVM-callable path for external
-callers. Access control is OZ `OwnableUpgradeable` (owner = the L2 governance entity; the ERC-1967 admin slot separately holds ProxyAdmin). See
+callers. Access control is OZ `OwnableUpgradeable` (owner = the L2 governance
+entity; the ERC-1967 admin slot separately holds ProxyAdmin). See
 `2026-06-17-systemconfig-slot-kv-redesign.md` for the full contract.
 
 `L2ValidatorSet` is a single-record-CRUD validator registry (BSC-style fields):

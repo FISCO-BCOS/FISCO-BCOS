@@ -155,6 +155,13 @@ _OP_PREDEPLOY_NAMESPACE_BASE = 0x4200000000000000000000000000000000000000
 _OP_CODE_NAMESPACE_BASE = 0xC0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D30000
 
 
+# The chain-config template's governance_owner placeholder. Like the zero
+# address it has no known private key, so shipping it locks governance
+# forever; unlike the zero address it slips past a non-zero check — reject it
+# explicitly.
+PLACEHOLDER_ADDRESS = 0xDEAD
+
+
 def in_reserved_namespace(address_int):
     """True if the address collides with an OP-Stack reserved namespace."""
     if (address_int >> 11) == (_OP_PREDEPLOY_NAMESPACE_BASE >> 11):
@@ -241,6 +248,23 @@ def word_int(value):
     return int(strip0x(value), 16)
 
 
+def config_word(value, label):
+    """word_int with a strict-prefix rule for quoted values.
+
+    A quoted decimal like "100" would silently re-read as hex (256) under
+    word_int; config values are consensus parameters, so require quoted
+    values to carry an explicit 0x prefix instead.
+    """
+    if isinstance(value, int):
+        return value
+    text = str(value).strip().lower()
+    if not text.startswith("0x"):
+        raise ValueError(
+            f"{label}: quoted values must be 0x-prefixed hex, got '{value}' "
+            f"(write it unquoted for decimal, or 0x... for hex)")
+    return int(text[2:] or "0", 16)
+
+
 def address_int(value):
     """Parse a 20-byte address (hex string) into an int, validating width."""
     text = strip0x(value)
@@ -293,7 +317,8 @@ def system_config_entry_storage(entries):
             raise ValueError(
                 "feature_flags is written by the C++ genesis path (Ledger); "
                 "remove it from system_config")
-        value = int(value)
+        # YAML ints verbatim; quoted values must be explicit 0x-hex.
+        value = config_word(value, f"system_config['{key}']")
         if value <= 0 or value >= (1 << 192):
             raise ValueError(
                 f"system_config['{key}'] must be a positive uint192, got {value} "
@@ -304,7 +329,7 @@ def system_config_entry_storage(entries):
     return storage
 
 
-def validator_storage(validators):
+def validator_storage(validators, name="L2ValidatorSet"):
     """L2ValidatorSet state: EnumerableSet.AddressSet + per-validator records.
 
     Layout (pinned by storage-layout/L2ValidatorSet.json):
@@ -326,8 +351,15 @@ def validator_storage(validators):
     seen = set()
     for index, validator in enumerate(validators):
         addr = address_int(validator["address"])
+        if addr == 0:
+            # Mirrors L2ValidatorSet._add's `require(a != address(0))`.
+            raise ValueError(f"{name}: validator address must not be the zero address")
+        if addr == PLACEHOLDER_ADDRESS:
+            raise ValueError(
+                f"{name}: validator address is still the 0x...dEaD template "
+                f"placeholder - replace it with the real address")
         if addr in seen:
-            raise ValueError(f"duplicate validator address: {validator['address']}")
+            raise ValueError(f"{name}: duplicate validator address: {validator['address']}")
         seen.add(addr)
         addr_word = addr.to_bytes(32, "big")
         storage[values_base + index] = addr
@@ -335,16 +367,30 @@ def validator_storage(validators):
 
         record_base = mapping_slot(addr_word, VALIDATOR_BY_ADDR_SLOT)
         fee_address = address_int(validator.get("fee_address", validator["address"]))
-        voting_power = int(validator.get("voting_power", 1))
+        if fee_address == 0 or fee_address == PLACEHOLDER_ADDRESS:
+            raise ValueError(
+                f"{name}: validator {validator['address']}: fee_address is the "
+                f"zero address or the 0x...dEaD template placeholder")
+        # YAML ints verbatim; quoted values must be explicit 0x-hex.
+        voting_power = config_word(
+            validator.get("voting_power", 1),
+            f"{name}: validator {validator['address']}: voting_power")
         if voting_power < 0 or voting_power >= (1 << 64):
-            raise ValueError(f"voting_power does not fit uint64: {voting_power}")
+            raise ValueError(
+                f"{name}: validator {validator['address']}: voting_power does "
+                f"not fit uint64: {voting_power}")
         packed = (voting_power << 168) | fee_address  # jailed byte (160-167) = 0
         if packed:
             storage[record_base] = packed
-        public_key = bytes.fromhex(strip0x(validator["consensus_public_key"]))
+        try:
+            public_key = bytes.fromhex(strip0x(validator["consensus_public_key"]))
+        except ValueError as error:
+            raise ValueError(
+                f"{name}: validator {validator['address']}: consensus_public_key "
+                f"is not valid hex: {error}") from error
         if not public_key:
             raise ValueError(
-                f"validator {validator['address']}: consensus_public_key is empty")
+                f"{name}: validator {validator['address']}: consensus_public_key is empty")
         put_dynamic_bytes(storage, record_base + 1, public_key)
     return storage
 
@@ -394,10 +440,18 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
         raise ValueError(
             f"{name}: proxied predeploys need top-level proxy_admin and "
             f"governance_owner in the chain config")
-    if address_int(governance_owner) == 0 or address_int(proxy_admin) == 0:
-        raise ValueError(
-            f"{name}: proxy_admin / governance_owner must not be the zero "
-            f"address (a zero owner bricks governance at genesis)")
+    for label, value in (("proxy_admin", proxy_admin),
+                         ("governance_owner", governance_owner)):
+        parsed = address_int(value)
+        if parsed == 0:
+            raise ValueError(
+                f"{name}: {label} must not be the zero address "
+                f"(a zero owner bricks governance at genesis)")
+        if parsed == PLACEHOLDER_ADDRESS:
+            raise ValueError(
+                f"{name}: {label} is still the 0x...dEaD template placeholder "
+                f"- replace it with the real address (0xdEaD has no known "
+                f"private key; shipping it locks governance forever)")
     if address_int(governance_owner) == address_int(proxy_admin):
         raise ValueError(
             f"{name}: proxy_admin and governance_owner must be different "
@@ -443,7 +497,7 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
         EIP1967_ADMIN_SLOT: address_int(proxy_admin),
     }
     storage.update(system_config_entry_storage(predeploy.get("system_config", {})))
-    storage.update(validator_storage(predeploy.get("validators", [])))
+    storage.update(validator_storage(predeploy.get("validators", []), name))
     for slot, value in (predeploy.get("storage") or {}).items():
         storage[word_int(slot)] = word_int(value)
 
