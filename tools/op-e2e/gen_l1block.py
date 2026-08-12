@@ -16,7 +16,10 @@ def p1(v): return pv(1, v)
 def p2(v): return pv(2, v)
 def p4(v): return pv(4, v)
 def p8(v): return pv(8, v)
-PUSH29 = bytes([0x5f + 29]) + (b'\xff' * 28)  # 2^224 - 1
+PUSH28 = bytes([0x5f + 28]) + (b'\xff' * 28)  # 2^224 - 1, as a 28-byte immediate (PUSH28 = 0x7b).
+# BUG NOTE: PUSH29 (0x7c) pushes 29 immediate bytes; the first delivery paired it with only 28
+# bytes of 0xff, so evmone swallowed the next instruction's first byte into the mask, misaligning
+# every subsequent instruction (observed: slot1 = 0x000000ff..16 instead of the computed 0).
 
 body = bytearray()
 
@@ -32,14 +35,14 @@ body += b'\x50'                                               # POP x0
 
 # --- slot1 = (x1 & M224) | ((x2 >> 224) << 224)
 #   l1_base_fee = calldata[36:68] = x1.bytes[4:32] ++ x2.bytes[0:4]
-body += p1(0x20) + b'\x35' + PUSH29 + b'\x16'                  # x1 & M224
+body += p1(0x20) + b'\x35' + PUSH28 + b'\x16'                  # x1 & M224
 body += p1(0x40) + b'\x35' + p1(0xe0) + b'\x1c' + p1(0xe0) + b'\x1b'  # (x2>>224)<<224
 body += b'\x17'
 body += p1(0x01) + b'\x55'                                    # SSTORE(1)
 
 # --- slot7 = (x2 & M224) | ((x3 >> 224) << 224)
 #   blob_base_fee = calldata[68:100] = x2.bytes[4:32] ++ x3.bytes[0:4]
-body += p1(0x40) + b'\x35' + PUSH29 + b'\x16'
+body += p1(0x40) + b'\x35' + PUSH28 + b'\x16'
 body += p1(0x60) + b'\x35' + p1(0xe0) + b'\x1c' + p1(0xe0) + b'\x1b'
 body += b'\x17'
 body += p1(0x07) + b'\x55'                                    # SSTORE(7)
@@ -61,8 +64,12 @@ body += p1(0x00) + p1(0x00) + b'\xf3'
 # require the destination to be a JUMPDEST (0x5b) — jumping to a non-JUMPDEST byte is an
 # exceptional halt that consumes all gas (deposit receipt reads status=0x0, gasUsed=gasLimit).
 # Both jump targets below land on explicit JUMPDESTs.
+# NOTE: EVM LT(0x10) is `top < second` (stack [a, b] with b on top => b < a). To test
+# `calldatasize < 4` the PUSH1 4 must be pushed BEFORE CALLDATASIZE, so the stack is [4, cd]
+# and LT = cd < 4. Writing CALLDATASIZE first gives LT = 4 < cd = "cd > 4" -- the guard's
+# condition was inverted in the first delivery and reverted every real deposit (calldata 178B).
 dispatch = bytearray()
-dispatch += b'\x36' + p1(0x04) + b'\x10' + p1(0x00) + b'\x57'   # size guard
+dispatch += p1(0x04) + b'\x36' + b'\x10' + p1(0x00) + b'\x57'   # size guard: cd < 4 -> revert
 dispatch += p1(0x00) + b'\x35' + p1(0xe0) + b'\x1c'
 dispatch += p4(0x098999be) + b'\x14' + p1(0x00) + b'\x57'       # Isthmus
 dispatch += p1(0x00) + b'\x35' + p1(0xe0) + b'\x1c'

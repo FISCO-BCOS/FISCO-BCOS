@@ -30,6 +30,7 @@ add_executable(opstack-executor-block-tests
     OpL1EdgeGateTest.cpp
     OpNewPayloadRpcE2eTest.cpp
     OpSchedulerImplSmokeTest.cpp
+    OpL1BlockDepositTest.cpp
     OpBlockRegisterTest.cpp
     OpEngineBranchSmokeTest.cpp
     OpTwoPhaseTest.cpp
