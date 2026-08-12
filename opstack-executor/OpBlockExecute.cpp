@@ -121,6 +121,9 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     bool seenNonDeposit = false;
     bool feeLoaded = false;
     OpFeeParams fee{};
+    // Receipt transactionIndex (eth_getTransactionByHash / getTransactionReceipt read it; it is
+    // NOT part of encodeReceiptForRoot, so it never affects the receipts root or golden replay).
+    size_t txIndex = 0;
 
     for (const auto& btx : txs)
     {
@@ -136,6 +139,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
             receipt->setCumulativeGasUsed(hexCumulative(cumulative));
+            receipt->setTransactionIndex(txIndex++);
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(static_cast<uint8_t>(kDepositTxType));
         }
@@ -193,6 +197,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
             receipt->setCumulativeGasUsed(hexCumulative(cumulative));
+            receipt->setTransactionIndex(txIndex++);
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(static_cast<uint8_t>(tx.type));
         }
