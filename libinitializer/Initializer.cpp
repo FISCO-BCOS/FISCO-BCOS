@@ -482,23 +482,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                       "OP mode (executor_version>=3) requires a numeric chain_id "
                                       "(decimal or 0x-prefixed hex)"));
         }
-        auto opScheduler =
-            std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType,
-                GlobalStateStorage>>(m_protocolInitializer->blockFactory()->receiptFactory(),
-                opChainId, forkTimestamps, m_protocolInitializer->blockFactory(),
-                m_globalStateStorageInitializer->storage(),
-                [](bcos::bytes const& env, bcos::crypto::HashType const& h)
-                    -> std::optional<bcostars::Transaction> {
-                    return bcos::engine::detail::opEnvelopeToTars(env, h);
-                });
+        auto opScheduler = std::make_shared<
+            bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType, GlobalStateStorage>>(
+            m_protocolInitializer->blockFactory()->receiptFactory(), opChainId, forkTimestamps,
+            m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
+            [](bcos::bytes const& env,
+                bcos::crypto::HashType const& h) -> std::optional<bcostars::Transaction> {
+                return bcos::engine::detail::opEnvelopeToTars(env, h);
+            });
         // Fix the missing-ledger gap (alignment plan problem 2): the ethereum paths pass ledger;
         // without it the engine's local-payload persistence branch (m_ledger null) is dead.
-        m_engineServiceInitializer = EngineServiceInitializer::build(
-            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+        m_engineServiceInitializer =
+            EngineServiceInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), opScheduler, transactionExecutor,
+                m_memPoolInitializer->memPool(), ledger, bcos::engine::c_defaultBlockTxCountLimit,
+                static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4));
         // OP RPC-facing scheduler (MultiVersionScheduler slot 3): eth_call / state reads with OP
         // semantics via OpstackExecutor. Mirrors the ethereum flow's two-object split — the engine
-        // gets OpSchedulerImpl (block execution), the RPC scheduler gets this adapter (per-tx call).
+        // gets OpSchedulerImpl (block execution), the RPC scheduler gets this adapter (per-tx
+        // call).
         auto opCallScheduler =
             std::make_shared<bcos::executor_v1::opstack::OpCallScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),
@@ -507,11 +509,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_opSchedulerHolder = [opCallScheduler]() { return opCallScheduler; };
         // RPC block-number notification (alignment plan problem 3): installs the callback into the
         // engine's scheduler; the engine fires it after a VALID OP block commits.
-        m_setOpSchedulerBlockNumberNotifier = [opScheduler](
-                                                  std::function<void(bcos::protocol::BlockNumber)>
-                                                      notifier) {
-            opScheduler->setBlockNumberNotifier(std::move(notifier));
-        };
+        m_setOpSchedulerBlockNumberNotifier =
+            [opScheduler](std::function<void(bcos::protocol::BlockNumber)> notifier) {
+                opScheduler->setBlockNumberNotifier(std::move(notifier));
+            };
         // Compile-time proof that this production composition root activates the OP engine branch.
         // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerImpl<...>&（左值引用），若作
         // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），
@@ -762,7 +763,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp());
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(),
+            // OP mode: the OP engine branch only accepts Isthmus+ V4 payloads (newPayloadV4);
+            // the generic driver's default V1 would be refused (-38005).
+            opStackMode ? static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4) : 0);
     }
 
 #ifdef TOOLS

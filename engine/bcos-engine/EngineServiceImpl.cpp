@@ -37,7 +37,8 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
     if (auto err = bcos::codec::rlp::decode(envRef, web3Tx); err)
     {
-        return std::nullopt;  // only malformed/un-enumerated envelopes -- no throw; 0x04 is already supported by Web3Transaction
+        return std::nullopt;  // only malformed/un-enumerated envelopes -- no throw; 0x04 is already
+                              // supported by Web3Transaction
     }
     auto tarsTx = web3Tx.takeToTarsTransaction();
     // The read side's tx.hash() returns extraTransactionHash; leaving it empty would throw
@@ -119,12 +120,15 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 
 std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 {
-    // Production interop downgrade: do not advertise `engine_newPayloadV4` /
-    // `engine_getPayloadV4` in the OP-mode capability negotiation. Both only have
-    // EngineServiceImpl-layer semantics; the RPC endpoint registration is not implemented, so
-    // advertising V4 would let op-node negotiate to a non-existent endpoint and hit a -38005 stub
-    // on every call. Honestly expose V3; restore the V4 entries here once the endpoints exist.
-    return supportedCapabilities();
+    // OP mode advertises V4: Isthmus+ payloads are accepted only on engine_newPayloadV4
+    // (EngineServiceImpl.h's OP version gate), so the capability must be on the wire or op-node
+    // would never reach the executing path. The engine's V4 semantics are proven in-process
+    // (OpNewPayloadRpcE2eTest drives `newPayload(req, 4)`); the RPC endpoints forward V4 to the
+    // same handlers.
+    auto caps = supportedCapabilities();
+    caps.insert(
+        caps.end(), {"engine_forkchoiceUpdatedV4", "engine_getPayloadV4", "engine_newPayloadV4"});
+    return caps;
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
@@ -141,6 +145,10 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     if (requestVersion == ApiVersion::V3)
     {
         return payloadVersion <= 3;
+    }
+    if (requestVersion == ApiVersion::V4)
+    {
+        return payloadVersion <= 4;
     }
     return false;
 }
@@ -413,7 +421,8 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     // Behaviorally equivalent to op-geth, with a different timing: FISCO rejects only after
     // executing the block, op-geth rejects before execution (the same "no full
     // VerifyHeader/ValidateBody equivalent" structural note as in
-    // docs/opstack-opgeth-e2e-comparison.md). Not a gap, but deliberately not mirrored here. extraData: OP Holocene+ header shape. op-geth validates it in
+    // docs/opstack-opgeth-e2e-comparison.md). Not a gap, but deliberately not mirrored here.
+    // extraData: OP Holocene+ header shape. op-geth validates it in
     // `consensus/misc/eip1559/eip1559_optimism.go`'s `ValidateHoloceneExtraData` (Isthmus) /
     // `ValidateJovianExtraData` (Jovian), reached from BOTH the block-verify path
     // (`consensus/beacon/consensus.go:240`) and the newPayload path
@@ -540,7 +549,8 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     header->setBaseFee(payload.baseFeePerGas);
     header->setWithdrawalsRoot(payload.withdrawalsRoot.value());
     header->setBlobGasUsed(payload.blobGasUsed.value());
-    // excessBlobGas is pinned to 0 by validation above (consistent with the retired EthBlockHeader).
+    // excessBlobGas is pinned to 0 by validation above (consistent with the retired
+    // EthBlockHeader).
     header->setExcessBlobGas(bcos::u256(0));
     header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
     header->setRequestsHash(c_opEmptyRequestsHash);
