@@ -233,7 +233,8 @@ std::string hexBytes(evmc::bytes_view b)
     return "0x" + evmc::hex(b);
 }
 
-// bytes32 slot keys/values are written as minimal-numeric hex (trie semantics: 0 == absent, compared after normalization).
+// bytes32 slot keys/values are written as minimal-numeric hex (trie semantics: 0 == absent,
+// compared after normalization).
 std::string hexSlot(const evmc::bytes32& b)
 {
     return hexU256(intx::be::load<intx::uint256>(b));
@@ -256,7 +257,8 @@ struct AllowEntry
 class DivergenceLedger
 {
 public:
-    // Missing ledger file = FAILURE (the ledger is a gate deliverable; a missing file must never imply all-exempt/all-empty).
+    // Missing ledger file = FAILURE (the ledger is a gate deliverable; a missing file must never
+    // imply all-exempt/all-empty).
     static DivergenceLedger load(const fs::path& path)
     {
         DivergenceLedger ledger;
@@ -283,7 +285,10 @@ public:
                     m[7].str()};
                 e.exempt = (e.attribution == "a" && e.status == "PENDING-FIX") ||
                            (e.attribution == "c" && e.status == "SIGNED-OFF");
-                ledger.m_entries.push_back(std::move(e));
+                // FINDING-dual-* entries belong to OpDualPathEquivalenceTest's own ledger
+                // instance (A-vs-B harness); this suite's finish() stale-check must not see them.
+                if (e.entryId.rfind("FINDING-dual-", 0) != 0)
+                    ledger.m_entries.push_back(std::move(e));
             }
         }
         // Dangling entry= (no matching "## <ENTRY-ID>" heading) = FAILURE: an
@@ -319,7 +324,8 @@ public:
         BOOST_ERROR("DIVERGE " << vectorId << " " << field << " want=" << want << " got=" << got);
     }
 
-    // An exemption never hit this run = FAILURE (stale exemption turns red; must be cleared after fix/vector regen).
+    // An exemption never hit this run = FAILURE (stale exemption turns red; must be cleared after
+    // fix/vector regen).
     void finish() const
     {
         for (const auto& e : m_entries)
@@ -668,7 +674,8 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                     }
                     else
                     {
-                        // Fill recovered signer + assert per tuple (evmone silently skips tuples without a signer).
+                        // Fill recovered signer + assert per tuple (evmone silently skips tuples
+                        // without a signer).
                         auth.signer = replayRecoverAuthority(auth);
                         if (!auth.signer.has_value())
                             BOOST_ERROR(id << ": authorization signer recovery failed (unmarked "
@@ -736,7 +743,8 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
             // Task 4 blob arm: type-0x3 blob txs are decode-class rejected on OP chains.
             // processOpBlock never reaches raw-tx decode (txs are already OpBlockTx), so
             // reproduce the real decode rejection via decodeOneRawTx, record the message,
-            // and let assertRejectThrow assert it directly (consumer-first; review R16 consumer:both).
+            // and let assertRejectThrow assert it directly (consumer-first; review R16
+            // consumer:both).
             const auto raw = test::from_json<bytes>(jAt(t, "_op_raw"));
             try
             {
@@ -769,9 +777,8 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
             placeholder.gas_limit = test::from_json<int64_t>(jAt(t, "gas"));
             placeholder.value = parseU256(jAt(t, "value"));
             placeholder.data = test::from_json<bytes>(jAt(t, "data"));
-            placeholder.max_gas_price = t.isMember("maxFeePerGas") ?
-                                            parseU256(jAt(t, "maxFeePerGas")) :
-                                            intx::uint256{};
+            placeholder.max_gas_price =
+                t.isMember("maxFeePerGas") ? parseU256(jAt(t, "maxFeePerGas")) : intx::uint256{};
             placeholder.max_priority_gas_price = t.isMember("maxPriorityFeePerGas") ?
                                                      parseU256(jAt(t, "maxPriorityFeePerGas")) :
                                                      intx::uint256{};
@@ -792,8 +799,8 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
 /// A nullptr pre skips pre parsing (chain block i>0 pre:null inherits ts after the
 /// previous block's applyDiff writes). touchedAddrs/touchedSlots are per-block
 /// (block N's .uncovered must not see addresses touched in blocks 0..N-1).
-void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
-    evmone::test::TestState& ts, const JsonValue* pre, DivergenceLedger& ledger, evmc::VM& vm,
+void replaySingleBlockInto(const std::string& id, const JsonValue& blk, evmone::test::TestState& ts,
+    const JsonValue* pre, DivergenceLedger& ledger, evmc::VM& vm,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
 {
     VectorContext ctx{ledger, id};
@@ -808,7 +815,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     if (pre != nullptr)
         ts = test::from_json<test::TestState>(*pre);
 
-    // Execute: the applyDiff callback both writes back into TestState and accumulates the write set (used by the coverage assertion).
+    // Execute: the applyDiff callback both writes back into TestState and accumulates the write set
+    // (used by the coverage assertion).
     std::set<evmc::address> touchedAddrs;
     std::map<evmc::address, std::set<evmc::bytes32>> touchedSlots;
     const auto apply = [&](const state::StateDiff& d) {
@@ -849,7 +857,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         return;
     }
 
-    // seal: message passer storage = end-of-block (post-finalize) snapshot (OpBlockSeal.h contract).
+    // seal: message passer storage = end-of-block (post-finalize) snapshot (OpBlockSeal.h
+    // contract).
     const std::map<evmc::bytes32, evmc::bytes32> mpStorage =
         ts.contains(OP_L2_TO_L1_MESSAGE_PASSER) ? ts.at(OP_L2_TO_L1_MESSAGE_PASSER).storage :
                                                   std::map<evmc::bytes32, evmc::bytes32>{};
@@ -898,7 +907,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     // side is absent (seal.blobGasUsed semantics = Jovian DA-footprint header field;
     // pre-Isthmus has no such reuse bit, and the vector's 0x0 is informational only).
     {
-        const auto wantBlobGas = parseU256(jAt(h, "blobGasUsed"));  // required (always emitted on Ecotone+)
+        const auto wantBlobGas =
+            parseU256(jAt(h, "blobGasUsed"));  // required (always emitted on Ecotone+)
         const auto gotBlobGas =
             seal.blobGasUsed.has_value() ? std::optional{hexU64(*seal.blobGasUsed)} : std::nullopt;
         if (isJovian)
@@ -1000,7 +1010,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
                 hexBytes(evmc::bytes_view{receipt->output().data(), receipt->output().size()})});
 
         const auto optWant = [&](const char* key) -> std::optional<std::string> {
-            return er.isMember(key) ? std::optional{hexU256(parseU256(jAt(er, key)))} : std::nullopt;
+            return er.isMember(key) ? std::optional{hexU256(parseU256(jAt(er, key)))} :
+                                      std::nullopt;
         };
         ctx.checkOptional(p + "._op_deposit_nonce", optWant("_op_deposit_nonce"), gotDepNonce);
         ctx.checkOptional(p + "._op_deposit_receipt_version",
@@ -1112,7 +1123,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         BOOST_ERROR(id << ": zero comparisons executed");
 }
 
-// ── Single-vector replay (flat vector: pre at top level; chain vectors call replayChainVector per block) ─
+// ── Single-vector replay (flat vector: pre at top level; chain vectors call replayChainVector per
+// block) ─
 
 void replayVector(const std::string& id, const JsonValue& v, DivergenceLedger& ledger, evmc::VM& vm,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
@@ -1133,7 +1145,8 @@ bool hasReject(const JsonValue& v)
 
 std::string rejectConsumer(const JsonValue& v)
 {
-    // consumer defaults to executor (T8n is an execution-layer replayer; engine-class vectors explicitly write engine).
+    // consumer defaults to executor (T8n is an execution-layer replayer; engine-class vectors
+    // explicitly write engine).
     return jAt(jAt(jAt(v, "_op_expected"), "reject"), "fisco")
         .get("consumer", Json::Value("executor"))
         .asString();
@@ -1155,7 +1168,8 @@ void assertRejectThrow(const std::string& id, const JsonValue& v, evmc::VM& vm,
         return;
     // decode-class reject (blob): the load section already reproduced the decodeOneRawTx
     // rejection and recorded the message. processOpBlock never reaches that decode (txs
-    // are already OpBlockTx); assert the recorded message directly (same string as the engine side).
+    // are already OpBlockTx); assert the recorded message directly (same string as the engine
+    // side).
     if (bc.decodeRejectMessage.has_value())
     {
         const auto expected =
@@ -1167,7 +1181,8 @@ void assertRejectThrow(const std::string& id, const JsonValue& v, evmc::VM& vm,
         return;
     }
     evmone::test::TestState ts = test::from_json<test::TestState>(jAt(v, "pre"));
-    // applyDiff callback matches the replaySingleBlockInto execute section (incl. ts write-back); ts is discarded after reject.
+    // applyDiff callback matches the replaySingleBlockInto execute section (incl. ts write-back);
+    // ts is discarded after reject.
     std::set<evmc::address> touchedAddrs;
     std::map<evmc::address, std::set<evmc::bytes32>> touchedSlots;
     const auto apply = [&](const state::StateDiff& d) {
@@ -1237,7 +1252,8 @@ void replayChainVector(const std::string& id, const JsonValue& v, DivergenceLedg
     }
 }
 }  // namespace
-// ── structurallyUnrecoverable predicate boundary unit test (prevents the predicate degenerating to always-true/always-false and letting marked tuples escape) ──
+// ── structurallyUnrecoverable predicate boundary unit test (prevents the predicate degenerating to
+// always-true/always-false and letting marked tuples escape) ──
 BOOST_AUTO_TEST_SUITE(OpT8nReplay)
 
 BOOST_AUTO_TEST_CASE(StructurallyUnrecoverablePredicateBoundaries)
@@ -1284,7 +1300,8 @@ BOOST_AUTO_TEST_CASE(Vectors)
     // but keeps them out of the manifest. Set equality exempts these two known
     // unregistered static-face files (suffix match, base-independent).
     const auto isUnregisteredStatic = [](std::string const& n) {
-        // "_static_3.json" = 14 chars, "_static_12.json" = 15 chars (suffix match, base-independent)
+        // "_static_3.json" = 14 chars, "_static_12.json" = 15 chars (suffix match,
+        // base-independent)
         return (n.size() >= 14 && n.rfind("_static_3.json") == n.size() - 14) ||
                (n.size() >= 15 && n.rfind("_static_12.json") == n.size() - 15);
     };
@@ -1298,13 +1315,15 @@ BOOST_AUTO_TEST_CASE(Vectors)
     auto vm = evmc::VM{evmc_create_evmone()};
     auto receiptFactory = makeTestReceiptFactory();
 
-    // Replay only the set intersection (missing/extra already FAILURE'd; don't let set errors cascade into parse crashes).
+    // Replay only the set intersection (missing/extra already FAILURE'd; don't let set errors
+    // cascade into parse crashes).
     for (const auto& name : manifest)
     {
         if (!present.contains(name))
             continue;
         const auto file = vectorsDir / name;
-        // parse failure / missing required field -> named ADD_FAILURE, then next file; never silent.
+        // parse failure / missing required field -> named ADD_FAILURE, then next file; never
+        // silent.
         try
         {
             std::ifstream input(file);
