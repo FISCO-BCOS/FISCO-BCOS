@@ -31,7 +31,7 @@
 2. **存储适配层统一**：`Storage2State` 并入带**可选 poison 通道**的共享读桥（`SharedReadBridge`），
    块路径开通道（错误→整块 OpStorageError），eth/eth_call 关通道（错误→absent，现状不变）。
 3. **转换代码一条路**：envelope→`protocol::Transaction`→evmone 只有一份转换实现，块路径不再直通。
-4. **语义零变化**：op-geth 对拍全绿（golden 63/33）、现有测试全绿。
+4. **语义零变化**：op-geth 对拍全绿（t8n 125 向量 + e2e 81 用例 + golden/engine 79）、现有测试全绿。
 
 ## 2. 非目标（本次不动）
 
@@ -88,16 +88,46 @@ executeOpBlock                                    executeOpBlock (块编排器�
   （由 error 指针开关）。`poison()` 只记首个错误、不重抛——语义对齐 `Storage2State.h:15-18` 的契约。
 - **额外读方法**：Storage2State 的 `fetchAllStorage`（live 账户/存储槽遍历，seal/stateRoot 依赖）与
   `AccountView` 等块路径专用方法必须带上共享桥（同样受 poison 通道门控）。
-- **读实现选择（验证门控）**：`StorageStateView` 经 EVMAccount 读，`Storage2State` 直接 storage2 读，
-  两实现存在差异（has_storage 探针、code_hash 空值处理等）。**默认以 StorageStateView 的 EVMAccount
-  读为共享实现**，块路径切换读桥后必须过 op-geth golden；若某读语义不一致，将该分歧逻辑并入共享桥
-  （保留 Storage2State 的语义），以双路径一致性测试 + golden 作为判定闸门。
+- **读实现选择（验证门控）**：`StorageStateView` 经 EVMAccount 读，`Storage2State` 直接 storage2 读。
+  经 sub-agent 审查确认的真实分歧（**必须显式处理，不能只靠 golden 兜底**）：
+  1. **has_storage 探针**：`StorageStateView::hasStorageImpl` 不过滤 tombstone/零值槽（任何非字段 key
+     → true）；`Storage2State::probeHasStorage` 只认 live 且非零的 32 字节 slot。**golden 账本由
+     Storage2State 写入（零值槽被删），两实现在 golden 上必然同值——golden 全绿不能证明一致**。
+     需定向用例：预置含零值/墓碑 slot 的账户 → CREATE/CREATE2 到该地址，双路径比对（EIP-7610 碰撞
+     判定）。
+  2. **/sys/ 路由**：`EVMAccount(storage, addr, false)` 把 8 个 `c_systemTxsAddress` 路由到 `/sys/`
+     （EVMAccount.h:280-291）；Storage2State 恒走 `/apps/`。payload 触碰 FISCO 预编译地址 → 新旧
+     路径读写不同表。
+  3. **code_hash 空值**：两侧都归一化到 EMPTY_CODE_HASH（一致，保留）。
+  4. **get_account_code legacy 回退**：StorageStateView 有 legacy CODE 字段回退，Storage2State 无
+     （OP 链代码均经 CODE_HASH 写入，难触发——保留 Storage2State 语义）。
+  **默认以 StorageStateView 的 EVMAccount 读为共享实现**，分歧 1/2/4 的 Storage2State 语义并入共享桥；
+  以"双路径一致性测试 + e2e golden（经桥）"为闸门。t8n 腿（TestState，不经桥）对读分歧零判别力。
+- **poison 通道同实例**：写回错误通道必须与读桥 poison 是**同一个实例**——否则写失败未设读桥 flag，
+  executeOpBlock 的 poisoned()-first 判定落空，写故障被误分类为 INVALID。现状（applyDiff 必先设 flag）
+  无此窗口，合并版必须接线。
+- **executor 块路径读注入**：`executeTransaction/executeDeposit/finalizeBlock` 当前内部各自构造
+  `StorageStateView`（读失败静默 absent，不经块路径 poison 通道）。块路径用这些方法时，读失败会
+  静默降级——必须给这些方法增加注入桥/poison 指针参数（或改为接收 SharedReadBridge），否则
+  §8 的"读桥 poison → OpStorageError"对逐笔读是空的。
 
 ### 5.2 写侧
 
-`applyStateDiff`（ethereum-executor/BCOS2Evmone.h:94）已是共享写回。Storage2State::applyDiff 的
-"写失败 poison + rethrow"契约并入共享写回：给 `applyStateDiff` 追加可选 error 通道（或薄封装
-`applyStateDiffWithPoison`），块路径用带通道版本，eth 路径用原版。
+`applyStateDiff`（ethereum-executor/BCOS2Evmone.h:94）已是共享写回。但 **`applyStateDiffWithPoison`
+不是薄封装**——`applyStateDiff` 与 `Storage2State::applyDiff` 写回语义有四处真实分歧，必须按
+Storage2State 语义逐项并入共享写回：
+1. **/apps/ vs /sys/ 路由**：`applyStateDiff` 用 `EVMAccount(storage, addr, false)` 把
+   `c_systemTxsAddress` 路由到 /sys/（BCOS2Evmone.h:103）；Storage2State 用 `FromTableName{}` 强制
+   /apps/（Storage2State.h:294-301，防 split-brain）。
+2. **零值槽**：applyStateDiff 写行不删（零值行残留，BCOS2Evmone.h:124-131）；Storage2State
+   `removeOne` + 重读守卫（Storage2State.h:347-377）。切到 applyStateDiff 后账本累积零值行，反向
+   放大 §5.1 has_storage 分歧——须保留删行语义。
+3. **EIP-161 空账户 create 守卫**：Storage2State 有（:318-325），applyStateDiff 无。
+4. **账户删除 / ghost-delete tripwire / 写透缓存**：Storage2State 的 range-删整表 + SYS_TABLES 标记、
+   ghost-delete tripwire（:399-403）、块内写透缓存一致性（:383-389）——必须迁移，否则共享桥（若带
+   缓存）读到陈旧值。
+另：`seeding=true` 播种模式（SeedPreState.h:104-113 依赖）需保留，删除 Storage2State 前先改写
+SeedPreState。写回错误通道 = 与读桥 poison **同实例**（先设 flag 再 rethrow，保持现状时序）。
 
 ### 5.3 删除
 
@@ -130,14 +160,24 @@ blockGasLeft 递减                              // 每笔按 gasLimit 扣
 产出仍是 `OpBlockResult{receipts, txTypes, gasUsed, finalizeDiff}`（receipt 顺序 / typed-prefix / 累积
 gas 与原 processOpBlock 逐字一致）。
 
-**ledgerConfig 来源（新增约束）**：当前块路径不消费 ledgerConfig（OpSchedulerImpl.h:206-207 注释），但
-executor 概念方法都读 `ledgerConfig.evmcRevision()` 做 fork 一致性检查。逐笔经概念方法后，编排器必须
-提供 ledgerConfig——来源二选一：
-- (a) 编排器从 storage 读：`ledger::getLedgerConfig(view, header.number(), blockFactory)`（对齐
-  OpCallScheduler.h:260-261 的获取方式）；
-- (b) `OpSchedulerImpl::executeBlock` 已接收的 ledgerConfig 参数向下穿透到 executeOpBlock。
-推荐 (a)（编排器自足，不依赖 executeBlock 调用方是否传对），并在双路径一致性测试中验证其
-evmcRevision 与 `configAt(timestamp)` 的 fork 判定一致（二者必须同一来源，防 fork/rev 双源漂移）。
+**编排器必须显式携带的块级逻辑（sub-agent 审查补全）**：
+- D-1 Jovian DA-footprint scalar 覆盖块（读 `txs[0].data[176:178]`，OpBlockExecute.cpp:158-175）——
+  块级共识定价逻辑，漏搬 = DA footprint 定价漂移。
+- `isL1AttributesTx` 内容校验（OpBlockExecute.cpp:18-26, :108-109）。
+- **显式 blockGasLeft 递减**：每笔按 receipt.gasUsed 递减、超限检查（evmone validate_transaction 内部
+  `tx.gas_limit > block_gas_left`，编排器逐笔传运行中值）。无双重检查风险——executor 按值接收、只用于
+  本次校验，不维护计数器（OpstackExecutor.h:284 确认）。
+
+**ledgerConfig 来源（新增硬约束）**：当前块路径不消费 ledgerConfig（OpSchedulerImpl.h:206-207 注释），
+但 executor 概念方法都读 `ledgerConfig.evmcRevision()` 做 fork 一致性检查（缺省回退 EVMC_OSAKA，
+LedgerConfig.h:270）。而 `configAt(timestamp)` 恒返回 rev=EVMC_PRAGUE——**两源无代码关联，漂移即整块
+OpForkRevisionMismatch→INVALID**（旧块路径完全不存在此拒绝模式）。处置二选一（设计必须写明）：
+  - (a) OP 链 genesis 固化 `evmc_revision=prague`（SystemConfig 播种），编排器从 storage 读
+    `ledger::getLedgerConfig(view, header.number(), blockFactory)`（对齐 OpCallScheduler.h:260-261）；
+    **双跑与现有 fixture 必须补 evmcRevision 播种**（当前 golden fixtures 只 seed 账户、不 seed
+    SystemConfig；e2e/TwoPhase 传默认空 LedgerConfig——新路径会逐条抛 EvmcRevisionNotConfigured）；
+  - (b) 块路径方法豁免该检查（跳过 evmcRevision 一致性校验，fork 判定唯一来源 = `configAt(timestamp)`）。
+推荐 (a) + fixture 播种补全；并加一条"evmc_revision 缺省回退=OSAKA 时整块 INVALID"的拒绝测试（§9.2）。
 
 ### 6.2 新增方法 `executeBlockStart`
 
@@ -145,14 +185,31 @@ evmcRevision 与 `configAt(timestamp)` 的 fork 判定一致（二者必须同�
 内部提取为 `OpstackExecutor` 公开方法，使**块首/块尾/逐笔全部落在执行器方法面上**（统一执行接口的完整性）。
 签名沿用 executeDeposit 的注入风格：`(storage, header, ledgerConfig, chainId, blockGasLeft, hashes)`。
 
-### 6.3 转换无损要求（本设计最关键的不变量）
+### 6.3 转换要求（sub-agent 审查后修订——三个最关键的输入不变量）
 
-块路径改经 `executeTransaction` 后，每笔 normal tx 的转换变为：
-`envelope → opEnvelopeToTars → protocol::Transaction → bcosTransactionToEvmone → evmone tx`。
+块路径改经 `executeTransaction` 后，opValidate 的**三个输入**都必须在两条路径上等价：
+`evmone tx` + `blockInfo` + **签名信封（signedTxEnvelope，算 L1/DA fee）**。
 
-**要求**：对每种 EIP-2718 类型（legacy / 2930 / 1559 / 4844 / 7702 及其 OP 组合），该往返结果必须与
-`decodeOneRawTx` 直通产出的 evmone tx **逐字节一致**，否则状态根分叉。由双路径一致性测试逐类型验证
-（§9.2）；任一类型不无损 → 该类型落回"共享执行核直通"（方案 B 退路，§11 R1）。
+1. **【共识·必修】签名信封必须是完整信封**：`m_prepare` 当前用 `transaction.extraTransactionBytes()`
+   （= encodeForSign **签名前像**，无 r/s/v，Web3Transaction.cpp:225-227）作 signedTxEnvelope。opValidate
+   用 env 对**整段**数 0/非 0 字节（Ecotone，RollupCost.cpp:148-156）或 FastLZ（Fjord+，:205）算
+   L1/DA fee——签名前像比完整信封少 ~65 字节，只要 L1 fee 参数非 0，两条路径的 L1/DA fee 不同 →
+   状态根分叉。**修法：`executeTransaction` 增加 `env`（完整信封）参数，编排器把 decode 保留的 raw
+   envelope 传入**（或 opEnvelopeToTars 把完整信封另存供 m_prepare 读取）。
+2. **【共识·必修】拒块裁决语义保留**：tars 往返路径缺失两块直通路径的拒绝——chain-id 一致性校验
+   （`tx.chain_id == m_chainId`，OpTxDecode.h:95-96 等，缺失则跨链重放 tx 从 INVALID 变 VALID）与
+   low-S/EIP-2 校验（requireLowSSignature，OpRlpDecode.h:96-104，缺失则 malleable tx 被收）。两条必须
+   保留在转换层或校验层，否则对 op-geth 的裁决漂移。
+3. **【执行等价 vs 逐字节】**：`bcosTransactionToEvmone(opEnvelopeToTars(env))` 与 `decodeOneRawTx(env).tx`
+   的逐字节差异（v/r/s 恒 0、chain_id 十进制被 safeFromQuantity 按 hex 解析、auth.chain_id≥2^64 截断为
+   2^64-1、auth.signer some(0) vs nullopt）经审查多为**执行中立**（CHAINID 取 host、sender 重算、
+   recoverAuthority 重算）。验收口径从"逐字节一致"改为"**执行等价**"：逐字段判定是否被执行消费，
+   非消费字段豁免；消费字段必须一致。**显式重定义 4844**：L2 无 blob，直通路径 decode 拒 0x03
+   （OpTxDecode.h:287-288）、tars 路径支持——不是"待验证类型"，是**拒绝路径 parity**（新旧路径拒绝层
+   不同，须对齐同一 INVALID/OpConsensusError 分类）。
+
+由双路径一致性测试逐类型验证（§9.2）；任一**执行消费**字段不等价 → 该类型落回"共享执行核直通"
+（方案 B 退路，§11 R1）。
 
 ## 7. executeOpBlock 整合与 Parity Switch
 
@@ -167,59 +224,116 @@ evmcRevision 与 `configAt(timestamp)` 的 fork 判定一致（二者必须同�
 旧 `processOpBlock` 路径与新编排器路径并存；测试对同一语料双跑、比对状态根与回执。全绿后翻转开关为
 `true`，删除旧路径（§10 阶段三）。开关放在 `executeOpBlock` 内，编译期消掉死分支。
 
-## 8. 错误分类映射
+**两个新增装配约束（sub-agent 审查补全）**：
+- **hashImpl 注入**：`OpSchedulerImpl` 目前无 `hashImpl` 成员（OpSchedulerImpl.h:416-423 只有
+  receiptFactory/chainId/forkTimestamps/vm/blockFactory/storage/envelopeToTars），新路径构造
+  `OpstackExecutor` 需要 hashImpl——注入为 scheduler 构造参数（与 receiptFactory 同源）。
+- **两条分支同一桥类型**：step4-6（poison 检查 / `visitAccounts` / `stateRootOf` / seal）在两条分支
+  之外共用，无法类型擦除（`visitAccounts`/`poisoned`/`firstError` 不在 StateView 接口里）——要求两条
+  分支使用**同一个桥类型**。故 Parity Switch 阶段二里"旧路径"实为 processOpBlock-on-SharedReadBridge
+  （阶段一先切桥），而非 Storage2State。spec §10 的排序已隐含，此处明示。
 
-块路径错误分类不得漂移。原 processOpBlock 的异常通道 → 新路径的映射：
+## 8. 错误分类映射（sub-agent 审查后修订——分类通道必须由编排器翻译）
 
-| 原通道 | 新来源 | 分类 |
-|---|---|---|
-| processOpBlock 内 `throw std::runtime_error`（validate 失败 / deposit 顺序 / gas 超限 / 空块） | `OpTxValidationFailed` / `OpForkRevisionMismatch` / `EvmcRevisionNotConfigured`（executeTransaction/executeDeposit 抛出） | `OpConsensusError`（→ INVALID）——编排器需把 executor 的抛出翻译回原块级异常通道 |
-| Storage2State poison | SharedReadBridge poison | `OpStorageError`（→ -32603），不变 |
-| applyDiff 写失败 poison + rethrow | `applyStateDiffWithPoison` | `OpStorageError`，不变 |
+块路径错误分类不得漂移。**关键机制**：`executeOpBlock` 的双 catch 依赖 -fno-rtti（OpSchedulerImpl.h:269-307）——
+`catch(const std::exception&)` 产 OpStorageError(-32603)、`catch(...)` 产 OpConsensusError(INVALID)。
+原 processOpBlock 的 `throw std::runtime_error` 逃过 typed-catch → INVALID。而 executor 抛的
+`OpTxValidationFailed`/`OpForkRevisionMismatch`/`EvmcRevisionNotConfigured` 都是 `bcos::Exception`
+（`virtual std::exception, virtual boost::exception`，bcos-utilities/Exceptions.h:38-48），在 rtti 编译的
+代码里**会被 `catch(const std::exception&)` 接住 → 误分类为 -32603**。因此：
 
-编排器对 executor 抛出的翻译是**行为面**，必须与现有错误分类测试（OpSchedulerImpl 相关用例）逐一对齐。
+- **编排器必须翻译**：捕获 executor 的具体异常类型（**全枚举**：m_prepare 的
+  OpTxValidationFailed/EvmcRevisionNotConfigured/OpForkRevisionMismatch，m_finish 的
+  EvmcRevisionNotConfigured，executeDeposit 的两类 fork 检查），**重抛为块级 std::runtime_error**
+  （落入 catch(...) → INVALID）或显式分类为其他。
+- **任何漏译类型静默变 -32603**——必须钉死分类测试。
+- **§8 表事实修正**：空块/首笔非 deposit/deposit 顺序是**编排器层检查**（留在编排器抛 runtime_error
+  → INVALID），不是 executor 抛点。deposit 与 normal 的 gas 超限走不同通道（runDeposit runtime_error vs
+  opValidate error_code → OpTxValidationFailed），编排器统一翻译。
+- **现有分类测试未钉死**：`OpSchedulerImplSmokeTest.cpp:159-163` 只断言 std::runtime_error、容忍两种
+  分类——重构后须补"空块/首笔非 deposit/normal 无效 tx/gas 超限 → 必须 OpConsensusError(INVALID)"
+  的钉死用例。
+- RTTI 链接方式是涌现属性（libevmone 链接/异常族变化会移位分类），spec 不把 §8 当稳定契约，测试兜底。
+
+| 原通道 | 新来源 | 分类 | 处置 |
+|---|---|---|---|
+| processOpBlock 内 throw std::runtime_error | 编排器层检查（空块/顺序/结构） | OpConsensusError(INVALID) | 编排器照抛 |
+| executor bcos::Exception（validate/fork/rev 检查） | executeTransaction/executeDeposit/finalizeBlock | OpConsensusError(INVALID) | 编排器捕获→重抛 runtime_error |
+| SharedReadBridge poison（读） | 逐笔读经注入桥（§5.1） | OpStorageError(-32603) | 块尾 poisoned() 判定 |
+| applyStateDiffWithPoison 写失败 | 写回（§5.2） | OpStorageError(-32603) | 与读桥同实例 poison，先 flag 后 rethrow |
 
 ## 9. 测试与验收
 
 ### 9.1 验收标准（可证伪）
 
-1. op-geth golden **63/33 全绿**（语义零变化）。
-2. 现有测试全绿：opstack-executor（OpstackExecutor 9、OpBlockRegister、OpTwoPhase、OpBlockSeal、
-   OpCallScheduler 2）、engine、OpNewPayloadRpcE2eTest、e2e。
-3. **双路径一致性测试**：同输入（语料见 §9.2）旧 processOpBlock vs 新编排器 → 相同状态根 + 相同回执 + 相同 gasUsed。
-4. `Storage2State` 删除后 grep 引用为零 + 全量编译通过。
+1. op-geth golden 全绿——**t8n 125 向量 + e2e 81 用例 + golden/engine 79**（现状实际计数，spec
+   "63/33" 为过时快照）。**两腿性质不同**：t8n 腿经 `evmone::test::TestState` 不经存储桥（管执行语义），
+   e2e 腿经真实读桥（管桥语义）——分别作为闸门，不能合并表述。
+2. 现有测试全绿：opstack-executor（OpstackExecutor、OpBlockRegister、OpTwoPhase、OpBlockSeal、
+   OpCallScheduler）、engine、OpNewPayloadRpcE2eTest、e2e。**注：OpCallScheduler 现有 2 用例不触桥读
+   （eth_call happy path 已延期，OpCallSchedulerTest.cpp:12-14）——需补 eth_call 全路径用例**，否则
+   SharedReadBridge 改造对 eth_call 读语义无保护。
+3. **双路径一致性测试**（需**新建 runner**，§9.2）：同 pre-state 旧路径 vs 新编排器 → 相同状态根 +
+   相同回执 + 相同 gasUsed；**并各自独立对 golden 绝对断言**（stateRoot / encodeOpHeader vs op-geth），
+   不只互比（防两路径同错，如 fixture 喂了同一个错误 evmcRevision）。
+4. **写侧契约迁移测试**（§5.2）：/apps/ 路由、零值删行、EIP-161、ghost-delete、写透缓存逐项对照；
+   迁移 `Storage2StateHelpersTest` + 新增"Storage2State vs SharedReadBridge 同 pre-state 双桥 stateRoot
+   对比"（golden 对多数写侧契约不可见）。
+5. `Storage2State` 删除后 grep 引用为零 + 全量编译通过（**含 SeedPreState.h:104-113 改写**——其
+   `applyDiff(seeding=true)` 是真实实例化依赖，不是注释引用）。
 
-### 9.2 双路径一致性测试语料
+### 9.2 双路径一致性测试语料与 runner
 
-- op-geth golden 63 用例 / 33 向量（现状语料）。
-- 增强语料 125 向量（invalid/chain/legacy，仓库已有）。
-- **逐 tx 类型探针**（补 golden 覆盖面缺口）：legacy / 2930 / 1559 / 4844 / 7702 各至少一笔，验证
-  §6.3 转换无损；含 deposit + normal 混排块、空块、首笔非 deposit 块（结构错误分类）。
+**runner（新建）**：建在 e2e/TwoPhase 的 MLS fixture 上（seedPreState + golden header + realConverter/
+opEnvelopeToTars + registerVerifiedBlock + parseNewPayloadRequest），同 pre-state 分别驱动旧
+processOpBlock 与新编排器。**不要复用 t8n 的 TestState harness**——新路径依赖 MLS 存储 +
+protocol::Transaction 物化 + LedgerConfig.evmcRevision，与 TestState 不兼容。**fixture 必须先补
+evmcRevision 播种**（§6.1），否则新路径每条向量抛 EvmcRevisionNotConfigured。
+
+**语料**：
+- t8n 125 向量 + e2e 81 用例 + golden/engine 79（仓库已入库，manifest.txt 为绑定集）。
+- **逐 tx 类型探针**（§6.3 口径）：
+  - legacy / 2930 / 1559 / 7702 valid 各至少一笔 → 双路径执行等价 + 独立 golden 绝对断言。
+  - **4844**：valid blob 执行探针结构性不可行（L2 无 blob，OpTxDecode.h:287-288）→ 改为**拒绝路径
+    parity**（新旧路径拒绝层不同：decode 拒 vs opValidate 拒，断言同一 INVALID/OpConsensusError 分类）。
+  - **结构/裁决探针**：空块、首笔非 deposit 块、deposit 混排块、**跨链 chain-id tx**、**high-s tx**
+    （§6.3.2 拒块裁决）、**含零值/墓碑 slot 账户的 CREATE**（EIP-7610，§5.1）、**非零 baseFee +
+    deposit 内读 BASEFEE**（§11 R6）、**evmc_revision 缺省回退=OSAKA**（§6.1 拒绝测试）。
 
 ## 10. 实施阶段（三步，每步独立验收）
 
-### 阶段一：存储适配层统一（独立可验收）
-- SharedReadBridge（poison 通道 + 承载 Storage2State 额外方法）+ `applyStateDiffWithPoison`。
+### 阶段一：存储适配层统一（最难的一步，非"热身"）
+- SharedReadBridge（poison 通道 + 读侧分歧 1/2/4 并入 + 写侧四契约迁移 + seeding 模式）+
+  `applyStateDiffWithPoison`（与读桥 poison 同实例）。
 - 块路径读/写切到共享桥（poison 通道开），Storage2State 保留（供 parity 参照）。
-- 闸门：op-geth golden 63/33 全绿 + 现有测试全绿。**读语义分歧在此步暴露并并入共享桥。**
+- **executor 块路径方法注入桥/poison 指针**（读失败进 poison，不静默 absent）。
+- 闸门：**e2e golden 全绿 + 写侧契约迁移测试全绿**（t8n 腿对桥语义零判别力，"全量 golden"表述会
+  高估此步可验收性）。读语义分歧在此步暴露并并入共享桥。
 
 ### 阶段二：块编排器 + 逐笔 concept 化（核心改动）
-- `executeBlockStart` 新增；编排器循环（§6）；executeOpBlock 切到编排器 + Parity Switch。
-- 双路径一致性测试在此步跑（新旧路径对照）。
-- 闸门：阶段一闸门 + 双路径一致性测试全绿。
+- `executeBlockStart` 新增；编排器循环（§6，含 D-1 覆盖、blockGasLeft 显式递减）；**编排器翻译
+  executor 异常 → 块级 runtime_error**（§8）；executeOpBlock 切到编排器 + Parity Switch +
+  **hashImpl 注入 + 同一桥类型**（§7）。
+- 双路径一致性测试在此步跑（新建 runner + fixture evmcRevision 播种，§9.2）。
+- 闸门：阶段一闸门 + 双路径一致性测试全绿 + 分类钉死用例全绿（§8）。
 
 ### 阶段三：清理与全量回归
-- 翻转 Parity Switch → `true`；删除旧 `processOpBlock` 路径与 `Storage2State`。
+- 翻转 Parity Switch → `true`；删除旧 `processOpBlock` 路径与 `Storage2State`（含 **SeedPreState 改写
+  为共享写回 + seeding 豁免**、注释引用清理）。
 - 闸门：全量编译 + 全量测试回归 + golden 再确认。
 
 ## 11. 风险与缓解
 
 | 风险 | 说明 | 缓解 |
 |---|---|---|
-| R1 转换不无损 | envelope→tars→evmone 往返在某种 tx 类型上不逐字节一致 → 状态根分叉 | 双路径一致性测试逐类型抓；该类型**落回共享执行核直通**（方案 B 退路） |
-| R2 读语义分歧 | StorageStateView(EVMAccount) 与 Storage2State(直读) 存在读差异 | 阶段一用 golden 当闸门；分歧逻辑并入共享桥（保留 Storage2State 语义） |
-| R3 错误分类漂移 | executor 抛出 vs processOpBlock 原异常通道的映射错位 | §8 映射表；现有错误分类测试逐一对齐 |
-| R4 golden 覆盖缺口 | 63/33 未覆盖某 tx 类型 → 转换问题漏网 | §9.2 逐类型探针补齐语料 |
+| R1 转换执行不等价 | 往返在**执行消费字段**上不等价 → 状态根分叉 | 双路径一致性测试逐类型抓；该类型**落回共享执行核直通**（方案 B 退路） |
+| R2 读语义分歧（has_storage / /sys/） | EVMAccount 与 Storage2State 读差异；golden 账本使 has_storage 分歧不可见 | 分歧并入共享桥；定向用例（零值/墓碑槽 CREATE，§5.1） |
+| R3 错误分类漂移 | executor 的 bcos::Exception 绑定 typed-catch → 误分类 -32603 | 编排器捕获→重抛 runtime_error；分类钉死用例（§8） |
+| R4 golden 覆盖缺口 | 语料未覆盖某 tx 类型/裁决 → 转换与裁决问题漏网 | §9.2 逐类型 + 结构/裁决探针补齐 |
+| R5 **签名信封**（新增·共识） | m_prepare 用签名前像（extraTransactionBytes）而非完整信封算 L1/DA fee → 状态根分叉 | §6.3.1：executeTransaction 加 env 参数，编排器传完整信封；双路径测试含 L1 fee 参数非 0 向量 |
+| R6 **deposit base_fee=0**（新增） | executeDeposit 硬编码 base_fee=0，旧路径读 header baseFee；deposit 读 BASEFEE 且 baseFee≠0 时分叉 | 改从 header 读 baseFee；或双路径测试加"非零 baseFee + deposit 读 BASEFEE"探针 |
+| R7 **evmcRevision 双源漂移**（新增） | getLedgerConfig（SYS_CONFIG，缺省 OSAKA）与 configAt（恒 PRAGUE）无代码关联 → 整块 INVALID | genesis 固化 evmc_revision=prague 或块路径豁免；fixture 播种 + 缺省回退拒绝测试 |
+| R8 **写侧契约迁移**（新增） | applyStateDiffWithPoison 非薄封装，四处写语义须迁移，否则账本卫生/路由漂移 | §5.2 逐项迁移 + 写侧契约测试 + 双桥 stateRoot 对比 |
 
 ## 12. 统一后残留差异（预期设定）
 
@@ -246,3 +360,10 @@ evmcRevision 与 `configAt(timestamp)` 的 fork 判定一致（二者必须同�
 - 2026-08-12：方案 A（编排器重构、逐笔经 OpstackExecutor 概念方法）为主；方案 B（共享执行核直通）
   作为 R1 转换不无损时特定 tx 类型的退路。
 - 2026-08-12：实施分三阶段（存储层 → 编排器 → 清理），每阶段独立验收；Parity Switch 承载双路径对比。
+- 2026-08-12：**sub-agent 四方审查完成并全量并入 spec**。关键修订：签名信封（R5，§6.3.1 完整信封
+  参数）、错误分类通道（R3，§8 编排器翻译 bcos::Exception→runtime_error + 分类钉死）、evmcRevision
+  双源升级为硬约束（R7，§6.1 genesis 固化或豁免 + fixture 播种）、has_storage 分歧逃逸 golden
+  （R2，§5.1 定向用例）、写侧契约非薄封装（R8，§5.2 五契约迁移）、双路径测试需新建 runner + fixture
+  evmcRevision 播种 + 双轨绝对断言（§9）、golden 计数更正 63/33→125/81/79（§9.1）、4844 重定义为拒绝
+  parity（§6.3）、hashImpl 注入 + 同一桥类型（§7）、编排器遗漏逻辑补全（D-1 DA 覆盖、blockGasLeft
+  显式递减、isL1AttributesTx 校验，§6.1）、executor 块路径读注入 poison（§5.1）。
