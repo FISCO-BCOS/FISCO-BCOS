@@ -76,20 +76,65 @@ def b1_table_consistency(db, rpc_url, head):
     check("current_number consistent", cn >= int(number), f"db={cn} rpc={number}")
 
 
+def calc_op_base_fee(parent, parent_is_jovian, parent_is_isthmus):
+    """Python port of bcos::engine::detail::calcOpBaseFee (EngineServiceImpl.cpp:234-320),
+    the exact EIP-1559 base-fee computation the OP sequencer applies to the next block.
+    extraData (Holocene+) = 0x01 || denominator(uint32 BE) || elasticity(uint32 BE)
+                          [+ Jovian minBaseFee(uint64 BE)].
+    """
+    elasticity, denominator = 2, 8
+    min_base_fee = None
+    if parent_is_isthmus:
+        extra = parent.get("extraData", "0x")[2:]  # strip 0x
+        denominator = int(extra[2:10], 16)   # bytes 1-4
+        elasticity = int(extra[10:18], 16)   # bytes 5-8
+        if parent_is_jovian:
+            min_base_fee = int(extra[18:34], 16)  # bytes 9-16
+    gas_target = int(parent["gasLimit"], 16) // elasticity
+    gas_metered = int(parent["gasUsed"], 16)
+    if parent_is_jovian and int(parent.get("blobGasUsed", "0x0"), 16) > gas_metered:
+        gas_metered = int(parent.get("blobGasUsed", "0x0"), 16)
+    if gas_metered == gas_target:
+        return int(parent["baseFeePerGas"], 16)
+    parent_base = int(parent["baseFeePerGas"], 16)
+    if gas_metered > gas_target:
+        delta = gas_metered - gas_target
+        delta_fee = parent_base * delta // gas_target // denominator
+        result = parent_base + (delta_fee if delta_fee > 0 else 1)
+    else:
+        delta = gas_target - gas_metered
+        delta_fee = parent_base * delta // gas_target // denominator
+        result = parent_base - delta_fee if delta_fee < parent_base else 0
+    if min_base_fee is not None and result < min_base_fee:
+        result = min_base_fee
+    return result
+
+
 def b2_header_chain(db, rpc_url, max_blocks):
-    print("B.2 header chain (RocksDB decoded)")
+    print("B.2 header chain (baseFee recalculation + hash/timestamp)")
     head = int(rpc_call(rpc_url, "eth_blockNumber"), 16)
-    # Walk a few recent blocks: number continuity is via RPC; parentHash continuity needs the
-    # OP header decode (opHeaderHash) which state_verify defers to op-payload-builder — here we
-    # pin number==prev+1 and monotonic timestamp via the raw s_number_2_header rows (decoded
-    # timestamp lives in the tars header; the exact field parse is in B.2 of the plan).
+    # B3 runs Jovian (fork timestamps long past): every recent parent is Isthmus+Jovian, so the
+    # Jovian max-gased + minBaseFee branch of calcOpBaseFee applies. baseFee[n] must equal
+    # calcOpBaseFee(parent[n-1]) — the sequencer's own formula, so the chain's fee curve is
+    # internally consistent. parentHash and timestamp (strictly increasing, ms on-chain) also.
     b = rpc_call(rpc_url, "eth_getBlockByNumber", [hex(head), False])
     check("head block queryable", b is not None and b["number"] == hex(head))
-    if max_blocks > 1 and head >= 2:
-        b_prev = rpc_call(rpc_url, "eth_getBlockByNumber", [hex(head - 1), False])
-        check("number continuity", b_prev is not None and b_prev["number"] == hex(head - 1))
-        check("parentHash continuity", b_prev is not None and b["parentHash"] == b_prev["hash"],
-              f"{b['parentHash'][:16]} vs {b_prev['hash'][:16]}")
+    checked = 0
+    for n in range(head, max(head - max_blocks, 1), -1):
+        cur = rpc_call(rpc_url, "eth_getBlockByNumber", [hex(n), False])
+        parent = rpc_call(rpc_url, "eth_getBlockByNumber", [hex(n - 1), False])
+        if not cur or not parent:
+            continue
+        check(f"b{n} number continuity", cur["number"] == hex(n))
+        check(f"b{n} parentHash == parent.hash", cur["parentHash"] == parent["hash"],
+              f"{cur['parentHash'][:16]} vs {parent['hash'][:16]}")
+        check(f"b{n} timestamp > parent", int(cur["timestamp"], 16) > int(parent["timestamp"], 16),
+              f"{cur['timestamp']} vs {parent['timestamp']}")
+        expected = calc_op_base_fee(parent, parent_is_jovian=True, parent_is_isthmus=True)
+        check(f"b{n} baseFee == calcOpBaseFee(parent)", int(cur["baseFeePerGas"], 16) == expected,
+              f"{cur['baseFeePerGas']} vs {hex(expected)}")
+        checked += 1
+    print(f"  checked {checked} consecutive-block pairs" if checked else "  (no pairs checked)")
 
 
 def main():
