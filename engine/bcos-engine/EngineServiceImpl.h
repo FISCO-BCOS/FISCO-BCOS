@@ -20,8 +20,8 @@
 #pragma once
 
 #include "bcos-crypto/merkle/Merkle.h"
-#include "bcos-framework/engine/Types.h"
 #include "bcos-framework/engine/EngineService.h"
+#include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockFactory.h"
@@ -36,6 +36,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -43,7 +44,6 @@
 #include <shared_mutex>
 #include <string>
 #include <string_view>
-#include <deque>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -257,6 +257,7 @@ public:
             .blockValue = 0,
             .blobsBundle = std::nullopt,
             .shouldOverrideBuilder = false,
+            .parentBeaconBlockRoot = payloadAttributes->parentBeaconBlockRoot,
             .view = std::make_shared<ViewType>(std::move(view)),
             .header = std::move(built.header),
             .receipts = std::move(built.receipts),
@@ -284,8 +285,8 @@ public:
                 auto const evictedId = m_payloadOrder.front();
                 m_payloadOrder.pop_front();
                 m_payloadCache.erase(evictedId);
-                std::erase_if(m_blockHashToPayloadId,
-                    [&](auto const& kv) { return kv.second == evictedId; });
+                std::erase_if(
+                    m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
             }
         }
         result.payloadId = payloadId;
@@ -329,6 +330,9 @@ private:
         u256 blockValue = 0;
         std::optional<BlobsBundleV1> blobsBundle;
         bool shouldOverrideBuilder = false;
+        /// Beacon root the payload was built with (from PayloadAttributes) or received
+        /// with (from NewPayloadRequest); echoed in the getPayload response (OP Stack).
+        std::optional<h256> parentBeaconBlockRoot;
         std::shared_ptr<ViewType> view;
         /// Built-block artifacts kept so newPayload() can persist the ledger block tables
         /// (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
@@ -384,6 +388,7 @@ private:
             .blobsBundle = it->second.blobsBundle,
             .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
             .executionRequests = std::nullopt,
+            .parentBeaconBlockRoot = it->second.parentBeaconBlockRoot,
         });
     }
 
@@ -450,6 +455,7 @@ private:
             .blockValue = 0,
             .blobsBundle = std::nullopt,
             .shouldOverrideBuilder = false,
+            .parentBeaconBlockRoot = request.parentBeaconBlockRoot,
             .view = nullptr,
             .header = nullptr,
             .receipts = {},
@@ -498,8 +504,7 @@ private:
                     ::ranges::views::transform(
                         [](auto const& tx) { return protocol::Transaction::ConstPtr(tx); }) |
                     ::ranges::to<std::vector>());
-                co_await ledger::prewriteBlockToBuffer(
-                    *m_ledger, blockTxs, block, prewriteStorage);
+                co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
                 co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
             }
             else
@@ -518,9 +523,8 @@ private:
         // executed (unbounded memory over time). Keep only the just-committed block; the
         // newPayload() parent check accepts the head hash directly, so dropping older
         // blockHash rows is safe.
-        std::erase_if(m_blockHashToPayloadId, [&](auto const& kv) {
-            return kv.first != request.executionPayload.blockHash;
-        });
+        std::erase_if(m_blockHashToPayloadId,
+            [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
         std::erase_if(m_payloadCache, [&](auto const& kv) { return kv.first != payloadId; });
 
         co_return makeStatus(
@@ -562,8 +566,7 @@ private:
             .withdrawals = std::nullopt,
             .blobGasUsed = std::nullopt,
             .excessBlobGas = std::nullopt,
-            .blockAccessList = std::nullopt,
-            .slotNumber = std::nullopt,
+            .withdrawalsRoot = std::nullopt,
         };
 
         if (version >= static_cast<std::uint32_t>(ApiVersion::V2))

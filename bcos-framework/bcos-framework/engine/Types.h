@@ -81,9 +81,19 @@ struct PayloadAttributes
     // Required by PayloadAttributesV3/V4.
     std::optional<h256> parentBeaconBlockRoot;
 
-    // Required by PayloadAttributesV4.
-    std::optional<std::uint64_t> slotNumber;
-    std::optional<std::uint64_t> targetGasLimit;
+    // OP Stack payload attributes (optimism/specs engine.md). All optional so that
+    // vanilla Ethereum attributes keep their current behavior when absent.
+    // EIP-2718 raw transaction hex strings, passed through verbatim without decoding;
+    // decoding/dispatch belongs to the raw-bytes carrier and type-dispatch work.
+    std::optional<std::vector<std::string>> transactions;
+    // When true the payload must not include transactions picked from the mempool.
+    std::optional<bool> noTxPool;
+    // Block gas limit dictated by the L1 SystemConfig via the CL.
+    std::optional<std::uint64_t> gasLimit;
+    // Holocene: 8 bytes = 4-byte EIP-1559 denominator followed by 4-byte elasticity.
+    std::optional<bytes> eip1559Params;
+    // Jovian: minimum base fee, in wei.
+    std::optional<std::uint64_t> minBaseFee;
 };
 
 struct ExecutionPayload
@@ -111,9 +121,10 @@ struct ExecutionPayload
     std::optional<u256> blobGasUsed;
     std::optional<u256> excessBlobGas;
 
-    // Required by ExecutionPayloadV4.
-    std::optional<bytes> blockAccessList;
-    std::optional<std::uint64_t> slotNumber;
+    // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
+    // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
+    // header wiring lands.
+    std::optional<h256> withdrawalsRoot;
 };
 
 struct NewPayloadRequest
@@ -167,6 +178,10 @@ struct GetPayloadData
 
     // Required by engine_getPayloadV4/V6.
     std::optional<std::vector<bytes>> executionRequests;
+
+    // OP Stack getPayload response extension: the beacon root the payload was built
+    // with, echoed back to newPayload by the CL.
+    std::optional<h256> parentBeaconBlockRoot;
 };
 
 using GetPayloadResult = std::unique_ptr<GetPayloadData>;

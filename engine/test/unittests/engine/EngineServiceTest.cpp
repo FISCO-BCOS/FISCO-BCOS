@@ -97,8 +97,8 @@ struct TrivialCheckpointStorage
     std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
 };
 
-using RealGlobalCheckpointBackend = TrivialCheckpointStorage<
-    bcos::executor_v1::StateKey, bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
+using RealGlobalCheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
+    bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
 using RealGlobalStateStorage = bcos::storage2::MultiLayerStorage<RealGlobalStateMutableStorage,
     void, RealGlobalCheckpointBackend>;
 
@@ -168,9 +168,8 @@ struct StubExecutor
     }
 
     template <class Storage>
-    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&,
-        const protocol::BlockHeader&, const protocol::Transaction&, int,
-        const ledger::LedgerConfig&, bool)
+    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&, const protocol::BlockHeader&,
+        const protocol::Transaction&, int, const ledger::LedgerConfig&, bool)
     {
         co_return ExecuteContext<Storage>{};
     }
@@ -180,8 +179,7 @@ struct StubScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&,
-        const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
         co_return {};
     }
@@ -191,8 +189,7 @@ struct BloomScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&,
-        const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
         Bloom bloom1{};
         bloom1[255] = static_cast<bcos::byte>(0x01);
@@ -226,8 +223,7 @@ BloomEngineServiceImpl makeBloomEngineServiceImpl(
 using TestEngineServiceImpl =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
 
-TestEngineServiceImpl makeEngineServiceImpl(
-    MemPoolImpl& memPool, RealGlobalStateStorage& storage)
+TestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
     StubExecutor executor;
     StubScheduler scheduler;
@@ -546,6 +542,45 @@ BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
         static_cast<int>(PayloadValidationStatus::Valid));
 }
 
+BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_root)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    // buildPayload stored the attributes' beacon root in the payload cache; getPayload
+    // must return it. withdrawalsRoot stays unset until real-value header wiring lands.
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload->parentBeaconBlockRoot.has_value());
+    BOOST_CHECK_EQUAL(*payload->parentBeaconBlockRoot, *payloadAttributes.parentBeaconBlockRoot);
+    BOOST_CHECK(!payload->executionPayload.withdrawalsRoot.has_value());
+
+    // newPayload carries both fields back in; the committed cache entry keeps them.
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    auto const withdrawalsRoot =
+        h256("4444444444444444444444444444444444444444444444444444444444444444");
+    request.executionPayload.withdrawalsRoot = withdrawalsRoot;
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(committed->parentBeaconBlockRoot.has_value());
+    BOOST_CHECK_EQUAL(*committed->parentBeaconBlockRoot, *request.parentBeaconBlockRoot);
+    BOOST_REQUIRE(committed->executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(*committed->executionPayload.withdrawalsRoot, withdrawalsRoot);
+}
+
 BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
 {
     MemPoolImpl memPool;
@@ -560,8 +595,8 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     auto payloadAttributes = makePayloadAttributesV2();
 
     BloomScheduler bloomScheduler;
-    auto engineService = makeBloomEngineServiceImpl(
-        memPool, globalStateStorageFixture.storage, bloomScheduler);
+    auto engineService =
+        makeBloomEngineServiceImpl(memPool, globalStateStorageFixture.storage, bloomScheduler);
 
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
