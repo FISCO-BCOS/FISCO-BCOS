@@ -13,11 +13,16 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Task 2 smoke test: SchedulerSkeleton CRTP hook dispatch + lock-free fast-path.
+ * @brief Smoke test: SchedulerSkeleton CRTP hook dispatch + lock-free fast-path.
  *        A minimal FakeDerived implements the 5 CRTP hooks + 4 pure virtuals +
- *        classifyException + the shared-mechanism stubs (which Task 3 migrates into
- *        the skeleton as real protected methods) and drives coExecuteBlock /
- *        coCommitBlock through their public SchedulerInterface face.
+ *        classifyException and drives coExecuteBlock / coCommitBlock through their
+ *        public SchedulerInterface face. Since Task 3a moved the shared-mechanism
+ *        implementations (fastPathHit / continuityCheck / pushResult / …) into the
+ *        skeleton as real protected methods, FakeDerived's stubs intentionally SHADOW
+ *        them (derived() resolves to the fake's copies) — the smoke test keeps testing
+ *        the skeleton's template orchestration, while the real mechanism bodies are
+ *        exercised by the full ethereum suite (testBaselineScheduler /
+ *        TestEthereumExecutorScheduler / …) through the inherited BaselineScheduler.
  *
  *        NOTE on the classify test: coExecuteBlock's catch (std::exception&) matches
  *        ANY std::exception subclass, with no type discrimination. bcos-task
@@ -85,12 +90,14 @@ DERIVE_BCOS_EXCEPTION(FakeExecuteBoom);
 /// A minimal Derived that implements the skeleton's whole contract.
 ///
 /// The 5 CRTP hooks + 4 pure virtuals + classifyException are the contract the
-/// skeleton enforces; the *mechanism* methods below (fastPathHit, tryExecuteLock,
-/// continuityCheck, backpressureOk, forkView, loadLedgerConfig, pushResult,
-/// updateLastExecutedBlockNumber, tryCommitLock, commitContinuityCheck, peekResult,
-/// mergeBackStorage, postMergeCommitObserver, popResult, loadCommitLedgerConfig,
-/// updateLastCommittedBlockNumber, notifyBlockNumber) are trivial stubs that Task 3a
-/// migrates into the skeleton as real protected methods (spec v3 §2.1).
+/// skeleton enforces; the *mechanism* methods below (continuityCheck, backpressureOk,
+/// forkView, loadLedgerConfig, pushResult, updateLastExecutedBlockNumber,
+/// commitContinuityCheck, peekResult, mergeBackStorage, postMergeCommitObserver,
+/// popResult, loadCommitLedgerConfig, updateLastCommittedBlockNumber,
+/// notifyBlockNumber) are trivial stubs that SHADOW the real protected methods Task 3a
+/// moved into the skeleton (spec v3 §2.1) — see the file header note. The lock-free
+/// fast-path / execute-commit hand-off use FakeDerived's own state so the smoke test
+/// stays self-contained.
 struct FakeDerived
   : SchedulerSkeleton<FakeStorage, FakeExecutor, FakeSchedulerImpl, FakeLedger, FakeDerived>
 {
@@ -99,7 +106,7 @@ struct FakeDerived
     bool m_throwInLoadLedgerConfig = false;
     scheduler::SchedulerError m_classifiedError = scheduler::SchedulerError::UnknownError;
 
-    // ---- fast-path state (FakeDerived's own m_results; Task 3 migrates the real deque) ----
+    // ---- fast-path state (FakeDerived's own m_results, shadowing the skeleton's) ----
     struct CachedExecuteResult
     {
         protocol::BlockHeader::Ptr m_executedBlockHeader;
@@ -135,7 +142,7 @@ struct FakeDerived
         co_return SchedulerExecuteResult{};
     }
 
-    task::Task<protocol::BlockHeader::Ptr> finishExecute(FakeView&, SchedulerExecuteResult const&,
+    task::Task<protocol::BlockHeader::Ptr> finishExecute(FakeView&, SchedulerExecuteResult&,
         protocol::BlockHeader const& blockHeader, protocol::Block&,
         std::vector<protocol::Transaction::ConstPtr> const&, ledger::LedgerConfig const&,
         bool& sysBlock)
@@ -147,9 +154,12 @@ struct FakeDerived
         co_return executedHeader;
     }
 
-    void verifyResult(protocol::BlockHeader::Ptr, protocol::BlockHeader const&)
+    // P1-1 + I-2 (Task 3b): returns Error::Ptr (null = pass) and takes the verify flag.
+    task::Task<Error::Ptr> verifyResult(
+        protocol::BlockHeader::Ptr, protocol::BlockHeader const&, bool)
     {
         record("verifyResult");
+        co_return nullptr;
     }
 
     task::Task<std::shared_ptr<FakeMutableStorage>> commit(
@@ -208,24 +218,27 @@ struct FakeDerived
         return std::nullopt;
     }
 
-    bool tryExecuteLock() { return true; }
     bool continuityCheck(protocol::BlockNumber) { return true; }
     bool backpressureOk() { return true; }
     FakeView forkView() { return FakeView{}; }
 
-    ledger::LedgerConfig::Ptr loadLedgerConfig(FakeView&, protocol::BlockNumber)
+    // Task 3a migrated the real bodies into the skeleton (commitContinuityCheck /
+    // loadLedgerConfig / loadCommitLedgerConfig became coroutines); the stubs below
+    // shadow them so the smoke test keeps driving only the skeleton's template flow.
+    task::Task<ledger::LedgerConfig::Ptr> loadLedgerConfig(FakeView&, protocol::BlockNumber)
     {
         if (m_throwInLoadLedgerConfig)
         {
             throw FakeExecuteBoom{};
         }
-        return std::make_shared<ledger::LedgerConfig>();
+        co_return std::make_shared<ledger::LedgerConfig>();
     }
 
-    void pushResult(protocol::BlockNumber number, protocol::Block::Ptr, protocol::BlockHeader::Ptr,
-        SchedulerExecuteResult result, bool)
+    void pushResult(protocol::BlockNumber number, protocol::Block::Ptr,
+        protocol::BlockHeader::Ptr executedHeader, SchedulerExecuteResult result, bool, FakeView)
     {
         record("pushResult");
+        result.m_executedBlockHeader = executedHeader;
         m_pendingNumber = number;
         m_pendingResult = std::make_shared<SchedulerExecuteResult>(std::move(result));
     }
@@ -235,8 +248,7 @@ struct FakeDerived
         record("updateLastExecutedBlockNumber");
     }
 
-    bool tryCommitLock() { return true; }
-    bool commitContinuityCheck(protocol::BlockNumber) { return true; }
+    task::Task<bool> commitContinuityCheck(protocol::BlockNumber) { co_return true; }
 
     std::shared_ptr<SchedulerExecuteResult> peekResult(protocol::BlockNumber number)
     {
@@ -268,9 +280,9 @@ struct FakeDerived
         }
     }
 
-    ledger::LedgerConfig::Ptr loadCommitLedgerConfig(protocol::BlockHeader::Ptr)
+    task::Task<ledger::LedgerConfig::Ptr> loadCommitLedgerConfig(protocol::BlockHeader::Ptr)
     {
-        return std::make_shared<ledger::LedgerConfig>();
+        co_return std::make_shared<ledger::LedgerConfig>();
     }
 
     void updateLastCommittedBlockNumber(protocol::BlockNumber)
@@ -278,7 +290,11 @@ struct FakeDerived
         record("updateLastCommittedBlockNumber");
     }
 
-    void notifyBlockNumber(protocol::BlockNumber) { record("notifyBlockNumber"); }
+    void notifyBlockNumber(
+        protocol::BlockNumber, std::shared_ptr<SchedulerExecuteResult>, ledger::LedgerConfig const&)
+    {
+        record("notifyBlockNumber");
+    }
 };
 
 using ExecuteResultTuple = std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, bool>;
