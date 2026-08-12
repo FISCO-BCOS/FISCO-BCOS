@@ -14,11 +14,14 @@
 //     （OpT8nReplayTest.cpp:266-328 DivergenceLedger），本 harness 条目 entryId 用
 //     `FINDING-dual-*` 前缀（与既有 6 条 contract_create 条目并存不冲突）。
 //   - deposit_basefee×2 绿守卫：三方一致（A==B==golden），不列 ALLOWLIST。
-//   - golden 三方（path A.stateRoot == 向量 `_op_expected.header.stateRoot`）P1 只 REPORT（G1）。
+//   - golden 三方（path A.stateRoot == 向量 `_op_expected.header.stateRoot`）P3 翻硬但带作用域
+//     （G1，第四轮裁定）：isthmus/jovian 非 contract_create 向量 mismatch 即 BOOST_CHECK 硬失败
+//     （防「两路径一起错」）；pre-isthmus（golden fork 不匹配是预期产物）与 contract_create
+//     （OpT8nReplay 域已知 route-A-vs-golden 分歧）保持软 REPORT。
 //
 // fork 模型：`forkTimestampsFor(bool jovian)` + `configAt`（isthmus/jovian）。语料中
 // ecotone/fjord/granite 向量按 isthmus 语义双路径一致执行（两路径同 cfg → A-vs-B 仍有效；
-// golden 三方因 fork 不匹配 REPORT mismatch，P1 软）。
+// golden 三方因 fork 不匹配 REPORT mismatch，软——pre-isthmus 在 golden-hard 作用域外）。
 //
 // 第三轮 P2 fork 平价：路径 B 显式算 cfg = configAt(timestamp/1000, forkTimestampsFor(jovian))
 // 传给 runOpBlockInjection 第 6 参，并断言与路径 A scheduler 内部 configAt 解析同源。
@@ -878,10 +881,12 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
         BOOST_ERROR(id << ": zero comparisons executed");
 }
 
-/// golden 三方 REPORT（G1，P1 软）：path A.stateRoot == 向量 _op_expected.header.stateRoot
-/// （在向量文件，非 golden 文件）。greenGuard 时三方一致翻硬（deposit_basefee 绿守卫要求）。
+/// golden 三方（G1，P1 软 → P3 带作用域翻硬）：path A.stateRoot == 向量
+/// _op_expected.header.stateRoot。hardGolden=true 时 mismatch 即 BOOST_CHECK 硬失败
+/// （作用域=isthmus/jovian 非 contract_create）；greenGuard（deposit_basefee 绿守卫）始终硬；
+/// 其余（pre-isthmus / contract_create）保持软 REPORT。
 void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256& stateRootA,
-    bool greenGuard, GoldenStats& stats)
+    bool greenGuard, bool hardGolden, GoldenStats& stats)
 {
     const auto want = jAt(jAt(vec, "_op_expected"), "header")["stateRoot"].asString();
     const auto got = stateRootA.hexPrefixed();
@@ -902,10 +907,17 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
         BOOST_CHECK_MESSAGE(false, id << ": green-guard three-way mismatch A.stateRoot=" << got
                                       << " vector.stateRoot=" << want);
     }
+    else if (hardGolden)
+    {
+        BOOST_CHECK_MESSAGE(false, id << ": golden three-way mismatch A.stateRoot=" << got
+                                      << " vector.stateRoot=" << want
+                                      << " (P3 hard, scope=isthmus/jovian non-contract_create)");
+    }
     else
     {
-        std::cout << "  GOLDEN-REPORT " << id << " stateRoot MISMATCH A=" << got
-                  << " vector=" << want << " (P1 soft REPORT, P3 hard)\n";
+        std::cout
+            << "  GOLDEN-REPORT " << id << " stateRoot MISMATCH A=" << got << " vector=" << want
+            << " (soft REPORT: pre-isthmus fork-mismatch or contract_create known-divergence)\n";
     }
 }
 
@@ -1012,9 +1024,15 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         // chain 继承：route A 权威 post-state merge 进 MLS（viewB 丢弃）。
         bcos::task::syncWait(fixture.multiLayerStorage.mergeView(std::move(viewA)));
 
-        // golden 三方（G1 P1 soft；greenGuard 硬）。
+        // golden 三方（G1 P3 带作用域翻硬）：isthmus/jovian 非 contract_create → hard；
+        // pre-isthmus（fork 不匹配预期）与 contract_create（已知分歧）保持软 REPORT。
         if (vec.isMember("_op_expected"))
-            reportGolden(id, vec, resultA.stateRoot, greenGuard, stats);
+        {
+            const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
+            const bool hardGolden = (hardfork == "isthmus" || hardfork == "jovian") &&
+                                    (id.find("contract_create") == std::string::npos);
+            reportGolden(id, vec, resultA.stateRoot, greenGuard, hardGolden, stats);
+        }
 
         // /sys tripwire（每个向量 pre/postState/tx/coinbase 派生表前缀）。
         checkSysTripwire(id, vec);
