@@ -38,6 +38,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-mempool/MemPoolImpl.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -47,12 +48,15 @@
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include "ethereum-executor/EthereumHost.h"
 #include "EthereumBlockHashLookup.h"
 #include <boost/test/unit_test.hpp>
 #include <cstring>
+#include <evmone/evmone.h>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -516,7 +520,11 @@ BOOST_AUTO_TEST_CASE(serialInvalidTxDoesNotAbortBlock)
             view, *executor, blockHeader, transactions, ledgerConfig);
 
         BOOST_CHECK_EQUAL(receipts.size(), 2u);
-        BOOST_CHECK(receipts[0]->status() != 0);  // invalid tx → failure receipt
+        // badSender is unfunded → INSUFFICIENT_FUNDS must map to the exact
+        // RPC-visible status (NotEnoughCash), not just "non-zero" — a wrong
+        // ErrorCode→TransactionStatus mapping would ship unnoticed otherwise.
+        BOOST_CHECK_EQUAL(receipts[0]->status(),
+            static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
         BOOST_CHECK_EQUAL(receipts[1]->status(), 0);  // good tx still succeeds
         auto goodBalance = co_await EEReadBalance(view, goodSender);
         BOOST_CHECK(goodBalance == EEFunding - 50);
@@ -578,7 +586,11 @@ BOOST_AUTO_TEST_CASE(serialSameNonceSecondRejected)
 
         BOOST_CHECK_EQUAL(receipts.size(), 2u);
         BOOST_CHECK_EQUAL(receipts[0]->status(), 0);  // first nonce-"0" tx succeeds
-        BOOST_CHECK(receipts[1]->status() != 0);  // second same-nonce tx rejected
+        // Second same-nonce tx is rejected as NONCE_TOO_LOW → NonceCheckFail.
+        // Assert the exact RPC-visible status so a wrong ErrorCode→Status
+        // mapping (e.g. mis-mapped to Unknown) is caught, not just "non-zero".
+        BOOST_CHECK_EQUAL(receipts[1]->status(),
+            static_cast<int32_t>(protocol::TransactionStatus::NonceCheckFail));
 
         // The sender must NOT be wrapped to ~2^256: only the first transfer is
         // debited, and the rejected second one writes nothing.
@@ -696,6 +708,136 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
         // A future height (> current) is never an ancestor — unknown.
         auto resolved301 = blockHashLookup(301, 300);
         BOOST_CHECK_EQUAL(std::memcmp(resolved301.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
+
+        // Negative block numbers are rejected before any storage access (a
+        // BLOCKHASH of a negative height is "unknown").
+        auto resolvedNeg = blockHashLookup(-1, 300);
+        BOOST_CHECK_EQUAL(std::memcmp(resolvedNeg.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
+
+        // A negative current height is not a valid executing height either —
+        // the window check must fail closed.
+        auto resolvedBadCurrent = blockHashLookup(50, -1);
+        BOOST_CHECK_EQUAL(
+            std::memcmp(resolvedBadCurrent.bytes, zero.bytes, sizeof(evmc_bytes32)), 0);
+    }());
+}
+
+// Regression for the review fix on 4/4: ethBlockHashLookupFromStorage used to
+// swallow storage failures in its own try/catch, which made the ERROR log in
+// EthereumHost::get_block_hash (the actual noexcept boundary) unreachable — the
+// "silent zero" problem one layer down. The provider is now free to throw and
+// the host catches. This test pins the boundary: a throwing provider must NOT
+// cross the host's noexcept get_block_hash (which would std::terminate), and a
+// zero-returning provider must behave identically — both yield {}.
+BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
+{
+    auto from = EEMakeAddress(201);
+    auto to = EEMakeAddress(202);
+    auto tx = EEMakeTransferTx(transactionFactory, cryptoSuite, from, to, 100, "0");
+
+    EEMutableStorage storage;
+    eth::EthereumState<EEMutableStorage> state(storage);
+    evmc::VM vm{evmc_create_evmone()};
+
+    eth::EthBlockInfo block{};
+    block.number = 300;
+    eth::EthCallParams callParams{};
+
+    // A micro-contract that executes BLOCKHASH(0x32): PUSH1 0x32; BLOCKHASH; STOP.
+    // Executed through evmc::VM::execute(Host&, ...) — the real call path by
+    // which the VM reaches the (private) host get_block_hash override.
+    const uint8_t code[] = {0x60, 0x32, 0x40, 0x00};
+    evmc_message msg{};
+    msg.kind = EVMC_CALL;
+    msg.gas = 100000;
+    msg.recipient.bytes[19] = 0x01;
+    msg.sender.bytes[19] = 0x02;
+
+    // 1. A provider that throws (simulated storage failure). If the host's
+    //    noexcept-boundary catch were lost, the throw would std::terminate
+    //    the test process — reaching the BOOST_CHECK proves the catch is in
+    //    place and the ERROR-log path is reachable. BLOCKHASH then reports
+    //    zero and the contract completes normally (EVMC_SUCCESS).
+    {
+        eth::BlockHashLookup throwingLookup = [](int64_t, int64_t) -> evmc::bytes32 {
+            throw std::runtime_error("simulated storage failure");
+        };
+        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
+            std::move(throwingLookup), *tx, callParams};
+        auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
+    }
+
+    // 2. A provider that returns zero (legal out-of-window miss) — the host
+    //    must report the same {} without distinguishing.
+    {
+        eth::BlockHashLookup zeroLookup = [](int64_t, int64_t) -> evmc::bytes32 {
+            return evmc::bytes32{};
+        };
+        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
+            std::move(zeroLookup), *tx, callParams};
+        auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
+    }
+}
+
+// has_storage semantics — the behaviour EthereumState::hasStorageImpl answers
+// with a storage2::range() scan, and the reason the v2 pipeline is wired
+// SERIAL-ONLY (the range read is not recorded in the read/write set, so a
+// parallel scheduler could race a storage-writer chunk against a reader). An
+// account carrying only the fixed field rows (nonce/balance/code_hash/code/abi/
+// alive/frozen/shard) has no storage; any additional slot makes has_storage
+// true. Pinning this keeps the serial-only decision honest: it is the exact
+// read the range scan serves.
+//
+// NOTE on the storage type: hasStorageImpl relies on the range visiting all
+// rows of one account's table contiguously, which holds for the production
+// RocksDB backend and for the single-bucket ordered MemoryStorage used here
+// (and by the EEST runner). A hash-bucketed CONCURRENT MemoryStorage does NOT
+// provide that order, so this test deliberately uses the ordered storage — as
+// the production wiring does.
+BOOST_AUTO_TEST_CASE(ethereumStateHasStorageSemantics)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        using namespace bcos::ledger::account;
+
+        auto plainAcc = EEMakeAddress(211);
+        auto slottedAcc = EEMakeAddress(212);
+
+        EEMutableStorage storage;
+        {
+            EVMAccount<EEMutableStorage> acc(storage, plainAcc, false);
+            if (!co_await acc.exists())
+                co_await acc.create();
+            co_await acc.setNonce("0");
+            co_await acc.setBalance(u256(1));
+        }
+        {
+            EVMAccount<EEMutableStorage> acc(storage, slottedAcc, false);
+            if (!co_await acc.exists())
+                co_await acc.create();
+            co_await acc.setNonce("0");
+            co_await acc.setBalance(u256(1));
+        }
+
+        // Give slottedAcc one real storage slot (beyond the fixed fields).
+        {
+            EVMAccount<EEMutableStorage> acc(storage, slottedAcc, false);
+            evmc_bytes32 key{};
+            key.bytes[31] = 1;
+            evmc_bytes32 value{};
+            value.bytes[31] = 42;
+            co_await acc.setStorage(key, value);
+        }
+
+        eth::EthereumState<EEMutableStorage> state(storage);
+        auto* plain = state.find(plainAcc);
+        BOOST_REQUIRE(plain != nullptr);
+        BOOST_CHECK(!plain->has_initial_storage);  // fixed fields only
+
+        auto* slotted = state.find(slottedAcc);
+        BOOST_REQUIRE(slotted != nullptr);
+        BOOST_CHECK(slotted->has_initial_storage);  // has a storage slot
     }());
 }
 

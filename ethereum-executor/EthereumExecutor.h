@@ -274,6 +274,11 @@ public:
                 }
                 m_callParams.free = true;
                 m_blockInfo.base_fee = 0;
+                // blob_base_fee is intentionally NOT zeroed for the dry run:
+                // geth's eth_call still enforces the blob-fee cap
+                // (BLOB_FEE_CAP_LESS_THAN_BLOCKS) and still includes the blob
+                // fee in the balance check, so a blob eth_call / estimateGas
+                // keeps those semantics. Only the non-blob price is cleared.
                 // * omitted nonce -> the sender's current nonce. This needs a
                 //   state read, so it is resolved in execute() (the only
                 //   phase allowed to touch state).
@@ -322,6 +327,13 @@ public:
             // storage, instead of leaving partial writes behind. The receipt is
             // only produced in finish(), so no receipt leaks for a rolled-back
             // transaction; the exception is rethrown for the caller to handle.
+            // Per-transaction journaling costs one in-memory pre-image read +
+            // Record copy per writeOne (a value transfer ≈ 6-9 writes). This
+            // is the deliberate price of all-or-nothing atomicity on a partial
+            // applyToStorage failure — a correctness improvement over the old
+            // executor, which could leave partial writes behind. On the happy
+            // path the journal is discarded with this local scope (no
+            // cross-block accumulation).
             Rollbackable<Storage> rollable(storage.get());
             EthereumState<Rollbackable<Storage>> state(rollable);
             const auto savepoint = rollable.current();

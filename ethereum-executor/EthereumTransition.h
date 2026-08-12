@@ -323,6 +323,13 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     int64_t blockGasLeft, int64_t blobGasLeft, EthCallParams const& callParams)
 {
     const auto txKind = tx.web3TypedTxKind();
+    // Reject unknown / out-of-range typed-tx kinds (only 0-4 exist). geth
+    // rejects unknown type bytes at RLP decode; the port has no decode layer,
+    // so without this a crafted kind (>=5) would skip both type gates below,
+    // trip the maxPriorityGasPrice assert (debug) or silently run as legacy
+    // (release), diverging from geth.
+    if (txKind > 4)
+        return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto nonce = effectiveNonce(tx, callParams);
     const auto maxGasPrice = ethMaxGasPrice(tx, callParams);
