@@ -418,7 +418,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumParallelScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
                 ledger);
         }
     }
