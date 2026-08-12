@@ -86,15 +86,29 @@ is_unregistered_static() {  # §4c item 3/12：生成但不入 manifest
 }
 
 manifest="$T8N_DIR/vectors/manifest.txt"
+# 终审 M-2：观察者定向向量（gaslimit/basefee，bothForks）单独成组 append，勿再并入
+# Phase-3 注释（否则 manifest 出现重复的 Phase-3 注释行）。幂等：已注册则两段 append 均 no-op。
+observer_vectors=(isthmus_deposit_basefee_observer.json isthmus_gaslimit_observer.json
+                  jovian_deposit_basefee_observer.json jovian_gaslimit_observer.json)
+is_observer() {
+  local base="$1"
+  for o in "${observer_vectors[@]}"; do
+    [ "$base" = "$o" ] && return 0
+  done
+  return 1
+}
 registerable=()
 for f in "$T8N_DIR"/vectors/*.json; do
   base="$(basename "$f")"
   if is_unregistered_static "$base"; then continue; fi
+  if is_observer "$base"; then continue; fi
   registerable+=("$base")
 done
 # 确定性顺序：排序后追加（与 diff 集合比较同序）。
 readarray -t sorted < <(printf '%s\n' "${registerable[@]}" | sort)
 append_if_absent "$manifest" "Phase-3 enhanced corpus (Task 6): corrupt 12 + static 10 + invalid-tx 18 + chain 6 + legacy 2 = 48 vectors (idempotent; §4c item 3/12 excluded — loader 不可表达)" "${sorted[@]}"
+readarray -t sorted_obs < <(printf '%s\n' "${observer_vectors[@]}" | sort)
+append_if_absent "$manifest" "Dual-path observer vectors (gaslimit/basefee, bothForks)" "${sorted_obs[@]}"
 
 # ── diff 源重定义（Task 7 Step 1，审查 R10）：cases ∪ 三模式产物 == manifest ──
 # cases basename 展开（.in.json → .json）∪ 派生名（corrupt/static 注册项/invalid-tx/chain）

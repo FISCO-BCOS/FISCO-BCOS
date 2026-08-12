@@ -582,7 +582,15 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
         return nullptr;
     }
     const auto* evmTx = std::get_if<evmone::state::Transaction>(&decoded.tx);
-    if (evmTx == nullptr || !evmoneTxFieldsEqual(rebuilt, *evmTx))
+    // 终审 M-1：evmTx==nullptr 须独立分支先 return，勿与字段比较短路同体（否则下方
+    // evmoneTxFieldDiff/hexAddr 会解引用空指针 UB）。
+    if (evmTx == nullptr)
+    {
+        BOOST_ERROR("buildFiscoTx pre-flight: decodeOneRawTx returned non-Transaction variant: env="
+                    << hexBytes(evmc::bytes_view(env.data(), env.size())));
+        return nullptr;
+    }
+    if (!evmoneTxFieldsEqual(rebuilt, *evmTx))
     {
         BOOST_ERROR("buildFiscoTx pre-flight mismatch: env="
                     << hexBytes(evmc::bytes_view(env.data(), env.size()))

@@ -108,6 +108,12 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
             auto const& tx = std::get<evmone::state::Transaction>(btx.tx);
             // 审查 D6：普通交易由调用方预构建（normalTxs[i]，其 extraTransactionBytes 已是完整
             // envelope——见 spec §2，takeToTarsTransaction 存的是 signing preimage 需覆盖）。
+            // 终审 I-2：normalIdx 无上界守卫，调用方少传即 OOB（生产模块 BaselineScheduler
+            // 将来消费）。
+            if (normalIdx >= normalTxs.size())
+                throw OpConsensusError(
+                    "runOpBlockInjection: normalTxs exhausted (caller-provided "
+                    "normal txs mismatch block txs)");
             auto receipt = bcos::task::syncWait(executor.executeTransaction(view, header,
                 *normalTxs[normalIdx++], /*contextID=*/0, ledgerConfig,
                 /*call=*/false, fee, blockGasLeft, chainId, &hashes));

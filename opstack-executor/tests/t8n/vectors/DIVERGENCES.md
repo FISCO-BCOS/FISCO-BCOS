@@ -237,6 +237,3 @@ runInvalidVector -32603 分支）先投 canonical（VALID 写 SYS_NUMBER_2_HASH 
 抛 OpExecutionInternalError。
 
 **处置**：FISCO 侧保留该行为（PBFT 单一权威链语义），记为结构性差异，不修。
-
----
-

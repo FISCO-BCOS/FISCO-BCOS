@@ -170,7 +170,7 @@ isthmus_legacy_transfer.json
 jovian_chain_3.json
 jovian_legacy_transfer.json
 
-# Phase-3 enhanced corpus (Task 6): corrupt 12 + static 10 + invalid-tx 18 + chain 6 + legacy 2 = 48 vectors (idempotent; §4c item 3/12 excluded — loader 不可表达)
+# Dual-path observer vectors (gaslimit/basefee, bothForks)
 isthmus_deposit_basefee_observer.json
 isthmus_gaslimit_observer.json
 jovian_deposit_basefee_observer.json
