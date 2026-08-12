@@ -45,6 +45,7 @@ default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
 auth_mode="false"
 monitor_mode="false"
+enable_op_engine_rpc="false"
 auth_admin_account=
 binary_path=""
 lightnode_binary_path=""
@@ -590,6 +591,7 @@ air
     -u <multi ca path>                  [Optional] set the path of another ca for multi ca mode
     -6 <ipv6 mode>                      [Optional] IPv6 mode use :: as default listen ip, default is false
     -T <Consensus Algorithm>            [Optional] Default PBFT. Options can be pbft / rpbft, pbft is recommended
+    -O <OP Engine RPC>                  [Optional] Default off. If set -O, emit [op_engine_rpc] section (enable=true) and generate a per-node JWT secret for external op-node driven mode
     -h Help
 pro or max
     -C <Command>                        [Optional] the command, support 'deploy' now, default is deploy
@@ -647,9 +649,11 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:O" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
+        ;;
+        O) enable_op_engine_rpc="true"
         ;;
         l)
             ip_param=$OPTARG
@@ -762,6 +766,9 @@ parse_params() {
     done
 
     if [[ "$chain_version" == "air" ]];then
+        if [[ "${sm_mode}" == "true" && "${enable_op_engine_rpc}" == "true" ]]; then
+            LOG_FATAL "-O (op_engine_rpc) is not supported together with SM mode (-s) yet"
+        fi
         if [[ "$mtail_binary_path" != "" ]]; then
             file_must_exists "${mtail_binary_path}"
         fi
@@ -1343,6 +1350,22 @@ generate_config_ini() {
         enable_ssl_content="enable_ssl=false"
     fi
 
+    # [op_engine_rpc] only appears when the chain is built for external op-node
+    # driven mode (-O); ordinary chains carry neither the section nor a JWT secret
+    local op_engine_rpc_section=""
+    if [[ "${enable_op_engine_rpc}" == "true" ]]; then
+        op_engine_rpc_section="[op_engine_rpc]
+    ; authenticated OP-Stack Engine API endpoint, driven by an external op-node
+    ; mutually exclusive with [consensus] enable_single_node_consensus
+    enable=true
+    listen_ip=127.0.0.1
+    listen_port=8551
+    ; JWT shared secret (op-node --l2.jwt-secret must point at the same file)
+    jwt_secret_file=conf/op-engine/jwt.hex
+
+"
+    fi
+
     cat <<EOF >"${output}"
 [p2p]
     listen_ip=${p2p_listen_ip}
@@ -1390,16 +1413,7 @@ generate_config_ini() {
     cors_allowed_headers=Content-Type, Authorization, X-Requested-With
     cors_max_age=86400
 
-[op_engine_rpc]
-    ; authenticated OP-Stack Engine API endpoint, driven by an external op-node
-    ; mutually exclusive with [consensus] enable_single_node_consensus
-    enable=false
-    listen_ip=127.0.0.1
-    listen_port=8551
-    ; JWT shared secret (op-node --l2.jwt-secret must point at the same file)
-    jwt_secret_file=conf/op-engine/jwt.hex
-
-[cert]
+${op_engine_rpc_section}[cert]
     ; directory the certificates located in
     ca_path=./conf
     ; the ca certificate file
@@ -1970,9 +1984,11 @@ expand_node()
     LOG_INFO "generate_node_cert ..."
     generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
     LOG_INFO "generate_node_cert success..."
-    # the copied config.ini points jwt_secret_file at conf/op-engine/jwt.hex; give the
-    # expanded node its own secret so enabling [op_engine_rpc] later just works
-    generate_jwt_secret "${node_dir}/conf"
+    # the expanded node inherits config.ini from the existing chain; generate a JWT
+    # secret only when that config carries an [op_engine_rpc] section
+    if grep -q '^\[op_engine_rpc\]' "${config_path}/config.ini"; then
+        generate_jwt_secret "${node_dir}/conf"
+    fi
     # generate node account
     LOG_INFO "generate_node_account ..."
     generate_node_account "${sm_mode}" "${node_dir}/conf" "${i}"
@@ -2147,7 +2163,9 @@ deploy_nodes()
             node_dir="${output_dir}/${ip}/node${node_count}"
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
-            generate_jwt_secret "${node_dir}/conf"
+            if [[ "${enable_op_engine_rpc}" == "true" ]]; then
+                generate_jwt_secret "${node_dir}/conf"
+            fi
             generate_node_scripts "${node_dir}" "${docker_mode}"
             if "${monitor_mode}" ;then
                 local port=$((mtail_listen_port + node_count))
@@ -2275,7 +2293,9 @@ generate_template_package()
     node_dir="${output_dir}/${node_name}"
     mkdir -p "${node_dir}"
     mkdir -p "${node_dir}/conf"
-    generate_jwt_secret "${node_dir}/conf"
+    if [[ "${enable_op_engine_rpc}" == "true" ]]; then
+        generate_jwt_secret "${node_dir}/conf"
+    fi
 
     p2p_listen_ip="${default_listen_ip}"
     rpc_listen_ip="${default_listen_ip}"

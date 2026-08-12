@@ -85,7 +85,7 @@ L1_GENESIS_HASH=$(rpc_call "${L1_RPC_URL}" '"eth_getBlockByNumber"' '["0x0", fal
 # ---- 2. FISCO chain with [op_engine_rpc] enabled ----
 log "building single-node chain (op_engine_rpc enabled, executor_version=2)"
 rm -rf "${WORK_ROOT}/nodes"
-(cd "${WORK_ROOT}" && bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" \
+(cd "${WORK_ROOT}" && bash "${BUILDER}" -l "127.0.0.1:1" -v 3.18.0 -e "${BINARY}" -O \
     >/dev/null 2>&1) || fail "build_chain.sh failed"
 [ -f "${NODE_DIR}/config.genesis" ] || fail "config.genesis not generated"
 
@@ -107,9 +107,10 @@ cat >> config.genesis <<'GENESIS_EOF'
     code=
 GENESIS_EOF
 
-# external-driver mode: op_engine_rpc + web3_rpc on, single-node consensus stays off
+# external-driver mode: web3_rpc on, single-node consensus stays off;
+# [op_engine_rpc] is already emitted with enable=true by build_chain.sh -O
 perl -p -i -e 'if (/\[web3_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/enable=true/) { $f=0 }' config.ini
-perl -p -i -e 'if (/\[op_engine_rpc\]/) { $f=1 } elsif ($f && s/enable\s*=\s*false/enable=true/) { $f=0 }' config.ini
+grep -q '^\[op_engine_rpc\]' config.ini || fail "[op_engine_rpc] section not in config.ini"
 grep -q "conf/op-engine/jwt.hex" config.ini || fail "jwt_secret_file not in config.ini"
 [ "$(wc -c <conf/op-engine/jwt.hex)" -eq 65 ] || fail "jwt.hex is not 64 hex chars + newline"
 
