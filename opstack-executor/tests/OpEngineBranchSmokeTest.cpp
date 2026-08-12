@@ -62,6 +62,12 @@ using ViewType = typename MLS::ViewType;
 
 struct StubMemPool
 {
+    // FCU block-building (buildPayload) calls remove/seal on the mempool; a stub keeps the
+    // branch-smoke instantiation compiling without a real pool.
+    template <class View>
+    void remove(View&) {}
+    template <class View, class Out>
+    void seal(int64_t, View&, Out) {}
 };
 
 struct StubExecutor

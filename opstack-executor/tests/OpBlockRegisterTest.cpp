@@ -19,12 +19,12 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-task/Wait.h>  // syncWait
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-task/Wait.h>  // syncWait
 #include <bcos-utilities/Common.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -124,8 +124,8 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeOpHeader(
 /// hash() would return the BCOS dataHash instead). sender is arbitrary raw bytes.
 bcos::evm::engine::EnvelopeToTarsConverter fixedTarsConverter()
 {
-    return [](bcos::bytes const&, bcos::crypto::HashType const& txHash)
-        -> std::optional<bcostars::Transaction> {
+    return [](bcos::bytes const&,
+               bcos::crypto::HashType const& txHash) -> std::optional<bcostars::Transaction> {
         bcostars::Transaction tarsTx;
         tarsTx.type = static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction);
         tarsTx.sender = {0x11, 0x22, 0x33};
@@ -137,8 +137,10 @@ bcos::evm::engine::EnvelopeToTarsConverter fixedTarsConverter()
 /// Converter that reports a malformed/un-enumerated envelope -> row skipped, block stays valid.
 bcos::evm::engine::EnvelopeToTarsConverter nullTarsConverter()
 {
-    return [](bcos::bytes const&, bcos::crypto::HashType const&)
-        -> std::optional<bcostars::Transaction> { return std::nullopt; };
+    return [](bcos::bytes const&,
+               bcos::crypto::HashType const&) -> std::optional<bcostars::Transaction> {
+        return std::nullopt;
+    };
 }
 
 const bcos::h256 c_blockHash{
@@ -171,17 +173,16 @@ BOOST_AUTO_TEST_CASE(HappyFiveTables)
 
     // 1. SYS_NUMBER_2_HASH["1"] == blockHash bytes
     const auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
-    auto num2hash = bcos::task::syncWait(bcos::storage2::readOne(
-        view, StateKey{bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr}));
+    auto num2hash = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr}));
     BOOST_REQUIRE(num2hash.has_value());
     BOOST_CHECK_EQUAL(num2hash->get(),
-        std::string_view(
-            reinterpret_cast<const char*>(c_blockHash.data()), c_blockHash.size()));
+        std::string_view(reinterpret_cast<const char*>(c_blockHash.data()), c_blockHash.size()));
 
     // 2. SYS_HASH_2_NUMBER[blockHash] == "1"
-    auto hash2num = bcos::task::syncWait(bcos::storage2::readOne(view,
-        StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
-            bcos::concepts::bytebuffer::toView(c_blockHash)}));
+    auto hash2num = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
+                                          bcos::concepts::bytebuffer::toView(c_blockHash)}));
     BOOST_REQUIRE(hash2num.has_value());
     BOOST_CHECK_EQUAL(hash2num->get(), blockNumberStr);
 
@@ -192,8 +193,8 @@ BOOST_AUTO_TEST_CASE(HappyFiveTables)
     bcos::bytes expectedHeaderBytes;
     header->encode(expectedHeaderBytes);
     BOOST_CHECK_EQUAL(headerEntry->get(),
-        std::string_view(reinterpret_cast<const char*>(expectedHeaderBytes.data()),
-            expectedHeaderBytes.size()));
+        std::string_view(
+            reinterpret_cast<const char*>(expectedHeaderBytes.data()), expectedHeaderBytes.size()));
     auto roundTripHeader = blockFactory->blockHeaderFactory()->createBlockHeader(
         bcos::bytes(headerEntry->get().begin(), headerEntry->get().end()));
     BOOST_CHECK_EQUAL(roundTripHeader->number(), header->number());
@@ -230,8 +231,8 @@ BOOST_AUTO_TEST_CASE(HappyFiveTables)
 
     // 7. SYS_NUMBER_2_TXS[blockNumber] decodes to a block whose tx hashes match the receipt keys —
     //    the legacy read path (getBlockData RECEIPTS/TRANSACTIONS_HASH) needs this metadata list.
-    auto txMetaEntry = bcos::task::syncWait(bcos::storage2::readOne(
-        view, StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr}));
+    auto txMetaEntry = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr}));
     BOOST_REQUIRE(txMetaEntry.has_value());
     auto metaBytes = bcos::bytesConstRef(
         reinterpret_cast<bcos::byte const*>(txMetaEntry->get().data()), txMetaEntry->get().size());
@@ -311,11 +312,12 @@ BOOST_AUTO_TEST_CASE(ConverterNulloptSkipsTxRow)
     const auto txHash = hashImpl.hash(rawTxBytes[0]);
 
     // The four other tables still carry their rows.
-    auto num2hash = bcos::task::syncWait(bcos::storage2::readOne(
-        view, StateKey{bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr}));
+    auto num2hash = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr}));
     BOOST_REQUIRE(num2hash.has_value());
-    auto hash2num = bcos::task::syncWait(bcos::storage2::readOne(view,
-        StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(c_blockHash)}));
+    auto hash2num = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
+                                          bcos::concepts::bytebuffer::toView(c_blockHash)}));
     BOOST_REQUIRE(hash2num.has_value());
     auto headerEntry = bcos::task::syncWait(bcos::storage2::readOne(
         view, StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}));

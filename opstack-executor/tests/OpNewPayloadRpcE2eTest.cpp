@@ -77,6 +77,12 @@ using ViewType = typename MLS::ViewType;
 // ── Composition-root stand-ins (val-loop GateFixture style: OP mode bypasses memPool/executor) ──
 struct StubMemPool
 {
+    // FCU block-building (buildPayload) calls remove/seal on the mempool; a stub keeps the
+    // branch-smoke instantiation compiling without a real pool.
+    template <class View>
+    void remove(View&) {}
+    template <class View, class Out>
+    void seal(int64_t, View&, Out) {}
 };
 struct StubExecutor
 {
@@ -241,7 +247,8 @@ void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr c
     BOOST_CHECK_MESSAGE(std::equal(produced->logsBloom().begin(), produced->logsBloom().end(),
                             goldenHeader->logsBloom().begin(), goldenHeader->logsBloom().end()),
         id << ": logsBloom");
-    // Main assertion: byte-exact equality of encodeOpHeader (covers the full RLP encoding of all fields)
+    // Main assertion: byte-exact equality of encodeOpHeader (covers the full RLP encoding of all
+    // fields)
     BOOST_CHECK_MESSAGE(
         produced->encodeOpHeader(c) == goldenHeader->encodeOpHeader(c), id << ": encodeOpHeader");
 }
@@ -253,7 +260,8 @@ void runGoldenVector(std::string const& id)
     auto sample = w6test::loadVectorSample(id);
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
     w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
-    // Warning: parent pre-registration (gap A): without it -> SYNCING instead of VALID. parentHash is decoded from the golden header
+    // Warning: parent pre-registration (gap A): without it -> SYNCING instead of VALID. parentHash
+    // is decoded from the golden header
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
 
@@ -283,14 +291,16 @@ void runGoldenVector(std::string const& id)
     // s_eth_hash_2_rawtx (D1). 0x04 (EIP-7702) has been a first-class TransactionType
     // (EIP7702=4) since upstream #5411, so opEnvelopeToTars converts it and it lands in
     // SYS_HASH_2_TX like any other typed tx (no longer absent; D7 is obsolete).
-    BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // P3-1: missing field fails cleanly
+    BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // P3-1: missing field
+                                                                          // fails cleanly
     auto const& rawTxs = *request.executionPayload.rawTransactions;
     auto& hashImpl = *fixture->blockFactory->cryptoSuite()->hashImpl();
     auto view = fixture->multiLayerStorage.fork();
     for (std::size_t i = 0; i < rawTxs.size(); ++i)
     {
         auto txHash = hashImpl.hash(rawTxs[i]);
-        // SYS_HASH_2_TX present + round-trip (tars decode back to Transaction, hash==txHash pins D4)
+        // SYS_HASH_2_TX present + round-trip (tars decode back to Transaction, hash==txHash pins
+        // D4)
         auto txEntry = bcos::task::syncWait(
             bcos::storage2::readOne(view, bcos::executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
                                               bcos::concepts::bytebuffer::toView(txHash)}));
@@ -324,7 +334,8 @@ void runChainedPair(std::string const& aId, std::string const& bId)
 {
     auto sampleA = w6test::loadChainedSample(aId);
     auto sampleB = w6test::loadChainedSample(bId);
-    BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // chained pair shares one fork (isthmus or jovian)
+    BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // chained pair shares one fork (isthmus or
+                                                      // jovian)
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sampleA.jovian));
 
     // Seed only A's pre (B's pre is A's postState; never re-seed)
@@ -396,10 +407,11 @@ runVectorAndGetBlockHash(std::string const& id)
 // Task 3 corpus files); the runner also accepts on-disk invalid_*.json (landed after
 // Task 3 generation). Reject schema (task-2-brief): fisco.consumer / classification
 // ("INVALID"|"SYNCING"|"-38005"|"-32603") / latest_valid_hash("parent"|null) /
-// validation_error_contains(optional) / expect_throw("UnsupportedFork"|"OpExecutionInternalError") /
-// version(optional, -38005 sets 3).
+// validation_error_contains(optional) / expect_throw("UnsupportedFork"|"OpExecutionInternalError")
+// / version(optional, -38005 sets 3).
 
-/// Parses the parent hash from `_op_payload.parentHash` (needed for INVALID's latestValidHash=parent assertion).
+/// Parses the parent hash from `_op_payload.parentHash` (needed for INVALID's
+/// latestValidHash=parent assertion).
 bcos::h256 parseParentHashFromPayload(w6test::InvalidSample const& sample)
 {
     return bcos::h256(std::string(sample.vector["_op_payload"]["parentHash"].asString()));
@@ -414,8 +426,8 @@ struct InlineInvalidSpec
     std::string classification;  // "INVALID"|"SYNCING"|"-38005"|"-32603"
     std::string validationContains = "";  // optional validation_error_contains
     std::uint32_t version = 4;            // -38005 uses 3 (version!=4 triggers UnsupportedFork)
-    bool carryCanonical = false;          // -32603 carries an uncorrupted canonical sibling (two-pour)
-    std::string consumer = "engine";      // Task 4 gate regression: executor skips message assertion
+    bool carryCanonical = false;      // -32603 carries an uncorrupted canonical sibling (two-pour)
+    std::string consumer = "engine";  // Task 4 gate regression: executor skips message assertion
 };
 
 /// Derives an inline invalid vector from a golden sample. Self-consistent corruption
@@ -452,7 +464,8 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
             "buildInlineInvalidSample: unknown corruptField " + spec.corruptField);
     }
 
-    // Self-consistent: recompute blockHash (the rebuilt header excludes payload.blockHash -> opHeaderHash)
+    // Self-consistent: recompute blockHash (the rebuilt header excludes payload.blockHash ->
+    // opHeaderHash)
     auto request = bcos::rpc::parseNewPayloadRequest(
         params, *blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
     auto header = productionHeaderOf(blockFactory, request);
@@ -465,11 +478,13 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
     sample.vector["_info"]["hardfork"] = sample.hardfork;
     sample.vector["pre"] = base.vector["pre"];
     sample.vector["_op_payload"] = ep;
-    // V4 static validation requires parentBeaconBlockRoot (EngineServiceImpl.cpp:340); params[2] always holds the real value
+    // V4 static validation requires parentBeaconBlockRoot (EngineServiceImpl.cpp:340); params[2]
+    // always holds the real value
     sample.vector["_op_payload"]["parentBeaconBlockRoot"] = params[2u];
     if (spec.carryCanonical)
     {
-        // -32603 canonical sibling = the uncorrupted base payload (same parent/height, different blockHash)
+        // -32603 canonical sibling = the uncorrupted base payload (same parent/height, different
+        // blockHash)
         auto canonicalParams = w6test::makeParamsJson(base);
         sample.vector["_op_canonical"] = canonicalParams[0u];
         sample.vector["_op_canonical"]["parentBeaconBlockRoot"] = canonicalParams[2u];
@@ -500,7 +515,8 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
     return sample;
 }
 
-/// Inline self-test vector registry (Task 2 self-test; on-disk corpus uses w6test::loadInvalidSample).
+/// Inline self-test vector registry (Task 2 self-test; on-disk corpus uses
+/// w6test::loadInvalidSample).
 w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
 {
     if (id == "inline_invalid_stateRoot")
@@ -582,7 +598,8 @@ void runInvalidVector(std::string const& id)
 
     if (classification == "SYNCING")
     {
-        // Warning: do not register the parent — a corrupted/broken parentHash vector intends parent unknown
+        // Warning: do not register the parent — a corrupted/broken parentHash vector intends parent
+        // unknown
         w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
         auto params = w6test::makeInvalidParamsJson(sample);
         auto request = bcos::rpc::parseNewPayloadRequest(
@@ -594,7 +611,8 @@ void runInvalidVector(std::string const& id)
         return;
     }
 
-    // Non-SYNCING: seed pre + register parent first (after self-consistent corruption, parentHash is a known valid ancestor)
+    // Non-SYNCING: seed pre + register parent first (after self-consistent corruption, parentHash
+    // is a known valid ancestor)
     w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto parentHash = parseParentHashFromPayload(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, parentHash, 0);
@@ -611,7 +629,8 @@ void runInvalidVector(std::string const& id)
             BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, version)),
                 bcos::engine::UnsupportedFork);
         }
-        else  // -32603: two-pour — submit canonical child first (VALID, writes SYS_NUMBER_2_HASH occupancy), then sibling
+        else  // -32603: two-pour — submit canonical child first (VALID, writes SYS_NUMBER_2_HASH
+              // occupancy), then sibling
         {
             // The canonical sibling must travel with the vector (Task 5 chain_fork_*
             // carriers share the schema). Missing = malformed corpus: a single sibling
@@ -650,7 +669,8 @@ void runInvalidVector(std::string const& id)
         id << ": expected INVALID, got " << static_cast<int>(status.status));
     // An INVALID vector must declare latest_valid_hash ("parent"|null); missing =
     // malformed corpus, fail loudly rather than reading the missing field as null and
-    // asserting the wrong thing (stateRoot corruption returning parent would false-fail misleadingly).
+    // asserting the wrong thing (stateRoot corruption returning parent would false-fail
+    // misleadingly).
     if (!fisco.isMember("latest_valid_hash"))
     {
         BOOST_ERROR(id << ": malformed vector — fisco.latest_valid_hash missing for INVALID");
@@ -912,7 +932,8 @@ BOOST_AUTO_TEST_CASE(IsthmusPrecompileEcrecover)
 // Completion cases (24): all the rest. Warning: BOOST_AUTO_TEST_CASE names must not repeat —
 // the 24 completion-case names deliberately avoid the 9 sample-case names (verified by
 // R2-D: zero collisions with the existing 107 case names or the planned 33).
-// Chained pair: one case (runChainedPair) runs chainA+chainB in one flow (B SYNCING -> A VALID -> B VALID).
+// Chained pair: one case (runChainedPair) runs chainA+chainB in one flow (B SYNCING -> A VALID -> B
+// VALID).
 BOOST_AUTO_TEST_CASE(ChainedAB)
 {
     runChainedPair("chainA", "chainB");
@@ -1036,7 +1057,8 @@ BOOST_AUTO_TEST_CASE(JovianPrecompileWrapValueRevert)
 //   INVALID (stateRoot self-consistent corruption + latestValidHash=parent + "stateRoot")
 //   SYNCING (parentHash broken chain -> do not register parent)
 //   -38005 (Isthmus+ timestamp + version!=4 -> UnsupportedFork)
-//   -32603 (same-parent twins: canonical VALID writes SYS_NUMBER_2_HASH occupancy, then sibling -> two-pour)
+//   -32603 (same-parent twins: canonical VALID writes SYS_NUMBER_2_HASH occupancy, then sibling ->
+//   two-pour)
 BOOST_AUTO_TEST_CASE(InvalidStateRootRejected)
 {
     runInvalidVector("inline_invalid_stateRoot");
@@ -1065,7 +1087,8 @@ BOOST_AUTO_TEST_CASE(ExecutorConsumerSkipsMessageAssertion)
     runInvalidVector("inline_invalid_executorStateRoot");
 }
 
-// Step 5: manifest subset iteration (invalid_*.json). Empty before Task 3 corpus lands -> zero iterations (forward compat).
+// Step 5: manifest subset iteration (invalid_*.json). Empty before Task 3 corpus lands -> zero
+// iterations (forward compat).
 BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
 {
     for (auto const& id : loadInvalidManifest())
@@ -1080,7 +1103,8 @@ BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
 // Proves the manifest->load path no longer double-appends.
 BOOST_AUTO_TEST_CASE(InvalidManifestStemStripsJsonSuffix)
 {
-    // Real manifest line shape -> stem without suffix (loadInvalidSample re-appends to the original filename)
+    // Real manifest line shape -> stem without suffix (loadInvalidSample re-appends to the original
+    // filename)
     BOOST_CHECK_EQUAL(
         invalidStemFromManifestLine("invalid_inline_stateRoot.json"), "invalid_inline_stateRoot");
     BOOST_CHECK_EQUAL(
@@ -1135,23 +1159,26 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
     }
     // Required: classification (all four states covered)
     for (auto const* c : {"INVALID", "SYNCING", "-38005", "-32603"})
-        BOOST_CHECK_MESSAGE(classifications.count(c),
-            "coverage: classification '" << c << "' has no vector");
+        BOOST_CHECK_MESSAGE(
+            classifications.count(c), "coverage: classification '" << c << "' has no vector");
     // Required: latest_valid_hash (both "parent" and null values)
     for (auto const* h : {"parent", "null"})
-        BOOST_CHECK_MESSAGE(lvh.count(h),
-            "coverage: latest_valid_hash '" << h << "' has no vector");
+        BOOST_CHECK_MESSAGE(
+            lvh.count(h), "coverage: latest_valid_hash '" << h << "' has no vector");
     // Required: static items 1..11 (except 3/12 — forced out of manifest)
     for (int n : {1, 2, 4, 5, 6, 7, 8, 9, 10, 11})
-        BOOST_CHECK_MESSAGE(staticItems.count(n),
-            "coverage: static item " << n << " has no vector");
+        BOOST_CHECK_MESSAGE(
+            staticItems.count(n), "coverage: static item " << n << " has no vector");
     BOOST_CHECK_MESSAGE(!staticItems.count(3),
         "coverage: static item 3 must NOT be manifest-registered (loader inexpressible)");
     BOOST_CHECK_MESSAGE(!staticItems.count(12),
         "coverage: static item 12 must NOT be manifest-registered (loader inexpressible)");
-    // Required: full set of validation_error_contains target strings (corrupt fields / static faces / invalid-tx messages)
+    // Required: full set of validation_error_contains target strings (corrupt fields / static faces
+    // / invalid-tx messages)
     static const char* kRequiredErrors[] = {
-        "stateRoot", "gasUsed", "receiptsRoot",
+        "stateRoot",
+        "gasUsed",
+        "receiptsRoot",
         "blockHash does not match the reconstructed block header",
         "extraData must be exactly 9 bytes on the OP path (Isthmus)",
         "extraData must be exactly 17 bytes on the OP path (Jovian)",
@@ -1164,7 +1191,9 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         "blockNumber must not be negative",
         "gasLimit exceeds the maximum block gas limit (2^63-1)",
         "DA footprint (blobGasUsed) exceeds the block gas limit",
-        "intrinsic gas too low", "nonce too low", "nonce too high",
+        "intrinsic gas too low",
+        "nonce too low",
+        "nonce too high",
         "insufficient funds for gas * price + value",
         "max fee per gas less than block base fee",
         "sender not an eoa",
@@ -1173,8 +1202,8 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         "unsupported tx type byte 0x3",
     };
     for (auto const* s : kRequiredErrors)
-        BOOST_CHECK_MESSAGE(errStrings.count(s),
-            "coverage: validation_error_contains '" << s << "' has no vector");
+        BOOST_CHECK_MESSAGE(
+            errStrings.count(s), "coverage: validation_error_contains '" << s << "' has no vector");
 }
 
 // ── Task 4 (OP driver orchestration alignment): notifier timing ──
@@ -1197,15 +1226,13 @@ BOOST_AUTO_TEST_CASE(NotifierFiresOnlyOnValidCommit)
         auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
         armNotifier(*fixture);
         w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
-        registerVerifiedBlock(
-            fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
+        registerVerifiedBlock(fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
         auto params = w6test::makeInvalidParamsJson(sample);
         auto request = bcos::rpc::parseNewPayloadRequest(
             params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
         auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-        BOOST_REQUIRE_MESSAGE(
-            static_cast<int>(status.status) ==
-                static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),
+        BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
+                                  static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),
             "NotifierFiresOnlyOnValidCommit: corrupt stateRoot expected INVALID, got "
                 << static_cast<int>(status.status));
     }
@@ -1218,23 +1245,20 @@ BOOST_AUTO_TEST_CASE(NotifierFiresOnlyOnValidCommit)
         auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
         w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
         const auto goldenHeader = w6test::decodeGoldenHeader(sample);
-        registerVerifiedBlock(
-            fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
+        registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
         auto params = w6test::makeParamsJson(sample);
         auto request = bcos::rpc::parseNewPayloadRequest(
             params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
         // First delivery (notifier NOT yet armed): VALID, committed.
         auto first = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-        BOOST_REQUIRE_MESSAGE(
-            static_cast<int>(first.status) ==
-                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+        BOOST_REQUIRE_MESSAGE(static_cast<int>(first.status) ==
+                                  static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
             "NotifierFiresOnlyOnValidCommit: seed delivery expected VALID");
         // Arm, then re-deliver the SAME block -> 3b short-circuit, no commit.
         armNotifier(*fixture);
         auto again = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-        BOOST_REQUIRE_MESSAGE(
-            static_cast<int>(again.status) ==
-                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+        BOOST_REQUIRE_MESSAGE(static_cast<int>(again.status) ==
+                                  static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
             "NotifierFiresOnlyOnValidCommit: re-delivery expected VALID");
     }
     BOOST_CHECK_EQUAL(notified, 0);  // known-block short-circuit must not fire
@@ -1247,15 +1271,13 @@ BOOST_AUTO_TEST_CASE(NotifierFiresOnlyOnValidCommit)
         armNotifier(*fixture);
         w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
         const auto goldenHeader = w6test::decodeGoldenHeader(sample);
-        registerVerifiedBlock(
-            fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
+        registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
         auto params = w6test::makeParamsJson(sample);
         auto request = bcos::rpc::parseNewPayloadRequest(
             params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
         auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-        BOOST_REQUIRE_MESSAGE(
-            static_cast<int>(status.status) ==
-                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+        BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
+                                  static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
             "NotifierFiresOnlyOnValidCommit: fresh valid expected VALID, got "
                 << static_cast<int>(status.status));
     }
@@ -1265,8 +1287,8 @@ BOOST_AUTO_TEST_CASE(NotifierFiresOnlyOnValidCommit)
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
-// ── FCU end-to-end 6 cases (/loop audit gap: zero coverage of real updateForkchoice OP semantics) ──
-// Mirrors op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated semantics:
+// ── FCU end-to-end 6 cases (/loop audit gap: zero coverage of real updateForkchoice OP semantics)
+// ── Mirrors op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated semantics:
 //   head known -> VALID + LatestValidHash=head (api.go:316-322 valid())
 //   head unknown -> STATUS_SYNCING (api.go:238 network pull)
 //   OP + attributes -> -38003 (checkOptimismPayloadAttributes rejects; here
@@ -1289,7 +1311,8 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
     BOOST_CHECK_EQUAL(*state.latestValidHash, blockHash);
 }
 
-// ② head unknown -> SYNCING (mirrors op-geth STATUS_SYNCING; getBlockNumber has no value -> :253-262)
+// ② head unknown -> SYNCING (mirrors op-geth STATUS_SYNCING; getBlockNumber has no value ->
+// :253-262)
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
 {
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(/*jovian=*/false));
@@ -1305,22 +1328,34 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
 // ③ OP attributes -> -38003 (UnsupportedOpPayloadAttributes; mirrors op-geth attribute rejection).
 // Note: the forkchoice state update takes effect first, then the build is rejected
 // (EngineServiceImpl.h:356-359).
-BOOST_AUTO_TEST_CASE(ForkchoiceAttributesRejected)
+// ③' FCU with attributes drives the sequencer payload builder (B1): previously OP mode threw
+// UnsupportedOpPayloadAttributes (-38003) here; the gate is lifted so the node can build + seal
+// a block from attributes (eth_sendRawTransaction -> mempool seal -> buildOpPayload). Assert the
+// builder returns VALID with a payloadId on a legal attribute set.
+BOOST_AUTO_TEST_CASE(ForkchoiceAttributesBuildsPayload)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     (void)number;
     bcos::engine::PayloadAttributes attrs;
-    BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
-                          bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
-                          /*version=*/3)),
-        bcos::engine::UnsupportedOpPayloadAttributes);
+    attrs.prevRandao = bcos::crypto::HashType(0x1234);
+    attrs.suggestedFeeRecipient = bcos::Address("0x4200000000000000000000000000000000000011");
+    // Current timestamp (seconds) so the built block is post-Jovian like the vector's.
+    attrs.timestamp = static_cast<uint64_t>(bcos::utcTime() / 1000);
+    auto [status, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
+        /*version=*/3));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_CHECK(payloadId.has_value());
 }
 
-// ④ finalized > head -> InvalidForkchoiceState (-38002 monotonicity; mirrors updateForkchoice :263-280)
+// ④ finalized > head -> InvalidForkchoiceState (-38002 monotonicity; mirrors updateForkchoice
+// :263-280)
 BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
-    // Manually register a higher-numbered "known" block for finalized (registerVerifiedBlock writes SYS_HASH_2_NUMBER)
+    // Manually register a higher-numbered "known" block for finalized (registerVerifiedBlock writes
+    // SYS_HASH_2_NUMBER)
     bcos::h256 higherBlock("0x9999999999999999999999999999999999999999999999999999999999999999");
     registerVerifiedBlock(fixture->multiLayerStorage, higherBlock, number + 2);
     // finalized (number+2) > head (number) -> throws InvalidForkchoiceState at :269-274
@@ -1330,7 +1365,8 @@ BOOST_AUTO_TEST_CASE(ForkchoiceMonotonicityRejected)
         bcos::engine::InvalidForkchoiceState);
 }
 
-// ⑤ head increment must be exactly +1: skipping (missing middle block) -> conflict; strict +1 -> VALID (mirrors :318-323)
+// ⑤ head increment must be exactly +1: skipping (missing middle block) -> conflict; strict +1 ->
+// VALID (mirrors :318-323)
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
 {
     auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
