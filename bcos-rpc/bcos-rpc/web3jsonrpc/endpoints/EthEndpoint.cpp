@@ -30,6 +30,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/mpt/Constants.h>
@@ -343,8 +344,18 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         // Latest state: fork a fresh view of GlobalStorageState and read the flat KV — a
         // consistent point-in-time snapshot (in-flight pending layers -> cache -> committed
-        // backend). The provider is unset on nodes with no local state storage (tars-built
-        // NodeService); those fall back to the ledger, which serves the same committed plane.
+        // backend).
+        //
+        // DELIBERATE PLANE DIFFERENCE from getBalance / getTransactionCount / getCode:
+        // MultiLayerStorage::fork() copies the in-flight pending layers (executed, not yet
+        // committed blocks) into the view, so eth_getStorageAt("latest") can observe state
+        // ahead of the committed plane those three endpoints read (ledger / scheduler).
+        // This is intentional - "latest" here means the node's most current state, per the
+        // original design requirement - not the last committed block. On a deployment where
+        // the pending window must stay invisible, point the provider at the committed
+        // backend (GlobalStateStorage::latestBackend()) instead of fork(). The provider is
+        // unset on nodes with no local state storage (tars-built NodeService); those fall
+        // back to the ledger, which serves the same committed plane.
         Json::Value result;
         auto const& stateStorageProvider = m_nodeService->stateStorageProvider();
         if (stateStorageProvider)
@@ -642,9 +653,14 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     else
     {
         // Historical state: the account's code from the block's committed MPT root, resolved
-        // through its codeHash into the content-addressed code store (s_code_binary rows are
-        // valid for any block). Scenario-driven absence semantics: scenario B reads a missing
-        // account as "no code"; scenario A errors for a dormant account.
+        // through its codeHash into the content-addressed code store (s_code_binary). Reads
+        // the LATEST plane (ledger->getStateStorage()) — equivalent to the historical one
+        // because code rows are content-addressed and NEVER deleted: EVM code is immutable
+        // and EVMAccount's write path has no deletion (lifecycle precondition; if code
+        // cleanup/compaction is ever introduced, this historical read must pin the code
+        // blob at the block, not read the latest plane). Scenario-driven absence semantics:
+        // scenario B reads a missing account as "no code"; scenario A errors for a dormant
+        // account.
         auto const ledger = m_nodeService->ledger();
         auto const mptReader = m_nodeService->mptNodeReader();
         auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
