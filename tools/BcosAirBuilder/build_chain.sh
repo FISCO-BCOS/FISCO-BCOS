@@ -1390,6 +1390,15 @@ generate_config_ini() {
     cors_allowed_headers=Content-Type, Authorization, X-Requested-With
     cors_max_age=86400
 
+[op_engine_rpc]
+    ; authenticated OP-Stack Engine API endpoint, driven by an external op-node
+    ; mutually exclusive with [consensus] enable_single_node_consensus
+    enable=false
+    listen_ip=127.0.0.1
+    listen_port=8551
+    ; JWT shared secret (op-node --l2.jwt-secret must point at the same file)
+    jwt_secret_file=conf/op-engine/jwt.hex
+
 [cert]
     ; directory the certificates located in
     ca_path=./conf
@@ -1633,6 +1642,14 @@ generate_sm_config_ini() {
 
 EOF
     generate_common_ini "${output}"
+}
+
+generate_jwt_secret() {
+    local conf_dir="${1}"
+    mkdir -p "${conf_dir}/op-engine"
+    # Engine API JWT shared secret: 32 random bytes hex-encoded,
+    # 64 hex chars + trailing newline (65 bytes total)
+    ${OPENSSL_CMD} rand -hex 32 >"${conf_dir}/op-engine/jwt.hex"
 }
 
 generate_p2p_connected_conf() {
@@ -1953,6 +1970,9 @@ expand_node()
     LOG_INFO "generate_node_cert ..."
     generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
     LOG_INFO "generate_node_cert success..."
+    # the copied config.ini points jwt_secret_file at conf/op-engine/jwt.hex; give the
+    # expanded node its own secret so enabling [op_engine_rpc] later just works
+    generate_jwt_secret "${node_dir}/conf"
     # generate node account
     LOG_INFO "generate_node_account ..."
     generate_node_account "${sm_mode}" "${node_dir}/conf" "${i}"
@@ -2127,6 +2147,7 @@ deploy_nodes()
             node_dir="${output_dir}/${ip}/node${node_count}"
             mkdir -p "${node_dir}"
             generate_node_cert "${sm_mode}" "${ca_dir}" "${node_dir}/conf"
+            generate_jwt_secret "${node_dir}/conf"
             generate_node_scripts "${node_dir}" "${docker_mode}"
             if "${monitor_mode}" ;then
                 local port=$((mtail_listen_port + node_count))
@@ -2254,6 +2275,7 @@ generate_template_package()
     node_dir="${output_dir}/${node_name}"
     mkdir -p "${node_dir}"
     mkdir -p "${node_dir}/conf"
+    generate_jwt_secret "${node_dir}/conf"
 
     p2p_listen_ip="${default_listen_ip}"
     rpc_listen_ip="${default_listen_ip}"
