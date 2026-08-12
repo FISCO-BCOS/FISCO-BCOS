@@ -30,6 +30,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <opstack-executor/OpBlockSeal.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/Storage2State.h>
 #include <boost/test/unit_test.hpp>
@@ -95,6 +96,17 @@ inline constexpr char kDepositEnvelopeHex[] =
     "0000000000000000000000000000000000000000000000000000000000000000"
     "0000000000000000000000000000000000000000000000000000000000000000"
     "00000000000000000000";
+
+// A real signed EIP-7702 set-code tx from the t8n vector isthmus_setcode_7702.json
+// (block.transactions[1]._op_raw, chainId 0x2105, sender 0x7e5f...5bdf, authority to=0x1eff...718).
+inline constexpr char kSetcodeTxEnvelopeHex[] =
+    "04f8cd822105808405f5e100847735940083030d40941eff47bc3a10a45d4b23"
+    "0b5d10e37751fe6aa7188080c0f85ef85c82210594c0de000000000000000000"
+    "0000000000000000048080a04f2932930bb9cb89e91dcfbbe82525b7d995da2d"
+    "a4a351a71386ded6636a0187a07188790945aae98efa664af83d1b67e5e0585e"
+    "7b01a60b74664c66841eb8aedd01a03b37a24be0a0db0436c899eb5413541384"
+    "0b37e0150c69ba5ac9de6e71f658c7a03cb8039b14d3d9a995fef3894447d497"
+    "eab638113ce0d76649c99c85c7889169";
 
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeOpHeader(
     bcos::protocol::BlockNumber number, int64_t timestampMillis)
@@ -577,10 +589,10 @@ struct JovianShapeFixture
     }
 
     // timestampMillis must put the block in the Jovian config (>= jovianTime*1000).
-    void run(std::vector<bcos::bytes> rawTxs, int64_t timestampMillis)
+    bcos::evm::engine::OpExecuteBlockResult run(std::vector<bcos::bytes> rawTxs, int64_t timestampMillis)
     {
         auto header = makeOpHeader(1, timestampMillis);
-        bcos::task::syncWait(scheduler.executeOpBlock(view, *header, rawTxs));
+        return bcos::task::syncWait(scheduler.executeOpBlock(view, *header, rawTxs));
     }
 };
 }  // namespace
@@ -650,6 +662,123 @@ BOOST_AUTO_TEST_CASE(IsthmusActivationBlockSeals)
     JovianShapeFixture fx;
     BOOST_REQUIRE_NO_THROW(fx.run(
         {makeDepositEnvelope(makeIsthmusCalldata())}, static_cast<int64_t>(1000) * 1000 + 500));
+}
+
+// ---- Item 5: invalid-block rejections (op-geth state_processor.go block-level errors) ----
+
+// First tx is not the L1 attributes deposit -> rejected outright.
+BOOST_AUTO_TEST_CASE(FirstTxNotAttributesRejected)
+{
+    JovianShapeFixture fx;
+    BOOST_CHECK_THROW(
+        fx.run({bcos::fromHex(kUserTxEnvelopeHex)}, static_cast<int64_t>(2000) * 1000 + 1000),
+        std::runtime_error);
+}
+
+// A deposit appearing after a non-deposit tx -> rejected (stricter-than-spec guard).
+BOOST_AUTO_TEST_CASE(DepositAfterNonDepositRejected)
+{
+    JovianShapeFixture fx;
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero()),
+        bcos::fromHex(kUserTxEnvelopeHex), makeDepositEnvelope(makeJovianCalldataNonZero())};
+    BOOST_CHECK_THROW(fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000), std::runtime_error);
+}
+
+// A deposit whose gasLimit exceeds the remaining block gas -> rejected (block error).
+BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetRejected)
+{
+    JovianShapeFixture fx;
+    BOOST_CHECK_THROW(
+        fx.run({makeDepositEnvelope(makeJovianCalldataNonZero(), 4'000'000'000)},
+            static_cast<int64_t>(2000) * 1000 + 1000),
+        std::runtime_error);
+}
+
+// ---- Item 4: MessagePasser storage drives the withdrawal root (opStorageRoot, OpBlockSeal) ----
+// OpBlockSeal has no direct unit test; the withdrawal root is consensus-critical (op-geth derives
+// it from the L2ToL1MessagePasser storage after the block). Seed the MessagePasser with known
+// slots, run a block that does not touch it, and assert the seal's withdrawalsRoot equals
+// opStorageRoot over the same slots.
+BOOST_AUTO_TEST_CASE(MessagePasserStorageDrivesWithdrawalRoot)
+{
+    using namespace evmc::literals;
+    JovianShapeFixture fx;
+
+    // Seed the MessagePasser (0x4200...11) with two non-zero slots.
+    const auto kPasser = bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
+    bcos::task::syncWait([&]() -> bcos::task::Task<void> {
+        bcos::ledger::account::EVMAccount<ViewType> acc(fx.view, kPasser, false);
+        co_await acc.create();
+        co_await acc.setNonce("1");
+        evmc::bytes32 k1{};
+        k1.bytes[31] = 0x01;
+        evmc::bytes32 v1{};
+        v1.bytes[31] = 0x02;
+        evmc::bytes32 k2{};
+        k2.bytes[31] = 0x02;
+        evmc::bytes32 v2{};
+        v2.bytes[31] = 0x03;
+        co_await acc.setStorage(k1, v1);
+        co_await acc.setStorage(k2, v2);
+        co_return;
+    }());
+
+    auto result = fx.run({makeDepositEnvelope(makeJovianCalldataNonZero())},
+        static_cast<int64_t>(2000) * 1000 + 1000);
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 1u);
+
+    // The expected root is opStorageRoot over the seeded slots (the block does not touch the
+    // MessagePasser). Zero-value slots are skipped by opStorageRoot.
+    std::map<evmc::bytes32, evmc::bytes32> seeded;
+    evmc::bytes32 k1{};
+    k1.bytes[31] = 0x01;
+    evmc::bytes32 v1{};
+    v1.bytes[31] = 0x02;
+    evmc::bytes32 k2{};
+    k2.bytes[31] = 0x02;
+    evmc::bytes32 v2{};
+    v2.bytes[31] = 0x03;
+    seeded[k1] = v1;
+    seeded[k2] = v2;
+    const auto expected = bcos::evm::opstack::opStorageRoot(seeded);
+    BOOST_TEST_MESSAGE("seal withdrawalsRoot: 0x"
+                       << evmc::hex(evmc::bytes_view(result.seal.withdrawalsRoot.bytes,
+                                              sizeof(result.seal.withdrawalsRoot.bytes))));
+    BOOST_TEST_MESSAGE("expected opStorageRoot: 0x"
+                       << evmc::hex(evmc::bytes_view(expected.bytes, sizeof(expected.bytes))));
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot.bytes, expected.bytes,
+                          sizeof(expected.bytes)),
+        0);
+}
+
+// ---- Item 6: EIP-7702 set-code tx in a block (deposit + setcode) ----
+// A real signed set-code tx (isthmus_setcode_7702.json) delegating authority 0x1eff...718 to
+// implementation 0xc0de...04 must write the delegation designator (0xef0100 ++ impl) onto the
+// authority in the block's post-state.
+BOOST_AUTO_TEST_CASE(SetCode7702InBlockWritesDelegation)
+{
+    using namespace evmc::literals;
+    JovianShapeFixture fx;
+
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero()),
+        bcos::fromHex(kSetcodeTxEnvelopeHex)};
+    auto result = fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000);
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 2u);
+    BOOST_CHECK_EQUAL(result.receipts[1]->status(), 0);
+
+    // The authority (tx.to = 0x1eff...) now carries the delegation designator 0xef0100 ++ impl.
+    const auto authority =
+        evmc::from_hex<evmc::address>("1eff47bc3a10a45d4b230b5d10e37751fe6aa718").value();
+    const auto impl = evmc::from_hex<evmc::address>("c0de000000000000000000000000000000000004").value();
+    bcos::ledger::account::EVMAccount<ViewType> acc(fx.view, authority, false);
+    auto codeEntry = bcos::task::syncWait(acc.code());
+    BOOST_REQUIRE(codeEntry.has_value());
+    const auto& code = codeEntry->get();
+    BOOST_REQUIRE_GE(code.size(), 23u);
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(code[0]), 0xef);
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(code[1]), 0x01);
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(code[2]), 0x00);
+    BOOST_CHECK_EQUAL(std::memcmp(code.data() + 3, impl.bytes, sizeof(impl.bytes)), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
