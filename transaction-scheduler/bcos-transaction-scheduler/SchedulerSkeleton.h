@@ -435,6 +435,17 @@ protected:
     // A3：异常分类钩子（基类不命名 OP 类型）。
     virtual scheduler::SchedulerError classifyException(std::exception_ptr) const = 0;
 
+    /// 异常消息钩子（wiring Task 5b）：`catch(...)` 兜底路径（OP 的 RTTI 旁路异常逃过
+    /// catch(std::exception&)）用 `derived().describeException(current_exception())` 构造错误
+    /// 消息——默认返回通用占位串（与旧行为逐字相同）；派生（OpScheduler）经 rethrow + typed
+    /// catch（FISCO 类型 typeinfo 稳定，可靠绑定）恢复原始 OpConsensusError/OpStorageError 的
+    /// what()，否则 catch(...) 丢消息（"-fno-rtti evmone 边界的 std::exception typeinfo 非唯一，
+    /// catch(const std::exception&) 不可靠绑定"）。签名 OP-free（返回 std::string），A3 不变。
+    virtual std::string describeException(std::exception_ptr) const
+    {
+        return "unclassified exception, RTTI typed-catch bypassed";
+    }
+
     // ================================================================
     // 模板方法（共享流程，B4：execute → finish → verify；coExecuteBlock ①-⑥）
     // ================================================================
@@ -545,9 +556,8 @@ protected:
             // catch(std::exception&)（Storage2State.h:195-199 实测同现象）。没有此兜底， OP
             // 异常会绕过 classifyException 直接逃出 executeBlock。classifyException 的 rethrow +
             // typed catch 对已归一（execute hook 内 catch(...) 重抛）的 FISCO 类型可靠绑定。
-            auto message = std::string{
-                "Execute block failed! (unclassified exception, RTTI "
-                "typed-catch bypassed)"};
+            auto message = std::string{"Execute block failed! ("} +
+                           derived().describeException(std::current_exception()) + ")";
             BASELINE_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
                 nullptr, false};
@@ -639,9 +649,8 @@ protected:
         {
             // RTTI-bypass 兜底（同 coExecuteBlock 注释）：runtime_error 子类逃 typed catch，
             // 无此兜底会绕过 classifyException 逃出 commitBlock。
-            auto message = std::string{
-                "Commit block failed! (unclassified exception, RTTI "
-                "typed-catch bypassed)"};
+            auto message = std::string{"Commit block failed! ("} +
+                           derived().describeException(std::current_exception()) + ")";
             BASELINE_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
                 nullptr};

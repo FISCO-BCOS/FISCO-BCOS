@@ -77,6 +77,14 @@ class OpScheduler : public bcos::scheduler_v1::SchedulerSkeleton<MultiLayerStora
     {
         bcos::evm::engine::OpExecuteBlockResult result;
         std::vector<bcos::bytes> rawTxBytes;
+        /// The block's OP hash (announced header's `opHeaderHash`) — stashed at execute time so
+        /// the commit hook's opstackRegisterBlock keys the tables by the authoritative block
+        /// hash without recomputing it from the (commitment-only) executed header. finishExecute
+        /// deliberately fills only the commitment fields (A8); the executed header's optional
+        /// header fields (baseFee/excessBlobGas/parentBeaconBlockRoot/...) stay empty, so
+        /// `opHeaderHash` on it throws std::bad_optional_access (Task 5b wiring finding — the
+        /// commit hook was never driven until the delegate path).
+        bcos::crypto::HashType announcedBlockHash;
     };
 
 public:
@@ -113,6 +121,19 @@ public:
         {
             result = co_await m_schedulerImpl.executeOpBlock(view, header, rawTxBytes);
         }
+        catch (const bcos::evm::engine::OpConsensusError&)
+        {
+            // FISCO 类型 typeinfo 稳定，可绑定——原样重抛，保留原始消息（describeException 在
+            // 骨架 catch(...) 兜底处恢复它）。不落到 catch(std::exception&)（-fno-rtti evmone
+            // 边界 std::exception typeinfo 非唯一，不可靠绑定）或 catch(...)（消息丢失）。
+            throw;
+        }
+        catch (const bcos::evm::engine::OpStorageError&)
+        {
+            // 同上：storage 故障保留类型与消息——骨架 classifyException 正确映射
+            // OpStorageFault（-32603，非 INVALID）。
+            throw;
+        }
         catch (const std::exception&)
         {
             throw;  // 可绑定类型（logic_error 族 / 正常 typeinfo 的 runtime_error）→ 骨架
@@ -140,8 +161,14 @@ public:
         // `*result->m_transactions` 空指针解引用（SchedulerSkeleton.h:355）。空表使 tx-submit zip
         // 空循环，blockNumber/transaction notifier 仍正常走。
         out.m_transactions = std::make_shared<protocol::ConstTransactions>();
+        // announcedBlockHash: 权威块 hash（announced header 的 opHeaderHash，引擎 step 2 已校验）
+        // 存进 extra——commit hook 用它 key 表，不在 executed header 上重算（其可选字段不全）。
         out.modeExtra = std::make_shared<OpExecuteExtra>(
-            OpExecuteExtra{std::move(result), std::move(rawTxBytes)});
+            OpExecuteExtra{std::move(result), std::move(rawTxBytes),
+                header.opHeaderHash(
+                    bcos::protocol::BlockHeader::OpHeaderConst{.ommersHash = c_emptyOmmersHash,
+                        .difficulty = bcos::u256(0),
+                        .nonce = c_posNonce})});
         co_return out;
     }
 
@@ -193,24 +220,31 @@ public:
     }
 
     /// ⑤ commit：opstackRegisterBlock（Task 1 机制）写独立 MutableStorage → 返回之
-    /// （骨架唯一一次 mergeBackStorage，FIB-104）。blockHash 经 header.opHeaderHash(opHeaderConst)
-    /// ——OP 头 hash 在 codec，不调 BlockHeader::hash()（A8）。
+    /// （骨架唯一一次 mergeBackStorage，FIB-104）。blockHash 用 execute hook 存的
+    /// extra.announcedBlockHash（announced header 的 opHeaderHash，引擎 step 2 已校验）——
+    /// 不在 executed header 上重算（finishExecute 只填承诺字段，可选头字段不全会抛
+    /// bad_optional_access，Task 5b 发现）。**注册的头是 announced header
+    /// （result.m_block->blockHeader()），不是 executed header**——finishExecute 只填承诺字段，
+    /// executed 头的 tars encode 不全（缺 coinbase/gasLimit/baseFee/prevRandao/excessBlobGas/
+    /// parentBeaconBlockRoot/...）；子块的 step 3a parent-header 读会经 createBlockHeader 重解析
+    /// 该头，不全的头触发 dataHash 重算抛异常（Task 5b wiring 发现）。OP 头 hash 在 codec，
+    /// 不调 BlockHeader::hash()（A8）。
     task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> commit(
-        ViewType& /*view*/, protocol::BlockHeader::Ptr header,
+        ViewType& /*view*/, protocol::BlockHeader::Ptr /*header*/,
         bcos::scheduler_v1::SchedulerExecuteResult const& result)
     {
         auto& extra = *std::static_pointer_cast<OpExecuteExtra>(result.modeExtra);
         auto storage = std::make_shared<typename MultiLayerStorage::MutableStorage>();
 
-        bcos::protocol::BlockHeader::OpHeaderConst opHeaderConst{
-            .ommersHash = c_emptyOmmersHash,
-            .difficulty = bcos::u256(0),
-            .nonce = c_posNonce,
-        };
-        auto blockHash = header->opHeaderHash(opHeaderConst);
-
-        co_await bcos::evm::engine::opstackRegisterBlock(*storage, *header, blockHash,
-            extra.rawTxBytes, extra.result, *this->m_blockFactory, m_envelopeToTars);
+        // The block's header is the announced one (the engine's buildOpBlock set it); finishExecute
+        // built a separate executed header without touching the block's. Keep the Ptr alive:
+        // blockHeader() returns a fresh shared_ptr BY VALUE, and binding a reference to
+        // `*block->blockHeader()` would dangle a temporary (OpBlockScheduler's documented
+        // segfault-on-timestamp() trap).
+        auto announcedHeader = result.m_block->blockHeader();
+        co_await bcos::evm::engine::opstackRegisterBlock(*storage, *announcedHeader,
+            extra.announcedBlockHash, extra.rawTxBytes, extra.result, *this->m_blockFactory,
+            m_envelopeToTars);
         co_return storage;
     }
 
@@ -340,6 +374,31 @@ public:
         catch (...)
         {
             return scheduler::SchedulerError::UnknownError;
+        }
+    }
+
+    /// 骨架 catch(...) 兜底处的错误消息恢复（wiring Task 5b）：rethrow + typed catch——FISCO
+    /// 类型 typeinfo 稳定，可靠绑定并取 what()（catch(std::exception&) 在 -fno-rtti evmone 边界
+    /// 不可靠绑定，原消息会丢）。六字段 mismatch（verifyResult 抛的 OpConsensusError）与
+    /// executeOpBlock 的 consensus/storage 拒绝消息都经此恢复，供引擎 barrier 生成带明细的
+    /// validationError（-fno-rtti 边界问题详述见 SchedulerSkeleton.h describeException 注释）。
+    std::string describeException(std::exception_ptr eptr) const override
+    {
+        try
+        {
+            std::rethrow_exception(std::move(eptr));
+        }
+        catch (const bcos::evm::engine::OpConsensusError& e)
+        {
+            return e.what();
+        }
+        catch (const bcos::evm::engine::OpStorageError& e)
+        {
+            return e.what();
+        }
+        catch (...)
+        {
+            return "unclassified exception, RTTI typed-catch bypassed";
         }
     }
 
