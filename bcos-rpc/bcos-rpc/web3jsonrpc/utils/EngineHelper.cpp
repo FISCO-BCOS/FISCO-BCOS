@@ -71,7 +71,11 @@ constexpr uint64_t c_millisPerSecond = 1000;
 
 uint64_t engineSecondsToInternalMillis(uint64_t seconds)
 {
-    if (seconds > std::numeric_limits<uint64_t>::max() / c_millisPerSecond)
+    // Bound by int64, not uint64: the converted value lands in
+    // BlockHeader::setTimestamp(static_cast<int64_t>(...)) and headers store the
+    // timestamp as int64_t milliseconds, so any seconds value whose millisecond
+    // form exceeds INT64_MAX would silently wrap to a negative header timestamp.
+    if (seconds > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / c_millisPerSecond)
     {
         BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
             "timestamp exceeds representable range: " + std::to_string(seconds)));

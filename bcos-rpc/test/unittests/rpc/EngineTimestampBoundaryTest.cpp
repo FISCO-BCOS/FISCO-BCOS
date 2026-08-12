@@ -116,5 +116,32 @@ BOOST_AUTO_TEST_CASE(overflowingSecondsRejected)
         JsonRpcException);
 }
 
+BOOST_AUTO_TEST_CASE(int64BoundaryIsExact)
+{
+    // Internal header timestamps are int64_t milliseconds
+    // (BlockHeader::setTimestamp(static_cast<int64_t>(...))), so the admissible
+    // maximum is INT64_MAX/1000 = 9'223'372'036'854'775 seconds (0x20c49ba5e353f7).
+    // One more second would convert to a value above INT64_MAX and wrap negative
+    // in the header, so it must be rejected even though it still fits in uint64.
+    auto attrs =
+        parsePayloadAttributes(makeAttributesParams("0x20c49ba5e353f7"), engine::ApiVersion::V3);
+    BOOST_REQUIRE(attrs.has_value());
+    BOOST_CHECK_EQUAL(attrs->timestamp, 9'223'372'036'854'775'000ULL);
+
+    BOOST_CHECK_THROW(
+        parsePayloadAttributes(makeAttributesParams("0x20c49ba5e353f8"), engine::ApiVersion::V3),
+        JsonRpcException);
+    BOOST_CHECK_THROW(
+        parseNewPayloadRequest(makeNewPayloadParams("0x20c49ba5e353f8"), engine::ApiVersion::V1),
+        JsonRpcException);
+
+    // Serialize direction has no symmetric hazard (int64-range ms / 1000 cannot
+    // overflow); pin the boundary value round-trips to the admissible maximum.
+    engine::ExecutionPayload payload;
+    payload.timestamp = 9'223'372'036'854'775'000ULL;
+    auto ep = serializeExecutionPayload(payload, engine::ApiVersion::V1);
+    BOOST_CHECK_EQUAL(ep["timestamp"].asString(), "0x20c49ba5e353f7");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
