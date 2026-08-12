@@ -6,6 +6,14 @@
 #
 # To bump: edit `tag` + `commit` + `date_pinned`, then refresh the four
 # submodule SHAs from upstream's `git submodule status` at the new tag.
+#
+# DEPRECATED PIN (K1.1): op-contracts/v1.6.0 below is pre-Karst — its L1Block
+# has only the Ecotone setters and its predeploy list lacks OperatorFeeVault
+# (in the predeploy set since Isthmus, 0x42...001B). It stays the ACTIVE pin
+# only because CI builds from it and the dep SHAs / predeploy paths below are
+# verified against it; flipping requires re-verifying both at the new tag.
+# The Karst-era replacement is proposed in [proposed_karst_pin] at the end of
+# this file (proposed, pending final freeze).
 
 upstream      = "ethereum-optimism/optimism"
 tag           = "op-contracts/v1.6.0"
@@ -38,3 +46,32 @@ predeploys = [
 "openzeppelin-contracts-upgradeable" = "0a2cb9a445c365870ed7a8ab461b12acf3e27d63"
 solady                               = "502cc1ea718e6fa73b380635ee0868b0740595f0"
 solmate                              = "8f9b23f8838670afda0fd8983f2c41e8037ae6bc"
+
+# --------------------------------------------------------------------------
+# K1.1 artifact quintuple — PROPOSED, PENDING FINAL FREEZE (researched
+# 2026-08-12 against the frozen anchors op-node v1.19.3 / op-reth v2.4.0).
+#
+# op-contracts/v7.0.0 is the Upgrade 19 / Karst contracts release ("Add Karst
+# hard fork activation", release notes 2026-06-25); op-deployer v0.7.1 states
+# it is "the op-deployer release associated with op-contracts/v7.0.0 and
+# Upgrade 19" (v0.7.0 and v0.7.1 dereference to the same commit; use v0.7.1).
+# superchain-registry has no release tags: two defensible commit pins are the
+# one op-node v1.19.0's release notes cite for the canonical Karst timestamps
+# (c90d86d2ed13541f16daf5ce8707c688723ca039) and the 2026-08-04 HEAD below,
+# which postdates the keep_karst_upgrade_gas corrections that op-node v1.19.3
+# exists to sync (PR #21674) — the HEAD pin is proposed for that reason.
+#
+# Before flipping the active pin above to v7.0.0: refresh the [deps] SHAs from
+# `git submodule status` at the new tag, re-verify the predeploys paths (at
+# minimum OperatorFeeVault joins the set), and regenerate the storage-layout
+# fixtures if the OZ pin moves.
+# --------------------------------------------------------------------------
+[proposed_karst_pin]
+op_contracts_tag           = "op-contracts/v7.0.0"
+op_contracts_commit        = "a7c88c8d636ceb9944ea0edaf7d033da258778ab"
+op_deployer_tag            = "op-deployer/v0.7.1"
+op_deployer_commit         = "7525482253bdc076548840638cde165c9004349f"
+superchain_registry_commit = "8336d2aedd19b87a57b01ae36ba4afef8ea377d0"
+# consistency anchors (already frozen elsewhere in the plan):
+op_node_tag                = "op-node/v1.19.3"   # 7f91e599c89fa309850f44debcd8ba84b98164e0
+op_reth_tag                = "op-reth/v2.4.0"    # b40d2ce097b928fe1a4ec79a8a1925eb231c675e
