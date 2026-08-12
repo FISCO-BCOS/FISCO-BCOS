@@ -176,6 +176,25 @@ bcos::protocol::Transaction::Ptr buildTx(bcos::u256 maxFeePerGas, bcos::u256 max
     return tx;
 }
 
+/// Fund an EOA so opValidate passes. The account must EXIST in the storage view —
+/// StorageStateView::exists() requires a non-zero codeHash (EVMAccount.h:55-62), so create() +
+/// setCode(empty, keccak(empty)=c5d246...) makes it an existing account with empty code; a plain
+/// setBalance would leave it nonexistent and opValidate would see insufficient funds.
+void fundAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr const& hashImpl,
+    bcos::u256 const& balance)
+{
+    auto view = mls.fork();
+    view.newMutable();
+    bcos::ledger::account::EVMAccount account(view, addr, /*rawAddress=*/false);
+    bcos::task::syncWait(account.create());
+    // emptyHash() — NOT hash({}): Hash's overload set (bytes/string_view/bytesConstRef/...) makes
+    // `hash({})` ambiguous (round-3 C1, compile error). emptyHash() is keccak("") = c5d246...
+    bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
+    bcos::task::syncWait(account.setNonce("0"));
+    bcos::task::syncWait(account.setBalance(balance));
+    bcos::task::syncWait(mls.mergeView(std::move(view)));
+}
+
 struct Fixture
 {
     BackendMemStorage backendStorage{1};
@@ -263,6 +282,38 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
             BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC), never a status-0 receipt
         });
     BOOST_REQUIRE(called);
+}
+
+BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
+{
+    Fixture f;
+    fundAccount(f.multiLayerStorage, kSender, f.hashImpl, bcos::u256(1) << 200);
+
+    // maxPriorityFeePerGas=0 (EIP-1559, so BCOS2Evmone's access_list override does NOT fire) =>
+    // effectiveGasPrice == base_fee + min(0, maxFee-base_fee) == base_fee exactly (round-3 C2).
+    // Pre-fix buildOpBlockInfo injected base_fee=0 -> effectiveGasPrice "0x0"; post-fix the
+    // header baseFee (1e9, set in makeGenesisHeader) surfaces. This is the injection-sensitive
+    // assertion that proves the Task 4 fix landed.
+    auto tx = buildTx(/*maxFeePerGas=*/bcos::u256(30'000'000'000ULL), /*maxPriorityFeePerGas=*/0);
+
+    bcos::protocol::TransactionReceipt::Ptr got;
+    bcos::Error::Ptr err;
+    f.scheduler->call(
+        std::move(tx), [&](bcos::Error::Ptr e, bcos::protocol::TransactionReceipt::Ptr r) {
+            err = std::move(e);
+            got = std::move(r);
+        });
+    BOOST_REQUIRE_MESSAGE(
+        err == nullptr, "eth_call must succeed, got error: " << (err ? err->errorMessage() : ""));
+    BOOST_REQUIRE(got != nullptr);
+    // effectiveGasPrice is a hex string ("0x...", TransactionReceipt.h:75). Parse to u256 and
+    // assert == the header baseFee (1e9) — exact, because EIP-1559 + maxPriority=0 makes
+    // effectiveGasPrice == baseFee. u256(std::string("0x...")) parses hex natively (round-3 closed;
+    // precedent ContractABICodec.cpp:177). If this exactness proves fragile, fall back to != 0.
+    const auto egp = bcos::u256(std::string(got->effectiveGasPrice()));
+    const auto baseFee = bcos::u256(1'000'000'000);
+    BOOST_CHECK_MESSAGE(
+        egp == baseFee, "effectiveGasPrice " << egp << " must equal header baseFee " << baseFee);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
