@@ -158,10 +158,16 @@ def main():
     check("storage deploy receipt", rec is not None)
     if rec:
         check("storage deploy status=0x1", rec["status"] == "0x1", str(rec["status"]))
-        # OP receipt contractAddress is a known gap (not populated); derive the CREATE address.
-        addr = create_address(SENDER, nonce)
-        code = rpc.call("eth_getCode", [addr, "latest"])
-        check("getCode == runtime", code == "0x" + store_runtime, f"{code} vs 0x{store_runtime}")
+        # contractAddress now populated by the OP receipt (evmc create_address); verify it equals
+        # the CREATE derivation keccak(rlp([sender, nonce]))[12:].
+        addr = rec.get("contractAddress")
+        check("receipt contractAddress present", isinstance(addr, str) and addr.startswith("0x"),
+              str(addr))
+        if isinstance(addr, str) and addr.startswith("0x"):
+            check("contractAddress == CREATE derived", addr.lower() == create_address(SENDER, nonce),
+                  f"{addr} vs {create_address(SENDER, nonce)}")
+            code = rpc.call("eth_getCode", [addr, "latest"])
+            check("getCode == runtime", code == "0x" + store_runtime, f"{code} vs 0x{store_runtime}")
         try:
             out = rpc.call("eth_call", [{"to": addr, "data": "0x"}, "latest"])
             check("eth_call storage contract succeeds", True, str(out))
@@ -172,8 +178,14 @@ def main():
     check("revert deploy receipt", rec2 is not None)
     if rec2:
         check("revert deploy status=0x1", rec2["status"] == "0x1", str(rec2["status"]))
-        addr2 = create_address(SENDER, nonce + 1)
-        code2 = rpc.call("eth_getCode", [addr2, "latest"])
+        addr2 = rec2.get("contractAddress")
+        check("revert contractAddress present", isinstance(addr2, str) and addr2.startswith("0x"),
+              str(addr2))
+        if isinstance(addr2, str) and addr2.startswith("0x"):
+            check("revert contractAddress == CREATE derived",
+                  addr2.lower() == create_address(SENDER, nonce + 1),
+                  f"{addr2} vs {create_address(SENDER, nonce + 1)}")
+            code2 = rpc.call("eth_getCode", [addr2, "latest"])
         check("revert getCode == runtime", code2 == "0x" + rev_runtime, f"{code2} vs 0x{rev_runtime}")
         try:
             rpc.call("eth_call", [{"to": addr2, "data": "0x"}, "latest"])

@@ -145,12 +145,13 @@ inline int32_t toFiscoStatus(evmc_status_code status) noexcept
 inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const evmone::state::TransactionReceipt& evmoneReceipt, const evmone::state::BlockInfo& block,
-    bcos::bytesConstRef output)
+    bcos::bytesConstRef output, std::string contractAddress = {})
 {
     auto out =
         receiptFactory->createReceipt(bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)},
-            std::string{}, mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status),
-            output, static_cast<bcos::protocol::BlockNumber>(block.number));
+            std::move(contractAddress), mapOpLogs(evmoneReceipt.logs),
+            toFiscoStatus(evmoneReceipt.status), output,
+            static_cast<bcos::protocol::BlockNumber>(block.number));
     out->setLogsBloom(bcos::bytesConstRef{
         evmoneReceipt.logs_bloom_filter.bytes, sizeof(evmoneReceipt.logs_bloom_filter.bytes)});
     return out;
@@ -328,8 +329,20 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     auto meta = deriveOpReceiptMeta(props, opAtUsed, /*fill_operator_scalars=*/true);
 
     outStateDiff = receipt.state_diff;
+    // Contract creation: evmc_result.create_address carries the deployed address (zero for a
+    // non-create tx). Fill the receipt's contractAddress so getTransactionReceipt returns it.
+    std::string contractAddress;
+    if (!tx.to.has_value())
+    {
+        auto const& ca = outcome.result.create_address;
+        if (!std::all_of(ca.bytes, ca.bytes + sizeof(ca.bytes),
+                [](std::uint8_t b) { return b == 0; }))
+            contractAddress = bcos::toHex(
+                bcos::bytes(ca.bytes, ca.bytes + sizeof(ca.bytes)));
+    }
     auto out = makeFiscoReceipt(receiptFactory, receipt, block,
-        bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size});
+        bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size},
+        std::move(contractAddress));
     out->setOpStackMeta(toOpStackMeta(meta));
     // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (api.go:1775, RPC top-level).
     out->setEffectiveGasPrice("0x" + intx::to_string(effective_gas_price, 16));
