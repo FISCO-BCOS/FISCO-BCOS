@@ -112,3 +112,17 @@ add_test(NAME EestRunner
         --json-failures "${CMAKE_BINARY_DIR}/pr-smoke-fails.json")
 set_tests_properties(EestRunner PROPERTIES
     ENVIRONMENT "EEST_FIXTURE_DIR=${EVM_REF_EEST_ROOT}/fixtures")
+
+# ApplyStateDiff write-back unit tests (Task 6.1, B4): a deleted_accounts entry must
+# remove the account's SYS_TABLES marker so a touch-deleted account cannot linger as an
+# EIP-161 ghost empty account. Directly instantiates eth::applyStateDiff over a memory
+# ledger (no block execution, no tars objects).
+find_package(Boost REQUIRED COMPONENTS unit_test_framework)
+add_executable(ethereum-executor-diff-tests ApplyStateDiffTest.cpp)
+target_link_libraries(ethereum-executor-diff-tests PRIVATE
+    ethereum-executor ledger bcos-crypto protocol-tars bcos-framework
+    evmone::evmone Boost::unit_test_framework)
+set_source_files_properties("ApplyStateDiffTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_target_properties(ethereum-executor-diff-tests PROPERTIES UNITY_BUILD OFF)
+set_target_properties(ethereum-executor-diff-tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+add_test(NAME EthereumExecutorDiffTests COMMAND ethereum-executor-diff-tests)

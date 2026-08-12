@@ -25,10 +25,12 @@ using ::bcos::executor_v1::eth::toIntxU256;
 // EIP-7840 blob schedule constants (target, max, base_fee_update_fraction).
 // Shared by EthereumExecutor (blob_gas_left for validation) and
 // blockHeaderToBlockInfo (blob_base_fee computation) so the two cannot drift.
-inline constexpr evmone::state::BlobParams PRAGUE_BLOB_PARAMS{
-    .target = 6, .max = 9, .base_fee_update_fraction = 5007716};
-inline constexpr evmone::state::BlobParams CANCUN_BLOB_PARAMS{
-    .target = 3, .max = 6, .base_fee_update_fraction = 3338477};
+inline constexpr evmone::state::BlobParams PRAGUE_BLOB_PARAMS{.target = 6,
+    .max = 9,
+    .base_fee_update_fraction = 5007716};
+inline constexpr evmone::state::BlobParams CANCUN_BLOB_PARAMS{.target = 3,
+    .max = 6,
+    .base_fee_update_fraction = 3338477};
 
 /// The EIP-7840 blob schedule in effect for @p rev (empty for pre-Cancun).
 inline evmone::state::BlobParams blobParamsForRevision(evmc_revision rev) noexcept
@@ -160,6 +162,15 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
             co_await acc.setNonce("0");
             co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
             co_await clearAccountStorage(storage, acc);
+            // B4 (Task 6.1): drop the SYS_TABLES marker too, so the touch-deleted
+            // account is fully gone — not a lingering EIP-161 ghost empty account
+            // (marker row survives while every field reads zero). acc.path() is the
+            // same tableName key space Storage2State::applyDeletedEntry removes
+            // (Storage2State.h:427-428); the exists() guard above keeps this shared
+            // function quiet when the account is already missing — no strict ghost-delete
+            // tripwire (unlike applyDeletedEntry), so the non-OP path cannot hard-error.
+            co_await storage2::removeOne(
+                storage, executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, co_await acc.path()));
         }
     }
 
