@@ -98,7 +98,7 @@ class OpBlockScheduler : public OpSchedulerImpl<ViewType>,
 
 ### 5.2 `buildOpBlockInfo` 三处修复（eth_call 正确性依赖）
 
-`OpstackExecutor::buildOpBlockInfo`（OpstackExecutor.h:78-90）现为：`timestamp` 原样（ms）、`base_fee` 由调用点注入且恒传 0（:258/:289）、仅 number/timestamp/gas_limit/base_fee/coinbase（prev_randao/beacon_root/extra_data/blob_gas_used 恒零）。该函数**只服务 eth_call**（块路径用 `toBlockInfo`，OpRlpDecode.h:112，`/1000` 语义）——修复无块路径回归。对照 op-alignment 的 OpstackExecutor（:275-277/:309-311）：
+`OpstackExecutor::buildOpBlockInfo`（OpstackExecutor.h:78-90）现为：`timestamp` 原样（ms）、`base_fee` 由调用点注入且恒传 0（:258/:289）、仅 number/timestamp/gas_limit/base_fee/coinbase（prev_randao/beacon_root/extra_data/blob_gas_used 恒零）。**主要服务 eth_call**（块路径用 `toBlockInfo`，OpRlpDecode.h:112，`/1000` 语义）；**但 `:194` executeDeposit 也消费它**——deposit 的 base_fee 从注入恒 0 改为 `header.baseFee().value_or(0)`（deposit gas price 恒 0，base_fee 影响其 effective gas price 推导；正是 op-eth-unification §11 R6 方向，round-3 C9）。块路径（executeTransaction → m_prepare/m_execute）不经 buildOpBlockInfo 之外的任何块级语义，修复无块路径回归。对照 op-alignment 的 OpstackExecutor（:275-277/:309-311）：
 
 1. `blk.timestamp = header.timestamp() / 1000`（ms → s，匹配块路径 `toBlockInfo`，`configAt` 消费秒）；
 2. `base_fee` 取自 `header.baseFee().value_or(0)`（不再由调用点恒传 0）；
@@ -110,13 +110,13 @@ class OpBlockScheduler : public OpSchedulerImpl<ViewType>,
 - `SYS_CURRENT_STATE` → head blockNumber；
 - `SYS_KEY_CURRENT_NUMBER` → head number。
 
-现缺口在 :1206-1208（「SYS_CURRENT_STATE head advance is still missing… deferred to the orchestration layer」）。单调推进（父 == 当前 tip 才推进；reorg-window 编排 #19 注释明示 deferred，本设计不引入 reorg 支持）。
+现缺口在 :1206-1208（「SYS_CURRENT_STATE head advance is still missing… deferred to the orchestration layer」）。**单调推进（round-3 C7）**：head 写加 `payload.blockNumber > currentHead` guard（`getCurrentBlockNumber` 空表返 -1，LedgerMethods.h:506，首块安全）。承重闸是现有 **step 3c**（EngineServiceImpl.h:1078-1086）——自身高度已占用即抛 `OpExecutionInternalError`，真实账本上 reorg-sibling 无法到达 head 写；parentKnown 只保证父是已验证祖先，不保证父==tip，**必须引 3c 而非 parentKnown**。reorg-window 编排 #19 注释明示 deferred，本设计不引入 reorg 支持。
 
 ### 5.4 MultiVersionScheduler 3→4 + 装配（libinitializer/）
 
 - `MultiVersionScheduler.h:30`：`SUPPORTED_EXECUTOR_VERSION_COUNT` 3→4。
-- `MultiVersionScheduler.cpp`：饱和规则现为 `min(version, size-1)`（加槽后自动变 `>=3 → 3`）；:96-105 的 WARNING log 注释同步更新（"newest" = slot 3）。`scheduler(version)` 是 `.at()` 直接索引（MultiVersionScheduler.cpp:107-111）——数组有第 4 槽后 `scheduler(3)` 即返回 OpBlockScheduler。
-- `Initializer.cpp` OP 分支（:456-497）：engine 构建 `OpSchedulerImpl<ViewType>` **保持不变**（含 :492-496 static_assert c_opMode）；新增 `make_shared<OpBlockScheduler<GlobalStateStorage::ViewType, GlobalStateStorage>>` 填入 MVS 数组第 4 槽（:509-513）。路由走 `setVersion(m_executorVersion)`（:517）→ `getScheduler()`（RPC 的 `MultiVersionScheduler::call()` 经 `JsonRpcImpl_2_0.cpp:1541`）——executor_version≥3 → slot 3。非 OP 模式 slot 3 需装响亮拒绝 stub（`scheduler(3)` 公开直索引 `.at()`，null 会 `*nullptr`）。
+- `MultiVersionScheduler.cpp`：**构造器定义（:9-13）同步**——现硬编码 `std::array<...,3>`，头改 4 后 out-of-line 定义与声明（:41 用 `SUPPORTED_EXECUTOR_VERSION_COUNT`）不匹配，必须一并改为用该常量（round-3 C3）。饱和规则现为 `min(version, size-1)`（加槽后自动变 `>=3 → 3`）；:96-105 的 WARNING log 注释同步更新（"newest" = slot 3）。`scheduler(version)` 是 `.at()` 直接索引（MultiVersionScheduler.cpp:107-111）——数组有第 4 槽后 `scheduler(3)` 即返回 OpBlockScheduler。
+- `Initializer.cpp` OP 分支（:456-497）：engine 构建 `OpSchedulerImpl<ViewType>` **保持不变**（含 :492-496 static_assert c_opMode）；新增 `make_shared<OpBlockScheduler<GlobalStateStorage::ViewType, GlobalStateStorage>>` 填入 MVS 数组第 4 槽（:509-513）。路由走 `setVersion(m_executorVersion)`（:517）→ `getScheduler()`（RPC 的 `MultiVersionScheduler::call()` 经 `bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.cpp`——`JsonRpcImpl_2_0.cpp` 已重构移除，round-3 C10）——executor_version≥3 → slot 3。非 OP 模式 slot 3 需装响亮拒绝 stub（`scheduler(3)` 公开直索引 `.at()`，null 会 `*nullptr`；stub 放 Initializer.cpp 匿名空间，round-3 C8）。
 
 ### 5.5 去留
 - `OpSchedulerImpl`：**保留**（engine SchedulerType + seam 载体 + executeOpBlock 宿主 + RTTI catch）。D5「catch 移 scheduler」不成立——catch 本就在 OpSchedulerImpl，原样保留。
@@ -170,7 +170,7 @@ RPC eth_call → scheduler()->call(tx, cb) → slot 3 OpBlockScheduler::call
 | 套件 | 验证 | 计数 |
 |---|---|---|
 | 新增 `OpBlockSchedulerTest` | call：**happy path 注入对拍**（fee/baseFee/hashes 参数语义；fixture 显式 seed `SYS_CURRENT_STATE` + L1Block 槽 + evmcRevision——head 未推进时 `getCurrentBlockNumber` 读 genesis）；Error 语义（无效调用 → JSON-RPC Error）；拒绝 stub（executeBlock/commitBlock/preExecuteBlock）；存储读 | — |
-| #19 断言 | registerOpBlock 后 `SYS_CURRENT_STATE`/`SYS_KEY_CURRENT_NUMBER` 单调推进（**reorg 不测**，当前无 reorg 支持） | — |
+| #19 断言 | registerOpBlock 后 `SYS_CURRENT_STATE`/`SYS_KEY_CURRENT_NUMBER` 单调推进——`blockNumber > currentHead` guard + step 3c 承重（round-3 C7；**reorg 不测**，当前无 reorg 支持） | — |
 | 适配 `OpSchedulerImplSmokeTest` / `OpEngineBranchSmokeTest` | executeOpBlock 逻辑不动，回归保护 | — |
 | 等价重验 | t8n 重放 + 引擎门 + 全套件全绿 | t8n **125**（manifest 实际登记：77 Phase-2 + 48 enhanced）；引擎门 **65**（63 single + 2 chained，OpNewPayloadRpcE2eTest.cpp:1015-1017） |
 | enhanced-corpus 分类断言 | invalid-tx 18 / static 10 / corrupt 12 / chain 6 / legacy 2 的 INVALID / -32603 / -38005 分类不回归（OpNewPayloadRpcE2eTest runner :380-540） | pin 用例清单 |
@@ -183,7 +183,7 @@ RPC eth_call → scheduler()->call(tx, cb) → slot 3 OpBlockScheduler::call
 |---|---|
 | 与 op-eth-executor-unification 交叉（将重写 processOpBlock/Storage2State/OpstackExecutor） | 声明 **OpBlockScheduler 公共接口契约稳定**（executeBlock/call/commitBlock 签名 + seam surface），内部实现允许替换；独立 worktree 干净基址 |
 | eth_call 与 unification 对 OpstackExecutor 双向依赖 | eth_call 语义锁定点：buildOpBlockInfo 修复 + 10 参注入契约固化进单测 |
-| buildOpBlockInfo 修复波及块路径 | 无回归——该函数只服务 eth_call（块路径用 toBlockInfo）；修复后跑 t8n 门确认 |
+| buildOpBlockInfo 修复波及块路径/deposit | 无块路径回归——该函数主服务 eth_call（块路径用 toBlockInfo）；`:194` executeDeposit 的 base_fee 从注入恒 0 改为 `value_or(0)` 是 R6 方向的语义变化（round-3 C9），deposit 用例（ExecutesDepositMint 等）在 Task 6 确认不因此变红（`ReceiptMetaSurvives` 的 `0x6fc23ac00` 依赖 base_fee=0，其 header 不设 baseFee → value_or(0)=0 → 保持绿） |
 | RTTI 双 catch 搬错 | 原样保留在 OpSchedulerImpl（不搬）；分类断言覆盖 |
 | eth_call happy path 假覆盖 | fixture 显式 seed ledger（SYS_CURRENT_STATE + L1Block + evmcRevision），happy path 注入对拍非仅 Error 路径 |
 | VM 实例数 / 串行化 | OpSchedulerImpl 持 1 VM（块）；OpBlockScheduler::call 每调用建 OpstackExecutor（各带 VM，RPC dry-run 可接受，同 OpCallScheduler 注释）；x_state 串行化假设仅块路径，RPC 路径不依赖 |
