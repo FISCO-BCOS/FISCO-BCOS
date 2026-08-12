@@ -70,10 +70,12 @@ def main():
           all(f"engine_{m}V4" in caps for m in ["newPayload", "forkchoiceUpdated", "getPayload"]),
           str(caps))
 
-    # 1. genesis head hash
-    genesis = eth.call("eth_getBlockByNumber", ["0x0", False])
-    check("genesis queryable", genesis is not None, str(genesis))
-    head = genesis["hash"]
+    # 1. current head hash (genesis on first run; a committed block after a restart — the
+    # active instance survives restarts, so never assume the chain is empty)
+    head_block = eth.call("eth_getBlockByNumber", ["latest", False])
+    check("head queryable", head_block is not None, str(head_block))
+    head = head_block["hash"]
+    head_num = int(head_block["number"], 16)
     now = int(time.time())
     attrs = {
         "timestamp": hex(now),
@@ -93,7 +95,8 @@ def main():
     pl = eng.call("engine_getPayloadV4", [pid])
     check("getPayload V4 result object", isinstance(pl, dict), str(pl)[:120])
     ep = pl.get("executionPayload", {})
-    check("getPayload V4 returns block 1", ep.get("blockNumber") == "0x1", str(ep.get("blockNumber")))
+    check("getPayload V4 returns head+1", ep.get("blockNumber") == hex(head_num + 1),
+          f"{ep.get('blockNumber')} vs {hex(head_num + 1)}")
     check("getPayload V4 blockHash present", ep.get("blockHash", "").startswith("0x"),
           str(ep.get("blockHash")))
     check("getPayload V4 has 1 deposit tx", len(ep.get("transactions", [])) == 1,
