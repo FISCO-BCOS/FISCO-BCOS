@@ -27,7 +27,9 @@ static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:
-    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 3;
+    // Slot layout: 0 = SchedulerManager (legacy), 1 = baseline scheduler, 2 = EthereumExecutor
+    // (pure Ethereum), 3 = OP scheduler (OpBlockScheduler facade, executor_version >= 3).
+    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;
@@ -37,8 +39,9 @@ private:
 public:
     bcos::scheduler::SchedulerInterface& scheduler(int version);
 
-    MultiVersionScheduler(std::array<scheduler::SchedulerInterface::Ptr,
-        SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers);
+    MultiVersionScheduler(
+        std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT>
+            schedulers);
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>

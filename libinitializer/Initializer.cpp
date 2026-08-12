@@ -78,6 +78,7 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
+#include <opstack-executor/OpBlockScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
@@ -95,6 +96,68 @@ using namespace bcos::tool;
 using namespace bcos::protocol;
 using namespace bcos::initializer;
 namespace fs = boost::filesystem;
+
+namespace
+{
+/// A loud refuse stub for the never-selected non-OP slot 3 (MultiVersionScheduler::scheduler(int)
+/// is a public direct-index call; a null slot would crash instead of refusing).
+class OpRefusingStubScheduler : public bcos::scheduler::SchedulerInterface
+{
+public:
+    void executeBlock(bcos::protocol::Block::Ptr, bool,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            nullptr, false);
+    }
+    void commitBlock(bcos::protocol::BlockHeader::Ptr,
+        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            nullptr);
+    }
+    void call(bcos::protocol::Transaction::Ptr,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            nullptr);
+    }
+    void preExecuteBlock(
+        bcos::protocol::Block::Ptr, bool, std::function<void(bcos::Error::Ptr)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+            "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"));
+    }
+    void getCode(std::string_view, std::function<void(bcos::Error::Ptr, bcos::bytes)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            {});
+    }
+    void getABI(std::string_view, std::function<void(bcos::Error::Ptr, std::string)> cb) override
+    {
+        cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+               "OpRefusingStubScheduler: OP scheduler not assembled (executor_version<3)"),
+            {});
+    }
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
+    {
+        co_return std::nullopt;
+    }
+    void status(
+        std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)> cb) override
+    {
+        cb({}, {});
+    }
+    void reset(std::function<void(bcos::Error::Ptr)> cb) override { cb({}); }
+    // NOTE: no callAtBlock override — SchedulerInterface's defaulted virtual already forwards to
+    // call() (SchedulerInterface.h:59-72); a redundant override would be dead code (round-3 C8).
+};
+}  // namespace
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, const std::string& _logPath)
@@ -494,6 +557,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             std::remove_reference_t<decltype(*opScheduler)>>;
         static_assert(OpEngineServiceT::c_opMode,
             "OP composition root must activate c_opMode (executeOpBlock SFINAE probe)");
+
+        // Slot-3 RPC-face scheduler: the OpBlockScheduler facade. It inherits OpSchedulerImpl
+        // (seam + executeOpBlock) and implements SchedulerInterface (call/reads/refuse). The RPC
+        // eth_call path routes via MultiVersionScheduler setVersion(m_executorVersion) ->
+        // getScheduler() -> slot 3. Storage ref: the same GlobalStateStorage the engine's
+        // m_globalStateStorage references (GlobalStateStorageInitializer::storage()).
+        m_opScheduler = std::make_shared<bcos::executor_v1::opstack::OpBlockScheduler<
+            GlobalStateStorage::ViewType, GlobalStateStorage>>(
+            m_protocolInitializer->blockFactory()->receiptFactory(),
+            m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkTimestamps,
+            m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage());
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -510,7 +584,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder(),
+                // Slot 3 = OP scheduler (executor_version>=3). Non-OP mode: a loud refuse stub so
+                // scheduler(3) (public, direct .at() index, no saturation) fails loudly instead of
+                // null-dereferencing. version<3 never selects slot 3 via setVersion; the stub is
+                // insurance against any external scheduler(3) call.
+                m_opScheduler ? m_opScheduler : std::make_shared<OpRefusingStubScheduler>()}));
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
