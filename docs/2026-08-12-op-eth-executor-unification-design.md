@@ -168,16 +168,16 @@ gas 与原 processOpBlock 逐字一致）。
   `tx.gas_limit > block_gas_left`，编排器逐笔传运行中值）。无双重检查风险——executor 按值接收、只用于
   本次校验，不维护计数器（OpstackExecutor.h:284 确认）。
 
-**ledgerConfig 来源（新增硬约束）**：当前块路径不消费 ledgerConfig（OpSchedulerImpl.h:206-207 注释），
-但 executor 概念方法都读 `ledgerConfig.evmcRevision()` 做 fork 一致性检查（缺省回退 EVMC_OSAKA，
-LedgerConfig.h:270）。而 `configAt(timestamp)` 恒返回 rev=EVMC_PRAGUE——**两源无代码关联，漂移即整块
-OpForkRevisionMismatch→INVALID**（旧块路径完全不存在此拒绝模式）。处置二选一（设计必须写明）：
-  - (a) OP 链 genesis 固化 `evmc_revision=prague`（SystemConfig 播种），编排器从 storage 读
-    `ledger::getLedgerConfig(view, header.number(), blockFactory)`（对齐 OpCallScheduler.h:260-261）；
-    **双跑与现有 fixture 必须补 evmcRevision 播种**（当前 golden fixtures 只 seed 账户、不 seed
-    SystemConfig；e2e/TwoPhase 传默认空 LedgerConfig——新路径会逐条抛 EvmcRevisionNotConfigured）；
-  - (b) 块路径方法豁免该检查（跳过 evmcRevision 一致性校验，fork 判定唯一来源 = `configAt(timestamp)`）。
-推荐 (a) + fixture 播种补全；并加一条"evmc_revision 缺省回退=OSAKA 时整块 INVALID"的拒绝测试（§9.2）。
+**ledgerConfig 来源（用户裁定 2026-08-12：块路径豁免）**：当前块路径不消费 ledgerConfig
+（OpSchedulerImpl.h:206-207 注释），但 executor 概念方法读 `ledgerConfig.evmcRevision()` 做 fork 一致
+性检查。而 `configAt(timestamp)` 恒返回 rev=EVMC_PRAGUE，与 ledger 持久值（缺省回退 EVMC_OSAKA，
+LedgerConfig.h:270）**无代码关联**——若经 executor 检查将产生"缺省回退 OSAKA → 整块
+OpForkRevisionMismatch→INVALID"的**新拒绝模式**（旧块路径不存在）。**裁定：块路径方法豁免该交叉检查**：
+OP 块执行的 fork 唯一来源 = `configAt(timestamp)`（现状 processOpBlock 即如此，从不消费 ledgerConfig）；
+m_execute 本就 `(void)ledgerConfig`（OpstackExecutor.h:307），块路径甚至无需 `getLedgerConfig`。
+实现：块路径方法加注入开关（跳过 ledgerConfig-evmcRevision 交叉校验）。eth_call 路径（OpCallScheduler
+已带 getLedgerConfig 且测试绿）保留该检查，行为不变。§8 的 EvmcRevisionNotConfigured/OpForkRevisionMismatch
+抛点在块路径上因此消除（不再需要编排器翻译它们）。
 
 ### 6.2 新增方法 `executeBlockStart`
 
@@ -242,10 +242,9 @@ OpForkRevisionMismatch→INVALID**（旧块路径完全不存在此拒绝模式�
 （`virtual std::exception, virtual boost::exception`，bcos-utilities/Exceptions.h:38-48），在 rtti 编译的
 代码里**会被 `catch(const std::exception&)` 接住 → 误分类为 -32603**。因此：
 
-- **编排器必须翻译**：捕获 executor 的具体异常类型（**全枚举**：m_prepare 的
-  OpTxValidationFailed/EvmcRevisionNotConfigured/OpForkRevisionMismatch，m_finish 的
-  EvmcRevisionNotConfigured，executeDeposit 的两类 fork 检查），**重抛为块级 std::runtime_error**
-  （落入 catch(...) → INVALID）或显式分类为其他。
+- **编排器必须翻译**：捕获 executor 的具体异常类型（**在 §6.1 豁免后，块路径主要剩余
+  `OpTxValidationFailed`**——opValidate 失败；fork/rev 检查已豁免不再抛），**重抛为块级
+  std::runtime_error**（落入 catch(...) → INVALID）或显式分类为其他。
 - **任何漏译类型静默变 -32603**——必须钉死分类测试。
 - **§8 表事实修正**：空块/首笔非 deposit/deposit 顺序是**编排器层检查**（留在编排器抛 runtime_error
   → INVALID），不是 executor 抛点。deposit 与 normal 的 gas 超限走不同通道（runDeposit runtime_error vs
@@ -298,7 +297,7 @@ evmcRevision 播种**（§6.1），否则新路径每条向量抛 EvmcRevisionNo
     parity**（新旧路径拒绝层不同：decode 拒 vs opValidate 拒，断言同一 INVALID/OpConsensusError 分类）。
   - **结构/裁决探针**：空块、首笔非 deposit 块、deposit 混排块、**跨链 chain-id tx**、**high-s tx**
     （§6.3.2 拒块裁决）、**含零值/墓碑 slot 账户的 CREATE**（EIP-7610，§5.1）、**非零 baseFee +
-    deposit 内读 BASEFEE**（§11 R6）、**evmc_revision 缺省回退=OSAKA**（§6.1 拒绝测试）。
+    deposit 内读 BASEFEE**（§11 R6）。
 
 ## 10. 实施阶段（三步，每步独立验收）
 
@@ -332,7 +331,7 @@ evmcRevision 播种**（§6.1），否则新路径每条向量抛 EvmcRevisionNo
 | R4 golden 覆盖缺口 | 语料未覆盖某 tx 类型/裁决 → 转换与裁决问题漏网 | §9.2 逐类型 + 结构/裁决探针补齐 |
 | R5 **签名信封**（新增·共识） | m_prepare 用签名前像（extraTransactionBytes）而非完整信封算 L1/DA fee → 状态根分叉 | §6.3.1：executeTransaction 加 env 参数，编排器传完整信封；双路径测试含 L1 fee 参数非 0 向量 |
 | R6 **deposit base_fee=0**（新增） | executeDeposit 硬编码 base_fee=0，旧路径读 header baseFee；deposit 读 BASEFEE 且 baseFee≠0 时分叉 | 改从 header 读 baseFee；或双路径测试加"非零 baseFee + deposit 读 BASEFEE"探针 |
-| R7 **evmcRevision 双源漂移**（新增） | getLedgerConfig（SYS_CONFIG，缺省 OSAKA）与 configAt（恒 PRAGUE）无代码关联 → 整块 INVALID | genesis 固化 evmc_revision=prague 或块路径豁免；fixture 播种 + 缺省回退拒绝测试 |
+| R7 **evmcRevision 双源**（已裁定） | getLedgerConfig（SYS_CONFIG，缺省 OSAKA）与 configAt（恒 PRAGUE）无代码关联 → 若经 executor 检查则整块 INVALID | **已裁定：块路径豁免交叉检查**（§6.1），fork 唯一来源 configAt(timestamp)；eth_call 路径保留检查 |
 | R8 **写侧契约迁移**（新增） | applyStateDiffWithPoison 非薄封装，四处写语义须迁移，否则账本卫生/路由漂移 | §5.2 逐项迁移 + 写侧契约测试 + 双桥 stateRoot 对比 |
 
 ## 12. 统一后残留差异（预期设定）
@@ -367,3 +366,8 @@ evmcRevision 播种**（§6.1），否则新路径每条向量抛 EvmcRevisionNo
   evmcRevision 播种 + 双轨绝对断言（§9）、golden 计数更正 63/33→125/81/79（§9.1）、4844 重定义为拒绝
   parity（§6.3）、hashImpl 注入 + 同一桥类型（§7）、编排器遗漏逻辑补全（D-1 DA 覆盖、blockGasLeft
   显式递减、isL1AttributesTx 校验，§6.1）、executor 块路径读注入 poison（§5.1）。
+- 2026-08-12：**用户确认三条裁定并落进 spec**：① 签名信封修法 = `executeTransaction` 增加 `env`
+  （完整信封）参数、默认空，块路径传 raw envelope、eth_call 行为不变（§6.3.1）；② evmcRevision 处置 =
+  块路径方法**豁免**交叉检查，fork 唯一来源 `configAt(timestamp)`，eth_call 保留检查（§6.1）；③ 验收口径
+  = **执行等价**（逐字段证明执行中立，状态根一致为最终验证），chain-id 拒绝 + low-S 拒绝**不豁免**
+  （§6.3.3 / §6.3.2）。
