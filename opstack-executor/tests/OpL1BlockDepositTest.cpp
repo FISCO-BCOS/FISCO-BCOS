@@ -18,6 +18,7 @@
 //     runtime storage fork, not the executor.
 //   - if slot1 stays 0x1234 -> the bug is REPRODUCED offline; the executor/bridge is at fault.
 
+#include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -34,7 +35,10 @@
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
+#include <intx/intx.hpp>
 #include <stdexcept>
+
+#include "TestPrinters.h"
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
@@ -154,7 +158,7 @@ bcos::bytes makeJovianCalldataNonZero()
 }
 
 /// Build a deposit envelope (0x7e + RLP list) carrying @p data as the L1-attributes calldata.
-bcos::bytes makeDepositEnvelope(bcos::bytes data)
+bcos::bytes makeDepositEnvelope(bcos::bytes data, uint64_t gas = 1000000)
 {
     bcos::bytes envelope;
     envelope.push_back(0x7e);
@@ -163,9 +167,9 @@ bcos::bytes makeDepositEnvelope(bcos::bytes data)
         0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0x00, 0x01};
     const bcos::bytes kTo{0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15};
-    const uint64_t kMint = 0, kValue = 0, kGas = 1000000, kIsSystemTx = 0;
+    const uint64_t kMint = 0, kValue = 0, kIsSystemTx = 0;
     bcos::codec::rlp::encode(
-        envelope, sourceHash, kFrom, kTo, kMint, kValue, kGas, kIsSystemTx, data);
+        envelope, sourceHash, kFrom, kTo, kMint, kValue, gas, kIsSystemTx, data);
     return envelope;
 }
 }  // namespace
@@ -362,6 +366,134 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
     checkSlot(3, expectedSlot3);
     checkSlot(7, expectedSlot7);
     checkSlot(8, expectedSlot8);
+}
+
+// Item 2: the deposit writes the fee slots, and the executor's consumer side (loadOpFeeParams)
+// reads exactly those values. Closes the deposit -> fee-loop that the t8n vectors only pre-seed.
+BOOST_AUTO_TEST_CASE(DepositWritesFeeParamsReadableByLoadOpFeeParams)
+{
+    using namespace evmc::literals;
+
+    BackendMemStorage backendStorage;
+    CheckpointBackend checkpointBackend(backendStorage);
+    MLS multiLayerStorage(checkpointBackend);
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+
+    constexpr uint64_t kIsthmusTime = 1000;
+    constexpr uint64_t kJovianTime = 2000;
+
+    bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+    const auto codeHash = keccak256(code);
+    bcos::task::syncWait([&]() -> bcos::task::Task<void> {
+        bcos::ledger::account::EVMAccount<ViewType> acc(
+            view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        co_await acc.create();
+        co_await acc.setCode(code, /*abi=*/"", codeHash);
+        co_await acc.setNonce("1");
+        co_return;
+    }());
+
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)};
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS> scheduler(receiptFactory, 11155111,
+        bcos::evm::opstack::OpForkTimestamps{
+            .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime},
+        nullptr, multiLayerStorage, {});
+
+    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero())};
+
+    bcos::evm::engine::OpExecuteBlockResult result;
+    try
+    {
+        result = bcos::task::syncWait(scheduler.executeOpBlock(view, *header, rawTxs));
+    }
+    catch (const std::exception& e)
+    {
+        BOOST_FAIL("executeOpBlock threw: " << e.what());
+    }
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 1u);
+    BOOST_CHECK_EQUAL(result.receipts.front()->status(), 0);
+
+    // The consumer side reads the deposit-written slots exactly as unpackOpFeeParams specified.
+    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
+    const auto fee = bcos::evm::opstack::loadOpFeeParams(bridge);
+    BOOST_CHECK_EQUAL(fee.l1_base_fee, intx::uint256{0x63});
+    BOOST_CHECK_EQUAL(fee.base_fee_scalar, 7u);
+    BOOST_CHECK_EQUAL(fee.blob_base_fee_scalar, 9u);
+    BOOST_CHECK_EQUAL(fee.blob_base_fee, intx::uint256{0x64});
+    BOOST_CHECK_EQUAL(fee.operator_fee_scalar, 11u);
+    BOOST_CHECK_EQUAL(fee.operator_fee_constant, 13u);
+    BOOST_CHECK_EQUAL(fee.da_footprint_gas_scalar, 15u);
+}
+
+// Item 3: a block whose L1-attributes deposit fails validation (intrinsic gas too low) still
+// seals — op-geth allows failed deposits. The receipt carries status=failure, gasUsed = gasLimit
+// in full, and the depositor's nonce is force-incremented (Regolith failed-deposit branch).
+BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
+{
+    using namespace evmc::literals;
+
+    BackendMemStorage backendStorage;
+    CheckpointBackend checkpointBackend(backendStorage);
+    MLS multiLayerStorage(checkpointBackend);
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+
+    constexpr uint64_t kIsthmusTime = 1000;
+    constexpr uint64_t kJovianTime = 2000;
+
+    bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+    const auto codeHash = keccak256(code);
+    bcos::task::syncWait([&]() -> bcos::task::Task<void> {
+        bcos::ledger::account::EVMAccount<ViewType> acc(
+            view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        co_await acc.create();
+        co_await acc.setCode(code, /*abi=*/"", codeHash);
+        co_await acc.setNonce("1");
+        co_return;
+    }());
+
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)};
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS> scheduler(receiptFactory, 11155111,
+        bcos::evm::opstack::OpForkTimestamps{
+            .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime},
+        nullptr, multiLayerStorage, {});
+
+    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+
+    // The Jovian L1-attributes calldata (178B) has intrinsic ~21832; gas_limit 20000 is too low
+    // -> INTRINSIC_GAS_TOO_LOW -> failed-deposit branch: status=failure, gasUsed = gasLimit,
+    // nonce force-incremented (op-geth state_transition.go:486-513).
+    constexpr uint64_t kTooLowGas = 20000;
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero(), kTooLowGas)};
+
+    bcos::evm::engine::OpExecuteBlockResult result;
+    try
+    {
+        result = bcos::task::syncWait(scheduler.executeOpBlock(view, *header, rawTxs));
+    }
+    catch (const std::exception& e)
+    {
+        BOOST_FAIL("executeOpBlock threw: " << e.what());
+    }
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 1u);
+
+    const auto& receipt = result.receipts.front();
+    BOOST_CHECK_EQUAL(receipt->status(), 1);  // toFiscoStatus: non-SUCCESS -> 1
+    BOOST_CHECK_EQUAL(receipt->gasUsed(), bcos::u256{kTooLowGas});  // full gasLimit charged
+
+    // Regolith: the depositor's nonce is force-incremented despite the failure.
+    bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_DEPOSITOR, false);
+    const auto nonce = bcos::task::syncWait(acc.nonce());
+    BOOST_REQUIRE(nonce.has_value());
+    BOOST_CHECK_EQUAL(*nonce, std::string{"1"});
 }
 
 BOOST_AUTO_TEST_SUITE_END()
