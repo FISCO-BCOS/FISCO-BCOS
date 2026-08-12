@@ -16,44 +16,34 @@ def p1(v): return pv(1, v)
 def p2(v): return pv(2, v)
 def p4(v): return pv(4, v)
 def p8(v): return pv(8, v)
-PUSH28 = bytes([0x5f + 28]) + (b'\xff' * 28)  # 2^224 - 1, as a 28-byte immediate (PUSH28 = 0x7b).
-# BUG NOTE: PUSH29 (0x7c) pushes 29 immediate bytes; the first delivery paired it with only 28
-# bytes of 0xff, so evmone swallowed the next instruction's first byte into the mask, misaligning
-# every subsequent instruction (observed: slot1 = 0x000000ff..16 instead of the computed 0).
 
 body = bytearray()
 
-# --- slot3 = (baseFeeScalar << 128) | (blob << 96)
-#   baseFeeScalar = calldata[4:8]  = (x0 >> 192) & 0xffffffff   (x0=CALLDATALOAD(0))
-#   blob          = calldata[8:12] = (x0 >> 160) & 0xffffffff
+# --- slot3 = (baseFeeScalar << 96) | (blobBaseFeeScalar << 64) ---
+#   FISCO unpackOpFeeParams reads base_fee_scalar at slot3 bytes[16:20] and blob_base_fee_scalar
+#   at bytes[20:24]. A 32-bit value at bytes[i:i+4] is shifted by (224 - 8i): i=16 -> <<0x60,
+#   i=20 -> <<0x40. calldata layout (makeL1AttributesDeposit): baseFeeScalar = calldata[4:8],
+#   blobBaseFeeScalar = calldata[8:12].
 body += p1(0x00) + b'\x35'                                    # x0
-body += b'\x80' + p1(0xc0) + b'\x1c' + p4(0xffffffff) + b'\x16' + p1(0x80) + b'\x1b'  # baseFeeScalar<<128
-body += p1(0x00) + b'\x35' + p1(0xa0) + b'\x1c' + p4(0xffffffff) + b'\x16' + p1(0x60) + b'\x1b'  # blob<<96
+body += b'\x80' + p1(0xc0) + b'\x1c' + p4(0xffffffff) + b'\x16' + p1(0x60) + b'\x1b'  # baseFeeScalar<<96
+body += p1(0x00) + b'\x35' + p1(0xa0) + b'\x1c' + p4(0xffffffff) + b'\x16' + p1(0x40) + b'\x1b'  # blob<<64
 body += b'\x17'
 body += p1(0x03) + b'\x55'                                    # SSTORE(3)
 body += b'\x50'                                               # POP x0
 
-# --- slot1 = (x1 & M224) | ((x2 >> 224) << 224)
-#   l1_base_fee = calldata[36:68] = x1.bytes[4:32] ++ x2.bytes[0:4]
-body += p1(0x20) + b'\x35' + PUSH28 + b'\x16'                  # x1 & M224
-body += p1(0x40) + b'\x35' + p1(0xe0) + b'\x1c' + p1(0xe0) + b'\x1b'  # (x2>>224)<<224
-body += b'\x17'
-body += p1(0x01) + b'\x55'                                    # SSTORE(1)
+# --- slot1 = l1_base_fee = calldata[36:68] (entire 256-bit slot) ---
+body += p1(0x24) + b'\x35' + p1(0x01) + b'\x55'               # CALLDATALOAD(36) SSTORE(1)
 
-# --- slot7 = (x2 & M224) | ((x3 >> 224) << 224)
-#   blob_base_fee = calldata[68:100] = x2.bytes[4:32] ++ x3.bytes[0:4]
-body += p1(0x40) + b'\x35' + PUSH28 + b'\x16'
-body += p1(0x60) + b'\x35' + p1(0xe0) + b'\x1c' + p1(0xe0) + b'\x1b'
-body += b'\x17'
-body += p1(0x07) + b'\x55'                                    # SSTORE(7)
+# --- slot7 = blob_base_fee = calldata[68:100] (entire 256-bit slot) ---
+body += p1(0x44) + b'\x35' + p1(0x07) + b'\x55'               # CALLDATALOAD(68) SSTORE(7)
 
-# --- slot8 = (da << 96) | (opFeeScalar << 64) | opFeeConstant
-#   da          = calldata[176:178] = (x6 >> 240) & 0xffff            (x6=CALLDATALOAD(176))
-#   opFeeScalar = calldata[164:168] = (x5 >> 192) & 0xffffffff        (x5=CALLDATALOAD(160))
-#   opFeeConst  = calldata[168:176] = (x5 >> 128) & 0xffffffffffffffff
-body += p1(0xb0) + b'\x35' + p1(0xf0) + b'\x1c' + p2(0xffff) + b'\x16' + p1(0x60) + b'\x1b'
-body += p1(0xa0) + b'\x35' + p1(0xc0) + b'\x1c' + p4(0xffffffff) + b'\x16' + p1(0x40) + b'\x1b' + b'\x17'
-body += p1(0xa0) + b'\x35' + p1(0x80) + b'\x1c' + p8(0xffffffffffffffff) + b'\x16' + b'\x17'
+# --- slot8 = (da << 96) | (opFeeScalar << 64) | opFeeConstant ---
+#   unpackOpFeeParams: da at bytes[18:20] (16-bit, <<96), opFeeScalar at bytes[20:24] (32-bit,
+#   <<64), opFeeConstant at bytes[24:32] (low 64 bits). calldata: da=[176:178],
+#   opFeeScalar=[164:168], opFeeConstant=[168:176].
+body += p1(0xa0) + b'\x35' + p1(0xc0) + b'\x1c' + p4(0xffffffff) + b'\x16' + p1(0x40) + b'\x1b'  # opFeeScalar<<64
+body += p1(0xa0) + b'\x35' + p1(0x80) + b'\x1c' + p8(0xffffffffffffffff) + b'\x16' + b'\x17'     # | opFeeConstant
+body += p1(0xb0) + b'\x35' + p1(0xf0) + b'\x1c' + p2(0xffff) + b'\x16' + p1(0x60) + b'\x1b' + b'\x17'  # | da<<96
 body += p1(0x08) + b'\x55'                                    # SSTORE(8)
 
 # return empty
