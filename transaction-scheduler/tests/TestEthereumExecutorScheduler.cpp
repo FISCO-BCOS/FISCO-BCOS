@@ -798,7 +798,10 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
 // the production wiring does.
 BOOST_AUTO_TEST_CASE(ethereumStateHasStorageSemantics)
 {
-    task::syncWait([&, this]() -> task::Task<void> {
+    // NOTE: no `this` capture — this test uses a local ordered EEMutableStorage
+    // and file-scope helpers only, never the fixture members. Clang's
+    // -Wunused-lambda-capture (-Werror) fails a stray `[&, this]`.
+    task::syncWait([&]() -> task::Task<void> {
         using namespace bcos::ledger::account;
 
         auto plainAcc = EEMakeAddress(211);
