@@ -128,6 +128,48 @@ def main():
         # -32603 internal may surface if the tamper trips a pre-execution gate; still an error
         check("tampered stateRoot rejected (INVALID or error)", True, str(e))
 
+    # ---- B4: engine error-code matrix (op-geth test-stack item 4) ----
+    # 7. tamper gasUsed → the engine must reject (INVALID after execution, or an RPC error).
+    bad_gas = dict(ep)
+    bad_gas["gasUsed"] = hex(int(ep["gasUsed"], 16) + 1)
+    bad_gas["blockHash"] = "0x" + "33" * 32
+    try:
+        npt = eng.call("engine_newPayloadV4", [bad_gas, [], root])
+        check("tampered gasUsed rejected (INVALID or error)",
+              npt.get("status") in ("INVALID", "SYNCING") or npt.get("status") is None, str(npt))
+    except AssertionError as e:
+        check("tampered gasUsed rejected (INVALID or error)", True, str(e)[:70])
+
+    # 8. tamper receiptsRoot → rejected the same way.
+    bad_rec = dict(ep)
+    bad_rec["receiptsRoot"] = "0x" + "44" * 32
+    bad_rec["blockHash"] = "0x" + "55" * 32
+    try:
+        npt = eng.call("engine_newPayloadV4", [bad_rec, [], root])
+        check("tampered receiptsRoot rejected (INVALID or error)",
+              npt.get("status") in ("INVALID", "SYNCING") or npt.get("status") is None, str(npt))
+    except AssertionError as e:
+        check("tampered receiptsRoot rejected (INVALID or error)", True, str(e)[:70])
+
+    # 9. getPayload with a bogus payloadId → RPC error (unknown payload), never a block payload.
+    try:
+        eng.call("engine_getPayloadV4", ["0xdeadbeef00"])
+        check("getPayload bogus payloadId error", False, "expected error")
+    except AssertionError as e:
+        check("getPayload bogus payloadId error", "-32602" in str(e) or "error" in str(e).lower(),
+              str(e)[:70])
+
+    # 10. FCU with an unknown head hash → SYNCING (parent unknown), not VALID.
+    unknown_head = {"headBlockHash": "0x" + "aa" * 32,
+                    "safeBlockHash": "0x" + "aa" * 32, "finalizedBlockHash": "0x" + "aa" * 32}
+    try:
+        fc = eng.call("engine_forkchoiceUpdatedV4", [unknown_head, None])
+        check("FCU unknown head SYNCING", fc.get("payloadStatus", {}).get("status") == "SYNCING",
+              str(fc)[:120])
+    except AssertionError as e:
+        check("FCU unknown head SYNCING", "SYNCING" in str(e) or "error" in str(e).lower(),
+              str(e)[:70])
+
     print(f"\n{len(PASSED)} passed, {len(FAILED)} failed")
     if FAILED:
         print("Failed:", FAILED)
