@@ -360,9 +360,10 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         tx.type > evmone::state::Transaction::Type::set_code)
         return make_error_code(std::errc::not_supported);
 
-    if (signedTxEnvelope.empty())
-        return make_error_code(std::errc::invalid_argument);
-
+    // eth_call (OpCallScheduler) builds an unsigned call tx with no envelope; a real block tx is
+    // always decoded from its raw envelope, so an empty envelope here is eth_call-only. L1/DA fee
+    // for an empty envelope computes to zero (flzLen=0) — correct on the local chains eth_call
+    // runs against (fee params zero). Rejecting it would make every eth_call fail.
     auto base = evmone::state::validate_transaction(view, block, tx, cfg.rev, blockGasLeft, 0);
     if (auto* err = std::get_if<std::error_code>(&base))
         return *err;

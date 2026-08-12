@@ -276,6 +276,11 @@ private:
             detail::narrowU256ToU64(blockHeader.baseFee().value_or(bcos::u256{0}),
                 "BlockInfo::baseFee"));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
+        // eth_call tx carries no gas (CallRequest defaults it to 0); op-geth defaults the call gas
+        // to the block limit. A real block tx always carries a positive gas_limit, so this only
+        // affects the call path.
+        if (evmTx.gas_limit == 0)
+            evmTx.gas_limit = static_cast<int64_t>(blockGasLeft);
         eth::StorageStateView<Storage> stateView(storage);
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
@@ -310,6 +315,9 @@ private:
             detail::narrowU256ToU64(blockHeader.baseFee().value_or(bcos::u256{0}),
                 "BlockInfo::baseFee"));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
+        // Same call-default as m_prepare — keep the validate/execute gas_limit in lockstep.
+        if (evmTx.gas_limit == 0)
+            evmTx.gas_limit = static_cast<int64_t>(blockGasLeft);
         eth::StorageStateView<Storage> stateView(storage);
 
         eth::ZeroBlockHashes zeroBlockHashes;

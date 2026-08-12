@@ -50,10 +50,14 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/algorithm/hex.hpp>
+#include <algorithm>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -261,7 +265,17 @@ private:
             co_await bcos::ledger::getLedgerConfig(view, blockNumber, (*m_blockFactory));
         auto block = co_await bcos::ledger::getBlockData(
             view, blockNumber, bcos::ledger::HEADER, (*m_blockFactory));
-        auto const& header = *block->blockHeader();
+        if (!block || !block->blockHeader())
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::ErrorArgument,
+                "OpCallScheduler: head block header missing"));
+        }
+        // BlockImpl::blockHeader() returns a FRESH BlockHeaderImpl each call (an aliasing
+        // shared_ptr over m_inner.blockHeader); the returned Ptr must be held for the call's
+        // lifetime or its only owner is destroyed at the end of the full expression, leaving the
+        // const& below dangling (eth_call then crashes on the next header field access).
+        auto headerPtr = block->blockHeader();
+        auto const& header = *headerPtr;
 
         // Active OP fork at the head block (tars ms -> seconds), same configAt executeOpBlock uses.
         const auto& cfg =
@@ -289,6 +303,33 @@ private:
         // timestamp (a chain that activates Jovian mid-flight gets the right config from then on).
         // An evmc::VM is created per call — acceptable for an RPC dry-run, not a hot path.
         bcos::executor_v1::opstack::OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
+
+        // eth_call (op-geth semantics): use the sender's current nonce. CallRequest only fills
+        // nonce for contract-deploy estimateGas; a plain call tx carries none and opValidate
+        // would reject nonce=0 against an already-used sender.
+        if (transaction->nonce().empty())
+        {
+            // sender() is the raw 20-byte address (BCOS2Evmone.cpp:134), not an ASCII hex
+            // string — build the evmc_address directly rather than via parseAddress.
+            auto const& senderBytes = transaction->sender();
+            if (senderBytes.size() >= sizeof(evmc_address))
+            {
+                evmc_address senderAddr{};
+                std::copy_n(senderBytes.begin(), sizeof(evmc_address), senderAddr.bytes);
+                bcos::ledger::account::EVMAccount account(view, senderAddr,
+                    ledgerConfig->features().get(
+                        bcos::ledger::Features::Flag::feature_raw_address));
+                if (auto nonceVal = co_await account.nonce();
+                    nonceVal && !nonceVal->empty() &&
+                    std::all_of(nonceVal->begin(), nonceVal->end(),
+                        [](char c) { return c >= '0' && c <= '9'; }))
+                {
+                    std::stringstream nonceStream;
+                    nonceStream << std::hex << bcos::u256(*nonceVal);
+                    transaction->setNonce("0x" + nonceStream.str());
+                }
+            }
+        }
 
         auto receipt = co_await executor.executeTransaction(view, header, *transaction,
             /*contextID=*/0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
