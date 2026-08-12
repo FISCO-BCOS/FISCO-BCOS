@@ -13,8 +13,10 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
+#include <algorithm>
 #include <concepts>
 #include <string_view>
+#include <unordered_set>
 
 namespace bcos::txpool
 {
@@ -104,6 +106,19 @@ private:
     std::mutex m_mutex;
     bool m_rawAddress{};
 
+    /// The mempool stores the sender as raw address bytes (TransactionImpl::sender());
+    /// convert them to an evmc_address so EVMAccount resolves the same lower-case hex
+    /// account path (/apps/<hex>) the executor writes and reads.
+    static evmc_address senderToAddress(std::string_view sender)
+    {
+        evmc_address addr{};
+        if (sender.size() >= sizeof(addr.bytes))
+        {
+            std::copy_n(sender.begin(), sizeof(addr.bytes), addr.bytes);
+        }
+        return addr;
+    }
+
     void add(protocol::Transaction::Ptr transaction);
     void removeBySenderNonces(SenderNonces auto senderNonces)
     {
@@ -138,10 +153,27 @@ public:
         std::unique_lock lock(m_mutex);
         auto& senderNonceIndex = m_transactions.get<0>();
         auto& senderIndex = m_transactions.get<2>();
+        // senderIndex is hashed_non_unique: a sender appears once per transaction, so the same
+        // sender is visited multiple times while iterating. Track the senders whose gapless
+        // prefix has already been sealed to avoid re-sealing the same transactions on the
+        // subsequent entries of that sender. (The legacy implementation achieved this by
+        // writing the advanced nonce back into `state`; keeping seal() read-only with respect
+        // to `state` requires the dedup to live here instead.)
+        std::unordered_set<std::string_view> sealedSenders;
         for (const auto& data : senderIndex)
         {
             auto sender = data.sender();
-            ledger::account::EVMAccount account(state, sender, m_rawAddress);
+            if (!sealedSenders.emplace(sender).second)
+            {
+                continue;
+            }
+            // The mempool stores the sender as raw address bytes (forceSender), while the
+            // executor persists accounts under the lower-case hex path (/apps/<hex>) via the
+            // evmc_address EVMAccount overload. Passing the raw bytes through the string_view
+            // overload would treat them as a hex string and compute a wrong table path, so the
+            // nonce read below would miss the account entirely. Build an evmc_address instead
+            // so the same hex path is used as the executor.
+            ledger::account::EVMAccount account(state, senderToAddress(sender), m_rawAddress);
 
             int64_t currentNonce = 0;
             if (auto nonceStr = task::syncWait(account.nonce()))
@@ -153,8 +185,13 @@ public:
                     bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
                 }
             }
-
-            auto startNonce = currentNonce;
+            // seal() is read-only with respect to `state`: it only reads the sender's current
+            // nonce to pick the executable (gapless) prefix in nonce order, and never writes the
+            // advanced nonce back. The authoritative nonce advance happens during execution
+            // itself, so writing it here would cause the executor (evmone) to reject every
+            // just-sealed transaction with NONCE_TOO_LOW. This matches how geth's legacypool
+            // (in-memory noncer) and reth's best_transactions() select block transactions
+            // without touching state.
             for (auto nonceIt = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
                 nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
                 nonceIt->nonce() == currentNonce;
@@ -168,10 +205,6 @@ public:
                 {
                     break;
                 }
-            }
-            if (currentNonce > startNonce)
-            {
-                task::syncWait(account.setNonce(std::to_string(currentNonce)));
             }
             if (count >= limit)
             {
@@ -190,7 +223,9 @@ public:
         {
             auto sender = it->sender();
             auto nextIt = senderIndex.equal_range(sender).second;
-            ledger::account::EVMAccount account(state, sender, m_rawAddress);
+            // Same hex-path note as in seal(): the raw sender bytes must go through the
+            // evmc_address overload so the account nonce read finds the executor's account.
+            ledger::account::EVMAccount account(state, senderToAddress(sender), m_rawAddress);
             if (auto nonceStr = task::syncWait(account.nonce()))
             {
                 int64_t nonce = 0;
@@ -259,6 +294,7 @@ public:
         }
         return transactions;
     }
+
 };
 
 }  // namespace bcos::txpool

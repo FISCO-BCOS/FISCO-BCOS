@@ -126,7 +126,12 @@ struct RealGlobalStateStorageFixture
 
     void setNonce(std::string_view sender, std::string nonce)
     {
-        ledger::account::EVMAccount account{backendStorage, sender, false};
+        // The mempool stores senders as raw bytes and MemPoolImpl::seal/remove resolve the
+        // account via the evmc_address overload (lower-case hex path), matching the executor.
+        // Use the same path here so the sealed nonce the test relies on is visible to seal().
+        evmc_address addr{};
+        std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
+        ledger::account::EVMAccount account{backendStorage, addr, false};
         task::syncWait(account.setNonce(std::move(nonce)));
     }
 };

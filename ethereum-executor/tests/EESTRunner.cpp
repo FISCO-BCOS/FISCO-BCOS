@@ -1018,6 +1018,35 @@ public:
             }
             header.setCoinbase(coinbaseAddr);
         }
+
+        // EIP-4399 (Paris+): opcode 0x44 is PREVRANDAO, returning the block
+        // mixHash. State-test fixtures carry it in env.currentRandom. The
+        // executor resolves PREVRANDAO from the block header (blockHeaderToBlockInfo
+        // reads header.prevRandao()), NOT from the ledger config, so the value
+        // MUST be placed on the header here. Without this, Cancun/Prague
+        // fixtures whose contract stores PREVRANDAO (static stRandom /
+        // mergeTest / blockInfo) observe 0x0 — and if that 0 is SSTORE'd into
+        // an already-zero slot, evmone charges only the no-op SSTORE cost (100)
+        // instead of SSTORE_SET (20000), under-charging gas by exactly 19900
+        // and corrupting the coinbase/sender balances too.
+        if (!env.random.empty())
+        {
+            auto mixHashBytes = test::hexToBytes(env.random);
+            if (!mixHashBytes.empty())
+            {
+                // bcos::h256 from raw bytes (right-aligned, big-endian) so a
+                // short currentRandom is left-zero-padded to 32 bytes.
+                header.setPrevRandao(bcos::h256(mixHashBytes));
+            }
+            else
+            {
+                header.setPrevRandao(bcos::h256{});
+            }
+        }
+        else
+        {
+            header.setPrevRandao(bcos::h256{});
+        }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
     }
@@ -1493,6 +1522,32 @@ public:
                 std::memcpy(coinbaseAddr.data(), cbBytes.data(), bcos::Address::SIZE);
             }
             header.setCoinbase(coinbaseAddr);
+        }
+
+        // EIP-4399 (Paris+): PREVRANDAO (opcode 0x44) returns the block mixHash.
+        // The executor resolves it from header.prevRandao() (blockHeaderToBlockInfo),
+        // so the mixHash parsed from the fixture block header MUST be placed on
+        // the BCOS header too — configuring m_ledgerConfig alone is not enough
+        // (same fix as the state-test buildBlockHeader(env)). Without this,
+        // Cancun/Prague blockchain tests (static stRandom / mergeTest / blockInfo)
+        // read PREVRANDAO == 0, and an SSTORE of that 0 into an empty slot is
+        // charged as a no-op (100) instead of SSTORE_SET (20000) → -19900 gas.
+        if (!bh.random.empty())
+        {
+            auto mixHashBytes = test::hexToBytes(bh.random);
+            if (!mixHashBytes.empty())
+            {
+                // bcos::h256 from raw bytes (right-aligned, big-endian).
+                header.setPrevRandao(bcos::h256(mixHashBytes));
+            }
+            else
+            {
+                header.setPrevRandao(bcos::h256{});
+            }
+        }
+        else
+        {
+            header.setPrevRandao(bcos::h256{});
         }
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;

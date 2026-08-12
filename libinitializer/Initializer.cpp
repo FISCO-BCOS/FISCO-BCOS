@@ -34,6 +34,7 @@
 #include "MemPoolInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
+#include "bcos-single-consensus/SingleNodeConsensus.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -49,6 +50,7 @@
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
 #include <TxPool.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -173,6 +175,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
+    // Single-node consensus mode is AIR-only. It skips txpool/pbft init and wires the
+    // in-process mempool into NodeService via AirNodeInitializer::setMemPool; on a MAX/tars
+    // node the flag would start the block-producing driver while sendRawTransaction still
+    // falls through to an uninitialized txpool. Reject the combination at startup rather
+    // than leaving that state reachable by a config flag.
+    if (m_nodeConfig->enableSingleNodeConsensus() &&
+        _nodeArchType != bcos::protocol::NodeArchitectureType::AIR)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+            "enable_single_node_consensus is only supported on AIR nodes (in-process "
+            "mempool/scheduler); not supported on MAX/tars deployments"));
+    }
+
     // TBB global thread control
     auto tbbThreadCount = m_nodeConfig->tbbThreadCount();
     if (tbbThreadCount > 0)
@@ -369,12 +384,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor);
+                transactionExecutor, !m_nodeConfig->enableSingleNodeConsensus());
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
         }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
@@ -394,7 +409,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor);
+                ethereumExecutor, !m_nodeConfig->enableSingleNodeConsensus());
+        // Single-node consensus mode on the v2 EthereumExecutor: build the Engine API service
+        // wired to the ethereum scheduler + EthereumExecutor so blocks are built with
+        // Ethereum-compliant semantics. In this mode the EngineService is the sole block
+        // producer, so the v1-only gate above does not apply.
+        if (!engineApiForV1Only && m_nodeConfig->enableSingleNodeConsensus())
+        {
+            m_engineServiceInitializer = EngineServiceInitializer::build(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                ethereumParallelScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger);
+        }
     }
     else
     {
@@ -403,12 +429,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor);
+                transactionExecutor, !m_nodeConfig->enableSingleNodeConsensus());
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool());
+                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
@@ -418,7 +444,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor);
+                ethereumExecutor, !m_nodeConfig->enableSingleNodeConsensus());
+        // Single-node consensus mode on the v2 EthereumExecutor (serial pipeline).
+        if (!engineApiForV1Only && m_nodeConfig->enableSingleNodeConsensus())
+        {
+            m_engineServiceInitializer = EngineServiceInitializer::build(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger);
+        }
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -595,16 +629,68 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             consensus->clearExceptionProposalState(blockNumber);
         });
     }
-    // init the txpool
-    m_txpoolInitializer->init();
+    // init the txpool / pbft.
+    // Single-node consensus mode ([consensus] enable_single_node_consensus) bypasses the legacy
+    // txpool/pbft/sealer lifecycle: PBFTInitializer is still constructed above so groupInfo /
+    // NodeService wiring stays intact, but txpool and pbft (and the sealer and block sync inside
+    // pbft) are never initialized or started — block production is driven instead by the
+    // single-node consensus module (EngineService + mempool), and sendRawTransaction routes to
+    // the mempool. The front service is still wired for gateway bookkeeping, but its dispatchers
+    // are inert with no peers.
+    if (!m_nodeConfig->enableSingleNodeConsensus())
+    {
+        // init the txpool
+        m_txpoolInitializer->init();
 
-    // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
-    // txpool init finished
-    m_pbftInitializer->init();
+        // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
+        // txpool init finished
+        m_pbftInitializer->init();
+    }
+    else
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "SingleNodeConsensus: skip txpool/pbft/sealer init (block production via Engine "
+            "Service + mempool)");
+    }
 
     // init the frontService
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
+
+    // Single-node consensus mode: build the built-in single-node consensus driver that
+    // produces blocks on a timer by driving the EngineService interface like an external CL
+    // (forkchoiceUpdated -> getPayload -> newPayload), bypassing txpool/sealer/pbft. The
+    // EngineService owns the mempool/scheduler/commit, so the driver only needs it plus the
+    // ledger (to resolve the initial head). It is always built in this mode — for
+    // executor_version < 2 on the v1 scheduler, and for executor_version >= 2 on the
+    // EthereumExecutor scheduler — so this is also the in-process CL path for the Engine API.
+    if (m_nodeConfig->enableSingleNodeConsensus())
+    {
+        // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
+        // deterministic hash of a fixed seed (for EEST the harness pins it to the fixture's
+        // currentRandom so block.prevrandao matches).
+        auto const& prevRandaoCfg = m_nodeConfig->singleNodeConsensusPrevRandao();
+        auto prevRandao = [&]() -> bcos::crypto::HashType {
+            if (!prevRandaoCfg.empty())
+            {
+                return bcos::crypto::HashType(prevRandaoCfg);
+            }
+            constexpr std::string_view seed = "single-node-consensus";
+            return bcos::crypto::keccak256Hash(bytesConstRef(
+                reinterpret_cast<byte const*>(seed.data()), seed.size()));
+        }();
+        if (!m_engineServiceInitializer)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                "enable_single_node_consensus requires the EngineService to be built"));
+        }
+        m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
+            *m_engineServiceInitializer->engineService(), m_ledger,
+            m_nodeConfig->singleNodeConsensusBlockInterval(),
+            m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
+            m_nodeConfig->singleNodeConsensusFeeRecipient(),
+            m_nodeConfig->singleNodeConsensusFixedTimestamp());
+    }
 
 #ifdef TOOLS
     if (m_nodeConfig->enableArchive())
@@ -683,7 +769,10 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             });
     }
 
-    m_pbftInitializer->initNotificationHandlers(_rpc);
+    if (m_pbftInitializer)
+    {
+        m_pbftInitializer->initNotificationHandlers(_rpc);
+    }
 }
 
 void Initializer::initSysContract()
@@ -788,13 +877,23 @@ void Initializer::initSysContract()
 
 void Initializer::start()
 {
-    if (m_txpoolInitializer)
+    // Single-node consensus mode: txpool/pbft (and the sealer inside pbft) stay dormant —
+    // block production is driven by the single-node consensus module.
+    if (!m_nodeConfig->enableSingleNodeConsensus())
     {
-        m_txpoolInitializer->start();
+        if (m_txpoolInitializer)
+        {
+            m_txpoolInitializer->start();
+        }
+        if (m_pbftInitializer)
+        {
+            m_pbftInitializer->start();
+        }
     }
-    if (m_pbftInitializer)
+
+    if (m_singleNodeConsensus)
     {
-        m_pbftInitializer->start();
+        m_singleNodeConsensus->start();
     }
 
     if (m_frontServiceInitializer)
@@ -813,6 +912,10 @@ void Initializer::stop()
 {
     try
     {
+        if (m_singleNodeConsensus)
+        {
+            m_singleNodeConsensus->stop();
+        }
         if (m_frontServiceInitializer)
         {
             m_frontServiceInitializer->stop();

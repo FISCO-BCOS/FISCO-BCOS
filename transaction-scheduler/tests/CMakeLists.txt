@@ -13,6 +13,8 @@ target_link_libraries(test-transaction-scheduler
 	table
 	bcos-framework
 	ethereum-executor
+	engine
+	mempool
 	Boost::unit_test_framework
 	FakeIt::FakeIt-boost
 )

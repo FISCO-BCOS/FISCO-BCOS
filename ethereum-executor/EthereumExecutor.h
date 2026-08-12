@@ -360,6 +360,10 @@ public:
                     // Genuinely invalid — skip execution; finish() produces a
                     // failure receipt and nothing is written for this transaction.
                     m_validationError = std::get<std::error_code>(validationResult);
+                    BCOS_LOG(INFO) << LOG_BADGE("EXECUTE")
+                                   << LOG_DESC("tx validation failed")
+                                   << LOG_KV("error", m_validationError.value().message())
+                                   << LOG_KV("code", m_validationError.value().value());
                 }
             }
             catch (...)

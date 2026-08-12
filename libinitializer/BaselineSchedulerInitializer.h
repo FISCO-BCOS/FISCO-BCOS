@@ -22,18 +22,34 @@ public:
         std::shared_ptr<SchedulerType> scheduler, std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
         std::shared_ptr<ledger::LedgerInterface> ledger,
-        std::shared_ptr<Executor> transactionExecutor)
+        std::shared_ptr<Executor> transactionExecutor, bool notifyTransactions = true)
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
             Executor, SchedulerType, ledger::LedgerInterface>>(
             storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
             *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
-        baselineScheduler->registerTransactionNotifier(
-            [txpool](bcos::protocol::BlockNumber blockNumber,
-                bcos::protocol::TransactionSubmitResultsPtr result,
-                std::function<void(bcos::Error::Ptr)> callback) mutable {
-                txpool->asyncNotifyBlockResult(blockNumber, std::move(result), std::move(callback));
-            });
+        if (notifyTransactions)
+        {
+            baselineScheduler->registerTransactionNotifier(
+                [txpool](bcos::protocol::BlockNumber blockNumber,
+                    bcos::protocol::TransactionSubmitResultsPtr result,
+                    std::function<void(bcos::Error::Ptr)> callback) mutable {
+                    txpool->asyncNotifyBlockResult(
+                        blockNumber, std::move(result), std::move(callback));
+                });
+        }
+        else
+        {
+            // Single-node consensus mode ([consensus] enable_single_node_consensus): the legacy
+            // txpool is bypassed and never initialized, so a commit that fires the transaction
+            // notifier must not dereference it (asyncNotifyBlockResult on an uninitialized pool
+            // segfaults in MemoryStorage::batchRemoveSealedTxs). sendRawTransaction returns the
+            // tx hash immediately in this mode, so no one is waiting on a notify anyway.
+            baselineScheduler->registerTransactionNotifier(
+                [](bcos::protocol::BlockNumber /*blockNumber*/,
+                    bcos::protocol::TransactionSubmitResultsPtr /*result*/,
+                    std::function<void(bcos::Error::Ptr)> callback) { callback({}); });
+        }
 
         return std::make_tuple(
             [scheduler = std::move(scheduler), baselineScheduler,

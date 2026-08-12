@@ -1187,7 +1187,8 @@ void SchedulerImpl::tryExecuteBlock(
         {
             return;
         }
-        bcos::protocol::ParentInfo parentInfo{.blockNumber = number, .blockHash = std::move(parentHash)};
+        bcos::protocol::ParentInfo parentInfo{
+            .blockNumber = number, .blockHash = std::move(parentHash)};
         block->blockHeader()->setParentInfo(parentInfo);
         block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 

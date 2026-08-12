@@ -20,6 +20,7 @@
  */
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
+#include "libinitializer/MemPoolInitializer.h"
 #include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -93,6 +94,14 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // declared before m_rpc / m_tarsApplication (the NodeService holders), so it is
     // destroyed after them.
     nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
+
+    // Single-node consensus mode ([consensus] enable_single_node_consensus): route
+    // sendRawTransaction to the in-process mempool instead of txpool — EngineService
+    // seals these txs into blocks on a timer, bypassing txpool/sealer/pbft.
+    if (nodeConfig->enableSingleNodeConsensus())
+    {
+        nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
+    }
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
