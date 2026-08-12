@@ -191,7 +191,7 @@ mpt::EIP1186Proof epiProofFromJson(Json::Value const& result)
     return out;
 }
 
-constexpr std::string_view c_epiContractAddress = "42000000000000000000000000000000000000c0";
+constexpr std::string_view c_epiContractAddress = "43000000000000000000000000000000000000c0";
 constexpr std::string_view c_epiContractCode = "6080604052";
 constexpr std::string_view c_epiEoaAddress = "1100000000000000000000000000000000000011";
 

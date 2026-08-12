@@ -73,7 +73,7 @@ struct AllocsHashFixture
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
         genesisConfig.m_allocs.push_back(
-            Alloc{.address = "42000000000000000000000000000000000000c0",
+            Alloc{.address = "43000000000000000000000000000000000000c0",
                 .balance = u256(0),
                 .nonce = "0",
                 .code = "6080604052",

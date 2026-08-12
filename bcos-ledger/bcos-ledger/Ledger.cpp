@@ -1818,7 +1818,7 @@ static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& fea
 // storage-layout/SystemConfig.json. At genesis the Entry.enableNumber is 0, so
 // the slot value is just the packed flags number (Entry.value, uint192).
 static constexpr std::string_view c_l2SystemConfigAddress =
-    "42000000000000000000000000000000000000c0";
+    "43000000000000000000000000000000000000c0";
 static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
 static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
 

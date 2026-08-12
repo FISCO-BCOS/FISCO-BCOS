@@ -84,7 +84,7 @@ struct GenesisNodeFixture
 };
 
 // Contract account: code + two storage slots (the storage sub-trie has real nodes).
-constexpr std::string_view c_contractAddress = "42000000000000000000000000000000000000c0";
+constexpr std::string_view c_contractAddress = "43000000000000000000000000000000000000c0";
 constexpr std::string_view c_contractCode = "6080604052";
 // EOA account: balance only.
 constexpr std::string_view c_eoaAddress = "1100000000000000000000000000000000000011";

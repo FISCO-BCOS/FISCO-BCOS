@@ -63,11 +63,13 @@
 
 namespace bcos::ledger
 {
-// Predeploy address of SystemConfig.sol: 0x42000000000000000000000000000000000000C0.
+// Predeploy address of SystemConfig.sol: 0x43000000000000000000000000000000000000C0.
+// The 0x43... prefix keeps FISCO's self-written predeploys out of the OP-Stack
+// reserved predeploy namespace (0x4200...0000-0x4200...07FF).
 // The table name follows USER_APPS convention so it lives next to user contract
 // tables in the state storage.
 inline constexpr std::string_view L2_SYSTEM_CONFIG_ADDRESS_HEX =
-    "42000000000000000000000000000000000000c0";
+    "43000000000000000000000000000000000000c0";
 
 // Storage slot where SystemConfig._config is declared. With OZ v4.7.3
 // Initializable + ContextUpgradeable + Ownable bases the mapping lands at

@@ -1656,7 +1656,7 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
             ledger::FeatureSet{.flag = Features::Flag::feature_l2_ethereum_compat, .enable = 1});
         // SystemConfig predeploy at the canonical L2 address (no 0x prefix, 40 hex)
         genesisConfig.m_allocs.push_back(
-            Alloc{.address = "42000000000000000000000000000000000000c0",
+            Alloc{.address = "43000000000000000000000000000000000000c0",
                 .balance = {},
                 .nonce = {},
                 .code = "6080604052",
@@ -1674,7 +1674,7 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
         auto slotHash = hashImpl->hash(bcos::ref(slotInput));
 
         auto tableName = fmt::format(
-            "{}{}", SYS_DIRECTORY::USER_APPS, "42000000000000000000000000000000000000c0");
+            "{}{}", SYS_DIRECTORY::USER_APPS, "43000000000000000000000000000000000000c0");
         auto slotView = std::string_view(reinterpret_cast<const char*>(slotHash.data()), 32);
         auto entry =
             co_await storage2::readOne(*storage, executor_v1::StateKeyView(tableName, slotView));

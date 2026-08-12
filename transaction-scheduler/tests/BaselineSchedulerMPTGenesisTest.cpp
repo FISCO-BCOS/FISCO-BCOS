@@ -36,7 +36,7 @@ using namespace bcos;
 using namespace bcos::test::fullchain;
 namespace mpt = bcos::ledger::mpt;
 
-constexpr std::string_view c_genContractAddress = "42000000000000000000000000000000000000c0";
+constexpr std::string_view c_genContractAddress = "43000000000000000000000000000000000000c0";
 constexpr std::string_view c_genContractCode = "6080604052";
 constexpr std::string_view c_genEoaAddress = "1100000000000000000000000000000000000011";
 
