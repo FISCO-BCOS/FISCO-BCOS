@@ -1,41 +1,47 @@
 #!/usr/bin/env python3
 # Copyright (c) FISCO-BCOS, Apache-2.0
-"""Generate FISCO-BCOS genesis [alloc.N] INI fragments from forge artifacts.
+"""Merge FISCO's predeploy overlay onto op-deployer terminal allocs.
 
-L2 mode materializes every predeploy directly into genesis state: no
-constructor runs on-chain. This tool reads the forge build artifacts under
-<contracts>/out/<Sol>/<Name>.json plus a chain-config YAML listing the
-predeploys, and emits the INI sections NodeConfig.loadAllocs() parses.
+The op-deployer-generated Karst terminal alloc JSON is the ONLY source for
+the OP-Stack side of genesis (every 0x42... predeploy proxy, every 0xc0d3...
+implementation, ProxyAdmin ownership, prefunded accounts). This tool never
+synthesizes an OP account: `--base-allocs` is a required input, and the tool
+does exactly two things —
 
-Self-written predeploys (SystemConfig, L2ValidatorSet) are materialized in
-their post-deployment terminal state, three layers per predeploy:
+  (a) overlay the FISCO self-written predeploys (SystemConfig,
+      L2ValidatorSet) in their post-deployment terminal state, three layers
+      each:
+        1. proxy account (0x43...): the canonical Proxy runtime bytecode
+           (copied from a designated base-alloc proxy, `proxy_code_source`,
+           so the bytes are the deployer's by construction) + EIP-1967
+           implementation/admin slots;
+        2. implementation account (0xc3d3..., outside every reserved
+           namespace): implementation bytecode from the bcos-l2-contracts
+           forge build, storage empty except `_initialized = 255` (the OZ
+           `_disableInitializers()` terminal state);
+        3. contract storage on the PROXY account: `_initialized = 1`, the
+           `Ownable.owner` slot (51) = the governance owner, and the
+           contract state — SystemConfig packed Entry slots /
+           L2ValidatorSet validator records.
+  (b) merge base + overlay into one account set and emit it as the
+      [alloc.N] INI sections NodeConfig.loadAllocs() parses (and optionally
+      as a geth-style alloc JSON via --out-json, so the SAME merged set
+      feeds both FISCO and the op-reth oracle genesis).
 
-  1. proxy account (the predeploy address): Proxy bytecode + EIP-1967
-     implementation slot (-> implementation account) + EIP-1967 admin slot
-     (-> ProxyAdmin predeploy);
-  2. implementation account (outside every reserved namespace): the
-     implementation bytecode, storage empty except `_initialized = 255`
-     (the OZ `_disableInitializers()` terminal state, so nobody can run
-     `initialize()` against the implementation's own storage);
-  3. contract storage, written on the PROXY account: `_initialized = 1`
-     (initialize() "already ran"), the `Ownable.owner` slot (51) = the
-     governance owner, and the contract's state — SystemConfig packed
-     Entry slots / L2ValidatorSet validator records.
+An overlay address that already exists in the base is a hard error; the
+`expected_predeploys` checklist in the chain config asserts the base really
+carries the OP predeploys the L2 relies on.
 
-Note the two-authority split: the EIP-1967 admin slot (upgrade authority) is
+Two-authority split: the EIP-1967 admin slot (upgrade authority) is
 ProxyAdmin, while `Ownable.owner` (config/validator write authority) is the
-governance entity — two independent slots, never the same role.
+governance entity — two independent slots, never the same entity (enforced).
 
 The `feature_flags` SystemConfig entry is still written by the C++ genesis
 path (Ledger), which alone knows the version-gated feature set after
 Features::setGenesisFeatures(version). This tool must not write that key.
 
-The OP-fork predeploys ship deployed bytecode as-is; their runtime state is
-seeded by the op-deployer-generated allocs this overlay is applied on top of.
-
-If a predeploy artifact still carries immutableReferences (unfilled
-immutables), the build aborts naming the contract, unless that predeploy opts
-in via `allow_unpatched_immutables: true` (accepting zero-valued immutables).
+If a self-written implementation artifact still carries immutableReferences
+(unfilled immutables), the build aborts naming the contract.
 """
 import argparse
 import json
@@ -171,6 +177,58 @@ def strip0x(value):
     return text[2:] if text.startswith("0x") else text
 
 
+def parse_amount(value, label):
+    """Parse a balance/nonce that may arrive as int, 0x-hex or decimal string."""
+    if isinstance(value, int):
+        return value
+    text = str(value).strip().lower()
+    if text.startswith("0x"):
+        return int(text, 16) if len(text) > 2 else 0
+    return int(text, 10) if text else 0
+
+
+def load_base_allocs(path):
+    """Load the op-deployer terminal alloc JSON: {address: account} keyed by int.
+
+    Accepts either a bare {address: account} mapping or a genesis file whose
+    accounts sit under an "alloc" / "accounts" key. Zero-valued storage slots
+    are dropped: a zero slot does not exist in the canonical state trie, so
+    carrying it forward could only create a FISCO/op-reth divergence.
+    """
+    with open(path) as handle:
+        data = json.load(handle)
+    for wrapper in ("alloc", "accounts"):
+        if isinstance(data, dict) and isinstance(data.get(wrapper), dict):
+            data = data[wrapper]
+            break
+    if not isinstance(data, dict) or not data:
+        raise ValueError(
+            f"{path}: expected a non-empty op-deployer alloc mapping "
+            f"(address -> account), optionally wrapped in 'alloc'/'accounts'")
+    accounts = {}
+    for address, account in data.items():
+        addr = address_int(address)
+        if addr in accounts:
+            raise ValueError(f"{path}: duplicate base account 0x{addr:040x}")
+        nonce = parse_amount(account.get("nonce", 0), "nonce")
+        if nonce >= (1 << 64):
+            raise ValueError(f"{path}: 0x{addr:040x} nonce does not fit uint64")
+        storage = {}
+        for slot, value in (account.get("storage") or {}).items():
+            value_int = word_int(value)
+            if value_int:
+                storage[word_int(slot)] = value_int
+        code = account.get("code") or ""
+        accounts[addr] = {
+            "address": "0x" + format(addr, "040x"),
+            "balance": parse_amount(account.get("balance", 0), "balance"),
+            "nonce": nonce,
+            "code": normalize_hex(code) if strip0x(code) else "",
+            "storage": storage,
+        }
+    return accounts
+
+
 def word_int(value):
     """Parse a storage slot/value that may arrive as int or hex string.
 
@@ -236,8 +294,12 @@ def system_config_entry_storage(entries):
                 "feature_flags is written by the C++ genesis path (Ledger); "
                 "remove it from system_config")
         value = int(value)
-        if value < 0 or value >= (1 << 192):
-            raise ValueError(f"system_config['{key}'] does not fit uint192: {value}")
+        if value <= 0 or value >= (1 << 192):
+            raise ValueError(
+                f"system_config['{key}'] must be a positive uint192, got {value} "
+                f"(a zero-valued entry writes a zero slot, which does not exist "
+                f"in the canonical state trie — the loader would see the key as "
+                f"missing)")
         storage[mapping_slot(key.encode("utf-8"), SYSTEM_CONFIG_BASE_SLOT)] = value
     return storage
 
@@ -301,35 +363,24 @@ def deployed_bytecode(artifact):
     return node.get("object", ""), node.get("immutableReferences", {}) or {}
 
 
-def checked_bytecode(artifact, name, allow_unpatched_immutables=False):
-    """Deployed bytecode; fail loud on unfilled immutables unless opted out."""
+def checked_bytecode(artifact, name):
+    """Deployed bytecode; fail loud on unfilled immutables."""
     code, immutable_refs = deployed_bytecode(artifact)
-    if immutable_refs and not allow_unpatched_immutables:
+    if immutable_refs:
         ast_ids = ", ".join(str(k) for k in immutable_refs)
         raise ValueError(
             f"{name}: artifact has unpatched immutables (immutableReferences "
             f"AST ids {ast_ids}); unpatched immutables would deploy broken "
-            f"genesis code; set allow_unpatched_immutables: true for this "
-            f"predeploy to accept zero-valued immutables")
+            f"genesis code")
     return code
 
 
-def build_alloc(artifact, address, name, allow_unpatched_immutables=False):
-    """A plain predeploy: deployed bytecode, empty storage."""
-    code = checked_bytecode(artifact, name, allow_unpatched_immutables)
-    return {
-        "address": normalize_hex(address),
-        "balance": 0,
-        "nonce": 0,
-        "code": normalize_hex(code),
-        "storage": {},
-    }
-
-
-def build_proxied_allocs(predeploy, config, contracts_dir):
+def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
     """Two allocs for a self-written proxied predeploy: proxy + implementation.
 
-    The proxy account carries the Proxy bytecode, the EIP-1967 slots and ALL
+    The proxy account carries the canonical Proxy runtime bytecode (copied
+    from the base-alloc account named by `proxy_code_source`, so the bytes
+    are the op-deployer's by construction), the EIP-1967 slots and ALL
     contract storage (terminal post-initialize state). The implementation
     account carries only the implementation bytecode with initializers
     disabled. See the module docstring for the full three-layer contract.
@@ -347,7 +398,6 @@ def build_proxied_allocs(predeploy, config, contracts_dir):
         raise ValueError(
             f"{name}: proxy_admin / governance_owner must not be the zero "
             f"address (a zero owner bricks governance at genesis)")
-
     proxy_address = address_int(predeploy["address"])
     implementation_address = address_int(proxy_spec["implementation"])
     for label, addr in (("address", proxy_address),
@@ -362,16 +412,23 @@ def build_proxied_allocs(predeploy, config, contracts_dir):
 
     implementation_artifact = load_artifact(
         contracts_dir, predeploy.get("sol_file", f"{name}.sol"), name)
-    implementation_code = checked_bytecode(
-        implementation_artifact, name,
-        bool(predeploy.get("allow_unpatched_immutables", False)))
+    implementation_code = checked_bytecode(implementation_artifact, name)
 
-    # Proxy bytecode comes from the pinned OP fork build (universal/Proxy.sol),
-    # same artifact the canonical OP predeploy proxies use.
-    proxy_artifact = load_artifact(
-        contracts_dir, proxy_spec.get("sol_file", "Proxy.sol"),
-        proxy_spec.get("name", "Proxy"))
-    proxy_code = checked_bytecode(proxy_artifact, f"{name} proxy")
+    # Proxy bytecode is copied from a designated proxied predeploy in the
+    # base allocs (e.g. the L1Block proxy) — byte-identical to what the
+    # op-deployer emitted, no separate OP forge build involved.
+    source = config.get("proxy_code_source")
+    if not source:
+        raise ValueError(
+            f"{name}: chain config needs proxy_code_source — a base-alloc "
+            f"proxied predeploy whose Proxy runtime bytecode to reuse "
+            f"(e.g. the L1Block proxy 0x42...0015)")
+    source_account = base_accounts.get(address_int(source))
+    if source_account is None or not source_account["code"]:
+        raise ValueError(
+            f"{name}: proxy_code_source {source} not found (or code-less) "
+            f"in the base allocs")
+    proxy_code = source_account["code"]
 
     storage = {
         OZ_INITIALIZED_SLOT: INITIALIZED_RAN,
@@ -401,28 +458,53 @@ def build_proxied_allocs(predeploy, config, contracts_dir):
     return [proxy_alloc, implementation_alloc]
 
 
-def build_allocs(config, contracts_dir):
-    """Return a list of alloc dicts from the YAML config (proxies expand to 2)."""
-    allocs = []
+def build_allocs(config, contracts_dir, base_accounts):
+    """Merge the FISCO overlay onto the op-deployer base accounts.
+
+    Returns the full merged account list in ascending address order (the
+    deterministic genesis order). The base is authoritative for every OP
+    account; the overlay may only ADD accounts — an address collision is a
+    hard error. `expected_predeploys` entries assert the base really carries
+    the OP predeploys the L2 relies on (present, with code).
+    """
+    merged = dict(base_accounts)
+
+    for expected in config.get("expected_predeploys") or []:
+        addr = address_int(expected["address"])
+        account = merged.get(addr)
+        if account is None or not account["code"]:
+            raise ValueError(
+                f"expected predeploy {expected.get('name', '?')} at "
+                f"{expected['address']} is missing (or code-less) in the "
+                f"base allocs — wrong/incomplete op-deployer output?")
+
     for predeploy in config["predeploys"]:
-        if "proxy" in predeploy:
-            allocs.extend(build_proxied_allocs(predeploy, config, contracts_dir))
-            continue
-        name = predeploy["name"]
-        artifact = load_artifact(
-            contracts_dir, predeploy.get("sol_file", f"{name}.sol"), name)
-        allocs.append(build_alloc(
-            artifact, predeploy["address"], name,
-            bool(predeploy.get("allow_unpatched_immutables", False))))
-    return allocs
+        if "proxy" not in predeploy:
+            raise ValueError(
+                f"{predeploy.get('name', '?')}: only proxied self-written "
+                f"predeploys may be overlaid; OP predeploys come from the "
+                f"base allocs (list them under expected_predeploys)")
+        for alloc in build_proxied_allocs(
+                predeploy, config, contracts_dir, base_accounts):
+            addr = address_int(alloc["address"])
+            if addr in merged:
+                raise ValueError(
+                    f"overlay account {alloc['address']} collides with an "
+                    f"existing base-alloc account")
+            merged[addr] = alloc
+
+    return [merged[addr] for addr in sorted(merged)]
 
 
 def emit_ini(allocs):
     """Render alloc dicts as FISCO-BCOS genesis INI sections.
 
-    Addresses are lowercased. Storage slots/values are emitted as full-width
-    32-byte hex words (Ledger's unhex is fixed-width) in ascending slot order
-    so the output is deterministic regardless of dict insertion order.
+    Addresses are lowercased; balance/nonce are decimal (NodeConfig
+    requireDecimalField). A code-less account (prefunded EOA) omits the
+    `code` line — NodeConfig treats a missing code as an EOA alloc. Storage
+    slots/values are emitted as full-width 32-byte hex words (Ledger's unhex
+    is fixed-width) in ascending slot order so the output is deterministic
+    regardless of dict insertion order.
     """
     lines = []
     for index, alloc in enumerate(allocs):
@@ -430,7 +512,9 @@ def emit_ini(allocs):
         lines.append(f"address={normalize_hex(alloc['address'])}")
         lines.append(f"balance={int(alloc.get('balance', 0))}")
         lines.append(f"nonce={int(alloc.get('nonce', 0))}")
-        lines.append(f"code={normalize_hex(alloc['code'])}")
+        code = alloc.get("code", "")
+        if strip0x(code):
+            lines.append(f"code={normalize_hex(code)}")
         storage = alloc.get("storage", {})
         if storage:
             lines.append(f"[alloc.{index}.storage]")
@@ -439,24 +523,59 @@ def emit_ini(allocs):
     return "\n".join(lines) + "\n"
 
 
+def emit_alloc_json(allocs):
+    """Render the merged account set as a geth-style alloc JSON mapping.
+
+    This is the shape an op-reth / op-geth genesis `alloc` section consumes,
+    so the SAME merged set can feed the oracle chain's genesis.
+    """
+    out = {}
+    for alloc in allocs:
+        entry = {
+            "balance": hex(int(alloc.get("balance", 0))),
+            "nonce": hex(int(alloc.get("nonce", 0))),
+        }
+        code = alloc.get("code", "")
+        if strip0x(code):
+            entry["code"] = normalize_hex(code)
+        storage = alloc.get("storage") or {}
+        if storage:
+            entry["storage"] = {
+                word_hex(slot): word_hex(storage[slot]) for slot in sorted(storage)
+            }
+        out[alloc["address"]] = entry
+    return json.dumps(out, indent=2, sort_keys=True) + "\n"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Generate genesis [alloc.N] INI from forge artifacts + chain config")
+        description="Merge the FISCO predeploy overlay onto op-deployer "
+                    "terminal allocs and emit genesis [alloc.N] INI")
     parser.add_argument("--config", required=True, help="chain-config YAML path")
     parser.add_argument("--contracts", required=True,
                         help="bcos-l2-contracts dir (containing out/)")
+    parser.add_argument("--base-allocs", required=True,
+                        help="op-deployer terminal alloc JSON (REQUIRED base; "
+                             "every OP account comes from here)")
     parser.add_argument("--out", help="output INI path (default: stdout)")
+    parser.add_argument("--out-json",
+                        help="also write the merged set as a geth-style alloc "
+                             "JSON (feeds the op-reth oracle genesis)")
     args = parser.parse_args(argv)
 
     with open(args.config) as handle:
         config = yaml.safe_load(handle)
-    allocs = build_allocs(config, args.contracts)
+    base_accounts = load_base_allocs(args.base_allocs)
+    allocs = build_allocs(config, args.contracts, base_accounts)
     ini = emit_ini(allocs)
     if args.out:
         Path(args.out).write_text(ini)
         sys.stderr.write(f"wrote {len(allocs)} alloc section(s) -> {args.out}\n")
     else:
         sys.stdout.write(ini)
+    if args.out_json:
+        Path(args.out_json).write_text(emit_alloc_json(allocs))
+        sys.stderr.write(f"wrote merged alloc JSON -> {args.out_json}\n")
     return 0
 
 

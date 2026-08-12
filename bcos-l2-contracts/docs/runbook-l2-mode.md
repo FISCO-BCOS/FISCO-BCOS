@@ -30,35 +30,42 @@ start below produces those allocs.
 All paths are relative to the repo root. `tools/opstack-genesis/` holds the
 allocs generator; `bcos-l2-contracts/` holds the Solidity suite.
 
-### 1. Build the contracts and edit a chain config
+### 1. Build the contracts, obtain the base allocs, edit a chain config
 
 ```bash
 cd tools/opstack-genesis
-make contracts    # forge build src/ + clone the pinned OP fork to /tmp + forge build it
+make contracts    # forge build of bcos-l2-contracts/src (the only artifacts genesis needs)
+# obtain final-allocs.json: the op-deployer terminal alloc JSON for the pinned
+# Karst release (bcos-l2-contracts/op-fork-pin.toml [karst_pin]); generating it
+# needs the op-deployer binary — run it wherever that binary is available.
 cp chain-config.template.yaml chain-config.yaml
 $EDITOR chain-config.yaml      # set chain_id, owner, gas/version fields
 ```
 
-`make contracts` (`tools/opstack-genesis/Makefile:36`) compiles the two
-self-written predeploys under `bcos-l2-contracts/src/`, then clones the OP fork
-pinned in `bcos-l2-contracts/op-fork-pin.toml` into `/tmp/op-fork` and builds
-its `packages/contracts-bedrock`. The OP tree is not vendored into this repo —
-see `runbook-op-fork-upgrade.md` to bump the pin.
+The op-deployer output is the ONLY source of the OP-Stack accounts (every
+0x42... proxy, every 0xc0d3... implementation, ProxyAdmin ownership,
+prefunded accounts). The OP fork source tree is NOT part of this pipeline;
+`make op-fork-build` still exists for compiling the pinned sources when you
+need to inspect them (`runbook-op-fork-upgrade.md` covers bumping the pin).
 
 ### 2. Generate the genesis allocs
 
 ```bash
-make allocs CONFIG=chain-config.yaml OUT=allocs.ini
+make allocs CONFIG=chain-config.yaml BASE=final-allocs.json OUT=allocs.ini
 # equivalently:
 python3 build-allocs.py --config chain-config.yaml \
-    --contracts ../../bcos-l2-contracts --out allocs.ini
+    --contracts ../../bcos-l2-contracts \
+    --base-allocs final-allocs.json --out allocs.ini --out-json allocs.json
 ```
 
-`allocs.ini` holds the `[alloc.N]` + `[alloc.N.storage]` fragments for all 13
-predeploys — 15 alloc sections, because the two self-written predeploys each
-expand to a proxy account (EIP-1967 slots + seeded contract storage) plus an
-implementation account. `SystemConfig`'s `chain_id` and the other config
-entries are seeded as packed Entry slots on the proxy account.
+`allocs.ini` holds one `[alloc.N]` (+ `[alloc.N.storage]`) section per merged
+account: every base-alloc account carried through verbatim, plus 4 overlay
+accounts — the two self-written predeploys each expand to a proxy account
+(EIP-1967 slots + seeded contract storage) and an implementation account.
+`SystemConfig`'s `chain_id` and the other config entries are seeded as packed
+Entry slots on the proxy account. `allocs.json` is the same merged set in
+geth-style alloc shape — feed it to the op-reth oracle genesis so both chains
+share one account set.
 
 ### 3. Assemble `config.genesis`
 
@@ -104,7 +111,7 @@ re-derived and checked on every later startup (see [Immutability](#immutability)
 ### 5. Verify
 
 ```bash
-# all 13 predeploys carry code
+# every merged predeploy carries code (spot-check; genesis-bootstrap.sh sweeps them all)
 cast code 0x43000000000000000000000000000000000000C0 --rpc-url http://127.0.0.1:8545
 
 # SystemConfig returns the seeded chain_id (value, enableNumber)

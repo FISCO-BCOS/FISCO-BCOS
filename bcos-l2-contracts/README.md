@@ -51,12 +51,15 @@ reserved for Phase B.
 
 ### Upstream OP fork (not vendored)
 
-The 11 entry-point OP-Stack predeploys that L2 genesis materializes are NOT
-checked into this repo. The exact upstream commit + the four external Solidity
-dependency SHAs (OpenZeppelin × 2, solady, solmate) live in `op-fork-pin.toml`.
-CI clones the pinned commit into `/tmp` and builds it there with OP's own
-foundry config (this project's `foundry.toml` only compiles the self-written
-`src/` contracts). Bumping the pin is documented in
+The OP-Stack predeploys are NOT checked into this repo, and their genesis
+bytecode/storage does NOT come from a forge build either: the op-deployer
+terminal alloc JSON is the only genesis source for OP accounts (see
+`tools/opstack-genesis/`). The pinned upstream commit + the four external
+Solidity dependency SHAs (OpenZeppelin × 2, solady, solmate) in
+`op-fork-pin.toml` serve source-level verification: CI clones the pinned
+commit into `/tmp` and builds it there with OP's own foundry config (this
+project's `foundry.toml` only compiles the self-written `src/` contracts).
+Bumping the pin is documented in
 [`docs/runbook-op-fork-upgrade.md`](docs/runbook-op-fork-upgrade.md) (added by
 PR-7).
 
@@ -123,14 +126,17 @@ and simulated deployments). Consequences for genesis tooling (PR-2
 1. **All storage state must come from allocs.** A predeploy constructor does
    not execute on-chain, so every storage slot a node reads at block 0 must be
    materialized in the genesis allocs, not derived from constructor logic.
-2. **Three-layer terminal state per self-written predeploy.** `build-allocs.py`
-   emits (a) the proxy account at the predeploy address — Proxy bytecode,
+2. **op-deployer base + three-layer overlay.** `build-allocs.py` takes the
+   op-deployer terminal alloc JSON as its required base (the only source of
+   OP accounts) and overlays, per self-written predeploy, (a) the proxy
+   account at the predeploy address — the base's canonical Proxy bytecode,
    EIP-1967 implementation + admin slots, `_initialized = 1`, the owner slot
    and the contract state (packed SystemConfig entries / validator records) —
    and (b) a separate implementation account (`0xc3d3...<suffix>`) carrying the
    implementation bytecode with `_initialized = 255` (initializers disabled).
-   The two authorities stay split: EIP-1967 admin = ProxyAdmin,
-   `Ownable.owner` = governance entity.
+   The two authorities stay split — EIP-1967 admin = ProxyAdmin,
+   `Ownable.owner` = governance entity — and the tool rejects a config that
+   points them at the same entity.
 3. **Constructor-emitted events are NOT emitted at genesis.** The
    `OwnershipTransferred(address(0), _owner)` (SystemConfig) and the initial
    `ValidatorSetUpdated` (L2ValidatorSet) logs only appear in
