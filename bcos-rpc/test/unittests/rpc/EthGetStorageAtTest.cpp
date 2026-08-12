@@ -119,6 +119,18 @@ public:
         stateRoot = commitIntoStateRows({{mpt::accountKeyHash(address), account.encode()}});
     }
 
+    /// Build a state trie whose account leaf has a non-zero nonce/balance but an EMPTY storage
+    /// root — a scenario-A first-touch account (MPTBuilder.h:307-310): pulled into the trie by
+    /// a balance change, with its pre-activation storage absent from the storage sub-trie.
+    void buildEmptyStorageTrie()
+    {
+        mpt::Account account;
+        account.nonce = 7;
+        account.balance = 1000;
+        // storageRoot stays default (emptyRootHash()).
+        stateRoot = commitIntoStateRows({{mpt::accountKeyHash(address), account.encode()}});
+    }
+
     /// The production wiring shape (AirNodeInitializer): the AnyStorage handle owns its
     /// adapter; only m_stateRows (the Initializer-owned backend stand-in) is borrowed.
     void wireReader() { nodeService->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows)); }
@@ -360,6 +372,49 @@ BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioBReadsZero)
 
     std::string const absent = "0x00000000000000000000000000000000000000cc";
     auto resp = getStorageAt(absent, "0x1", "0x1");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == paddedHex(0));
+}
+
+// Historical state, scenario A: an account PRESENT in the trie but with an EMPTY storage
+// root (first touch wrote only nonce/balance/code — MPTBuilder.h:307-310) has no storage in
+// the sub-trie at all. A slot query must fall back to the flat KV (its pre-activation
+// storage), not report a silent zero.
+BOOST_AUTO_TEST_CASE(HistoricalEmptyStorageRootScenarioAFallsBackToFlat)
+{
+    buildEmptyStorageTrie();
+    wireReader();
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+
+    // The pre-activation storage lives in the flat KV.
+    bcos::bytes value32(32, 0);
+    value32.back() = 0x2a;
+    storage::Entry entry;
+    entry.set(bcos::bytes(value32));
+    m_ledger->setStorageAt(address.hex(),
+        std::string{reinterpret_cast<char const*>(slotA.ref().data()), h256::SIZE},
+        std::move(entry));
+
+    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == paddedHex(42));
+}
+
+// Historical state, scenario B: the same empty-storage-root account reads zero (complete
+// trie — the account genuinely has no storage).
+BOOST_AUTO_TEST_CASE(HistoricalEmptyStorageRootScenarioBReadsZero)
+{
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
+    buildEmptyStorageTrie();
+    wireReader();
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+
+    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
     BOOST_TEST(!resp.isMember("error"));
     BOOST_REQUIRE(resp.isMember("result"));
     BOOST_TEST(resp["result"].asString() == paddedHex(0));

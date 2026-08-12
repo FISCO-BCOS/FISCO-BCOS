@@ -390,9 +390,14 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     //  - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
     //    trie / absent slot all read zero — Ethereum semantics at a committed root;
     //  - scenario A (mid-chain activation): a dormant account absent from the trie is
-    //    indistinguishable from a non-existent one → explicit error; a dormant slot absent
-    //    from the (incomplete) storage trie → fall back to the flat KV, whose value is
-    //    authoritative (it never changed after activation).
+    //    indistinguishable from a non-existent one → explicit error; a slot absent from the
+    //    (incomplete) storage trie — whether the account has no storage in the trie yet
+    //    (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
+    //    storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
+    //    is authoritative when the slot was never written after activation; if it was written
+    //    *after* the requested block the fallback returns that later value, since
+    //    ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
+    //    SlotNotInMPT fallback). Still strictly better than reporting zero.
     std::optional<std::string> flatFallback;  // scenario-A dormant-slot fallback rendering
     bcos::u256 value = 0;
     {
@@ -407,15 +412,25 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
                     EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
             }
         }
-        else if (account->storageRoot != bcos::ledger::mpt::emptyRootHash())
+        else
         {
-            bcos::ledger::mpt::Trie trie{*mptReader, account->storageRoot};
-            auto const slot = co_await trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes));
-            if (slot)
+            // The slot may be absent two ways: the account has no storage in the trie yet
+            // (storageRoot == emptyRootHash — first touch wrote only nonce/balance/code,
+            // MPTBuilder.h:307-310), or the storage trie has no leaf for this slot. Both mean
+            // "unknown at this root", not "zero", on a scenario-A chain — so the flat fallback
+            // below covers both.
+            bool slotInTrie = false;
+            if (account->storageRoot != bcos::ledger::mpt::emptyRootHash())
             {
-                value = bcos::ledger::mpt::decodeStorageValue(bcos::ref(*slot));
+                bcos::ledger::mpt::Trie trie{*mptReader, account->storageRoot};
+                if (auto const slot =
+                        co_await trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes)))
+                {
+                    value = bcos::ledger::mpt::decodeStorageValue(bcos::ref(*slot));
+                    slotInTrie = true;
+                }
             }
-            else if (!ctx.fullTrie) [[unlikely]]
+            if (!slotInTrie && !ctx.fullTrie) [[unlikely]]
             {
                 if (auto const flat = co_await ledger::getStorageAt(
                         *ledger, addressStr, positionBytes.toRawString(), blockNumber);
