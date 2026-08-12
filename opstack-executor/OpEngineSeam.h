@@ -115,6 +115,38 @@ inline OpBlockCommitments commitmentsOf(const bcos::evm::opstack::OpBlockSeal& s
     return out;
 }
 
+/// Compares the executed block's commitments against the payload's announced commitments.
+/// Returns the mismatching field name (first in comparison order), or nullopt if all match.
+/// Contract (verbatim port of the engine's comparison block, zero judgment change):
+///   - fields compared in order receiptsRoot → logsBloom → withdrawalsRoot → stateRoot →
+///     gasUsed → txRoot → blobGasUsed → requestsHash; first mismatch wins;
+///   - the txRoot slot reports the literal "transactionsRoot" (not "txRoot");
+///   - blobGasUsed / requestsHash are compared only when the COMPUTED side has a value, and the
+///     announced side is dereferenced (guaranteed present by the engine validation — see design
+///     doc §4); computed-side nullopt skips regardless of announced.
+inline std::optional<std::string> mismatchedFieldOf(
+    const OpBlockCommitments& computed, const OpBlockCommitments& announced)
+{
+    if (computed.receiptsRoot != announced.receiptsRoot)
+        return "receiptsRoot";
+    if (computed.logsBloom != announced.logsBloom)
+        return "logsBloom";
+    if (computed.withdrawalsRoot != announced.withdrawalsRoot)
+        return "withdrawalsRoot";
+    if (computed.stateRoot != announced.stateRoot)
+        return "stateRoot";
+    if (computed.gasUsed != announced.gasUsed)
+        return "gasUsed";
+    if (computed.txRoot != announced.txRoot)
+        return "transactionsRoot";
+    if (computed.blobGasUsed.has_value() && *computed.blobGasUsed != *announced.blobGasUsed)
+        return "blobGasUsed";
+    if (computed.requestsHash.has_value() &&
+        *computed.requestsHash != announced.requestsHash.value())
+        return "requestsHash";
+    return std::nullopt;
+}
+
 /// transactionsRoot over the block's raw EIP-2718 envelopes: trie key = canonical RLP of the
 /// index, trie value = **the raw wire bytes as received**.
 ///

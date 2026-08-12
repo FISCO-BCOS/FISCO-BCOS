@@ -31,9 +31,9 @@
 #include <evmone/evmone.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockSeal.h>
-#include <opstack-executor/OpRlpDecode.h>
 #include <opstack-executor/OpEngineSeam.h>
 #include <opstack-executor/OpErrors.h>
+#include <opstack-executor/OpRlpDecode.h>
 #include <opstack-executor/OpTxDecode.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
@@ -59,18 +59,6 @@ namespace bcos::evm::engine
 /// -> coinbase/baseFee/prevRandao/parentBeaconBlockRoot/gasLimit/extraData/blobGasUsed/parentHash
 /// -> parentInfo). The engine now fills one header object and `executeOpBlock`/`toBlockInfo` read
 /// the accessors directly.
-
-/// Six-way comparison surface: `seal`'s receiptsRoot/logsBloom/withdrawalsRoot
-/// (bcos::evm::opstack::OpBlockSeal, unchanged structure) plus three members below
-/// (stateRoot/gasUsed/txRoot) that are deliberately NOT folded into OpBlockSeal.
-struct OpExecuteBlockResult
-{
-    std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
-    bcos::evm::opstack::OpBlockSeal seal;
-    bcos::h256 stateRoot;
-    uint64_t gasUsed;
-    bcos::h256 txRoot;
-};
 
 namespace detail
 {
@@ -123,6 +111,14 @@ public:
     {
         return bcos::evm::engine::commitmentsOf(
             result.seal, result.stateRoot, result.gasUsed, result.txRoot);
+    }
+
+    /// Eight-field commitments comparison: returns the first mismatching field name, or nullopt.
+    /// Re-published from OpEngineSeam.h so the engine reaches it as a dependent name.
+    static std::optional<std::string> mismatchedFieldOf(
+        const OpBlockCommitments& computed, const OpBlockCommitments& announced)
+    {
+        return bcos::evm::engine::mismatchedFieldOf(computed, announced);
     }
 
     /// transactionsRoot over raw EIP-2718 envelopes — the engine needs it *before* execution to
