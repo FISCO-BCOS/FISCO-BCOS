@@ -334,4 +334,44 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     BOOST_CHECK_EQUAL(*meta->l1_gas_price, bcosU256FromIntx(F.l1_base_fee));
 }
 
+BOOST_AUTO_TEST_CASE(EmptyEnvelopeAccepted)
+{
+    // eth_call (OpCallScheduler) builds an unsigned call tx with NO signed envelope. opValidate
+    // must accept it (L1/DA fee computes to zero — flzLen=0) instead of returning
+    // invalid_argument, or every eth_call fails. Regression for the phase-1 real-node finding:
+    // eth_call reported "Invalid argument".
+    constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
+    test::TestState ts;
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
+    ts[dest] = {};
+    seedOpPredeploys(ts);
+
+    state::BlockInfo block;
+    block.number = 1;
+    block.gas_limit = 30000000;
+    block.base_fee = 7;
+    block.coinbase = OP_SEQUENCER_FEE_VAULT;
+
+    state::Transaction tx;
+    tx.type = state::Transaction::Type::eip1559;
+    tx.sender = sender;
+    tx.to = dest;
+    tx.gas_limit = 100000;
+    tx.max_gas_price = 1000;
+    tx.max_priority_gas_price = 10;
+    tx.value = intx::uint256{0};
+    tx.nonce = 0;
+
+    OpFeeParams F{};  // zero fee params
+
+    // Empty envelope {} — the eth_call signature (no signature bytes exist in a dry-run).
+    const auto v = opValidate(ts, block, tx, {}, isthmusConfig(), F, 30000000);
+    BOOST_REQUIRE_MESSAGE(std::holds_alternative<OpTxProperties>(v),
+        "empty envelope (eth_call) must be accepted, got error code");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

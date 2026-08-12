@@ -64,7 +64,7 @@ struct Fixture : public ::testing::Test
         ledgerConfig.setGasPrice({"0x0", 0});
     }
 
-    bcostars::protocol::TransactionImpl buildWeb3Tx()
+    bcostars::protocol::TransactionImpl buildWeb3Tx(uint64_t gasLimit = 5000000)
     {
         // Construct a minimal EIP-2930 Web3 tx directly (chainId=5, nonce=7, gasPrice, gasLimit,
         // to, value, empty data/accessList, yParity=0, 32-byte r/s) — the v1 raw-RLP fixture no
@@ -75,7 +75,7 @@ struct Fixture : public ::testing::Test
         w3.nonce = 7;
         w3.maxFeePerGas = bcos::u256(30000000000);  // gasPrice (EIP-2930)
         w3.maxPriorityFeePerGas = w3.maxFeePerGas;
-        w3.gasLimit = 5000000;
+        w3.gasLimit = gasLimit;
         w3.to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
         w3.value = bcos::u256(2000000000000000000);  // 2 ETH
         w3.signatureV = 0;                            // yParity
@@ -141,6 +141,45 @@ TEST_F(Fixture, ExecutesNormalTransferEndToEnd)
     EXPECT_GE(receipt->gasUsed(), 21000u);
     EXPECT_EQ(receipt->blockNumber(), 1);
     EXPECT_TRUE(receipt->opStackMeta().has_value());
+}
+
+TEST_F(Fixture, CallTxWithZeroGasUsesBlockGasLeft)
+{
+    // eth_call (CallRequest) defaults gas to 0; the executor must fall back to the block gas
+    // limit (op-geth semantics) instead of failing intrinsic-gas-too-low. Regression for the
+    // phase-1 real-node finding: eth_call reported "intrinsic gas too low".
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    auto tx = buildWeb3Tx(0);
+    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+    tx.clearSenderAndHash();
+    tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256("100000000000000000000"));
+        co_await acc.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        std::string nonceStr(tx.nonce());
+        if (nonceStr.empty())
+            nonceStr = "0";
+        co_await acc.setNonce(nonceStr);
+        co_return;
+    }());
+
+    bcos::evm::opstack::OpFeeParams fee{};  // zero fee
+    auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/true, fee, /*blockGasLeft=*/30000000,
+        /*chainId=*/10));
+    ASSERT_NE(receipt, nullptr);
+    EXPECT_EQ(receipt->status(), 0);
+    EXPECT_GE(receipt->gasUsed(), 21000u);
 }
 
 TEST_F(Fixture, RejectsForkRevisionMismatch)
