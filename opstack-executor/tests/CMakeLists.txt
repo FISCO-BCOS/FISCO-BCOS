@@ -31,6 +31,7 @@ add_executable(opstack-executor-block-tests
     OpNewPayloadRpcE2eTest.cpp
     OpSchedulerImplSmokeTest.cpp
     OpEngineBranchSmokeTest.cpp
+    OpBlockSchedulerTest.cpp
     support/SeedPreStateTest.cpp
     support/GoldenSampleTest.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
