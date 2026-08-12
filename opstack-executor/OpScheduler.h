@@ -131,7 +131,15 @@ public:
         }
 
         bcos::scheduler_v1::SchedulerExecuteResult out;
-        out.receipts = std::move(result.receipts);
+        // 拷贝（shared_ptr vector，廉价）而非 move：`SchedulerExecuteResult.receipts`（骨架
+        // pushResult / 回调面）与 `OpExecuteExtra.result.receipts`（commit hook 的
+        // opstackRegisterBlock 校验 rawTxBytes.size() !=
+        // result.receipts.size()，OpBlockRegister.h:113）都要持有完整 receipts。
+        out.receipts = result.receipts;
+        // OP 无 txpool 提交——置非空空表，避免骨架 coCommitBlock 的 notifyBlockNumber 对
+        // `*result->m_transactions` 空指针解引用（SchedulerSkeleton.h:355）。空表使 tx-submit zip
+        // 空循环，blockNumber/transaction notifier 仍正常走。
+        out.m_transactions = std::make_shared<protocol::ConstTransactions>();
         out.modeExtra = std::make_shared<OpExecuteExtra>(
             OpExecuteExtra{std::move(result), std::move(rawTxBytes)});
         co_return out;
