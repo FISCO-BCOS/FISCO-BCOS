@@ -18,7 +18,8 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
 {
     auto& tarsInput = dynamic_cast<bcostars::protocol::TransactionImpl&>(input);
     auto transaction = std::make_shared<TransactionImpl>(
-        [m_inner = std::move(tarsInput.mutableInner())]() mutable { return &m_inner; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(std::move(tarsInput.mutableInner()))));
     transaction->setSynced(input.synced());
     transaction->setSealed(input.sealed());
     transaction->setInvalid(input.invalid());
@@ -36,7 +37,7 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
     bcos::bytesConstRef txData, bool checkSig, bool checkHash, bool tainted)
 {
     auto transaction = std::make_shared<TransactionImpl>(
-        [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{}, new bcostars::Transaction()));
     transaction->setTainted(tainted);
 
     transaction->decode(txData);
@@ -101,7 +102,7 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::dec
     bcos::bytesConstRef txData, bool tainted)
 {
     auto transaction = std::make_shared<TransactionImpl>(
-        [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{}, new bcostars::Transaction()));
     transaction->setTainted(tainted);
 
     transaction->decode(txData);
@@ -138,7 +139,7 @@ bcostars::protocol::TransactionFactoryImpl::createTransaction(int32_t _version, 
     std::string _maxPriorityFeePerGas)
 {
     auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{}, new bcostars::Transaction()));
     auto& inner = transaction->mutableInner();
     inner.data.version = _version;
     inner.data.to = std::move(_to);

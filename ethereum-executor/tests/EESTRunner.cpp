@@ -1187,7 +1187,8 @@ public:
         }
 
         return std::make_shared<bcostars::protocol::TransactionImpl>(
-            [tarsTx = std::move(tarsTx)]() mutable { return tarsTx.get(); });
+            bcos::HoldablePointer<bcostars::Transaction>(
+                bcos::isOwner<false>{}, tarsTx.get()));
     }
 
     /// Verify post-state. Returns a string with mismatch details (empty = all good).

@@ -55,7 +55,8 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
     transaction.data.value = std::to_string(value);
     transaction.type = _type;
     auto pbTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(std::move(transaction))));
     // set signature
     pbTransaction->calculateHash(*_cryptoSuite->hashImpl());
 
@@ -167,7 +168,8 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
         data);
     transaction.extraTransactionBytes.assign(preimage.begin(), preimage.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(std::move(transaction))));
     // Web3 signatures sign the EIP signing hash keccak256(preimage) -- the same hash verify()
     // recovers the sender from.
     auto sigHash = bcos::crypto::keccak256Hash(bcos::ref(preimage));

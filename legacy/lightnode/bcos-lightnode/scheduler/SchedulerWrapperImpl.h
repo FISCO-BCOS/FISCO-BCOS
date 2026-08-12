@@ -27,7 +27,8 @@ private:
         bcos::concepts::receipt::TransactionReceipt auto& receipt)
     {
         auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
-            [&transaction]() { return const_cast<bcostars::Transaction*>(&transaction); });
+            bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<false>{},
+                const_cast<bcostars::Transaction*>(&transaction)));
 
         struct Awaitable : public std::suspend_always
         {

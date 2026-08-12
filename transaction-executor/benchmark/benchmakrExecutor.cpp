@@ -53,7 +53,8 @@ struct Fixture
         std::string contractAddress;
         task::syncWait([this, &contractAddress]() -> task::Task<void> {
             bcostars::protocol::TransactionImpl createTransaction(
-                [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+                bcos::HoldablePointer<bcostars::Transaction>(
+                    bcos::isOwner<true>{}, new bcostars::Transaction()));
             createTransaction.mutableInner().data.input.assign(
                 m_helloworldBytecodeBinary.begin(), m_helloworldBytecodeBinary.end());
             auto receipt = co_await m_executor.executeTransaction(
@@ -70,7 +71,8 @@ static void create(benchmark::State& state)
     Fixture fixture;
 
     bcostars::protocol::TransactionImpl transaction(
-        [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+        bcos::HoldablePointer<bcostars::Transaction>(
+            bcos::isOwner<true>{}, new bcostars::Transaction()));
     transaction.mutableInner().data.input.assign(
         fixture.m_helloworldBytecodeBinary.begin(), fixture.m_helloworldBytecodeBinary.end());
     transaction.mutableInner().dataHash.resize(1);
@@ -147,7 +149,8 @@ static void call_delegateCall(benchmark::State& state)
 
     bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
     bcostars::protocol::TransactionImpl transaction1(
-        [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+        bcos::HoldablePointer<bcostars::Transaction>(
+            bcos::isOwner<true>{}, new bcostars::Transaction()));
     auto input = abiCodec.abiIn("delegateCall()");
     transaction1.mutableInner().data.input.assign(input.begin(), input.end());
     transaction1.mutableInner().data.to = contractAddress;
@@ -172,7 +175,8 @@ static void call_deployAndCall(benchmark::State& state)
 
     bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
     bcostars::protocol::TransactionImpl transaction1(
-        [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+        bcos::HoldablePointer<bcostars::Transaction>(
+            bcos::isOwner<true>{}, new bcostars::Transaction()));
     auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(999));
     transaction1.mutableInner().data.input.assign(input.begin(), input.end());
     transaction1.mutableInner().data.to = contractAddress;

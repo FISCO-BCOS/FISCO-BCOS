@@ -154,14 +154,16 @@ bcostars::TxPoolServiceClient::sealTxs(uint64_t _txsLimit)
     for (auto& metaData : txs->inner().transactionsMetaData)
     {
         txsList.emplace_back(std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-            [m_metaData = std::move(metaData)]() mutable { return &m_metaData; }));
+            bcos::HoldablePointer<bcostars::TransactionMetaData>(bcos::isOwner<true>{},
+                new bcostars::TransactionMetaData(std::move(metaData)))));
     }
     std::vector<bcos::protocol::TransactionMetaData::Ptr> sysTxsList;
     sysTxsList.reserve(sysTxs->inner().transactionsMetaData.size());
     for (auto& metaData : sysTxs->inner().transactionsMetaData)
     {
         sysTxsList.emplace_back(std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-            [m_metaData = std::move(metaData)]() mutable { return &m_metaData; }));
+            bcos::HoldablePointer<bcostars::TransactionMetaData>(bcos::isOwner<true>{},
+                new bcostars::TransactionMetaData(std::move(metaData)))));
     }
     return std::make_tuple(std::move(txsList), std::move(sysTxsList));
 }
@@ -249,7 +251,8 @@ void bcostars::TxPoolServiceClient::asyncFillBlock(bcos::crypto::HashListPtr _tx
             for (auto&& it : *mutableFilled)
             {
                 auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-                    [m_tx = std::move(it)]() mutable { return &m_tx; });
+                    bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+                        new bcostars::Transaction(std::move(it))));
                 txs->push_back(tx);
             }
             m_callback(toBcosError(ret), txs);

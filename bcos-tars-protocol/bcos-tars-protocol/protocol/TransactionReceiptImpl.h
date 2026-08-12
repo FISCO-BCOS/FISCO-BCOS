@@ -35,18 +35,19 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/HoldablePointer.h>
 
 namespace bcostars::protocol
 {
 class TransactionReceiptImpl : public bcos::protocol::TransactionReceipt
 {
 public:
-    TransactionReceiptImpl(const TransactionReceiptImpl&) = default;
+    TransactionReceiptImpl(const TransactionReceiptImpl&) = delete;
     TransactionReceiptImpl(TransactionReceiptImpl&&) noexcept = default;
-    TransactionReceiptImpl& operator=(const TransactionReceiptImpl&) = default;
+    TransactionReceiptImpl& operator=(const TransactionReceiptImpl&) = delete;
     TransactionReceiptImpl& operator=(TransactionReceiptImpl&&) noexcept = default;
     TransactionReceiptImpl();
-    explicit TransactionReceiptImpl(std::function<bcostars::TransactionReceipt*()> inner);
+    explicit TransactionReceiptImpl(bcos::HoldablePointer<bcostars::TransactionReceipt> inner);
 
     ~TransactionReceiptImpl() override = default;
     void decode(bcos::bytesConstRef _receiptData) override;
@@ -81,14 +82,14 @@ public:
     void setInner(const bcostars::TransactionReceipt& inner);
     void setInner(bcostars::TransactionReceipt&& inner);
 
-    std::function<bcostars::TransactionReceipt*()> const& innerGetter();
+    bcos::HoldablePointer<bcostars::TransactionReceipt> const& innerGetter();
     void setLogEntries(std::vector<bcos::protocol::LogEntry> const& _logEntries);
     std::string const& message() const override;
     void setMessage(std::string message) override;
     size_t size() const override;
 
 private:
-    std::function<bcostars::TransactionReceipt*()> m_inner;
+    bcos::HoldablePointer<bcostars::TransactionReceipt> m_inner;
     mutable std::vector<bcos::protocol::LogEntry> m_logEntries;
 };
 }  // namespace bcostars::protocol

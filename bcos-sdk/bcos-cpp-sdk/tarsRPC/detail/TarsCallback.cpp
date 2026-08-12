@@ -30,9 +30,9 @@ void bcos::sdk::detail::TarsCallback::callback_sendTransaction(
     }
     m_response.emplace<protocol::TransactionReceipt::Ptr>(
         std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-            [m_inner = std::move(const_cast<bcostars::TransactionReceipt&>(response))]() mutable {
-                return std::addressof(m_inner);
-            }));
+            bcos::HoldablePointer<bcostars::TransactionReceipt>(bcos::isOwner<true>{},
+                new bcostars::TransactionReceipt(
+                    std::move(const_cast<bcostars::TransactionReceipt&>(response))))));
 }
 void bcos::sdk::detail::TarsCallback::callback_sendTransaction_exception(tars::Int32 ret)
 {
@@ -48,9 +48,9 @@ void bcos::sdk::detail::TarsCallback::callback_call(
     }
     m_response.emplace<protocol::TransactionReceipt::Ptr>(
         std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-            [m_inner = std::move(const_cast<bcostars::TransactionReceipt&>(response))]() mutable {
-                return std::addressof(m_inner);
-            }));
+            bcos::HoldablePointer<bcostars::TransactionReceipt>(bcos::isOwner<true>{},
+                new bcostars::TransactionReceipt(
+                    std::move(const_cast<bcostars::TransactionReceipt&>(response))))));
 }
 void bcos::sdk::detail::TarsCallback::callback_call_exception(tars::Int32 ret) {}
 

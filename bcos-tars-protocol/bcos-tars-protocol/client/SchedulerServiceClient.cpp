@@ -44,7 +44,8 @@ void SchedulerServiceClient::call(bcos::protocol::Transaction::Ptr _tx,
             const bcostars::Error& ret, const bcostars::TransactionReceipt& _receipt) override
         {
             auto bcosReceipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                [m_receipt = std::move(_receipt)]() mutable { return &m_receipt; });
+                bcos::HoldablePointer<bcostars::TransactionReceipt>(bcos::isOwner<true>{},
+                    new bcostars::TransactionReceipt(std::move(_receipt))));
             m_callback(toBcosError(ret), bcosReceipt);
         }
 

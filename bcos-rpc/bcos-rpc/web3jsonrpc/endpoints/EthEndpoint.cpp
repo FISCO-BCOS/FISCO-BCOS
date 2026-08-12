@@ -433,7 +433,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto encodeTxHash = web3Tx.txHash();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(web3Tx.takeToTarsTransaction())));
 
 // for web3.eth.sendRawTransaction, return the hash of raw transaction
 #if 0

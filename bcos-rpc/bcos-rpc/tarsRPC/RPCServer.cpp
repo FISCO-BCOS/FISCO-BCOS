@@ -50,9 +50,9 @@ bcostars::Error bcos::rpc::RPCServer::call(const bcostars::Transaction& request,
 
     current->setResponse(false);
     auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [inner = std::move(const_cast<bcostars::Transaction&>(request))]() mutable {
-            return &inner;
-        });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(
+                std::move(const_cast<bcostars::Transaction&>(request)))));
 
     m_params.node->scheduler()->call(std::move(transaction),
         [current](Error::Ptr const& error,
@@ -93,9 +93,9 @@ bcostars::Error bcos::rpc::RPCServer::sendTransaction(const bcostars::Transactio
 {
     current->setResponse(false);
     auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [inner = std::move(const_cast<bcostars::Transaction&>(request))]() mutable {
-            return &inner;
-        });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(
+                std::move(const_cast<bcostars::Transaction&>(request)))));
 
     bcos::task::wait([](decltype(this) self, decltype(transaction) transaction,
                          tars::TarsCurrentPtr current) -> task::Task<void> {

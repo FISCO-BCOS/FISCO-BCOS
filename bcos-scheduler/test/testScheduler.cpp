@@ -254,7 +254,8 @@ BOOST_AUTO_TEST_CASE(createContract)
     block->blockHeader()->setNumber(100);
 
     auto metaTx = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-        [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });
+        bcos::HoldablePointer<bcostars::TransactionMetaData>(bcos::isOwner<true>{},
+            new bcostars::TransactionMetaData()));
     metaTx->setHash(h256(1));
     metaTx->setTo("");
     block->appendTransactionMetaData(std::move(metaTx));

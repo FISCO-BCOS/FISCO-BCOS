@@ -35,7 +35,8 @@ bcostars::Error SchedulerServiceServer::call(
 {
     current->setResponse(false);
     auto bcosTransaction = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [m_tx = _tx]() mutable { return &m_tx; });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(_tx)));
     m_scheduler->call(bcosTransaction,
         [current](bcos::Error::Ptr&& _error, bcos::protocol::TransactionReceipt::Ptr&& _receipt) {
             bcostars::TransactionReceipt tarsReceipt;

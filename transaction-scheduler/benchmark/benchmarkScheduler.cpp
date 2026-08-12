@@ -241,7 +241,8 @@ struct Fixture
             ::ranges::views::zip(m_addresses, ::ranges::views::iota(0LU, m_addresses.size())) |
             ::ranges::views::transform([this, &abiCodec](auto&& tuple) {
                 auto transaction = std::make_unique<bcostars::protocol::TransactionImpl>(
-                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+                    bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+                        new bcostars::Transaction()));
                 auto& inner = transaction->mutableInner();
                 inner.data.to = m_contractAddress;
 

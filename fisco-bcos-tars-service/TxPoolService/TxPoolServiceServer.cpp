@@ -13,9 +13,9 @@ bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
     current->setResponse(false);
 
     auto transaction = std::make_shared<protocol::TransactionImpl>(
-        [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
-            return &m_transaction;
-        });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(
+                std::move(const_cast<bcostars::Transaction&>(tx)))));
     bcos::task::wait([](std::shared_ptr<bcos::txpool::TxPoolInterface> txpool,
                          protocol::TransactionImpl::Ptr transaction,
                          tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
@@ -42,9 +42,9 @@ bcostars::Error TxPoolServiceServer::broadcastTransaction(
     current->setResponse(false);
 
     auto transaction = std::make_shared<protocol::TransactionImpl>(
-        [m_transaction = std::move(const_cast<bcostars::Transaction&>(tx))]() mutable {
-            return &m_transaction;
-        });
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+            new bcostars::Transaction(
+                std::move(const_cast<bcostars::Transaction&>(tx)))));
     bcos::task::wait([](decltype(this) self, decltype(transaction) transaction,
                          decltype(current) current) -> bcos::task::Task<void> {
         try

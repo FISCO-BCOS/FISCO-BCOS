@@ -84,7 +84,8 @@ bcos::protocol::TransactionReceipt::ConstPtr
 bcostars::protocol::TransactionSubmitResultImpl::transactionReceipt() const
 {
     return std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-        [innerPtr = &m_inner()->transactionReceipt]() { return innerPtr; });
+        bcos::HoldablePointer<bcostars::TransactionReceipt>(
+            bcos::isOwner<false>{}, &m_inner()->transactionReceipt));
 }
 
 void bcostars::protocol::TransactionSubmitResultImpl::setTransactionReceipt(

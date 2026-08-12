@@ -248,7 +248,8 @@ bcostars::protocol::BlockImpl::transactionMetaDatas() const
     return ::ranges::views::transform(m_inner.transactionsMetaData, [](auto& inner) {
         return bcos::protocol::AnyTransactionMetaData(
             bcos::InPlace<bcostars::protocol::TransactionMetaDataImpl>{},
-            [&]() mutable { return &inner; });
+            bcos::HoldablePointer<bcostars::TransactionMetaData>(
+                bcos::isOwner<false>{}, &inner));
     });
 }
 bcos::protocol::ViewResult<bcos::protocol::AnyTransaction>
@@ -256,7 +257,8 @@ bcostars::protocol::BlockImpl::transactions() const
 {
     return ::ranges::views::transform(m_inner.transactions, [](auto& inner) {
         return bcos::protocol::AnyTransaction(
-            bcos::InPlace<bcostars::protocol::TransactionImpl>{}, [&]() mutable { return &inner; });
+            bcos::InPlace<bcostars::protocol::TransactionImpl>{},
+            bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<false>{}, &inner));
     });
 }
 bcos::protocol::ViewResult<bcos::protocol::AnyTransactionReceipt>
@@ -265,7 +267,8 @@ bcostars::protocol::BlockImpl::receipts() const
     return ::ranges::views::transform(m_inner.receipts, [](auto& receipt) {
         return bcos::protocol::AnyTransactionReceipt(
             bcos::InPlace<bcostars::protocol::TransactionReceiptImpl>{},
-            [&receipt]() { return std::addressof(receipt); });
+            bcos::HoldablePointer<bcostars::TransactionReceipt>(
+                bcos::isOwner<false>{}, &receipt));
     });
 }
 size_t bcostars::protocol::BlockImpl::size() const

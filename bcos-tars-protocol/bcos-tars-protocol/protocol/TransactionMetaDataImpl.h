@@ -28,6 +28,7 @@
 #endif
 #include "bcos-framework/protocol/TransactionMetaData.h"
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
+#include "bcos-utilities/HoldablePointer.h"
 
 namespace bcostars::protocol
 {
@@ -39,7 +40,7 @@ public:
 
     TransactionMetaDataImpl();
     TransactionMetaDataImpl(bcos::crypto::HashType hash, std::string to);
-    explicit TransactionMetaDataImpl(std::function<bcostars::TransactionMetaData*()> inner);
+    explicit TransactionMetaDataImpl(bcos::HoldablePointer<bcostars::TransactionMetaData> inner);
     ~TransactionMetaDataImpl() override = default;
     TransactionMetaDataImpl& operator=(const TransactionMetaDataImpl& _txMetaData) = delete;
     TransactionMetaDataImpl& operator=(TransactionMetaDataImpl&& _txMetaData) = default;
@@ -63,6 +64,6 @@ public:
     void setInner(bcostars::TransactionMetaData inner);
 
 private:
-    std::function<bcostars::TransactionMetaData*()> m_inner;
+    bcos::HoldablePointer<bcostars::TransactionMetaData> m_inner;
 };
 }  // namespace bcostars::protocol

@@ -83,7 +83,8 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         auto transactions =
             ::ranges::iota_view<int, int>(0, 100) | ::ranges::views::transform([](int index) {
                 return std::make_unique<bcostars::protocol::TransactionImpl>(
-                    [inner = bcostars::Transaction()]() mutable { return std::addressof(inner); });
+                    bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+                        new bcostars::Transaction()));
             }) |
             ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 

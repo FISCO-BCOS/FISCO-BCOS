@@ -36,7 +36,8 @@ BOOST_AUTO_TEST_CASE(parse_eip1559_from_tars_structured_access_list)
     auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
-    bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });
+    bcostars::protocol::TransactionImpl txImpl(
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<false>{}, tarsHolder.get()));
 
     auto const resolved = resolveWeb3AccessList(txImpl);
     BOOST_CHECK_EQUAL(resolved.web3TypedTxKind, static_cast<uint8_t>(TransactionType::EIP1559));
@@ -63,7 +64,8 @@ BOOST_AUTO_TEST_CASE(parse_eip1559_access_list_from_extra_when_tars_list_empty)
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
     tarsHolder->data.accessList.clear();
-    bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });
+    bcostars::protocol::TransactionImpl txImpl(
+        bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<false>{}, tarsHolder.get()));
     BOOST_CHECK(txImpl.web3AccessList().empty());
 
     auto const resolved = resolveWeb3AccessList(txImpl);

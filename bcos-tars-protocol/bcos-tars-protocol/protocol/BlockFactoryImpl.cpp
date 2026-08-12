@@ -51,7 +51,8 @@ bcos::protocol::TransactionMetaData::Ptr
 bcostars::protocol::BlockFactoryImpl::createTransactionMetaData()
 {
     return std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-        [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });
+        bcos::HoldablePointer<bcostars::TransactionMetaData>(bcos::isOwner<true>{},
+            new bcostars::TransactionMetaData()));
 }
 bcos::protocol::TransactionMetaData::Ptr
 bcostars::protocol::BlockFactoryImpl::createTransactionMetaData(

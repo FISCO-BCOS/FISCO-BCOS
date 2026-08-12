@@ -167,7 +167,8 @@ void LedgerServiceClient::asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _
             for (auto const& tx : _txs)
             {
                 auto bcosTx = std::make_shared<bcostars::protocol::TransactionImpl>(
-                    [m_tx = tx]() mutable { return &m_tx; });
+                    bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+                        new bcostars::Transaction(tx)));
                 bcosTxsList->emplace_back(bcosTx);
             }
             // decode the proof list
@@ -225,7 +226,8 @@ void LedgerServiceClient::asyncGetTransactionReceiptByHash(bcos::crypto::HashTyp
             const std::vector<std::string>& _proof) override
         {
             auto bcosReceipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                [m_receipt = std::move(_receipt)]() mutable { return &m_receipt; });
+                bcos::HoldablePointer<bcostars::TransactionReceipt>(bcos::isOwner<true>{},
+                    new bcostars::TransactionReceipt(std::move(_receipt))));
             auto bcosProof = std::make_shared<bcos::ledger::MerkleProof>();
             for (auto const& item : _proof)
             {

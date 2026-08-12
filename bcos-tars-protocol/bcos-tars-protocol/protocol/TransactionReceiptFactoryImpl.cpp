@@ -10,9 +10,10 @@ bcostars::protocol::TransactionReceiptImpl::Ptr
 bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(
     bcos::protocol::TransactionReceipt& input) const
 {
-    auto tarsInput = dynamic_cast<TransactionReceiptImpl&>(input);
+    auto& tarsInput = dynamic_cast<TransactionReceiptImpl&>(input);
     return std::make_shared<TransactionReceiptImpl>(
-        [m_inner = std::move(tarsInput.inner())]() mutable { return &m_inner; });
+        bcos::HoldablePointer<bcostars::TransactionReceipt>(bcos::isOwner<true>{},
+            new bcostars::TransactionReceipt(tarsInput.inner())));
 }
 
 
@@ -21,7 +22,8 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(
     bcos::bytesConstRef _receiptData) const
 {
     auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
-        [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
+        bcos::HoldablePointer<bcostars::TransactionReceipt>(
+            bcos::isOwner<true>{}, new bcostars::TransactionReceipt()));
 
     transactionReceipt->decode(_receiptData);
 
@@ -48,7 +50,8 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(bcos::u256 cons
     int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber) const
 {
     auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
-        [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
+        bcos::HoldablePointer<bcostars::TransactionReceipt>(
+            bcos::isOwner<true>{}, new bcostars::TransactionReceipt()));
     auto& data = transactionReceipt->inner();
     data.data.version = 0;
     // inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
@@ -69,7 +72,8 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt2(bcos::u256 con
     std::string effectiveGasPrice, bcos::protocol::TransactionVersion version, bool withHash) const
 {
     auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
-        [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
+        bcos::HoldablePointer<bcostars::TransactionReceipt>(
+            bcos::isOwner<true>{}, new bcostars::TransactionReceipt()));
     auto& data = transactionReceipt->inner();
     data.data.version = std::bit_cast<uint32_t>(version);
     data.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);

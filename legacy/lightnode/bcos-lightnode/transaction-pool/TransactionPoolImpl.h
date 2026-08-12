@@ -38,7 +38,8 @@ private:
         TRANSACTIONPOOL_LOG(INFO) << "Submit transaction request";
 
         auto transactionImpl = std::make_shared<bcostars::protocol::TransactionImpl>(
-            [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
+            bcos::HoldablePointer<bcostars::Transaction>(bcos::isOwner<true>{},
+                new bcostars::Transaction(std::move(transaction))));
 
         auto submitResult = co_await concepts::getRef(m_transactionPool)
                                 .submitTransaction(std::move(transactionImpl), true);
