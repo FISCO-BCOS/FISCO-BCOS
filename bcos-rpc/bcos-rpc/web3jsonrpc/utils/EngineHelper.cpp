@@ -251,11 +251,22 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     ep["blockHash"] = payload.blockHash.hexPrefixed();
 
     Json::Value transactions(Json::arrayValue);
-    for (auto const& transaction : payload.transactions)
+    // OP path: the block's transactions live in rawTransactions (raw EIP-2718 envelopes,
+    // including the 0x7E deposit) — `transactions` is the generic-path carrier and is empty on
+    // OP. Emit the raw envelopes so getPayloadV4 hands op-node the same txs execution used.
+    if (payload.rawTransactions.has_value())
     {
-        bytes encoded;
-        transaction->encode(encoded);
-        transactions.append(toHexStringWithPrefix(encoded));
+        for (auto const& raw : *payload.rawTransactions)
+            transactions.append(toHexStringWithPrefix(raw));
+    }
+    else
+    {
+        for (auto const& transaction : payload.transactions)
+        {
+            bytes encoded;
+            transaction->encode(encoded);
+            transactions.append(toHexStringWithPrefix(encoded));
+        }
     }
     ep["transactions"] = std::move(transactions);
 
@@ -280,6 +291,12 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     if (payload.excessBlobGas.has_value())
     {
         ep["excessBlobGas"] = toQuantity(*payload.excessBlobGas);
+    }
+    // OP Isthmus+: withdrawalsRoot (MessagePasser storage root) is required by newPayloadV4 on
+    // OP chains — round-trip it so getPayloadV4 hands op-node the field execution will validate.
+    if (payload.withdrawalsRoot.has_value())
+    {
+        ep["withdrawalsRoot"] = payload.withdrawalsRoot->hexPrefixed();
     }
     return ep;
 }
