@@ -11,43 +11,12 @@
 #include <sstream>
 #include <stdexcept>
 
+// isL1AttributesTx / narrowGasUsed / hexCumulative were exported to OpBlockExecute.h
+// (R3: shared with OpBlockInjector.h runOpBlockInjection — one implementation, no copy drift);
+// the anonymous-namespace copies are removed so processOpBlock sees exactly one definition.
+
 namespace bcos::evm::opstack
 {
-namespace
-{
-[[nodiscard]] bool isL1AttributesTx(const DepositTx& dep) noexcept
-{
-    // Stricter-than-spec: validate the L1 attributes deposit by content. op-geth's EL does not
-    // perform this validation (pushed down to the CL layer); op-node always prepends a deposit
-    // that satisfies both conditions, so a divergent verdict is only reachable via a hand-crafted
-    // payload fed directly to engine_newPayload. Keep the check: it rejects malformed blocks
-    // op-geth accepts, at zero cost on legitimate payloads.
-    return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
-}
-
-/// Narrow the FISCO receipt's gasUsed (u256) back to the int64 the gas pool/cumulative accounting
-/// uses. The execution layer only ever stores a small positive gas_used, but the "widen -> check ->
-/// narrow" discipline (Storage2State.h precedent) applies: a corrupt receipt must not silently
-/// wrap blockGasLeft/cumulative.
-[[nodiscard]] int64_t narrowGasUsed(const bcos::u256& gasUsed)
-{
-    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
-    if (gasUsed > kMaxInt64)
-        throw std::runtime_error("op block: receipt gasUsed exceeds int64_t range");
-    return static_cast<int64_t>(gasUsed);
-}
-
-/// "0x" + lowercase hex, no leading zeros (op-geth hexutil.Uint64 convention). Stored on the
-/// receipt's cumulativeGasUsed string field; encodeReceiptForRoot parses it back to the exact
-/// uint64 for the EncodeIndex leaf (see OpBlockSeal.cpp).
-[[nodiscard]] std::string hexCumulative(uint64_t cumulative)
-{
-    std::ostringstream oss;
-    oss << "0x" << std::hex << cumulative;
-    return oss.str();
-}
-}  // namespace
-
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg)
 {
     // C-3/C-4 are Jovian-only: op-geth calls CalcDAFootprint only under `IsJovian`

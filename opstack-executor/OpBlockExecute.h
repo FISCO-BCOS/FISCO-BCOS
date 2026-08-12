@@ -1,14 +1,20 @@
 #pragma once
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-utilities/Common.h>
 #include <array>
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <span>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -74,4 +80,44 @@ inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6
 /// on the seal side (OpBlockSeal.cpp). Throws `std::runtime_error` (block-level error) on a shape
 /// violation, the same channel as `processOpBlock`'s sibling structural checks.
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg);
+
+// ---- shared per-receipt helpers (R3 export) ----
+// `narrowGasUsed` / `hexCumulative` / `isL1AttributesTx` were promoted out of OpBlockExecute.cpp's
+// anonymous namespace (OpBlockExecute.cpp:16-49) so the per-transaction injector loop
+// (OpBlockInjector.h runOpBlockInjection) and processOpBlock share ONE implementation — the
+// "no copy drift" guard of the route-B harness (spec §7.0, review R3). Pure refactor: these three
+// are only used inside OpBlockExecute.cpp (verified by grep), and the anonymous-namespace copies
+// are deleted alongside, so no TU sees two definitions.
+
+/// Stricter-than-spec: validate the L1 attributes deposit by content. op-geth's EL does not
+/// perform this validation (pushed down to the CL layer); op-node always prepends a deposit
+/// that satisfies both conditions, so a divergent verdict is only reachable via a hand-crafted
+/// payload fed directly to engine_newPayload. Keep the check: it rejects malformed blocks
+/// op-geth accepts, at zero cost on legitimate payloads.
+[[nodiscard]] inline bool isL1AttributesTx(const DepositTx& dep) noexcept
+{
+    return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
+}
+
+/// Narrow the FISCO receipt's gasUsed (u256) back to the int64 the gas pool/cumulative accounting
+/// uses. The execution layer only ever stores a small positive gas_used, but the "widen -> check ->
+/// narrow" discipline (Storage2State.h precedent) applies: a corrupt receipt must not silently
+/// wrap blockGasLeft/cumulative.
+[[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
+{
+    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
+    if (gasUsed > kMaxInt64)
+        throw std::runtime_error("op block: receipt gasUsed exceeds int64_t range");
+    return static_cast<int64_t>(gasUsed);
+}
+
+/// "0x" + lowercase hex, no leading zeros (op-geth hexutil.Uint64 convention). Stored on the
+/// receipt's cumulativeGasUsed string field; encodeReceiptForRoot parses it back to the exact
+/// uint64 for the EncodeIndex leaf (see OpBlockSeal.cpp).
+[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
+{
+    std::ostringstream oss;
+    oss << "0x" << std::hex << cumulative;
+    return oss.str();
+}
 }  // namespace bcos::evm::opstack
