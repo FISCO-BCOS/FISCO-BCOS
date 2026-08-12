@@ -1218,17 +1218,24 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
         produce_empty_blocks=true
         fee_recipient=0x0
     */
-    m_enableSingleNodeConsensus =
-        _pt.get<bool>("consensus.enable_single_node_consensus", false);
+    m_enableSingleNodeConsensus = _pt.get<bool>("consensus.enable_single_node_consensus", false);
+    // Mutual exclusion with [op_engine_rpc].enable (loadOpEngineRpcConfig runs before this
+    // loader in loadConfig): the built-in single-node driver and an external op-node would
+    // both drive the same EngineService forkchoice/payload state. Refuse the combination at
+    // startup instead of leaving two block producers reachable by configuration.
+    if (m_enableSingleNodeConsensus && m_enableOpEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
+                "exclusive: both drive the same EngineService; enable at most one"));
+    }
     m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
-    m_singleNodeConsensusProduceEmptyBlocks =
-        _pt.get<bool>("consensus.produce_empty_blocks", true);
+    m_singleNodeConsensusProduceEmptyBlocks = _pt.get<bool>("consensus.produce_empty_blocks", true);
     m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
         "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
-    m_singleNodeConsensusPrevRandao =
-        _pt.get<std::string>("consensus.prev_randao", "");
-    m_singleNodeConsensusFixedTimestamp =
-        _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
+    m_singleNodeConsensusPrevRandao = _pt.get<std::string>("consensus.prev_randao", "");
+    m_singleNodeConsensusFixedTimestamp = _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
     NodeConfig_LOG(INFO) << LOG_DESC("loadSingleNodeConsensusConfig")
                          << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
                          << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
@@ -2647,7 +2654,8 @@ std::string bcos::tool::generateGenesisData(
            << "compatibility_version:"
            << bcos::protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << '\n'
            << "[tx]" << '\n'
-           << "gaslimit:" << genesisConfig.m_txGasLimit << '\n'
+           << "gaslimit:" << genesisConfig.m_txGasLimit
+           << '\n'
            // tx.gas_price / tx.excess_blob_gas are seeded into SYS_CONFIG at genesis and feed
            // v2 execution (base fee / blob base fee), so they must be part of the genesis pin
            // the guard at Ledger::buildGenesisBlock compares on restart — otherwise two nodes
