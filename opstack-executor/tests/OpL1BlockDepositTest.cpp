@@ -157,6 +157,35 @@ bcos::bytes makeJovianCalldataNonZero()
     return data;
 }
 
+/// Isthmus setL1BlockValues calldata (176B, selector 0x098999be), all-zero fields. Used for the
+/// C-4 Jovian-activation shape: an Isthmus-length (176B) attributes deposit in a Jovian block.
+bcos::bytes makeIsthmusCalldata()
+{
+    bcos::bytes data(176, 0);
+    data[0] = 0x09;
+    data[1] = 0x89;
+    data[2] = 0x99;
+    data[3] = 0xbe;
+    return data;
+}
+
+/// A real signed EIP-1559 user-tx envelope from the t8n vector fjord_transfer_basic.json
+/// (block.transactions[1]._op_raw, chainId 0x2105, sender 0x7e5f...5bdf). The OP path recovers the
+/// sender from the signature, so a dummy-sig envelope would recover a garbage sender with no
+/// balance; this real one recovers to the sender the fixture seeds.
+inline constexpr char kUserTxEnvelopeHex[] =
+    "02f9013e822105808405f5e1008477359400830186a094b0b000000000000000"
+    "0000000000000000000001880de0b6b3a7640000b8c80479f5f560b988c4ea6f"
+    "e8523be93037def43fa29d31cdee175dc41f337b92a83a9ea71774bcebb7ab0b"
+    "58cec7eca58ab97d783ca99951ce676ea6d1f5e6171cbf75553673c7ec123290"
+    "4e1f829da51f1620b1c9e76ddfa5ff5f5c1ac7e5baabc48f81ca620d9a1b40a7"
+    "4cd0e0dc5a18e5d1b6141249666730d8d676be8990dc9d2bed6c54304970f855"
+    "fa4a047eef26a75e4caae417010aaf87bb055d86e161a58f751cf56945e79d45"
+    "1225aee813f7aa0014e374ac53560d02b6d907225d37323feb36400786e5c001"
+    "a0c9162f1f368afac58af73432071c2ce78dfbf3e18efcc5e7f8df97117c899a"
+    "b0a07cc63b3b67568aaebd638f60578cf3aa200f3123e61f7c6cb9589b08da91"
+    "9199";
+
 /// Build a deposit envelope (0x7e + RLP list) carrying @p data as the L1-attributes calldata.
 bcos::bytes makeDepositEnvelope(bcos::bytes data, uint64_t gas = 1000000)
 {
@@ -494,6 +523,133 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
     const auto nonce = bcos::task::syncWait(acc.nonce());
     BOOST_REQUIRE(nonce.has_value());
     BOOST_CHECK_EQUAL(*nonce, std::string{"1"});
+}
+
+// B6: fork-boundary / Jovian L1-attributes block-shape rules (op-geth rollup_cost.go C-3/C-4).
+//   C-3: a normal Jovian block's attributes deposit must be >= 178B with the Jovian selector.
+//   C-4: a block whose attributes deposit is Isthmus-length (176B) is the Jovian *activation*
+//        block and must be deposits-only.
+// The rules are checked BEFORE the tx loop (validateJovianBlockShape), so a violating block
+// throws OpConsensusError -> executeOpBlock throws a runtime_error subclass.
+namespace
+{
+// Shared harness: seeded L1Block code + scheduler; returns (view, scheduler) for one block.
+struct JovianShapeFixture
+{
+    BackendMemStorage backendStorage;
+    CheckpointBackend checkpointBackend{backendStorage};
+    MLS multiLayerStorage{checkpointBackend};
+    ViewType view = multiLayerStorage.fork();
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS> scheduler;
+
+    JovianShapeFixture()
+      : scheduler([] {
+            auto cs = std::make_shared<bcos::crypto::CryptoSuite>(
+                std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+            bcos::protocol::TransactionReceiptFactory::Ptr rf{
+                std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cs)};
+            return rf;
+        }(), 0x2105,  // chainId of the real user-tx fixture (fjord_transfer_basic.json)
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 1000, .jovianTime = 2000},
+            nullptr, multiLayerStorage, {})
+    {
+        view.newMutable();
+        bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+        const auto codeHash = keccak256(code);
+        bcos::task::syncWait([&]() -> bcos::task::Task<void> {
+            bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+            co_await acc.create();
+            co_await acc.setCode(code, /*abi=*/"", codeHash);
+            co_await acc.setNonce("1");
+            // The user-tx fixture sender (fjord_transfer_basic.json) needs balance for the
+            // normal-block test where the tx actually executes.
+            const auto kUserSender =
+                evmc::from_hex<evmc::address>("7e5f4552091a69125d5dfcb7b8c2659029395bdf").value();
+            bcos::ledger::account::EVMAccount<ViewType> usr(view, kUserSender, false);
+            co_await usr.create();
+            co_await usr.setBalance(bcos::u256("1000000000000000000000"));  // 1000 ETH
+            co_await usr.setNonce("0");
+            co_await usr.setCode({}, "",
+                bcos::crypto::HashType(
+                    "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+            co_return;
+        }());
+    }
+
+    // timestampMillis must put the block in the Jovian config (>= jovianTime*1000).
+    void run(std::vector<bcos::bytes> rawTxs, int64_t timestampMillis)
+    {
+        auto header = makeOpHeader(1, timestampMillis);
+        bcos::task::syncWait(scheduler.executeOpBlock(view, *header, rawTxs));
+    }
+};
+}  // namespace
+
+// C-4 happy path: a Jovian activation block (Isthmus-length 176B attributes) with no user tx
+// must seal.
+BOOST_AUTO_TEST_CASE(JovianActivationDepositOnlySeals)
+{
+    JovianShapeFixture fx;
+    BOOST_REQUIRE_NO_THROW(fx.run(
+        {makeDepositEnvelope(makeIsthmusCalldata())}, static_cast<int64_t>(2000) * 1000 + 1000));
+}
+
+// C-4 violation: an Isthmus-length attributes deposit followed by a user tx in a Jovian block
+// must be rejected (op-geth rollup_cost.go:568-576, deposits-only activation block).
+BOOST_AUTO_TEST_CASE(JovianActivationWithUserTxRejected)
+{
+    JovianShapeFixture fx;
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeIsthmusCalldata()),
+        bcos::fromHex(kUserTxEnvelopeHex)};
+    BOOST_CHECK_THROW(fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000), std::runtime_error);
+}
+
+// C-3: a normal Jovian block (178B Jovian attributes) + a user tx must seal.
+BOOST_AUTO_TEST_CASE(JovianNormalBlockWithUserTxSeals)
+{
+    JovianShapeFixture fx;
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero()),
+        bcos::fromHex(kUserTxEnvelopeHex)};
+    try
+    {
+        fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000);
+    }
+    catch (const std::exception& e)
+    {
+        BOOST_FAIL("Jovian normal block with user tx threw: " << e.what());
+    }
+}
+
+// C-3 violation: Jovian attributes shorter than 178B (not Isthmus-length either) -> rejected.
+BOOST_AUTO_TEST_CASE(JovianShortAttributesRejected)
+{
+    JovianShapeFixture fx;
+    bcos::bytes shortData = makeJovianCalldataNonZero();
+    shortData.resize(170);
+    BOOST_CHECK_THROW(fx.run({makeDepositEnvelope(shortData)}, static_cast<int64_t>(2000) * 1000 + 1000),
+        std::runtime_error);
+}
+
+// C-3 violation: 178B but with the wrong selector -> rejected.
+BOOST_AUTO_TEST_CASE(JovianWrongSelectorRejected)
+{
+    JovianShapeFixture fx;
+    bcos::bytes wrong = makeJovianCalldataNonZero();
+    wrong[0] = 0x00;  // corrupt the selector
+    wrong[1] = 0x00;
+    wrong[2] = 0x00;
+    wrong[3] = 0x00;
+    BOOST_CHECK_THROW(fx.run({makeDepositEnvelope(wrong)}, static_cast<int64_t>(2000) * 1000 + 1000),
+        std::runtime_error);
+}
+
+// Isthmus-config block (timestamp < jovianTime): a 176B Isthmus deposit is a normal block shape
+// (has_da_footprint=false -> C-3/C-4 do not apply) and seals.
+BOOST_AUTO_TEST_CASE(IsthmusActivationBlockSeals)
+{
+    JovianShapeFixture fx;
+    BOOST_REQUIRE_NO_THROW(fx.run(
+        {makeDepositEnvelope(makeIsthmusCalldata())}, static_cast<int64_t>(1000) * 1000 + 500));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
