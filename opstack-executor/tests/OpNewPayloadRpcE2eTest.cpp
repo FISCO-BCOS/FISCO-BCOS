@@ -138,9 +138,9 @@ bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
     };
 }
 
-using OpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
+using EngineOpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
 using OpEngineService =
-    bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, OpScheduler>;
+    bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, EngineOpScheduler>;
 
 struct OpE2eFixture
 {
@@ -157,7 +157,7 @@ struct OpE2eFixture
     StubExecutor executor;
     bcos::crypto::Hash::Ptr hashImpl;
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory;
-    OpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerImpl<ViewType>)
+    EngineOpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerImpl<ViewType>)
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     /// Wiring Task 5a/5b: the engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
     /// A second OpSchedulerImpl lives inside it (own evmc::VM) — the dual-instance pin
@@ -190,7 +190,7 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
     bcos::engine::NewPayloadRequest const& request)
 {
     auto const& payload = request.executionPayload;
-    const auto transactionsRoot = OpScheduler::computeTxRoot(*payload.rawTransactions);
+    const auto transactionsRoot = EngineOpScheduler::computeTxRoot(*payload.rawTransactions);
     return bcos::engine::detail::rebuildOpEthHeader(blockFactory->blockHeaderFactory(), payload,
         transactionsRoot, *request.parentBeaconBlockRoot);
 }
@@ -323,9 +323,9 @@ void runGoldenVector(std::string const& id)
         BOOST_CHECK_MESSAGE(
             backendEntry.has_value(), id << ": tx #" << i << " SYS_HASH_2_TX in backend");
         // rawtx table absent (D1: not retained)
-        auto rawEntry = bcos::task::syncWait(
-            bcos::storage2::readOne(view, bcos::executor_v1::StateKey{OpScheduler::c_ethRawTxTable,
-                                              bcos::concepts::bytebuffer::toView(txHash)}));
+        auto rawEntry = bcos::task::syncWait(bcos::storage2::readOne(
+            view, bcos::executor_v1::StateKey{EngineOpScheduler::c_ethRawTxTable,
+                      bcos::concepts::bytebuffer::toView(txHash)}));
         BOOST_CHECK_MESSAGE(
             !rawEntry.has_value(), id << ": tx #" << i << " s_eth_hash_2_rawtx absent");
     }

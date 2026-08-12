@@ -28,7 +28,8 @@ class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:
     // Slot layout: 0 = SchedulerManager (legacy), 1 = baseline scheduler, 2 = EthereumExecutor
-    // (pure Ethereum), 3 = OP scheduler (OpBlockScheduler facade, executor_version >= 3).
+    // (pure Ethereum), 3 = OP scheduler (OpScheduler, executor_version >= 3; same instance as the
+    // engine's m_delegate — Task 5c wiring).
     static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;

@@ -31,7 +31,6 @@ add_executable(opstack-executor-block-tests
     OpNewPayloadRpcE2eTest.cpp
     OpSchedulerImplSmokeTest.cpp
     OpEngineBranchSmokeTest.cpp
-    OpBlockSchedulerTest.cpp
     OpSchedulerTest.cpp
     OpBlockInjectorTest.cpp
     OpDualPathEquivalenceTest.cpp

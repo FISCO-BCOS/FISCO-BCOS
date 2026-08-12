@@ -161,9 +161,9 @@ bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
     };
 }
 
-using OpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
+using EngineOpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
 using OpEngineService =
-    bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, OpScheduler>;
+    bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, EngineOpScheduler>;
 
 struct OpE2eFixture
 {
@@ -173,7 +173,7 @@ struct OpE2eFixture
     StubMemPool memPool;
     StubExecutor executor;
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{makeReceiptFactory()};
-    OpScheduler scheduler;
+    EngineOpScheduler scheduler;
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     OpEngineService service;
 

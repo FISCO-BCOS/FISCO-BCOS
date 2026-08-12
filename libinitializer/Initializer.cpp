@@ -78,7 +78,6 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
-#include <opstack-executor/OpBlockScheduler.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <rocksdb/slice.h>
@@ -546,10 +545,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(), opChainId, forkTimestamps);
-        // Wiring Task 5a: engine block-execution delegate = OpScheduler (slot-3 in Task 5c).
-        // Dual OpSchedulerImpl instance (design §4 pin): the seam SchedulerType (opScheduler
-        // above) serves the engine's c_opMode probe / isIsthmusActiveAt / isJovianActiveAt /
-        // computeTxRoot; the delegate owns its own OpSchedulerImpl for executeOpBlock.
+        // Wiring Task 5a/5c: engine block-execution delegate = OpScheduler (slot-3, same instance).
+        // Dual OpSchedulerImpl instance (design §4 pin, "倾向共享，若不可行则明确双实例并存"):
+        // the seam SchedulerType (opScheduler above) serves the engine's c_opMode probe /
+        // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot; the delegate owns its own
+        // OpSchedulerImpl for executeOpBlock. Sharing would require OpScheduler to accept an
+        // existing OpSchedulerImpl (its ctor currently constructs one, owning an evmc::VM) — kept
+        // dual-instance this cycle.
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),
@@ -572,16 +574,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         static_assert(OpEngineServiceT::c_opMode,
             "OP composition root must activate c_opMode (executeOpBlock SFINAE probe)");
 
-        // Slot-3 RPC-face scheduler: the OpBlockScheduler facade. It inherits OpSchedulerImpl
-        // (seam + executeOpBlock) and implements SchedulerInterface (call/reads/refuse). The RPC
-        // eth_call path routes via MultiVersionScheduler setVersion(m_executorVersion) ->
-        // getScheduler() -> slot 3. Storage ref: the same GlobalStateStorage the engine's
-        // m_globalStateStorage references (GlobalStateStorageInitializer::storage()).
-        m_opScheduler = std::make_shared<bcos::executor_v1::opstack::OpBlockScheduler<
-            GlobalStateStorage::ViewType, GlobalStateStorage>>(
-            m_protocolInitializer->blockFactory()->receiptFactory(),
-            m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkTimestamps,
-            m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage());
+        // Slot-3 RPC-face scheduler = OpScheduler (Task 5c): the SAME instance as the engine's
+        // m_delegate. Serves eth_call (OpScheduler::call, absorbed from OpBlockScheduler) and
+        // block execute/commit (via the shared SchedulerSkeleton). The RPC eth_call path routes
+        // via MultiVersionScheduler setVersion(m_executorVersion) -> getScheduler() -> slot 3.
+        m_opScheduler = opDelegate;
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(

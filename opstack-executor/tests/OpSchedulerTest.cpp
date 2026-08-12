@@ -14,9 +14,10 @@
 //    classifyException → Error 码 == OpConsensusRejected。
 // 3. classifyException 直调三分类：OpConsensusError→OpConsensusRejected / OpStorageError→
 //    OpStorageFault / 其它→UnknownError。
+// 4. CommitPersistsSevenLedgerTables（Task 5c 槽位 3 E2E）：executeBlock + commitBlock 后 7 张
+//    SYS 表落盘断言（SEV-10，取代被删 OpBlockScheduler 的 RefuseStubs）。
 //
-// 注：commit hook（opstackRegisterBlock 7 表落盘）在 Task 5c 的 scheduler E2E 覆盖；本套件只测
-// execute 等价 + 三分类（黄金约束：最小 OP 块 receipts/status/gasUsed == 直调）。
+// 黄金约束：最小 OP 块 receipts/status/gasUsed == 直调 executeOpBlock。
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpTxDecode.h>  // detail::canonicalEnvelopeBytes（deposit 信封重建）
@@ -386,6 +387,128 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock)
             std::string(resultA.receipts[i]->cumulativeGasUsed()));
         BOOST_CHECK_EQUAL(std::string(receipts[i]->effectiveGasPrice()),
             std::string(resultA.receipts[i]->effectiveGasPrice()));
+    }
+}
+
+/// 接线 Task 5c 槽位 3 E2E（SEV-10）：OpScheduler executeBlock + commitBlock 后 7 张 SYS 表落盘
+/// （SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER / SYS_CURRENT_STATE /
+/// SYS_NUMBER_2_TXS / SYS_HASH_2_RECEIPT / SYS_HASH_2_TX）。取代被删 OpBlockScheduler 的
+/// RefuseStubs（OP 块执行/提交不再被拒绝 stub，而是真正经 OpScheduler 落盘）。
+BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
+{
+    Fixture f;
+
+    // 语料信封（同 ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock）：deposit + eip1559。
+    auto depTx = makeDeposit();
+    bcos::bytes depEnv = detail::canonicalEnvelopeBytes(bcos::evm::opstack::OpBlockTx{depTx, {}});
+    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
+    std::vector<bcos::bytes> rawTxBytes{depEnv, eipEnvBytes};
+
+    auto header = makeHeader();
+
+    // 直调 executeOpBlock 得真实承诺，回填 announced 头（verify 六字段对比通过）。
+    bcos::evm::engine::OpSchedulerImpl<ViewType> directScheduler(
+        f.receiptFactory, kChainId, f.forkTimestamps);
+    auto viewA = f.multiLayerStorage.fork();
+    viewA.newMutable();
+    bcos::evm::engine::OpExecuteBlockResult resultA =
+        bcos::task::syncWait(directScheduler.executeOpBlock(viewA, *header, rawTxBytes));
+    BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
+    fillAnnouncedHeader(header, resultA);
+
+    // 块装配（SEV-8 完整信封）。
+    auto block = f.blockFactory->createBlock();
+    block->setBlockHeader(header);
+    auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
+    auto eipFiscoTx = buildFiscoTx(eipEnvBytes, f.hashImpl);
+    BOOST_REQUIRE(depFiscoTx != nullptr);
+    BOOST_REQUIRE(eipFiscoTx != nullptr);
+    block->appendTransaction(depFiscoTx);
+    block->appendTransaction(eipFiscoTx);
+
+    // executeBlock → commitBlock（槽位 3 驱动）。
+    bcos::Error::Ptr execErr;
+    bcos::protocol::BlockHeader::Ptr executedHeader;
+    bool called = false;
+    f.scheduler->executeBlock(
+        block, /*verify=*/true, [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr h, bool) {
+            called = true;
+            execErr = std::move(e);
+            executedHeader = std::move(h);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE_MESSAGE(
+        execErr == nullptr, "executeBlock failed: " << (execErr ? execErr->errorMessage() : ""));
+    BOOST_REQUIRE(executedHeader != nullptr);
+
+    bcos::Error::Ptr commitErr;
+    called = false;
+    f.scheduler->commitBlock(
+        executedHeader, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
+            called = true;
+            commitErr = std::move(e);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE_MESSAGE(commitErr == nullptr,
+        "commitBlock failed: " << (commitErr ? commitErr->errorMessage() : ""));
+
+    // ── 7 张表落盘断言 ──
+    auto const blockNumberStr = boost::lexical_cast<std::string>(header->number());
+    auto& hashImpl = *f.blockFactory->cryptoSuite()->hashImpl();
+    auto view = f.multiLayerStorage.fork();
+    const auto expectedBlockHash = header->opHeaderHash(bcos::engine::detail::opHeaderConst());
+
+    // 1. SYS_NUMBER_2_HASH[number] = blockHash（announced header opHeaderHash，commit hook key）。
+    auto number2Hash = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr}));
+    BOOST_REQUIRE_MESSAGE(number2Hash.has_value(), "SYS_NUMBER_2_HASH must be written");
+    {
+        auto const& stored = number2Hash->get();
+        BOOST_REQUIRE_EQUAL(stored.size(), size_t(32));
+        // Compare as hex: the entry stores raw bytes as char (signed on AppleClang), so a
+        // byte-wise std::equal against h256's unsigned bytes fails for high bytes (>= 0x80).
+        BOOST_CHECK_EQUAL(bcos::toHex(stored), expectedBlockHash.hex());
+    }
+
+    // 2. SYS_HASH_2_NUMBER[blockHash] = number。
+    auto hash2Number = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
+                                          bcos::concepts::bytebuffer::toView(expectedBlockHash)}));
+    BOOST_REQUIRE_MESSAGE(hash2Number.has_value(), "SYS_HASH_2_NUMBER must be written");
+    BOOST_CHECK_EQUAL(std::string(hash2Number->get()), blockNumberStr);
+
+    // 3. SYS_NUMBER_2_BLOCK_HEADER[number] = tars header（非空）。
+    auto headerEntry = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}));
+    BOOST_REQUIRE_MESSAGE(headerEntry.has_value(), "SYS_NUMBER_2_BLOCK_HEADER must be written");
+    BOOST_CHECK(!headerEntry->get().empty());
+
+    // 4. SYS_CURRENT_STATE[SYS_KEY_CURRENT_NUMBER] = number（head 推进）。
+    auto currentState = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER}));
+    BOOST_REQUIRE_MESSAGE(currentState.has_value(), "SYS_CURRENT_STATE head must advance");
+    BOOST_CHECK_EQUAL(std::string(currentState->get()), blockNumberStr);
+
+    // 5. SYS_NUMBER_2_TXS[number] = tx metadata（SEV-10 第 7 表）。
+    auto number2Txs = bcos::task::syncWait(
+        bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr}));
+    BOOST_REQUIRE_MESSAGE(number2Txs.has_value(), "SYS_NUMBER_2_TXS (SEV-10) must be written");
+    BOOST_CHECK(!number2Txs->get().empty());
+
+    // 6/7. 每笔 tx 的 SYS_HASH_2_RECEIPT + SYS_HASH_2_TX。
+    for (auto const& env : rawTxBytes)
+    {
+        const auto txHash = hashImpl.hash(env);
+        auto receiptEntry = bcos::task::syncWait(
+            bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
+                                              bcos::concepts::bytebuffer::toView(txHash)}));
+        BOOST_REQUIRE_MESSAGE(
+            receiptEntry.has_value(), "SYS_HASH_2_RECEIPT must be written for tx " << txHash.hex());
+        auto txEntry = bcos::task::syncWait(bcos::storage2::readOne(view,
+            StateKey{bcos::ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)}));
+        BOOST_REQUIRE_MESSAGE(
+            txEntry.has_value(), "SYS_HASH_2_TX must be written for tx " << txHash.hex());
     }
 }
 
