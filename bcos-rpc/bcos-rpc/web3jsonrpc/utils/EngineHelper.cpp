@@ -85,6 +85,9 @@ uint64_t engineSecondsToInternalMillis(uint64_t seconds)
 
 uint64_t internalMillisToEngineSeconds(uint64_t millis)
 {
+    // Integer division truncates: sub-second precision is deliberately dropped at the
+    // Engine boundary — execution-apis timestamps are second-granular, and blocks built
+    // from Engine attributes carry whole-second internal timestamps anyway.
     return millis / c_millisPerSecond;
 }
 }  // namespace

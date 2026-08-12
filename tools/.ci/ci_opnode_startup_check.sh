@@ -116,10 +116,14 @@ grep -q "conf/op-engine/jwt.hex" config.ini || fail "jwt_secret_file not in conf
 
 log "starting fisco-bcos node"
 bash start.sh >/dev/null 2>&1 || fail "start.sh failed"
-# anchor the pattern to this check's node dir (start.sh execs
-# "${NODE_DIR}/../fisco-bcos -c config.ini ...") so unrelated local fisco-bcos
-# processes are never matched (and never killed by cleanup)
-NODE_PID=$(pgrep -f "${NODE_DIR}" || true)
+# the node's cmdline is "<start.sh's pwd>/../fisco-bcos -c config.ini" (start.sh resolves
+# SHELL_FOLDER with `cd ...; pwd`). That is normally the literal ${NODE_DIR}, but under a
+# symlinked root the shell's pwd may resolve differently and a single pattern silently
+# never matches, leaving cleanup's kill fallback dead — so try the logical and the
+# physical form. Keeping the node dir in the pattern scopes the match to this check's
+# node only; unrelated local fisco-bcos processes are never matched or killed.
+NODE_PID=$(pgrep -f "${NODE_DIR}/../fisco-bcos" ||
+    pgrep -f "$(cd "${NODE_DIR}" && pwd -P)/../fisco-bcos" || true)
 for _ in $(seq 1 40); do
     if rpc_call "${L2_RPC_URL}" '"eth_chainId"' '[]' | grep -q result; then break; fi
     sleep 1

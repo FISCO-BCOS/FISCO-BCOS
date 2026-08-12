@@ -77,5 +77,30 @@ BOOST_AUTO_TEST_CASE(bothDriversEnabledRejectedAtStartup)
     BOOST_CHECK_THROW(probe.loadSingleNodeConsensusConfig(pt), InvalidConfig);
 }
 
+BOOST_AUTO_TEST_CASE(bothDriversEnabledRejectedInReverseLoadOrder)
+{
+    // The guard must not depend on loadConfig's loader order: run the loaders in reverse
+    // (single-node consensus first) and the symmetric check in loadOpEngineRpcConfig fires.
+    LoaderProbe probe;
+    auto pt = fromIni(
+        "[consensus]\nenable_single_node_consensus=true\n"
+        "[op_engine_rpc]\nenable=true\n");
+    probe.loadSingleNodeConsensusConfig(pt);
+    BOOST_CHECK_THROW(probe.loadOpEngineRpcConfig(pt), InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(engineDrivenBlockProduction)
+{
+    LoaderProbe probe;
+    BOOST_CHECK(!probe.engineDrivenBlockProduction());
+    probe.loadOpEngineRpcConfig(fromIni("[op_engine_rpc]\nenable=true\n"));
+    BOOST_CHECK(probe.engineDrivenBlockProduction());
+
+    LoaderProbe probe2;
+    probe2.loadSingleNodeConsensusConfig(
+        fromIni("[consensus]\nenable_single_node_consensus=true\n"));
+    BOOST_CHECK(probe2.engineDrivenBlockProduction());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

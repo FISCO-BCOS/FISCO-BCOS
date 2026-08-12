@@ -2,11 +2,19 @@
 """Unit tests for gen_rollup_config.py: the emitted rollup.json must carry every
 field op-node v1.19.3 rollup.Config.Check() validates, with all fork times 0
 (post-Karst genesis) and a non-empty chain_op_config."""
+import importlib.util
 import json
+from pathlib import Path
 
 import pytest
 
-import gen_rollup_config as gen
+# Load by file path (same as test_build_allocs.py): tools/opstack-genesis/ is not a
+# package, so a plain `import gen_rollup_config` only works under pytest's default
+# rootdir sys.path insertion — path loading keeps the test import-mode independent.
+_SPEC = importlib.util.spec_from_file_location(
+    "gen_rollup_config", str(Path(__file__).parent / "gen_rollup_config.py"))
+gen = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(gen)
 
 L1_HASH = "0x" + "11" * 32
 L2_HASH = "0x" + "22" * 32

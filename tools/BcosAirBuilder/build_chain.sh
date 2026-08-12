@@ -1660,10 +1660,23 @@ EOF
 
 generate_jwt_secret() {
     local conf_dir="${1}"
+    local jwt_file="${conf_dir}/op-engine/jwt.hex"
     mkdir -p "${conf_dir}/op-engine"
     # Engine API JWT shared secret: 32 random bytes hex-encoded,
-    # 64 hex chars + trailing newline (65 bytes total)
-    ${OPENSSL_CMD} rand -hex 32 >"${conf_dir}/op-engine/jwt.hex"
+    # 64 hex chars + trailing newline (65 bytes total). Created 0600 (umask 077):
+    # it authenticates the Engine API and must not be world-readable.
+    jwt_secret_valid() {
+        grep -qE '^[0-9a-fA-F]{64}$' "${1}" 2>/dev/null && [ "$(wc -c <"${1}")" -eq 65 ]
+    }
+    (umask 077 && ${OPENSSL_CMD} rand -hex 32 >"${jwt_file}") || true
+    if ! jwt_secret_valid "${jwt_file}"; then
+        # openssl failed or produced garbage (e.g. tassl bootstrap not ready): python3 fallback
+        (umask 077 && python3 -c 'import secrets; print(secrets.token_hex(32))' >"${jwt_file}") || true
+    fi
+    if ! jwt_secret_valid "${jwt_file}"; then
+        LOG_FATAL "failed to generate Engine API JWT secret at ${jwt_file} (openssl and python3 both failed?)"
+    fi
+    chmod 600 "${jwt_file}"
 }
 
 generate_p2p_connected_conf() {

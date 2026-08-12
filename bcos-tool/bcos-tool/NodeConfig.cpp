@@ -841,6 +841,16 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
 
     m_enableOpEngineRpc = enableOpEngineRpc;
+    // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
+    // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
+    // order and also when a loader is invoked on its own.
+    if (m_enableOpEngineRpc && m_enableSingleNodeConsensus)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
+                "exclusive: both drive the same EngineService; enable at most one"));
+    }
     m_opEngineRpcListenIP = listenIP;
     m_opEngineRpcListenPort = listenPort;
     m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
@@ -1219,10 +1229,11 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
         fee_recipient=0x0
     */
     m_enableSingleNodeConsensus = _pt.get<bool>("consensus.enable_single_node_consensus", false);
-    // Mutual exclusion with [op_engine_rpc].enable (loadOpEngineRpcConfig runs before this
-    // loader in loadConfig): the built-in single-node driver and an external op-node would
-    // both drive the same EngineService forkchoice/payload state. Refuse the combination at
-    // startup instead of leaving two block producers reachable by configuration.
+    // Mutual exclusion with [op_engine_rpc].enable: the built-in single-node driver and an
+    // external op-node would both drive the same EngineService forkchoice/payload state.
+    // Refuse the combination at startup instead of leaving two block producers reachable by
+    // configuration. The check is symmetric (loadOpEngineRpcConfig carries the same guard),
+    // so it does not depend on the order the two loaders run in loadConfig.
     if (m_enableSingleNodeConsensus && m_enableOpEngineRpc)
     {
         BOOST_THROW_EXCEPTION(
@@ -2301,6 +2312,11 @@ bool NodeConfig::enableOpEngineRpc() const
 bool NodeConfig::enableSingleNodeConsensus() const
 {
     return m_enableSingleNodeConsensus;
+}
+
+bool NodeConfig::engineDrivenBlockProduction() const
+{
+    return m_enableSingleNodeConsensus || m_enableOpEngineRpc;
 }
 
 uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
