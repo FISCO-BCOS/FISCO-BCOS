@@ -101,6 +101,21 @@ public:
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()),
                     nullptr);
             }
+            catch (...)
+            {
+                // Typed-catch RTTI bypass (same phenomenon documented in the block path's
+                // catch(...) clause, OpSchedulerImpl.h:256-273): the -fno-rtti libevmone.a brings
+                // a hidden non-unique typeinfo for std::exception, so the catch(const
+                // std::exception&) above does NOT reliably bind std::runtime_error thrown by
+                // evmone/opstack-linked code inside coCallLatest -> OpstackExecutor::
+                // executeTransaction. Without this fallback such throws escape call() -> task::wait
+                // into the EthEndpoint awaitable's unguarded await_suspend, crashing/hanging the
+                // RPC coroutine instead of returning a JSON-RPC Error. The original message is
+                // unrecoverable here (no typed handle on the caught object).
+                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+                       "OpBlockScheduler::call: unknown (RTTI-bypassed) exception"),
+                    nullptr);
+            }
         }());
     }
 
