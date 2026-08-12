@@ -143,6 +143,35 @@ def test_proxied_predeploy_requires_both_authorities(tmp_path):
         build_allocs.build_allocs(config, str(contracts))
 
 
+def test_raw_storage_accepts_int_and_hex_string_values(tmp_path):
+    # YAML parses unquoted 0x10 into int 16; the tool must take ints as-is
+    # instead of re-reading their decimal digits as hex (16 -> 22).
+    contracts = _base_contracts(tmp_path)
+    predeploy = _system_config_predeploy(
+        system_config={}, storage={16: 16, "0x20": "0x2a"})
+    allocs = build_allocs.build_allocs(_config(predeploy), str(contracts))
+    storage = allocs[0]["storage"]
+    assert storage[16] == 16      # int slot/value used verbatim
+    assert storage[0x20] == 0x2a  # hex strings parsed as hex
+
+
+def test_empty_consensus_public_key_rejected(tmp_path):
+    contracts = _base_contracts(tmp_path)
+    _write_artifact(contracts, "L2ValidatorSet.sol", "L2ValidatorSet", "0xbeef")
+    predeploy = {
+        "name": "L2ValidatorSet",
+        "address": VALIDATOR_SET_ADDR,
+        "sol_file": "L2ValidatorSet.sol",
+        "proxy": {"implementation": VALIDATOR_SET_IMPL},
+        "validators": [{
+            "address": "0x1111111111111111111111111111111111111111",
+            "consensus_public_key": "0x",
+        }],
+    }
+    with pytest.raises(ValueError, match="consensus_public_key is empty"):
+        build_allocs.build_allocs(_config(predeploy), str(contracts))
+
+
 def test_zero_governance_owner_rejected(tmp_path):
     contracts = _base_contracts(tmp_path)
     config = _config(_system_config_predeploy())

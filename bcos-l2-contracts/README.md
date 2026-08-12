@@ -28,7 +28,10 @@ addressing convention (2-byte suffix identifies the contract) one prefix up.
 
 `SystemConfig` is a generic key→value store: `setValueByKey(key, value,
 enableNumber)` / `getValueByKey(key)`, each entry packed as `(uint192 value,
-uint64 enableNumber)` in a single slot. The L2 upper layers read a key's slot
+uint64 enableNumber)` in a single slot. Runtime writes are whitelisted —
+currently only `block_tx_count_limit`; `chain_id`, `gas_limit`,
+`compatibility_version` and `feature_flags` are genesis-frozen (D4 authority
+boundary). The L2 upper layers read a key's slot
 directly (no EVM) via `keccak256(utf8(key) ‖ be32(baseSlot))`, where `baseSlot`
 is the slot of `_config` (101, after the OZ upgradeable base; pinned by PR-7's
 storage-layout gate). `getValueByKey` is the EVM-callable path for external

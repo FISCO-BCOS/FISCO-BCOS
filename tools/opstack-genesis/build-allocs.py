@@ -171,6 +171,18 @@ def strip0x(value):
     return text[2:] if text.startswith("0x") else text
 
 
+def word_int(value):
+    """Parse a storage slot/value that may arrive as int or hex string.
+
+    YAML parses an unquoted `0x10` into the int 16; feeding that through
+    `int(strip0x(...), 16)` would silently re-read the decimal digits as hex
+    (16 -> 22). Ints are taken as-is; only strings go through hex parsing.
+    """
+    if isinstance(value, int):
+        return value
+    return int(strip0x(value), 16)
+
+
 def address_int(value):
     """Parse a 20-byte address (hex string) into an int, validating width."""
     text = strip0x(value)
@@ -268,6 +280,9 @@ def validator_storage(validators):
         if packed:
             storage[record_base] = packed
         public_key = bytes.fromhex(strip0x(validator["consensus_public_key"]))
+        if not public_key:
+            raise ValueError(
+                f"validator {validator['address']}: consensus_public_key is empty")
         put_dynamic_bytes(storage, record_base + 1, public_key)
     return storage
 
@@ -367,7 +382,7 @@ def build_proxied_allocs(predeploy, config, contracts_dir):
     storage.update(system_config_entry_storage(predeploy.get("system_config", {})))
     storage.update(validator_storage(predeploy.get("validators", [])))
     for slot, value in (predeploy.get("storage") or {}).items():
-        storage[int(strip0x(slot), 16)] = int(strip0x(value), 16)
+        storage[word_int(slot)] = word_int(value)
 
     proxy_alloc = {
         "address": normalize_hex(predeploy["address"]),
