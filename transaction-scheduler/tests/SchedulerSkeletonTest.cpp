@@ -19,11 +19,15 @@
  *        the skeleton as real protected methods) and drives coExecuteBlock /
  *        coCommitBlock through their public SchedulerInterface face.
  *
- *        NOTE on the classify test: coExecuteBlock's catch only matches exceptions
- *        whose std::exception subobject is reached through bcos::Exception (the
- *        real-world error type). A raw std::runtime_error is NOT caught by the
- *        coroutine body's catch in this toolchain — pre-existing behavior shared by
- *        BaselineScheduler — so the fake throws a DERIVE_BCOS_EXCEPTION type.
+ *        NOTE on the classify test: coExecuteBlock's catch (std::exception&) matches
+ *        ANY std::exception subclass, with no type discrimination. bcos-task
+ *        propagates a failed child as an exception_ptr — PromiseBase::unhandled_exception()
+ *        stores current_exception(), and Awaitable::await_resume() rethrows the
+ *        original exception at the parent co_await point — so both a raw
+ *        std::runtime_error and a bcos::Exception subclass are caught alike. The fake
+ *        throws a DERIVE_BCOS_EXCEPTION type only because that is the real-world error
+ *        type (richer boost::diagnostic_information); it is not required for the catch
+ *        to match.
  * @file SchedulerSkeletonTest.cpp
  */
 
@@ -73,7 +77,9 @@ struct FakeLedger
 };
 
 /// Thrown by the fake's loadLedgerConfig to exercise the A3 classify path. Uses a
-/// DERIVE_BCOS_EXCEPTION type (bcos::Exception) so the coroutine catch matches it.
+/// DERIVE_BCOS_EXCEPTION type (bcos::Exception) as the real-world error type; the
+/// coroutine's catch (std::exception&) would equally match a bare std::runtime_error
+/// (bcos-task rethrows the original exception at the parent co_await point).
 DERIVE_BCOS_EXCEPTION(FakeExecuteBoom);
 
 /// A minimal Derived that implements the skeleton's whole contract.
