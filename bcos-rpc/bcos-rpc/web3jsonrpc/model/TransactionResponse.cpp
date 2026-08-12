@@ -1,4 +1,5 @@
 #include "TransactionResponse.h"
+#include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include <bcos-crypto/hash/Keccak256.h>
 
@@ -43,6 +44,33 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     result["gasPrice"] = toQuantity(gasPrice.value_or(0));
     result["hash"] = tx.hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx.input());
+
+    // OP Stack deposit (0x7e): extraTransactionBytes carries the full raw envelope, and
+    // the geth-shaped deposit fields (sourceHash/mint/isSystemTx, zero nonce/gasPrice and
+    // zero v/r/s — deposits are unsigned) come from decoding it. Return early: the
+    // signature-derived fields below have no deposit semantics.
+    if (auto extraBytes = tx.extraTransactionBytes();
+        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    {
+        DepositTransaction deposit;
+        auto rawCursor = bcos::bytesRef(const_cast<byte*>(extraBytes.data()), extraBytes.size());
+        if (auto error = decodeDepositTransaction(rawCursor, deposit); error == nullptr)
+        {
+            combineDepositTxResponse(result, deposit);
+        }
+        else
+        {
+            // Undecodable deposit bytes: keep the generic fields already filled and mark
+            // the type; never fall through to the Web3 payload decoder (wrong format) or
+            // to the signature fields (deposits carry none).
+            result["type"] = toQuantity(static_cast<uint64_t>(c_depositTxType));
+            result["nonce"] = "0x0";
+            result["v"] = "0x0";
+            result["r"] = "0x0";
+            result["s"] = "0x0";
+        }
+        return;
+    }
 
     if (tx.type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
     {

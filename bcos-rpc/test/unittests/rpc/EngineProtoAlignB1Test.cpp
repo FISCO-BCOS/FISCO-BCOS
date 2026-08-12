@@ -18,10 +18,7 @@
  *        ExecutionPayload.withdrawalsRoot and GetPayloadData.parentBeaconBlockRoot.
  */
 
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
-#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -32,14 +29,6 @@ using namespace bcos::rpc;
 
 namespace
 {
-bcos::protocol::TransactionFactory::Ptr makeTransactionFactory()
-{
-    auto hashImpl = std::make_shared<crypto::Keccak256>();
-    auto sign = std::make_shared<crypto::Secp256k1Crypto>();
-    auto cryptoSuite = std::make_shared<crypto::CryptoSuite>(hashImpl, sign, nullptr);
-    return std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
-}
-
 Json::Value makeBaseAttributes()
 {
     Json::Value attrs(Json::objectValue);
@@ -174,7 +163,6 @@ BOOST_AUTO_TEST_CASE(payloadAttributesTransactionsMustBeArray)
 
 BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
 {
-    auto factory = makeTransactionFactory();
     auto const withdrawalsRootHex =
         std::string("0x9999999999999999999999999999999999999999999999999999999999999999");
 
@@ -184,7 +172,7 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
     params.append(ep);
 
     // withdrawalsRoot is a V4+ (Isthmus) payload field, so the round trip runs at V4.
-    auto request = parseNewPayloadRequest(params, *factory, engine::ApiVersion::V4);
+    auto request = parseNewPayloadRequest(params, engine::ApiVersion::V4);
     BOOST_REQUIRE(request.executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK_EQUAL(request.executionPayload.withdrawalsRoot->hexPrefixed(), withdrawalsRootHex);
 
@@ -195,14 +183,13 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
     // Parse the serialized payload again: the field survives a full round trip.
     Json::Value reparseParams(Json::arrayValue);
     reparseParams.append(serialized);
-    auto reparsed = parseNewPayloadRequest(reparseParams, *factory, engine::ApiVersion::V4);
+    auto reparsed = parseNewPayloadRequest(reparseParams, engine::ApiVersion::V4);
     BOOST_CHECK(
         reparsed.executionPayload.withdrawalsRoot == request.executionPayload.withdrawalsRoot);
 }
 
 BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootIgnoredBeforeV4)
 {
-    auto factory = makeTransactionFactory();
     auto ep = makeBaseExecutionPayload();
     ep["withdrawalsRoot"] = "0x9999999999999999999999999999999999999999999999999999999999999999";
     Json::Value params(Json::arrayValue);
@@ -210,7 +197,7 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootIgnoredBeforeV4)
 
     // V1-V3: the field is ignored (matches op-geth NewPayloadV3, which performs no
     // withdrawalsRoot validation; the Isthmus spec leaves pre-V4 handling unspecified).
-    auto request = parseNewPayloadRequest(params, *factory, engine::ApiVersion::V3);
+    auto request = parseNewPayloadRequest(params, engine::ApiVersion::V3);
     BOOST_CHECK(!request.executionPayload.withdrawalsRoot.has_value());
 
     // Even with the struct field set, V1-V3 serialization never emits it.
@@ -222,11 +209,10 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootIgnoredBeforeV4)
 
 BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootAbsentByDefault)
 {
-    auto factory = makeTransactionFactory();
     Json::Value params(Json::arrayValue);
     params.append(makeBaseExecutionPayload());
 
-    auto request = parseNewPayloadRequest(params, *factory, engine::ApiVersion::V1);
+    auto request = parseNewPayloadRequest(params, engine::ApiVersion::V1);
     BOOST_CHECK(!request.executionPayload.withdrawalsRoot.has_value());
 
     auto serialized = serializeExecutionPayload(request.executionPayload, engine::ApiVersion::V1);

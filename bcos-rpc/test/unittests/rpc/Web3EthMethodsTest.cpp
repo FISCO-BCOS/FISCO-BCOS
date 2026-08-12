@@ -38,7 +38,9 @@ public:
     {
         std::promise<bcos::bytes> promise;
         web3JsonRpc->onRPCRequest(
-            request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+            request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -201,6 +203,22 @@ BOOST_AUTO_TEST_CASE(getFilterChangesUnknownId)
 {
     auto resp = call(req("eth_getFilterChanges", R"(["0x999"])"));
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsBlobTransaction)
+{
+    // L2 never admits blob (type-3) transactions; rejected before RLP decoding.
+    auto resp = call(req("eth_sendRawTransaction", R"(["0x03deadbeef"])"));
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_NE(resp["error"]["message"].asString().find("blob"), std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsDepositTransaction)
+{
+    // Deposits (0x7e) are CL-injected via the Engine API only, never via the tx pool.
+    auto resp = call(req("eth_sendRawTransaction", R"(["0x7edeadbeef"])"));
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_NE(resp["error"]["message"].asString().find("deposit"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)

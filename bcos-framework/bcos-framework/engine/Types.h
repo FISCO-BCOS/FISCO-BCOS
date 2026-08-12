@@ -96,6 +96,18 @@ struct PayloadAttributes
     std::optional<std::uint64_t> minBaseFee;
 };
 
+/// One Engine-API transaction. The raw EIP-2718 bytes are the canonical wire form and
+/// are preserved byte-for-byte through parse -> payload cache -> serialization (getPayload
+/// must return exactly what newPayload received). The decoded form is the executable
+/// representation where one exists: locally built payloads carry the mempool transaction
+/// here; externally received payloads and deposits carry raw bytes only until execution
+/// wiring decodes them.
+struct EngineTransaction
+{
+    bytes raw;
+    protocol::Transaction::Ptr decoded;
+};
+
 struct ExecutionPayload
 {
     // Required by ExecutionPayloadV1/V2/V3/V4.
@@ -108,7 +120,7 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
-    bcos::protocol::Transactions transactions;
+    std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
     std::uint64_t timestamp = 0;

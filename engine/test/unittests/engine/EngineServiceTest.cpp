@@ -5,8 +5,11 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
+#include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
@@ -67,6 +70,46 @@ static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t n
     tx->calculateHash(hasher);
     tx->markClean();
     tx->setImportTime(nonce);
+    return tx;
+}
+
+/// A Web3-typed transaction with a real EIP-1559 signing payload and a 65-byte
+/// signature, shaped exactly like the eth_sendRawTransaction ingress produces:
+/// type=Web3Transaction, extraTransactionBytes = 0x02 || rlp(unsigned fields),
+/// signature = r(32) || s(32) || yParity(1). calculateHash() runs the same raw-bytes
+/// splice buildPayload uses, so constructing one also validates the payload shape.
+static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint64_t nonce)
+{
+    bytes body;
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // chainId
+    bcos::codec::rlp::encode(body, nonce);
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));      // maxFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(21000));  // gasLimit
+    bcos::codec::rlp::encode(body, Address("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"));
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));  // value
+    bcos::codec::rlp::encode(body, bytes{});                   // data
+    body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);          // empty accessList
+    bytes payload;
+    payload.push_back(0x02);
+    bcos::codec::rlp::encodeHeader(
+        payload, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    payload.insert(payload.end(), body.begin(), body.end());
+
+    auto tx = std::make_shared<TestTransactionImpl>();
+    tx->mutableInner().type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
+    tx->mutableInner().extraTransactionBytes.assign(payload.begin(), payload.end());
+    bytes signature(65, 0);
+    signature[31] = 0x12;  // r != 0
+    signature[63] = 0x34;  // s != 0
+    signature[64] = 0x01;  // yParity
+    tx->mutableInner().signature.assign(signature.begin(), signature.end());
+    tx->setNonce("0x" + std::to_string(nonce));
+    tx->forceSender(toBytes(senderBytes));
+    Keccak256 hasher;
+    tx->calculateHash(hasher);
+    tx->markClean();
+    tx->setImportTime(static_cast<int64_t>(nonce));
     return tx;
 }
 
@@ -582,6 +625,168 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     BOOST_CHECK_EQUAL(*committed->parentBeaconBlockRoot, *request.parentBeaconBlockRoot);
     BOOST_REQUIRE(committed->executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK_EQUAL(*committed->executionPayload.withdrawalsRoot, withdrawalsRoot);
+}
+
+BOOST_AUTO_TEST_CASE(build_payload_reassembles_web3_raw_bytes)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("dddddddddddddddddddd", 20);
+    auto tx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{tx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
+    auto const& engineTx = payload->executionPayload.transactions.front();
+
+    // The wire form is the reassembled signed EIP-2718 raw envelope, not Tars encoding.
+    BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(engineTx.raw)) ==
+                bcos::engine::RawTransactionKind::DynamicFee);
+    // keccak256(raw) is the canonical txHash — the exact equality op-node depends on
+    // when it recomputes transaction hashes from getPayload's raw bytes.
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bcos::ref(engineTx.raw)), tx->hash());
+    // Dual model: the decoded executable form is the sealed mempool transaction itself.
+    BOOST_CHECK(engineTx.decoded == tx);
+
+    // A native Tars encoding, by contrast, dispatches as Unsupported — pinning why the
+    // buildPayload Tars fallback wire form cannot pass newPayload validation and is
+    // reserved for flows that stop at getPayload.
+    bytes tarsEncoded;
+    makeTx(sender, 1)->encode(tarsEncoded);
+    BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(tarsEncoded)) ==
+                bcos::engine::RawTransactionKind::Unsupported);
+}
+
+BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    // dep-1: raw 0x7E deposit bytes. Only the first byte matters to the dispatch table;
+    // byte fidelity is asserted on the full vector.
+    bytes const depositRaw{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05};
+    bytes const legacyRaw{0xc9, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80};
+    bytes const typedRaw{0x02, 0xf8, 0x01, 0x02};
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.executionPayload.transactions.push_back({.raw = depositRaw, .decoded = nullptr});
+    request.executionPayload.transactions.push_back({.raw = legacyRaw, .decoded = nullptr});
+    request.executionPayload.transactions.push_back({.raw = typedRaw, .decoded = nullptr});
+
+    // Deposit / legacy / typed all dispatch as admissible payload transactions.
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    // getPayload returns exactly the bytes newPayload received (dep-1 byte-for-byte).
+    auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(committed->executionPayload.transactions.size(), 3);
+    BOOST_CHECK(committed->executionPayload.transactions[0].raw == depositRaw);
+    BOOST_CHECK(committed->executionPayload.transactions[1].raw == legacyRaw);
+    BOOST_CHECK(committed->executionPayload.transactions[2].raw == typedRaw);
+}
+
+BOOST_AUTO_TEST_CASE(new_payload_rejects_blob_and_unknown_transaction_types)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // A single blob transaction invalidates the whole payload, even next to a valid one.
+    NewPayloadRequest blobRequest;
+    blobRequest.executionPayload.transactions.push_back(
+        {.raw = bytes{0xc9, 0x80, 0x80}, .decoded = nullptr});
+    blobRequest.executionPayload.transactions.push_back(
+        {.raw = bytes{0x03, 0xaa, 0xbb}, .decoded = nullptr});
+    auto blobStatus = task::syncWait(engineService.newPayload(blobRequest, 1));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(blobStatus.status), static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(blobStatus.validationError.has_value());
+    BOOST_CHECK_NE(blobStatus.validationError->find("blob"), std::string::npos);
+
+    // 0x00 is not a valid EIP-2718 type.
+    NewPayloadRequest zeroRequest;
+    zeroRequest.executionPayload.transactions.push_back(
+        {.raw = bytes{0x00, 0x01}, .decoded = nullptr});
+    auto zeroStatus = task::syncWait(engineService.newPayload(zeroRequest, 1));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(zeroStatus.status), static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(zeroStatus.validationError.has_value());
+    BOOST_CHECK_NE(zeroStatus.validationError->find("unsupported"), std::string::npos);
+
+    // Unknown reserved type byte.
+    NewPayloadRequest unknownRequest;
+    unknownRequest.executionPayload.transactions.push_back(
+        {.raw = bytes{0x05, 0x01}, .decoded = nullptr});
+    auto unknownStatus = task::syncWait(engineService.newPayload(unknownRequest, 1));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(unknownStatus.status), static_cast<int>(PayloadValidationStatus::Invalid));
+
+    // Empty raw bytes.
+    NewPayloadRequest emptyRequest;
+    emptyRequest.executionPayload.transactions.push_back({.raw = bytes{}, .decoded = nullptr});
+    auto emptyStatus = task::syncWait(engineService.newPayload(emptyRequest, 1));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(emptyStatus.status), static_cast<int>(PayloadValidationStatus::Invalid));
+}
+
+BOOST_AUTO_TEST_CASE(forkchoice_attributes_reject_blob_forced_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // A blob transaction in the forced transaction list invalidates the whole FCU.
+    auto blobAttributes = makePayloadAttributesV3();
+    blobAttributes.transactions = std::vector<std::string>{"0x03aabb"};
+    auto blobResult =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &blobAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(blobResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(blobResult.payloadStatus.validationError.has_value());
+    BOOST_CHECK_NE(blobResult.payloadStatus.validationError->find("blob"), std::string::npos);
+    BOOST_CHECK(!blobResult.payloadId.has_value());
+
+    // Non-hex entries are rejected, not decoded.
+    auto badHexAttributes = makePayloadAttributesV3();
+    badHexAttributes.transactions = std::vector<std::string>{"0xzz"};
+    auto badHexResult =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &badHexAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(badHexResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+
+    // A deposit in the forced transaction list is admissible (dep-1 arrives this way).
+    auto depositAttributes = makePayloadAttributesV3();
+    depositAttributes.transactions = std::vector<std::string>{"0x7e010203"};
+    auto depositResult =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(depositResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_CHECK(depositResult.payloadId.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)

@@ -35,6 +35,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -493,7 +494,7 @@ private:
                 block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
                 for (auto const& tx : it->second.executionPayload.transactions)
                 {
-                    block->appendTransaction(tx);
+                    block->appendTransaction(tx.decoded);
                 }
                 for (auto const& receipt : it->second.receipts)
                 {
@@ -501,8 +502,9 @@ private:
                 }
                 auto blockTxs = std::make_shared<protocol::ConstTransactions>(
                     it->second.executionPayload.transactions |
-                    ::ranges::views::transform(
-                        [](auto const& tx) { return protocol::Transaction::ConstPtr(tx); }) |
+                    ::ranges::views::transform([](auto const& tx) {
+                        return protocol::Transaction::ConstPtr(tx.decoded);
+                    }) |
                     ::ranges::to<std::vector>());
                 co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
                 co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
@@ -548,6 +550,36 @@ private:
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
+        // Dual carrier: every sealed transaction is stored with both its raw EIP-2718
+        // bytes (the wire form getPayload returns) and the decoded executable form (used
+        // for execution and ledger persistence). Web3 transactions reassemble their exact
+        // signed raw bytes from the signing payload + signature — the same splice that
+        // produces the canonical txHash. Native Tars transactions have no EIP-2718 form
+        // and keep the legacy Tars encoding as a fallback. NOTE: a Tars-encoded wire form
+        // does NOT pass this service's own newPayload validation (its first byte
+        // dispatches as Unsupported), so a payload built from a native transaction only
+        // serves flows that stop at getPayload. In production the mempool's sole ingress
+        // is eth_sendRawTransaction, which admits Web3 transactions exclusively, so this
+        // branch is unreachable there; it exists for legacy test fixtures.
+        std::vector<EngineTransaction> engineTransactions;
+        engineTransactions.reserve(sealedTxs.size());
+        for (auto& sealedTx : sealedTxs)
+        {
+            bytes raw;
+            if (sealedTx->type() ==
+                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+            {
+                raw = bcostars::protocol::reassembleWeb3RawTransaction(
+                    sealedTx->extraTransactionBytes(), sealedTx->signatureData());
+            }
+            else
+            {
+                sealedTx->encode(raw);
+            }
+            engineTransactions.push_back(
+                EngineTransaction{.raw = std::move(raw), .decoded = std::move(sealedTx)});
+        }
+
         ExecutionPayload executionPayload{
             .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
@@ -558,7 +590,7 @@ private:
             .gasUsed = 0,
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
-            .transactions = std::move(sealedTxs),
+            .transactions = std::move(engineTransactions),
             .extraData = {},
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
@@ -629,10 +661,16 @@ private:
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
 
-        // Step 2c: Execute transactions via the scheduler
-        // Use views::indirect to dereference shared_ptr<Transaction> -> const Transaction&
-        auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
-            *blockHeader, executionPayload.transactions | ::ranges::views::indirect, ledgerConfig);
+        // Step 2c: Execute transactions via the scheduler, over the decoded executable
+        // forms (locally sealed transactions always carry one).
+        auto receipts =
+            co_await m_scheduler.get().executeBlock(view, m_executor.get(), *blockHeader,
+                executionPayload.transactions |
+                    ::ranges::views::transform(
+                        [](auto const& transaction) -> bcos::protocol::Transaction const& {
+                            return *transaction.decoded;
+                        }),
+                ledgerConfig);
 
         // Step 2d: Compute transaction root (Merkle over tx hashes)
         // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
@@ -646,8 +684,9 @@ private:
                 hasher.clone());
             if (!executionPayload.transactions.empty())
             {
-                auto txHashes = executionPayload.transactions |
-                                ::ranges::views::transform([](auto& tx) { return tx->hash(); });
+                auto txHashes =
+                    executionPayload.transactions |
+                    ::ranges::views::transform([](auto& tx) { return tx.decoded->hash(); });
                 std::vector<h256> merkleTrie;
                 merkle.generateMerkle(txHashes, merkleTrie);
                 if (!merkleTrie.empty())

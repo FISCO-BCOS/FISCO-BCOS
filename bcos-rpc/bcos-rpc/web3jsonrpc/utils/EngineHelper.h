@@ -27,11 +27,6 @@
 #include <algorithm>
 #include <string>
 
-namespace bcos::protocol
-{
-class TransactionFactory;
-}  // namespace bcos::protocol
-
 namespace bcos::rpc
 {
 /// @brief Parse a hex-encoded 32-byte h256 value.
@@ -67,11 +62,14 @@ inline bcos::Address parseAddress(std::string_view hex)
 }
 
 // The functions below are defined in EngineHelper.cpp to avoid pulling
-// ~300 lines of serialization code and <TransactionFactory.h> into every
-// translation unit that transitively includes this header.
+// ~300 lines of serialization code into every translation unit that
+// transitively includes this header.
 
-bcos::engine::NewPayloadRequest parseNewPayloadRequest(Json::Value const& params,
-    bcos::protocol::TransactionFactory& transactionFactory, engine::ApiVersion version);
+// Transactions are carried as raw EIP-2718 bytes: parsing and serialization only do
+// hex <-> bytes, byte-preserving in both directions. Classification/decoding of the
+// raw bytes is the dispatch table's job (bcos-framework/engine/RawTransactionDispatch.h).
+bcos::engine::NewPayloadRequest parseNewPayloadRequest(
+    Json::Value const& params, engine::ApiVersion version);
 
 Json::Value serializePayloadStatus(
     bcos::engine::PayloadStatus const& status, engine::ApiVersion version);

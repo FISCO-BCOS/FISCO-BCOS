@@ -18,7 +18,6 @@
  */
 
 #include "EngineHelper.h"
-#include <bcos-framework/protocol/TransactionFactory.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -29,8 +28,8 @@ namespace
 constexpr std::size_t c_eip1559ParamsBytes = 8;
 }  // namespace
 
-bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(Json::Value const& params,
-    bcos::protocol::TransactionFactory& transactionFactory, engine::ApiVersion version)
+bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
+    Json::Value const& params, engine::ApiVersion version)
 {
     auto const& ep = params[0u];
     bcos::engine::ExecutionPayload payload{
@@ -71,11 +70,22 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(Json::Value co
     }
     if (ep.isMember("transactions") && !ep["transactions"].isNull())
     {
+        // Raw EIP-2718 bytes, hex-decoded verbatim. No transaction decoding happens
+        // here — getPayload must later return exactly these bytes.
         payload.transactions.reserve(ep["transactions"].size());
-        for (auto const& tx : ep["transactions"])
+        for (auto const& transaction : ep["transactions"])
         {
-            auto txData = fromHex(tx.asString());
-            payload.transactions.push_back(transactionFactory.decodeTransaction(ref(txData)));
+            bcos::engine::EngineTransaction engineTx;
+            try
+            {
+                engineTx.raw = fromHex(transaction.asString());
+            }
+            catch (std::exception const&)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "Expected hex string entries in executionPayload.transactions"));
+            }
+            payload.transactions.push_back(std::move(engineTx));
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
@@ -339,9 +349,9 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     Json::Value transactions(Json::arrayValue);
     for (auto const& transaction : payload.transactions)
     {
-        bytes encoded;
-        transaction->encode(encoded);
-        transactions.append(toHexStringWithPrefix(encoded));
+        // Raw EIP-2718 bytes out, exactly as carried — byte-for-byte what newPayload
+        // received or what buildPayload reassembled.
+        transactions.append(toHexStringWithPrefix(transaction.raw));
     }
     ep["transactions"] = std::move(transactions);
 

@@ -23,6 +23,7 @@ namespace bcos::txpool
 
 DERIVE_BCOS_EXCEPTION(InvalidNonce);
 DERIVE_BCOS_EXCEPTION(InvalidTaintedTransaction);
+DERIVE_BCOS_EXCEPTION(InvalidBlobTransaction);
 
 struct TransactionData
 {
@@ -294,7 +295,6 @@ public:
         }
         return transactions;
     }
-
 };
 
 }  // namespace bcos::txpool
