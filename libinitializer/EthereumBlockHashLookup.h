@@ -24,7 +24,10 @@ namespace bcos::initializer
 ///        here. It bounds BLOCKHASH to the last 256 ancestors (Yellow Paper
 ///        H.4): the visible ancestors are [currentHeight - 256, currentHeight - 1].
 ///        Fails closed: a broken backend or an out-of-window request reports an
-///        unknown block (zero hash).
+///        unknown block (zero hash). A storage failure is not swallowed here —
+///        this function is free to throw; the actual noexcept boundary is
+///        EthereumHost::get_block_hash, which catches, logs ERROR and returns
+///        zero (see #5416).
 template <class Backend>
 evmc::bytes32 ethBlockHashLookupFromStorage(
     Backend& backend, int64_t blockNumber, int64_t currentHeight)
@@ -48,23 +51,15 @@ evmc::bytes32 ethBlockHashLookupFromStorage(
         return {};
     }
 
-    try
+    auto hashOpt = task::tbb::syncWait(
+        bcos::ledger::getBlockHash(backend, blockNumber, bcos::ledger::fromStorage));
+    evmc::bytes32 result{};
+    if (hashOpt.has_value())
     {
-        auto hashOpt = task::tbb::syncWait(
-            bcos::ledger::getBlockHash(backend, blockNumber, bcos::ledger::fromStorage));
-        evmc::bytes32 result{};
-        if (hashOpt.has_value())
-        {
-            auto const& hash = *hashOpt;
-            std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
-                result.bytes);
-        }
-        return result;
+        auto const& hash = *hashOpt;
+        std::copy_n(hash.data(), std::min<size_t>(hash.size(), sizeof(evmc_bytes32)),
+            result.bytes);
     }
-    catch (...)
-    {
-        // Never let a lookup failure cross the noexcept boundary.
-        return {};
-    }
+    return result;
 }
 }  // namespace bcos::initializer

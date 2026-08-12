@@ -195,8 +195,8 @@ inline TransactionCost compute_tx_intrinsic_cost(
     return {intrinsic_cost, min_cost};
 }
 
-inline evmc_message build_message(protocol::Transaction const& tx, int64_t execution_gas_limit,
-    EthCallParams const& callParams) noexcept
+inline evmc_message build_message(
+    protocol::Transaction const& tx, int64_t execution_gas_limit) noexcept
 {
     const auto to = ethToAddress(tx);
     const auto recipient = to.has_value() ? *to : evmc::address{};
@@ -572,7 +572,7 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     if (rev >= EVMC_SHANGHAI)
         host.access_account(block.coinbase);
 
-    auto message = eth_transition_detail::build_message(tx, txProps.execution_gas_limit, callParams);
+    auto message = eth_transition_detail::build_message(tx, txProps.execution_gas_limit);
     if (to.has_value())
     {
         if (const auto delegate = evmone::get_delegate_address(host, *to))
