@@ -97,6 +97,16 @@ inline constexpr char kDepositEnvelopeHex[] =
     "0000000000000000000000000000000000000000000000000000000000000000"
     "00000000000000000000";
 
+// A signed EIP-1559 tx calling the L2ToL1MessagePasser (0x4200...0016, OP_L2_TO_L1_MESSAGE_PASSER)
+// sendMessage(bytes32) with an all-zero message hash (selector 0xe12c9ca8, chainId 0x2105). Signed
+// with the known test privkey (b3_contracts.py PRIVKEY), so the recovered sender is 0x6afa...C693.
+inline constexpr char kWithdrawTxEnvelopeHex[] =
+    "02f89182210580843b9aca00847735940083030d409442000000000000000000"
+    "0000000000000000001680a4e12c9ca800000000000000000000000000000000"
+    "00000000000000000000000000000000c001a0d3379d9b67266aeb5c70214c78"
+    "521e0507e502ab29d56979b1a83c6bcbf426d8a0267494e0394f7160b64e2015"
+    "a9acd35f6df16d42cf0af0d58498e79ce2bb49f4";
+
 // A real signed EIP-7702 set-code tx from the t8n vector isthmus_setcode_7702.json
 // (block.transactions[1]._op_raw, chainId 0x2105, sender 0x7e5f...5bdf, authority to=0x1eff...718).
 inline constexpr char kSetcodeTxEnvelopeHex[] =
@@ -779,6 +789,98 @@ BOOST_AUTO_TEST_CASE(SetCode7702InBlockWritesDelegation)
     BOOST_CHECK_EQUAL(static_cast<uint8_t>(code[1]), 0x01);
     BOOST_CHECK_EQUAL(static_cast<uint8_t>(code[2]), 0x00);
     BOOST_CHECK_EQUAL(std::memcmp(code.data() + 3, impl.bytes, sizeof(impl.bytes)), 0);
+}
+
+// ---- Item ③: transaction-driven withdrawal flow ----
+// A user tx calling L2ToL1MessagePasser.sendMessage(bytes32) writes sentMessages[hash]=true (the
+// Solidity mapping slot keccak256(hash || uint256(0))), and the block's withdrawal root changes
+// to reflect the new slot. Uses a FRESH view (like the L1Block tests) rather than the shared
+// JovianShapeFixture, whose MLS layer visibility made EVMAccount's writes unreachable by the
+// bridge (fixture quirk, not a production issue).
+BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
+{
+    using namespace evmc::literals;
+    using intx::operator""_u256;
+
+    BackendMemStorage backendStorage;
+    CheckpointBackend checkpointBackend(backendStorage);
+    MLS multiLayerStorage(checkpointBackend);
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+
+    constexpr uint64_t kIsthmusTime = 1000;
+    constexpr uint64_t kJovianTime = 2000;
+
+    const auto kPasser = bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
+    const auto kSender =
+        evmc::from_hex<evmc::address>("6afa9580383e6627da926b6f6ed9ab2b9c8cc693").value();
+    // PUSH1 1 (value) CALLDATACOPY(dest=0,offset=4,size=32) MSTORE(32,0) KECCAK256(offset=0,size=64)
+    // SSTORE RETURN. EVM stack args are TOP-first: CALLDATACOPY pops dest,offset,size so push
+    // size,offset,dest; KECCAK256 pops offset,size so push size,offset; value pushed FIRST so
+    // SSTORE pops key=slot then value=1.
+    bcos::bytes passerCode = bcos::fromHex("600160206004600037600060205260406000205560006000f3");
+    const auto passerCodeHash = keccak256(passerCode);
+    bcos::bytes l1Code = bcos::fromHex(kL1BlockCodeHex);
+    const auto l1CodeHash = keccak256(l1Code);
+
+    bcos::task::syncWait([&]() -> bcos::task::Task<void> {
+        bcos::ledger::account::EVMAccount<ViewType> l1(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        co_await l1.create();
+        co_await l1.setCode(l1Code, /*abi=*/"", l1CodeHash);
+        co_await l1.setNonce("1");
+        bcos::ledger::account::EVMAccount<ViewType> mp(view, kPasser, false);
+        co_await mp.create();
+        co_await mp.setCode(passerCode, /*abi=*/"", passerCodeHash);
+        co_await mp.setNonce("1");
+        bcos::ledger::account::EVMAccount<ViewType> snd(view, kSender, false);
+        co_await snd.create();
+        co_await snd.setBalance(bcos::u256("1000000000000000000000"));  // 1000 ETH
+        co_await snd.setNonce("0");
+        co_await snd.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        co_return;
+    }());
+
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)};
+    bcos::evm::engine::OpSchedulerImpl<ViewType, MLS> scheduler(receiptFactory, 0x2105,
+        bcos::evm::opstack::OpForkTimestamps{
+            .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime},
+        nullptr, multiLayerStorage, {});
+
+    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero()),
+        bcos::fromHex(kWithdrawTxEnvelopeHex)};
+    auto result = bcos::task::syncWait(scheduler.executeOpBlock(view, *header, rawTxs));
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 2u);
+    BOOST_CHECK_EQUAL(result.receipts[1]->status(), 0);
+    // The withdraw tx wrote sentMessages[0x00..00] = true: slot keccak256(0x00*64) = 1.
+    bcos::bytes slotInput(64, 0);
+    auto slotHash = keccak256(slotInput);
+    evmc::bytes32 slotKey{};
+    std::copy_n(slotHash.data(), 32, slotKey.bytes);
+    bcos::ledger::account::EVMAccount<ViewType> mp(view, kPasser, false);
+    const auto slotVal = bcos::task::syncWait(mp.storage(slotKey));
+    BOOST_CHECK_EQUAL(slotVal.bytes[31], 0x01);
+
+
+    // The withdrawal root now reflects the one non-zero slot.
+    std::map<evmc::bytes32, evmc::bytes32> expectedStorage;
+    evmc::bytes32 one{};
+    one.bytes[31] = 0x01;
+    expectedStorage[slotKey] = one;
+    const auto expectedRoot = bcos::evm::opstack::opStorageRoot(expectedStorage);
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot.bytes, expectedRoot.bytes,
+                          sizeof(expectedRoot.bytes)),
+        0);
+    // And it is NOT the empty-trie root (the sendMessage changed the state).
+    const auto emptyRoot = bcos::ledger::mpt::emptyRootHash();
+    BOOST_CHECK_NE(std::memcmp(result.seal.withdrawalsRoot.bytes, emptyRoot.data(),
+                       bcos::h256::SIZE),
+        0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
