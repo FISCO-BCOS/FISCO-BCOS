@@ -161,6 +161,70 @@ BOOST_AUTO_TEST_CASE(payloadAttributesTransactionsMustBeArray)
         JsonRpcException);
 }
 
+BOOST_AUTO_TEST_CASE(payloadAttributesTransactionsElementsMustBePrefixedHexStrings)
+{
+    // Non-string element.
+    auto attrs = makeBaseAttributes();
+    Json::Value transactions(Json::arrayValue);
+    transactions.append(Json::Value(123));
+    attrs["transactions"] = transactions;
+    BOOST_CHECK_THROW(parsePayloadAttributes(makeAttributesParams(attrs), engine::ApiVersion::V3),
+        JsonRpcException);
+
+    // Invalid hex characters.
+    auto badHexAttrs = makeBaseAttributes();
+    Json::Value badHexTxs(Json::arrayValue);
+    badHexTxs.append("0xzz");
+    badHexAttrs["transactions"] = badHexTxs;
+    BOOST_CHECK_THROW(
+        parsePayloadAttributes(makeAttributesParams(badHexAttrs), engine::ApiVersion::V3),
+        JsonRpcException);
+
+    // Missing 0x prefix.
+    auto noPrefixAttrs = makeBaseAttributes();
+    Json::Value noPrefixTxs(Json::arrayValue);
+    noPrefixTxs.append("7e01020304");
+    noPrefixAttrs["transactions"] = noPrefixTxs;
+    BOOST_CHECK_THROW(
+        parsePayloadAttributes(makeAttributesParams(noPrefixAttrs), engine::ApiVersion::V3),
+        JsonRpcException);
+
+    // Odd-length hex (fromHex would silently left-pad a '0' nibble — must reject).
+    auto oddAttrs = makeBaseAttributes();
+    Json::Value oddTxs(Json::arrayValue);
+    oddTxs.append("0x123");
+    oddAttrs["transactions"] = oddTxs;
+    BOOST_CHECK_THROW(
+        parsePayloadAttributes(makeAttributesParams(oddAttrs), engine::ApiVersion::V3),
+        JsonRpcException);
+
+    // Bare "0x" (empty transaction).
+    auto emptyAttrs = makeBaseAttributes();
+    Json::Value emptyTxs(Json::arrayValue);
+    emptyTxs.append("0x");
+    emptyAttrs["transactions"] = emptyTxs;
+    BOOST_CHECK_THROW(
+        parsePayloadAttributes(makeAttributesParams(emptyAttrs), engine::ApiVersion::V3),
+        JsonRpcException);
+}
+
+BOOST_AUTO_TEST_CASE(payloadAttributesNoTxPoolMustBeBoolean)
+{
+    // jsoncpp asBool() silently converts numbers and strings; the parser must gate on
+    // the JSON type instead.
+    auto stringAttrs = makeBaseAttributes();
+    stringAttrs["noTxPool"] = "true";
+    BOOST_CHECK_THROW(
+        parsePayloadAttributes(makeAttributesParams(stringAttrs), engine::ApiVersion::V3),
+        JsonRpcException);
+
+    auto numberAttrs = makeBaseAttributes();
+    numberAttrs["noTxPool"] = 1;
+    BOOST_CHECK_THROW(
+        parsePayloadAttributes(makeAttributesParams(numberAttrs), engine::ApiVersion::V3),
+        JsonRpcException);
+}
+
 BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
 {
     auto const withdrawalsRootHex =

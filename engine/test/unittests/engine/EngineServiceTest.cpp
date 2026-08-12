@@ -312,8 +312,11 @@ NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPaylo
     request.executionPayload = executionPayload;
     request.expectedBlobVersionedHashes = {
         h256("3333333333333333333333333333333333333333333333333333333333333333")};
+    // Deliberately different from makePayloadAttributesV3()'s beacon root (0x2222...):
+    // tests must be able to tell whether newPayload really overwrites the cached value
+    // with the request's, not just re-reads what the attributes stored.
     request.parentBeaconBlockRoot =
-        h256("2222222222222222222222222222222222222222222222222222222222222222");
+        h256("5555555555555555555555555555555555555555555555555555555555555555");
     return request;
 }
 }  // namespace
@@ -622,6 +625,9 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
 
     auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_REQUIRE(committed->parentBeaconBlockRoot.has_value());
+    // The request carries a beacon root different from the attributes' — the cache must
+    // now hold the request's value, proving newPayload overwrites rather than re-reads.
+    BOOST_CHECK_NE(*request.parentBeaconBlockRoot, *payloadAttributes.parentBeaconBlockRoot);
     BOOST_CHECK_EQUAL(*committed->parentBeaconBlockRoot, *request.parentBeaconBlockRoot);
     BOOST_REQUIRE(committed->executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK_EQUAL(*committed->executionPayload.withdrawalsRoot, withdrawalsRoot);

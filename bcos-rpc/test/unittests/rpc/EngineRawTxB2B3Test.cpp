@@ -186,9 +186,44 @@ BOOST_AUTO_TEST_CASE(rawTransactionBytesSurviveParseSerializeRoundTrip)
 
 BOOST_AUTO_TEST_CASE(parseNewPayloadRejectsNonHexTransactionEntries)
 {
+    // Invalid hex characters.
     Json::Value params(Json::arrayValue);
     params.append(makeExecutionPayloadJson({"0xzz"}));
     BOOST_CHECK_THROW(parseNewPayloadRequest(params, engine::ApiVersion::V1), JsonRpcException);
+
+    // Missing 0x prefix.
+    Json::Value noPrefixParams(Json::arrayValue);
+    noPrefixParams.append(makeExecutionPayloadJson({"7e01020304"}));
+    BOOST_CHECK_THROW(
+        parseNewPayloadRequest(noPrefixParams, engine::ApiVersion::V1), JsonRpcException);
+
+    // Non-string element.
+    auto nonStringPayload = makeExecutionPayloadJson({});
+    nonStringPayload["transactions"].append(Json::Value(123));
+    Json::Value nonStringParams(Json::arrayValue);
+    nonStringParams.append(nonStringPayload);
+    BOOST_CHECK_THROW(
+        parseNewPayloadRequest(nonStringParams, engine::ApiVersion::V1), JsonRpcException);
+
+    // Odd-length hex (fromHex would silently left-pad a '0' nibble — must reject to
+    // keep the byte-fidelity contract).
+    Json::Value oddParams(Json::arrayValue);
+    oddParams.append(makeExecutionPayloadJson({"0x123"}));
+    BOOST_CHECK_THROW(parseNewPayloadRequest(oddParams, engine::ApiVersion::V1), JsonRpcException);
+
+    // Bare "0x" (empty transaction).
+    Json::Value emptyParams(Json::arrayValue);
+    emptyParams.append(makeExecutionPayloadJson({"0x"}));
+    BOOST_CHECK_THROW(
+        parseNewPayloadRequest(emptyParams, engine::ApiVersion::V1), JsonRpcException);
+
+    // transactions must be an array.
+    auto scalarPayload = makeExecutionPayloadJson({});
+    scalarPayload["transactions"] = "0x7e01020304";
+    Json::Value scalarParams(Json::arrayValue);
+    scalarParams.append(scalarPayload);
+    BOOST_CHECK_THROW(
+        parseNewPayloadRequest(scalarParams, engine::ApiVersion::V1), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(depositDecodeFullFields)

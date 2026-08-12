@@ -26,6 +26,40 @@ namespace
 {
 /// Holocene eip1559Params: 4-byte denominator followed by 4-byte elasticity.
 constexpr std::size_t c_eip1559ParamsBytes = 8;
+
+/// Validate and decode one element of a JSON `transactions` array. The element must be
+/// a string, "0x"-prefixed and valid hex. Shared by the payloadAttributes and the
+/// executionPayload parse paths so both reject malformed entries with the same
+/// InvalidParams shape, naming the offending index.
+bcos::bytes parseRawTransactionElement(
+    Json::Value const& element, char const* container, Json::ArrayIndex index)
+{
+    auto reject = [&]() -> bcos::bytes {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+            std::string(container) + ".transactions[" + std::to_string(index) +
+                "] must be a 0x-prefixed hex string"));
+    };
+    if (!element.isString())
+    {
+        return reject();
+    }
+    auto const hex = element.asString();
+    // <= 2 also rejects a bare "0x" (empty transaction); the odd-length check matters
+    // because bcos::fromHex silently left-pads odd-length input with a '0' nibble,
+    // which would break the "hex-decoded verbatim" byte-fidelity contract.
+    if (hex.size() <= 2 || hex.size() % 2 != 0 || hex[0] != '0' || (hex[1] != 'x' && hex[1] != 'X'))
+    {
+        return reject();
+    }
+    try
+    {
+        return bcos::fromHex(hex);
+    }
+    catch (std::exception const&)
+    {
+        return reject();
+    }
+}
 }  // namespace
 
 bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
@@ -70,22 +104,20 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     }
     if (ep.isMember("transactions") && !ep["transactions"].isNull())
     {
+        if (!ep["transactions"].isArray())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
+        }
         // Raw EIP-2718 bytes, hex-decoded verbatim. No transaction decoding happens
         // here — getPayload must later return exactly these bytes.
         payload.transactions.reserve(ep["transactions"].size());
-        for (auto const& transaction : ep["transactions"])
+        for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
         {
-            bcos::engine::EngineTransaction engineTx;
-            try
-            {
-                engineTx.raw = fromHex(transaction.asString());
-            }
-            catch (std::exception const&)
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    InvalidParams, "Expected hex string entries in executionPayload.transactions"));
-            }
-            payload.transactions.push_back(std::move(engineTx));
+            payload.transactions.push_back(bcos::engine::EngineTransaction{
+                .raw = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i),
+                .decoded = nullptr,
+            });
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
@@ -222,14 +254,24 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
         }
         std::vector<std::string> transactions;
         transactions.reserve(pa["transactions"].size());
-        for (auto const& transaction : pa["transactions"])
+        for (Json::ArrayIndex i = 0; i < pa["transactions"].size(); ++i)
         {
-            transactions.push_back(transaction.asString());
+            // Validate shape and hex, but keep the original string verbatim — the
+            // forced-transaction list must pass through byte-identical.
+            parseRawTransactionElement(pa["transactions"][i], "payloadAttributes", i);
+            transactions.push_back(pa["transactions"][i].asString());
         }
         attrs.transactions = std::move(transactions);
     }
     if (pa.isMember("noTxPool") && !pa["noTxPool"].isNull())
     {
+        // Strict: jsoncpp asBool() silently converts numbers/strings, so gate on the
+        // JSON type (op-node serializes NoTxPool as a JSON bool).
+        if (!pa["noTxPool"].isBool())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Expected boolean for payloadAttributes.noTxPool"));
+        }
         attrs.noTxPool = pa["noTxPool"].asBool();
     }
     if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())

@@ -88,11 +88,19 @@ struct PayloadAttributes
     std::optional<std::vector<std::string>> transactions;
     // When true the payload must not include transactions picked from the mempool.
     std::optional<bool> noTxPool;
-    // Block gas limit dictated by the L1 SystemConfig via the CL.
+    // Block gas limit dictated by the L1 SystemConfig via the CL. 64-bit by protocol:
+    // op-node serializes it as a Uint64Quantity (op-service/eth/types.go,
+    // PayloadAttributes.GasLimit *Uint64Quantity).
     std::optional<std::uint64_t> gasLimit;
-    // Holocene: 8 bytes = 4-byte EIP-1559 denominator followed by 4-byte elasticity.
+    // Holocene: 8 bytes = 4-byte EIP-1559 denominator followed by 4-byte elasticity
+    // (op-node: EIP1559Params *Bytes8).
     std::optional<bytes> eip1559Params;
-    // Jovian: minimum base fee, in wei.
+    // Jovian: minimum base fee, in wei. 64-bit by protocol: op-node declares it as
+    // MinBaseFee *uint64 (op-service/eth/types.go) and the Jovian block-header
+    // extraData packs it as a big-endian u64 at bytes [9, 17)
+    // (specs.optimism.io jovian/exec-engine); the spec's bare "QUANTITY" wording does
+    // not widen it. Values beyond uint64 are rejected at JSON parse (strict
+    // fromQuantity), matching what the extraData encoding could never carry.
     std::optional<std::uint64_t> minBaseFee;
 };
 
