@@ -42,6 +42,7 @@
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
 #include <deque>
@@ -379,24 +380,12 @@ public:
         {
             co_return result;
         }
-        if constexpr (c_opMode)
-        {
-            // An OP validator's L1-derivation path *does* send forkchoiceUpdated with
-            // OP-extended attributes (noTxPool=true + derived transactions) whenever consolidation
-            // fails or there is no unsafe block -- "the validator does not send attributes" is not
-            // true. Attribute-driven building is not supported this cycle (the same road as
-            // OP-izing getPayload), so the answer is -38003.
-            //
-            // Placement is the whole point: everything above -- the storage lookups, the
-            // monotonicity checks, and the tracked-head/safe/finalized update under `x_state` --
-            // has already run and is *kept*. The forkchoice update is not rolled back; only the
-            // build is refused.
-            BOOST_THROW_EXCEPTION(
-                UnsupportedOpPayloadAttributes{} << bcos::errinfo_comment{
-                    "Payload attributes are not supported in OP mode (block building is not "
-                    "OP-ized; JSON-RPC -38003)"});
-        }
-        else
+        // Attribute-driven block building runs for BOTH modes: `buildPayload` (called below)
+        // branches on `c_opMode` internally — the FISCO path builds a FISCO-style header, the OP
+        // path (buildOpPayload) builds an OP header from the mempool-sealed transactions'
+        // rawTransactionBytes. Previously OP mode threw -38003 here (block building not OP-ized);
+        // that gate is lifted so the node can act as a sequencer (eth_sendRawTransaction ->
+        // mempool seal -> build -> commit).
         {
             // Mempool operations run without lock — they only depend on the state, not on x_state.
             // Step 1: Remove stale/tainted transactions from mempool (cleans tx with nonce < state
@@ -539,21 +528,9 @@ private:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
-        if constexpr (c_opMode)
         {
-            // `getPayloadV4`'s stated behaviour is "return an explicit error in OP mode (block
-            // building is not OP-ized)". The refusal is unconditional in OP mode rather than
-            // V4-only, because the *cause* is version-independent: OP mode never builds a payload
-            // at all (the attributes path above refuses with -38003), so the cache is always
-            // empty and every version would otherwise answer the misleading `UnknownPayload`.
-            // Full V4 response shaping (executionRequests etc.) ships together with
-            // attributes-driven building.
-            BOOST_THROW_EXCEPTION(
-                OpPayloadBuildingUnsupported{} << bcos::errinfo_comment{
-                    "getPayload is not supported in OP mode (block building is not OP-ized)"});
-        }
-        else
-        {
+            // OP mode builds payloads now (buildOpPayload), so getPayload serves from the same
+            // cache as the generic path — the payload's rawTransactions carries the envelopes.
             std::shared_lock lock(x_state);
             auto it = m_payloadCache.find(payloadId);
             if (it == m_payloadCache.end())
@@ -613,7 +590,8 @@ private:
     }
 
     /// Unified block-execution dispatch: [OP] handleOpNewPayload, [generic] the pre-existing
-    /// body. Keeps handleNewPayload to version-gate + delegation for readability (behavior-neutral).
+    /// body. Keeps handleNewPayload to version-gate + delegation for readability
+    /// (behavior-neutral).
     bcos::task::Task<PayloadStatus> executePayload(
         const NewPayloadRequest& request, std::uint32_t version)
     {
@@ -846,10 +824,12 @@ private:
             // distinguishes this barrier from that fallback, so a test can tell which window an
             // escape came through (a bare `catch (...)` otherwise collapses every refusal into
             // one indistinguishable type).
+            const std::string detail = boost::diagnostic_information(std::current_exception());
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     "OP newPayload threw an unclassified exception outside block execution "
-                    "(validation, comparison or registration phase)"});
+                    "(validation, comparison or registration phase) DIAG_MARKER" +
+                    (detail.empty() ? std::string{} : std::string{": " + detail})});
         }
     }
 
@@ -867,9 +847,19 @@ private:
         // null). Note the status is `Invalid`, never `InvalidBlockHash` -- that Engine API status
         // has been deprecated since Shanghai and the OP branch does not use it (the enumerator
         // stays in Types.h for the generic path).
-        if (auto validationError = detail::validateOpNewPayloadRequest(
+        std::optional<std::string> validationError;
+        try
+        {
+            validationError = detail::validateOpNewPayloadRequest(
                 request, m_scheduler.get().isJovianActiveAt(payload.timestamp));
-            validationError.has_value())
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "validateOpNewPayloadRequest threw: " +
+                                      boost::diagnostic_information(std::current_exception())});
+        }
+        if (validationError.has_value())
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
         }
@@ -877,9 +867,29 @@ private:
         // here -- the same derivation `executeOpBlock` performs internally (one shared function,
         // `OpEngineSeam.h`'s `computeOpTxRoot`), which is what lets the blockHash check stay
         // genuinely static (before parentKnown and before execution).
-        const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
-        const auto ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
-            payload, transactionsRoot, *request.parentBeaconBlockRoot);
+        bcos::h256 transactionsRoot;
+        try
+        {
+            transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "computeTxRoot threw: " +
+                                      boost::diagnostic_information(std::current_exception())});
+        }
+        bcos::protocol::BlockHeader::Ptr ethHeader;
+        try
+        {
+            ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
+                transactionsRoot, *request.parentBeaconBlockRoot);
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "rebuildOpEthHeader threw: " +
+                                      boost::diagnostic_information(std::current_exception())});
+        }
         // OP hash = keccak(RLP(21 fields)), via the protocol::BlockHeader OP capability
         // (opHeaderConst injects the 3 post-merge constants). Must not use BlockHeader::hash() --
         // an empty tars dataHash throws EmptyBlockHeaderHash, and if the factory back-fills it the
@@ -905,191 +915,332 @@ private:
         // reflect what is actually persisted, so the query goes to `SYS_HASH_2_NUMBER` through the
         // ledger accessor rather than to `m_blockHashToPayloadId` (which the generic path uses and
         // which the OP branch never populates). Nothing is written on this path.
-        auto view = m_globalStateStorage.get().fork();
-        auto parentBlockNumber = co_await bcos::ledger::getBlockNumber(
-            view, payload.parentHash, bcos::ledger::fromStorage);
-        if (!parentBlockNumber.has_value())
+        ViewType view = m_globalStateStorage.get().fork();
+        std::optional<bcos::crypto::HashType> latestValidHash = std::nullopt;
+        try
         {
-            co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-        }
-        // Past this point the parent IS a verified ancestor -- that is precisely the operational
-        // definition of "parent verified": present in `SYS_HASH_2_NUMBER`, a table only the VALID
-        // branch below writes. So every INVALID from here on reports `latestValidHash =
-        // parentHash`.
-        const auto latestValidHash = std::make_optional(payload.parentHash);
-
-        // Parent/child number continuity. Load-bearing here: `parentBlockNumber` is already in
-        // hand, and both registration indices written in step 6 (`SYS_NUMBER_2_HASH` and the ETH
-        // header table) are keyed BY NUMBER. Without this check a payload naming a verified parent
-        // but carrying an arbitrary `blockNumber` would silently overwrite an existing height's
-        // index entries -- a corrupted chain index, not merely a rejected block. Classified with
-        // steps 4/5 (INVALID + latestValidHash = parent) because the parent is established valid.
-        if (payload.blockNumber != *parentBlockNumber + 1)
-        {
-            co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                std::string("blockNumber must be exactly one greater than the parent's"));
-        }
-
-        // ---- Step 3a: timestamp strictly increases ----
-        //
-        // op-geth rejects this twice over: `eth/catalyst/api.go:891-894`
-        // (`block.Time() <= parent.Time()` -> invalid, latestValidHash = parent) and
-        // `consensus/beacon/consensus.go:253-256` (`errInvalidTimestamp`).
-        //
-        // Here the timestamp is also the FORK SELECTOR: `OpSchedulerImpl` picks its
-        // `OpForkConfig` with `configAt(fiscoHeader.timestamp(), ...)` and step 1's -38005 gate
-        // reads the same field, so without monotonicity a payload could roll the active fork
-        // backwards (Jovian -> Isthmus), changing DA accounting and baseFee semantics mid-chain.
-        //
-        // Keyed by NUMBER (op-geth keys by HASH, `api.go:887`); equivalent only while
-        // number -> header is injective, which step 3c guarantees today (at most one block per
-        // height). Whoever lifts step 3c must re-key this read by hash in the same change.
-        //
-        // Deliberately ordered BEFORE step 3b's already-known-block short-circuit, unlike op-geth
-        // (known-block first at `api.go:872-876`, timestamp after) -- observationally equivalent,
-        // since a re-delivered block necessarily passed this check when first accepted.
-        //
-        // Missing parent header => SKIP, deliberately (the genesis/first-block case): a trusted
-        // starting point is established by seeding `SYS_HASH_2_NUMBER` alone, so the first block
-        // after it has no stored parent header to compare against. Every block registered BY this
-        // loop does store its header, so the check is live for every subsequent block.
-        const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
-        // The parent header is read from the standard s_number_2_header table as a tars
-        // BlockHeader, replacing the retired s_eth_block_header RLP read path. Entry::get()
-        // returns a string_view (Entry.h:332) and createBlockHeader has no string_view overload
-        // -- copy explicitly into bytes.
-        if (auto parentHeaderEntry = co_await storage2::readOne(view,
-                executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
-            parentHeaderEntry.has_value())
-        {
-            const auto storedHeader = parentHeaderEntry->get();  // string_view
-            bcos::protocol::BlockHeader::Ptr parentHeader;
+            std::optional<bcos::protocol::BlockNumber> parentBlockNumber;
             try
             {
-                bcos::bytes parentHeaderBytes(storedHeader.begin(), storedHeader.end());
-                parentHeader =
-                    m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
+                parentBlockNumber = co_await bcos::ledger::getBlockNumber(
+                    view, payload.parentHash, bcos::ledger::fromStorage);
             }
-            catch (const std::exception& e)
-            {
-                // Our own stored bytes failed to parse: a local storage/consistency fault, not a
-                // verdict on the incoming payload (the error-classification rule cuts both ways).
-                BOOST_THROW_EXCEPTION(
-                    OpExecutionInternalError{} << bcos::errinfo_comment{
-                        std::string("stored parent block header is undecodable: ") + e.what()});
-            }
-            // tars
-            // Tars decoding is lenient: a truncated stream may silently fill defaults. This table
-            // is keyed by height and written only by this loop, so a height mismatch is a local
-            // fault.
-            if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
+            catch (...)
             {
                 BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                          "stored parent block header height mismatch"});
+                                          "getBlockNumber(parent) threw: " +
+                                          boost::diagnostic_information(std::current_exception())});
             }
-            // Note: createBlockHeader(bytesConstRef) auto back-fills dataHash with the tars-order
-            // hasher when it is empty (BlockHeaderFactoryImpl.cpp:21-37) -- that value is NOT the
-            // OP hash. This step only reads timestamp/baseFee/extraData/gasLimit/gasUsed/
-            // blobGasUsed, never hash(), so it is unaffected; this is a known consequence of
-            // deferred dataHash, and any future consumer of OP headers must not call hash().
-            // Monotonicity: payload seconds -> milliseconds, compared in the same unit as the
-            // parent header (milliseconds).
-            if (static_cast<uint64_t>(payload.timestamp) * 1000 <=
-                static_cast<uint64_t>(parentHeader->timestamp()))
+            if (!parentBlockNumber.has_value())
+            {
+                co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+            // Past this point the parent IS a verified ancestor -- that is precisely the
+            // operational definition of "parent verified": present in `SYS_HASH_2_NUMBER`, a table
+            // only the VALID branch below writes. So every INVALID from here on reports
+            // `latestValidHash = parentHash`.
+            latestValidHash = std::make_optional(payload.parentHash);
+
+            // Parent/child number continuity. Load-bearing here: `parentBlockNumber` is already in
+            // hand, and both registration indices written in step 6 (`SYS_NUMBER_2_HASH` and the
+            // ETH header table) are keyed BY NUMBER. Without this check a payload naming a verified
+            // parent but carrying an arbitrary `blockNumber` would silently overwrite an existing
+            // height's index entries -- a corrupted chain index, not merely a rejected block.
+            // Classified with steps 4/5 (INVALID + latestValidHash = parent) because the parent is
+            // established valid.
+            if (payload.blockNumber != *parentBlockNumber + 1)
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                    std::string("timestamp must be strictly greater than the parent's"));
+                    std::string("blockNumber must be exactly one greater than the parent's"));
             }
 
-            // Step 3a-2: baseFee consistency (Holocene+ EIP-1559 with Optimism
-            // extensions). op-geth checks this in consensus/misc/eip1559/eip1559.go's
-            // VerifyEIP1559Header → CalcBaseFee. The parent header is already in hand
-            // from the timestamp check above, and fork membership is determined from
-            // the parent's own timestamp — matching op-geth's
-            // config.IsJovian(parent.Time) / config.IsOptimismHolocene(parent.Time).
-            // Fork determination switches back to seconds (consistent with the payload seconds and
-            // the config thresholds; the reverse direction of the milliseconds comparison above).
+            // ---- Step 3a: timestamp strictly increases ----
+            //
+            // op-geth rejects this twice over: `eth/catalyst/api.go:891-894`
+            // (`block.Time() <= parent.Time()` -> invalid, latestValidHash = parent) and
+            // `consensus/beacon/consensus.go:253-256` (`errInvalidTimestamp`).
+            //
+            // Here the timestamp is also the FORK SELECTOR: `OpSchedulerImpl` picks its
+            // `OpForkConfig` with `configAt(fiscoHeader.timestamp(), ...)` and step 1's -38005 gate
+            // reads the same field, so without monotonicity a payload could roll the active fork
+            // backwards (Jovian -> Isthmus), changing DA accounting and baseFee semantics
+            // mid-chain.
+            //
+            // Keyed by NUMBER (op-geth keys by HASH, `api.go:887`); equivalent only while
+            // number -> header is injective, which step 3c guarantees today (at most one block per
+            // height). Whoever lifts step 3c must re-key this read by hash in the same change.
+            //
+            // Deliberately ordered BEFORE step 3b's already-known-block short-circuit, unlike
+            // op-geth (known-block first at `api.go:872-876`, timestamp after) -- observationally
+            // equivalent, since a re-delivered block necessarily passed this check when first
+            // accepted.
+            //
+            // Missing parent header => SKIP, deliberately (the genesis/first-block case): a trusted
+            // starting point is established by seeding `SYS_HASH_2_NUMBER` alone, so the first
+            // block after it has no stored parent header to compare against. Every block registered
+            // BY this loop does store its header, so the check is live for every subsequent block.
+            const auto parentNumberStr = boost::lexical_cast<std::string>(*parentBlockNumber);
+            // The parent header is read from the standard s_number_2_header table as a tars
+            // BlockHeader, replacing the retired s_eth_block_header RLP read path. Entry::get()
+            // returns a string_view (Entry.h:332) and createBlockHeader has no string_view overload
+            // -- copy explicitly into bytes.
+            try
             {
-                auto expectedBaseFee = detail::calcOpBaseFee(*parentHeader,
-                    m_scheduler.get().isJovianActiveAt(
-                        static_cast<uint64_t>(parentHeader->timestamp()) / 1000),
-                    m_scheduler.get().isIsthmusActiveAt(
-                        static_cast<uint64_t>(parentHeader->timestamp()) / 1000));
-                if (payload.baseFeePerGas != expectedBaseFee)
+                std::optional<bcos::storage::Entry> parentHeaderEntry;
+                try
                 {
-                    co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                        std::string("baseFeePerGas does not match the value computed "
-                                    "from the parent"));
+                    parentHeaderEntry = co_await storage2::readOne(
+                        view, executor_v1::StateKeyView{
+                                  ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
+                }
+                catch (...)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        OpExecutionInternalError{} << bcos::errinfo_comment{
+                            "3a readOne(parent header) threw: " +
+                            boost::diagnostic_information(std::current_exception())});
+                }
+                if (parentHeaderEntry.has_value())
+                {
+                    const auto storedHeader = parentHeaderEntry->get();  // string_view
+                    bcos::protocol::BlockHeader::Ptr parentHeader;
+                    try
+                    {
+                        bcos::bytes parentHeaderBytes(storedHeader.begin(), storedHeader.end());
+                        parentHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader(
+                            parentHeaderBytes);
+                    }
+                    catch (const std::exception& e)
+                    {
+                        // Our own stored bytes failed to parse: a local storage/consistency fault,
+                        // not a verdict on the incoming payload (the error-classification rule cuts
+                        // both ways).
+                        BOOST_THROW_EXCEPTION(
+                            OpExecutionInternalError{} << bcos::errinfo_comment{
+                                std::string("stored parent block header is undecodable: ") +
+                                e.what()});
+                    }
+                    catch (...)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            OpExecutionInternalError{} << bcos::errinfo_comment{
+                                "3a createBlockHeader(parent header) threw untyped: " +
+                                boost::diagnostic_information(std::current_exception())});
+                    }
+                    // tars
+                    // Tars decoding is lenient: a truncated stream may silently fill defaults. This
+                    // table is keyed by height and written only by this loop, so a height mismatch
+                    // is a local fault.
+                    if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
+                    {
+                        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                                  "stored parent block header height mismatch"});
+                    }
+                    // Note: createBlockHeader(bytesConstRef) auto back-fills dataHash with the
+                    // tars-order hasher when it is empty (BlockHeaderFactoryImpl.cpp:21-37) -- that
+                    // value is NOT the OP hash. This step only reads
+                    // timestamp/baseFee/extraData/gasLimit/gasUsed/ blobGasUsed, never hash(), so
+                    // it is unaffected; this is a known consequence of deferred dataHash, and any
+                    // future consumer of OP headers must not call hash(). Monotonicity: payload
+                    // seconds -> milliseconds, compared in the same unit as the parent header
+                    // (milliseconds).
+                    if (static_cast<uint64_t>(payload.timestamp) * 1000 <=
+                        static_cast<uint64_t>(parentHeader->timestamp()))
+                    {
+                        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                            std::string("timestamp must be strictly greater than the parent's"));
+                    }
+
+                    // Step 3a-2: baseFee consistency (Holocene+ EIP-1559 with Optimism
+                    // extensions). op-geth checks this in consensus/misc/eip1559/eip1559.go's
+                    // VerifyEIP1559Header → CalcBaseFee. The parent header is already in hand
+                    // from the timestamp check above, and fork membership is determined from
+                    // the parent's own timestamp — matching op-geth's
+                    // config.IsJovian(parent.Time) / config.IsOptimismHolocene(parent.Time).
+                    // Fork determination switches back to seconds (consistent with the payload
+                    // seconds and the config thresholds; the reverse direction of the milliseconds
+                    // comparison above).
+                    //
+                    // Genesis-parent skip (FISCO-specific, mirrors the timestamp check's genesis
+                    // handling): the FISCO OP genesis header is not OP-shaped — its extraData is
+                    // the config dump (generateGenesisData), not the 17-byte Jovian block header
+                    // shape calcOpBaseFee reads (offsets 1/5/9+). On a real ledger the parent of
+                    // block 1 is that genesis header, so calcOpBaseFee would misread garbage (or
+                    // throw) and reject every first block. op-geth has no such case: its L2 genesis
+                    // carries a proper OP header. Skip the baseFee consistency check for the
+                    // genesis parent (blockNumber == 0); block 2 onward the parent is a real OP
+                    // block written by this loop and the check is live.
+                    if (*parentBlockNumber > 0)
+                    {
+                        bcos::u256 expectedBaseFee;
+                        try
+                        {
+                            expectedBaseFee = detail::calcOpBaseFee(*parentHeader,
+                                m_scheduler.get().isJovianActiveAt(
+                                    static_cast<uint64_t>(parentHeader->timestamp()) / 1000),
+                                m_scheduler.get().isIsthmusActiveAt(
+                                    static_cast<uint64_t>(parentHeader->timestamp()) / 1000));
+                        }
+                        catch (...)
+                        {
+                            BOOST_THROW_EXCEPTION(
+                                OpExecutionInternalError{} << bcos::errinfo_comment{
+                                    "calcOpBaseFee threw: " +
+                                    boost::diagnostic_information(std::current_exception())});
+                        }
+                        if (payload.baseFeePerGas != expectedBaseFee)
+                        {
+                            co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                                std::string("baseFeePerGas does not match the value computed "
+                                            "from the parent"));
+                        }
+                    }
                 }
             }
-        }
+            catch (...)
+            {
+                std::string a3detail;
+                try
+                {
+                    throw;
+                }
+                catch (bcos::Exception& e)
+                {
+                    a3detail = "bcos::Exception: " + boost::diagnostic_information(e);
+                }
+                catch (std::exception& e)
+                {
+                    a3detail = std::string("std::exception: ") + e.what();
+                }
+                catch (...)
+                {
+                    a3detail = "non-std-non-boost";
+                }
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "step 3a parent-header processing threw: " + a3detail});
+            }
 
-        // ---- Step 3b: already-known block -> VALID short-circuit ----
-        //
-        // op-geth does exactly this (`eth/catalyst/api.go:872-876`): a payload whose block is
-        // already in the chain returns VALID without re-executing. Re-delivery is a routine
-        // path, not a reorg -- CL timeouts re-send, and op-node replays unsafe blocks after a
-        // restart. Without this short-circuit the second delivery re-executes ON TOP OF the
-        // state the first delivery already committed, which produces a guaranteed-wrong result
-        // and answers INVALID: user-transaction blocks fail inside `processOpBlock` (the sender
-        // nonce has already advanced), deposit-only blocks fail the receiptsRoot comparison (the
-        // mint is credited twice). Answering INVALID there would make op-node mark a block it
-        // itself just accepted as bad -- the one case in this implementation where a block
-        // op-geth accepts would be rejected.
-        //
-        // Placement is load-bearing: AFTER step 2, so a malformed payload is still rejected on
-        // its own merits rather than waved through on a hash match; AFTER parentKnown/continuity,
-        // so the answer is only ever given for a block that sits where it claims to sit; and
-        // BEFORE the non-tip check below, because a re-delivered block always has a child height
-        // occupied (by itself) and would otherwise trip that check.
-        //
-        // `SYS_HASH_2_NUMBER` is written only by the VALID branch below, so presence there means
-        // "this exact block was executed and accepted by this node" -- the same operational
-        // definition step 5 uses for the parent.
-        if (auto knownBlockNumber = co_await bcos::ledger::getBlockNumber(
-                view, payload.blockHash, bcos::ledger::fromStorage);
-            knownBlockNumber.has_value())
-        {
-            co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
-        }
+            // ---- Step 3b: already-known block -> VALID short-circuit ----
+            //
+            // op-geth does exactly this (`eth/catalyst/api.go:872-876`): a payload whose block is
+            // already in the chain returns VALID without re-executing. Re-delivery is a routine
+            // path, not a reorg -- CL timeouts re-send, and op-node replays unsafe blocks after a
+            // restart. Without this short-circuit the second delivery re-executes ON TOP OF the
+            // state the first delivery already committed, which produces a guaranteed-wrong result
+            // and answers INVALID: user-transaction blocks fail inside `processOpBlock` (the sender
+            // nonce has already advanced), deposit-only blocks fail the receiptsRoot comparison
+            // (the mint is credited twice). Answering INVALID there would make op-node mark a block
+            // it itself just accepted as bad -- the one case in this implementation where a block
+            // op-geth accepts would be rejected.
+            //
+            // Placement is load-bearing: AFTER step 2, so a malformed payload is still rejected on
+            // its own merits rather than waved through on a hash match; AFTER
+            // parentKnown/continuity, so the answer is only ever given for a block that sits where
+            // it claims to sit; and BEFORE the non-tip check below, because a re-delivered block
+            // always has a child height occupied (by itself) and would otherwise trip that check.
+            //
+            // `SYS_HASH_2_NUMBER` is written only by the VALID branch below, so presence there
+            // means "this exact block was executed and accepted by this node" -- the same
+            // operational definition step 5 uses for the parent.
+            try
+            {
+                if (auto knownBlockNumber = co_await bcos::ledger::getBlockNumber(
+                        view, payload.blockHash, bcos::ledger::fromStorage);
+                    knownBlockNumber.has_value())
+                {
+                    co_return makeStatus(
+                        PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+                }
+            }
+            catch (...)
+            {
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "step 3b known-block getBlockNumber threw: " +
+                                          boost::diagnostic_information(std::current_exception())});
+            }
 
-        // ---- Step 3c: the parent must be the current chain tip ----
-        //
-        // `fork()` above hands back the top of the layer stack -- the CURRENT tip's state -- not
-        // the state as of `payload.parentHash`. Whenever those differ, execution would silently
-        // run against the wrong base state and produce a result that cannot match the payload,
-        // reported as INVALID: a wrong verdict dressed up as a consensus judgement.
-        //
-        // The criterion is one-directional: an occupied child height ALWAYS implies the parent is
-        // not the tip (this is the direction used to refuse); an empty child height implies the
-        // parent IS the tip only under the invariant that every hash in `SYS_HASH_2_NUMBER`
-        // occupies its own height in `SYS_NUMBER_2_HASH`. `opstackRegisterBlock` (called by the
-        // step 6 `commitBlock`) writes both, always together, as does the production precedent
-        // `BaselineScheduler.h:207-220` -- so on
-        // a real ledger the criterion is exact; a store where the two disagree (notably a test
-        // fixture that seeds only `SYS_HASH_2_NUMBER`, a documented exemption) can present an
-        // empty child height for a parent that is not the tip and slip through. The parent/child
-        // number continuity check above does not close that gap: a parent seeded at height 5 with
-        // a payload at height 6 satisfies it.
-        //
-        // (A block already occupying the child height that IS this payload was short-circuited
-        // immediately above, so reaching here with an occupied height means a genuine
-        // sibling/side-chain delivery.)
-        //
-        // Answering `OpExecutionInternalError` (-32603) rather than INVALID is the honest
-        // reply: this node cannot evaluate the block, which is a capability limit, not a verdict.
-        // Serving arbitrary-parent base state needs a `blockHash -> MLS layer` mapping that does
-        // not exist today; that is architecture work, parked (this cycle delivers the explicit
-        // refusal, not the capability).
-        const auto childNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
-        if (auto occupiedHeight = co_await storage2::readOne(
-                view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, childNumberStr});
-            occupiedHeight.has_value())
+            // ---- Step 3c: the parent must be the current chain tip ----
+            //
+            // `fork()` above hands back the top of the layer stack -- the CURRENT tip's state --
+            // not the state as of `payload.parentHash`. Whenever those differ, execution would
+            // silently run against the wrong base state and produce a result that cannot match the
+            // payload, reported as INVALID: a wrong verdict dressed up as a consensus judgement.
+            //
+            // The criterion is one-directional: an occupied child height ALWAYS implies the parent
+            // is not the tip (this is the direction used to refuse); an empty child height implies
+            // the parent IS the tip only under the invariant that every hash in `SYS_HASH_2_NUMBER`
+            // occupies its own height in `SYS_NUMBER_2_HASH`. `opstackRegisterBlock` (called by the
+            // step 6 `commitBlock`) writes both, always together, as does the production precedent
+            // `BaselineScheduler.h:207-220` -- so on
+            // a real ledger the criterion is exact; a store where the two disagree (notably a test
+            // fixture that seeds only `SYS_HASH_2_NUMBER`, a documented exemption) can present an
+            // empty child height for a parent that is not the tip and slip through. The
+            // parent/child number continuity check above does not close that gap: a parent seeded
+            // at height 5 with a payload at height 6 satisfies it.
+            //
+            // (A block already occupying the child height that IS this payload was short-circuited
+            // immediately above, so reaching here with an occupied height means a genuine
+            // sibling/side-chain delivery.)
+            //
+            // Answering `OpExecutionInternalError` (-32603) rather than INVALID is the honest
+            // reply: this node cannot evaluate the block, which is a capability limit, not a
+            // verdict. Serving arbitrary-parent base state needs a `blockHash -> MLS layer` mapping
+            // that does not exist today; that is architecture work, parked (this cycle delivers the
+            // explicit refusal, not the capability).
+            const auto childNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
+            try
+            {
+                if (auto occupiedHeight = co_await storage2::readOne(
+                        view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, childNumberStr});
+                    occupiedHeight.has_value())
+                {
+                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                              "non-tip parent not supported: a different block is "
+                                              "already registered at "
+                                              "this height, so the forked view's base state is not "
+                                              "the payload's parent"});
+                }
+            }
+            catch (...)
+            {
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "step 3c occupied-height readOne threw: " +
+                                          boost::diagnostic_information(std::current_exception())});
+            }
+        }
+        catch (...)
         {
-            BOOST_THROW_EXCEPTION(
-                OpExecutionInternalError{} << bcos::errinfo_comment{
-                    "non-tip parent not supported: a different block is already registered at "
-                    "this height, so the forked view's base state is not the payload's parent"});
+            std::string step3detail;
+            try
+            {
+                throw;
+            }
+            catch (bcos::Exception& e)
+            {
+                step3detail = "bcos::Exception: " + boost::diagnostic_information(e);
+            }
+            catch (std::exception& e)
+            {
+                step3detail = std::string("std::exception: ") + e.what();
+            }
+            catch (std::string& s)
+            {
+                step3detail = "std::string: " + s;
+            }
+            catch (char const* s)
+            {
+                step3detail = std::string("char*: ") + s;
+            }
+            catch (int i)
+            {
+                step3detail = "int: " + std::to_string(i);
+            }
+            catch (...)
+            {
+                step3detail = "non-std-non-boost-non-scalar";
+            }
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "step3 parent checks threw: " + step3detail});
         }
 
         // ---- Step 4: execute(two-phase phase 1) ----
@@ -1098,13 +1249,22 @@ private:
         // 的 ledger::getLedgerConfig(L1204),按"配置生效到父块"语义取 payload.blockNumber-1。
         bcos::ledger::LedgerConfig ledgerConfig;
         // payload.blockNumber 是 protocol::BlockNumber(int64),无需转换。
-        co_await bcos::ledger::getLedgerConfig(
-            view, ledgerConfig, payload.blockNumber - 1, *m_blockFactory);
+        try
+        {
+            co_await bcos::ledger::getLedgerConfig(
+                view, ledgerConfig, payload.blockNumber - 1, *m_blockFactory);
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "getLedgerConfig threw: " +
+                                      boost::diagnostic_information(std::current_exception())});
+        }
         try
         {
             // executeBlock 从参数 move view 进 m_pending——此后本分支不得再触碰 view(比对走
-            // pendingExecuteResult,提交走 commitBlock 内部)。返回值丢弃(比对用 pendingExecuteResult),
-            // (void) 抑制 -Wunused-but-set-variable。
+            // pendingExecuteResult,提交走 commitBlock 内部)。返回值丢弃(比对用
+            // pendingExecuteResult), (void) 抑制 -Wunused-but-set-variable。
             (void)co_await m_scheduler.get().executeBlock(
                 view, m_executor.get(), *ethHeader, *payload.rawTransactions, ledgerConfig);
         }
@@ -1131,20 +1291,54 @@ private:
         // ---- Step 5: 八项比对(pendingExecuteResult 拿 ExecuteResult → commitments)----
         const auto& executeResult = m_scheduler.get().pendingExecuteResult();
         const auto commitments = SchedulerType::commitmentsOf(executeResult);
-        const auto announced =
-            SchedulerType::announcedCommitmentsOf(payload, transactionsRoot, *ethHeader);
+        decltype(SchedulerType::announcedCommitmentsOf(
+            payload, transactionsRoot, *ethHeader)) announced;
+        try
+        {
+            announced =
+                SchedulerType::announcedCommitmentsOf(payload, transactionsRoot, *ethHeader);
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "announcedCommitmentsOf threw: " +
+                                      boost::diagnostic_information(std::current_exception())});
+        }
         if (auto mismatchedField = SchedulerType::mismatchedFieldOf(commitments, announced);
             mismatchedField.has_value())
         {
             m_scheduler.get().resetPending();  // 不留残留视图到下一块
-            co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-                std::string("execution result does not match payload field: ") + *mismatchedField);
+            std::string diagMsg =
+                "execution result does not match payload field: " + *mismatchedField;
+            diagMsg += " [computed: stateRoot=" + commitments.stateRoot.hex();
+            diagMsg += " receiptsRoot=" + commitments.receiptsRoot.hex();
+            diagMsg += " logsBloom=" + commitments.logsBloom.hex();
+            diagMsg += " withdrawalsRoot=" + commitments.withdrawalsRoot.hex();
+            diagMsg += " gasUsed=" + commitments.gasUsed.str(10);
+            diagMsg += " txRoot=" + commitments.txRoot.hex();
+            diagMsg += " blobGasUsed=" + (commitments.blobGasUsed ?
+                                                 std::to_string(*commitments.blobGasUsed) :
+                                                 std::string("nullopt"));
+            diagMsg +=
+                " requestsHash=" + (commitments.requestsHash ? commitments.requestsHash->hex() :
+                                                               std::string("nullopt"));
+            diagMsg += "]";
+            co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash, diagMsg);
         }
 
         // ---- Step 6: commit(two-phase phase 2)----
         // commitBlock 内部:opstackRegisterBlock 写 5 表 → mergeView 原子落盘 → notifyBlockNumber。
         // 落盘错误经 handleOpNewPayload 屏障(OpExecutionInternalError 原样放行 → -32603)。
-        co_await m_scheduler.get().commitBlock(ethHeader, payload.blockHash);
+        try
+        {
+            co_await m_scheduler.get().commitBlock(ethHeader, payload.blockHash);
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "commitBlock threw: " +
+                                      boost::diagnostic_information(std::current_exception())});
+        }
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
 
@@ -1165,6 +1359,19 @@ private:
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
+        if constexpr (c_opMode)
+        {
+            // OP mode: build an OP-header payload (sequencer). Sealed transactions carry the raw
+            // EIP-2718 envelopes (rawTransactionBytes) the user submitted; buildOpPayload executes
+            // them via executeOpBlock, back-fills the OP header commitments, and computes the OP
+            // blockHash. The generic FISCO path below lives in the `else` so `if constexpr`
+            // discards it entirely on the OP composition root (its `executeBlock(Transaction-view)`
+            // would otherwise be instantiated and fail to compile).
+            co_return co_await buildOpPayload(forkchoiceState, payloadAttributes, payloadId,
+                version, nextBlockNumber, std::move(sealedTxs), view);
+        }
+        else
+        {
         ExecutionPayload executionPayload{
             .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
@@ -1340,6 +1547,167 @@ private:
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(blockHeader),
             .receipts = std::move(receipts)};
+        }
+    }
+
+    /// OP-mode payload builder (sequencer): seals transactions from the mempool, executes them as
+    /// an OP block (raw EIP-2718 envelopes), back-fills the OP header commitments, and computes the
+    /// OP blockHash. Counterpart to `buildPayload`'s generic path — the two are kept separate so the
+    /// FISCO logic (merkle txRoot / FISCO receiptRoot / calculateStateRoot) is untouched.
+    ///
+    /// Precondition: `view` already has a mutable layer (the caller, updateForkchoice's shared
+    /// seal path, calls `view.newMutable()` before invoking buildPayload).
+    bcos::task::Task<BuildPayloadResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
+        std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+        std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
+    {
+        // Parent header: read from storage (SYS_NUMBER_2_BLOCK_HEADER[parentNumber]) to derive the
+        // OP baseFee (calcOpBaseFee reads the parent's extraData/gasUsed/blobGasUsed/baseFee) and
+        // the parentIsJovian/parentIsIsthmus fork predicates. The genesis parent (number 0) is not
+        // OP-shaped (FISCO config-dump extraData) — skip baseFee derivation there, mirroring the
+        // newPayload check's genesis-parent skip (EngineServiceImpl.h ~L1085). Same read pattern as
+        // the newPayload parent-header check (storage2::readOne + createBlockHeader).
+        std::optional<bcos::protocol::BlockHeader::Ptr> parentHeader;
+        if (auto parentHeaderEntry = co_await storage2::readOne(view,
+                executor_v1::StateKeyView{
+                    bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, boost::lexical_cast<std::string>(
+                                                                 nextBlockNumber - 1)});
+            parentHeaderEntry.has_value())
+        {
+            auto const& storedHeader = parentHeaderEntry->get();
+            bcos::bytes parentHeaderBytes(storedHeader.begin(), storedHeader.end());
+            parentHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader(
+                std::move(parentHeaderBytes));
+        }
+        const auto parentTimestamp =
+            parentHeader.has_value() ? static_cast<uint64_t>((*parentHeader)->timestamp()) : 0;
+        const auto parentIsJovian =
+            parentHeader.has_value() && m_scheduler.get().isJovianActiveAt(parentTimestamp / 1000);
+        const auto parentIsIsthmus =
+            parentHeader.has_value() && m_scheduler.get().isIsthmusActiveAt(parentTimestamp / 1000);
+        bcos::u256 baseFee =
+            (parentHeader.has_value() && nextBlockNumber > 1) ?
+                detail::calcOpBaseFee(**parentHeader, parentIsJovian, parentIsIsthmus) :
+                bcos::u256(0);
+
+        // Extract the raw EIP-2718 envelopes. Sealed FISCO transactions carry the verbatim bytes
+        // the user submitted (rawTransactionBytes, populated by eth_sendRawTransaction); a tx
+        // without them (entered via a non-web3 path) cannot be faithfully re-executed and is
+        // skipped — the block stays buildable with the remaining txs.
+        std::vector<bcos::bytes> rawTransactions;
+        rawTransactions.reserve(sealedTxs.size());
+        for (auto const& tx : sealedTxs)
+        {
+            // The engine holds sealed txs as protocol::Transaction (the abstract interface). The
+            // raw EIP-2718 envelope lives on the concrete tars impl (tag-16 rawTransactionBytes);
+            // down-cast to reach it. A tx that is not a tars Web3 tx (or carries no raw bytes)
+            // cannot be faithfully re-executed — skip it, the block stays buildable.
+            if (auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx))
+            {
+                auto const& raw = tarsTx->inner().rawTransactionBytes;
+                if (!raw.empty())
+                    rawTransactions.emplace_back(raw.begin(), raw.end());
+            }
+        }
+
+        // Header skeleton — the fields `toBlockInfo` reads before execution (number/timestamp/
+        // gasLimit/baseFee/coinbase/prevRandao/parentBeaconBlockRoot/extraData/blobGasUsed).
+        // extraData inherits the parent's (OP L2 blocks carry the parent's extraData forward —
+        // op-geth sets it from the block's own field, which the sequencer derives from the L1
+        // attributes; inheriting the parent is the minimal faithful choice for the local driver).
+        auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        blockHeader->setNumber(nextBlockNumber);
+        blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+        blockHeader->setParentInfo(bcos::protocol::ParentInfo{
+            .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash});
+        blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
+        blockHeader->setPrevRandao(payloadAttributes.prevRandao);
+        bcos::ledger::LedgerConfig ledgerConfig;
+        co_await ledger::getLedgerConfig(
+            view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+        blockHeader->setGasLimit(bcos::u256(std::get<0>(ledgerConfig.gasLimit())));
+        blockHeader->setBaseFee(baseFee);
+        blockHeader->setParentBeaconBlockRoot(bcos::h256{});  // filled below if known
+        if (parentHeader.has_value())
+        {
+            auto const parentExtra = (*parentHeader)->extraData();  // bytesConstRef
+            blockHeader->setExtraData(bcos::bytes(parentExtra.begin(), parentExtra.end()));
+        }
+        else
+        {
+            blockHeader->setExtraData(bcos::bytes{});
+        }
+        blockHeader->setBlobGasUsed(bcos::u256(0));  // Jovian DA footprint set from seal below
+        blockHeader->setRequestsHash(bcos::h256{});
+
+        // Execute the block. The scheduler drives OP execution (executeOpBlock) on this view and
+        // stages the result; the returned commitments (seal/stateRoot/txRoot/gasUsed) are what the
+        // header must carry.
+        auto result = co_await m_scheduler.get().executeOpBlock(
+            view, *blockHeader, rawTransactions);
+        const auto commitments = SchedulerType::commitmentsOf(result);
+
+        // Back-fill the header with the executed commitments. logsBloom is the 256-byte block
+        // bloom (payload stores it as-is). withdrawalsRoot/requestsHash are optional-engaged for
+        // Isthmus+ (seal's requestsHash is nullopt pre-Isthmus). Jovian blobGasUsed is the DA
+        // footprint (seal's blobGasUsed), else 0.
+        blockHeader->setStateRoot(commitments.stateRoot);
+        blockHeader->setTxsRoot(commitments.txRoot);
+        blockHeader->setReceiptsRoot(commitments.receiptsRoot);
+        blockHeader->setGasUsed(commitments.gasUsed);
+        // withdrawalsRoot is a plain h256 in OpBlockCommitments (seal always carries one — the
+        // empty-list root pre-Isthmus); logsBloom is h2048 (256 bytes) already in payload shape.
+        blockHeader->setWithdrawalsRoot(commitments.withdrawalsRoot);
+        blockHeader->setLogsBloom(bcos::bytesConstRef(
+            commitments.logsBloom.data(), commitments.logsBloom.size()));
+        if (commitments.requestsHash.has_value())
+            blockHeader->setRequestsHash(*commitments.requestsHash);
+        if (commitments.blobGasUsed.has_value())
+            blockHeader->setBlobGasUsed(bcos::u256(*commitments.blobGasUsed));
+
+        // OP blockHash = keccak(RLP(21 fields)) via the header's OP capability.
+        const auto blockHash = blockHeader->opHeaderHash(detail::opHeaderConst());
+
+        // Assemble the ExecutionPayload. rawTransactions carries the envelopes (the OP path's only
+        // tx carrier); withdrawalsRoot/requestsHash go in the optional OP fields.
+        ExecutionPayload executionPayload{
+            .logsBloom = Bloom{},
+            .parentHash = forkchoiceState.headBlockHash,
+            .stateRoot = commitments.stateRoot,
+            .receiptsRoot = commitments.receiptsRoot,
+            .prevRandao = payloadAttributes.prevRandao,
+            .gasLimit = blockHeader->gasLimit(),
+            .gasUsed = commitments.gasUsed,
+            .baseFeePerGas = baseFee,
+            .blockHash = blockHash,
+            .transactions = {},
+            .extraData = [&] {
+                auto const e = blockHeader->extraData();  // bytesConstRef
+                return bcos::bytes(e.begin(), e.end());
+            }(),
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .timestamp = payloadAttributes.timestamp,
+            .blockNumber = nextBlockNumber,
+            .withdrawals = std::nullopt,
+            .blobGasUsed = commitments.blobGasUsed.has_value() ?
+                               std::optional<u256>(bcos::u256(*commitments.blobGasUsed)) :
+                               std::nullopt,
+            .excessBlobGas = u256(0),
+            .blockAccessList = std::nullopt,
+            .slotNumber = std::nullopt,
+            .rawTransactions = std::move(rawTransactions),
+            .withdrawalsRoot = commitments.withdrawalsRoot,
+        };
+        // commitments.logsBloom is h2048 (FixedBytes<256>); the payload's Bloom is the same 256
+        // bytes as std::array<byte, 256> — copy element-wise (FixedBytes exposes .data()).
+        std::copy(commitments.logsBloom.data(),
+            commitments.logsBloom.data() + commitments.logsBloom.size(),
+            executionPayload.logsBloom.begin());
+
+        co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
+            .header = std::move(blockHeader),
+            .receipts = std::move(result.receipts)};
     }
 
     /// Compute state root by iterating over storage and XOR-ing entry hashes.
