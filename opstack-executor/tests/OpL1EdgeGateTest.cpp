@@ -180,7 +180,8 @@ struct OpE2eFixture
     explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
       : scheduler(receiptFactory, kChainId, forkTimestamps),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
-            /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4)
+            /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
+            /*delegate=*/nullptr)
     {}
 };
 
@@ -206,11 +207,13 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
     auto request = bcos::rpc::parseNewPayloadRequest(
         params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
-    // PayloadValidationStatus is an enum class without operator<<; must compare via static_cast<int>.
+    // PayloadValidationStatus is an enum class without operator<<; must compare via
+    // static_cast<int>.
     BOOST_CHECK_EQUAL(static_cast<int>(status.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(status.validationError.has_value());
-    // Warning: the real string includes (blobGasUsed); check "DA footprint" (not "DA footprint exceeds").
+    // Warning: the real string includes (blobGasUsed); check "DA footprint" (not "DA footprint
+    // exceeds").
     BOOST_CHECK(status.validationError->find("DA footprint") != std::string::npos);
 }
 
@@ -250,7 +253,8 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     tx.value = intx::uint256{0};
     tx.nonce = 0;
 
-    // Inject fee F: l1_base_fee = 1 gwei (non-zero), base_fee_scalar 1100 -> props.l1_cost non-zero.
+    // Inject fee F: l1_base_fee = 1 gwei (non-zero), base_fee_scalar 1100 -> props.l1_cost
+    // non-zero.
     OpFeeParams F{.l1_base_fee = 1000000000_u256,
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
@@ -259,14 +263,16 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
         .operator_fee_constant = 0};
     std::vector<uint8_t> env(120, 0x11);  // non-empty envelope: flz non-zero -> l1_cost non-zero
 
-    // opValidate returns std::variant<OpTxProperties, std::error_code>; must std::get<OpTxProperties>.
+    // opValidate returns std::variant<OpTxProperties, std::error_code>; must
+    // std::get<OpTxProperties>.
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), F, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
     BOOST_REQUIRE_MESSAGE(props.l1_cost > intx::uint256{0}, "test is vacuous unless l1_cost > 0");
 
-    // OpFeeParams has no operator== (non-defaulted aggregate, not generated in C++20) -> compare the snapshot to the injected values field-by-field.
+    // OpFeeParams has no operator== (non-defaulted aggregate, not generated in C++20) -> compare
+    // the snapshot to the injected values field-by-field.
     BOOST_CHECK(props.fee.l1_base_fee == F.l1_base_fee);
     BOOST_CHECK(props.fee.base_fee_scalar == F.base_fee_scalar);
     BOOST_CHECK(props.fee.blob_base_fee_scalar == F.blob_base_fee_scalar);
@@ -303,7 +309,8 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     BOOST_REQUIRE(meta.has_value());
     BOOST_REQUIRE(meta->l1_fee.has_value());
     BOOST_CHECK_EQUAL(*meta->l1_fee, bcosU256FromIntx(props.l1_cost));
-    // Strengthen: l1_gas_price likewise comes from the F snapshot, not re-read storage (deriveOpReceiptMeta OpTransition.cpp:214).
+    // Strengthen: l1_gas_price likewise comes from the F snapshot, not re-read storage
+    // (deriveOpReceiptMeta OpTransition.cpp:214).
     BOOST_REQUIRE(meta->l1_gas_price.has_value());
     BOOST_CHECK_EQUAL(*meta->l1_gas_price, bcosU256FromIntx(F.l1_base_fee));
 }

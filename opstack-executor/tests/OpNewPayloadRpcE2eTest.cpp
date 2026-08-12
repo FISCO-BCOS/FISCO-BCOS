@@ -14,6 +14,7 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <opstack-executor/OpEngineSeam.h>
+#include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
 // bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type
@@ -154,15 +155,28 @@ struct OpE2eFixture
     MLS multiLayerStorage{checkpointBackend};
     StubMemPool memPool;
     StubExecutor executor;
-    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{makeReceiptFactory()};
-    OpScheduler scheduler;
+    bcos::crypto::Hash::Ptr hashImpl;
+    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory;
+    OpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerImpl<ViewType>)
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
+    /// Wiring Task 5a/5b: the engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
+    /// A second OpSchedulerImpl lives inside it (own evmc::VM) — the dual-instance pin
+    /// (design §4, "倾向共享，若不可行则明确双实例并存"); fork timestamps match the seam's.
+    std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngineService service;
 
     explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
-      : scheduler(receiptFactory, kChainId, forkTimestamps),
+      : hashImpl(makeCryptoSuite()->hashImpl()),
+        receiptFactory(makeReceiptFactory()),
+        scheduler(receiptFactory, kChainId, forkTimestamps),
+        opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
+            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage,
+            [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
+                return bcos::engine::detail::opEnvelopeToTars(env, txHash);
+            })),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
-            /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4)
+            /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
+            opDelegate)
     {}
 };
 

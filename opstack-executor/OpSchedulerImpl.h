@@ -113,6 +113,16 @@ public:
             result.seal, result.stateRoot, result.gasUsed, result.txRoot);
     }
 
+    /// Announced-side projection for the six-field comparison (wiring Task 5a): the payload's
+    /// announced commitments, re-published from OpEngineSeam.h so the engine reaches it as a
+    /// dependent name (MAIN seam-surface parity).
+    static bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
+        const bcos::engine::ExecutionPayload& payload, const bcos::h256& transactionsRoot,
+        const bcos::protocol::BlockHeader& ethHeader)
+    {
+        return bcos::evm::engine::announcedCommitmentsOf(payload, transactionsRoot, ethHeader);
+    }
+
     /// Eight-field commitments comparison: returns the first mismatching field name, or nullopt.
     /// Re-published from OpEngineSeam.h so the engine reaches it as a dependent name.
     static std::optional<std::string> mismatchedFieldOf(

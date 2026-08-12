@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
     // the generic root's V3 default would refuse version 4 before the OP branch's -38005 gate.
     OpEngine engine(memPool, storage, executor, scheduler, blockFactory,
         /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit,
-        static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4));
+        static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), /*delegate=*/nullptr);
 
     // A V4 newPayload with a pre-Isthmus timestamp hits the -38005 version gate (which lives
     // outside the classification barrier), proving the OP branch is wired end-to-end.

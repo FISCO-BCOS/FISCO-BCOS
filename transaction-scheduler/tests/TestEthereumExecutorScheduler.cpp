@@ -841,7 +841,8 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
             bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
         bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl, EEMultiLayerStorage,
             EthereumExecutor, SchedulerSerialImpl>
-            engineService(memPool, multiLayerStorage, *executor, scheduler, blockFactory);
+            engineService(memPool, multiLayerStorage, *executor, scheduler, blockFactory,
+                /*delegate=*/nullptr);
 
         // Submit a real value-transfer tx (nonce 0, matching the sender's state nonce).
         // Built directly as EETestTransactionImpl (the factory returns a base TransactionImpl

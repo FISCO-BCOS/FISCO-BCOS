@@ -358,6 +358,16 @@ public:
     {
         this->m_multiLayerStorage = &multiLayerStorage;
         this->m_blockFactory = blockFactory.get();
+        // v3（M4 尾部）：OP commit 的 notifyBlockNumber 走骨架（m_asyncGroup），OP 无 RPC
+        // 推送需求——默认注册 no-op notifier，composition root（Initializer）可经
+        // setBlockNumberNotifier/setTransactionNotifier 覆盖。缺省为空 std::function 调用会抛
+        // std::bad_function_call（异步任务内 → dtor 的 m_asyncGroup.wait() 重抛 → terminate）。
+        // OP 的 m_transactions 恒为非空空表，tx-submit zip 空循环，m_transactionSubmitResultFactory
+        // 为 null 也安全（createTxSubmitResult 从不被调）。
+        this->m_blockNumberNotifier = [](bcos::protocol::BlockNumber) {};
+        this->m_transactionNotifier =
+            [](bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
+                std::function<void(bcos::Error::Ptr)> cb) { cb(nullptr); };
     }
     OpScheduler(const OpScheduler&) = delete;
     OpScheduler& operator=(const OpScheduler&) = delete;
@@ -388,6 +398,43 @@ public:
         ledgerConfig->setBlockNumber(header->number());
         ledgerConfig->setTimestamp(header->timestamp());
         co_return ledgerConfig;
+    }
+
+    /// commit 连续性（v3 P1-6 头推进守卫）：opstackRegisterBlock 写 SYS_CURRENT_STATE 是无条件写
+    /// （MAIN OpBlockRegister.h:75-80）——引擎原有守卫写（blockNumber >
+    /// currentHead，EngineServiceImpl 内联路径）搬到 OpScheduler commit 后由本 override
+    /// 承载，单调守卫语义保留（拒绝已提交 / 断连提交）。骨架 base 版读
+    /// *m_ledger（getCurrentBlockNumber(*m_ledger)），OP composition root 不 wire
+    /// LedgerInterface——这里改读 storage view（getCurrentBlockNumber(view, fromStorage)， 与引擎
+    /// step 3 同源）。置 public 同 loadCommitLedgerConfig（coCommitBlock 经 derived() 访问）。
+    /// isSysContractDeploy 特例保留（block 0 系统合约部署块，PrecompiledTypeDef.h:31）。
+    task::Task<bool> commitContinuityCheck(protocol::BlockNumber number)
+    {
+        if (!isSysContractDeploy(number))
+        {
+            if (this->m_lastCommittedBlockNumber == -1)
+            {
+                auto view = this->m_multiLayerStorage->fork();
+                this->m_lastCommittedBlockNumber =
+                    co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+            }
+            if (this->m_lastCommittedBlockNumber != -1 &&
+                number <= this->m_lastCommittedBlockNumber)
+            {
+                BASELINE_SCHEDULER_LOG(INFO) << "Block already committed: " << number
+                                             << "! latest: " << this->m_lastCommittedBlockNumber;
+                co_return false;
+            }
+            if (this->m_lastCommittedBlockNumber != -1 &&
+                number - this->m_lastCommittedBlockNumber != 1)
+            {
+                BASELINE_SCHEDULER_LOG(INFO)
+                    << "Discontinuous commit block number: " << number
+                    << "! expect: " << (this->m_lastCommittedBlockNumber + 1);
+                co_return false;
+            }
+        }
+        co_return true;
     }
 
 private:

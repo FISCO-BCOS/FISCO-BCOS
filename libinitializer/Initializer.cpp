@@ -79,6 +79,7 @@
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpBlockScheduler.h>
+#include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
@@ -545,9 +546,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(), opChainId, forkTimestamps);
+        // Wiring Task 5a: engine block-execution delegate = OpScheduler (slot-3 in Task 5c).
+        // Dual OpSchedulerImpl instance (design §4 pin): the seam SchedulerType (opScheduler
+        // above) serves the engine's c_opMode probe / isIsthmusActiveAt / isJovianActiveAt /
+        // computeTxRoot; the delegate owns its own OpSchedulerImpl for executeOpBlock.
+        auto opDelegate =
+            std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
+                m_protocolInitializer->blockFactory()->receiptFactory(),
+                m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkTimestamps,
+                m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
+                [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
+                    return bcos::engine::detail::opEnvelopeToTars(env, txHash);
+                });
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            transactionExecutor, m_memPoolInitializer->memPool());
+            transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
+            bcos::engine::c_defaultBlockTxCountLimit, opDelegate);
         // Compile-time proof that this production composition root activates the OP engine branch.
         // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerImpl<...>&（左值引用），若作
         // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），

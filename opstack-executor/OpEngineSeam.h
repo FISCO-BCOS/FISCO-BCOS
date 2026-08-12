@@ -12,11 +12,15 @@
 // it deliberately does NOT include `OpSchedulerImpl.h` (that would be circular).
 
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-framework/engine/Types.h>  // ExecutionPayload (announcedCommitmentsOf)
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <opstack-executor/OpBlockSeal.h>
+#include <opstack-executor/OpRlpDecode.h>  // detail::narrowU256ToU64 (announcedCommitmentsOf)
+#include <array>
 #include <cstdint>
+#include <cstring>
 #include <evmc/evmc.hpp>
 #include <iterator>
 #include <optional>
@@ -112,6 +116,43 @@ inline OpBlockCommitments commitmentsOf(const bcos::evm::opstack::OpBlockSeal& s
     {
         out.requestsHash = detail::toBcosH256(*seal.requestsHash);
     }
+    return out;
+}
+
+/// Payload Bloom (std::array<byte,256>) → bcos::h2048, byte-faithful (mirrors the engine's
+/// detail::toEthLogsBloom, moved OP-side with the projection). Named distinctly from the
+/// existing detail::toBcosBloom (evmone::state::BloomFilter overload) to avoid confusion.
+inline bcos::h2048 payloadBloomToH2048(const std::array<bcos::byte, 256>& bloom)
+{
+    bcos::h2048 out;
+    std::memcpy(out.data(), bloom.data(), bloom.size());
+    return out;
+}
+
+/// Projects the payload/header announced commitments into OpBlockCommitments (the "announced"
+/// side of mismatchedFieldOf). 5 fields from ExecutionPayload, txRoot from the caller's
+/// computeTxRoot, blobGasUsed reverse-narrowed (payload optional<u256> → optional<uint64_t>;
+/// narrow is total because validateOpNewPayloadRequest already bounds it ≤ UINT64_MAX,
+/// EngineServiceImpl.cpp:475-477), requestsHash from the rebuilt header. withdrawalsRoot /
+/// blobGasUsed deref is safe: the engine validation guarantees them present (design doc §4).
+/// Added per wiring Task 1 forward note (announcedCommitmentsOf + payloadBloomToH2048 absent in
+/// the worktree; the seam-switch comparison needs the announced-side projection).
+inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPayload& payload,
+    const bcos::h256& transactionsRoot, const bcos::protocol::BlockHeader& ethHeader)
+{
+    OpBlockCommitments out{
+        .receiptsRoot = payload.receiptsRoot,
+        .logsBloom = payloadBloomToH2048(payload.logsBloom),
+        .withdrawalsRoot = *payload.withdrawalsRoot,
+        .stateRoot = payload.stateRoot,
+        .gasUsed = payload.gasUsed,
+        .txRoot = transactionsRoot,
+        .blobGasUsed = payload.blobGasUsed.has_value() ?
+                           std::optional<uint64_t>(bcos::evm::engine::detail::narrowU256ToU64(
+                               *payload.blobGasUsed, "ExecutionPayload.blobGasUsed")) :
+                           std::nullopt,
+        .requestsHash = ethHeader.requestsHash(),
+    };
     return out;
 }
 

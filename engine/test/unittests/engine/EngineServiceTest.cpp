@@ -97,8 +97,8 @@ struct TrivialCheckpointStorage
     std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
 };
 
-using RealGlobalCheckpointBackend = TrivialCheckpointStorage<
-    bcos::executor_v1::StateKey, bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
+using RealGlobalCheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
+    bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
 using RealGlobalStateStorage = bcos::storage2::MultiLayerStorage<RealGlobalStateMutableStorage,
     void, RealGlobalCheckpointBackend>;
 
@@ -168,9 +168,8 @@ struct StubExecutor
     }
 
     template <class Storage>
-    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&,
-        const protocol::BlockHeader&, const protocol::Transaction&, int,
-        const ledger::LedgerConfig&, bool)
+    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&, const protocol::BlockHeader&,
+        const protocol::Transaction&, int, const ledger::LedgerConfig&, bool)
     {
         co_return ExecuteContext<Storage>{};
     }
@@ -180,8 +179,7 @@ struct StubScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&,
-        const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
         co_return {};
     }
@@ -191,8 +189,7 @@ struct BloomScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&,
-        const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
         Bloom bloom1{};
         bloom1[255] = static_cast<bcos::byte>(0x01);
@@ -220,20 +217,21 @@ BloomEngineServiceImpl makeBloomEngineServiceImpl(
     StubExecutor executor;
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return BloomEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+    return BloomEngineServiceImpl(
+        memPool, storage, executor, scheduler, blockFactory, /*delegate=*/nullptr);
 }
 
 using TestEngineServiceImpl =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
 
-TestEngineServiceImpl makeEngineServiceImpl(
-    MemPoolImpl& memPool, RealGlobalStateStorage& storage)
+TestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
     StubExecutor executor;
     StubScheduler scheduler;
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return TestEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+    return TestEngineServiceImpl(
+        memPool, storage, executor, scheduler, blockFactory, /*delegate=*/nullptr);
 }
 
 ForkchoiceState makeForkchoiceState()
@@ -560,8 +558,8 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     auto payloadAttributes = makePayloadAttributesV2();
 
     BloomScheduler bloomScheduler;
-    auto engineService = makeBloomEngineServiceImpl(
-        memPool, globalStateStorageFixture.storage, bloomScheduler);
+    auto engineService =
+        makeBloomEngineServiceImpl(memPool, globalStateStorageFixture.storage, bloomScheduler);
 
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));

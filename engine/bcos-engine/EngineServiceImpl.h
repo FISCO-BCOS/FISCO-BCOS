@@ -21,6 +21,7 @@
 
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/Types.h"
@@ -206,7 +207,8 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3))
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
+        bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
@@ -214,7 +216,8 @@ public:
         m_scheduler(std::ref(scheduler)),
         m_blockFactory(std::move(blockFactory)),
         m_maxEngineVersion(maxEngineVersion),
-        m_ledger(std::move(ledger))
+        m_ledger(std::move(ledger)),
+        m_delegate(std::move(delegate))
     {
         if (!m_blockFactory)
         {
@@ -1226,6 +1229,45 @@ private:
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
 
+    /// OP block assembly (wiring Task 5a, SEV-8). Build a `protocol::Block` carrying the
+    /// payload's raw EIP-2718 envelopes as each transaction's `extraTransactionBytes` -- the
+    /// FULL envelope, not the signing preimage (`takeToTarsTransaction` stores the preimage;
+    /// the delegate's execute hook re-derives rawTxBytes from extraTransactionBytes, so the
+    /// overwrite is load-bearing). Precedent: OpDualPathEquivalenceTest.cpp:566-568. Used only
+    /// by the delegate path (Task 5b); the inline `executeOpBlock` path keeps its raw-byte
+    /// carrier. `[[maybe_unused]]` in the 5a intermediate state, before the delegate path
+    /// consumes it.
+    [[maybe_unused]] bcos::protocol::Block::Ptr buildOpBlock(
+        const ExecutionPayload& payload, bcos::protocol::BlockHeader::Ptr header)
+    {
+        auto block = m_blockFactory->createBlock();
+        block->setBlockHeader(std::move(header));
+        auto const& rawTransactions = *payload.rawTransactions;
+        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
+        for (auto const& env : rawTransactions)
+        {
+            const auto txHash = hashImpl.hash(env);
+            auto tarsTx = detail::opEnvelopeToTars(env, txHash);
+            if (!tarsTx)
+            {
+                // A payload that reached this point passed step-2 static validation and (in the
+                // delegate path) execution, so every envelope is canonical and enumerated --
+                // opEnvelopeToTars failing here is a local conversion fault, not a verdict on
+                // the block.
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "OP block assembly: envelope failed opEnvelopeToTars "
+                                          "conversion"});
+            }
+            // SEV-8: takeToTarsTransaction stores the signing preimage; overwrite with the full
+            // envelope so the delegate's execute hook decodes the exact wire bytes.
+            tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
+            auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+                [tars = std::move(*tarsTx)]() mutable { return &tars; });
+            block->appendTransaction(std::move(tx));
+        }
+        return block;
+    }
+
     /// Block registration (step 6, table-level manifest). Everything lands in the one
     /// mutable layer the caller opened, so the caller's single `pushView` publishes it atomically.
     ///
@@ -1627,6 +1669,12 @@ private:
     /// is committed via newPayload(). Null in unit tests / for payloads without block
     /// persistence.
     bcos::ledger::LedgerInterface::Ptr m_ledger;
+    /// OP block-execution delegate (wiring Task 5): when non-null and `c_opMode`, newPayload
+    /// routes block execution + commit through `m_delegate->executeBlock/commitBlock`
+    /// (SchedulerInterface face) instead of the inline `executeOpBlock` path. The delegate is
+    /// the composition root's `OpScheduler` (slot 3). Null for the generic composition root and
+    /// for OP fixtures that never drive block execution (ethereum instances).
+    bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;
