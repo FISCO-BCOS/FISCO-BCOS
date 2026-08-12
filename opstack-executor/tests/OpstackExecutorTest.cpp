@@ -389,3 +389,80 @@ TEST_F(Fixture, FinalizeOpBlockNoReward)
     auto bal = task::syncWait(acc.balance());
     EXPECT_EQ(bal, 100u);
 }
+
+TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
+{
+    // spec §8（v2：仅 gasLimit）：buildOpBlockInfo 的 gasLimit 取 header.gasLimit（非
+    // blockGasLeft）。 行为断言：执行读 GASLIMIT 的最小合约，slot0 存值必须 == header.gasLimit()。
+    // 修复前：executeTransaction 的 BlockInfo.gasLimit = blockGasLeft（注入值），合约存到
+    // blockGasLeft；这里注入 blockGasLeft(250000) < header.gasLimit(1000000) → 红。
+    // 修复后：BlockInfo.gasLimit = header.gasLimit == 1000000 → 绿。
+    // 第三轮 P0-1 修正：blockGasLeft 必须 ≥ tx.gasLimit(200000)（否则 state.cpp:390
+    // GAS_LIMIT_REACHED 在验证层即拒，测试永远红）且 < header.gasLimit(1000000) 才暴露分叉。
+    constexpr auto kObserver = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto kSender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+    const bcos::bytes kObserverCode{0x45, 0x60, 0x00, 0x55, 0x00};  // GASLIMIT; PUSH1 0; SSTORE;
+                                                                    // STOP
+
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.setGasLimit(bcos::u256(1000000));  // 触发新路径（gasLimit()!=0）
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+    ledgerConfig.setEVMCRevision(fork.rev);
+
+    // Deploy the GASLIMIT observer contract + fund the sender (mirror the fundAccount pattern).
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> obs(storage, kObserver, false);
+        co_await obs.create();
+        co_await obs.setCode(kObserverCode, "", cryptoSuite->hashImpl()->hash(kObserverCode));
+        co_await obs.setBalance(bcos::u256(0));
+        co_await obs.setNonce("0");
+        ledger::account::EVMAccount<MutableStorage> snd(storage, kSender, false);
+        co_await snd.create();
+        co_await snd.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        co_await snd.setBalance(u256("100000000000000000000"));
+        co_await snd.setNonce("0");
+        co_return;
+    }());
+
+    // EIP-1559 tx calling the observer with empty data, value 0.
+    bcos::rpc::Web3Transaction w3{};
+    w3.type = bcos::rpc::TransactionType::EIP1559;
+    w3.chainId = 5;
+    w3.nonce = 0;
+    w3.maxFeePerGas = bcos::u256(30000000000);
+    w3.maxPriorityFeePerGas = bcos::u256(0);
+    w3.gasLimit = 200000;
+    w3.to = bcos::Address("0x00000000000000000000000000000000000000aa");
+    w3.value = bcos::u256(0);
+    w3.signatureV = 0;
+    w3.signatureR = bcos::bytes(32, 0x01);
+    w3.signatureS = bcos::bytes(32, 0x02);
+    auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+    auto const txHash = w3.txHash();
+    tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
+    bcostars::protocol::TransactionImpl tx([tarsHolder]() { return tarsHolder.get(); });
+    tx.clearSenderAndHash();
+    tx.forceSender(bcos::bytes(kSender.bytes, kSender.bytes + sizeof(kSender.bytes)));
+
+    bcos::evm::opstack::OpFeeParams fee{};
+    // 注入 blockGasLeft=250000 < header.gasLimit=1000000（第三轮 P0-1：≥ tx.gasLimit 200000
+    // 过验证层，< header 暴露 GASLIMIT 分叉）—— 暴露 GASLIMIT 分叉的关键。
+    auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/250000,
+        /*chainId=*/10));
+    ASSERT_NE(receipt, nullptr);
+    EXPECT_EQ(receipt->status(), 0);
+
+    // Read observer slot0: must == header.gasLimit (1000000), not the injected blockGasLeft.
+    // 第三轮 P0-2：存储键是 raw 32 字节（evmc_bytes32{}=32 个 0x00），storageEntry("0")/hex
+    // 串都读不到。 EVMAccount::storage() 返回 evmc_bytes32 值（未设时全零）而非 optional —— 用
+    // slot.bytes
+    // + intx::be::load 解析（32 字节大端），不照抄 storageEntry 的 has_value()/operator->。
+    ledger::account::EVMAccount<MutableStorage> obs(storage, kObserver, false);
+    auto slot = task::syncWait(obs.storage(evmc_bytes32{}));  // EVMAccount.h:210
+    EXPECT_EQ(intx::be::load<intx::uint256>(slot.bytes), intx::uint256(1000000));
+}

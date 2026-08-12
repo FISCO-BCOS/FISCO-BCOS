@@ -102,6 +102,16 @@ public:
         return blk;
     }
 
+    /// BlockInfo gasLimit：真实块头 gasLimit（EVM 可见 GASLIMIT 常数，与 processOpBlock 的
+    /// toBlockInfo 一致）；header gasLimit 未设（==0，如最小测试头）时回退调用方 blockGasLeft
+    /// （保留 eth_call/OpstackExecutorTest 现状——那里 blockGasLeft==header.gasLimit()）。
+    static uint64_t opBlockGasLimit(protocol::BlockHeader const& header, uint64_t fallback)
+    {
+        namespace detail = bcos::evm::engine::detail;  // 第三轮 P0-3：移入函数体
+        auto const gl = header.gasLimit();  // 非 optional 的 u256（BlockHeader.h:156）
+        return (gl == 0) ? fallback : detail::narrowU256ToU64(gl, "BlockInfo::gasLimit");
+    }
+
     // ---- TransactionExecutor concept: ExecuteContext with prepare/execute/finish ----
     template <class Storage>
     struct ExecuteContext
@@ -204,7 +214,8 @@ public:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft));
+        auto blockInfo = buildOpBlockInfo(
+            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         eth::StorageStateView<Storage> stateView(storage);
         eth::ZeroBlockHashes zeroBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : zeroBlockHashes;
@@ -267,7 +278,8 @@ private:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft));
+        auto blockInfo = buildOpBlockInfo(
+            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
         auto envRef = transaction.extraTransactionBytes();
@@ -297,7 +309,8 @@ private:
         namespace eth = bcos::executor_v1::eth;
 
         (void)ledgerConfig;
-        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft));
+        auto blockInfo = buildOpBlockInfo(
+            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
 
