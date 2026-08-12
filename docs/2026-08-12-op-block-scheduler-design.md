@@ -89,7 +89,7 @@ class OpBlockScheduler : public OpSchedulerImpl<ViewType>,
 - **SchedulerInterface 面**：
   | 方法 | 行为 |
   |---|---|
-  | `call(tx, cb)` | **OP eth_call**（真实现）：fork OpenedStorage → ViewType → `getCurrentBlockNumber`/`getLedgerConfig`/`getBlockData` → `configAt(header.timestamp()/1000, forkTimestamps)` → `buildOpBlockInfo`（三处修复）→ `loadOpFeeParams` → blockGasLeft = `narrowU256ToU64(header.gasLimit())` → `RecentBlockHashes`（seed {N-1: parentHash}）→ `OpstackExecutor::executeTransaction(view, header, *tx, 0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, chainId, &hashes)` → 无效 → Error（JSON-RPC）；成功 → 回执（fork 丢弃）。镜像 OpCallScheduler.h:247-299 + 修复 |
+  | `call(tx, cb)` | **OP eth_call**（真实现）：fork OpenedStorage → ViewType → `getCurrentBlockNumber`/`getBlockData`(HEADER) → `configAt(header.timestamp()/1000, forkTimestamps)` → 手工组 LedgerConfig（blockNumber/timestamp/features/evmcRevision=cfg.rev，**不用 getLedgerConfig**——其 hash() 对 OP 头抛，见 §6.2 修正注）→ `buildOpBlockInfo`（三处修复）→ `loadOpFeeParams` → blockGasLeft = `narrowU256ToU64(header.gasLimit())` → `RecentBlockHashes`（seed {N-1: parentHash}）→ `OpstackExecutor::executeTransaction(view, header, *tx, 0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, chainId, &hashes)` → 无效 → Error（JSON-RPC）；成功 → 回执（fork 丢弃） |
   | `executeBlock` / `commitBlock` / `preExecuteBlock` | **响亮拒绝** stub（照抄 OpCallScheduler.h:194-218：块执行 engine 驱动、commit engine 驱动） |
   | `getCode` / `getABI` / `getPendingStorageAt` | 存储读（镜像 BaselineScheduler.h:1018-1076 / OpCallScheduler.h:114-190，executor 无关） |
   | `status` / `reset` | no-op（OpCallScheduler.h:222-228） |
@@ -116,7 +116,7 @@ class OpBlockScheduler : public OpSchedulerImpl<ViewType>,
 
 - `MultiVersionScheduler.h:30`：`SUPPORTED_EXECUTOR_VERSION_COUNT` 3→4。
 - `MultiVersionScheduler.cpp`：饱和规则现为 `min(version, size-1)`（加槽后自动变 `>=3 → 3`）；:96-105 的 WARNING log 注释同步更新（"newest" = slot 3）。`scheduler(version)` 是 `.at()` 直接索引（MultiVersionScheduler.cpp:107-111）——数组有第 4 槽后 `scheduler(3)` 即返回 OpBlockScheduler。
-- `Initializer.cpp` OP 分支（:456-497）：engine 构建 `OpSchedulerImpl<ViewType>` **保持不变**（含 :492-496 static_assert c_opMode）；新增 `make_shared<OpBlockScheduler<GlobalStateStorage::ViewType, GlobalStateStorage>>` 填入 MVS 数组第 4 槽（:509-513）。装配时确认 RPC 侧 `scheduler(executor_version)` 路由（executor_version≥3 → slot 3；op-alignment 的 notifier 接线模式可参照）。
+- `Initializer.cpp` OP 分支（:456-497）：engine 构建 `OpSchedulerImpl<ViewType>` **保持不变**（含 :492-496 static_assert c_opMode）；新增 `make_shared<OpBlockScheduler<GlobalStateStorage::ViewType, GlobalStateStorage>>` 填入 MVS 数组第 4 槽（:509-513）。路由走 `setVersion(m_executorVersion)`（:517）→ `getScheduler()`（RPC 的 `MultiVersionScheduler::call()` 经 `JsonRpcImpl_2_0.cpp:1541`）——executor_version≥3 → slot 3。非 OP 模式 slot 3 需装响亮拒绝 stub（`scheduler(3)` 公开直索引 `.at()`，null 会 `*nullptr`）。
 
 ### 5.5 去留
 - `OpSchedulerImpl`：**保留**（engine SchedulerType + seam 载体 + executeOpBlock 宿主 + RTTI catch）。D5「catch 移 scheduler」不成立——catch 本就在 OpSchedulerImpl，原样保留。
@@ -139,8 +139,12 @@ engine newPayload → handleOpNewPayload（timestamp x version gate -38005）
 RPC eth_call → scheduler()->call(tx, cb) → slot 3 OpBlockScheduler::call
   → task::wait → coCallLatest
     → view = storage.fork() + newMutable()
-    → blockNumber/ledgerConfig/header（从 fork 取）
+    → blockNumber/header（从 fork 取：getCurrentBlockNumber + getBlockData(HEADER)）
     → configAt(header.timestamp()/1000, forkTimestamps)
+    → ledgerConfig 手工组（NOT getLedgerConfig——其调 header.hash() 对 OP 头
+      [dataHash 恒空，EngineServiceImpl.h:1253-1255] 抛 EmptyBlockHeaderHash，生产缺陷）；
+      设 blockNumber/timestamp/features(readFromStorage)/evmcRevision=cfg.rev
+      [fork schedule 即 OP 链 revision 源，与块路径一致，绕开 ledger executor_version 门控]
     → buildOpBlockInfo(header)（三处修复：ms→s / header.baseFee / 全字段）
     → fee = loadOpFeeParams(view)（L1Block 槽，无 attributes 覆盖）
     → blockGasLeft = narrowU256ToU64(header.gasLimit())
@@ -148,6 +152,8 @@ RPC eth_call → scheduler()->call(tx, cb) → slot 3 OpBlockScheduler::call
     → OpstackExecutor::executeTransaction(view, header, *tx, 0, *ledgerConfig, call=true, fee, blockGasLeft, chainId, &hashes)
     → 无效 → Error(JSON-RPC)；成功 → 回执（fork 丢弃）
 ```
+
+> **审查修正（plan 3-agent，2026-08-12）**：coCallLatest/getCode/getABI/getPendingStorageAt **不得用 `bcos::ledger::getLedgerConfig`**——该 CPO 在 LedgerMethods.h:347 调 `headerPtr->hash()`，OP 头经 registerOpBlock 落库 dataHash 恒空，`BlockHeaderImpl::hash()` 抛 `EmptyBlockHeaderHash`。真实 OP 链第一个 eth_call/getCode 即挂。三者均改为读 blockNumber + 读 header + `ledger::readFromStorage(features, ...)` + 手工组 LedgerConfig（coCallLatest 额外 `setEVMCRevision(cfg.rev)`，与块路径的 fork schedule 源一致，且免去 SYS_CONFIG 的 executor_version/evmc_revision 依赖）。
 
 ## 7. 错误处理（分类）
 
