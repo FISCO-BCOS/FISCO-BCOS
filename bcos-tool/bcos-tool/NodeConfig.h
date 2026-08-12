@@ -344,6 +344,7 @@ private:
 
     // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
+    void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
     void validateL2Invariants();
 
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(

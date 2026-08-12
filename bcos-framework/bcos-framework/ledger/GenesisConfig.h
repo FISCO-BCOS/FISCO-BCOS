@@ -25,11 +25,15 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 
 namespace bcos::ledger
@@ -50,6 +54,40 @@ struct Alloc
     std::string nonce;
     std::string code;
     std::vector<State> storage;
+};
+
+// B0 full Ethereum genesis header, sourced field-by-field from the merged
+// genesis artifact (op-deployer base + FISCO overlay). Parsed from the
+// [eth_genesis_header] section of config.genesis; when the section is present
+// every field is REQUIRED (NodeConfig fail-fasts on the first missing key).
+// m_hash is a checksum, not an input: Ledger::buildGenesisBlock recomputes
+// keccak256(rlp(header)) from the other 21 fields and refuses to start if it
+// differs. m_timestamp is in SECONDS (the Ethereum header domain) — B0 is
+// artifact-authoritative, unlike FISCO's millisecond block timestamps.
+struct EthGenesisHeader
+{
+    crypto::HashType m_parentHash;
+    crypto::HashType m_sha3Uncles;
+    Address m_miner;
+    crypto::HashType m_stateRoot;
+    crypto::HashType m_transactionsRoot;
+    crypto::HashType m_receiptsRoot;
+    bytes m_logsBloom;  // exactly 256 bytes
+    u256 m_difficulty;
+    int64_t m_number{};
+    u256 m_gasLimit;
+    u256 m_gasUsed;
+    int64_t m_timestamp{};  // seconds
+    bytes m_extraData;      // artifact extraData (Jovian 17-byte format on our chain)
+    h256 m_mixHash;
+    h64 m_nonce;
+    u256 m_baseFeePerGas;
+    crypto::HashType m_withdrawalsRoot;
+    u256 m_blobGasUsed;
+    u256 m_excessBlobGas;
+    crypto::HashType m_parentBeaconBlockRoot;
+    crypto::HashType m_requestsHash;
+    crypto::HashType m_hash;  // expected keccak256(rlp(header)); checked, never trusted
 };
 
 class GenesisConfig
@@ -104,6 +142,11 @@ public:
 
     std::vector<FeatureSet> m_features;
     std::vector<Alloc> m_allocs;
+
+    // Present iff config.genesis carries an [eth_genesis_header] section
+    // (L2 mode, B0 built as a full Ethereum header). Absent on every legacy
+    // chain — Ledger then keeps the native Tars genesis-header path.
+    std::optional<EthGenesisHeader> m_ethGenesisHeader;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger
