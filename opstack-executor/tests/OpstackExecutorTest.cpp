@@ -78,8 +78,8 @@ struct Fixture : public ::testing::Test
         w3.gasLimit = 5000000;
         w3.to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
         w3.value = bcos::u256(2000000000000000000);  // 2 ETH
-        w3.signatureV = 0;                            // yParity
-        w3.signatureR = bcos::bytes(32, 0x01);        // dummy r/s (unused: evmone skips sig verify)
+        w3.signatureV = 0;                           // yParity
+        w3.signatureR = bcos::bytes(32, 0x01);       // dummy r/s (unused: evmone skips sig verify)
         w3.signatureS = bcos::bytes(32, 0x02);
         auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
         auto const txHash = w3.txHash();
@@ -97,9 +97,38 @@ struct Fixture : public ::testing::Test
 
 TEST(OpstackExecutor, ConstructsWithJovianFork)
 {
-    auto rf = std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
+    auto rf =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
     OpstackExecutor executor(rf, makeCryptoSuite()->hashImpl());
     EXPECT_NE(&executor.vm(), nullptr);
+}
+
+TEST(OpstackExecutor, BuildOpBlockInfoMirrorsBlockPath)
+{
+    // buildOpBlockInfo must mirror toBlockInfo's field mapping (OpRlpDecode.h:106-121) so eth_call
+    // sees the same block context as block execution: seconds timestamp, header baseFee (via
+    // value_or(0), so optional-less test headers do not throw), and the full field set.
+    auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    h->setNumber(7);
+    h->setTimestamp(1'234'567'890);  // ms; block path divides by 1000
+    h->setCoinbase(bcos::Address{"0x00000000000000000000000000000000000000aa"});
+    h->setBaseFee(bcos::u256(1'000'000'000));
+    h->setPrevRandao(
+        bcos::h256{"0xab00000000000000000000000000000000000000000000000000000000000000"});
+    h->setParentBeaconBlockRoot(
+        bcos::h256{"0xcd00000000000000000000000000000000000000000000000000000000000000"});
+    h->setExtraData(bcos::bytes{0xde, 0xad});
+    h->setBlobGasUsed(bcos::u256(0x1234));
+
+    const auto blk = bcos::executor_v1::opstack::OpstackExecutor::buildOpBlockInfo(*h, 30'000'000);
+    EXPECT_EQ(blk.number, 7);
+    EXPECT_EQ(blk.timestamp, 1'234'567ULL);                 // ms -> s
+    EXPECT_EQ(blk.gas_limit, 30'000'000);                   // injected gasLimit
+    EXPECT_EQ(blk.base_fee, intx::uint256(1'000'000'000));  // header baseFee, NOT 0
+    EXPECT_EQ(blk.prev_randao.bytes[0], 0xab);              // full field set
+    EXPECT_EQ(blk.parent_beacon_block_root.bytes[0], 0xcd);
+    EXPECT_EQ(blk.extra_data, (evmc::bytes{0xde, 0xad}));
+    EXPECT_EQ(blk.blob_gas_used, 0x1234ULL);
 }
 
 TEST_F(Fixture, ExecutesNormalTransferEndToEnd)
@@ -119,8 +148,9 @@ TEST_F(Fixture, ExecutesNormalTransferEndToEnd)
         ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
         co_await acc.create();
         co_await acc.setBalance(u256("100000000000000000000"));
-        // EIP-3607: evmone validate_transaction rejects a sender whose code_hash != EMPTY_CODE_HASH.
-        // Seed the canonical empty-code hash so the sender is recognised as an EOA.
+        // EIP-3607: evmone validate_transaction rejects a sender whose code_hash !=
+        // EMPTY_CODE_HASH. Seed the canonical empty-code hash so the sender is recognised as an
+        // EOA.
         co_await acc.setCode({}, "",
             bcos::crypto::HashType(
                 "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));

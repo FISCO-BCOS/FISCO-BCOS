@@ -13,8 +13,9 @@
 ///
 /// Semantics: uses the INJECTION-style opValidate/opTransition with an orchestrator-supplied
 /// OpFeeParams (including the D-1 attributes-calldata DA-scalar override), a decrementing
-/// blockGasLeft, the chain id, and real block hashes — mirroring processOpBlock. It does NOT use
-/// the EEST-calibrated blockHeaderToBlockInfo (buildOpBlockInfo keeps timestamp verbatim).
+/// blockGasLeft, the chain id, and real block hashes — mirroring processOpBlock. The eth_call
+/// block context (buildOpBlockInfo) mirrors detail::toBlockInfo (OpRlpDecode.h): seconds timestamp,
+/// header baseFee via value_or(0), and the full field set.
 ///
 /// Adapter reuse: the storage-backed StateView and state-diff writeback are shared with
 /// EthereumExecutor via ethereum-executor (PR #5366). This module links the ethereum-executor
@@ -37,6 +38,7 @@
 #include "ethereum-executor/BCOS2Evmone.h"
 #include "ethereum-executor/StorageStateView.h"
 #include "opstack-executor/OpBlockFinalize.h"
+#include "opstack-executor/OpRlpDecode.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmc/evmc.hpp>
@@ -71,21 +73,32 @@ public:
     /// Access the EVM instance (needed for system_call functions).
     evmc::VM& vm() { return m_vm; }
 
-    /// OP-specific blockInfo: timestamp verbatim (OP headers store seconds; the EEST-calibrated
-    /// blockHeaderToBlockInfo would /1000 it to ~1970), gasLimit and baseFee injected by the
-    /// orchestrator (from payload.gasLimit / payload.baseFeePerGas, not LedgerConfig). Sets
-    /// number/timestamp/gas_limit/base_fee/coinbase; prev_randao and blob_gas_used default to zero.
+    /// OP-specific blockInfo for the eth_call path — mirrors `detail::toBlockInfo`
+    /// (OpRlpDecode.h:106-121) so an eth_call sees the same block context as block execution:
+    /// timestamp in seconds (tars ms -> evmone s), baseFee / blobGasUsed / parentBeaconBlockRoot
+    /// from the header via value_or(0) — a header that leaves an optional unset (minimal test
+    /// headers, and any header whose field the engine did not fill) reads as 0 rather than
+    /// throwing. gasLimit stays an injection because the RPC call path threads the head block's
+    /// gas limit as blockGasLeft.
     static evmone::state::BlockInfo buildOpBlockInfo(
-        protocol::BlockHeader const& header, uint64_t gasLimit, uint64_t baseFeePerGas)
+        protocol::BlockHeader const& header, uint64_t gasLimit)
     {
+        // `detail` aliases bcos::evm::engine::detail (OpRlpDecode.h) — narrowU256ToU64 /
+        // toEvmcAddress / toEvmcBytes32 live there, NOT in this namespace (round-3 C5).
+        namespace detail = bcos::evm::engine::detail;
         evmone::state::BlockInfo blk;
         blk.number = header.number();
-        blk.timestamp = header.timestamp();
+        blk.timestamp = static_cast<uint64_t>(header.timestamp()) / 1000;  // ms -> s
         blk.gas_limit = static_cast<int64_t>(gasLimit);
-        blk.base_fee = baseFeePerGas;
-        auto const& cb = header.coinbase();
-        if (cb.size() == sizeof(evmc_address))
-            std::copy_n(cb.begin(), sizeof(evmc_address), blk.coinbase.bytes);
+        blk.base_fee =
+            detail::narrowU256ToU64(header.baseFee().value_or(bcos::u256{0}), "BlockInfo::baseFee");
+        blk.coinbase = detail::toEvmcAddress(header.coinbase());
+        blk.prev_randao = detail::toEvmcBytes32(header.prevRandao());
+        blk.parent_beacon_block_root =
+            detail::toEvmcBytes32(header.parentBeaconBlockRoot().value_or(bcos::h256{}));
+        blk.extra_data = evmc::bytes(header.extraData().begin(), header.extraData().end());
+        blk.blob_gas_used = detail::narrowU256ToU64(
+            header.blobGasUsed().value_or(bcos::u256{0}), "BlockInfo::blobGasUsed");
         return blk;
     }
 
@@ -191,7 +204,7 @@ public:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft), 0);
+        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft));
         eth::StorageStateView<Storage> stateView(storage);
         eth::ZeroBlockHashes zeroBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : zeroBlockHashes;
@@ -254,8 +267,7 @@ private:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo =
-            buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
+        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
         auto envRef = transaction.extraTransactionBytes();
@@ -285,8 +297,7 @@ private:
         namespace eth = bcos::executor_v1::eth;
 
         (void)ledgerConfig;
-        auto blockInfo =
-            buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft), /*baseFeePerGas=*/0);
+        auto blockInfo = buildOpBlockInfo(blockHeader, static_cast<uint64_t>(blockGasLeft));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
 
