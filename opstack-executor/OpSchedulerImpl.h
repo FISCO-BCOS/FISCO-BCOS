@@ -168,6 +168,17 @@ public:
         return computeOpTxRoot(rawTxBytes);
     }
 
+    /// Builds the L1-attributes deposit envelope the sequencer injects as the first transaction of
+    /// every built OP block. Engine reaches it as a dependent name (same seam mechanism as
+    /// computeTxRoot); the definition lives in OpEngineSeam.h's detail.
+    static bcos::bytes makeL1AttributesDeposit(
+        uint64_t blockNumber, uint64_t sequenceNumber, uint64_t timestamp, uint64_t baseFee,
+        uint64_t gasLimit, uint64_t chainId, bool isJovian = false)
+    {
+        return detail::makeL1AttributesDeposit(
+            blockNumber, sequenceNumber, timestamp, baseFee, gasLimit, chainId, isJovian);
+    }
+
     /// Isthmus activation predicate for the engine's -38005 timestamp x version gate. The
     /// threshold comparison deliberately lives on this side of the seam, next to `configAt`,
     /// rather than being reimplemented in the engine.

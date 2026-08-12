@@ -93,8 +93,8 @@ public:
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
-        task::wait([this, tx = std::move(transaction), cb = std::move(callback)]() mutable
-                   -> task::Task<void> {
+        task::wait([this, tx = std::move(transaction),
+                       cb = std::move(callback)]() mutable -> task::Task<void> {
             try
             {
                 cb(nullptr, co_await coCallLatest(std::move(tx)));
@@ -105,7 +105,8 @@ public:
                 // consensus/storage errors for block-context faults; the RPC expects an Error
                 // (JSON-RPC error), not a status-0 failure receipt — matching op-geth, where an
                 // invalid eth_call is an error.
-                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()), nullptr);
+                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()),
+                    nullptr);
             }
         }());
     }
@@ -126,7 +127,8 @@ public:
                     view, blockNumber, (*self->m_blockFactory));
 
                 bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                    ledgerConfig->features().get(bcos::ledger::Features::Flag::feature_raw_address));
+                    ledgerConfig->features().get(
+                        bcos::ledger::Features::Flag::feature_raw_address));
                 auto code = co_await account.code();
                 if (!code)
                 {
@@ -138,8 +140,8 @@ public:
             }
             catch (const std::exception& e)
             {
-                callback(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()),
-                    {});
+                callback(
+                    BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()), {});
             }
         }(this, contract, std::move(callback)));
     }
@@ -158,7 +160,8 @@ public:
                     view, blockNumber, (*self->m_blockFactory));
 
                 bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                    ledgerConfig->features().get(bcos::ledger::Features::Flag::feature_raw_address));
+                    ledgerConfig->features().get(
+                        bcos::ledger::Features::Flag::feature_raw_address));
                 auto abi = co_await account.abi();
                 if (!abi)
                 {
@@ -169,8 +172,8 @@ public:
             }
             catch (const std::exception& e)
             {
-                callback(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()),
-                    {});
+                callback(
+                    BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()), {});
             }
         }(this, contract, std::move(callback)));
     }
@@ -241,7 +244,8 @@ private:
 
     /// OP eth_call: fork the latest committed state, build the real OP block context, run the
     /// transaction through OpstackExecutor's injection-style executeTransaction, discard the fork.
-    task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(protocol::Transaction::Ptr transaction)
+    task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
+        protocol::Transaction::Ptr transaction)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
@@ -251,7 +255,8 @@ private:
         // — the fork is the latest committed view; the block header / ledger config come from it.
         auto view = m_storage.fork();
         view.newMutable();
-        auto blockNumber = co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+        auto blockNumber =
+            co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
         auto ledgerConfig =
             co_await bcos::ledger::getLedgerConfig(view, blockNumber, (*m_blockFactory));
         auto block = co_await bcos::ledger::getBlockData(
@@ -283,15 +288,13 @@ private:
         // Fork-aware: the executor is built per call so its OpForkConfig matches the head block's
         // timestamp (a chain that activates Jovian mid-flight gets the right config from then on).
         // An evmc::VM is created per call — acceptable for an RPC dry-run, not a hot path.
-        bcos::executor_v1::opstack::OpstackExecutor executor(
-            m_receiptFactory, m_hashImpl, cfg);
+        bcos::executor_v1::opstack::OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
-        auto receipt = co_await executor.executeTransaction(view, header, *transaction, /*contextID=*/0,
-            *ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
+        auto receipt = co_await executor.executeTransaction(view, header, *transaction,
+            /*contextID=*/0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
 
         if (hashErr.has_value())
-            throw std::runtime_error(
-                "OpCallScheduler: block-hash lookup failed: " + *hashErr);
+            throw std::runtime_error("OpCallScheduler: block-hash lookup failed: " + *hashErr);
         co_return receipt;
     }
 

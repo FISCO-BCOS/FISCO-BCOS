@@ -1595,8 +1595,53 @@ private:
         // the user submitted (rawTransactionBytes, populated by eth_sendRawTransaction); a tx
         // without them (entered via a non-web3 path) cannot be faithfully re-executed and is
         // skipped — the block stays buildable with the remaining txs.
+        // Header skeleton — the fields `toBlockInfo` reads before execution (number/timestamp/
+        // gasLimit/baseFee/coinbase/prevRandao/parentBeaconBlockRoot/extraData/blobGasUsed).
+        // extraData inherits the parent's (OP L2 blocks carry the parent's extraData forward —
+        // op-geth sets it from the block's own field, which the sequencer derives from the L1
+        // attributes; inheriting the parent is the minimal faithful choice for the local driver).
+        auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        blockHeader->setNumber(nextBlockNumber);
+        // header timestamp is stored in MILLISECONDS (tars convention); the payload/attributes
+        // timestamp is SECONDS. newPayload's rebuildOpEthHeader does ×1000, so the header must
+        // hold seconds×1000 for the blockHash to agree.
+        blockHeader->setTimestamp(
+            static_cast<int64_t>(payloadAttributes.timestamp) * 1000);
+        blockHeader->setParentInfo(bcos::protocol::ParentInfo{
+            .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash});
+        blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
+        blockHeader->setPrevRandao(payloadAttributes.prevRandao);
+        bcos::ledger::LedgerConfig ledgerConfig;
+        co_await ledger::getLedgerConfig(
+            view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+        const auto blockGasLimit = std::get<0>(ledgerConfig.gasLimit());
+        // A missing tx_gas_limit system config reads as 0 (LedgerMethods getOrDefault "0"); a
+        // zero gas limit cannot host even the L1-attributes deposit (kDepositGas = 1M), so the
+        // block builder would always fail with gas-limit-reached. Real nodes pin tx_gas_limit at
+        // genesis; this fallback only guards misconfigured / fixture storage.
+        const auto effectiveGasLimit =
+            blockGasLimit > 0 ? blockGasLimit : bcos::ledger::DEFAULT_GAS_LIMIT;
+        blockHeader->setGasLimit(bcos::u256(effectiveGasLimit));
+        blockHeader->setBaseFee(baseFee);
+
+        // Every OP block must lead with the L1-attributes deposit (processOpBlock rejects an
+        // empty / non-deposit-first block). The sequencer injects it: the deposit carries the
+        // block's L1 attributes into L1Block.sol. sequenceNumber advances per block.
+        const uint64_t sequenceNumber = static_cast<uint64_t>(nextBlockNumber);
+        // The deposit's calldata layout follows the fork: a Jovian-active chain must carry the
+        // Jovian 178-byte attributes (selector 0x3db6be2b + DA-footprint gas scalar), or the
+        // executor's C-4 rule reads the Isthmus-length 176B form as a Jovian *activation* block
+        // and rejects any non-deposit tx in it. Same predicate the extraData branch below uses.
+        const bool isJovian = m_scheduler.get().isJovianActiveAt(payloadAttributes.timestamp);
+        const auto depositEnvelope = SchedulerType::makeL1AttributesDeposit(
+            static_cast<uint64_t>(nextBlockNumber), sequenceNumber,
+            payloadAttributes.timestamp, static_cast<uint64_t>(baseFee), effectiveGasLimit,
+            0 /*chainId*/, isJovian);
+
+        // rawTransactions = [deposit, sealed user txs...] — the OP path's tx carrier.
         std::vector<bcos::bytes> rawTransactions;
-        rawTransactions.reserve(sealedTxs.size());
+        rawTransactions.reserve(1 + sealedTxs.size());
+        rawTransactions.push_back(depositEnvelope);
         for (auto const& tx : sealedTxs)
         {
             // The engine holds sealed txs as protocol::Transaction (the abstract interface). The
@@ -1610,42 +1655,34 @@ private:
                     rawTransactions.emplace_back(raw.begin(), raw.end());
             }
         }
-
-        // Header skeleton — the fields `toBlockInfo` reads before execution (number/timestamp/
-        // gasLimit/baseFee/coinbase/prevRandao/parentBeaconBlockRoot/extraData/blobGasUsed).
-        // extraData inherits the parent's (OP L2 blocks carry the parent's extraData forward —
-        // op-geth sets it from the block's own field, which the sequencer derives from the L1
-        // attributes; inheriting the parent is the minimal faithful choice for the local driver).
-        auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        blockHeader->setNumber(nextBlockNumber);
-        blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
-        blockHeader->setParentInfo(bcos::protocol::ParentInfo{
-            .blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash});
-        blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
-        blockHeader->setPrevRandao(payloadAttributes.prevRandao);
-        bcos::ledger::LedgerConfig ledgerConfig;
-        co_await ledger::getLedgerConfig(
-            view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-        blockHeader->setGasLimit(bcos::u256(std::get<0>(ledgerConfig.gasLimit())));
-        blockHeader->setBaseFee(baseFee);
         blockHeader->setParentBeaconBlockRoot(bcos::h256{});  // filled below if known
-        if (parentHeader.has_value())
+        // OP extraData: version byte (1) + denominator (uint32 BE) + elasticity (uint32 BE);
+        // Jovian appends minBaseFee (uint64 BE) → 17 bytes, Holocene/Isthmus → 9 bytes. The OP
+        // engine validation requires exactly this shape (the genesis parent's config-dump
+        // extraData is not OP-shaped, so it is NOT inherited).
         {
-            auto const parentExtra = (*parentHeader)->extraData();  // bytesConstRef
-            blockHeader->setExtraData(bcos::bytes(parentExtra.begin(), parentExtra.end()));
-        }
-        else
-        {
-            blockHeader->setExtraData(bcos::bytes{});
+            constexpr uint32_t kDenominator = 8, kElasticity = 2;
+            bcos::bytes opExtra;
+            opExtra.push_back(0x01);
+            for (int i = 3; i >= 0; --i)
+                opExtra.push_back(static_cast<bcos::byte>((kDenominator >> (i * 8)) & 0xFF));
+            for (int i = 3; i >= 0; --i)
+                opExtra.push_back(static_cast<bcos::byte>((kElasticity >> (i * 8)) & 0xFF));
+            if (m_scheduler.get().isJovianActiveAt(payloadAttributes.timestamp))
+            {
+                // minBaseFee (uint64 BE) = 0 — no floor for the local driver.
+                opExtra.insert(opExtra.end(), 8, bcos::byte{0});
+            }
+            blockHeader->setExtraData(std::move(opExtra));
         }
         blockHeader->setBlobGasUsed(bcos::u256(0));  // Jovian DA footprint set from seal below
+        blockHeader->setExcessBlobGas(bcos::u256(0));  // opHeaderHash encodes it; must be engaged
         blockHeader->setRequestsHash(bcos::h256{});
 
         // Execute the block. The scheduler drives OP execution (executeOpBlock) on this view and
         // stages the result; the returned commitments (seal/stateRoot/txRoot/gasUsed) are what the
         // header must carry.
-        auto result = co_await m_scheduler.get().executeOpBlock(
-            view, *blockHeader, rawTransactions);
+        auto result = co_await m_scheduler.get().executeOpBlock(view, *blockHeader, rawTransactions);
         const auto commitments = SchedulerType::commitmentsOf(result);
 
         // Back-fill the header with the executed commitments. logsBloom is the 256-byte block
@@ -1689,7 +1726,9 @@ private:
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,
-            .withdrawals = std::nullopt,
+            // OP path: withdrawals must be present (empty vector — OP L2 has no beacon
+            // withdrawals); the engine validation rejects a nullopt here.
+            .withdrawals = std::vector<WithdrawalV1>{},
             .blobGasUsed = commitments.blobGasUsed.has_value() ?
                                std::optional<u256>(bcos::u256(*commitments.blobGasUsed)) :
                                std::nullopt,

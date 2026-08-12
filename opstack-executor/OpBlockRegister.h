@@ -1,16 +1,16 @@
 #pragma once
 
-#include <bcos-concepts/ByteBuffer.h>                      // bcos::concepts::bytebuffer::toView
-#include <bcos-framework/engine/Errors.h>                  // OpExecutionInternalError
-#include <bcos-framework/ledger/LedgerTypeDef.h>           // SYS_* 表常量(LedgerTypeDef.h:106-112)
+#include <bcos-concepts/ByteBuffer.h>             // bcos::concepts::bytebuffer::toView
+#include <bcos-framework/engine/Errors.h>         // OpExecutionInternalError
+#include <bcos-framework/ledger/LedgerTypeDef.h>  // SYS_* 表常量(LedgerTypeDef.h:106-112)
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/storage/Entry.h>                  // bcos::storage::Entry
 #include <bcos-framework/storage2/Storage.h>               // storage2::writeOne
 #include <bcos-framework/transaction-executor/StateKey.h>  // bcos::executor_v1::StateKey
-#include <bcos-tars-protocol/protocol/TransactionImpl.h>   // bcostars::Transaction + TransactionImpl(自带 tars Transaction.h)
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>  // bcostars::Transaction + TransactionImpl(自带 tars Transaction.h)
 #include <bcos-task/Task.h>
-#include <opstack-executor/OpErrors.h>                     // OpExecuteBlockResult
+#include <opstack-executor/OpErrors.h>  // OpExecuteBlockResult
 #include <boost/lexical_cast.hpp>
 #include <functional>
 #include <optional>
@@ -75,8 +75,8 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
     bcos::storage::Entry numberEntry;
     numberEntry.set(blockNumberStr);
     co_await bcos::storage2::writeOne(view,
-        bcos::executor_v1::StateKey{bcos::ledger::SYS_CURRENT_STATE,
-            bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+        bcos::executor_v1::StateKey{
+            bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
         std::move(numberEntry));
 
     auto& hashImpl = *blockFactory.cryptoSuite()->hashImpl();
@@ -108,11 +108,11 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr},
         std::move(number2TxEntry));
 
-    // processOpBlock 每 tx 恰产一 receipt;数量分叉是执行层坏不变量,响亮失败(内部错误,非对块的裁决)。
+    // processOpBlock 每 tx 恰产一
+    // receipt;数量分叉是执行层坏不变量,响亮失败(内部错误,非对块的裁决)。
     if (rawTxBytes.size() != result.receipts.size())
     {
-        BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{}
-                              << bcos::errinfo_comment{
+        BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
                                   "OP block execution returned a receipt count differing from "
                                   "the transaction count"});
     }
@@ -121,8 +121,7 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         auto const& receipt = result.receipts[index];
         if (!receipt)
         {
-            BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{}
-                                  << bcos::errinfo_comment{
+            BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
                                       "OP block execution returned a null receipt"});
         }
         bcos::bytes encodedReceipt;

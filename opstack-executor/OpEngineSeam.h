@@ -67,6 +67,86 @@ inline bcos::h2048 toBcosBloom(const evmone::state::BloomFilter& bloom)
 {
     return bcos::h2048(reinterpret_cast<const bcos::byte*>(bloom.bytes), sizeof(bloom.bytes));
 }
+
+/// Builds the L1-attributes deposit envelope the sequencer must inject as the first transaction of
+/// every OP block (op-geth: the EL builds the first deposit tx; processOpBlock requires it — an
+/// empty/non-deposit-first block is rejected). Format: `0x7E || rlp([sourceHash(32B), from(20B),
+/// to(20B), mint, value, gas, isSystemTx, data])` — the canonical deposit envelope `decodeDepositTx`
+/// reads back. calldata is the Isthmus L1-attributes shape: `0x098999be` (setL1BlockValues
+/// selector) + 12 fields × 14 bytes (0-padded big-endian uint64/uint128, L1Block.sol encoding)
+/// + 4 trailing zero bytes = 176 bytes (IsthmusL1AttributesLen). sourceHash is derived as
+/// keccak256("l1AttributesDeposit" || blockNumber || sequenceNumber) — a deterministic unique id
+/// (op-geth derives it from the L1 tx; a local sequencer has no L1, so a local derivation is the
+/// faithful analogue). The exact calldata values are not consensus-critical for the shape check —
+/// L1Block.sol stores them as state the L2 can read.
+inline bcos::bytes makeL1AttributesDeposit(uint64_t blockNumber, uint64_t sequenceNumber,
+    uint64_t timestamp, uint64_t baseFee, uint64_t gasLimit, uint64_t chainId, bool isJovian)
+{
+    using bcos::codec::rlp::encode;
+    constexpr std::uint8_t kDepositTypeByte = 0x7e;
+    (void)baseFee;  // L2 base fee — not part of the L1-attributes calldata
+
+    // L1-attributes calldata in op-geth's L1Block.sol setL1BlockValues encoding — the layout the
+    // executor's C-3/C-4 shape validation (OpBlockExecute.cpp validateJovianBlockShape) and the
+    // L1Block contract expect. (An earlier 12×14B analogue satisfied only the length/selector
+    // check and wrote garbage L1Block slots; it broke as soon as a user tx joined the block —
+    // 176B reads as a Jovian activation block, which must be deposits-only.)
+    //   Isthmus: 176B, selector 0x098999be, [4:8] baseFeeScalar, [8:12] blobBaseFeeScalar,
+    //            [12:20] sequenceNumber, [20:28] l1Timestamp, [28:36] l1Number,
+    //            [36:68] l1BaseFee, [68:100] blobBaseFee, [100:132] l1Hash, [132:164] batcherHash,
+    //            [164:168] opFeeScalar, [168:176] opFeeConstant.
+    //   Jovian:  178B, selector 0x3db6be2b, + [176:178] daFootprintGasScalar.
+    // L1-specific values are zero — a local sequencer has no L1 — so l1/operator/DA fees are 0
+    // and the block's only gas cost is the L2 base fee.
+    constexpr std::array<uint8_t, 4> kIsthmusSel = {0x09, 0x89, 0x99, 0xbe};
+    constexpr std::array<uint8_t, 4> kJovianSel = {0x3d, 0xb6, 0xbe, 0x2b};
+    const size_t calldataLen = isJovian ? 178 : 176;
+    bcos::bytes data(calldataLen, 0);
+    auto const& sel = isJovian ? kJovianSel : kIsthmusSel;
+    std::copy(sel.begin(), sel.end(), data.begin());
+    auto putBe = [&data](size_t offset, uint64_t value, size_t width) {
+        for (size_t i = 0; i < width; ++i)
+            data[offset + width - 1 - i] = static_cast<bcos::byte>((value >> (i * 8)) & 0xFF);
+    };
+    putBe(4, 0, 4);                 // baseFeeScalar = 0
+    putBe(8, 0, 4);                 // blobBaseFeeScalar = 0
+    putBe(12, sequenceNumber, 8);   // sequenceNumber
+    putBe(20, timestamp, 8);        // L1 timestamp (L2 block timestamp analogue)
+    putBe(28, blockNumber, 8);      // L1 number (L2 block number analogue)
+    // [36:132] l1BaseFee / blobBaseFee / l1Hash / batcherHash stay zero.
+    // [132:164] batcherHash zero, [164:168] opFeeScalar zero, [168:176] opFeeConstant zero.
+    if (isJovian)
+        putBe(176, 0, 2);           // daFootprintGasScalar = 0
+
+    // sourceHash: keccak256("l1AttributesDeposit" || blockNumber || sequenceNumber) — deterministic
+    // unique per block. bcos::crypto::keccak256Hash is available transitively; a 32-byte zero hash
+    // would also pass decodeDepositTx (it only length-checks), but a real derivation is safer for
+    // downstream uniqueness assumptions.
+    bcos::bytes sourceInput = bcos::bytes{'l', '1', 'A', 't', 't', 'r', 'i', 'b', 'u', 't', 'e',
+        's', 'D', 'e', 'p', 'o', 's', 'i', 't'};
+    for (int i = 7; i >= 0; --i)
+        sourceInput.push_back(static_cast<bcos::byte>((blockNumber >> (i * 8)) & 0xFF));
+    for (int i = 7; i >= 0; --i)
+        sourceInput.push_back(static_cast<bcos::byte>((sequenceNumber >> (i * 8)) & 0xFF));
+    auto sourceHash = bcos::crypto::keccak256Hash(bcos::ref(sourceInput));
+    const auto sourceHashBytes = sourceHash.asBytes();
+
+    // Deposit envelope fields.
+    const bcos::bytes kFrom{0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0xde,
+        0xad, 0xde, 0xad, 0xde, 0xad, 0xde, 0xad, 0x00, 0x01};  // OP_DEPOSITOR 0xdead..0001
+    const bcos::bytes kTo{0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15};  // L1Block 0x4200..15
+    constexpr uint64_t kMint = 0, kValue = 0, kIsSystemTx = 0;
+    constexpr uint64_t kDepositGas = 1'000'000;  // well above intrinsic; L1Block call needs little
+
+    // The variadic `encode(to, args...)` already wraps the fields in an RLP list header
+    // (RLPEncode.h:141-147) — the deposit envelope is `0x7E || rlp_list([...])`, so the list
+    // payload goes straight after the type byte, no second list header.
+    bcos::bytes envelope;
+    envelope.push_back(kDepositTypeByte);
+    encode(envelope, sourceHashBytes, kFrom, kTo, kMint, kValue, kDepositGas, kIsSystemTx, data);
+    return envelope;
+}
 }  // namespace detail
 
 /// The block-execution commitments the engine's newPayload OP branch compares against the
