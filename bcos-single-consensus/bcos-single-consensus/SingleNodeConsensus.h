@@ -52,7 +52,7 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0);
+        std::uint64_t _fixedTimestamp = 0, std::uint32_t _engineApiVersion = 0);
 
     ~SingleNodeConsensus();
 
@@ -83,6 +83,8 @@ private:
     /// at startup instead of failing on the first block tick).
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
+    /// Engine API version this CL speaks (V1 default; the OP composition root passes V4).
+    std::uint32_t m_engineApiVersion;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer
