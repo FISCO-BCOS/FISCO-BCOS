@@ -1908,6 +1908,52 @@ static task::Task<void> importGenesisState(
     }
 }
 
+// A3: project the [eth_genesis_header] artifact fields onto B0. Precondition:
+// the header's stateRoot already carries the locally derived MPT root — the
+// artifact's state_root is checked against it, so a wrong or stale artifact
+// cannot re-anchor the chain state. After this the header is a complete
+// Prague-era Ethereum header: calculateHash() computes keccak256(rlp(header))
+// instead of the Tars hash, and the RLP header carries no FISCO field (in
+// particular no compatibility_version — the D4 decoupling point).
+static void applyEthGenesisHeader(
+    bcos::protocol::BlockHeader& header, ledger::EthGenesisHeader const& ethHeader)
+{
+    if (ethHeader.m_stateRoot != header.stateRoot())
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << errinfo_comment(
+                "[eth_genesis_header].state_root does not match the state root derived from "
+                "the genesis allocs: artifact=" +
+                ethHeader.m_stateRoot.hex() + " derived=" + header.stateRoot().hex()));
+    }
+    if (ethHeader.m_parentHash != bcos::crypto::HashType{})
+    {
+        header.setParentInfo(
+            bcos::protocol::ParentInfo{.blockNumber = -1, .blockHash = ethHeader.m_parentHash});
+    }
+    header.setUncleHash(ethHeader.m_sha3Uncles);
+    header.setCoinbase(ethHeader.m_miner);
+    header.setTxsRoot(ethHeader.m_transactionsRoot);
+    header.setReceiptsRoot(ethHeader.m_receiptsRoot);
+    header.setLogsBloom(bcos::ref(ethHeader.m_logsBloom));
+    header.setDifficulty(ethHeader.m_difficulty);
+    header.setGasLimit(ethHeader.m_gasLimit);
+    header.setGasUsed(ethHeader.m_gasUsed);
+    // B0's timestamp is artifact-authoritative and in SECONDS (the Ethereum
+    // header domain): the RLP hash must reproduce the artifact byte-for-byte.
+    header.setTimestamp(ethHeader.m_timestamp);
+    header.setExtraData(bcos::bytes(ethHeader.m_extraData));
+    header.setPrevRandao(ethHeader.m_mixHash);
+    header.setNonce(ethHeader.m_nonce);
+    header.setBaseFee(ethHeader.m_baseFeePerGas);
+    header.setWithdrawalsRoot(ethHeader.m_withdrawalsRoot);
+    header.setBlobGasUsed(ethHeader.m_blobGasUsed);
+    header.setExcessBlobGas(ethHeader.m_excessBlobGas);
+    header.setParentBeaconBlockRoot(ethHeader.m_parentBeaconBlockRoot);
+    header.setRequestsHash(ethHeader.m_requestsHash);
+    header.setEthBlockVersion(bcos::protocol::EthBlockVersion::PRAGUE);
+}
+
 // sync method, to be split
 // FIXME: too long
 bool Ledger::buildGenesisBlock(
@@ -1945,7 +1991,40 @@ bool Ledger::buildGenesisBlock(
             std::promise<protocol::BlockHeader::Ptr> blockHeaderFuture;
             auto block = co_await ledger::getBlockData(*this, 0, HEADER);
             bcos::protocol::BlockHeader::Ptr genesisBlockHeader = block->blockHeader();
-            auto existsGenesisData = genesisBlockHeader->extraData().toStringView();
+            // A3: an eth-genesis chain keeps the FISCO genesis pin in
+            // SYS_CONFIG (B0's extraData carries the artifact bytes and enters
+            // the RLP hash), so the restart comparison reads it from there.
+            std::string existsGenesisData;
+            if (genesis.m_ethGenesisHeader.has_value())
+            {
+                auto genesisDataEntry = co_await storage2::readOne(*m_stateStorage,
+                    executor_v1::StateKeyView(SYS_CONFIG, INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA));
+                if (!genesisDataEntry)
+                {
+                    BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                              "[eth_genesis_header] is configured but the chain "
+                                              "was not initialized with one (no stored "
+                                              "eth_genesis_data); refuse to start"));
+                }
+                auto [storedData, _] =
+                    bcos::storage::serialize::decode<SystemConfigEntry>(genesisDataEntry->get());
+                existsGenesisData = std::move(storedData);
+                // The stored B0 hash must still match the artifact's claim —
+                // a swapped artifact cannot re-point an initialized chain.
+                if (genesisBlockHeader->hash() != genesis.m_ethGenesisHeader->m_hash)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        bcos::tool::InvalidConfig() << errinfo_comment(
+                            "[eth_genesis_header].hash does not match the stored genesis block: "
+                            "stored=" +
+                            genesisBlockHeader->hash().hex() +
+                            " artifact=" + genesis.m_ethGenesisHeader->m_hash.hex()));
+                }
+            }
+            else
+            {
+                existsGenesisData = std::string(genesisBlockHeader->extraData().toStringView());
+            }
 
             // generateGenesisData() (hence extraData) covers chainID / groupID /
             // smCrypto / [features] / consensus / version / executor /
@@ -2034,6 +2113,78 @@ bool Ledger::buildGenesisBlock(
                                           genesis.m_compatibilityVersion)) +
                                       ", high than support maxVersion"));
         }
+
+        // Build and validate B0's header BEFORE any table/state write: an
+        // eth-genesis artifact mismatch (state_root cross-check or the
+        // keccak256(rlp) checksum below) must fail while the datadir is still
+        // untouched, so the operator can fix the config and simply retry —
+        // the system-table creation further down is not idempotent
+        // (asyncCreateTable rejects an existing table on the next attempt).
+        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(0);
+        if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
+        {
+            header->setVersion(versionNumber);
+        }
+        if (!genesis.m_ethGenesisHeader.has_value())
+        {
+            // Legacy genesis: the FISCO genesis pin travels in B0's extraData.
+            // Eth-genesis chains keep it in SYS_CONFIG instead (written below)
+            // — their extraData is the artifact's (Jovian format), because
+            // every extraData byte enters the RLP genesis hash.
+            header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
+        }
+        // L2 genesis: pin the allocs into the block hash via the op-geth state
+        // root (also the value the Engine-API eth-block view serves to op-node
+        // as the genesis stateRoot). pbft chains leave stateRoot empty as before
+        // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
+        // per-block state-change hashes, a different domain from this MPT root,
+        // so only the (previously empty) genesis block carries it.
+        bool const l2EthereumCompat = std::any_of(genesis.m_features.begin(),
+            genesis.m_features.end(), [](ledger::FeatureSet const& featureSet) {
+                return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
+                       featureSet.enable > 0;
+            });
+        if (!genesis.m_allocs.empty())
+        {
+            header->setStateRoot(ethStateTrie.root);
+        }
+        else if (l2EthereumCompat)
+        {
+            // Empty-alloc L2 genesis: NodeConfig::validateL2Invariants rejects this
+            // combination, but buildGenesisBlock is callable directly. Publish the
+            // canonical empty-trie root instead of a zero h256 — commitTrie()
+            // recognizes only emptyRootHash() as the from-empty marker
+            // (mpt/HashBuilder.h), so a zero parent root would send block 1's
+            // incremental MPT build down the node-reading merge path and abort on
+            // the nonexistent zero-hash node.
+            header->setStateRoot(mpt::emptyRootHash());
+        }
+        if (genesis.m_ethGenesisHeader.has_value())
+        {
+            applyEthGenesisHeader(*header, *genesis.m_ethGenesisHeader);
+        }
+        header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        if (genesis.m_ethGenesisHeader.has_value())
+        {
+            // hash() throws EmptyBlockHeaderHash when the RLP validation
+            // inside calculateHash() rejected the header — fail-fast either
+            // way. The artifact's hash field is a checksum over the other 21
+            // fields: any config/artifact drift lands here.
+            auto builtHash = header->hash();
+            if (builtHash != genesis.m_ethGenesisHeader->m_hash)
+            {
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "[eth_genesis_header].hash mismatch: keccak256(rlp(header)) = " +
+                        builtHash.hex() + " but the artifact claims " +
+                        genesis.m_ethGenesisHeader->m_hash.hex() +
+                        "; the artifact and the 21 header fields disagree"));
+            }
+            LEDGER_LOG(INFO) << LOG_DESC("buildGenesisBlock: eth genesis header")
+                             << LOG_KV("hash", builtHash.hex());
+        }
+
         // clang-format off
     constexpr static auto tables = std::to_array<std::string_view>({
         SYS_CONFIG, SYS_VALUE_AND_ENABLE_BLOCK_NUMBER,
@@ -2082,42 +2233,6 @@ bool Ledger::buildGenesisBlock(
                          << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
                          << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
                          << LOG_KV("isAuthCheck", genesis.m_isAuthCheck);
-
-        // build a block
-        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(0);
-        if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
-        {
-            header->setVersion(versionNumber);
-        }
-        header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
-        // L2 genesis: pin the allocs into the block hash via the op-geth state
-        // root (also the value the Engine-API eth-block view serves to op-node
-        // as the genesis stateRoot). pbft chains leave stateRoot empty as before
-        // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
-        // per-block state-change hashes, a different domain from this MPT root,
-        // so only the (previously empty) genesis block carries it.
-        bool const l2EthereumCompat = std::any_of(genesis.m_features.begin(),
-            genesis.m_features.end(), [](ledger::FeatureSet const& featureSet) {
-                return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
-                       featureSet.enable > 0;
-            });
-        if (!genesis.m_allocs.empty())
-        {
-            header->setStateRoot(ethStateTrie.root);
-        }
-        else if (l2EthereumCompat)
-        {
-            // Empty-alloc L2 genesis: NodeConfig::validateL2Invariants rejects this
-            // combination, but buildGenesisBlock is callable directly. Publish the
-            // canonical empty-trie root instead of a zero h256 — commitTrie()
-            // recognizes only emptyRootHash() as the from-empty marker
-            // (mpt/HashBuilder.h), so a zero parent root would send block 1's
-            // incremental MPT build down the node-reading merge path and abort on
-            // the nonexistent zero-hash node.
-            header->setStateRoot(mpt::emptyRootHash());
-        }
-        header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
         auto block = m_blockFactory->createBlock();
         block->setBlockHeader(header);
@@ -2169,6 +2284,17 @@ bool Ledger::buildGenesisBlock(
             gasPriceEntry.set(bcos::storage::serialize::encode(
                 SystemConfigEntry(genesis.m_txGasPrice, 0)));
             sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
+        }
+
+        // A3: eth-genesis chains keep the FISCO genesis pin here — B0's
+        // extraData carries the artifact bytes, so the restart consistency
+        // check (top of this function) reads the pin back from this row.
+        if (genesis.m_ethGenesisHeader.has_value())
+        {
+            Entry genesisDataEntry;
+            genesisDataEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry{genesisData, 0}));
+            sysTable->setRow(INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA, std::move(genesisDataEntry));
         }
 
         if (RPBFT_CONSENSUS_TYPE == genesis.m_consensusType &&
