@@ -187,11 +187,15 @@ def main():
                   f"{addr2} vs {create_address(SENDER, nonce + 1)}")
             code2 = rpc.call("eth_getCode", [addr2, "latest"])
         check("revert getCode == runtime", code2 == "0x" + rev_runtime, f"{code2} vs 0x{rev_runtime}")
+        # Known limitation (recorded): OP mode has no historical-state snapshot (no MPT /
+        # checkpoint), so SchedulerInterface::callAtBlock defaults to call() == latest — a
+        # historical blockTag does NOT honor block-N state. The revert path is asserted at
+        # latest only; blockTag history honoring is a documented gap (spec A.2 partial).
         try:
             rpc.call("eth_call", [{"to": addr2, "data": "0x"}, "latest"])
-            check("eth_call REVERT contract fails", False, "expected revert/error")
+            check("eth_call REVERT contract fails (latest)", False, "expected revert/error")
         except AssertionError as e:
-            check("eth_call REVERT contract fails", True, str(e)[:70])
+            check("eth_call REVERT contract fails (latest)", True, str(e)[:70])
 
     print(f"\n{len(PASSED)} passed, {len(FAILED)} failed")
     if FAILED:

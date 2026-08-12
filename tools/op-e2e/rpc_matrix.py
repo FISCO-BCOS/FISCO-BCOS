@@ -149,6 +149,11 @@ def a2_exec(rpc, sender):
     out2 = rpc.call("eth_call",
         [{"to": "0x4200000000000000000000000000000000000015", "data": "0x9a2ac6d5"}, "latest"])
     check("eth_call empty-code contract returns 0x", out2 == "0x", str(out2))
+    # historical blockTag: OP mode has no historical-state snapshot, so SchedulerInterface's
+    # callAtBlock default routes to call() == latest. Assert the RPC is reachable and does not
+    # crash; honoring block-N state is a documented gap (spec A.2 partial).
+    h_out = rpc.call("eth_call", [tx, "0x1"])
+    check("eth_call historical tag reachable (0x1)", h_out == "0x", str(h_out))
 
 
 def a4_scope(rpc):
