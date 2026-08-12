@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OpScheduler — OP 专用调度器（spec 2026-08-12-op-baseline-scheduler-wiring 接线 Task 4）。
+// OpScheduler — OP 专用调度器（spec 2026-08-12-op-baseline-scheduler-wiring 接线 Task 4 + P4）。
 // 继承 SchedulerSkeleton（统一编排骨架），实现 OP 的 5 个 CRTP hook + 4 个纯虚
 // （call/getCode/getABI/getPendingStorageAt）+ classifyException；锁/连续性/背压/view/
 // 队列/notifier/流程全部继承，无重复。status/reset/preExecuteBlock 用骨架默认（v3 P1-7）。
@@ -13,14 +13,17 @@
 //
 // 与引擎 seam 的关系：引擎 SchedulerType 仍为 OpSchedulerImpl（computeTxRoot/… 依赖名不变）；
 // 本类内部持有一个 OpSchedulerImpl 实例（m_schedulerImpl，构造即建 evmc::VM），execute hook 走
-// executeOpBlock（route A）。P4 换芯（route B runOpBlockInjection）只动 execute hook。
+// executeOpBlock（route A）。Task 6（P4 M3）换芯：execute hook 改走 runOpBlockInjection
+// （route B，OpBlockInjector.h:31，逐笔注入循环），route A 保留为注释对照的 fallback。
 //
 // EnvelopeToTarsConverter 由 composition root 注入（v4 P0-2：opstack-executor 不 link engine——
 // opEnvelopeToTars 在 engine lib；复用 Task 1 带的 using 别名 OpBlockRegister.h:24）。
 
+#include <opstack-executor/OpBlockInjector.h>  // runOpBlockInjection（route B，Task 6 P4 M3）
 #include <opstack-executor/OpBlockRegister.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpstackExecutor.h>
+#include <opstack-executor/OpstackExecutorCache.h>  // 分叉键缓存（SEV-9）
 #include <opstack-executor/RecentBlockHashes.h>
 #include <transaction-scheduler/bcos-transaction-scheduler/SchedulerSkeleton.h>
 
@@ -101,13 +104,26 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    /// ② 执行内核：executeOpBlock（route A，OpSchedulerImpl.h:202）。
+    /// ② 执行内核：route B——runOpBlockInjection（逐笔注入循环，OpBlockInjector.h:31，Task 6
+    /// P4 M3 换芯）。装配：rawTxBytes = 各笔 extraTransactionBytes（P3 块装配已覆写完整信封，
+    /// SEV-8）；txs = detail::decodeOneRawTx(chainId)；normalTxs = EnvelopeToTarsConverter
+    /// （composition-root 注入的 lambda，经构造传入——转换结果须覆写 extraTransactionBytes =
+    /// 完整信封，opEnvelopeToTars 不设该字段，先例 EngineServiceImpl.h:1192 /
+    /// OpDualPathEquivalenceTest.cpp:566-568）；cfg = configAt(timestamp/1000, forkTimestamps)；
+    /// executor = OpstackExecutorCache 分叉键取（SEV-9，不每调现构造）；ledgerConfig 只需
+    /// evmcRevision（injector 的 executeDeposit/executeTransaction/finalizeBlock 校验它）。
+    /// route A（executeOpBlock，OpSchedulerImpl.h:202）保留为注释对照的 fallback——换芯前该
+    /// hook 即 `co_await m_schedulerImpl.executeOpBlock(view, header, rawTxBytes)`（m_schedulerImpl
+    /// 成员保留），如需回退恢复注释体即可。
     /// → 包 SchedulerExecuteResult{receipts, modeExtra=OpExecuteExtra{result, rawTxBytes}}。
     task::Task<bcos::scheduler_v1::SchedulerExecuteResult> execute(ViewType& view,
         protocol::BlockHeader const& header,
         std::vector<protocol::Transaction::ConstPtr> const& transactions,
         ledger::LedgerConfig const& /*ledgerConfig*/)
     {
+        namespace op = bcos::evm::opstack;
+        namespace detail = bcos::evm::engine::detail;
+
         std::vector<bcos::bytes> rawTxBytes;
         rawTxBytes.reserve(transactions.size());
         for (auto const& tx : transactions)
@@ -119,7 +135,48 @@ public:
         bcos::evm::engine::OpExecuteBlockResult result;
         try
         {
-            result = co_await m_schedulerImpl.executeOpBlock(view, header, rawTxBytes);
+            // cfg：forkTimestamps 解析（与 executeOpBlock 同源 configAt；tars 毫秒 → OP 秒）。
+            const auto& cfg =
+                op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, m_forkTimestamps);
+
+            // txs：排序/解码（decodeOneRawTx 内部含 whole-envelope canonical round-trip，P4
+            // 兜底）。
+            std::vector<op::OpBlockTx> txs;
+            txs.reserve(rawTxBytes.size());
+            for (auto const& raw : rawTxBytes)
+                txs.push_back(detail::decodeOneRawTx(raw, m_chainId));
+
+            // normalTxs：converter 逐笔（跳过 deposit、按块内序）——对齐 injector 的 normalIdx
+            // 仅非 deposit 分支 ++（OpBlockInjector.h:71）。转换成功与否决定 extraTransactionBytes
+            // 覆写（SEV-8 同上）。转换失败：到达执行的 envelope 已通过引擎 step-2 静态校验
+            // （canonical + enumerated），是本地故障——与 engine buildOpBlock 的
+            // OpExecutionInternalError 同语义（EngineServiceImpl.h:1186），非对块的裁决。
+            std::vector<protocol::Transaction::Ptr> normalTxs;
+            normalTxs.reserve(rawTxBytes.size());
+            for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+            {
+                if (std::holds_alternative<op::DepositTx>(txs[i].tx))
+                    continue;
+                const auto txHash = m_hashImpl->hash(rawTxBytes[i]);
+                auto tarsTx = m_envelopeToTars(rawTxBytes[i], txHash);
+                if (!tarsTx)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
+                            "OpScheduler: envelope failed opEnvelopeToTars conversion"});
+                }
+                tarsTx->extraTransactionBytes.assign(rawTxBytes[i].begin(), rawTxBytes[i].end());
+                normalTxs.push_back(std::make_shared<bcostars::protocol::TransactionImpl>(
+                    [tarsTx = std::move(*tarsTx)]() mutable { return &tarsTx; }));
+            }
+
+            bcos::ledger::LedgerConfig ledgerConfig;
+            ledgerConfig.setEVMCRevision(cfg.rev);
+
+            auto& executor = m_executorCache.get(m_forkTimestamps, m_chainId, cfg);
+
+            result = bcos::evm::engine::runOpBlockInjection(executor, view, header, txs, normalTxs,
+                cfg, m_chainId, ledgerConfig, rawTxBytes, m_hashImpl);
         }
         catch (const bcos::evm::engine::OpConsensusError&)
         {
@@ -142,12 +199,13 @@ public:
         catch (...)
         {
             // RTTI 旁路（Storage2State.h:195-199 实测：runtime_error 子类逃 typed catch，落到
-            // catch(...)）——decodeOneRawTx 的 OpConsensusError 等以坏 typeinfo 逃出 executeOpBlock
+            // catch(...)）——decodeOneRawTx 的 OpConsensusError 等以坏 typeinfo 逃出本 hook
             // 会绕过骨架 coExecuteBlock 的 catch(std::exception&)（实测：直接抛到测试）。
-            // 归一为 FISCO 类型（consensus——storage 故障已被 executeOpBlock 的 poison-first
-            // 归为 OpStorageError 抛在可绑定路径），保证 classifyException 收到可 catch 类型。
+            // 归一为 FISCO 类型（consensus——storage 故障已被 runOpBlockInjection 的
+            // poison-first 归为 OpStorageError 抛在可绑定路径），保证 classifyException 收到
+            // 可 catch 类型。
             throw bcos::evm::engine::OpConsensusError(
-                "OpScheduler: executeOpBlock threw an unrecognized (RTTI-bypassed) exception; "
+                "OpScheduler: runOpBlockInjection threw an unrecognized (RTTI-bypassed) exception; "
                 "raw tx decode or block-level consensus fault");
         }
 
@@ -246,6 +304,19 @@ public:
             extra.announcedBlockHash, extra.rawTxBytes, extra.result, *this->m_blockFactory,
             m_envelopeToTars);
         co_return storage;
+    }
+
+    /// 测试观察面（Task 6 P1-8 harness 手术）：dual-path harness 经 executeBlock 驱动 execute
+    /// hook 后需要拿回 OpExecuteBlockResult 做 A-vs-B 对比。返回最新 pending 结果里的原始执行
+    /// 结果（骨架 pushResult 后 m_results.front() 即最新块）。生产路径不消费——commit hook 走
+    /// result.modeExtra 的 OpExecuteExtra（字段更全，含 announcedBlockHash/rawTxBytes）。
+    std::optional<bcos::evm::engine::OpExecuteBlockResult> peekExecuteResult()
+    {
+        std::unique_lock<std::mutex> lock(this->m_resultsMutex);
+        if (this->m_results.empty())
+            return std::nullopt;
+        auto& extra = *std::static_pointer_cast<OpExecuteExtra>(this->m_results.front()->modeExtra);
+        return extra.result;
     }
 
     // ---- 纯虚：call / 存储读（v3 B3：骨架不实现，派生各实现） ----
@@ -409,6 +480,9 @@ public:
         bcos::evm::engine::EnvelopeToTarsConverter envelopeToTars)
       : SchedulerBase(),
         m_schedulerImpl(receiptFactory, chainId, forkTimestamps),
+        // 分叉键缓存：拷贝 Ptr（shared_ptr）后再 move 给 m_receiptFactory/m_hashImpl——缓存
+        // 持有的拷贝独立存活。
+        m_executorCache(receiptFactory, hashImpl),
         m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
@@ -573,7 +647,8 @@ private:
         detail::RecentBlockHashes<ViewType> hashes(
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
-        bcos::executor_v1::opstack::OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
+        // SEV-9：分叉键缓存取 executor（不每调现构造——OpBlockScheduler.h:298 先例的接线后形态）。
+        auto& executor = m_executorCache.get(m_forkTimestamps, m_chainId, cfg);
 
         auto receipt = co_await executor.executeTransaction(view, header, *transaction,
             /*contextID=*/0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
@@ -589,6 +664,7 @@ private:
     static const bcos::h64 c_posNonce;
 
     bcos::evm::engine::OpSchedulerImpl<ViewType> m_schedulerImpl;
+    bcos::executor_v1::opstack::OpstackExecutorCache m_executorCache;
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     uint64_t m_chainId;

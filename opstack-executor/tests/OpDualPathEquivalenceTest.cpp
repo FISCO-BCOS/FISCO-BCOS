@@ -1,11 +1,12 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpDualPathEquivalenceTest.cpp — OP 双路径执行等价性 harness（plan v3 Task 5，P1 红阶段）。
+// OpDualPathEquivalenceTest.cpp — OP 双路径执行等价性 harness（plan v3 Task 5，P1 红阶段；
+// Task 6 P1-8 手术：route A 改走 OpScheduler.executeBlock）。
 //
-// 路线 A（`OpSchedulerImpl::executeOpBlock`，生产单路径，Storage2State 桥）vs 路线 B
-// （`runOpBlockInjection`，逐笔注入循环，OpstackExecutor 注入式入口）在 t8n/vectors 语料上
-// 逐块双 fork（viewA/viewB 各持独立 MLS view）对比：
+// 路线 A（Task 6 起为 `OpScheduler.executeBlock`——骨架驱动 execute hook = route B，view 生命周期
+// 归骨架）vs 路线 B（`runOpBlockInjection` 直调，逐笔注入循环，OpstackExecutor 注入式入口）在
+// t8n/vectors 语料上逐块双 fork（viewA=骨架 push 进 MLS 的 executed view，viewB=独立 fork）对比：
 //   - hard（mechanics，任何分叉即 BOOST_ERROR）：gasUsed / txRoot / receipt 数 / 每笔 status /
 //     gasUsed / cumulativeGasUsed / effectiveGasPrice / logsCount / log
 //     内容（topics/data/address）。
@@ -61,6 +62,7 @@
 #include <ethereum-executor/BCOS2Evmone.h>
 #include <json/json.h>
 #include <opstack-executor/OpBlockInjector.h>
+#include <opstack-executor/OpScheduler.h>  // route A 手术（Task 6 P1-8）：executeBlock 驱动
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpTxDecode.h>
 #include <opstack-executor/OpstackExecutor.h>
@@ -601,6 +603,44 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     return tx;
 }
 
+/// 块装配用的 FISCO tx（Task 6 P1-8 harness 手术）：从 raw envelope 建（opEnvelopeToTars +
+/// SEV-8 覆写完整信封），无 buildFiscoTx 的 pre-flight——块装配需要 deposit 也建 tx
+/// （getTransactions 返回全量，execute hook 只从 extraTransactionBytes 提 raw）。先例
+/// EngineServiceImpl.h:1176-1196 buildOpBlock。
+bcos::protocol::Transaction::Ptr buildBlockTx(
+    bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
+{
+    auto txHash = hashImpl->hash(env);
+    auto tarsTx = bcos::engine::detail::opEnvelopeToTars(env, txHash);
+    if (!tarsTx)
+        return nullptr;
+    tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tars = std::move(*tarsTx)]() mutable { return &tars; });
+}
+
+/// 用 route B 的真实承诺回填 announced 头（Task 6 P1-8 手术）：route A 改走
+/// OpScheduler.executeBlock 后，骨架 verifyResult 对 OP 恒做六字段对比（OpScheduler.h verifyResult
+/// 忽略 verify 布尔）——announced 头必须带真实承诺（finishExecute 只填承诺字段，非承诺字段不全）。
+/// 先跑 route B 拿 resultB 回填，保证 route A 复跑时 verify 通过（双路径等价 ⇒ 承诺一致）。
+/// 字段同 OpSchedulerTest.cpp:191-204 fillAnnouncedHeader。blobGasUsed 不参与 OP 执行（opstack
+/// 从不读 blk.blob_gas_used，blob tx 被 opValidate 拒），只被 seal 六字段对比消费——填它不改变
+/// 执行结果。
+void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
+    bcos::evm::engine::OpExecuteBlockResult const& result)
+{
+    header->setStateRoot(result.stateRoot);
+    header->setTxsRoot(result.txRoot);
+    header->setReceiptsRoot(detail::toBcosH256(result.seal.receiptsRoot));
+    header->setGasUsed(bcos::u256(result.gasUsed));
+    header->setLogsBloom(bcos::bytesConstRef(result.seal.logsBloom.bytes, 256));
+    header->setWithdrawalsRoot(detail::toBcosH256(result.seal.withdrawalsRoot));
+    if (result.seal.requestsHash.has_value())
+        header->setRequestsHash(detail::toBcosH256(*result.seal.requestsHash));
+    if (result.seal.blobGasUsed.has_value())
+        header->setBlobGasUsed(bcos::u256(*result.seal.blobGasUsed));
+}
+
 /// opStackMeta 集合驱动：deposit（envelope 首字节 0x7E）只带 nonce/version；normal 带 fee 字段。
 /// 字段集不硬编码数量——按 receipt->opStackMeta() 实际 present 字段动态提取。
 std::map<std::string, std::string> opMetaFields(
@@ -929,9 +969,10 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
     }
 }
 
-/// 单块等价执行：seedPreState 已在外部完成；本函数 fork 双 view（A/B 各持独立 MLS view）、
-/// 双路径执行、assertEquivalent、golden REPORT。chain 继承：route A 是权威路径，本块结束后
-/// mergeView(viewA)（viewB 对比完即弃）。
+/// 单块等价执行：seedPreState 已在外部完成；本函数先 fork viewB（route A 会把 executed view push
+/// 进 MLS，viewB 必须读 pre-state）、直调 route B、用 resultB 回填 announced 头、经
+/// OpScheduler.executeBlock 跑 route A、从骨架取 resultA + viewA（fork 读透骨架 push 的 executed
+/// view）、assertEquivalent、mergeBackStorage 持久化 route A 权威 post-state（viewB 对比完即弃）。
 void runBlockEquivalence(const std::string& id, Fixture& fixture,
     bcos::protocol::BlockHeader::Ptr const& header, const std::vector<bcos::bytes>& rawTxBytes,
     const JsonValue& vec, bool jovian, const bcos::evm::opstack::OpForkConfig& vectorCfg,
@@ -973,30 +1014,10 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         normalTxs.push_back(std::move(tx));
     }
 
-    // 路线 A：executeOpBlock（生产单路径）。viewA 生命周期覆盖整个对比（dumpAccountDiff 读它）。
-    auto viewA = fixture.multiLayerStorage.fork();
-    viewA.newMutable();
-    engine::OpExecuteBlockResult resultA;
-    try
-    {
-        resultA = bcos::task::syncWait(engine::OpSchedulerImpl<ViewType>(
-            fixture.receiptFactory, kChainId, forkTimestampsFor(jovian))
-                                           .executeOpBlock(viewA, *header, rawTxBytes));
-    }
-    catch (const std::exception& e)
-    {
-        BOOST_ERROR(id << ": route A threw: " << e.what());
-        return;
-    }
-    catch (...)
-    {
-        const auto* excType = abi::__cxa_current_exception_type();
-        BOOST_ERROR(id << ": route A threw (typed catch bypassed, exception type: "
-                       << (excType ? excType->name() : "<unknown>") << ")");
-        return;
-    }
-
-    // 路线 B：runOpBlockInjection（逐笔注入循环）。viewB 生命周期覆盖整个对比。
+    // 路线 B：runOpBlockInjection（逐笔注入循环）——先跑，拿 resultB 回填 announced 头供 route A
+    // verify 用（见 fillAnnouncedHeader 注释）。viewB 在 route A 之前 fork——route A 的
+    // executeBlock 会把 executed view push 进 MLS，viewB 必须读 pre-state。viewB 生命周期覆盖
+    // 整个对比（dumpAccountDiff 读它）。
     auto viewB = fixture.multiLayerStorage.fork();
     viewB.newMutable();
     engine::OpExecuteBlockResult resultB;
@@ -1024,13 +1045,79 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         return;
     }
 
+    // announced 头回填 route B 真实承诺（route A 的 verify 恒六字段对比，需带承诺；blobGasUsed
+    // 不参与 OP 执行，只被 seal 对比消费）。
+    fillAnnouncedHeader(header, resultB);
+
+    // 路线 A（Task 6 P1-8 手术）：OpScheduler.executeBlock——view 生命周期归骨架（fork/pushView
+    // 在骨架内），execute hook 即 route B（runOpBlockInjection）。结果从骨架 m_results 取
+    // （peekExecuteResult），post-state 从骨架 push 进 MLS 的 executed view 取（fork 读透）。
+    engine::OpExecuteBlockResult resultA;
+    try
+    {
+        // 块装配：extraTransactionBytes = 完整信封（SEV-8，buildBlockTx 覆写）。
+        auto block = fixture.blockFactory->createBlock();
+        block->setBlockHeader(header);
+        for (const auto& raw : rawTxBytes)
+        {
+            auto tx = buildBlockTx(raw, fixture.hashImpl);
+            if (tx == nullptr)
+            {
+                BOOST_ERROR(id << ": buildBlockTx failed (opEnvelopeToTars nullopt)");
+                return;
+            }
+            block->appendTransaction(std::move(tx));
+        }
+
+        auto opScheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
+            fixture.receiptFactory, fixture.hashImpl, kChainId, forkTimestampsFor(jovian),
+            fixture.blockFactory, fixture.multiLayerStorage,
+            [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
+                return bcos::engine::detail::opEnvelopeToTars(env, txHash);
+            });
+
+        bcos::Error::Ptr routeAErr;
+        opScheduler->executeBlock(block, /*verify=*/true,
+            [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr, bool) {
+                routeAErr = std::move(e);
+            });
+        if (routeAErr)
+        {
+            BOOST_ERROR(id << ": route A executeBlock failed: " << routeAErr->errorMessage());
+            return;
+        }
+        auto peeked = opScheduler->peekExecuteResult();
+        if (!peeked)
+        {
+            BOOST_ERROR(id << ": route A executeBlock produced no result");
+            return;
+        }
+        resultA = std::move(*peeked);
+    }
+    catch (const std::exception& e)
+    {
+        BOOST_ERROR(id << ": route A threw: " << e.what());
+        return;
+    }
+    catch (...)
+    {
+        const auto* excType = abi::__cxa_current_exception_type();
+        BOOST_ERROR(id << ": route A threw (typed catch bypassed, exception type: "
+                       << (excType ? excType->name() : "<unknown>") << ")");
+        return;
+    }
+
+    // viewA：route A post-state（骨架 push 进 MLS 的 executed view，从骨架的 storage 取）。
+    auto viewA = fixture.multiLayerStorage.fork();
+
     // A-vs-B 对比（hard 全绿 + soft ALLOWLIST）。
     try
     {
         assertEquivalent(id, resultA, resultB, viewA, viewB, rawTxBytes, ledger);
 
-        // chain 继承：route A 权威 post-state merge 进 MLS（viewB 丢弃）。
-        bcos::task::syncWait(fixture.multiLayerStorage.mergeView(std::move(viewA)));
+        // chain 继承：route A 权威 post-state 已由骨架 pushView 进 MLS，只 mergeBackStorage
+        // 持久化（不重复 pushView——mergeView 会再 push 一层，viewB 对比完即弃）。
+        bcos::task::syncWait(fixture.multiLayerStorage.mergeBackStorage());
 
         // golden 三方（G1 P3 带作用域翻硬）：isthmus/jovian 非 contract_create → hard；
         // pre-isthmus（fork 不匹配预期）与 contract_create（已知分歧）保持软 REPORT。

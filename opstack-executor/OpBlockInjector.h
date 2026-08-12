@@ -114,9 +114,24 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
                 throw OpConsensusError(
                     "runOpBlockInjection: normalTxs exhausted (caller-provided "
                     "normal txs mismatch block txs)");
-            auto receipt = bcos::task::syncWait(executor.executeTransaction(view, header,
-                *normalTxs[normalIdx++], /*contextID=*/0, ledgerConfig,
-                /*call=*/false, fee, blockGasLeft, chainId, &hashes));
+            // 审查 R3 分类契约：校验失败（opValidate 拒绝普通交易）→ OpConsensusError（INVALID），
+            // 非 -32603。Task 6 换芯前 OpTxValidationFailed 只出现在 direct injector（harness 跳过
+            // invalid_ 向量）；换芯后走引擎 delegate 生产路径，漏分类会把 INVALID 向量误报为
+            // -32603（mapDelegateError 抛内部错误）——与 processOpBlock 的 validate-error 通道
+            // （runtime_error → OpConsensusError）对齐。syncWait 同步重抛；FISCO 类型 typeinfo
+            // 稳定，typed catch 可靠。
+            protocol::TransactionReceipt::Ptr receipt;
+            try
+            {
+                receipt = bcos::task::syncWait(executor.executeTransaction(view, header,
+                    *normalTxs[normalIdx++], /*contextID=*/0, ledgerConfig,
+                    /*call=*/false, fee, blockGasLeft, chainId, &hashes));
+            }
+            catch (const bcos::executor_v1::opstack::OpTxValidationFailed& e)
+            {
+                throw OpConsensusError(
+                    "runOpBlockInjection: normal tx validation failed: " + std::string(e.what()));
+            }
             auto const gasUsed = op::narrowGasUsed(receipt->gasUsed());  // v2：op:: 限定
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;

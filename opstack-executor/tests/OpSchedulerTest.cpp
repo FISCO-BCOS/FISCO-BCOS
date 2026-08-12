@@ -491,6 +491,26 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock)
         BOOST_CHECK_EQUAL(std::string(receipts[i]->effectiveGasPrice()),
             std::string(resultA.receipts[i]->effectiveGasPrice()));
     }
+
+    // Task 6（P4 M3）黄金约束：executeBlock 内部经 runOpBlockInjection（route B）的完整结果
+    // == 直调 executeOpBlock（route A）——peekExecuteResult 暴露骨架 m_results 里的原始结果。
+    auto routeB = f.scheduler->peekExecuteResult();
+    BOOST_REQUIRE_MESSAGE(routeB.has_value(), "executeBlock must stash an OpExecuteBlockResult");
+    BOOST_CHECK_EQUAL(routeB->stateRoot, resultA.stateRoot);
+    BOOST_CHECK_EQUAL(routeB->txRoot, resultA.txRoot);
+    BOOST_CHECK_EQUAL(routeB->gasUsed, resultA.gasUsed);
+    // evmc::bytes32 / BloomFilter 无 operator<<，用 == / 字节比较（不可 BOOST_CHECK_EQUAL）。
+    BOOST_CHECK(routeB->seal.receiptsRoot == resultA.seal.receiptsRoot);
+    BOOST_CHECK(std::equal(std::begin(routeB->seal.logsBloom.bytes),
+        std::end(routeB->seal.logsBloom.bytes), std::begin(resultA.seal.logsBloom.bytes)));
+    BOOST_CHECK(routeB->seal.withdrawalsRoot == resultA.seal.withdrawalsRoot);
+    BOOST_CHECK_EQUAL(routeB->seal.requestsHash.has_value(), resultA.seal.requestsHash.has_value());
+    if (routeB->seal.requestsHash.has_value() && resultA.seal.requestsHash.has_value())
+        BOOST_CHECK(*routeB->seal.requestsHash == *resultA.seal.requestsHash);  // evmc::bytes32 无
+                                                                                // <<
+    BOOST_CHECK_EQUAL(routeB->seal.blobGasUsed.has_value(), resultA.seal.blobGasUsed.has_value());
+    if (routeB->seal.blobGasUsed.has_value() && resultA.seal.blobGasUsed.has_value())
+        BOOST_CHECK_EQUAL(*routeB->seal.blobGasUsed, *resultA.seal.blobGasUsed);
 }
 
 /// 接线 Task 5c 槽位 3 E2E（SEV-10）：OpScheduler executeBlock + commitBlock 后 7 张 SYS 表落盘
