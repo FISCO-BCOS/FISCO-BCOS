@@ -61,6 +61,10 @@ var (
 	// EIP-4788 GET path (the BeaconRootsAddress predeploy) and SSTOREs the
 	// returned root.
 	readerAddr = common.HexToAddress("0xc0de000000000000000000000000000000000006")
+	// gaslimit_observer / deposit_basefee_observer: 定向分叉观察者目标地址。
+	// 审查 R1：用 0x...0007/0008 —— 0x...0004/0005 已被 delegateAddr/aclAddr 占用。
+	gaslimitObsAddr = common.HexToAddress("0xc0de000000000000000000000000000000000007")
+	basefeeObsAddr  = common.HexToAddress("0xc0de000000000000000000000000000000000008")
 	// empty_account_cleanup case: pre-seeded exists-but-empty account
 	// (balance 0, nonce 0, no code, no storage). NOT a precompile on either
 	// side (exact-set membership; op-stack P256VERIFY sits at 0x…0100).
@@ -76,6 +80,10 @@ var (
 	delegateCode = hexutil.MustDecode("0x602a60015500")
 	// SSTORE(0, GASPRICE); SSTORE(1, BASEFEE); SSTORE(2, SELFBALANCE); STOP
 	feeObserverCode = hexutil.MustDecode("0x3a5f55486001554760025500")
+	// spec §6：gaslimit: GASLIMIT(0x45) PUSH1 0 SSTORE STOP —— 存 gaslimit()。
+	// basefee: BASEFEE(0x48) PUSH1 0 SSTORE STOP —— 存 basefee()。
+	gaslimitObserverCode = hexutil.MustDecode("0x4560005500")
+	basefeeObserverCode  = hexutil.MustDecode("0x4860005500")
 	// contract_create initcode: init phase SSTORE(0,1), then the classic
 	// PUSH+MSTORE+RETURN deploy of the 6-byte runtime 0x600160005500
 	// (= SSTORE(0,1); STOP; never called in-block):
@@ -955,6 +963,47 @@ var caseSpecs = []caseSpec{
 				common.BigToHash(big.NewInt(1)),
 				common.BigToHash(big.NewInt(2)),
 			},
+		}
+		return c
+	}},
+
+	{"gaslimit_observer", bothForks, func(fork string) inputCase {
+		// 触发注入路径 BlockInfo.gasLimit=blockGasLeft vs 块头 gasLimit 的分叉（spec §6.1）。
+		c := caseFrame(fork, "gaslimit_observer",
+			"contract reads GASLIMIT and SSTOREs slot0; injected-path BlockInfo.gasLimit=blockGasLeft diverges from header gasLimit",
+			defaultFeeParams(), 10_000_000)
+		c.Pre[gaslimitObsAddr] = types.Account{Balance: big.NewInt(0), Code: gaslimitObserverCode}
+		fund(&c, 1, eth(100))
+		c.Transactions = append(c.Transactions, transferTx(1, 0, gaslimitObsAddr, big.NewInt(0), 200_000, nil))
+		// opt8n-ref postState 校验：contract 执行期写入的每个 slot 都必须由 corpus 声明
+		// （pre storage / extra_storage）。gaslimitObserverCode 仅写 slot 0。
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			gaslimitObsAddr: {common.BigToHash(big.NewInt(0))},
+		}
+		return c
+	}},
+
+	{"deposit_basefee_observer", bothForks, func(fork string) inputCase {
+		// v2（D7）：绿守卫向量——不再触发分叉（Task 4 后 executeDeposit 读 header baseFee），
+		// 验证 deposit 内 BASEFEE 读数三方（A/B/op-geth）一致 == header baseFee，回归保护 Task 4 修复。
+		// spec §6.2 已按 v2 修订为「绿守卫语义」。
+		c := caseFrame(fork, "deposit_basefee_observer",
+			"deposit calls a contract reading BASEFEE; guards that injected path reads header baseFee (Task 4)",
+			defaultFeeParams(), 10_000_000)
+		c.Pre[basefeeObsAddr] = types.Account{Balance: big.NewInt(0), Code: basefeeObserverCode}
+		to := basefeeObsAddr // 审查 R1：inputDeposit.To 是 *common.Address，必须取地址
+		c.Transactions = append(c.Transactions, inputTx{
+			OpType: "deposit",
+			OpDeposit: &inputDeposit{
+				From: userDepositor, To: &to, Gas: 200_000,
+				SourceHash: sourceHash("deposit_basefee_observer " + fork),
+			},
+			Data: hexutil.Bytes{},
+		})
+		// opt8n-ref postState 校验：contract 执行期写入的每个 slot 都必须由 corpus 声明。
+		// basefeeObserverCode 仅写 slot 0。
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			basefeeObsAddr: {common.BigToHash(big.NewInt(0))},
 		}
 		return c
 	}},
