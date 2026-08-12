@@ -32,6 +32,7 @@ add_executable(opstack-executor-block-tests
     OpSchedulerImplSmokeTest.cpp
     OpEngineBranchSmokeTest.cpp
     OpBlockSchedulerTest.cpp
+    OpSchedulerTest.cpp
     OpBlockInjectorTest.cpp
     OpDualPathEquivalenceTest.cpp
     support/SeedPreStateTest.cpp
@@ -45,7 +46,8 @@ set_source_files_properties(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 target_link_libraries(opstack-executor-block-tests PRIVATE
     opstack-executor bcosevm::opstack Boost::unit_test_framework
-    codec protocol-tars ledger engine bcos-utilities jsoncpp_static rpc)
+    codec protocol-tars ledger engine bcos-utilities jsoncpp_static rpc
+    transaction-scheduler)  # OpSchedulerTest: SchedulerSkeleton::current() (BaselineScheduler.cpp)
 target_include_directories(opstack-executor-block-tests PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/bcos-ledger

@@ -537,6 +537,21 @@ protected:
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
                 nullptr, false};
         }
+        catch (...)
+        {
+            // RTTI-bypass fallback（OpScheduler 接线 Task 4 发现）：-fno-rtti 的 libevmone.a 带
+            // 非唯一 typeinfo，runtime_error 子类（OpSchedulerImpl 的
+            // OpConsensusError/OpStorageError） 会逃出上面的
+            // catch(std::exception&)（Storage2State.h:195-199 实测同现象）。没有此兜底， OP
+            // 异常会绕过 classifyException 直接逃出 executeBlock。classifyException 的 rethrow +
+            // typed catch 对已归一（execute hook 内 catch(...) 重抛）的 FISCO 类型可靠绑定。
+            auto message = std::string{
+                "Execute block failed! (unclassified exception, RTTI "
+                "typed-catch bypassed)"};
+            BASELINE_SCHEDULER_LOG(ERROR) << message;
+            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
+                nullptr, false};
+        }
     }
 
     task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>> coCommitBlock(
@@ -616,6 +631,17 @@ protected:
         catch (std::exception& e)
         {
             auto message = fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
+            BASELINE_SCHEDULER_LOG(ERROR) << message;
+            co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
+                nullptr};
+        }
+        catch (...)
+        {
+            // RTTI-bypass 兜底（同 coExecuteBlock 注释）：runtime_error 子类逃 typed catch，
+            // 无此兜底会绕过 classifyException 逃出 commitBlock。
+            auto message = std::string{
+                "Commit block failed! (unclassified exception, RTTI "
+                "typed-catch bypassed)"};
             BASELINE_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
                 nullptr};
