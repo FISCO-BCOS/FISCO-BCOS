@@ -84,10 +84,14 @@ inline constexpr size_t L2_SLOT_BYTES = 32;
 
 // Config keys read from the SystemConfig predeploy. The set mirrors the
 // LedgerConfig fields that downstream consumers already understand (Scheduler /
-// Executor / RPC); growing it is zero-ABI on the contract side (just write a
-// new key) but it does require a matching LedgerConfig setter, which is why
-// l2_block_time is intentionally NOT in this set yet (LedgerConfig has no
-// l2BlockTime field; spec follow-up).
+// Executor / RPC). D4 authority boundary: of these four keys only
+// block_tx_count_limit is runtime-writable on the contract
+// (SystemConfig._isWritableKey); chain_id, gas_limit and compatibility_version
+// are genesis-frozen, so the loader re-reads constant values for them —
+// gas_limit's runtime authority moves to op-node payload attributes (K2).
+// Growing the set requires both a contract whitelist change (upgrade) and a
+// matching LedgerConfig setter, which is why l2_block_time is intentionally
+// NOT in this set yet (LedgerConfig has no l2BlockTime field; spec follow-up).
 inline constexpr std::array<std::string_view, 4> L2_SYSTEM_CONFIG_KEYS = {
     "chain_id", "gas_limit", "block_tx_count_limit", "compatibility_version"};
 
@@ -273,6 +277,18 @@ public:
             }
             auto const slotBytes = entries[i]->get();
             auto const decoded = detail::decodeEntryValue(slotBytes);
+
+            // chain_id is genesis-frozen (D4): genesis writes it with
+            // enableNumber 0 and the contract rejects runtime writes. A
+            // non-zero enableNumber can only mean someone smuggled a scheduled
+            // chain_id change past the contract whitelist (e.g. via a raw
+            // storage write) — refuse to run rather than re-key the chain.
+            if (key == "chain_id" && decoded.enableNumber != 0)
+            {
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error("L2ConfigLoader: chain_id is genesis-frozen; a scheduled "
+                                       "chain_id change (enableNumber != 0) is invalid"));
+            }
 
             // Schedule gate: a config whose enableNumber is still in the future
             // must not be applied yet — the block keeps its prior value. This

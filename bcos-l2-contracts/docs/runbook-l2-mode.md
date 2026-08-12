@@ -55,8 +55,10 @@ python3 build-allocs.py --config chain-config.yaml \
 ```
 
 `allocs.ini` holds the `[alloc.N]` + `[alloc.N.storage]` fragments for all 13
-predeploys (runtime bytecode + seeded storage). `SystemConfig`'s `chain_id` and
-the other config entries are seeded as storage slots here.
+predeploys — 15 alloc sections, because the two self-written predeploys each
+expand to a proxy account (EIP-1967 slots + seeded contract storage) plus an
+implementation account. `SystemConfig`'s `chain_id` and the other config
+entries are seeded as packed Entry slots on the proxy account.
 
 ### 3. Assemble `config.genesis`
 
@@ -73,7 +75,7 @@ Enable the feature under `[features]` and append the generated `allocs.ini`:
 
 ; --- appended from allocs.ini ---
 [alloc.0]
-    address = 42000000000000000000000000000000000000c0
+    address = 43000000000000000000000000000000000000c0
     balance = 0
     nonce   = 0
     code    = 0x60806040...
@@ -103,10 +105,10 @@ re-derived and checked on every later startup (see [Immutability](#immutability)
 
 ```bash
 # all 13 predeploys carry code
-cast code 0x42000000000000000000000000000000000000C0 --rpc-url http://127.0.0.1:8545
+cast code 0x43000000000000000000000000000000000000C0 --rpc-url http://127.0.0.1:8545
 
 # SystemConfig returns the seeded chain_id (value, enableNumber)
-cast call 0x42000000000000000000000000000000000000C0 \
+cast call 0x43000000000000000000000000000000000000C0 \
     "getValueByKey(string)" "chain_id" --rpc-url http://127.0.0.1:8545
 
 # eth_chainId agrees with SystemConfig chain_id (PR-4/PR-6 path consistency)
@@ -176,7 +178,7 @@ editing a frozen field means the node is now pointed at a different chain.
 | Enable/disable `feature_l2_ethereum_compat` | changes the genesis feature set (extraData) and allocs; immutable after first init — start a **new chain** |
 | Add / change a predeploy (different allocs) | allocs are pinned by the genesis `stateRoot`; start a **new chain** |
 | Bump the pinned OP fork to a new tag | edit `op-fork-pin.toml` — see `runbook-op-fork-upgrade.md` |
-| Phase B governance handover (DAO switch) | transfer `ProxyAdmin` ownership to the DAO (a runtime `ProxyAdmin.transferOwnership` tx, not a genesis change) |
+| Phase B governance handover (DAO switch) | runtime `transferOwnership` txs, not a genesis change: `Ownable.owner` of SystemConfig / L2ValidatorSet (config + validator authority) and/or `ProxyAdmin` ownership (upgrade authority) — two independent roles, hand over each deliberately |
 
 There is no in-place migration for any frozen genesis field by design: the
 `stateRoot` / `extraData` guards exist to stop a node from silently running on a

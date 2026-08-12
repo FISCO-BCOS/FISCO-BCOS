@@ -6,23 +6,62 @@
 #   python3 build-allocs.py --config chain-config.yaml \
 #       --contracts ../../bcos-l2-contracts --out allocs.ini
 
-# This tool emits one [alloc.N] per predeploy: deployed bytecode, empty storage.
-# SystemConfig storage is NOT seeded here — `feature_flags` is injected by the
-# C++ genesis path (Ledger), which alone knows the version-gated feature set;
-# the remaining SystemConfig config entries (owner, chain_id, gas/version) are a
-# follow-up PR. Only the predeploy list is needed below.
+# Self-written predeploys (SystemConfig, L2ValidatorSet) are materialized in
+# their post-deployment terminal state: a Proxy account (EIP-1967 slots +
+# contract storage) plus a separate implementation account. The `feature_flags`
+# SystemConfig entry is still injected by the C++ genesis path (Ledger), which
+# alone knows the version-gated feature set — never list it here.
+
+# Two-authority split (do NOT point these at the same entity):
+#   proxy_admin       -> EIP-1967 admin slot: upgrade authority (ProxyAdmin
+#                        predeploy).
+#   governance_owner  -> Ownable.owner (slot 51): config / validator write
+#                        authority (the L2 governance entity).
+proxy_admin: "0x4200000000000000000000000000000000000018"
+# Placeholder — REPLACE with the real governance address before generating
+# allocs (the tool rejects the zero address).
+governance_owner: "0x000000000000000000000000000000000000dEaD"
 
 # Predeploys: SystemConfig + L2ValidatorSet (self-written, src/) and the 11
 # vendored OP fork entry-point contracts (vendor/op-fork/). Canonical OP-Stack
-# predeploy addresses are fixed by the protocol.
+# predeploy addresses are fixed by the protocol. The self-written predeploys
+# use the 0x43... prefix so they stay out of the OP reserved predeploy
+# namespace (0x4200...0000-0x4200...07FF).
 predeploys:
-  # --- FISCO-BCOS self-written predeploys ---
+  # --- FISCO-BCOS self-written predeploys (proxied, storage seeded) ---
+  # Implementation addresses mirror the OP code-namespace convention
+  # (0xc0d3...<2-byte suffix>) one prefix up (0xc3d3...) so they collide with
+  # neither the OP predeploy range nor the OP code namespace. The Proxy
+  # bytecode artifact (Proxy.sol) comes from the pinned OP fork build.
   - name: SystemConfig
-    address: "0x42000000000000000000000000000000000000C0"
+    address: "0x43000000000000000000000000000000000000C0"
     sol_file: SystemConfig.sol
+    proxy:
+      implementation: "0xc3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d300c0"
+    # Genesis-seeded config entries, one packed Entry slot per key
+    # (enableNumber = 0). chain_id and gas_limit are genesis-frozen:
+    # SystemConfig.setValueByKey rejects them at runtime (D4 authority
+    # boundary), so these values are final for the life of the chain
+    # (gas_limit authority moves to op-node payload attributes).
+    system_config:
+      chain_id: 20200
+      gas_limit: 30000000
+      block_tx_count_limit: 1000
+      compatibility_version: 0x03120000  # 3.18.0
   - name: L2ValidatorSet
-    address: "0x42000000000000000000000000000000000000C1"
+    address: "0x43000000000000000000000000000000000000C1"
     sol_file: L2ValidatorSet.sol
+    proxy:
+      implementation: "0xc3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d300c1"
+    # Initial validator set, written as terminal EnumerableSet + record
+    # storage. fee_address defaults to the validator address; voting_power
+    # defaults to 1. jailed / incoming are Phase-A constants (0).
+    validators: []
+    # validators:
+    #   - address: "0x1111111111111111111111111111111111111111"
+    #     consensus_public_key: "0x<hex>"
+    #     fee_address: "0x1111111111111111111111111111111111111111"
+    #     voting_power: 1
 
   # --- vendored OP fork predeploys (bytecode as-is, empty storage in Phase A) ---
   - name: L1Block

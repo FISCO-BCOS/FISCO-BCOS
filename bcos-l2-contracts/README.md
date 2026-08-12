@@ -17,8 +17,14 @@ C++ build. The C++ tree only wires this in when `WITH_L2_CONTRACTS=ON`
 
 | Contract | Predeploy address |
 |----------|-------------------|
-| `SystemConfig.sol` | `0x42000000000000000000000000000000000000C0` (`0x42...00C0`) |
-| `L2ValidatorSet.sol` | `0x42000000000000000000000000000000000000C1` (`0x42...00C1`) |
+| `SystemConfig.sol` | `0x43000000000000000000000000000000000000C0` (`0x43...00C0`) |
+| `L2ValidatorSet.sol` | `0x43000000000000000000000000000000000000C1` (`0x43...00C1`) |
+
+The self-written predeploys live under the `0x43...` prefix because
+`0x4200000000000000000000000000000000000000`–`0x42...000007FF` is the OP-Stack
+reserved predeploy namespace: parking FISCO-specific contracts inside it would
+collide with any future upstream predeploy assignment. `0x43...` mirrors the OP
+addressing convention (2-byte suffix identifies the contract) one prefix up.
 
 `SystemConfig` is a generic key→value store: `setValueByKey(key, value,
 enableNumber)` / `getValueByKey(key)`, each entry packed as `(uint192 value,
@@ -26,7 +32,7 @@ uint64 enableNumber)` in a single slot. The L2 upper layers read a key's slot
 directly (no EVM) via `keccak256(utf8(key) ‖ be32(baseSlot))`, where `baseSlot`
 is the slot of `_config` (101, after the OZ upgradeable base; pinned by PR-7's
 storage-layout gate). `getValueByKey` is the EVM-callable path for external
-callers. Access control is OZ `OwnableUpgradeable` (owner = ProxyAdmin). See
+callers. Access control is OZ `OwnableUpgradeable` (owner = the L2 governance entity; the ERC-1967 admin slot separately holds ProxyAdmin). See
 `2026-06-17-systemconfig-slot-kv-redesign.md` for the full contract.
 
 `L2ValidatorSet` is a single-record-CRUD validator registry (BSC-style fields):
@@ -34,7 +40,8 @@ callers. Access control is OZ `OwnableUpgradeable` (owner = ProxyAdmin). See
 `getValidators` / `isValidator`, all O(1), backed by OZ `EnumerableSet.AddressSet`
 plus a parallel record mapping. The `Validator` struct packs `feeAddress` +
 `jailed` + `votingPower` into one slot; `consensusPublicKey` is algorithm-neutral. Access
-control is OZ `OwnableUpgradeable` (owner = ProxyAdmin). `jailed` (always
+control is OZ `OwnableUpgradeable` (owner = the L2 governance entity; the
+ERC-1967 admin slot separately holds ProxyAdmin). `jailed` (always
 `false`), `incoming` (always `0`) and `felony` / `misdemeanor` (revert) are
 reserved for Phase B.
 
@@ -112,11 +119,14 @@ and simulated deployments). Consequences for genesis tooling (PR-2
 1. **All storage state must come from allocs.** A predeploy constructor does
    not execute on-chain, so every storage slot a node reads at block 0 must be
    materialized in the genesis allocs, not derived from constructor logic.
-2. **`SystemConfig.chainId` is `immutable`** — it lives in the runtime bytecode
-   (solc `immutableReferences`), not in storage. `build-allocs.py` MUST patch
-   the artifact's `deployedBytecode` at the offsets in
-   `out/SystemConfig.sol/SystemConfig.json -> deployedBytecode.immutableReferences`,
-   otherwise on-chain `getChainConfig()` returns `chainId == 0`.
+2. **Three-layer terminal state per self-written predeploy.** `build-allocs.py`
+   emits (a) the proxy account at the predeploy address — Proxy bytecode,
+   EIP-1967 implementation + admin slots, `_initialized = 1`, the owner slot
+   and the contract state (packed SystemConfig entries / validator records) —
+   and (b) a separate implementation account (`0xc3d3...<suffix>`) carrying the
+   implementation bytecode with `_initialized = 255` (initializers disabled).
+   The two authorities stay split: EIP-1967 admin = ProxyAdmin,
+   `Ownable.owner` = governance entity.
 3. **Constructor-emitted events are NOT emitted at genesis.** The
    `OwnershipTransferred(address(0), _owner)` (SystemConfig) and the initial
    `ValidatorSetUpdated` (L2ValidatorSet) logs only appear in

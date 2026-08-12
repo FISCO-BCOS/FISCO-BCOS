@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 /// @title IL2ValidatorSet
 /// @notice On-chain validator set for FISCO-BCOS L2 mode, deployed as a predeploy
-///         at 0x42000000000000000000000000000000000000C1.
+///         at 0x43000000000000000000000000000000000000C1.
 /// @dev    The consensus address is the identity (mapping key + enumeration
 ///         element), so it is NOT a struct field. Single-record CRUD is O(1):
 ///         addition appends, removal swap-pops. The Validator struct packs

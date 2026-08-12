@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 /// @title ISystemConfig
 /// @notice Generic key→value system-config store for FISCO-BCOS L2 mode,
-///         deployed as a predeploy at 0x42000000000000000000000000000000000000C0.
+///         deployed as a predeploy at 0x43000000000000000000000000000000000000C0.
 /// @dev    Each config key maps to a packed Entry{value, enableNumber}. The L2
 ///         upper layers (executor/consensus) do NOT call getValueByKey via EVM;
 ///         they read the backing storage slot directly using the fixed addressing
@@ -11,11 +11,17 @@ pragma solidity 0.8.25;
 ///         getValueByKey/setValueByKey are the EVM-callable path for external
 ///         contracts / RPC / governance. See the slot-KV redesign spec.
 interface ISystemConfig {
-    /// @notice Emitted on every config write (owner-only, via ProxyAdmin governance).
+    /// @notice Emitted on every config write (owner-only; the owner is the L2
+    ///         governance entity, distinct from the proxy's ProxyAdmin).
     event ConfigUpdate(string indexed key, uint192 value, uint64 enableNumber);
 
-    /// @notice Owner-only: set a config value and the block height it takes effect at.
-    /// @param key         config name (e.g. "web3_chain_id", "feature_evm_prague")
+    /// @notice Owner-only: set a config value and the block height it takes
+    ///         effect at. Only whitelisted keys are runtime-writable; keys
+    ///         that carry chain identity (chain_id), OP consensus authority
+    ///         (gas_limit) or state-transition semantics
+    ///         (compatibility_version, feature_flags) are genesis-frozen and
+    ///         revert.
+    /// @param key         config name (e.g. "block_tx_count_limit")
     /// @param value       config value, ≤ uint192 (all current configs fit)
     /// @param enableNumber block height at which the value becomes active
     function setValueByKey(string calldata key, uint192 value, uint64 enableNumber) external;

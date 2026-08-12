@@ -2,25 +2,40 @@
 # Copyright (c) FISCO-BCOS, Apache-2.0
 """Generate FISCO-BCOS genesis [alloc.N] INI fragments from forge artifacts.
 
-L2 mode materializes every predeploy directly into genesis state: runtime
-bytecode, no constructor runs on-chain. This tool reads the forge build
-artifacts under <contracts>/out/<Sol>/<Name>.json plus a chain-config YAML
-listing the predeploys, and emits the INI sections NodeConfig.loadAllocs()
-parses.
+L2 mode materializes every predeploy directly into genesis state: no
+constructor runs on-chain. This tool reads the forge build artifacts under
+<contracts>/out/<Sol>/<Name>.json plus a chain-config YAML listing the
+predeploys, and emits the INI sections NodeConfig.loadAllocs() parses.
 
-Storage seeding is intentionally out of scope here:
+Self-written predeploys (SystemConfig, L2ValidatorSet) are materialized in
+their post-deployment terminal state, three layers per predeploy:
 
-  * SystemConfig (pr1) is a generic `mapping(string => Entry)` with no immutables
-    and no fixed slots. Its `feature_flags` entry is written by the C++ genesis
-    path (Ledger), which alone knows the version-gated feature set after
-    Features::setGenesisFeatures(version); its other config entries (owner,
-    chain_id, gas/version) are a follow-up PR.
-  * The OP-fork predeploys ship deployed bytecode as-is; op-node writes their
-    runtime state (Phase A).
+  1. proxy account (the predeploy address): Proxy bytecode + EIP-1967
+     implementation slot (-> implementation account) + EIP-1967 admin slot
+     (-> ProxyAdmin predeploy);
+  2. implementation account (outside every reserved namespace): the
+     implementation bytecode, storage empty except `_initialized = 255`
+     (the OZ `_disableInitializers()` terminal state, so nobody can run
+     `initialize()` against the implementation's own storage);
+  3. contract storage, written on the PROXY account: `_initialized = 1`
+     (initialize() "already ran"), the `Ownable.owner` slot (51) = the
+     governance owner, and the contract's state — SystemConfig packed
+     Entry slots / L2ValidatorSet validator records.
 
-If a predeploy artifact still carries immutableReferences (unfilled immutables),
-the build aborts naming the contract, unless that predeploy opts in via
-`allow_unpatched_immutables: true` (accepting zero-valued immutables, Phase A).
+Note the two-authority split: the EIP-1967 admin slot (upgrade authority) is
+ProxyAdmin, while `Ownable.owner` (config/validator write authority) is the
+governance entity — two independent slots, never the same role.
+
+The `feature_flags` SystemConfig entry is still written by the C++ genesis
+path (Ledger), which alone knows the version-gated feature set after
+Features::setGenesisFeatures(version). This tool must not write that key.
+
+The OP-fork predeploys ship deployed bytecode as-is; their runtime state is
+seeded by the op-deployer-generated allocs this overlay is applied on top of.
+
+If a predeploy artifact still carries immutableReferences (unfilled
+immutables), the build aborts naming the contract, unless that predeploy opts
+in via `allow_unpatched_immutables: true` (accepting zero-valued immutables).
 """
 import argparse
 import json
@@ -32,6 +47,113 @@ try:
 except ImportError:  # pragma: no cover - dependency hint only
     sys.stderr.write("error: pyyaml required (pip install pyyaml)\n")
     raise
+
+
+# ---------------------------------------------------------------------------
+# keccak256 (pure python, no dependency).
+#
+# hashlib.sha3_256 is NIST SHA-3 (0x06 domain padding) and produces DIFFERENT
+# digests from Ethereum's keccak256 (0x01 padding), so it cannot be used here.
+# Verified against the standard vectors in test_build_allocs.py
+# (keccak256("") = c5d24601..., keccak256("abc") = 4e03657a...).
+# ---------------------------------------------------------------------------
+
+_KECCAK_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+]
+_KECCAK_ROTC = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14,
+                27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44]
+_KECCAK_PILN = [10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4,
+                15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1]
+_MASK64 = (1 << 64) - 1
+
+
+def _rotl64(value, shift):
+    return ((value << shift) | (value >> (64 - shift))) & _MASK64
+
+
+def _keccak_f1600(state):
+    for round_index in range(24):
+        # theta
+        parity = [state[i] ^ state[i + 5] ^ state[i + 10] ^ state[i + 15] ^ state[i + 20]
+                  for i in range(5)]
+        for i in range(5):
+            effect = parity[(i + 4) % 5] ^ _rotl64(parity[(i + 1) % 5], 1)
+            for j in range(0, 25, 5):
+                state[j + i] ^= effect
+        # rho + pi
+        lane = state[1]
+        for i in range(24):
+            j = _KECCAK_PILN[i]
+            lane, state[j] = state[j], _rotl64(lane, _KECCAK_ROTC[i])
+        # chi
+        for j in range(0, 25, 5):
+            row = state[j:j + 5]
+            for i in range(5):
+                state[j + i] = row[i] ^ ((row[(i + 1) % 5] ^ _MASK64) & row[(i + 2) % 5])
+        # iota
+        state[0] ^= _KECCAK_RC[round_index]
+
+
+def keccak256(data):
+    """Ethereum keccak256 of `data` (bytes) -> 32-byte digest."""
+    rate = 136  # 1088-bit rate for 256-bit output
+    state = [0] * 25
+    padded = bytearray(data)
+    padded.append(0x01)
+    while len(padded) % rate:
+        padded.append(0x00)
+    padded[-1] |= 0x80
+    for offset in range(0, len(padded), rate):
+        for i in range(rate // 8):
+            state[i] ^= int.from_bytes(padded[offset + i * 8:offset + (i + 1) * 8], "little")
+        _keccak_f1600(state)
+    return b"".join(state[i].to_bytes(8, "little") for i in range(4))
+
+
+# ---------------------------------------------------------------------------
+# Storage-slot layout constants.
+#
+# The OZ slots are pinned by the storage-layout drift gate
+# (bcos-l2-contracts/storage-layout/*.json): _initialized shares slot 0,
+# _owner is slot 51, and both contracts' own state starts at slot 101.
+# ---------------------------------------------------------------------------
+
+# EIP-1967: keccak256("eip1967.proxy.implementation") - 1 / ...proxy.admin - 1
+EIP1967_IMPLEMENTATION_SLOT = int(
+    "360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", 16)
+EIP1967_ADMIN_SLOT = int(
+    "b53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103", 16)
+
+OZ_INITIALIZED_SLOT = 0   # Initializable._initialized (uint8, offset 0)
+OZ_OWNER_SLOT = 51        # OwnableUpgradeable._owner
+
+SYSTEM_CONFIG_BASE_SLOT = 101      # SystemConfig._config mapping
+VALIDATOR_SET_VALUES_SLOT = 101    # L2ValidatorSet._validatorSet._inner._values
+VALIDATOR_SET_INDEXES_SLOT = 102   # L2ValidatorSet._validatorSet._inner._indexes
+VALIDATOR_BY_ADDR_SLOT = 103       # L2ValidatorSet._validatorByAddr
+
+# `_initialized` terminal states (OZ v4.7 Initializable):
+INITIALIZED_RAN = 1        # proxy storage: as if initialize() already ran
+INITIALIZED_DISABLED = 255  # implementation storage: _disableInitializers()
+
+# OP-Stack reserved namespaces (Predeploys.sol): proxies live in
+# 0x4200...0000-0x4200...07FF, their implementations in
+# 0xc0d3...0000 | (last 2 bytes). Self-written predeploys must avoid both.
+_OP_PREDEPLOY_NAMESPACE_BASE = 0x4200000000000000000000000000000000000000
+_OP_CODE_NAMESPACE_BASE = 0xC0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D30000
+
+
+def in_reserved_namespace(address_int):
+    """True if the address collides with an OP-Stack reserved namespace."""
+    if (address_int >> 11) == (_OP_PREDEPLOY_NAMESPACE_BASE >> 11):
+        return True
+    return (address_int & ~0xFFFF) == _OP_CODE_NAMESPACE_BASE
 
 
 def normalize_hex(value):
@@ -49,6 +171,107 @@ def strip0x(value):
     return text[2:] if text.startswith("0x") else text
 
 
+def address_int(value):
+    """Parse a 20-byte address (hex string) into an int, validating width."""
+    text = strip0x(value)
+    if len(text) != 40:
+        raise ValueError(f"address must be 20 bytes (40 hex chars): {value}")
+    return int(text, 16)
+
+
+def word_hex(value_int):
+    """Render an int as a full-width 32-byte 0x-hex word.
+
+    Ledger::importGenesisState unhexes storage keys/values with fixed-width
+    32-byte buffers (left-aligned), so short hex would be misread — always
+    emit the full 64 chars.
+    """
+    return "0x" + format(value_int, "064x")
+
+
+def mapping_slot(key_bytes, base_slot):
+    """Solidity mapping value slot: keccak256(key_bytes || be32(base_slot))."""
+    digest = keccak256(bytes(key_bytes) + base_slot.to_bytes(32, "big"))
+    return int.from_bytes(digest, "big")
+
+
+def put_dynamic_bytes(storage, slot, data):
+    """Write a Solidity `bytes` value rooted at `slot` (standard encoding)."""
+    length = len(data)
+    if length < 32:
+        word = int.from_bytes(data.ljust(32, b"\0"), "big") | (2 * length)
+        if word:
+            storage[slot] = word
+    else:
+        storage[slot] = 2 * length + 1
+        data_base = int.from_bytes(keccak256(slot.to_bytes(32, "big")), "big")
+        for i in range(0, length, 32):
+            storage[data_base + i // 32] = int.from_bytes(
+                data[i:i + 32].ljust(32, b"\0"), "big")
+
+
+def system_config_entry_storage(entries):
+    """Packed Entry slots for SystemConfig `mapping(string => Entry)`.
+
+    entrySlot(key) = keccak256(utf8(key) || be32(101)); the word packs
+    (enableNumber:uint64 high 8 bytes || value:uint192 low 24 bytes).
+    Genesis entries activate at block 0, so the word is just the value.
+    """
+    storage = {}
+    for key, value in entries.items():
+        if key == "feature_flags":
+            raise ValueError(
+                "feature_flags is written by the C++ genesis path (Ledger); "
+                "remove it from system_config")
+        value = int(value)
+        if value < 0 or value >= (1 << 192):
+            raise ValueError(f"system_config['{key}'] does not fit uint192: {value}")
+        storage[mapping_slot(key.encode("utf-8"), SYSTEM_CONFIG_BASE_SLOT)] = value
+    return storage
+
+
+def validator_storage(validators):
+    """L2ValidatorSet state: EnumerableSet.AddressSet + per-validator records.
+
+    Layout (pinned by storage-layout/L2ValidatorSet.json):
+      slot 101         _validatorSet._inner._values.length
+      keccak(101)+i    _values[i] = validator address (as bytes32)
+      slot 102 map     _indexes[addr] = i + 1
+      slot 103 map     _validatorByAddr[addr] -> Validator struct base:
+        base+0   feeAddress(20B) | jailed(1B, always 0 in Phase A) |
+                 votingPower(8B)  — packed, low-to-high by declaration order
+        base+1   consensusPublicKey (dynamic bytes)
+        base+2   incoming (always 0 in Phase A — omitted)
+    """
+    storage = {}
+    if not validators:
+        return storage
+    storage[VALIDATOR_SET_VALUES_SLOT] = len(validators)
+    values_base = int.from_bytes(
+        keccak256(VALIDATOR_SET_VALUES_SLOT.to_bytes(32, "big")), "big")
+    seen = set()
+    for index, validator in enumerate(validators):
+        addr = address_int(validator["address"])
+        if addr in seen:
+            raise ValueError(f"duplicate validator address: {validator['address']}")
+        seen.add(addr)
+        addr_word = addr.to_bytes(32, "big")
+        storage[values_base + index] = addr
+        storage[mapping_slot(addr_word, VALIDATOR_SET_INDEXES_SLOT)] = index + 1
+
+        record_base = mapping_slot(addr_word, VALIDATOR_BY_ADDR_SLOT)
+        fee_address = address_int(validator.get("fee_address", validator["address"]))
+        voting_power = int(validator.get("voting_power", 1))
+        if voting_power < 0 or voting_power >= (1 << 64):
+            raise ValueError(f"voting_power does not fit uint64: {voting_power}")
+        packed = (voting_power << 168) | fee_address  # jailed byte (160-167) = 0
+        if packed:
+            storage[record_base] = packed
+        public_key = bytes.fromhex(strip0x(validator["consensus_public_key"]))
+        put_dynamic_bytes(storage, record_base + 1, public_key)
+    return storage
+
+
 def load_artifact(contracts_dir, sol_file, name):
     """Load a forge artifact: <contracts>/out/<sol_file>/<name>.json."""
     path = Path(contracts_dir) / "out" / sol_file / f"{name}.json"
@@ -63,14 +286,8 @@ def deployed_bytecode(artifact):
     return node.get("object", ""), node.get("immutableReferences", {}) or {}
 
 
-def build_alloc(artifact, address, name, allow_unpatched_immutables=False):
-    """A predeploy emitted as deployed bytecode with empty storage.
-
-    Genesis seeds no storage here (see module docstring). If the artifact still
-    carries immutableReferences, those unfilled immutables would deploy broken
-    runtime code (e.g. a FeeVault with RECIPIENT == address(0)); fail loud unless
-    the predeploy explicitly opts out via allow_unpatched_immutables.
-    """
+def checked_bytecode(artifact, name, allow_unpatched_immutables=False):
+    """Deployed bytecode; fail loud on unfilled immutables unless opted out."""
     code, immutable_refs = deployed_bytecode(artifact)
     if immutable_refs and not allow_unpatched_immutables:
         ast_ids = ", ".join(str(k) for k in immutable_refs)
@@ -78,7 +295,13 @@ def build_alloc(artifact, address, name, allow_unpatched_immutables=False):
             f"{name}: artifact has unpatched immutables (immutableReferences "
             f"AST ids {ast_ids}); unpatched immutables would deploy broken "
             f"genesis code; set allow_unpatched_immutables: true for this "
-            f"predeploy to accept zero-valued immutables (Phase A deferral)")
+            f"predeploy to accept zero-valued immutables")
+    return code
+
+
+def build_alloc(artifact, address, name, allow_unpatched_immutables=False):
+    """A plain predeploy: deployed bytecode, empty storage."""
+    code = checked_bytecode(artifact, name, allow_unpatched_immutables)
     return {
         "address": normalize_hex(address),
         "balance": 0,
@@ -88,24 +311,103 @@ def build_alloc(artifact, address, name, allow_unpatched_immutables=False):
     }
 
 
+def build_proxied_allocs(predeploy, config, contracts_dir):
+    """Two allocs for a self-written proxied predeploy: proxy + implementation.
+
+    The proxy account carries the Proxy bytecode, the EIP-1967 slots and ALL
+    contract storage (terminal post-initialize state). The implementation
+    account carries only the implementation bytecode with initializers
+    disabled. See the module docstring for the full three-layer contract.
+    """
+    name = predeploy["name"]
+    proxy_spec = predeploy["proxy"]
+
+    proxy_admin = config.get("proxy_admin")
+    governance_owner = config.get("governance_owner")
+    if not proxy_admin or not governance_owner:
+        raise ValueError(
+            f"{name}: proxied predeploys need top-level proxy_admin and "
+            f"governance_owner in the chain config")
+    if address_int(governance_owner) == 0 or address_int(proxy_admin) == 0:
+        raise ValueError(
+            f"{name}: proxy_admin / governance_owner must not be the zero "
+            f"address (a zero owner bricks governance at genesis)")
+
+    proxy_address = address_int(predeploy["address"])
+    implementation_address = address_int(proxy_spec["implementation"])
+    for label, addr in (("address", proxy_address),
+                        ("proxy.implementation", implementation_address)):
+        if in_reserved_namespace(addr):
+            raise ValueError(
+                f"{name}: {label} 0x{addr:040x} falls into an OP-Stack "
+                f"reserved namespace (0x4200...0000-07FF predeploys or "
+                f"0xc0d3... code namespace)")
+    if implementation_address == proxy_address:
+        raise ValueError(f"{name}: implementation address equals proxy address")
+
+    implementation_artifact = load_artifact(
+        contracts_dir, predeploy.get("sol_file", f"{name}.sol"), name)
+    implementation_code = checked_bytecode(
+        implementation_artifact, name,
+        bool(predeploy.get("allow_unpatched_immutables", False)))
+
+    # Proxy bytecode comes from the pinned OP fork build (universal/Proxy.sol),
+    # same artifact the canonical OP predeploy proxies use.
+    proxy_artifact = load_artifact(
+        contracts_dir, proxy_spec.get("sol_file", "Proxy.sol"),
+        proxy_spec.get("name", "Proxy"))
+    proxy_code = checked_bytecode(proxy_artifact, f"{name} proxy")
+
+    storage = {
+        OZ_INITIALIZED_SLOT: INITIALIZED_RAN,
+        OZ_OWNER_SLOT: address_int(governance_owner),
+        EIP1967_IMPLEMENTATION_SLOT: implementation_address,
+        EIP1967_ADMIN_SLOT: address_int(proxy_admin),
+    }
+    storage.update(system_config_entry_storage(predeploy.get("system_config", {})))
+    storage.update(validator_storage(predeploy.get("validators", [])))
+    for slot, value in (predeploy.get("storage") or {}).items():
+        storage[int(strip0x(slot), 16)] = int(strip0x(value), 16)
+
+    proxy_alloc = {
+        "address": normalize_hex(predeploy["address"]),
+        "balance": 0,
+        "nonce": 0,
+        "code": normalize_hex(proxy_code),
+        "storage": storage,
+    }
+    implementation_alloc = {
+        "address": normalize_hex(proxy_spec["implementation"]),
+        "balance": 0,
+        "nonce": 0,
+        "code": normalize_hex(implementation_code),
+        "storage": {OZ_INITIALIZED_SLOT: INITIALIZED_DISABLED},
+    }
+    return [proxy_alloc, implementation_alloc]
+
+
 def build_allocs(config, contracts_dir):
-    """Return a list of alloc dicts, one per predeploy in the YAML config."""
+    """Return a list of alloc dicts from the YAML config (proxies expand to 2)."""
     allocs = []
     for predeploy in config["predeploys"]:
+        if "proxy" in predeploy:
+            allocs.extend(build_proxied_allocs(predeploy, config, contracts_dir))
+            continue
         name = predeploy["name"]
-        address = predeploy["address"]
-        sol_file = predeploy.get("sol_file", f"{name}.sol")
-        artifact = load_artifact(contracts_dir, sol_file, name)
-        allow_unpatched = bool(predeploy.get("allow_unpatched_immutables", False))
-        allocs.append(build_alloc(artifact, address, name, allow_unpatched))
+        artifact = load_artifact(
+            contracts_dir, predeploy.get("sol_file", f"{name}.sol"), name)
+        allocs.append(build_alloc(
+            artifact, predeploy["address"], name,
+            bool(predeploy.get("allow_unpatched_immutables", False))))
     return allocs
 
 
 def emit_ini(allocs):
     """Render alloc dicts as FISCO-BCOS genesis INI sections.
 
-    Addresses are lowercased; storage slot keys (if any) are emitted in sorted
-    order so the output is deterministic regardless of dict insertion order.
+    Addresses are lowercased. Storage slots/values are emitted as full-width
+    32-byte hex words (Ledger's unhex is fixed-width) in ascending slot order
+    so the output is deterministic regardless of dict insertion order.
     """
     lines = []
     for index, alloc in enumerate(allocs):
@@ -117,8 +419,8 @@ def emit_ini(allocs):
         storage = alloc.get("storage", {})
         if storage:
             lines.append(f"[alloc.{index}.storage]")
-            for key in sorted(storage, key=lambda k: int(strip0x(k), 16)):
-                lines.append(f"{normalize_hex(key)}={normalize_hex(storage[key])}")
+            for slot in sorted(storage):
+                lines.append(f"{word_hex(slot)}={word_hex(storage[slot])}")
     return "\n".join(lines) + "\n"
 
 
