@@ -135,6 +135,22 @@ def a2_accounts(rpc, sender):
     check("getStorageAt returns 0x0..0", st == "0x" + "00" * 32, str(st))
 
 
+def a2_exec(rpc, sender):
+    print("A.2 exec (eth_call/estimateGas)")
+    # Phase-1 fixes: eth_call now executes (was: node crash / rev-mismatch / invalid-argument /
+    # nonce-too-low / intrinsic-gas-too-low). Regression asserts on the B3 node.
+    tx = {"from": sender, "to": "0x000000000000000000000000000000000000dEaD", "value": "0x1"}
+    out = rpc.call("eth_call", [tx, "latest"])
+    check("eth_call EOA->EOA returns 0x", out == "0x", str(out))
+    gas = rpc.call("eth_estimateGas", [tx])
+    check("eth_estimateGas == 21000", int(gas, 16) == 21000, str(gas))
+    # predeploy L1Block is unseeded on B3 (getCode == 0x): a call to an empty-code address is a
+    # no-op returning empty output, not an error or crash.
+    out2 = rpc.call("eth_call",
+        [{"to": "0x4200000000000000000000000000000000000015", "data": "0x9a2ac6d5"}, "latest"])
+    check("eth_call empty-code contract returns 0x", out2 == "0x", str(out2))
+
+
 def a3_web3_net(rpc):
     print("A.3 web3/net")
     v = rpc.call("web3_clientVersion")
@@ -160,7 +176,9 @@ def main():
     rpc = RpcClient(args.host, args.port)
     jwt_hex = open(args.jwt_secret).read().strip()
     erpc = RpcClient(args.host, args.engine_port, jwt_secret_hex=jwt_hex)
-    groups = {"a1": [lambda: a1_engine_surface(erpc)], "a2": [lambda: a2_chain(rpc), lambda: a2_blocks(rpc), lambda: a2_accounts(rpc, args.sender)], "a3": [lambda: a3_web3_net(rpc)]}
+    groups = {"a1": [lambda: a1_engine_surface(erpc)],
+              "a2": [lambda: a2_chain(rpc), lambda: a2_blocks(rpc), lambda: a2_accounts(rpc, args.sender), lambda: a2_exec(rpc, args.sender)],
+              "a3": [lambda: a3_web3_net(rpc)]}
     if args.only:
         for fn in groups[args.only]:
             fn()

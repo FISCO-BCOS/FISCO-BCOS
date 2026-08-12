@@ -159,10 +159,38 @@ def main():
         check(f"tx[{i}] receipt", receipt is not None)
         if not receipt:
             continue
+        print(f"  tx[{i}] hash={tx_hash} block={receipt['blockNumber']} cumGas={receipt.get('cumulativeGasUsed')} gasUsed={receipt.get('gasUsed')} idx={receipt.get('transactionIndex')}")
         check(f"tx[{i}] status=0x1", receipt["status"] == "0x1", str(receipt["status"]))
         check(f"tx[{i}] from", receipt["from"].lower() == SENDER.lower(), receipt["from"])
         check(f"tx[{i}] gasUsed=21000", int(receipt["gasUsed"], 16) == 21000, receipt["gasUsed"])
         cumulative_gas += int(receipt["gasUsed"], 16)
+
+        # A.2 tx query family (phase-1 additions): getTransactionByHash field parity,
+        # getTransactionByBlockNumberAndIndex (index 0 = L1-attributes deposit, index i+1 = user),
+        # getTransactionReceipt OP meta.
+        b = rpc.call("eth_getTransactionByHash", [tx_hash])
+        check(f"tx[{i}] byHash from", b is not None and b["from"].lower() == SENDER.lower(),
+            str(b and b.get("from")))
+        check(f"tx[{i}] byHash to", b["to"].lower() == "0x" + RECIPIENT.hex(),
+            str(b.get("to")))
+        check(f"tx[{i}] byHash nonce", int(b["nonce"], 16) == nonce0 + i, str(b.get("nonce")))
+        check(f"tx[{i}] byHash value", int(b["value"], 16) == args.value, str(b.get("value")))
+        check(f"tx[{i}] byHash blockNumber", int(b["blockNumber"], 16) == int(receipt["blockNumber"], 16),
+            str(b.get("blockNumber")))
+        check(f"tx[{i}] byHash index", int(b["transactionIndex"], 16) == 1,
+            str(b.get("transactionIndex")))
+        blk_num = receipt["blockNumber"]
+        dep = rpc.call("eth_getTransactionByBlockNumberAndIndex", [blk_num, "0x0"])
+        check(f"tx[{i}] index0 is deposit", dep is not None and int(dep["transactionIndex"], 16) == 0,
+            str(dep))
+        user = rpc.call("eth_getTransactionByBlockNumberAndIndex", [blk_num, "0x1"])
+        check(f"tx[{i}] index1 == tx hash", user is not None and user["hash"] == tx_hash,
+            str(user))
+        check(f"tx[{i}] receipt effectiveGasPrice",
+            receipt.get("effectiveGasPrice") is not None, str(receipt.get("effectiveGasPrice")))
+        check(f"tx[{i}] receipt cumulative>=used",
+            int(receipt.get("cumulativeGasUsed", "0x0"), 16) >= int(receipt["gasUsed"], 16),
+            str(receipt.get("cumulativeGasUsed")))
 
     # Final balance accounting: pre − Σ(value + gasUsed×effectiveGasPrice)
     bal1 = int(rpc.call("eth_getBalance", [SENDER, "latest"]), 16)
