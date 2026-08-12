@@ -564,6 +564,9 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     BOOST_CHECK(!payload->executionPayload.withdrawalsRoot.has_value());
 
     // newPayload carries both fields back in; the committed cache entry keeps them.
+    // This exercises the structure layer only: withdrawalsRoot is set directly on the
+    // struct, deliberately bypassing the JSON parser, whose V1-V3 dialect ignores the
+    // field (it is an ExecutionPayloadV4+/Isthmus field — see EngineProtoAlignB1Test).
     globalStateStorageFixture.setBlockNumber(
         payload->executionPayload.blockHash, c_initialBlockNumber + 1);
     auto request = makeNewPayloadRequestV3(payload->executionPayload);

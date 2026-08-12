@@ -183,20 +183,41 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
     Json::Value params(Json::arrayValue);
     params.append(ep);
 
-    auto request = parseNewPayloadRequest(params, *factory, engine::ApiVersion::V3);
+    // withdrawalsRoot is a V4+ (Isthmus) payload field, so the round trip runs at V4.
+    auto request = parseNewPayloadRequest(params, *factory, engine::ApiVersion::V4);
     BOOST_REQUIRE(request.executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK_EQUAL(request.executionPayload.withdrawalsRoot->hexPrefixed(), withdrawalsRootHex);
 
-    auto serialized = serializeExecutionPayload(request.executionPayload, engine::ApiVersion::V3);
+    auto serialized = serializeExecutionPayload(request.executionPayload, engine::ApiVersion::V4);
     BOOST_REQUIRE(serialized.isMember("withdrawalsRoot"));
     BOOST_CHECK_EQUAL(serialized["withdrawalsRoot"].asString(), withdrawalsRootHex);
 
     // Parse the serialized payload again: the field survives a full round trip.
     Json::Value reparseParams(Json::arrayValue);
     reparseParams.append(serialized);
-    auto reparsed = parseNewPayloadRequest(reparseParams, *factory, engine::ApiVersion::V3);
+    auto reparsed = parseNewPayloadRequest(reparseParams, *factory, engine::ApiVersion::V4);
     BOOST_CHECK(
         reparsed.executionPayload.withdrawalsRoot == request.executionPayload.withdrawalsRoot);
+}
+
+BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootIgnoredBeforeV4)
+{
+    auto factory = makeTransactionFactory();
+    auto ep = makeBaseExecutionPayload();
+    ep["withdrawalsRoot"] = "0x9999999999999999999999999999999999999999999999999999999999999999";
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+
+    // V1-V3: the field is ignored (matches op-geth NewPayloadV3, which performs no
+    // withdrawalsRoot validation; the Isthmus spec leaves pre-V4 handling unspecified).
+    auto request = parseNewPayloadRequest(params, *factory, engine::ApiVersion::V3);
+    BOOST_CHECK(!request.executionPayload.withdrawalsRoot.has_value());
+
+    // Even with the struct field set, V1-V3 serialization never emits it.
+    request.executionPayload.withdrawalsRoot =
+        parseH256("0x9999999999999999999999999999999999999999999999999999999999999999");
+    auto serialized = serializeExecutionPayload(request.executionPayload, engine::ApiVersion::V3);
+    BOOST_CHECK(!serialized.isMember("withdrawalsRoot"));
 }
 
 BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootAbsentByDefault)

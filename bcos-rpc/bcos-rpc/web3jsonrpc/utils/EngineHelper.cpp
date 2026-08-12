@@ -100,7 +100,12 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(Json::Value co
     {
         payload.excessBlobGas = fromBigQuantity(ep["excessBlobGas"].asString());
     }
-    if (ep.isMember("withdrawalsRoot") && !ep["withdrawalsRoot"].isNull())
+    // withdrawalsRoot is an ExecutionPayloadV4+ field (Isthmus). For V1-V3 requests it
+    // is ignored rather than rejected: the Isthmus spec leaves pre-V4 handling
+    // unspecified and op-geth's NewPayloadV3 (eth/catalyst/api.go) performs no
+    // withdrawalsRoot validation, so rejecting here would diverge from op-geth.
+    if (version >= engine::ApiVersion::V4 && ep.isMember("withdrawalsRoot") &&
+        !ep["withdrawalsRoot"].isNull())
     {
         payload.withdrawalsRoot = parseH256(ep["withdrawalsRoot"].asString());
     }
@@ -362,7 +367,8 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     {
         ep["excessBlobGas"] = toQuantity(*payload.excessBlobGas);
     }
-    if (payload.withdrawalsRoot.has_value())
+    // V4+ only (Isthmus): never emitted in V1-V3 payload shapes.
+    if (version >= engine::ApiVersion::V4 && payload.withdrawalsRoot.has_value())
     {
         ep["withdrawalsRoot"] = payload.withdrawalsRoot->hexPrefixed();
     }
