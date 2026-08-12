@@ -230,6 +230,49 @@ public:
         co_return out;
     }
 
+    /// 覆写骨架 fastPathHit（I-2 硬契约守卫）。骨架 base 只按块号命中（SchedulerSkeleton.h）；
+    /// OP 链上块号不能唯一标识块——若上一块 execute 成功但 commit 失败（opstackRegisterBlock /
+    /// mergeBackStorage 抛），result 滞留 m_results、view 滞留层栈，而 SYS_HASH_2_NUMBER /
+    /// SYS_NUMBER_2_HASH 均未写（引擎 step 3b/3c 都拦不住该同高度重送）。此时 op-node 若送同
+    /// 高度另一块，base 会命中旧块 executedHeader、跳过新块执行 + verify，commit 写旧块状态却
+    /// 报新载荷 VALID —— 链上状态与 op-node 分叉。本覆写在命中时追加比对：缓存块（execute hook
+    /// 存的 OpExecuteExtra::announcedBlockHash）必须等于入块 announced header 的 opHeaderHash，
+    /// 不符返回无命中（强制重执行）。范围匹配逻辑与 base 逐字一致，在单锁内完成（消除
+    /// base-hit 与校验间的 TOCTOU）。返回无命中后骨架 fallthrough 到连续性复查，拒绝该高度的
+    /// 重复块（-32603，诚实拒绝而非假 VALID）。
+    std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
+        protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
+    {
+        std::unique_lock resultsLock(this->m_resultsMutex);
+        if (this->m_results.empty())
+        {
+            return std::nullopt;
+        }
+        auto frontNumber = this->m_results.front()->m_executedBlockHeader->number();
+        auto backNumber = this->m_results.back()->m_executedBlockHeader->number();
+        if (number <= frontNumber && number >= backNumber)
+        {
+            auto& result = this->m_results.at(frontNumber - number);
+            auto extra = std::static_pointer_cast<OpExecuteExtra>(result->modeExtra);
+            if (!extra ||
+                extra->announcedBlockHash !=
+                    announcedHeader.opHeaderHash(
+                        bcos::protocol::BlockHeader::OpHeaderConst{.ommersHash = c_emptyOmmersHash,
+                            .difficulty = bcos::u256(0),
+                            .nonce = c_posNonce}))
+            {
+                // Different block (or a result lacking the OP extra) at this height: the cached
+                // executedHeader must not stand in for the new block.
+                BASELINE_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height "
+                                             << number << "; ignoring cache and re-executing";
+                return std::nullopt;
+            }
+            BASELINE_SCHEDULER_LOG(INFO) << "Block has been executed, return result directly";
+            return std::pair{result->m_executedBlockHeader, result->m_sysBlock};
+        }
+        return std::nullopt;
+    }
+
     /// ③ finish：OP 承诺写 executedHeader（setStateRoot/TxsRoot/ReceiptsRoot/GasUsed/LogsBloom/
     /// WithdrawalsRoot/RequestsHash/BlobGasUsed；跳过 MPT；不调 BlockHeader::hash()）。
     /// （v3 A8：新建机制——当前 OP 无"计算值回写头"代码，头由 payload announced 重建 + 对比验证。）

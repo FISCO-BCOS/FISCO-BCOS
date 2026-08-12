@@ -202,7 +202,7 @@ struct FakeDerived
     // ============ shared-mechanism stubs (Task 3 migrates real bodies into skeleton) ============
 
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
-        protocol::BlockNumber number)
+        protocol::BlockNumber number, protocol::BlockHeader const& /*header*/)
     {
         // Mirror of BaselineScheduler.h:397-412 (front = newest, back = oldest).
         if (!m_results.empty())

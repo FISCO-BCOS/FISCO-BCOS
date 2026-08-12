@@ -1179,13 +1179,18 @@ private:
             auto tarsTx = detail::opEnvelopeToTars(env, txHash);
             if (!tarsTx)
             {
-                // A payload that reached this point passed step-2 static validation and (in the
-                // delegate path) execution, so every envelope is canonical and enumerated --
-                // opEnvelopeToTars failing here is a local conversion fault, not a verdict on
-                // the block.
-                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                          "OP block assembly: envelope failed opEnvelopeToTars "
-                                          "conversion"});
+                // A conversion failure means the envelope is malformed or un-enumerated
+                // (Web3Transaction RLP decode returned an error) -- a consensus-level rejection
+                // of the block, classified INVALID by the execution layer's decodeOneRawTx
+                // (OpTxDecode.h), never -32603. Step 2 (validateOpNewPayloadRequest) does NOT
+                // decode envelopes, so reaching assembly does not imply every envelope is
+                // canonical and enumerated. Carry the raw envelope in a minimal tars tx (only the
+                // hash and wire bytes populated) so the delegate's execute hook re-derives it and
+                // decodeOneRawTx issues the verdict -- the same envelope the old inline path
+                // handed to executeOpBlock (which threw OpConsensusError -> INVALID).
+                bcostars::Transaction fallback;
+                fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
+                tarsTx = std::move(fallback);
             }
             // SEV-8: takeToTarsTransaction stores the signing preimage; overwrite with the full
             // envelope so the delegate's execute hook decodes the exact wire bytes.

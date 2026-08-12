@@ -169,8 +169,11 @@ protected:
     // ================================================================
 
     // 无锁 fast-path（A7）：m_results 缓存命中直接回，不取 m_executeMutex。front=最新。
+    // v2 增 BlockHeader const&（I-2）：本基类忽略该参、行为不变（BaselineScheduler 不受影响）；
+    // OpScheduler 覆写它在命中时比对缓存块 announcedBlockHash 与入块 opHeaderHash，防同高度
+    // 不同块（failed-commit 滞留）误命中旧块。
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
-        protocol::BlockNumber number)
+        protocol::BlockNumber number, protocol::BlockHeader const& /*header*/)
     {
         std::unique_lock resultsLock(m_resultsMutex);
         if (!m_results.empty())
@@ -463,7 +466,7 @@ protected:
             auto number = blockHeader->number();
 
             // ① 无锁 fast-path（A7）：缓存命中直接回，不取 m_executeMutex。
-            if (auto cached = derived().fastPathHit(number))
+            if (auto cached = derived().fastPathHit(number, *blockHeader))
             {
                 co_return {nullptr, cached->first, cached->second};
             }
