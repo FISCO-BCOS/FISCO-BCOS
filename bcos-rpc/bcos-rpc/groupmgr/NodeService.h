@@ -132,8 +132,8 @@ public:
     }
 
     /// blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
-    /// point to (wired from [web3_rpc] safe_block_depth / finalized_block_depth by the AIR
-    /// initializer; defaults match Ethereum's common 1 / 2).
+    /// point to (wired from [web3_rpc] safe_block_depth / finalized_block_depth). Default 0
+    /// — PBFT commits are final, so safe/finalized equal "latest" unless configured.
     void setSafeBlockDepth(protocol::BlockNumber _depth) noexcept { m_safeBlockDepth = _depth; }
     protocol::BlockNumber safeBlockDepth() const noexcept { return m_safeBlockDepth; }
     void setFinalizedBlockDepth(protocol::BlockNumber _depth) noexcept
@@ -168,9 +168,10 @@ private:
     /// see setStateStorageProvider() for the lifetime contract.
     StateStorageProvider m_stateStorageProvider;
 
-    /// blockTag semantics: "safe"/"finalized" point latest - depth blocks behind.
-    protocol::BlockNumber m_safeBlockDepth = 1;
-    protocol::BlockNumber m_finalizedBlockDepth = 2;
+    /// blockTag semantics: "safe"/"finalized" point latest - depth blocks behind. Default 0
+    /// = "latest" (PBFT: a committed block is final); operators opt into a lag via config.
+    protocol::BlockNumber m_safeBlockDepth = 0;
+    protocol::BlockNumber m_finalizedBlockDepth = 0;
 
     /// Raw pointer to the single-node-consensus mempool (see setMemPool for lifetime).
     bcos::txpool::MemPoolImpl* m_memPool = nullptr;

@@ -159,16 +159,27 @@ task::Task<void> EthEndpoint::blockNumber(const Json::Value&, Json::Value& respo
 
 /// Historical state-read error code (eth_getStorageAt / getBalance / getTransactionCount /
 /// getCode): a historical block whose MPT state root is not available on this node (MPT never
-/// enabled, or the block predates MPT activation).
+/// enabled, or the block predates MPT activation), or — scenario A — a dormant account absent
+/// from the incomplete trie.
 constexpr int32_t EthHistoricalStateUnavailable = -32004;
 
-/// Resolve a historical block's committed MPT state root, applying the same checks as
-/// getProof (generateProof's BlockNotCommitted): the block must exist, the node must have a
-/// local MPT node reader, and the state root must be present in MPT node storage. Throws a
-/// JsonRpcException on any failure — a historical query is never silently served from the
-/// latest state. The empty root has no node row, so it is treated as "root not committed"
+/// Historical MPT read context: the block's committed state root plus whether the chain's
+/// storage tries are complete. getProof reads the same flag (feature_l2_ethereum_compat) to
+/// distinguish "exclusion provably means zero" (scenario B, complete tries) from "cold slot
+/// absent from an incomplete trie" (scenario A, mid-chain MPT activation).
+struct HistoricalMptContext
+{
+    bcos::h256 stateRoot;
+    bool fullTrie = false;
+};
+
+/// Resolve a historical block's committed MPT state root and scenario flag, applying the same
+/// checks as getProof (generateProof's BlockNotCommitted): the block must exist, the node must
+/// have a local MPT node reader, and the state root must be present in MPT node storage.
+/// Throws a JsonRpcException on any failure — a historical query is never silently served from
+/// the latest state. The empty root has no node row, so it is treated as "root not committed"
 /// exactly like getProof.
-bcos::task::Task<bcos::h256> resolveHistoricalMptRoot(
+bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
     std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
 {
@@ -187,7 +198,10 @@ bcos::task::Task<bcos::h256> resolveHistoricalMptRoot(
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
     }
-    co_return stateRoot;
+    // The scenario flag decides how absence at this root is read (getProof's fullTrie).
+    auto const features = co_await ledger::getFeatures(ledger);
+    co_return HistoricalMptContext{
+        stateRoot, features.get(ledger::Features::Flag::feature_l2_ethereum_compat)};
 }
 
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
@@ -228,16 +242,23 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     }
     else
     {
-        // Historical state: the account's balance from the block's committed MPT root. An
-        // absent account reads as zero — Ethereum semantics at a committed root.
+        // Historical state: the account's balance from the block's committed MPT root.
+        // Absence semantics are scenario-driven, same rule as getProof: scenario B (complete
+        // tries) reads a missing account as zero; scenario A cannot distinguish a dormant
+        // account from a non-existent one, so it errors explicitly.
         auto const mptReader = m_nodeService->mptNodeReader();
-        auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
-        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
+        auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
+        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
         auto const account = co_await view.readAccount(
             bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
         if (account)
         {
             balance = account->balance;
+        }
+        else if (!ctx.fullTrie) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
         }
     }
     Json::Value result = toQuantity(std::move(balance));
@@ -270,8 +291,9 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     auto position = toView(request[1u]);
-    std::string positionStr =
-        std::string(position.starts_with("0x") ? position.substr(2) : position);
+    std::string positionStr = std::string(
+        (position.starts_with("0x") || position.starts_with("0X")) ? position.substr(2) :
+                                                                    position);
     if (position.size() % 2 != 0)
     {
         positionStr.insert(0, "0");
@@ -361,17 +383,31 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     // Historical state: served from the MPT at the block's committed state root (same checks
     // as getProof / getBalance / getTransactionCount / getCode).
     auto const mptReader = m_nodeService->mptNodeReader();
-    auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
+    auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
 
     // Query the slot through the MPT at that root: account leaf -> storageRoot -> slot leaf
-    // (slotKeyHash(slot)). Absent account, empty storage trie, or absent slot all read zero —
-    // Ethereum semantics at a committed root.
+    // (slotKeyHash(slot)). Absence semantics are scenario-driven, exactly like getProof:
+    //  - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
+    //    trie / absent slot all read zero — Ethereum semantics at a committed root;
+    //  - scenario A (mid-chain activation): a dormant account absent from the trie is
+    //    indistinguishable from a non-existent one → explicit error; a dormant slot absent
+    //    from the (incomplete) storage trie → fall back to the flat KV, whose value is
+    //    authoritative (it never changed after activation).
+    std::optional<std::string> flatFallback;  // scenario-A dormant-slot fallback rendering
     bcos::u256 value = 0;
     {
-        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
-        if (auto const account = co_await view.readAccount(
-                bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-            account && account->storageRoot != bcos::ledger::mpt::emptyRootHash())
+        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
+        auto const account = co_await view.readAccount(
+            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+        if (!account)
+        {
+            if (!ctx.fullTrie) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
+            }
+        }
+        else if (account->storageRoot != bcos::ledger::mpt::emptyRootHash())
         {
             bcos::ledger::mpt::Trie trie{*mptReader, account->storageRoot};
             auto const slot = co_await trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes));
@@ -379,10 +415,27 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
             {
                 value = bcos::ledger::mpt::decodeStorageValue(bcos::ref(*slot));
             }
+            else if (!ctx.fullTrie) [[unlikely]]
+            {
+                if (auto const flat = co_await ledger::getStorageAt(
+                        *ledger, addressStr, positionBytes.toRawString(), blockNumber);
+                    flat.has_value())
+                {
+                    flatFallback = storageValueToData(flat.value().get());
+                }
+            }
         }
     }
     // Render like the flat path: a fixed-width 32-byte hex value.
-    Json::Value result = toHex(bcos::h256{value}.ref(), "0x");
+    Json::Value result;
+    if (flatFallback)
+    {
+        result = *flatFallback;
+    }
+    else
+    {
+        result = toHex(bcos::h256{value}.ref(), "0x");
+    }
     buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Json::Value& response)
@@ -432,16 +485,22 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     }
     else
     {
-        // Historical state: the account's nonce from the block's committed MPT root. An
-        // absent account reads as zero — Ethereum semantics at a committed root.
+        // Historical state: the account's nonce from the block's committed MPT root.
+        // Scenario-driven absence semantics, same rule as getBalance / getProof: scenario B
+        // reads a missing account as zero; scenario A errors for a dormant account.
         auto const mptReader = m_nodeService->mptNodeReader();
-        auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
-        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
+        auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
+        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
         auto const account = co_await view.readAccount(
             bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
         if (account)
         {
             nonce = account->nonce;
+        }
+        else if (!ctx.fullTrie) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
         }
     }
     Json::Value result = toQuantity(nonce);
@@ -569,24 +628,32 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
     {
         // Historical state: the account's code from the block's committed MPT root, resolved
         // through its codeHash into the content-addressed code store (s_code_binary rows are
-        // valid for any block). An account with no leaf, or with the empty code hash, has no
-        // code.
+        // valid for any block). Scenario-driven absence semantics: scenario B reads a missing
+        // account as "no code"; scenario A errors for a dormant account.
         auto const ledger = m_nodeService->ledger();
         auto const mptReader = m_nodeService->mptNodeReader();
-        auto const stateRoot = co_await resolveHistoricalMptRoot(*ledger, blockNumber, mptReader);
-        bcos::ledger::mpt::MPTReadView view{*mptReader, stateRoot};
+        auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
+        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
         auto const account = co_await view.readAccount(
             bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-        if (account && account->codeHash != bcos::ledger::mpt::emptyCodeHash())
+        if (account)
         {
-            auto const stateStorage = ledger->getStateStorage();
-            std::string const codeHashStr = account->codeHash.toRawString();
-            if (auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
-                    executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
-                codeEntry.has_value())
+            if (account->codeHash != bcos::ledger::mpt::emptyCodeHash())
             {
-                code.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
+                auto const stateStorage = ledger->getStateStorage();
+                std::string const codeHashStr = account->codeHash.toRawString();
+                if (auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
+                        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
+                    codeEntry.has_value())
+                {
+                    code.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
+                }
             }
+        }
+        else if (!ctx.fullTrie) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
         }
     }
     Json::Value result = toHexStringWithPrefix(code);

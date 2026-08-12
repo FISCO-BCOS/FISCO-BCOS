@@ -101,5 +101,12 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
         m_engineService);
 
     nodeService->setLedgerPrx(ledgerClient.second);
+
+    // blockTag semantics ([web3_rpc] safe_block_depth / finalized_block_depth): without this,
+    // a MAX/pro deployment's NodeService keeps the default 0 and the operator's configured
+    // depths would be parsed and logged by NodeConfig but silently ignored.
+    nodeService->setSafeBlockDepth(_nodeConfig->web3SafeBlockDepth());
+    nodeService->setFinalizedBlockDepth(_nodeConfig->web3FinalizedBlockDepth());
+
     return nodeService;
 }

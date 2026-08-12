@@ -79,7 +79,7 @@ public:
     }
     void setBlockHash(const std::string& _hash) { m_blockHash = _hash; }
     void fromJson(const Json::Value& jParams, protocol::BlockNumber latest = 0,
-        protocol::BlockNumber safeDepth = 1, protocol::BlockNumber finalizedDepth = 2);
+        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0);
     bool checkBlockRange();
 
     virtual int32_t InvalidParamsCode() = 0;

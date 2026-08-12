@@ -185,7 +185,8 @@ public:
     bool web3SyncTransaction() const;
 
     // blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
-    // point to (Ethereum-consistent default: 1 / 2).
+    // point to. Default 0 — PBFT has no finalization window (a committed block is already
+    // final), so safe/finalized equal "latest" unless an operator opts into a lag.
     uint32_t web3SafeBlockDepth() const;
     uint32_t web3FinalizedBlockDepth() const;
 
@@ -487,9 +488,10 @@ private:
     int32_t m_web3CorsMaxAge = 86400;
     bool m_web3CorsAllowCredentials = true;
     bool m_web3SyncTransaction = false;
-    // blockTag semantics: "safe"/"finalized" point latest - depth blocks behind (defaults 1/2).
-    uint32_t m_web3SafeBlockDepth = 1;
-    uint32_t m_web3FinalizedBlockDepth = 2;
+    // blockTag semantics: "safe"/"finalized" point latest - depth blocks behind. Default 0
+    // (= "latest"): PBFT commits are final, so no lag unless the operator configures one.
+    uint32_t m_web3SafeBlockDepth = 0;
+    uint32_t m_web3FinalizedBlockDepth = 0;
 
     // thread pool configuration
     size_t m_ioThreadCount{};

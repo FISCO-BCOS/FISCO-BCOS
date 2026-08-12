@@ -21,6 +21,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -280,14 +281,85 @@ BOOST_AUTO_TEST_CASE(HistoricalSlotFromMPTRoot)
     BOOST_TEST(resp2["result"].asString() == paddedHex(0x1337));
 }
 
-// Historical state: an absent slot at a committed root reads as zero (Ethereum semantics).
-BOOST_AUTO_TEST_CASE(HistoricalAbsentSlotReadsZero)
+// Historical state, scenario B (feature_l2_ethereum_compat): the storage tries are complete,
+// so a slot absent from the trie provably reads zero.
+BOOST_AUTO_TEST_CASE(HistoricalAbsentSlotScenarioBReadsZero)
 {
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
     buildTrie();
     wireReader();
     m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
 
     auto resp = getStorageAt(address.hexPrefixed(), "0x5", "0x1");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == paddedHex(0));
+}
+
+// Historical state, scenario A (default — MPT activated mid-chain): a slot absent from the
+// incomplete storage trie is dormant, and its flat KV value is authoritative (it never
+// changed after activation). The read falls back to the flat state, exactly like getProof.
+BOOST_AUTO_TEST_CASE(HistoricalAbsentSlotScenarioAFallsBackToFlat)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+
+    // slot 5 is absent from the trie; give it a non-zero flat value (dormant slot).
+    h256 slotC{5U};
+    bcos::bytes value32(32, 0);
+    value32.back() = 0x2a;
+    storage::Entry entry;
+    entry.set(bcos::bytes(value32));
+    m_ledger->setStorageAt(address.hex(),
+        std::string{reinterpret_cast<char const*>(slotC.ref().data()), h256::SIZE},
+        std::move(entry));
+
+    auto resp = getStorageAt(address.hexPrefixed(), "0x5", "0x1");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == paddedHex(42));
+}
+
+// Historical state, scenario A: an account absent from the incomplete trie may be dormant
+// (real non-zero state) rather than non-existent — indistinguishable at this root, so every
+// state-read endpoint errors explicitly, exactly like getProof's AccountNotInMPT.
+BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioAErrors)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+
+    std::string const dormant = "0x00000000000000000000000000000000000000cc";
+    for (auto const& [method, resp] : {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
+             std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
+             std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
+             std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
+    {
+        BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
+        BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
+        BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("Account not in trie") !=
+                                std::string::npos,
+            method);
+    }
+}
+
+// Historical state, scenario B: a genuinely absent account provably has no state → zero.
+BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioBReadsZero)
+{
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+
+    std::string const absent = "0x00000000000000000000000000000000000000cc";
+    auto resp = getStorageAt(absent, "0x1", "0x1");
     BOOST_TEST(!resp.isMember("error"));
     BOOST_REQUIRE(resp.isMember("result"));
     BOOST_TEST(resp["result"].asString() == paddedHex(0));
@@ -363,10 +435,31 @@ BOOST_AUTO_TEST_CASE(OverwidePositionReturnsInvalidParams)
                 std::string::npos);
 }
 
-// blockTag semantics: "safe" resolves to latest - safeBlockDepth (default 1), a committed
-// historical block served from the MPT, never the head. latest = 19 → safe = block 18.
+// blockTag semantics: the default depths are 0 — PBFT commits are final, so safe/finalized
+// equal "latest" (flat path), byte-identical to pre-upgrade behaviour.
+BOOST_AUTO_TEST_CASE(DefaultSafeFinalizedStayOnLatest)
+{
+    wireStateProvider();
+    bcos::bytes value32(32, 0);
+    value32.back() = 0x2a;
+    setFlatSlot(slotA, value32);
+
+    for (auto const& tag : {std::string("safe"), std::string("finalized")})
+    {
+        auto resp = getStorageAt(address.hexPrefixed(), "0x1", tag);
+        BOOST_TEST_MESSAGE("tag " + tag);
+        BOOST_TEST(!resp.isMember("error"));
+        BOOST_REQUIRE(resp.isMember("result"));
+        BOOST_TEST(resp["result"].asString() == paddedHex(42));
+    }
+}
+
+// blockTag semantics: with a configured safeBlockDepth, "safe" resolves to latest - depth (a
+// committed historical block served from the MPT, never the head). latest = 19, depth 1 →
+// safe = block 18.
 BOOST_AUTO_TEST_CASE(SafeTagResolvesToHistoricalMpt)
 {
+    nodeService->setSafeBlockDepth(1);
     buildTrie();
     wireReader();
     m_ledger->ledgerData()[18]->blockHeader()->setStateRoot(stateRoot);
@@ -377,10 +470,12 @@ BOOST_AUTO_TEST_CASE(SafeTagResolvesToHistoricalMpt)
     BOOST_TEST(resp["result"].asString() == paddedHex(42));
 }
 
-// blockTag semantics: "finalized" resolves to latest - finalizedBlockDepth (default 2), a
-// committed historical block served from the MPT. latest = 19 → finalized = block 17.
+// blockTag semantics: with a configured finalizedBlockDepth, "finalized" resolves to
+// latest - depth (a committed historical block served from the MPT). latest = 19, depth 2 →
+// finalized = block 17.
 BOOST_AUTO_TEST_CASE(FinalizedTagResolvesToHistoricalMpt)
 {
+    nodeService->setFinalizedBlockDepth(2);
     buildTrie();
     wireReader();
     m_ledger->ledgerData()[17]->blockHeader()->setStateRoot(stateRoot);

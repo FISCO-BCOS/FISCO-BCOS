@@ -45,9 +45,9 @@ BOOST_AUTO_TEST_CASE(web3RpcConfigDefaultsAndPopulated)
     LoaderProbe a;
     a.loadWeb3RpcConfig({});
     BOOST_CHECK(!a.enableWeb3Rpc());
-    // blockTag depth defaults: Ethereum-consistent safe=1 / finalized=2.
-    BOOST_CHECK_EQUAL(a.web3SafeBlockDepth(), 1U);
-    BOOST_CHECK_EQUAL(a.web3FinalizedBlockDepth(), 2U);
+    // blockTag depth defaults: 0 (= "latest") — PBFT has no finalization window.
+    BOOST_CHECK_EQUAL(a.web3SafeBlockDepth(), 0U);
+    BOOST_CHECK_EQUAL(a.web3FinalizedBlockDepth(), 0U);
 
     LoaderProbe b;
     auto pt = fromIni(

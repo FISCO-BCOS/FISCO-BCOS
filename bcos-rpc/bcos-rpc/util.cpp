@@ -41,16 +41,18 @@ std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     {
         return std::make_tuple(0, false);
     }
-    // safe / finalized are committed historical blocks, latest - depth (clamped at 0).
+    // safe / finalized: latest - depth (clamped at 0). Default depth 0 makes them "latest"
+    // (isLatest = true) — byte-identical to pre-upgrade behaviour; a configured depth turns
+    // them into committed historical blocks.
     if (blockTag == SafeBlock)
     {
-        return std::make_tuple(
-            (std::max)(latest - safeDepth, protocol::BlockNumber{0}), false);
+        auto const number = (std::max)(latest - safeDepth, protocol::BlockNumber{0});
+        return std::make_tuple(number, std::cmp_equal(latest, number));
     }
     if (blockTag == FinalizedBlock)
     {
-        return std::make_tuple(
-            (std::max)(latest - finalizedDepth, protocol::BlockNumber{0}), false);
+        auto const number = (std::max)(latest - finalizedDepth, protocol::BlockNumber{0});
+        return std::make_tuple(number, std::cmp_equal(latest, number));
     }
     if (blockTag == LatestBlock || blockTag == PendingBlock)
     {
