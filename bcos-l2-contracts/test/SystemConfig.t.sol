@@ -37,10 +37,11 @@ contract SystemConfigTest is Test {
         cfg.setValueByKey(WRITABLE_KEY, 1, 0);
     }
 
-    /// D4 authority boundary: genesis-frozen keys revert even for the owner —
-    /// chain_id (chain identity), gas_limit (authority = op-node payload
-    /// attributes), compatibility_version / feature_flags (state-transition
-    /// semantics; a runtime write would fork from the OP oracle).
+    /// D4 authority boundary: frozen keys revert even for the owner —
+    /// chain_id (chain identity) and gas_limit (authority = op-node payload
+    /// attributes) permanently; compatibility_version / feature_flags
+    /// (state-transition semantics; a runtime write would fork from the OP
+    /// oracle) until a governed, oracle-synced change path exists.
     function test_SetValueByKey_FrozenKeysRevert() public {
         string[4] memory frozen = ["chain_id", "gas_limit", "compatibility_version", "feature_flags"];
         vm.startPrank(owner);

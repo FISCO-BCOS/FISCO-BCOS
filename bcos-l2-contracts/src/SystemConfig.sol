@@ -26,8 +26,11 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 ///         attributes → execution layer, never this contract;
 ///         `compatibility_version` / `feature_flags` change state-transition
 ///         semantics, so a runtime write would fork FISCO from the OP oracle.
-///         All of those are genesis-frozen. Widening the whitelist requires a
-///         contract upgrade, i.e. explicit governance review.
+///         `chain_id` and `gas_limit` are frozen permanently;
+///         `compatibility_version` and `feature_flags` are frozen until a
+///         governed change path that keeps the OP oracle in sync exists
+///         (tracked in the integration plan). Widening the whitelist requires
+///         a contract upgrade, i.e. explicit governance review.
 ///
 ///         GENESIS: as a predeploy the constructor/initialize do not run on-chain;
 ///         genesis tooling writes the owner slot (OZ) and each key's packed Entry

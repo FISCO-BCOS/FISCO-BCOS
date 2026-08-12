@@ -17,10 +17,11 @@ interface ISystemConfig {
 
     /// @notice Owner-only: set a config value and the block height it takes
     ///         effect at. Only whitelisted keys are runtime-writable; keys
-    ///         that carry chain identity (chain_id), OP consensus authority
-    ///         (gas_limit) or state-transition semantics
-    ///         (compatibility_version, feature_flags) are genesis-frozen and
-    ///         revert.
+    ///         that carry chain identity (chain_id) or OP consensus authority
+    ///         (gas_limit) are frozen permanently, and keys that carry
+    ///         state-transition semantics (compatibility_version,
+    ///         feature_flags) are frozen until a governed, oracle-synced
+    ///         change path exists — all of them revert.
     /// @param key         config name (e.g. "block_tx_count_limit")
     /// @param value       config value, ≤ uint192 (all current configs fit)
     /// @param enableNumber block height at which the value becomes active
