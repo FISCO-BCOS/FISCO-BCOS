@@ -1202,10 +1202,30 @@ private:
 
         // ---- Step 6: block registration, then publish the view ----
         co_await registerOpBlock(view, payload, *ethHeader, *executeResult);
+        // #19: head advance (SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER) lands in the SAME view
+        // as the block tables, so the single mergeView publishes both atomically. Value format is
+        // the decimal number string — the encoding getCurrentBlockNumber
+        // (LedgerMethods.h:485-507) lexical-casts back.
+        //
+        // Monotonicity (round-3 C7): on a real ledger step 3c ALREADY guarantees the parent is the
+        // tip — it refuses any payload whose own height is occupied (EngineServiceImpl.h:1078-1086,
+        // a reorg-sibling would trip it), and parentKnown + number continuity make the chain
+        // sequential, so a head regression cannot reach here. The guard below is cheap
+        // defense-in-depth + self-documentation: write only when the payload strictly advances the
+        // current head. getCurrentBlockNumber returns -1 when SYS_CURRENT_STATE is empty
+        // (LedgerMethods.h:506), so the first block (number >= 0) always passes.
+        const auto currentHead =
+            co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+        if (payload.blockNumber > currentHead)
+        {
+            storage::Entry headEntry;
+            headEntry.set(boost::lexical_cast<std::string>(payload.blockNumber));
+            co_await storage2::writeOne(view,
+                executor_v1::StateKey{ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER},
+                std::move(headEntry));
+        }
         // `mergeView` atomically persists (pushView + mergeBackStorage combined): a single VALID
-        // block lands in the RocksDB backend. `SYS_CURRENT_STATE` head advance is still missing:
-        // after a restart the block tables are readable but the head pointer is not set --
-        // deferred to the orchestration layer together with reorg-window orchestration.
+        // block lands in the RocksDB backend — including the head advance above.
         co_await m_globalStateStorage.get().mergeView(std::move(view));
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
