@@ -5,7 +5,6 @@ find_package(intx REQUIRED)
 find_package(TBB CONFIG REQUIRED)
 
 add_library(opstack-executor
-    OpstackExecutor.cpp
     OpBlockExecute.cpp
 )
 target_include_directories(opstack-executor PUBLIC
