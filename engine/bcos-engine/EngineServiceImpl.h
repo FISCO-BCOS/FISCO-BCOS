@@ -22,6 +22,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -39,12 +40,14 @@
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <concepts>
 #include <cstdint>
 #include <deque>
 #include <functional>
 #include <mutex>
 #include <optional>
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/transform.hpp>
@@ -80,6 +83,19 @@ std::optional<std::string> validatePayloadAttributes(
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 }  // namespace detail
+
+/// The OP deposit execution entry an executor may provide (see buildPayload Step 2c-0).
+/// Named so the gate below and the hard conformance check on the REAL executor share one
+/// definition: a signature drift on EthereumExecutor::executeDeposit must fail the
+/// static_assert next to its scheduler wiring (TestEthereumExecutorScheduler.cpp), not
+/// silently turn this `if constexpr` off and stop executing deposits.
+template <class Executor, class Storage>
+concept ExecutesDeposits = requires(Executor& executor, Storage& storage,
+    protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig) {
+    {
+        executor.executeDeposit(storage, blockHeader, bcos::bytesConstRef{}, ledgerConfig)
+    } -> std::same_as<task::Task<protocol::TransactionReceipt::Ptr>>;
+};
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
     requires executor_v1::TransactionExecutor<ExecutorType,
@@ -506,9 +522,12 @@ private:
                 auto const& bloom = it->second.executionPayload.logsBloom;
                 block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
                 // Raw-only entries (forced transactions) carry no decoded form and are
-                // not modeled as ledger transactions until execution wiring lands; the
-                // persisted transaction list therefore matches the receipts list, which
-                // also only covers the executed (decoded) subset.
+                // not modeled as ledger transactions; the persisted transaction list
+                // therefore matches the receipts list, which also only covers the
+                // decoded subset — prewriteBlockToBuffer pairs them index-by-index, so
+                // the two MUST stay aligned. Deposits DO execute (Step 2c-0) and enter
+                // the block totals, but their receipts are not persisted until deposits
+                // are modeled as ledger transactions.
                 for (auto const& tx : it->second.executionPayload.transactions)
                 {
                     if (tx.decoded)
@@ -593,11 +612,11 @@ private:
         // CL gave them — this is the only OP-sanctioned path for deposits. Their raw
         // EIP-2718 bytes are carried byte-for-byte (hex validity and dispatch
         // admissibility were already enforced by validatePayloadAttributes, which runs
-        // before buildPayload). They carry no decoded executable form yet: 0x7E deposit
-        // execution (runDeposit) and raw->executable decoding for typed/legacy forced
-        // transactions belong to the execution-lane wiring, so raw-only entries are
-        // placed in the payload, participate in the transactions root via their
-        // canonical keccak256(raw) hash, but are not executed and do not advance state.
+        // before buildPayload). They carry no decoded executable form: 0x7E deposits
+        // execute through the executor's deposit entry (Step 2c-0 below, executor
+        // permitting); raw->executable decoding for typed/legacy forced transactions is
+        // still unwired, so those raw-only entries participate in the transactions root
+        // via their canonical keccak256(raw) hash but are not executed.
         if (payloadAttributes.transactions.has_value())
         {
             for (auto const& forcedHex : *payloadAttributes.transactions)
@@ -709,9 +728,29 @@ private:
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
 
+        // Step 2c-0: Execute 0x7E deposits (raw-only forced entries) FIRST, before the
+        // scheduler runs the decoded transactions — deposits lead the OP payload and the
+        // scheduler's transactions must see their state. Executed directly through the
+        // executor's deposit entry (deposits never exist as protocol::Transaction), gated
+        // on the executor providing one so stub executors keep their behavior. An invalid
+        // deposit throws out of buildPayload — it is a block-level error.
+        std::vector<protocol::TransactionReceipt::Ptr> depositReceipts;
+        if constexpr (ExecutesDeposits<ExecutorType, ViewType>)
+        {
+            for (auto const& engineTx : executionPayload.transactions)
+            {
+                if (engineTx.decoded == nullptr &&
+                    dispatchRawTransaction(bcos::ref(engineTx.raw)) == RawTransactionKind::Deposit)
+                {
+                    depositReceipts.push_back(co_await m_executor.get().executeDeposit(
+                        view, *blockHeader, bcos::ref(engineTx.raw), ledgerConfig));
+                }
+            }
+        }
+
         // Step 2c: Execute transactions via the scheduler, over the decoded executable
-        // forms. Raw-only entries (forced transactions from the OP attributes list) have
-        // no executable form yet and are skipped — see the forced-transaction comment
+        // forms. Raw-only non-deposit entries (forced typed/legacy transactions) have no
+        // executable form yet and are skipped — see the forced-transaction comment
         // above. Materialized into a vector because scheduler implementations require a
         // sized range (a lazy filter view is not sized).
         auto executableTransactions =
@@ -723,6 +762,19 @@ private:
             ::ranges::to<std::vector>();
         auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
             *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
+        // Deposit receipts lead, matching payload order (forced entries come first) — but
+        // ONLY for the block totals below (receiptsRoot / gasUsed / logsBloom).
+        // BuildPayloadResult.receipts stays the scheduler subset: newPayload persistence
+        // pairs receipts with the persisted (decoded) transaction list index-by-index
+        // (prewriteBlockToBuffer keys SYS_HASH_2_RECEIPT by blockTxs[i]->hash()), and a
+        // deposit has no ledger transaction to pair with until deposits are modeled as
+        // ledger transactions. Merging them into the persisted list would mis-key the
+        // first decoded receipt and overrun blockTxs on a mixed block. Until that later
+        // PR, a deposit's receipt affects the block totals but is not retrievable via
+        // eth_getTransactionReceipt — KNOWN INVARIANT BREAK: the header commits to a
+        // receiptsRoot the stored receipts cannot reproduce until C3 models deposits as
+        // ledger transactions.
+        auto allReceipts = ::ranges::views::concat(depositReceipts, receipts);
 
         // Step 2d: Compute transaction root (Merkle over tx hashes)
         // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
@@ -753,11 +805,11 @@ private:
             }
         }
 
-        // Step 2e: Compute receipt root (Merkle over receipt hashes)
+        // Step 2e: Compute receipt root (Merkle over receipt hashes, deposits included)
         h256 receiptRoot;
         {
             // Validate receipts are non-null before computing hashes
-            if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
+            if (::ranges::any_of(allReceipts, [](auto& r) { return !r; }))
             {
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
             }
@@ -765,10 +817,10 @@ private:
             auto hasher = hashImpl.hasher();
             crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
                 hasher.clone());
-            if (!receipts.empty())
+            if (!::ranges::empty(allReceipts))
             {
                 auto receiptHashes =
-                    receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
+                    allReceipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
                 std::vector<h256> merkleTrie;
                 merkle.generateMerkle(receiptHashes, merkleTrie);
                 if (!merkleTrie.empty())
@@ -778,10 +830,11 @@ private:
             }
         }
 
-        // Step 2f: Compute gas used and block-level logsBloom from receipts.
+        // Step 2f: Compute gas used and block-level logsBloom from receipts
+        // (deposits included).
         u256 totalGasUsed;
         Bloom logsBloom{};
-        for (auto& receipt : receipts)
+        for (auto& receipt : allReceipts)
         {
             if (!receipt)
             {

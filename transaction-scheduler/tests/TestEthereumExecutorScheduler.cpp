@@ -26,6 +26,7 @@
  * ledger::getBlockHash LedgerMethod.
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPEncode.h"
@@ -51,10 +52,9 @@
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
+#include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <cstring>
-#include <evmone/evmone.h>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
 #include <sstream>
@@ -84,6 +84,12 @@ using EEMultiLayerStorage = MultiLayerStorage<EEMutableStorage, void, EECheckpoi
 // driven through the scheduler's createExecuteContext + prepare/execute/finish
 // pipeline.
 static_assert(executor_v1::TransactionExecutor<EthereumExecutor, EEMutableStorage>);
+
+// Hard conformance check for the Engine's deposit lane (buildPayload Step 2c-0): the gate
+// there is `if constexpr (ExecutesDeposits<...>)`, so a signature drift on
+// EthereumExecutor::executeDeposit would otherwise silently stop executing deposits
+// instead of failing the build.
+static_assert(bcos::engine::ExecutesDeposits<EthereumExecutor, EEMutableStorage>);
 
 static const u256 EEFunding = u256(1000000000000000000ULL);  // 1 ETH
 
@@ -201,8 +207,7 @@ public:
         // node wires — not a parallel copy that can drift.
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(
-                backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
     }
@@ -291,12 +296,10 @@ BOOST_AUTO_TEST_CASE(serialExecuteBlock)
         // The storage-backed block-hash lookup resolves committed hashes via LedgerMethod.
         // The transfers above executed in a block of height 1, which is the current
         // height passed to the provider for the 256-ancestor bound.
-        auto h0 = task::tbb::syncWait(
-            ledger::getBlockHash(backendStorage, 0, ledger::fromStorage));
+        auto h0 = task::tbb::syncWait(ledger::getBlockHash(backendStorage, 0, ledger::fromStorage));
         BOOST_CHECK(h0.has_value());
         auto resolved = blockHashLookup(0, 1);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
     }());
 }
 
@@ -684,16 +687,14 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
             task::tbb::syncWait(ledger::getBlockHash(backendStorage, 50, ledger::fromStorage));
         BOOST_CHECK(h50.has_value());
         auto resolved50 = blockHashLookup(50, 300);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
 
         // The oldest reachable ancestor (current - 256) — must resolve.
         auto h44 =
             task::tbb::syncWait(ledger::getBlockHash(backendStorage, 44, ledger::fromStorage));
         BOOST_CHECK(h44.has_value());
         auto resolved44 = blockHashLookup(44, 300);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved44.bytes, h44->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved44.bytes, h44->data(), sizeof(evmc_bytes32)), 0);
 
         // Older than 256 ancestors — unknown (zero hash), despite the hash being stored.
         evmc::bytes32 zero{};
@@ -762,8 +763,8 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup throwingLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             throw std::runtime_error("simulated storage failure");
         };
-        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(throwingLookup), *tx, callParams};
+        eth::EthereumHost<EEMutableStorage> host{
+            EVMC_SHANGHAI, vm, state, block, std::move(throwingLookup), *tx, callParams};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -774,8 +775,8 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup zeroLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             return evmc::bytes32{};
         };
-        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(zeroLookup), *tx, callParams};
+        eth::EthereumHost<EEMutableStorage> host{
+            EVMC_SHANGHAI, vm, state, block, std::move(zeroLookup), *tx, callParams};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -927,8 +928,7 @@ BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
         {
             auto to = ethToAddress(*mkTx(toHexStr));
             BOOST_REQUIRE(to.has_value());
-            BOOST_CHECK_EQUAL(
-                std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+            BOOST_CHECK_EQUAL(std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
         }
 
         // Raw 20 bytes (defensive fallback branch) -> the exact recipient address.
@@ -936,8 +936,7 @@ BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
             bcos::bytes raw(std::begin(recipient.bytes), std::end(recipient.bytes));
             auto to = ethToAddress(*mkTx(std::string(raw.begin(), raw.end())));
             BOOST_REQUIRE(to.has_value());
-            BOOST_CHECK_EQUAL(
-                std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+            BOOST_CHECK_EQUAL(std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
         }
 
         // Short hex "0x1234" -> unset (contract creation), never 0x1234000...0.

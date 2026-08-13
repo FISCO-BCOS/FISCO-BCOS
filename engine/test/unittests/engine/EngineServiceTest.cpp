@@ -946,4 +946,65 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     }
 }
 
+/// A stub executor that additionally provides the OP deposit entry: buildPayload's
+/// Step 2c-0 gate (if constexpr requires executeDeposit) compiles the deposit lane
+/// in, must call it for raw-only 0x7e entries — and only those — and prepends the
+/// returned receipt.
+struct DepositRecordingExecutor : StubExecutor
+{
+    std::vector<bytes> executedDeposits;
+
+    template <class Storage>
+    task::Task<protocol::TransactionReceipt::Ptr> executeDeposit(Storage& /*storage*/,
+        const protocol::BlockHeader& /*blockHeader*/, bcos::bytesConstRef rawDeposit,
+        const ledger::LedgerConfig& /*ledgerConfig*/)
+    {
+        executedDeposits.emplace_back(rawDeposit.begin(), rawDeposit.end());
+        auto inner = std::make_shared<bcostars::TransactionReceipt>();
+        inner->data.gasUsed = "21000";
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
+            [inner]() mutable { return inner.get(); });
+        Keccak256 hasher;
+        receipt->calculateHash(hasher);
+        co_return receipt;
+    }
+};
+
+BOOST_AUTO_TEST_CASE(build_payload_executes_forced_deposits)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    // One forced deposit and one forced non-deposit (typed raw): only the deposit
+    // reaches executeDeposit; the typed raw entry still has no execution wiring.
+    auto attributes = makePayloadAttributesV3();
+    attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
+
+    DepositRecordingExecutor executor;
+    StubScheduler scheduler;
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, DepositRecordingExecutor, StubScheduler>
+        engineService(
+            memPool, globalStateStorageFixture.storage, executor, scheduler, blockFactory);
+
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    // Exactly the deposit's raw bytes were executed.
+    BOOST_REQUIRE_EQUAL(executor.executedDeposits.size(), 1);
+    BOOST_CHECK(executor.executedDeposits[0] == (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
+    // The deposit receipt participates in the block totals (StubScheduler
+    // contributes no receipts, so the gas total is the deposit's alone).
+    BOOST_CHECK_EQUAL(payload->executionPayload.gasUsed, u256(21000));
+    // Both forced entries still ride the payload raw, byte-for-byte.
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 2);
+    BOOST_CHECK(payload->executionPayload.transactions[0].raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
