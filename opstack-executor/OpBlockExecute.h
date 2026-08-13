@@ -20,8 +20,7 @@
 #include <ethereum-executor/BCOS2Evmone.h>
 #include <ethereum-executor/StorageStateView.h>
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048 / toBcosH256
-#include <opstack-executor/OpErrors.h>
-#include <opstack-executor/OpRlpDecode.h>
+#include <opstack-executor/OpCommon.h>  // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
@@ -116,7 +115,7 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
 evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
 
-// ---- seal: header commitment functions (OpBlockSeal struct lives in OpErrors.h) ----
+// ---- seal: header commitment functions (OpBlockSeal struct lives in OpCommon.h) ----
 using evmc::literals::operator""_bytes32;
 
 /// Isthmus+ requestsHash = sha256("").
@@ -141,32 +140,8 @@ inline constexpr auto OP_EMPTY_REQUESTS_HASH =
 
 namespace bcos::evm::engine
 {
-namespace detail
-{
-/// Decode a 0x7E deposit envelope into a DepositTx. DepositTx field order:
-/// [sourceHash, from, to, mint, value, gas, isSystemTransaction, data] — no signature (`from` is
-/// explicit). Envelope 0x7E || rlp([...]); body starts at the list header.
-inline bcos::evm::opstack::DepositTx decodeDepositTx(bcos::bytes rawEntry)
-{
-    // Envelope 0x7E || rlp([...]); body starts at the list header.
-    bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
-    auto listBody = enterList(body);
-    bcos::evm::opstack::DepositTx dep;
-    dep.source_hash = decodeHashField(listBody);
-    dep.from = decodeAddressField(listBody);
-    dep.to = decodeOptionalAddressField(listBody);
-    // mint/value nilability: nil and a present-but-zero big.Int are RLP-indistinguishable (both
-    // encode to the empty string), so decode as a plain scalar defaulting to 0.
-    dep.mint = decodeU256Scalar(listBody);
-    dep.value = decodeU256Scalar(listBody);
-    dep.gas_limit = narrowGasLimit(decodeU64Scalar(listBody), "deposit.gas");
-    dep.is_system_tx = decodeBoolField(listBody);
-    dep.data = decodeBytesField(listBody);
-    expectExhausted(listBody, "deposit envelope fields");
-    expectExhausted(body, "deposit envelope (trailing bytes after the field list)");
-    return dep;
-}
-}  // namespace detail
+// DepositTx is built from the block's tars Transaction objects (OpstackExecutor::
+// depositFromTransaction, OpstackExecutor.h) — no raw-envelope RLP parse.
 
 // Forward-declared; defined at the end of this block.
 template <class RawTxRange>
@@ -175,11 +150,8 @@ template <class RawTxRange>
 // ---- block execution: per-transaction injection loop ----
 
 /// Per-tx injection loop replicating processOpBlock's orchestration through OpstackExecutor.
-/// The block's `transactions` (block-order Transaction objects, already converted from the raw
-/// EIP-2718 envelopes by the caller — opEnvelopeToTars lives in the engine lib; building it here
-/// would create a link cycle) and `deposits` (decoded 0x7E deposit envelopes) are consumed
-/// directly; the raw type byte per rawTxBytes[i][0] dispatches deposit vs normal. poison/hashErr →
-/// OpStorageError, shape/validation → OpConsensusError.
+/// `transactions` and `deposits` are consumed directly; rawTxBytes[i][0] dispatches deposit vs
+/// normal. poison/hashErr → OpStorageError, shape/validation → OpConsensusError.
 template <class Storage>
 OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExecutor& executor,
     Storage& view, bcos::protocol::BlockHeader const& header,
@@ -199,7 +171,7 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     eth::StorageStateView<Storage> stateView(view);
 
-    // (1) Pre-block system call (unchanged).
+    // (1) Pre-block system call.
     auto sysDiff =
         evmone::state::system_call_block_start(stateView, blk, hashes, cfg.rev, executor.vm());
     bcos::task::syncWait(eth::applyStateDiff(
@@ -210,8 +182,8 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
     constexpr uint8_t kRlpListBase = 0xc0;
     if (rawTxBytes.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
-    // 空 envelope 守卫：任何 raw[0]/raw.back()[0] 访问之前（Global Constraints；首元素非空才可取
-    // 类型字节）。
+    // Empty-envelope guard: the first envelope must be non-empty before its type byte is read
+    // (and before raw.back()[0] below).
     if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty() ||
         !op::isL1AttributesTx(deposits[0]))
         throw OpConsensusError("op block: first tx is not the L1 attributes deposit");
@@ -220,7 +192,7 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
         auto const& data = deposits[0].data;
         if (data.size() == op::IsthmusL1AttributesLen)
         {
-            // 空 envelope 守卫：back()[0] 访问之前（末交易为空 → 同拒绝路径）。
+            // Empty-envelope guard before back()[0] access (trailing empty tx -> same reject path).
             if (rawTxBytes.back().empty() || rawTxBytes.back()[0] != kDepositTypeByte)
                 throw OpConsensusError(
                     "op block: unexpected non-deposit transactions in Jovian activation block");
@@ -248,8 +220,7 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
     op::OpFeeParams fee{};
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
-        if (rawTxBytes[i].empty())  // 空 envelope：直接 raw[0] 会越界；旧 decodeOneRawTx 的干净
-                                    // INVALID 保留
+        if (rawTxBytes[i].empty())  // empty envelope: raw[0] would be out of bounds
             throw OpConsensusError("op block: empty envelope");
         if (rawTxBytes[i][0] == kDepositTypeByte)
         {

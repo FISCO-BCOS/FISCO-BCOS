@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OpScheduler — the OP-specific scheduler. Derives from SchedulerSkeleton, implementing the OP's
+// OpScheduler — the OP-specific scheduler: derives from SchedulerSkeleton, implementing the OP's
 // 5 CRTP hooks + 4 pure virtuals (call/getCode/getABI/getPendingStorageAt) + classifyException;
-// locks/continuity/backpressure/view/queues/notifier/flow are inherited. A template header — the
-// real GlobalStateStorage is instantiated by the composition root at slot 3, so it is not named
-// here. OP block execution goes through the execute hook → runOpBlockInjection; the block's
-// Transaction objects are consumed directly (opEnvelopeToTars conversion happened in buildOpBlock).
+// the rest is inherited. Template header — the real GlobalStateStorage is instantiated by the
+// composition root at slot 3. OP block execution goes through the execute hook → runOpBlockInjection.
 
 #include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / OpBlockSeal
 #include <opstack-executor/OpCommitments.h>   // OpBlockCommitments / mismatchedFieldOf / toBcosH256
@@ -88,11 +86,9 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    /// ② Execution kernel: runOpBlockInjection. Assembly: rawTxBytes = each tx's
-    /// extraTransactionBytes (the full envelope); deposits = decoded 0x7E envelopes; the block's
-    /// Transaction objects are consumed as-is (buildOpBlock converted them via opEnvelopeToTars —
-    /// no raw parse, no composition-root converter); cfg = configAt(timestamp/1000); executor = a
-    /// per-block OpstackExecutor (one evmc::VM); ledgerConfig only needs evmcRevision.
+    /// ② Execution kernel: runOpBlockInjection. rawTxBytes = each tx's extraTransactionBytes;
+    /// deposits = decoded 0x7E envelopes; cfg = configAt(timestamp/1000); executor = a per-block
+    /// OpstackExecutor (one evmc::VM); ledgerConfig only needs evmcRevision.
     task::Task<bcos::scheduler_v1::SchedulerExecuteResult> execute(ViewType& view,
         protocol::BlockHeader const& header,
         std::vector<protocol::Transaction::ConstPtr> const& transactions,
@@ -115,20 +111,29 @@ public:
             const auto& cfg =
                 op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, m_forkTimestamps);
 
-            // Classify by type byte: deposits decoded; normal txs consumed as the block's
-            // Transaction objects (buildOpBlock already converted them via opEnvelopeToTars) — no
-            // raw parse.
+            // Classify by type byte: deposits come from the block's Transaction objects
+            // (depositFromTransaction); deposit canonicality is backed by its width checks +
+            // the engine step-2 blockHash check.
             std::vector<op::DepositTx> deposits;
             deposits.reserve(rawTxBytes.size());
-            for (auto const& raw : rawTxBytes)
+            for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
             {
-                if (raw.empty())  // 空 envelope：直接 raw[0] 会越界（旧 decodeOneRawTx 的 empty
-                                  // 拒绝保留）
+                auto const& raw = rawTxBytes[i];
+                if (raw.empty())  // empty envelope: raw[0] would be out of bounds
                     throw bcos::evm::engine::OpConsensusError("OpScheduler: empty envelope");
                 auto const typeByte = raw[0];
                 if (typeByte == static_cast<uint8_t>(op::kDepositTxType))
-                    deposits.push_back(detail::decodeDepositTx(raw));  // OpConsensusError on
-                                                                       // malformed
+                {
+                    try
+                    {
+                        deposits.push_back(OpstackExecutor::depositFromTransaction(*transactions[i]));
+                    }
+                    catch (const OpTxValidationFailed& e)
+                    {
+                        throw bcos::evm::engine::OpConsensusError(
+                            std::string("OpScheduler: malformed deposit: ") + e.what());
+                    }
+                }
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
                     throw bcos::evm::engine::OpConsensusError(
@@ -176,8 +181,7 @@ public:
         // No txpool submission on the OP path — a non-empty empty table keeps the skeleton's
         // notifyBlockNumber from dereferencing a null transactions vector.
         out.m_transactions = std::make_shared<protocol::ConstTransactions>();
-        // Authoritative block hash (announced header's opHeaderHash), stashed for the commit hook;
-        // the executed header's optional fields are incomplete, so it cannot be recomputed there.
+        // Announced block hash stashed for the commit hook (see OpExecuteExtra).
         out.modeExtra = std::make_shared<OpExecuteExtra>(
             OpExecuteExtra{std::move(result), std::move(rawTxBytes),
                 header.opHeaderHash(
@@ -187,13 +191,10 @@ public:
         co_return out;
     }
 
-    /// Override of the skeleton's fastPathHit (hard-contract guard). The base matches only on
-    /// block number, which does not uniquely identify an OP block: if the previous block executed
-    /// but commit failed and op-node resends a *different* block at the same height, the base would
-    /// hit the stale executedHeader, skip execution + verify, and report the new payload VALID —
-    /// forking the chain. This adds a comparison on a hit: the cached announcedBlockHash must equal
-    /// the incoming header's opHeaderHash, else no hit (forcing re-execution). Range-matching is
-    /// verbatim the base's, under a single lock (no TOCTOU).
+    /// Override of the skeleton's fastPathHit. The base matches only on block number, which is not
+    /// unique for an OP block: a resend at the same height after a failed commit would hit the
+    /// stale executedHeader and report the new payload VALID — forking the chain. On a hit,
+    /// additionally require the cached announcedBlockHash to equal the incoming header's opHeaderHash.
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
         protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
     {
@@ -215,7 +216,6 @@ public:
                             .difficulty = bcos::u256(0),
                             .nonce = c_posNonce}))
             {
-                // Different block at this height: the cached executedHeader must not stand in.
                 BASELINE_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height "
                                              << number << "; ignoring cache and re-executing";
                 return std::nullopt;
@@ -271,14 +271,12 @@ public:
         co_return nullptr;
     }
 
-    /// ⑤ commit: reuse ledger::prewriteBlockToBuffer to persist the 7 SYS tables into a standalone
-    /// MutableStorage (the skeleton's only mergeBackStorage). blockHash = the execute hook's
-    /// announcedBlockHash (the announced header's opHeaderHash, validated by engine step 2), never
-    /// recomputed on the executed header (its optional fields are incomplete → would throw).
-    /// writeNonces=false (OP never writes SYS_BLOCK_NUMBER_2_NONCES).
-    /// **The registered header is the announced one (result.m_block->blockHeader()), NOT the
-    /// executed header** — the executed header's tars encode is incomplete (missing
-    /// coinbase/gasLimit/baseFee/...), which a child block's parent-header read would reject.
+    /// ⑤ commit: persist the 7 SYS tables via ledger::prewriteBlockToBuffer into a standalone
+    /// MutableStorage. blockHash = the execute hook's announcedBlockHash, never recomputed on the
+    /// executed header (its optional fields are incomplete → would throw). writeNonces=false.
+    /// **Registers the announced header (result.m_block->blockHeader()), NOT the executed one** —
+    /// the executed header's tars encode is incomplete (missing coinbase/gasLimit/baseFee/...),
+    /// which a child block's parent-header read would reject.
     task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> commit(
         ViewType& /*view*/, protocol::BlockHeader::Ptr /*header*/,
         bcos::scheduler_v1::SchedulerExecuteResult const& result)
@@ -286,23 +284,23 @@ public:
         auto& extra = *std::static_pointer_cast<OpExecuteExtra>(result.modeExtra);
         auto storage = std::make_shared<typename MultiLayerStorage::MutableStorage>();
 
-        // 守卫：回执数必须等于交易数（保留旧 opstackRegisterBlock 不变量）。
+        // Guard: receipt count must equal tx count (opstackRegisterBlock invariant).
         if (result.receipts.size() != result.m_block->transactionsSize())
             BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
                                       "OP block execution returned a receipt count differing "
                                       "from the transaction count"});
 
         auto block = result.m_block;
-        // 幂等：commit 失败重试同一 pending result 会二次 append，先 clear 再 append。
+        // Idempotency: retrying a failed commit re-appends the same pending result; clear first.
         block->clearReceipts();
         for (auto const& r : result.receipts)
             block->appendReceipt(r);
-        // setStoreToBackend 只应落在 toShared() 的 fresh 副本上；此处重置是防御性冗余。
+        // setStoreToBackend should only be set on the toShared() fresh copies; this reset is defensive.
         for (auto const& tx : block->transactions())
             tx->setStoreToBackend(false);
 
-        // blockTxs：复用 getTransactions 钩子写法（AnyTransaction 无 ConstPtr 转换，toShared()
-        // 限定）。
+        // blockTxs: same pattern as the getTransactions hook (toShared() is required for the
+        // ConstPtr conversion).
         auto blockTxs = std::make_shared<protocol::ConstTransactions>(
             block->transactions() | ::ranges::views::transform([](auto tx) {
                 return protocol::Transaction::ConstPtr{std::move(tx).toShared()};
@@ -315,7 +313,7 @@ public:
     }
 
     /// Test observation surface: returns the raw execution result of the latest pending block
-    /// (after pushResult, m_results.front() is the newest). Not consumed by production.
+    /// (after pushResult, m_results.front() is the newest).
     std::optional<bcos::evm::engine::OpExecuteBlockResult> peekExecuteResult()
     {
         std::unique_lock<std::mutex> lock(this->m_resultsMutex);
@@ -431,9 +429,8 @@ public:
         co_return co_await account.storageEntry(key);
     }
 
-    // Exception classification — OpConsensusError→OpConsensusRejected / OpStorageError→
-    // OpStorageFault / other→UnknownError, via rethrow + catch (the RTTI trap across the -fno-rtti
-    // evmone boundary is handled by the execute hook's catch(...) backstop).
+    // Exception classification: OpConsensusError→OpConsensusRejected / OpStorageError→
+    // OpStorageFault / other→UnknownError.
     scheduler::SchedulerError classifyException(std::exception_ptr eptr) const override
     {
         try
@@ -535,8 +532,7 @@ public:
     /// Commit continuity (head-advance guard): prewriteBlockToBuffer writes SYS_CURRENT_STATE
     /// unconditionally, so this override restores the monotonic guard (rejecting already-committed
     /// / discontinuous commits). Reads the storage view (where the OP commit writes), not the
-    /// ledger's own m_stateStorage. Public for the same reason as loadCommitLedgerConfig. The
-    /// isSysContractDeploy special case (block-0 system-contract deployment) is retained.
+    /// ledger's own m_stateStorage.
     task::Task<bool> commitContinuityCheck(protocol::BlockNumber number)
     {
         if (!isSysContractDeploy(number))

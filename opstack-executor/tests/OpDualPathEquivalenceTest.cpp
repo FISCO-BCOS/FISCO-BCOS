@@ -1,12 +1,12 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpDualPathEquivalenceTest.cpp — OP dual-path execution equivalence harness (plan v3 Task 5,
-// P1 red phase; Task 6 P1-8 surgery: route A moved to OpScheduler.executeBlock).
+// OpDualPathEquivalenceTest.cpp — OP dual-path execution equivalence harness (route A moved to
+// OpScheduler.executeBlock).
 //
-// Route A (from Task 6 onward: `OpScheduler.executeBlock` — skeleton drives the execute hook =
-// route B, view lifecycle owned by the skeleton) vs route B (`runOpBlockInjection` direct call,
-// per-tx injection loop, OpstackExecutor injectable entry) compared per-block under a dual fork on
+// Route A (`OpScheduler.executeBlock` — skeleton drives the execute hook = route B, view lifecycle
+// owned by the skeleton) vs route B (`runOpBlockInjection` direct call, per-tx injection loop,
+// OpstackExecutor injectable entry) compared per-block under a dual fork on
 // the t8n/vectors corpus (viewA = executed view the skeleton pushed into MLS, viewB = independent
 // fork):
 //   - hard (mechanics; any divergence is BOOST_ERROR): gasUsed / txRoot / receipt count / per-tx
@@ -29,16 +29,16 @@
 // paths share the same cfg → A-vs-B still valid; golden three-way REPORTs mismatch due to fork
 // mismatch, soft — pre-isthmus is outside the golden-hard scope).
 //
-// Round 3 P2 fork parity: route B explicitly computes cfg = configAt(timestamp/1000,
+// Fork parity: route B explicitly computes cfg = configAt(timestamp/1000,
 // forkTimestampsFor(jovian)) and passes it as arg 6 to runOpBlockInjection, asserting it resolves
 // from the same source as route A's scheduler-internal configAt.
-// (refactor) Route B consumes the block's Transaction objects (block order) + decoded DepositTx —
+// Route B consumes the block's Transaction objects (block order) + decoded DepositTx —
 // no raw-tx parse, no normalTxs conversion.
-// Review I-1 exception handling: per-vector catches use catch(std::exception)/catch(...) (route
+// Exception handling: per-vector catches use catch(std::exception)/catch(...) (route
 // B's OpTxValidationFailed is a bcos::Exception, not a runtime_error; and libevmone -fno-rtti
 // makes typed catch unreliable) — catch → BOOST_ERROR + continue, never judge divergence by
 // exception type.
-// Round 3 P4: has_storage scan (same-block create pre-triage; scan without pre-fixing) + /sys
+// has_storage scan (same-block create pre-triage; scan without pre-fixing) + /sys
 // tripwire derived-table prefix assertion (accountTableName(addr) prefix == apps/).
 
 #include "support/GoldenSample.h"
@@ -394,7 +394,7 @@ bcos::u256 jsonBcosU256(const std::string& s)
 
 /// chain vectors have no golden: build a FISCO BlockHeaderImpl from env (current block).
 /// toBlockInfo reads number/timestamp/gasLimit/baseFee/coinbase/prevRandao/
-/// parentBeaconBlockRoot/extraData/blobGasUsed (OpRlpDecode.h:106-121, optional fields .value());
+/// parentBeaconBlockRoot/extraData/blobGasUsed (OpCommon.h:106-121, optional fields .value());
 /// parentInfo serves RecentBlockHashes.
 bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& env)
 {
@@ -464,7 +464,7 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
     return rawTxBytes;
 }
 
-/// FISCO tx for block assembly (Task 6 P1-8 harness surgery): built from the raw envelope
+/// FISCO tx for block assembly: built from the raw envelope
 /// (opEnvelopeToTars + SEV-8 full-envelope override) — block assembly must also build txs for
 /// deposits (getTransactions returns the full set; the execute hook pulls raw bytes from
 /// extraTransactionBytes and classifies by type byte). Precedent:
@@ -481,7 +481,7 @@ bcos::protocol::Transaction::Ptr buildBlockTx(
         [tars = std::move(*tarsTx)]() mutable { return &tars; });
 }
 
-/// Backfill the announced header with route B's real commitments (Task 6 P1-8 surgery): once
+/// Backfill the announced header with route B's real commitments: once
 /// route A goes through OpScheduler.executeBlock, the skeleton's verifyResult always does the
 /// six-field comparison for OP (OpScheduler.h verifyResult ignores the verify boolean) — the
 /// announced header must carry real commitments (finishExecute only fills the commitment fields,
@@ -610,7 +610,7 @@ void dumpAccountDiff(ViewType& viewA, ViewType& viewB)
     }
 }
 
-/// /sys tripwire (round 3 decision): derived-table prefix assertion — for every vector
+/// /sys tripwire: derived-table prefix assertion — for every vector
 /// pre/postState/tx to/from/coinbase address, accountTableName(addr) must prefix with apps/
 /// (more robust than enumerating c_systemTxsAddress).
 void checkSysTripwire(const std::string& id, const JsonValue& vec)
@@ -660,7 +660,7 @@ void checkSysTripwire(const std::string& id, const JsonValue& vec)
     }
 }
 
-/// has_storage scan (round 3 P4; scan without pre-fixing): P1 scans same-block creates for
+/// has_storage scan (without pre-fixing): P1 scans same-block creates for
 /// early triage — the corpus likely does not trigger StorageStateView's has_storage read-side
 /// asymmetry; a hit only REPORTs, never fails. Post-refactor the block's txs are deposits +
 /// FISCO Transactions; contract creations are visible as deposits with a nullopt `to` (the L1
@@ -800,7 +800,7 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
         BOOST_ERROR(id << ": zero comparisons executed");
 }
 
-/// golden three-way (G1: soft in P1 → scoped hard in P3): path A.stateRoot == vector
+/// golden three-way: path A.stateRoot == vector
 /// _op_expected.header.stateRoot. When hardGolden=true, a mismatch is a hard BOOST_CHECK failure
 /// (scope = isthmus/jovian non-contract_create); greenGuard (deposit_basefee green guard) is
 /// always hard; the rest (pre-isthmus / contract_create) stays soft REPORT.
@@ -851,21 +851,19 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     const JsonValue& vec, bool jovian, const bcos::evm::opstack::OpForkConfig& vectorCfg,
     DivergenceLedger& ledger, bool greenGuard, GoldenStats& stats)
 {
-    // Round 3 P2 fork parity: cfg = configAt(timestamp/1000, forkTimestampsFor(jovian)), resolved
+    // Fork parity: cfg = configAt(timestamp/1000, forkTimestampsFor(jovian)), resolved
     // from the same source as route A's scheduler-internal configAt (same forkTimestampsFor, same
     // static singleton object).
     const auto& cfg =
         op::configAt(static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
     BOOST_CHECK_MESSAGE(&cfg == &vectorCfg, id << ": fork parity broken: block cfg != vector cfg");
 
-    // deposits + block-order transactions（buildBlockTx 已支持 deposit，Web3Transaction 0x7e）。
-    std::vector<op::DepositTx> deposits;
+    // Block-order transactions (buildBlockTx: opEnvelopeToTars + full envelope overwrite,
+    // Web3Transaction supports 0x7e).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
     transactions.reserve(rawTxBytes.size());
     for (auto const& raw : rawTxBytes)
     {
-        if (raw[0] == static_cast<uint8_t>(op::kDepositTxType))
-            deposits.push_back(detail::decodeDepositTx(raw));
         auto tx = buildBlockTx(raw, fixture.hashImpl);
         if (tx == nullptr)
         {
@@ -874,6 +872,13 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         }
         transactions.push_back(tx);
     }
+    // Deposits built from the Transaction objects (mirroring the execute hook, no RLP parse).
+    std::vector<op::DepositTx> deposits;
+    deposits.reserve(rawTxBytes.size());
+    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+        if (rawTxBytes[i][0] == static_cast<uint8_t>(op::kDepositTxType))
+            deposits.push_back(
+                bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(*transactions[i]));
 
     // Route B: runOpBlockInjection (per-tx injection loop) — run first, backfill the announced
     // header from resultB for route A's verify (see fillAnnouncedHeader). viewB forks before
@@ -911,7 +916,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     // OP execution, only consumed by the seal comparison).
     fillAnnouncedHeader(header, resultB);
 
-    // Route A (Task 6 P1-8 surgery): OpScheduler.executeBlock — view lifecycle owned by the
+    // Route A: OpScheduler.executeBlock — view lifecycle owned by the
     // skeleton (fork/pushView inside it), execute hook is route B (runOpBlockInjection). Result is
     // taken from the skeleton's m_results (peekExecuteResult); post-state from the executed view
     // the skeleton pushed into MLS (fork reads through).
@@ -996,7 +1001,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         // /sys tripwire (derived table prefix for every vector pre/postState/tx/coinbase).
         checkSysTripwire(id, vec);
 
-        // has_storage scan (P4 pre-triage; REPORT only).
+        // has_storage scan (pre-triage; REPORT only).
         hasStorageScan(id, deposits);
     }
     catch (const std::exception& e)

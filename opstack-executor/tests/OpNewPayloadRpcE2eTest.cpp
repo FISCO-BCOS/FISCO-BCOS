@@ -1,5 +1,5 @@
 // bcos-evm/test/opstack/OpNewPayloadRpcE2eTest.cpp
-// W6 L2 end-to-end real-chain comparison: real JSON params ->
+// L2 end-to-end real-chain comparison: real JSON params ->
 // EngineHelper::parseNewPayloadRequest(V4) -> EngineService<OpSchedulerImpl>.newPayload(4)
 // -> executeOpBlock -> seven assertions vs golden. The fixture composition mirrors the
 // val-loop EngineNewPayloadGateTest GateFixture (member order storage->memPool->executor->
@@ -13,7 +13,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <opstack-executor/OpErrors.h>
+#include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
@@ -21,7 +21,7 @@
 // itself (production relies on bcos-rpc unity-build include order). A single-TU
 // direct compile must include TransactionFactory.h first or the declaration fails.
 #include <bcos-framework/protocol/TransactionFactory.h>
-#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the delegate's commit hook (Task 3)
+#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the delegate's commit hook
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-table/src/LegacyStorageWrapper.h>  // LegacyStorageWrapper<BackendMemStorage>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -77,7 +77,7 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-// ── Composition-root stand-ins (val-loop GateFixture style: OP mode bypasses memPool/executor) ──
+// ── Composition-root stand-ins (OP mode bypasses memPool/executor) ──
 struct StubMemPool
 {
 };
@@ -171,7 +171,7 @@ void seedSysTables(MLS& multiLayerStorage)
 
 struct OpE2eFixture
 {
-    // Single-bucket CONCURRENT backend: after the C2 fix, seed/parent lands in the
+    // Single-bucket CONCURRENT backend: seed/parent lands in the
     // backend via mergeView, and stateRoot's range(SYS_TABLES) scan relies on the
     // backend's RANGE_SEEK semantics. With multiple buckets (default
     // hardware_concurrency*2+1), MemoryStorage's range only seeks bucket 0, so buckets
@@ -186,7 +186,7 @@ struct OpE2eFixture
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory;
     EngineOpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerImpl<ViewType>)
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
-    /// Task 3: a real Ledger wired into the delegate's m_ledger (the commit hook now calls
+    /// A real Ledger wired into the delegate's m_ledger (the commit hook now calls
     /// prewriteBlockToBuffer; every newPayload VALID submission commits through the delegate).
     /// prewriteBlockToBuffer writes through the commit hook's MutableStorage, so the Ledger's own
     /// m_stateStorage is only read by asyncGetTotalTransactionCount (SYS_CURRENT_STATE) — the
@@ -196,7 +196,7 @@ struct OpE2eFixture
     /// forkchoice tests depend on that branch staying inert).
     std::shared_ptr<bcos::storage::LegacyStorageWrapper<BackendMemStorage>> legacyLedgerStorage;
     std::shared_ptr<bcos::ledger::Ledger> ledger;
-    /// Wiring Task 5a/5b: the engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
+    /// The engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
     /// A single OpSchedulerImpl serves the seam SchedulerType (route A executeOpBlock retired);
     /// OpScheduler holds no execution kernel — block execution is the delegate's route B.
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
@@ -235,7 +235,7 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
         transactionsRoot, *request.parentBeaconBlockRoot);
 }
 
-/// Parent pre-registration (R3/R5 fatal-gap A fix): the OP path's step-3 parentKnown
+/// Parent pre-registration: the OP path's step-3 parentKnown
 /// checks SYS_HASH_2_NUMBER. All 33 isolated vectors are block 1, so the parent must be
 /// pre-registered as a trusted genesis, otherwise newPayload returns SYNCING. The write
 /// encoding must match production: key = raw 32-byte hash, value = decimal number string
@@ -249,7 +249,7 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(bcos::storage2::writeOne(view,
         StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(entry)));
-    // C2 review fix (P1 CRITICAL): mergeBackStorage merges the oldest layer (FIFO).
+    // mergeBackStorage merges the oldest layer (FIFO).
     // Drain the stack — parent pre-registration lands in the backend immediately, and
     // with an empty stack before each block push, mergeView persists right away so the
     // backend assertions can pass.
@@ -335,8 +335,8 @@ void runGoldenVector(std::string const& id)
     // s_eth_hash_2_rawtx (D1). 0x04 (EIP-7702) has been a first-class TransactionType
     // (EIP7702=4) since upstream #5411, so opEnvelopeToTars converts it and it lands in
     // SYS_HASH_2_TX like any other typed tx (no longer absent; D7 is obsolete).
-    BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // P3-1: missing field
-                                                                          // fails cleanly
+    BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());  // missing field fails
+                                                                          // cleanly
     auto const& rawTxs = *request.executionPayload.rawTransactions;
     auto& hashImpl = *fixture->blockFactory->cryptoSuite()->hashImpl();
     auto view = fixture->multiLayerStorage.fork();
@@ -371,7 +371,7 @@ void runGoldenVector(std::string const& id)
     }
 }
 
-/// Chained two-block (chainA/B, R2-C verified flow): seed only A's pre -> register A's
+/// Chained two-block: seed only A's pre -> register A's
 /// parent(0) -> submit B first (SYNCING) -> submit A (VALID) -> submit B again (VALID).
 /// FCU deliberately omitted (see implementation hint #4).
 void runChainedPair(std::string const& aId, std::string const& bId)
@@ -466,13 +466,12 @@ runVectorAndGetBlockHash(std::string const& id)
         goldenHeader->number()};
 }
 
-// ═══════════════════ Task 2: invalid-vector runner (classification-driven) ════
-// Consumer-first (atomicity): Task 2 self-tests use inline vectors (no dependence on
-// Task 3 corpus files); the runner also accepts on-disk invalid_*.json (landed after
-// Task 3 generation). Reject schema (task-2-brief): fisco.consumer / classification
-// ("INVALID"|"SYNCING"|"-38005"|"-32603") / latest_valid_hash("parent"|null) /
-// validation_error_contains(optional) / expect_throw("UnsupportedFork"|"OpExecutionInternalError")
-// / version(optional, -38005 sets 3).
+// ═══════════════════ Invalid-vector runner (classification-driven) ════
+// Consumer-first (atomicity): self-tests use inline vectors (no dependence on corpus
+// files); the runner also accepts on-disk invalid_*.json. Reject schema:
+// fisco.consumer / classification ("INVALID"|"SYNCING"|"-38005"|"-32603") /
+// latest_valid_hash("parent"|null) / validation_error_contains(optional) /
+// expect_throw("UnsupportedFork"|"OpExecutionInternalError") / version(optional, -38005 sets 3).
 
 /// Parses the parent hash from `_op_payload.parentHash` (needed for INVALID's
 /// latestValidHash=parent assertion).
@@ -579,7 +578,7 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
     return sample;
 }
 
-/// Inline self-test vector registry (Task 2 self-test; on-disk corpus uses
+/// Inline self-test vector registry (on-disk corpus uses
 /// w6test::loadInvalidSample).
 w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
 {
@@ -618,7 +617,7 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
                                                 .carryCanonical = true,
                                             });
     }
-    // Task 4 gate regression: an executor-consumer vector's validation_error_contains is
+    // An executor-consumer vector's validation_error_contains is
     // a T8n execution-layer throw message ("intrinsic gas too low"), which the engine's
     // RTTI-bypass folds into a generic message — if the runner does not skip the message
     // assertion per consumer, this vector would go red. INVALID classification +
@@ -636,7 +635,7 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
     throw std::runtime_error("makeInlineInvalidSample: unknown inline id " + id);
 }
 
-/// Classification-driven runner (Task 2 main deliverable). Key branches:
+/// Classification-driven runner. Key branches:
 ///  - SYNCING: skips registerVerifiedBlock (unknown parent is the intent — registering
 ///    would let parentKnown pass and it would no longer be SYNCING)
 ///  - -38005/-32603: expect_throw picks UnsupportedFork / OpExecutionInternalError by
@@ -653,7 +652,7 @@ void runInvalidVector(std::string const& id)
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
     const auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
     const auto classification = fisco["classification"].asString();
-    // Task 4 consumer gate: for executor-consumer vectors (non-decode class), the
+    // Consumer gate: for executor-consumer vectors (non-decode class), the
     // validation_error_contains is a T8n execution-layer throw message, which the engine's
     // RTTI-bypass folds into a generic message, so a substring assertion would always
     // mismatch. For consumer=="both" (blob) the decode message is a reliable engine-side
@@ -781,7 +780,7 @@ std::string invalidStemFromManifestLine(std::string line)
     return line;
 }
 
-/// The `invalid_*` subset of manifest.txt (same logic as Task 1 loadManifest; entries are
+/// The `invalid_*` subset of manifest.txt (same logic as loadManifest; entries are
 /// stored as stems without `.json`). Empty before Task 3 corpus lands -> zero iterations
 /// of InvalidVectorsFromManifest (forward-compat hook).
 std::set<std::string> loadInvalidManifest()
@@ -852,7 +851,7 @@ BOOST_AUTO_TEST_CASE(IsthmusBigBlock130tx)
     runGoldenVector("isthmus_big_block_130tx");
 }
 
-// B-7: single-fork isthmus system-call-order observable vector (id set by W5 review A#1).
+// Single-fork isthmus system-call-order observable vector.
 // Wrong order -> L1 reader REVERT -> stateRoot mismatch -> VALID assertion + seven-field
 // assertions turn red.
 BOOST_AUTO_TEST_CASE(SystemCallOrderObservable)
@@ -958,7 +957,7 @@ BOOST_AUTO_TEST_CASE(JovianTxReverted)
     runGoldenVector("jovian_tx_reverted");
 }
 
-// ── Engine-gate probe (Task 2 gate 1): 5 representative precompile vectors ─────────
+// ── Engine-gate probe: 5 representative precompile vectors ─────────
 // (five risk faces: over-cap / 7702 / Jovian / value / successful output)
 BOOST_AUTO_TEST_CASE(IsthmusPrecompileBn256PairNorm)
 {
@@ -981,21 +980,8 @@ BOOST_AUTO_TEST_CASE(IsthmusPrecompileEcrecover)
     runGoldenVector("isthmus_precompile_ecrecover");
 }
 
-// Note: the first 9 sample cases cover 9 vectors; the 24 above-completed cases cover the
-// remaining 24, totaling 33. Full list (16 isthmus + 17 jovian):
-//   isthmus: access_list, big_block_130tx, contract_create, contract_logs, deposit_failed,
-//            deposit_mint, deposit_only, empty_account_cleanup, fee_env_observer,
-//            message_passer_write, setcode_7702, setcode_7702_skips, system_contracts_real,
-//            transfer_basic, transfer_multi, tx_reverted
-//   jovian:  access_list, contract_create, contract_logs, da_mix, deposit_failed, deposit_mint,
-//            deposit_only, empty_account_cleanup, fee_env_observer, first_block,
-//            message_passer_write, setcode_7702, setcode_7702_skips, system_contracts_real,
-//            transfer_basic, transfer_multi, tx_reverted
-// Sample cases (9): JovianDepositOnly/JovianTransferMulti/JovianDaMix/JovianFirstBlock/
-//   IsthmusDepositOnly/IsthmusTransferMulti/IsthmusSetcode7702/IsthmusTxReverted/IsthmusBigBlock130tx
-// Completion cases (24): all the rest. Warning: BOOST_AUTO_TEST_CASE names must not repeat —
-// the 24 completion-case names deliberately avoid the 9 sample-case names (verified by
-// R2-D: zero collisions with the existing 107 case names or the planned 33).
+// BOOST_AUTO_TEST_CASE names must not repeat: the completion-case names below deliberately avoid
+// the 9 sample-case names above.
 // Chained pair: one case (runChainedPair) runs chainA+chainB in one flow (B SYNCING -> A VALID -> B
 // VALID).
 BOOST_AUTO_TEST_CASE(ChainedAB)
@@ -1010,10 +996,10 @@ BOOST_AUTO_TEST_CASE(JovianChainedAB)
 {
     runChainedPair("jovianChainA", "jovianChainB");
 }
-// ── Task 4 completion: 24 precompile matrix vectors (brief appendix A id->case mapping) ──
-// Task 2's 5 probes (bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/
-// ecrecover) already covered the five risk faces; this section completes the remaining 24,
-// totaling 29 precompile cases.
+// ── Precompile matrix completion: 24 vectors ──
+// The 5 probes (bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/ecrecover)
+// covered the five risk faces; this section completes the remaining 24, totaling 29 precompile
+// cases.
 BOOST_AUTO_TEST_CASE(IsthmusPrecompileBlake2f)
 {
     runGoldenVector("isthmus_precompile_blake2f");
@@ -1113,10 +1099,10 @@ BOOST_AUTO_TEST_CASE(JovianPrecompileWrapValueRevert)
 
 // Final tally: 65 cases = 63 single vectors + 2 chained pairs (chainA/B + jovianChainA/B,
 // covering 4 chained samples). 63 single = 34 base vectors (33 +
-// isthmus_system_call_order_observable) + 29 precompile (Task 2 probes 5 + Task 4 completion 24).
+// isthmus_system_call_order_observable) + 29 precompile (probes 5 + completion 24).
 
-// ── Task 2: E2E invalid-vector runner (classification-driven) ──
-// Inline self-test vectors (Task 2 does not depend on Task 3 corpus files): the
+// ── E2E invalid-vector runner (classification-driven) ──
+// Inline self-test vectors (no dependence on corpus files): the
 // classification-driven runner covers all four branches —
 //   INVALID (stateRoot self-consistent corruption + latestValidHash=parent + "stateRoot")
 //   SYNCING (parentHash broken chain -> do not register parent)
@@ -1143,16 +1129,15 @@ BOOST_AUTO_TEST_CASE(InvalidSiblingForkRejected)
     runInvalidVector("inline_invalid_siblingFork");
 }
 
-// Task 4 gate regression: executor-consumer vectors skip the validation_error_contains
-// assertion (engine RTTI-bypass folds T8n messages), but INVALID classification +
-// latest_valid_hash=parent must still be asserted.
+// Executor-consumer vectors skip the validation_error_contains assertion (engine RTTI-bypass
+// folds T8n messages), but INVALID classification + latest_valid_hash=parent must still be
+// asserted.
 BOOST_AUTO_TEST_CASE(ExecutorConsumerSkipsMessageAssertion)
 {
     runInvalidVector("inline_invalid_executorStateRoot");
 }
 
-// Step 5: manifest subset iteration (invalid_*.json). Empty before Task 3 corpus lands -> zero
-// iterations (forward compat).
+// Manifest subset iteration (invalid_*.json). Empty corpus -> zero iterations (forward compat).
 BOOST_AUTO_TEST_CASE(InvalidVectorsFromManifest)
 {
     for (auto const& id : loadInvalidManifest())
@@ -1180,8 +1165,8 @@ BOOST_AUTO_TEST_CASE(InvalidManifestStemStripsJsonSuffix)
     BOOST_CHECK_EQUAL(invalidStemFromManifestLine(""), "");
 }
 
-// ── Task 6 Step 2: coverage-matrix assertion (manifest-registered subset driven) ─────
-// Iterates manifest invalid_* vectors + Task 2 inline vectors, asserting every required
+// ── Coverage-matrix assertion (manifest-registered subset driven) ─────
+// Iterates manifest invalid_* vectors + inline vectors, asserting every required
 // set member is covered (missing -> FAILURE): each classification (incl. -38005 — satisfied
 // by the Task 2 version vector; -32603 satisfied by the two-pour runner), each
 // latest_valid_hash value ("parent"|null), each static item (except 3/12 — inexpressible
@@ -1210,7 +1195,7 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         if (pos != std::string::npos)
             staticItems.insert(std::stoi(id.substr(pos + 8)));
     }
-    // Task 2 inline vectors (-38005 / two-pour -32603 / SYNCING satisfied inline; not in manifest).
+    // Inline vectors (-38005 / two-pour -32603 / SYNCING satisfied inline; not in manifest).
     for (auto const* id : {"inline_invalid_stateRoot", "inline_invalid_parentUnknown",
              "inline_invalid_unsupportedFork", "inline_invalid_siblingFork"})
     {
@@ -1273,7 +1258,7 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
-// ── FCU end-to-end 6 cases (/loop audit gap: zero coverage of real updateForkchoice OP semantics)
+// ── FCU end-to-end 6 cases ──
 // ── Mirrors op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated semantics:
 //   head known -> VALID + LatestValidHash=head (api.go:316-322 valid())
 //   head unknown -> STATUS_SYNCING (api.go:238 network pull)

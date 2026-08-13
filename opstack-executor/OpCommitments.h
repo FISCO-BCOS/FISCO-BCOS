@@ -4,10 +4,10 @@
 
 // The six-way commitment comparison surface: the executed block's commitments vs the payload's
 // announced commitments (restated in bcos:: types), plus the seal-only outputs (blobGasUsed /
-// requestsHash). Split out of OpErrors.h so that header stays a pure types header (errors +
+// requestsHash). Split out of OpCommon.h so that header stays a pure types header (errors +
 // result structs) and this functional surface lives with the conversions it uses.
 
-#include <opstack-executor/OpErrors.h>  // OpBlockSeal / OpExecuteBlockResult
+#include <opstack-executor/OpCommon.h>  // OpBlockSeal / OpExecuteBlockResult
 
 #include <bcos-utilities/FixedBytes.h>
 #include <array>

@@ -3,12 +3,12 @@
 
 // OpBlockInjectorTest — drives runOpBlockInjection (opstack-executor/OpBlockExecute.h) over a
 // plain MutableStorage fixture (spec §7(a); the injector is a Storage template, so no MLS is
-// needed). A minimal "L1 attributes deposit + eip1559" block verifies (review R3 P3):
+// needed). A minimal "L1 attributes deposit + eip1559" block verifies:
 //   (1) the system-call BlockInfo's gas_limit == header.gasLimit (toBlockInfo, trivially true);
 //   (2) receipt count == tx count;
 //   (3) the injector's block-level gasUsed == manual Σ per-receipt gasUsed.
-// Per-tx BlockInfo gasLimit==header is deliberately NOT asserted here — that is Task 6's job
-// (OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit) and would be red at this phase.
+// Per-tx BlockInfo gasLimit==header is deliberately NOT asserted here — that belongs to
+// OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit.
 
 #include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpBlockExecute.h>
@@ -58,7 +58,7 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
 }
 
-/// A header carrying every optional field toBlockInfo reads via `.value()` (OpRlpDecode.h:106-121):
+/// A header carrying every optional field toBlockInfo reads via `.value()` (OpCommon.h:106-121):
 /// baseFee / parentBeaconBlockRoot / blobGasUsed must be set or toBlockInfo throws.
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader(int64_t timestampMillis)
 {
@@ -120,14 +120,14 @@ bcos::evm::opstack::OpBlockTx makeEip1559OpBlockTx()
     return bcos::evm::opstack::OpBlockTx{evmTx, envelope};
 }
 
-/// Caller-prebuilt FISCO Transaction for the eip1559 tx (review D6: buildFiscoTx is the caller's
+/// Caller-prebuilt FISCO Transaction for the eip1559 tx (buildFiscoTx is the caller's
 /// responsibility — the injector only consumes Transaction::Ptr). EIP-1559 with
 /// maxPriorityFeePerGas=0 keeps effectiveGasPrice == baseFee (BCOS2Evmone's access-list override
 /// never fires), and the dummy r/s is neutralized by forceSender.
 bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
 {
-    // chainId must match the block chainId (kChainId, 0x2105): Task 2 made the envelope's chain id
-    // binding — m_prepare's validateEnvelopeSignature rejects a mismatch before opValidate.
+    // chainId must match the block chainId (kChainId, 0x2105): a mismatch is rejected in m_prepare
+    // before opValidate.
     bcos::rpc::Web3Transaction w3{};
     w3.type = bcos::rpc::TransactionType::EIP1559;
     w3.chainId = kChainId;
@@ -144,8 +144,7 @@ bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
     // takeToTarsTransaction stores the signing preimage (which a full-envelope consumer would
-    // reject as a truncated typed envelope); overwrite with the full EIP-2718 envelope (SEV-8,
-    // precedent OpSchedulerTest.cpp:228 / OpstackExecutorTest buildWeb3Tx).
+    // reject as a truncated typed envelope); overwrite with the full EIP-2718 envelope.
     auto const envelope = w3.encode();
     tarsHolder->extraTransactionBytes.assign(envelope.begin(), envelope.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
@@ -176,7 +175,7 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     namespace engine = bcos::evm::engine;
     namespace detail = bcos::evm::engine::detail;
 
-    // Isthmus-active fork config (configAt resolution == path A executeOpBlock, fork parity).
+    // Isthmus-active fork config.
     constexpr uint64_t kIsthmusTime = 0;
     constexpr uint64_t kJovianTime = std::numeric_limits<uint64_t>::max();
     const auto& cfg = op::configAt(1000, op::OpForkTimestamps{kIsthmusTime, kJovianTime});
@@ -196,10 +195,10 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     auto depTx = makeAttributesDeposit();  // OpBlockTx
     auto normTx = makeEip1559OpBlockTx();  // OpBlockTx
     std::vector<op::DepositTx> deposits{std::get<op::DepositTx>(depTx.tx)};
-    // 块序 transactions：索引0 是 deposit 占位（deposit 分支不触碰），索引1 是 normal。
+    // Block-order transactions: index 0 is the deposit placeholder (untouched by the deposit branch), index 1 is normal.
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{nullptr, buildEip1559FiscoTx()};
-    // makeAttributesDeposit 的 signedEnvelope 为空，runOpBlockInjection 需按 rawTxBytes[0][0]
-    // 分类 → 用 encodeDepositEnvelope 重建真实 0x7e 信封。
+    // makeAttributesDeposit leaves signedEnvelope empty; runOpBlockInjection classifies by
+    // rawTxBytes[0][0] -> rebuild the real 0x7e envelope with encodeDepositEnvelope.
     bcos::bytes depEnv = encodeDepositEnvelope(std::get<op::DepositTx>(depTx.tx));
     bcos::bytes normEnv(normTx.signedEnvelope.begin(), normTx.signedEnvelope.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, normEnv};
@@ -207,7 +206,7 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     auto result = engine::runOpBlockInjection(executor, storage, *header, transactions, deposits,
         cfg, kChainId, ledgerConfig, rawTxBytes, hashImpl);
 
-    // R3 P3: system-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
+    // System-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
     const auto sysBlk = detail::toBlockInfo(*header);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit, kHeaderGasLimit);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit,
@@ -224,10 +223,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     BOOST_CHECK_GT(manual, 0);  // both txs actually consumed gas
 }
 
-/// Empty-block rejection (after route A executeOpBlock retired, the empty-block rejection moved to
-/// the injector with route B): runOpBlockInjection with empty txs → OpConsensusError (a
-/// std::runtime_error subclass). The former OpSchedulerImpl SmokeTest::EmptyBlockRejected covered
-/// the same classification for executeOpBlock — this is the route-B equivalent.
+/// Empty-block rejection: runOpBlockInjection with empty txs → OpConsensusError (a
+/// std::runtime_error subclass).
 BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByInjector)
 {
     namespace op = bcos::evm::opstack;

@@ -1,5 +1,5 @@
 // bcos-evm/test/opstack/OpL1EdgeGateTest.cpp
-// W5 Task 4 (L1 edge gate): B-5b Jovian DA-footprint rejection + D-4 validate-snapshot contract.
+// L1 edge gate: B-5b Jovian DA-footprint rejection + D-4 validate-snapshot contract.
 //
 // B-5b: engine_newPayloadV4 whose blobGasUsed (= the Jovian DA footprint header slot) exceeds
 //       gasLimit must be rejected INVALID in Step 2 static validation, BEFORE parentKnown /
@@ -20,7 +20,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <opstack-executor/OpErrors.h>
+#include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
 // bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type

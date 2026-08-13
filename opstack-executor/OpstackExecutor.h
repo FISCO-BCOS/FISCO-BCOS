@@ -21,7 +21,7 @@
 #include "bcos-task/TBBWait.h"
 #include "ethereum-executor/BCOS2Evmone.h"
 #include "ethereum-executor/StorageStateView.h"
-#include "opstack-executor/OpRlpDecode.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
+#include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmc/evmc.hpp>
@@ -153,7 +153,7 @@ public:
         }
 
         auto props = co_await m_prepare(
-            storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft, chainId, call);
+            storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft);
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(storage, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes);
@@ -220,20 +220,17 @@ public:
     }
 
 private:
-    // ---- Shared normal-tx pipeline: the concept lifecycle and executeTransaction drive the same
-    // ---- three stages.
+    // ---- Shared normal-tx pipeline: three stages (prepare/execute/finish). ----
     // Stage 1 — validate: fork/evmc revision check, block info + evmone tx + signed envelope, then
-    // injection-style opValidate (fee supplied by the orchestrator; props.fee snapshotted for the
-    // transition stage).
+    // injection-style opValidate (props.fee snapshotted for the transition stage).
     template <class Storage>
     task::Task<bcos::evm::opstack::OpTxProperties> m_prepare(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee = {},
-        int64_t blockGasLeft = 0, uint64_t chainId = 0, bool call = false)
+        int64_t blockGasLeft = 0)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
-        namespace detail = bcos::evm::engine::detail;
 
         auto revOpt = ledgerConfig.evmcRevision();
         if (!revOpt.has_value())
@@ -249,13 +246,6 @@ private:
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
         auto envRef = transaction.extraTransactionBytes();
-        if (!call && !envRef.empty())
-            // Consensus envelope checks (chain-id binding, EIP-2 low-s, yParity<=1) run before
-            // opValidate on real (call=false) transactions; eth_call skips them. envRef is a
-            // bytesConstRef — validateEnvelopeSignature takes bcos::bytes, so .toBytes() copies
-            // (per-tx, acceptable). The !envRef.empty() gate covers an empty envelope, which the
-            // validation helper would otherwise reject.
-            detail::validateEnvelopeSignature(envRef.toBytes(), chainId);
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
         auto validated =
@@ -266,8 +256,7 @@ private:
     }
 
     // Stage 2 — execute: injection-style opTransition reusing props.fee (the validate-time
-    // snapshot), so the pair can never be fed different OpFeeParams. Returns the final FISCO
-    // receipt and the state diff via `diff` out-param.
+    // snapshot), so the pair can never be fed different OpFeeParams.
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> m_execute(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
@@ -309,11 +298,11 @@ private:
     }
 
     /// Build a DepositTx from a protocol::Transaction whose isDepositTx() is true, reading the
-    /// deposit-only mirrors (sourceHash/mint/isSystemTransaction) from the object. SAFE ONLY for
-    /// single-tx tooling whose input was authoritatively decoded from a trusted RPC/engine-API
-    /// source (NOT a P2P peer) — the block path (processOpBlock) re-derives these from the
-    /// envelope instead. If this entry is ever reused from a P2P path, it MUST switch back to
-    /// envelope re-derivation. mint is always Some(value) (0 == no mint).
+    /// deposit-only mirrors (sourceHash/mint/isSystemTransaction) from the object. No raw-envelope
+    /// RLP re-parse (buildOpBlock decoded it via opEnvelopeToTars); the width checks below
+    /// (sourceHash 32-byte / sender 20-byte / to 20-byte) reject malformed fields. mint is always
+    /// Some(value) (0 == no mint).
+public:
     static bcos::evm::opstack::DepositTx depositFromTransaction(protocol::Transaction const& tx)
     {
         namespace op = bcos::evm::opstack;
@@ -355,6 +344,7 @@ private:
         return dep;
     }
 
+private:
     protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     crypto::Hash::Ptr m_hashImpl;
     bcos::evm::opstack::OpForkConfig const& m_forkConfig;

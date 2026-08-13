@@ -1,10 +1,9 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpstackExecutorTest.cpp — drives OpstackExecutor over BCOS storage. Ported from the v1
-// (feat-op-validator-loop) test and adapted to the v2 OP API: opTransition/runDeposit now produce
-// the final FISCO receipt directly (OP metadata + effective gas price already projected), and the
-// state diff is returned via an out-param. Storage is a plain MutableStorage.
+// OpstackExecutorTest.cpp — drives OpstackExecutor over BCOS storage. opTransition/runDeposit
+// produce the final FISCO receipt directly (OP metadata + effective gas price already projected),
+// and the state diff is returned via an out-param. Storage is a plain MutableStorage.
 
 #include "opstack-executor/OpstackExecutor.h"
 #include "bcos-evm/opstack/OpForkSchedule.h"
@@ -69,9 +68,8 @@ struct Fixture : public ::testing::Test
         // Construct a minimal EIP-2930 Web3 tx directly (nonce=7, gasPrice, gasLimit, to, value,
         // empty data/accessList, yParity=0, 32-byte r/s) — the v1 raw-RLP fixture no longer
         // decodes under the v2 Web3Transaction path, so build fields instead of RLP. chainId
-        // defaults to 10 to match every executeTransaction call site below: Task 2 makes the
-        // envelope's chain id binding (a mismatch is rejected in m_prepare before opValidate),
-        // so the fixture envelope must carry the same chain id the call passes.
+        // defaults to 10 to match every executeTransaction call site below, so the fixture
+        // envelope must carry the same chain id the call passes.
         bcos::rpc::Web3Transaction w3{};
         w3.type = bcos::rpc::TransactionType::EIP2930;
         w3.chainId = chainId;
@@ -88,14 +86,14 @@ struct Fixture : public ::testing::Test
         auto const txHash = w3.txHash();
         tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
         // takeToTarsTransaction stores the signing preimage (Web3Transaction.cpp:220-223);
-        // overwrite with the full EIP-2718 envelope (mirroring EngineServiceImpl buildOpBlock's
-        // SEV-8 overwrite) so m_prepare's validateEnvelopeSignature sees canonical wire bytes.
+        // overwrite with the full EIP-2718 envelope (mirroring EngineServiceImpl buildOpBlock) so
+        // the envelope is canonical wire bytes.
         auto const envelope = w3.encode();
         tarsHolder->extraTransactionBytes.assign(envelope.begin(), envelope.end());
         return bcostars::protocol::TransactionImpl([tarsHolder]() { return tarsHolder.get(); });
     }
 
-    // Deposit tx mirror for single-tx deposit dispatch (Task 1/2). isSystemTx mirrors the
+    // Deposit tx mirror for single-tx deposit dispatch. isSystemTx mirrors the
     // deposit RLP field (tars field 15), NOT Transaction::systemTx().
     bcostars::protocol::TransactionImpl buildDepositTx(bool isSystemTx = false)
     {
@@ -131,7 +129,7 @@ TEST(OpstackExecutor, ConstructsWithJovianFork)
 
 TEST(OpstackExecutor, BuildOpBlockInfoMirrorsBlockPath)
 {
-    // buildBlockInfo must mirror toBlockInfo's field mapping (OpRlpDecode.h:106-121) so eth_call
+    // buildBlockInfo must mirror toBlockInfo's field mapping (OpCommon.h:106-121) so eth_call
     // sees the same block context as block execution: seconds timestamp, header baseFee (via
     // value_or(0), so optional-less test headers do not throw), and the full field set.
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
@@ -326,61 +324,6 @@ TEST_F(Fixture, ReceiptMetaSurvives)
     EXPECT_EQ(receipt->effectiveGasPrice(), "0x6fc23ac00");
 }
 
-TEST_F(Fixture, RejectsCrossChainEnvelopeUnlessCall)
-{
-    // Task 2: m_prepare runs validateEnvelopeSignature (chain-id binding, EIP-2 low-s, yParity<=1)
-    // before opValidate for call=false. A cross-chain envelope (chainId 0x2106) vs the passed
-    // chainId (0x2105) must be rejected as OpConsensusError. call=true (eth_call) skips the check
-    // and proceeds to opValidate, so no OpConsensusError is thrown there.
-    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
-    bcostars::protocol::BlockHeaderImpl blockHeader;
-    blockHeader.setNumber(1);
-    blockHeader.calculateHash(*cryptoSuite->hashImpl());
-
-    auto tx = buildWeb3Tx(/*chainId=*/0x2106);  // cross-chain envelope
-    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
-    tx.clearSenderAndHash();
-    tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
-    task::syncWait([&]() -> task::Task<void> {
-        ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
-        co_await acc.create();
-        co_await acc.setBalance(u256("100000000000000000000"));
-        // EIP-3607: seed the canonical empty-code hash so the sender is recognised as an EOA.
-        co_await acc.setCode({}, "",
-            bcos::crypto::HashType(
-                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
-        std::string nonceStr(tx.nonce());
-        if (nonceStr.empty())
-            nonceStr = "0";
-        co_await acc.setNonce(nonceStr);
-        co_return;
-    }());
-
-    bcos::evm::opstack::OpFeeParams fee{};
-    constexpr uint64_t kChainId = 0x2105;
-
-    // call=true (eth_call): envelope signature validation is skipped; execution proceeds, so no
-    // OpConsensusError is thrown for the cross-chain envelope. Runs first so the account nonce is
-    // pristine for both assertions (the real-execution path below persists the nonce bump).
-    try
-    {
-        auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
-            /*contextID=*/0, ledgerConfig, /*call=*/true, fee, /*blockGasLeft=*/30000000,
-            /*chainId=*/kChainId));
-        EXPECT_NE(receipt, nullptr);
-    }
-    catch (bcos::evm::engine::OpConsensusError const&)
-    {
-        FAIL() << "call=true must skip validateEnvelopeSignature";
-    }
-
-    // call=false: chain-id mismatch rejected in m_prepare, before opValidate.
-    EXPECT_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
-                     /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-                     /*chainId=*/kChainId)),
-        bcos::evm::engine::OpConsensusError);
-}
-
 // ---- executeDeposit + finalizeBlock (reuse bcos-evm/opstack runDeposit / finalizeOpBlock) ----
 
 TEST_F(Fixture, ExecutesDepositMint)
@@ -433,7 +376,7 @@ TEST_F(Fixture, ExecutesDepositThroughExecuteTransaction)
     blockHeader.setNumber(1);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
-    auto tx = buildDepositTx();  // Task 1 helper
+    auto tx = buildDepositTx();
     constexpr auto from = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;
     task::syncWait([&]() -> task::Task<void> {
         ledger::account::EVMAccount<MutableStorage> acc(storage, from, false);
@@ -512,12 +455,11 @@ TEST_F(Fixture, FinalizeOpBlockNoReward)
 
 TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
 {
-    // spec §8 (v2: gasLimit only): buildBlockInfo's gasLimit takes header.gasLimit (not
-    // blockGasLeft). Behavior assertion: executing a minimal GASLIMIT-reading contract, slot0 must
-    // store == header.gasLimit(). Before the fix: executeTransaction's BlockInfo.gasLimit =
-    // blockGasLeft (injected value), so the contract stored blockGasLeft; injecting
-    // blockGasLeft(250000) < header.gasLimit(1000000) went red. After the fix:
-    // BlockInfo.gasLimit = header.gasLimit == 1000000 → green. Round-3 P0-1 correction:
+    // buildBlockInfo's gasLimit takes header.gasLimit (not blockGasLeft). Behavior assertion:
+    // executing a minimal GASLIMIT-reading contract, slot0 must store == header.gasLimit().
+    // Before the fix: executeTransaction's BlockInfo.gasLimit = blockGasLeft (injected value), so
+    // the contract stored blockGasLeft; injecting blockGasLeft(250000) < header.gasLimit(1000000)
+    // went red. After the fix: BlockInfo.gasLimit = header.gasLimit == 1000000 → green.
     // blockGasLeft must be ≥ tx.gasLimit(200000) (else state.cpp:390 GAS_LIMIT_REACHED rejects at
     // validation and the test is permanently red) AND < header.gasLimit(1000000) to expose the
     // fork.
@@ -529,7 +471,7 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
-    blockHeader.setGasLimit(bcos::u256(1000000));  // exercises the new path (gasLimit()!=0)
+    blockHeader.setGasLimit(bcos::u256(1000000));  // exercises the header-gasLimit path
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
     ledgerConfig.setEVMCRevision(fork.rev);
 
@@ -551,7 +493,7 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     }());
 
     // EIP-1559 tx calling the observer with empty data, value 0. chainId=10 matches the
-    // executeTransaction call below (Task 2: envelope chain-id binding is enforced in m_prepare).
+    // executeTransaction call below.
     bcos::rpc::Web3Transaction w3{};
     w3.type = bcos::rpc::TransactionType::EIP1559;
     w3.chainId = 10;
@@ -567,7 +509,7 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
-    // Overwrite the signing preimage with the full EIP-2718 envelope (SEV-8 pattern).
+    // Overwrite the signing preimage with the full EIP-2718 envelope.
     auto const envelope = w3.encode();
     tarsHolder->extraTransactionBytes.assign(envelope.begin(), envelope.end());
     bcostars::protocol::TransactionImpl tx([tarsHolder]() { return tarsHolder.get(); });
@@ -575,8 +517,8 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     tx.forceSender(bcos::bytes(kSender.bytes, kSender.bytes + sizeof(kSender.bytes)));
 
     bcos::evm::opstack::OpFeeParams fee{};
-    // Inject blockGasLeft=250000 < header.gasLimit=1000000 (round-3 P0-1: ≥ tx.gasLimit 200000
-    // passes validation, < header exposes the GASLIMIT fork) — the key to exposing the fork.
+    // Inject blockGasLeft=250000 < header.gasLimit=1000000 (≥ tx.gasLimit 200000 passes
+    // validation, < header exposes the GASLIMIT fork) — the key to exposing the fork.
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/250000,
         /*chainId=*/10));
@@ -584,7 +526,7 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     EXPECT_EQ(receipt->status(), 0);
 
     // Read observer slot0: must == header.gasLimit (1000000), not the injected blockGasLeft.
-    // Round-3 P0-2: the storage key is raw 32 bytes (evmc_bytes32{}=32 0x00 bytes); neither
+    // The storage key is raw 32 bytes (evmc_bytes32{}=32 0x00 bytes); neither
     // storageEntry("0") nor a hex string reads it. EVMAccount::storage() returns an evmc_bytes32
     // value (all-zero when unset), not an optional — parse slot.bytes with intx::be::load
     // (32-byte big-endian), not storageEntry's has_value()/operator->.

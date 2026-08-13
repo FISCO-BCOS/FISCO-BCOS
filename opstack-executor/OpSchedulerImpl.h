@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OpSchedulerImpl — the engine-facing seam shim for OP mode. `executeBlock` satisfies the
-// scheduler_v1::TransactionScheduler concept check only (OP mode never calls it — throws
-// immediately); OP block execution goes through the delegate's runOpBlockInjection. Every other
-// method re-publishes the seam surface from OpErrors.h / OpBlockExecute.h so the engine reaches it
-// as a dependent name on `SchedulerType`. A pure template header, no .cpp.
+// OpSchedulerImpl — the engine-facing seam shim for OP mode. `executeBlock` exists only to
+// satisfy the scheduler_v1::TransactionScheduler concept check (OP mode never calls it — throws
+// immediately). A pure template header, no .cpp.
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -17,7 +15,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <opstack-executor/OpBlockExecute.h>  // computeOpTxRoot / announcedCommitmentsOf
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
-#include <opstack-executor/OpErrors.h>
+#include <opstack-executor/OpCommon.h>
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
@@ -50,7 +48,7 @@ public:
     //
     // The engine's newPayload OP branch reaches every name below as a dependent name on its
     // `SchedulerType` template parameter — the only channel available (the engine must not include
-    // anything from bcos-evm). The definitions live in OpErrors.h / OpBlockExecute.h; this block
+    // anything from bcos-evm). The definitions live in OpCommon.h / OpBlockExecute.h; this block
     // re-publishes them under the class scope the engine can reach.
 
     /// The block-execution environment the engine fills in from the payload — the FISCO

@@ -775,7 +775,7 @@ private:
     /// `SchedulerType` is the OP scheduler -- which is what makes every `SchedulerType::`-qualified
     /// name below legal without this library depending on bcos-evm: they are dependent names,
     /// resolved at instantiation in a translation unit that included the OP scheduler header (see
-    /// `opstack-executor/OpErrors.h`'s file comment for the seam's full rationale, and
+    /// `opstack-executor/OpCommon.h`'s file comment for the seam's full rationale, and
     /// `c_opMode` above for the purity constraint).
     ///
     /// This function is the version gate plus a **classification barrier**: it guarantees that

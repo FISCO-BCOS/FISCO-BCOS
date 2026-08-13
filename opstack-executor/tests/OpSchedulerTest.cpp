@@ -1,8 +1,8 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpSchedulerTest — minimal OP-block + three-way-classification unit tests for wired Task 4
-// (the new OpScheduler class).
+// OpSchedulerTest — minimal OP-block + three-way-classification unit tests for the new
+// OpScheduler class.
 //
 // 1. ExecutesMinimalOpBlockEqualToDirectRouteB: the minimal OP block (deposit + 1 normal with
 //    envelope, SEV-8: extraTransactionBytes = full envelope, precedent
@@ -17,7 +17,7 @@
 //    OpConsensusRejected.
 // 3. classifyException direct three-way mapping: OpConsensusError→OpConsensusRejected /
 //    OpStorageError→OpStorageFault / other→UnknownError.
-// 4. CommitPersistsSevenLedgerTables (Task 5c slot-3 E2E): after executeBlock + commitBlock, 7 SYS
+// 4. CommitPersistsSevenLedgerTables: after executeBlock + commitBlock, 7 SYS
 //    tables are asserted persisted (SEV-10, replacing the deleted OpBlockScheduler's RefuseStubs).
 //
 // Golden constraint: minimal OP block receipts/status/gasUsed == direct route B
@@ -32,8 +32,8 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the commit hook (Task 3)
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>  // for migrated call cases (Task 5c fix round 1)
+#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the commit hook
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>  // for migrated call cases
 #include <bcos-table/src/LegacyStorageWrapper.h>         // LegacyStorageWrapper<BackendMemStorage>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -299,7 +299,7 @@ struct Fixture
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     bcos::evm::opstack::OpForkTimestamps forkTimestamps{.isthmusTime = 0,
         .jovianTime = std::numeric_limits<uint64_t>::max()};
-    // Task 3: a real Ledger wired into the scheduler's m_ledger (the commit hook now calls
+    // A real Ledger wired into the scheduler's m_ledger (the commit hook now calls
     // prewriteBlockToBuffer). prewriteBlockToBuffer writes through the commit hook's MutableStorage
     // (wrapped into a fresh LegacyStorageWrapper by prewriteBlock), so the Ledger's own
     // m_stateStorage is only read by asyncGetTotalTransactionCount (SYS_CURRENT_STATE) — the
@@ -322,8 +322,7 @@ struct Fixture
     }
 };
 
-// ── call/getCode case migration (Task 5c fix round 1, verbatim from the deleted
-//    OpBlockSchedulerTest) ──
+// ── call/getCode case migration (verbatim from the deleted OpBlockSchedulerTest) ──
 // Once OpScheduler absorbed OpBlockScheduler's call/getCode pure-virtual implementations, the
 // original OpBlockSchedulerTest RPC-face cases (StatusAndResetNoOp / GetCodeEmpty /
 // CallInvalidReturnsError / CallHappyPathInjectsRealBaseFee) moved into this suite, with the driven
@@ -382,7 +381,7 @@ void seedCallGenesis(MLS& mls, bcos::protocol::BlockHeader::Ptr const& genesisHe
 }
 
 /// Build an EIP-1559 (type 2) web3 tx wrapped as a tars Transaction::Ptr (lambda-holder form).
-/// EIP-1559 is deliberate (round-3 C2): an EIP-2930/legacy tx with maxPriorityFeePerGas=0 would
+/// EIP-1559 is deliberate: an EIP-2930/legacy tx with maxPriorityFeePerGas=0 would
 /// trigger BCOS2Evmone's access_list override (max_priority=max_gas), making effectiveGasPrice =
 /// maxFeePerGas instead of baseFee — a false positive; EIP-1559 keeps max_priority=0 so
 /// effectiveGasPrice == baseFee exactly (injection-sensitive).
@@ -436,17 +435,15 @@ bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& vi
     namespace op = bcos::evm::opstack;
     const auto& cfg =
         op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, f.forkTimestamps);
-    std::vector<op::DepositTx> deposits;
+    // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full envelope overwrite).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
     transactions.reserve(rawTxBytes.size());
     for (auto const& raw : rawTxBytes)
     {
-        if (raw[0] == static_cast<uint8_t>(op::kDepositTxType))
-            deposits.push_back(detail::decodeDepositTx(raw));
         const auto txHash = f.hashImpl->hash(raw);
         auto tarsTx = bcos::engine::detail::opEnvelopeToTars(raw, txHash);
         if (!tarsTx)
-        {  // 镜像 buildOpBlock fallback：minimal tx（hash + wire bytes）
+        {  // mirror buildOpBlock fallback: minimal tx (hash + wire bytes)
             bcostars::Transaction fallback;
             fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
             fallback.extraTransactionBytes.assign(raw.begin(), raw.end());
@@ -456,6 +453,13 @@ bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& vi
         transactions.push_back(std::make_shared<bcostars::protocol::TransactionImpl>(
             [tarsTx = std::move(*tarsTx)]() mutable { return &tarsTx; }));
     }
+    // Deposits built from the Transaction objects (mirroring the execute hook, no RLP parse).
+    std::vector<op::DepositTx> deposits;
+    deposits.reserve(rawTxBytes.size());
+    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+        if (rawTxBytes[i][0] == static_cast<uint8_t>(op::kDepositTxType))
+            deposits.push_back(
+                bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(*transactions[i]));
     bcos::ledger::LedgerConfig ledgerConfig;
     ledgerConfig.setEVMCRevision(cfg.rev);
     bcos::executor_v1::opstack::OpstackExecutor executor{f.receiptFactory, f.hashImpl, cfg};
@@ -510,7 +514,7 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
     // is not written — the execute path doesn't write the header table, only compares).
     fillAnnouncedHeader(header, resultA);
 
-    // Block assembly: extraTransactionBytes = full envelope (SEV-8).
+    // Block assembly: extraTransactionBytes = full envelope.
     auto block = f.blockFactory->createBlock();
     block->setBlockHeader(header);
     auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
@@ -572,9 +576,9 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
             std::string(resultA.receipts[i]->effectiveGasPrice()));
     }
 
-    // Task 6 (P4 M3) golden constraint: executeBlock's (skeleton-driven, execute hook =
-    // runOpBlockInjection route B) full result == direct runOpBlockInjection (route B) —
-    // peekExecuteResult exposes the raw result stashed in the skeleton's m_results.
+    // Golden constraint: executeBlock's (skeleton-driven, execute hook = runOpBlockInjection
+    // route B) full result == direct runOpBlockInjection (route B) — peekExecuteResult exposes
+    // the raw result stashed in the skeleton's m_results.
     auto routeB = f.scheduler->peekExecuteResult();
     BOOST_REQUIRE_MESSAGE(routeB.has_value(), "executeBlock must stash an OpExecuteBlockResult");
     BOOST_CHECK_EQUAL(routeB->stateRoot, resultA.stateRoot);
@@ -596,11 +600,10 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
         BOOST_CHECK_EQUAL(*routeB->seal.blobGasUsed, *resultA.seal.blobGasUsed);
 }
 
-/// Wires Task 5c slot-3 E2E (SEV-10): after OpScheduler executeBlock + commitBlock, 7 SYS tables
-/// are persisted (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
-/// SYS_CURRENT_STATE / SYS_NUMBER_2_TXS / SYS_HASH_2_RECEIPT / SYS_HASH_2_TX). Replaces the
-/// deleted OpBlockScheduler's RefuseStubs (OP block execution/commit is no longer a refused stub
-/// but is genuinely persisted via OpScheduler).
+/// After OpScheduler executeBlock + commitBlock, 7 SYS tables are persisted
+/// (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER / SYS_CURRENT_STATE /
+/// SYS_NUMBER_2_TXS / SYS_HASH_2_RECEIPT / SYS_HASH_2_TX). OP block execution/commit is genuinely
+/// persisted via OpScheduler (not a refused stub).
 BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 {
     Fixture f;
@@ -624,7 +627,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, resultA);
 
-    // Block assembly (SEV-8 full envelope).
+    // Block assembly (full envelope).
     auto block = f.blockFactory->createBlock();
     block->setBlockHeader(header);
     auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
@@ -718,17 +721,16 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
             txEntry.has_value(), "SYS_HASH_2_TX must be written for tx " << txHash.hex());
     }
 
-    // OP 不写 SYS_BLOCK_NUMBER_2_NONCES（prewriteBlockToBuffer writeNonces=false）—— 回归守护，
-    // 防止 commit hook 意外多写 nonce 表。
+    // OP never writes SYS_BLOCK_NUMBER_2_NONCES (prewriteBlockToBuffer writeNonces=false) -
+    // regression guard against the commit hook unexpectedly writing the nonce table.
     auto noncesEntry = bcos::task::syncWait(bcos::storage2::readOne(
         view, StateKey{bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr}));
     BOOST_CHECK_MESSAGE(!noncesEntry.has_value(),
         "SYS_BLOCK_NUMBER_2_NONCES must NOT be written for OP commits (writeNonces=false)");
 }
 
-// ── RPC-face case migration (Task 5c fix round 1, verbatim from the deleted OpBlockSchedulerTest;
-//    driven object changed to OpScheduler — f.scheduler is TestOpScheduler<OpScheduler>;
-//    call/getCode/status/reset inherited) ──
+// ── RPC-face case migration (verbatim from the deleted OpBlockSchedulerTest; driven object
+//    changed to OpScheduler — call/getCode/status/reset inherited) ──
 
 /// Skeleton defaults to no-op status/reset (same semantics as OpBlockScheduler).
 BOOST_AUTO_TEST_CASE(StatusAndResetNoOp)
@@ -773,11 +775,11 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
 }
 
 /// Scheduler-level call-chain (OpScheduler::call → coCallLatest → buildOpBlockInfo) baseFee
-/// injection cross-check (Task 5/dual-path #34): maxPriorityFeePerGas=0 (EIP-1559, BCOS2Evmone
-/// access_list override not triggered) → effectiveGasPrice == base_fee + min(0, maxFee-base_fee) ==
-/// base_fee exactly. Pre-fix buildOpBlockInfo injected base_fee=0 → egp "0x0"; post-fix the header
-/// baseFee(1e9) shines through — proving Task 4's buildOpBlockInfo baseFee fix takes effect on the
-/// scheduler-level call chain.
+/// injection cross-check: maxPriorityFeePerGas=0 (EIP-1559, BCOS2Evmone access_list override not
+/// triggered) → effectiveGasPrice == base_fee + min(0, maxFee-base_fee) == base_fee exactly.
+/// Pre-fix buildOpBlockInfo injected base_fee=0 → egp "0x0"; post-fix the header baseFee(1e9)
+/// shines through — proving buildOpBlockInfo's baseFee fix takes effect on the scheduler-level
+/// call chain.
 BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
 {
     Fixture f;

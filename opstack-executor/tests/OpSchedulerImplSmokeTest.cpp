@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // OpSchedulerImplSmokeTest — minimal compile-and-run verification that the ported
-// `bcos::evm::engine::OpSchedulerImpl` header (op-validator-loop engine OP branch) instantiates
-// against the current branch's types and that its engine-facing seam surface works. The full
-// vector-replay suite lives on the source branch (OpSchedulerImplTest.cpp, t8n-corpus bound);
-// this file deliberately exercises only:
+// `bcos::evm::engine::OpSchedulerImpl` header instantiates against the current branch's types and
+// that its engine-facing seam surface works. Exercises only:
 //   1. construction over a real MultiLayerStorage ViewType;
 //   2. the static seam surface the engine reaches as dependent names
 //      (computeTxRoot / commitmentsOf / isIsthmusActiveAt / isJovianActiveAt);
@@ -115,42 +113,7 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
 // Note: route A (executeOpBlock) is retired — the empty-block rejection test moved to route B
 // (runOpBlockInjection) in OpBlockInjectorTest (EmptyBlockRejectedByInjector). OpSchedulerImpl is
 // now a pure engine seam and no longer executes blocks, so there is no matching execution case
-// here. C2 (W8 review): EIP-7702 authorization yParity is a uint8 in op-geth
-// (core/types/tx_setcode.go:76). A wider RLP scalar — e.g. 0x82 0x01 0x00 (256) — overflows that
-// uint8 and must be rejected at decode time by readCanonicalScalar(in, 1, "authorization
-// yParity"). Without this width check the value-range guard (OpTransition.cpp:67, auth.v > 1)
-// would merely *skip* the authorization and leave the block VALID where op-geth rejects the whole
-// transaction — a consensus split. The value-RANGE case (yParity in [2,255]) is deliberately NOT
-// rejected here (EIP-7702 says skip, not fatal); only the >1-byte encoding is a decode-time error.
-BOOST_AUTO_TEST_CASE(OverWideAuthYParityIsConsensusError)
-{
-    namespace engine = bcos::evm::engine;
-
-    // 0x82 0x01 0x00 = RLP string with payloadLength 2, value 256 → wider than uint8. The
-    // "too wide" message proves the throw comes from the width guard
-    // (readCanonicalScalar: payloadLength > maxBytes), not from the leading-zero or list checks.
-    bcos::bytes wide{0x82, 0x01, 0x00};
-    auto inWide = bcos::ref(wide);
-    BOOST_CHECK_EXCEPTION(engine::detail::decodeAuthYParityScalar(inWide), engine::OpConsensusError,
-        [](const engine::OpConsensusError& e) {
-            return std::string(e.what()).find("too wide") != std::string::npos;
-        });
-
-    // Boundary: the canonical single-byte encodings still decode (yParity 0 and 1).
-    bcos::bytes zero{0x80};  // empty string → 0
-    auto inZero = bcos::ref(zero);
-    BOOST_CHECK(engine::detail::decodeAuthYParityScalar(inZero) == intx::uint256(0));
-
-    bcos::bytes one{0x01};  // 0x01 → 1
-    auto inOne = bcos::ref(one);
-    BOOST_CHECK(engine::detail::decodeAuthYParityScalar(inOne) == intx::uint256(1));
-
-    // Value-RANGE case: a single-byte 0x02 (yParity=2) is NOT rejected at decode — EIP-7702
-    // requires it to be *skipped* at execution (OpTransition.cpp:67), not fatal. Only the
-    // >1-byte encoding is a decode-time error. This pins the width-vs-range boundary.
-    bcos::bytes two{0x02};  // 0x02 → 2
-    auto inTwo = bcos::ref(two);
-    BOOST_CHECK(engine::detail::decodeAuthYParityScalar(inTwo) == intx::uint256(2));
-}
+// here. The EIP-7702 authorization yParity width test was removed with the RLP decode primitives
+// (decodeAuthYParityScalar retired in OpCommon.h).
 
 BOOST_AUTO_TEST_SUITE_END()
