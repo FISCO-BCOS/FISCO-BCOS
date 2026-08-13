@@ -263,3 +263,16 @@ ExecuteContext 直接 `depositFromTransaction(transaction)` 自建 DepositTx 用
 - **不引入骨架**：SchedulerSkeleton 不复活；OpScheduler 保持独立编排。
 - **不统一执行语义**：deposit、六项承诺、Storage2State、announced hash、交易来源差异全部保留（§2.1）。
 - **实现偏差（相对 §5 的"零改动"）**：OpScheduler ctor 加第 8 参 `ioServicePool`（必填），Initializer + 3 个测试 fixture 构造点需更新（共享调度器的 GC 需要 io pool）。
+
+## 10. 实现偏差记录（实现后与 spec 的 3 处必要偏离）
+
+实现（commits 62bd50e05..77d47f2d）中，3 处 brief/spec 字面写法因 C++ 规则无法编译，按技术必要性偏离，均已由 task reviewer 判定可接受：
+
+1. **OpBlockExecutionContext 命名空间级（非 OpstackExecutor 嵌套）**：嵌套 struct 的 default member initializer 不能在宿主类成员函数外求值（`BlockContext{}` 默认参、`ctx{}` 值初始化会报错）。字段 + 默认初始化逐字保留，`using BlockContext = OpBlockExecutionContext` 仍在类内，`BlockContextOf<OpstackExecutor>::type` 面不变。
+
+2. **createExecuteContext 第 7 参带默认值 `= BlockContext{}`**：`executor_v1::TransactionExecutor` concept 要求 6 参调用有效；无默认则 OpstackExecutor 不满足 concept，`SchedulerSerialImpl` 无法实例化。值初始化 = 零注入，与旧 concept 路径语义一致。
+
+3. **preBlockOpSteps 的 `hashes` 输出为 `std::optional<RecentBlockHashes<Storage>>&`**：RecentBlockHashes 有 `Storage&` 引用成员（不可拷贝赋值、无默认构造），裸 `&` 无法编译；`optional.emplace()` 是唯一原地构造载体。调用方 `&*hashes` 安全（emplace 先于返回，抛异常则 ctx 不构造）。
+
+另：`narrowGasUsed`/`hexCumulative` 已从 OpBlockExecute.h 搬至 OpCommon.h（避免 OpstackExecutor.h ↔ OpBlockExecute.h 循环包含）。
+
