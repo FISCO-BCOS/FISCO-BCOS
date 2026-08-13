@@ -16,7 +16,8 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <opstack-executor/OpBlockExecute.h>  // computeOpTxRoot / announcedCommitmentsOf
-#include <opstack-executor/OpErrors.h>  // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
+#include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
+#include <opstack-executor/OpErrors.h>
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>

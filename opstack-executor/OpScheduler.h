@@ -10,6 +10,7 @@
 // Transaction objects are consumed directly (opEnvelopeToTars conversion happened in buildOpBlock).
 
 #include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / OpBlockSeal
+#include <opstack-executor/OpCommitments.h>   // OpBlockCommitments / mismatchedFieldOf / toBcosH256
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>

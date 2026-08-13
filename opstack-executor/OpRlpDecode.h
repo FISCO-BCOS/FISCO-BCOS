@@ -45,7 +45,7 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
     return out;
 }
 
-// `toBcosH256` (evmc::bytes32 -> bcos::h256) lives in OpErrors.h (two identical inline
+// `toBcosH256` (evmc::bytes32 -> bcos::h256) lives in OpCommitments.h (two identical inline
 // definitions of one name in the same namespace would be a redefinition error).
 
 /// Bounds-checked u256→u64 narrowing — explicit > max check, never raw static_cast

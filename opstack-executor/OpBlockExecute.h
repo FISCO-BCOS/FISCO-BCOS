@@ -19,6 +19,7 @@
 #include <bcos-utilities/Common.h>
 #include <ethereum-executor/BCOS2Evmone.h>
 #include <ethereum-executor/StorageStateView.h>
+#include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048 / toBcosH256
 #include <opstack-executor/OpErrors.h>
 #include <opstack-executor/OpRlpDecode.h>
 #include <opstack-executor/OpstackExecutor.h>
