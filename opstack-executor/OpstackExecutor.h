@@ -152,8 +152,8 @@ public:
                 storage, blockHeader, dep, chainId, blockGasLeft, ledgerConfig, blockHashes);
         }
 
-        auto props = co_await m_prepare(
-            storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft);
+        auto props =
+            co_await m_prepare(storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft);
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(storage, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes);

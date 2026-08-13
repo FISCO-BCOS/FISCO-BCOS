@@ -445,7 +445,8 @@ private:
     /// public visitAccounts entry point). Two kinds of row are skipped before they can reach the
     /// returned map, and the two filters are cumulative, not alternatives: tombstoned rows (so a
     /// logically-deleted slot cannot resurrect) and zero-valued slot rows (zero ≡ the slot does
-    /// not exist, matching what accountStorageRoot/opStorageRoot already do when building the trie).
+    /// not exist, matching what accountStorageRoot/opStorageRoot already do when building the
+    /// trie).
     task::Task<std::map<evmc::bytes32, evmc::bytes32>> fetchAllStorage(std::string tableName) const
     {
         std::map<evmc::bytes32, evmc::bytes32> storage;
@@ -697,7 +698,8 @@ private:
     }
 
     /// get_account_code: read via CODE_HASH -> SYS_CODE_BINARY. This bridge serves only the
-    /// storage2 stack and does not reproduce EVMAccount::code()'s fallback to the legacy CODE field.
+    /// storage2 stack and does not reproduce EVMAccount::code()'s fallback to the legacy CODE
+    /// field.
     task::Task<evmc::bytes> fetchCode(std::string tableName) const
     {
         auto codeHashEntry = co_await storage2::readOne(m_storage.get(),

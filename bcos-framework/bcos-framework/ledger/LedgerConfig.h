@@ -23,10 +23,10 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 #include "SystemConfigs.h"
-#include <evmc/evmc.hpp>
 #include <algorithm>
-#include <charconv>
 #include <cctype>
+#include <charconv>
+#include <evmc/evmc.hpp>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -374,8 +374,7 @@ inline std::string_view evmcRevisionName(evmc_revision rev)
 /// SYS_CONFIG value string. Format: a comma-separated list of "block:forkName" entries.
 /// The first entry is always the block-0 base revision, so decoding always yields a
 /// complete fork schedule.
-inline std::string encodeEVMCRevisionConfig(
-    std::optional<evmc_revision> explicitRev,
+inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explicitRev,
     std::map<bcos::protocol::BlockNumber, evmc_revision> const& forks)
 {
     evmc_revision base = EVMC_REVISION_DEFAULT;
@@ -417,8 +416,8 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
     while (pos < value.size())
     {
         auto comma = value.find(',', pos);
-        auto entry = value.substr(pos,
-            comma == std::string_view::npos ? std::string_view::npos : comma - pos);
+        auto entry = value.substr(
+            pos, comma == std::string_view::npos ? std::string_view::npos : comma - pos);
         pos = comma == std::string_view::npos ? value.size() : comma + 1;
 
         auto colon = entry.find(':');
@@ -435,8 +434,7 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         auto blockStr = entry.substr(0, colon);
         auto name = entry.substr(colon + 1);
         bcos::protocol::BlockNumber block = 0;
-        auto [ptr, ec] =
-            std::from_chars(blockStr.data(), blockStr.data() + blockStr.size(), block);
+        auto [ptr, ec] = std::from_chars(blockStr.data(), blockStr.data() + blockStr.size(), block);
         if (ec != std::errc())
         {
             continue;
@@ -470,8 +468,9 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         // chain, so a corrupt persisted value must halt loudly, not silently fall back
         // to a compile-time default: two nodes on different binaries would otherwise
         // execute the same blocks under different revisions (a silent state-root fork).
-        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
-            "cannot parse evmc_revision config value: " + std::string(value)));
+        BOOST_THROW_EXCEPTION(
+            InvalidEVMCRevisionConfig()
+            << errinfo_comment("cannot parse evmc_revision config value: " + std::string(value)));
     }
 }
 }  // namespace bcos::ledger

@@ -195,7 +195,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     auto depTx = makeAttributesDeposit();  // OpBlockTx
     auto normTx = makeEip1559OpBlockTx();  // OpBlockTx
     std::vector<op::DepositTx> deposits{std::get<op::DepositTx>(depTx.tx)};
-    // Block-order transactions: index 0 is the deposit placeholder (untouched by the deposit branch), index 1 is normal.
+    // Block-order transactions: index 0 is the deposit placeholder (untouched by the deposit
+    // branch), index 1 is normal.
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{nullptr, buildEip1559FiscoTx()};
     // makeAttributesDeposit leaves signedEnvelope empty; runOpBlockInjection classifies by
     // rawTxBytes[0][0] -> rebuild the real 0x7e envelope with encodeDepositEnvelope.
