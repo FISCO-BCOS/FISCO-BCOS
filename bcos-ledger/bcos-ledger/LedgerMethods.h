@@ -46,11 +46,14 @@ inline task::AwaitableValue<bool> tag_invoke(ledger::tag_t<buildGenesisBlock> /*
 
 task::Task<void> prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage);
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+    bool writeNonces = true);
 
 task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, auto& storage)
+    bool withTransactionsAndReceipts, auto& storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
 {
     static_assert(
         !std::convertible_to<std::remove_const_t<decltype(storage)>, storage::StorageInterface&>,
@@ -70,7 +73,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInter
     }
 
     co_await prewriteBlockToStorage(ledger, std::move(transactions), std::move(block),
-        withTransactionsAndReceipts, std::move(legacyStorage));
+        withTransactionsAndReceipts, std::move(legacyStorage), blockHashOverride, writeNonces);
 }
 
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
@@ -83,7 +86,8 @@ task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerI
 // bypassing m_blockStorage so the caller can mergeBack everything atomically.
 task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     LedgerInterface& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
-    bcos::protocol::Block::ConstPtr block, auto& storage)
+    bcos::protocol::Block::ConstPtr block, auto& storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt, bool writeNonces = true)
 {
     if (!block)
     {
@@ -94,7 +98,8 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     // existing prewriteBlock path. withTransactionsAndReceipts=false intentionally
     // skips the tx/receipt writes that would otherwise go to m_blockStorage; we
     // route them through the same `storage` below to keep the commit atomic.
-    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage);
+    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage,
+        blockHashOverride, writeNonces);
 
     auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
     if (txSize == 0)
@@ -390,8 +395,7 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
     int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
-        versionConfig)
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
     {
         executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
@@ -491,8 +495,7 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
         bcos::protocol::BlockNumber blockNumber = -1;
         try
         {
-            blockNumber =
-                boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
+            blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {

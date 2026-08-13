@@ -259,7 +259,9 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features) override
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) override
     {
         (void)storage;
         (void)block;
@@ -300,7 +302,8 @@ public:
         {
             auto tx = blockTxs ? blockTxs->at(i) : block->transactions()[i].toShared();
             auto txHash = tx->hash();
-            auto txData = std::make_shared<bcos::bytes>();  // C3: fix null shared_ptr dereference (P4-3)
+            auto txData =
+                std::make_shared<bcos::bytes>();  // C3: fix null shared_ptr dereference (P4-3)
             tx->encode(*txData);
             m_txsHashToData[txHash] = txData;
         }

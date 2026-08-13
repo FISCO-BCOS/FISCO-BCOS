@@ -137,7 +137,8 @@ public:
             .AlwaysDo([](bcos::storage::StorageInterface::Ptr, bcos::protocol::ConstTransactionsPtr,
                           bcos::protocol::Block::ConstPtr,
                           std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool,
-                          std::optional<bcos::ledger::Features>) { callback({}, nullptr); });
+                          std::optional<bcos::ledger::Features>,
+                          std::optional<bcos::crypto::HashType>, bool) { callback({}, nullptr); });
         // Ledger: storeTransactionsAndReceipts => no error
         fakeit::When(Method(mockLedger, storeTransactionsAndReceipts))
             .AlwaysDo([](bcos::protocol::ConstTransactionsPtr,

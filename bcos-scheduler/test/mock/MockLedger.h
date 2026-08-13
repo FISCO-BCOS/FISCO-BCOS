@@ -14,7 +14,9 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features>) override
+        std::optional<bcos::ledger::Features>,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) override
     {
         BOOST_CHECK_EQUAL(block->blockHeader()->number(), 100);
         callback("", nullptr);
