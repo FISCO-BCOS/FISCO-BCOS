@@ -9,9 +9,9 @@
 
 #include <opstack-executor/OpErrors.h>  // OpBlockSeal / OpExecuteBlockResult
 
+#include <bcos-utilities/FixedBytes.h>
 #include <array>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
-#include <bcos-utilities/FixedBytes.h>
 #include <cstring>
 #include <evmc/evmc.hpp>
 #include <optional>
