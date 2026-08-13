@@ -47,6 +47,7 @@ If a self-written implementation artifact still carries immutableReferences
 (unfilled immutables), the build aborts naming the contract.
 """
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -170,6 +171,11 @@ PLACEHOLDER_ADDRESS = 0xDEAD
 # not committing the feature set the node actually runs with.
 SYSTEM_CONFIG_PREDEPLOY = 0x43000000000000000000000000000000000000C0
 
+# OP ProxyAdmin storage layout: the contract is plain OZ `Ownable`, so its
+# `_owner` lives at slot 0. The upgrade authority of every proxied predeploy
+# is ProxyAdmin.owner — NOT the ProxyAdmin contract address — and the base
+# allocs are the source of truth for it.
+PROXY_ADMIN_OWNER_SLOT = 0
 
 
 def in_reserved_namespace(address_int):
@@ -202,6 +208,33 @@ def parse_amount(value, label):
     if text.startswith("0x"):
         return int(text, 16) if len(text) > 2 else 0
     return int(text, 10) if text else 0
+
+
+def verify_base_provenance(path, expected_sha256):
+    """Pin the base alloc file to the frozen artifact by whole-file SHA-256.
+
+    The op-deployer output carries no version metadata of its own, and the
+    Karst predeploy codehashes are unknown until the real artifact is
+    generated — so the strongest static pin available today is the SHA-256 of
+    the whole file, recorded next to the frozen quintuple
+    (bcos-l2-contracts/op-fork-pin.toml [karst_pin].base_allocs_sha256) and
+    mirrored into the chain config. When the chain config carries no
+    expected hash yet (pre-freeze iteration), warn loudly instead of failing.
+    """
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    if not expected_sha256:
+        sys.stderr.write(
+            f"WARNING: base allocs provenance unpinned - set base_allocs_sha256 "
+            f"in the chain config once the artifact is frozen "
+            f"(sha256 of {path} = {digest})\n")
+        return digest
+    expected = strip0x(expected_sha256).lower()
+    if digest != expected:
+        raise ValueError(
+            f"{path}: sha256 mismatch - file is {digest} but the chain config "
+            f"pins base_allocs_sha256 = {expected}; this is not the frozen "
+            f"op-deployer artifact")
+    return digest
 
 
 def load_base_allocs(path):
@@ -464,6 +497,26 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
             f"entities (upgrade authority vs config/validator write "
             f"authority; see the two-authority split in the module doc)")
 
+    # Two-authority split, checked against the REAL upgrade authority: the
+    # base alloc's ProxyAdmin.owner (OZ Ownable, slot 0), not merely the
+    # ProxyAdmin contract address.
+    admin_account = base_accounts.get(address_int(proxy_admin))
+    if admin_account is None or not admin_account["code"]:
+        raise ValueError(
+            f"{name}: proxy_admin {proxy_admin} is missing (or code-less) in "
+            f"the base allocs — wrong/incomplete op-deployer output?")
+    admin_owner = admin_account["storage"].get(PROXY_ADMIN_OWNER_SLOT, 0)
+    if admin_owner == 0:
+        raise ValueError(
+            f"{name}: ProxyAdmin.owner (slot {PROXY_ADMIN_OWNER_SLOT} of "
+            f"{proxy_admin}) is zero/absent in the base allocs — the upgrade "
+            f"authority is burned; refuse to mint such a chain")
+    if admin_owner == address_int(governance_owner):
+        raise ValueError(
+            f"{name}: governance_owner equals ProxyAdmin.owner "
+            f"(0x{admin_owner:040x}) — upgrade authority and config/validator "
+            f"write authority must be different entities")
+
     proxy_address = address_int(predeploy["address"])
     implementation_address = address_int(proxy_spec["implementation"])
     for label, addr in (("address", proxy_address),
@@ -640,6 +693,7 @@ def main(argv=None):
 
     with open(args.config) as handle:
         config = yaml.safe_load(handle)
+    verify_base_provenance(args.base_allocs, config.get("base_allocs_sha256"))
     base_accounts = load_base_allocs(args.base_allocs)
     allocs = build_allocs(config, args.contracts, base_accounts)
     ini = emit_ini(allocs)

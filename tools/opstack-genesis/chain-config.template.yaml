@@ -17,6 +17,13 @@
 # their post-deployment terminal state: a Proxy account (EIP-1967 slots +
 # contract storage) plus a separate implementation account.
 
+# SHA-256 of the op-deployer base alloc file (--base-allocs), recorded next to
+# the frozen quintuple in bcos-l2-contracts/op-fork-pin.toml
+# ([karst_pin].base_allocs_sha256). Leave empty during pre-freeze iteration
+# (the tool warns); once the artifact is frozen, set it — a mismatching base
+# file is then rejected.
+base_allocs_sha256: ""
+
 # Two-authority split (the tool REJECTS these being the same entity):
 #   proxy_admin       -> EIP-1967 admin slot: upgrade authority (ProxyAdmin
 #                        predeploy).

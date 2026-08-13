@@ -9,10 +9,11 @@ CONTRACTS ?= ../../bcos-l2-contracts
 # prefunded accounts) comes from this file; generating it needs the
 # op-deployer binary (see the karst_pin in $(CONTRACTS)/op-fork-pin.toml).
 BASE      ?= final-allocs.json
-# Path to a clone of the pinned OP fork. NOT needed for `make allocs` —
-# genesis takes OP bytecode from $(BASE). The clone/build targets remain for
-# compiling the pinned sources (e.g. to inspect them or cross-check
-# storage layouts against the deployer output).
+# Path to a clone of the OP fork at the FROZEN Karst pin
+# ([karst_pin].op_contracts_commit in $(CONTRACTS)/op-fork-pin.toml). NOT
+# needed for `make allocs` — genesis takes OP bytecode from $(BASE). The
+# clone/build targets remain for inspecting the pinned sources / cross-
+# checking against the deployer output.
 OP_FORK   ?= /tmp/op-fork
 # chain-config YAML (copy chain-config.template.yaml and edit).
 CONFIG    ?= chain-config.yaml
@@ -41,11 +42,13 @@ allocs:
 	$(PYTHON) build-allocs.py --config $(CONFIG) --contracts $(CONTRACTS) \
 	    --base-allocs $(BASE) --out $(OUT) --out-json $(OUT_JSON)
 
-# Clone the pinned OP fork into $(OP_FORK). No-op if the dir already exists —
-# bumping the pin is a manual step (see docs/runbook-op-fork-upgrade.md).
+# Clone the OP fork at the frozen Karst pin into $(OP_FORK). No-op if the dir
+# already exists — bumping the pin is a manual step (see
+# docs/runbook-op-fork-upgrade.md). Note: this reads the [karst_pin] table,
+# NOT the top-level legacy compile-check pin CI still consumes.
 op-fork:
 	@if [ ! -d "$(OP_FORK)" ]; then \
-		COMMIT=$$(grep -E '^commit' $(CONTRACTS)/op-fork-pin.toml | awk -F'"' '{print $$2}'); \
+		COMMIT=$$(grep -E '^op_contracts_commit' $(CONTRACTS)/op-fork-pin.toml | awk -F'"' '{print $$2}'); \
 		git clone --filter=blob:none https://github.com/ethereum-optimism/optimism $(OP_FORK); \
 		git -C $(OP_FORK) checkout $$COMMIT; \
 		git -C $(OP_FORK) submodule update --init --recursive --depth=1 \

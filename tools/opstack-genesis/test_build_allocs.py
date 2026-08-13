@@ -30,6 +30,10 @@ SYSTEM_CONFIG_IMPL = "0xc3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d300c0"
 VALIDATOR_SET_ADDR = "0x43000000000000000000000000000000000000C1"
 VALIDATOR_SET_IMPL = "0xc3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d3c3d300c1"
 PROXY_ADMIN = "0x4200000000000000000000000000000000000018"
+# ProxyAdmin.owner (OZ Ownable slot 0) as seeded in the synthetic base — the
+# REAL upgrade authority, distinct from both the ProxyAdmin contract address
+# and the governance owner.
+PROXY_ADMIN_OWNER = "0x000000000000000000000000000000000000a11c"
 GOVERNANCE_OWNER = "0x000000000000000000000000000000000000d00d"
 
 L1BLOCK_PROXY = "0x4200000000000000000000000000000000000015"
@@ -74,10 +78,11 @@ def _synthetic_base():
         },
         # its implementation in the OP code namespace
         L1BLOCK_IMPL: {"balance": "0x0", "nonce": "0x0", "code": L1BLOCK_IMPL_CODE},
-        # ProxyAdmin with a seeded owner slot
+        # ProxyAdmin with its owner (OZ Ownable slot 0) seeded — the upgrade
+        # authority the two-authority check compares against.
         PROXY_ADMIN: {
             "code": PROXY_ADMIN_CODE,
-            "storage": {"0x" + format(0, "064x"): GOVERNANCE_OWNER},
+            "storage": {"0x" + format(0, "064x"): PROXY_ADMIN_OWNER},
         },
         # a prefunded EOA (no code)
         PREFUNDED_EOA: {"balance": "0xde0b6b3a7640000", "nonce": "0x1"},
@@ -169,7 +174,7 @@ def test_merge_preserves_base_and_adds_overlay(tmp_path):
     by_address = {alloc["address"]: alloc for alloc in allocs}
     # every base account survives untouched
     assert by_address[L1BLOCK_PROXY.lower()]["code"] == PROXY_CODE
-    assert by_address[PROXY_ADMIN.lower()]["storage"][0] == int(GOVERNANCE_OWNER, 16)
+    assert by_address[PROXY_ADMIN.lower()]["storage"][0] == int(PROXY_ADMIN_OWNER, 16)
     assert by_address[PREFUNDED_EOA]["balance"] == 10**18
     # overlay added proxy + implementation
     assert SYSTEM_CONFIG_ADDR.lower() in by_address
@@ -419,6 +424,53 @@ def test_same_admin_and_owner_rejected(tmp_path):
         build_allocs.build_allocs(config, str(contracts), base)
 
 
+def test_governance_owner_equal_to_proxy_admin_owner_rejected(tmp_path):
+    # The REAL upgrade authority is ProxyAdmin.owner (base alloc, OZ Ownable
+    # slot 0) — pointing governance at that entity collapses the two
+    # authorities even though the addresses of the CONTRACTS differ.
+    contracts = _base_contracts(tmp_path)
+    base = _load_base(tmp_path)
+    config = _config(_system_config_predeploy())
+    config["governance_owner"] = PROXY_ADMIN_OWNER
+    with pytest.raises(ValueError, match="ProxyAdmin.owner"):
+        build_allocs.build_allocs(config, str(contracts), base)
+
+
+def test_burned_proxy_admin_owner_rejected(tmp_path):
+    # ProxyAdmin.owner zero/absent in the base = the upgrade authority is
+    # burned; minting such a chain deserves its own loud error.
+    contracts = _base_contracts(tmp_path)
+    base_data = _synthetic_base()
+    del base_data[PROXY_ADMIN]["storage"]
+    base = _load_base(tmp_path, base=base_data)
+    with pytest.raises(ValueError, match="burned"):
+        build_allocs.build_allocs(
+            _config(_system_config_predeploy()), str(contracts), base)
+
+
+def test_missing_proxy_admin_account_rejected(tmp_path):
+    contracts = _base_contracts(tmp_path)
+    base_data = _synthetic_base()
+    del base_data[PROXY_ADMIN]
+    base = _load_base(tmp_path, base=base_data)
+    with pytest.raises(ValueError, match="proxy_admin.*missing"):
+        build_allocs.build_allocs(
+            _config(_system_config_predeploy()), str(contracts), base)
+
+
+def test_base_provenance_sha256(tmp_path):
+    path = tmp_path / "base.json"
+    path.write_text(json.dumps(_synthetic_base()))
+    import hashlib
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    # pinned and matching -> passes and returns the digest
+    assert build_allocs.verify_base_provenance(str(path), digest) == digest
+    # pinned and mismatching -> the file is not the frozen artifact
+    with pytest.raises(ValueError, match="sha256 mismatch"):
+        build_allocs.verify_base_provenance(str(path), "ab" * 32)
+    # unpinned (pre-freeze) -> warns but passes
+    assert build_allocs.verify_base_provenance(str(path), "") == digest
+
 
 def test_reserved_namespace_rejected(tmp_path):
     contracts = _base_contracts(tmp_path)
@@ -584,6 +636,10 @@ def _template_pipeline(tmp_path):
     base = {expected["address"]: {"code": "0x60ff"}
             for expected in config["expected_predeploys"]}
     base[config["proxy_code_source"]] = {"code": PROXY_CODE}
+    # seed ProxyAdmin.owner (slot 0): the two-authority check reads the real
+    # upgrade authority from the base allocs
+    base[config["proxy_admin"]]["storage"] = {
+        "0x" + format(0, "064x"): PROXY_ADMIN_OWNER}
     return config, contracts, _load_base(tmp_path, base=base)
 
 
