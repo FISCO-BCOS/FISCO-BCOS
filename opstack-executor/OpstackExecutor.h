@@ -70,10 +70,10 @@ class OpstackExecutor
 public:
     OpstackExecutor(protocol::TransactionReceiptFactory::Ptr receiptFactory,
         crypto::Hash::Ptr hashImpl,
-        bcos::evm::opstack::OpForkConfig const& forkConfig = bcos::evm::opstack::jovianConfig())
+        bcos::evm::opstack::OpForkConfig forkConfig = bcos::evm::opstack::jovianConfig())
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
-        m_forkConfig(forkConfig),
+        m_forkConfig(std::move(forkConfig)),
         m_vm(evmc_create_evmone())
     {}
 
@@ -472,7 +472,9 @@ public:
 private:
     protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     crypto::Hash::Ptr m_hashImpl;
-    bcos::evm::opstack::OpForkConfig const& m_forkConfig;
+    // Value copy, not a reference: OpForkConfig is small (~32B, once per block) and a reference
+    // member to a caller's config is the same lifetime footgun class that m_ctx had.
+    bcos::evm::opstack::OpForkConfig m_forkConfig;
     evmc::VM m_vm;
 };
 

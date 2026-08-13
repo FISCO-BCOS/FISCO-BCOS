@@ -83,6 +83,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 
     OpBlockResult result;
     result.receipts.reserve(txs.size());
+    result.txTypes.reserve(txs.size());
     int64_t blockGasLeft = block.gas_limit;
     int64_t cumulative = 0;
     bool seenNonDeposit = false;

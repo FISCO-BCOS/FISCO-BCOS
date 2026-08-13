@@ -97,10 +97,14 @@ inline std::optional<std::string> mismatchedFieldOf(
         return "gasUsed";
     if (computed.txRoot != announced.txRoot)
         return "transactionsRoot";
-    if (computed.blobGasUsed.has_value() && *computed.blobGasUsed != *announced.blobGasUsed)
+    // Compared only when the computed side has a value (the fork gate decides whether the field
+    // exists at all). A present computed value paired with a MISSING announced one is a real
+    // mismatch (report it) rather than a bad_optional_access crash.
+    if (computed.blobGasUsed.has_value() &&
+        (!announced.blobGasUsed.has_value() || *computed.blobGasUsed != *announced.blobGasUsed))
         return "blobGasUsed";
     if (computed.requestsHash.has_value() &&
-        *computed.requestsHash != announced.requestsHash.value())
+        (!announced.requestsHash.has_value() || *computed.requestsHash != *announced.requestsHash))
         return "requestsHash";
     return std::nullopt;
 }
