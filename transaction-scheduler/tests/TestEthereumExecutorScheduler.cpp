@@ -590,7 +590,6 @@ BOOST_AUTO_TEST_CASE(serialSameNonceSecondRejected)
         // mapping (e.g. mis-mapped to Unknown) is caught, not just "non-zero".
         BOOST_CHECK_EQUAL(receipts[1]->status(),
             static_cast<int32_t>(protocol::TransactionStatus::NonceCheckFail));
->>>>>>> fisco/release-3.18.0
 
         // The sender must NOT be wrapped to ~2^256: only the first transfer is
         // debited, and the rejected second one writes nothing.
