@@ -89,6 +89,18 @@ BOOST_AUTO_TEST_CASE(bothDriversEnabledRejectedInReverseLoadOrder)
     BOOST_CHECK_THROW(probe.loadOpEngineRpcConfig(pt), InvalidConfig);
 }
 
+BOOST_AUTO_TEST_CASE(allowV1ExecutorDefaultsOff)
+{
+    LoaderProbe probe;
+    probe.loadOpEngineRpcConfig(fromIni("[op_engine_rpc]\nenable=true\n"));
+    BOOST_CHECK(!probe.opEngineAllowV1Executor());
+
+    LoaderProbe probe2;
+    probe2.loadOpEngineRpcConfig(
+        fromIni("[op_engine_rpc]\nenable=true\nunsafe_allow_v1_executor=true\n"));
+    BOOST_CHECK(probe2.opEngineAllowV1Executor());
+}
+
 BOOST_AUTO_TEST_CASE(engineDrivenBlockProduction)
 {
     LoaderProbe probe;

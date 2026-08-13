@@ -839,6 +839,8 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     const std::string jwtSecretFile =
         _pt.get<std::string>("op_engine_rpc.jwt_secret_file", "conf/op-engine/jwt.hex");
     const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
+    // test-only escape hatch, see Initializer's executor-version guard
+    const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
 
     m_enableOpEngineRpc = enableOpEngineRpc;
     // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
@@ -857,6 +859,7 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
     m_opEngineJwtSecretFile = jwtSecretFile;
     m_opEngineClockSkewSecs = clockSkewSecs;
+    m_opEngineAllowV1Executor = allowV1Executor;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
                          << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
@@ -864,7 +867,8 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
                          << LOG_KV("jwtSecretFile", jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", clockSkewSecs);
+                         << LOG_KV("clockSkewSecs", clockSkewSecs)
+                         << LOG_KV("unsafeAllowV1Executor", allowV1Executor);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -2367,6 +2371,11 @@ uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
 const std::string& NodeConfig::opEngineJwtSecretFile() const
 {
     return m_opEngineJwtSecretFile;
+}
+
+bool NodeConfig::opEngineAllowV1Executor() const
+{
+    return m_opEngineAllowV1Executor;
 }
 
 int32_t NodeConfig::opEngineClockSkewSecs() const

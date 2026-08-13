@@ -25,10 +25,10 @@
  */
 
 #include "Initializer.h"
-#include "EthereumBlockHashLookup.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
+#include "EthereumBlockHashLookup.h"
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
@@ -336,14 +336,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // The 256-ancestor window is bounded by the current block height, which the
     // executor's execution context already knows (EthereumHost passes
     // m_block.number), so no storage read for the current height is needed.
-    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
-                                       int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
+    auto ethereumBlockHashLookup =
+        [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
+            int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
         // The body lives in EthereumBlockHashLookup.h (shared with the
         // scheduler integration test so they exercise the same provider).
         return ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
     };
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
-        *m_protocolInitializer->blockFactory()->receiptFactory(), std::move(ethereumBlockHashLookup));
+        *m_protocolInitializer->blockFactory()->receiptFactory(),
+        std::move(ethereumBlockHashLookup));
 
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
@@ -376,16 +378,26 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
     // endpoint would silently serve the v1 EngineService built below, and an external
     // op-node — which trusts the EL and never cross-checks state roots — would drive a
-    // chain with v1 (non-Ethereum) semantics. Fail fast instead. (The v1 Engine API stays
-    // available to the in-process single-node driver for local testing.)
+    // chain with v1 (non-Ethereum) semantics. Fail fast instead. The only exception is the
+    // explicit test-only escape hatch unsafe_allow_v1_executor, which the v1 Engine API
+    // integration harness (tools/engine_integration_test.sh, driving the v1 EngineService
+    // over this endpoint with a mock CL / Lodestar) sets; production configs must not.
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "op_engine_rpc requires executor_version >= " +
-                std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
-                " (the pure-Ethereum executor): on executor_version < 2 the endpoint would "
-                "serve v1 semantics that diverge from an OP Stack chain"));
+        if (!m_nodeConfig->opEngineAllowV1Executor())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "op_engine_rpc requires executor_version >= " +
+                    std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
+                    " (the pure-Ethereum executor): on executor_version < 2 the endpoint "
+                    "would serve v1 semantics that diverge from an OP Stack chain. For the "
+                    "v1 Engine API test harness only, set [op_engine_rpc] "
+                    "unsafe_allow_v1_executor=true"));
+        }
+        INITIALIZER_LOG(WARNING) << LOG_DESC(
+            "op_engine_rpc serving the v1 EngineService (unsafe_allow_v1_executor=true): "
+            "test-harness mode, never drive this endpoint with a production op-node");
     }
 
     if (baselineSchedulerConfig.parallel)
@@ -441,8 +453,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
-                ledger);
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
         }
     }
     else

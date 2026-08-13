@@ -196,6 +196,10 @@ public:
     uint32_t opEngineBatchRequestSizeLimit() const;
     const std::string& opEngineJwtSecretFile() const;
     int32_t opEngineClockSkewSecs() const;
+    // test-only escape hatch: allow [op_engine_rpc] to serve the v1 EngineService on
+    // executor_version < 2 (the v1 Engine API integration harness drives it over this
+    // endpoint); production configs must never set it
+    bool opEngineAllowV1Executor() const;
 
     // single-node consensus configurations
     bool enableSingleNodeConsensus() const;
@@ -500,6 +504,7 @@ private:
     uint32_t m_opEngineBatchRequestSizeLimit{};
     std::string m_opEngineJwtSecretFile;
     int32_t m_opEngineClockSkewSecs{60};
+    bool m_opEngineAllowV1Executor = false;
 
     // config for single-node consensus
     bool m_enableSingleNodeConsensus = false;
