@@ -17,14 +17,14 @@
 #include <stdexcept>
 
 // isL1AttributesTx / narrowGasUsed / hexCumulative were exported to OpBlockExecute.h
-// (R3: shared with OpBlockInjector.h runOpBlockInjection — one implementation, no copy drift);
+// (shared with runOpBlockInjection — one implementation, no copy drift);
 // the anonymous-namespace copies are removed so processOpBlock sees exactly one definition.
 
 namespace bcos::evm::opstack
 {
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg)
 {
-    // C-3/C-4 are Jovian-only: op-geth calls CalcDAFootprint only under `IsJovian`
+    // Jovian-only: op-geth calls CalcDAFootprint only under `IsJovian`
     // (block_validator.go:120) and CalcDAFootprint is documented "must not be called for pre-Jovian
     // blocks" (rollup_cost.go:562). `has_da_footprint` is true iff the active config is Jovian
     // (OpForkSchedule.cpp).
@@ -42,7 +42,7 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
     const auto& data = firstDep->data;
     if (data.size() == IsthmusL1AttributesLen)
     {
-        // C-4: Jovian *activation* block. The first Jovian block still carries Isthmus-length L1
+        // Jovian *activation* block. The first Jovian block still carries Isthmus-length L1
         // attributes (no DA-footprint gas scalar yet) and op-geth requires it to be deposits-only
         // (rollup_cost.go:568-576). Checking the LAST tx is sufficient because deposits always
         // precede non-deposits (enforced by processOpBlock's "deposit after non-deposit" guard),
@@ -53,7 +53,7 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
         return;
     }
 
-    // C-3: a normal Jovian block's L1 attributes calldata must carry the Jovian selector and be at
+    // A normal Jovian block's L1 attributes calldata must carry the Jovian selector and be at
     // least the Jovian length (op-geth `ExtractDAFootprintGasScalar`, rollup_cost.go:547-556).
     if (data.size() < JovianL1AttributesLen)
         throw std::runtime_error(
@@ -94,8 +94,8 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     if (firstDep == nullptr || !isL1AttributesTx(*firstDep))
         throw std::runtime_error("op block: first tx is not the L1 attributes deposit");
 
-    // Step 2 precondition: Jovian L1-attributes block shape — attributes selector/length (C-3)
-    // and the activation block's deposits-only rule (C-4). No-op pre-Jovian. Placed before the
+    // Step 2 precondition: Jovian L1-attributes block shape — attributes selector/length and the
+    // activation block's deposits-only rule. No-op pre-Jovian. Placed before the
     // per-tx loop so an activation block carrying a user tx is refused before any of it executes,
     // mirroring op-geth's `CalcDAFootprint` in block validation.
     validateJovianBlockShape(txs, cfg);
@@ -146,10 +146,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                     const auto& attrData = std::get<DepositTx>(txs[0].tx).data;
                     if (attrData.size() == IsthmusL1AttributesLen)
                     {
-                        // Under C-4 the activation block has no user tx, so this branch is
-                        // structurally unreachable; if C-4 were ever relaxed, op-geth would reject
-                        // the block here (CalcDAFootprint requires deposits-only for Isthmus
-                        // length, rollup_cost.go:572-575) rather than set 0.
+                        // The activation block has no user tx, so this branch is structurally
+                        // unreachable; if the deposits-only rule were ever relaxed, op-geth would
+                        // reject the block here (CalcDAFootprint requires deposits-only for
+                        // Isthmus length, rollup_cost.go:572-575) rather than set 0.
                         fee.da_footprint_gas_scalar = 0;
                     }
                     else if (attrData.size() >= JovianL1AttributesLen)
@@ -364,7 +364,7 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     }
 
     // Jovian block-header BlobGasUsed reuse slot (equivalent to CalcDAFootprint, see header
-    // comment; reclaimed by M-B2 decision record 2). Only non-deposit receipts carry
+    // comment). Only non-deposit receipts carry
     // da_footprint in their opStackMeta — deposits always have it nullopt, so summing over every
     // receipt is equivalent to the old OpTxReceipt-only loop.
     if (cfg.has_da_footprint)

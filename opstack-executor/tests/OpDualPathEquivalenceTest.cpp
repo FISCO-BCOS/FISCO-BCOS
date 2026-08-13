@@ -68,7 +68,7 @@
 #include <engine/bcos-engine/EngineServiceImpl.h>
 #include <ethereum-executor/BCOS2Evmone.h>
 #include <json/json.h>
-#include <opstack-executor/OpBlockInjector.h>
+#include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpScheduler.h>  // route A surgery (Task 6 P1-8): executeBlock drives
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpTxDecode.h>

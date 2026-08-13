@@ -4,8 +4,8 @@
 
 // OpSchedulerImpl — the engine-facing seam shim for OP mode. `executeBlock` satisfies the
 // scheduler_v1::TransactionScheduler concept check only (the concept is unconditional; OP mode
-// never calls it — throws immediately). Route A (`executeOpBlock`) is retired — OP block
-// execution goes through the delegate's route B (runOpBlockInjection). Every other method
+// never calls it — throws immediately). OP block execution goes through the delegate's
+// runOpBlockInjection. Every other method
 // re-publishes the seam surface from OpEngineSeam.h so the engine reaches it as a dependent name
 // on `SchedulerType`.
 //
@@ -43,11 +43,11 @@ namespace detail
 {
 // Decode primitives (conversions / RLP scalars / composite decoders) live in
 // OpRlpDecode.h; tx-type decoders + canonical round-trip in OpTxDecode.h.
-// (Group 4-5 moved out — the class template below references detail::decodeOneRawTx etc.)
+// (The class template below references detail::decodeOneRawTx etc.)
 }  // namespace detail
 /// OP scheduler component: a pure engine-facing seam shim. Constructed once per fork-timestamps
-/// combination (composition-root-owned). Route A (executeOpBlock) is retired — OP block execution
-/// now goes through the delegate's route B (runOpBlockInjection); this class only re-publishes the
+/// combination (composition-root-owned). OP block execution goes through the delegate's
+/// runOpBlockInjection; this class only re-publishes the
 /// seam surface the engine reaches as dependent names on `SchedulerType`.
 template <class Storage>
 class OpSchedulerImpl
@@ -77,8 +77,8 @@ public:
     using ConsensusError = OpConsensusError;
     /// Storage-layer failure -> engine maps to JSON-RPC -32603, never INVALID.
     using StorageError = OpStorageError;
-    /// c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX (s_eth_hash_2_rawtx). No longer written since
-    /// plan B (2026-08-10): registerOpBlock writes SYS_HASH_2_TX via opEnvelopeToTars instead.
+    /// c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX (s_eth_hash_2_rawtx). No longer written:
+    /// registerOpBlock writes SYS_HASH_2_TX via opEnvelopeToTars instead.
     /// The constant is kept only for read-side test assertions that the rawtx table is absent.
     static constexpr std::string_view c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX;
 
@@ -89,7 +89,7 @@ public:
             result.seal, result.stateRoot, result.gasUsed, result.txRoot);
     }
 
-    /// Announced-side projection for the six-field comparison (wiring Task 5a): the payload's
+    /// Announced-side projection for the six-field comparison: the payload's
     /// announced commitments, re-published from OpEngineSeam.h so the engine reaches it as a
     /// dependent name (MAIN seam-surface parity).
     static bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
@@ -109,7 +109,7 @@ public:
 
     /// transactionsRoot over raw EIP-2718 envelopes — the engine needs it *before* execution to
     /// reconstruct the header for the blockHash check (`ExecutionPayload` carries no
-    /// transactionsRoot field); the delegate's route B derives the same value.
+    /// transactionsRoot field); the delegate derives the same value.
     static bcos::h256 computeTxRoot(::ranges::input_range auto const& rawTxBytes)
     {
         return computeOpTxRoot(rawTxBytes);

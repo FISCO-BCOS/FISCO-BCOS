@@ -1,7 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpBlockInjectorTest — drives runOpBlockInjection (opstack-executor/OpBlockInjector.h) over a
+// OpBlockInjectorTest — drives runOpBlockInjection (opstack-executor/OpBlockExecute.h) over a
 // plain MutableStorage fixture (spec §7(a); the injector is a Storage template, so no MLS is
 // needed). A minimal "L1 attributes deposit + eip1559" block verifies (review R3 P3):
 //   (1) the system-call BlockInfo's gas_limit == header.gasLimit (toBlockInfo, trivially true);
@@ -10,7 +10,7 @@
 // Per-tx BlockInfo gasLimit==header is deliberately NOT asserted here — that is Task 6's job
 // (OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit) and would be red at this phase.
 
-#include <opstack-executor/OpBlockInjector.h>
+#include <opstack-executor/OpBlockExecute.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>

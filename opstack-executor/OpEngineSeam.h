@@ -16,8 +16,8 @@
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <opstack-executor/OpBlockExecute.h>  // OpBlockSeal / computeOpTxRoot (seal merged here)
-#include <opstack-executor/OpRlpDecode.h>     // detail::narrowU256ToU64 (announcedCommitmentsOf)
+#include <opstack-executor/OpErrors.h>     // OpBlockSeal (commitment struct)
+#include <opstack-executor/OpRlpDecode.h>  // detail::narrowU256ToU64 (announcedCommitmentsOf)
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -29,7 +29,7 @@
 namespace bcos::evm::engine
 {
 
-/// (REMOVED 2026-08-05) `SYS_ETH_BLOCK_HEADER`/"s_eth_block_header" was retired: OP headers now
+/// `SYS_ETH_BLOCK_HEADER`/"s_eth_block_header" was retired: OP headers now
 /// land in the standard `bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER` ("s_number_2_header") as tars
 /// `protocol::BlockHeader`.
 
@@ -61,7 +61,7 @@ inline bcos::h256 toBcosH256(const evmc::bytes32& hash)
 }
 
 /// evmone::state::BloomFilter (256 raw bytes) -> bcos::h2048, the type
-/// `bcos::codec::rlp::EthBlockHeader::logsBloom` is declared with (Task 3).
+/// `bcos::codec::rlp::EthBlockHeader::logsBloom` is declared with.
 inline bcos::h2048 toBcosBloom(const evmone::state::BloomFilter& bloom)
 {
     return bcos::h2048(reinterpret_cast<const bcos::byte*>(bloom.bytes), sizeof(bloom.bytes));
@@ -135,8 +135,6 @@ inline bcos::h2048 payloadBloomToH2048(const std::array<bcos::byte, 256>& bloom)
 /// narrow is total because validateOpNewPayloadRequest already bounds it ≤ UINT64_MAX,
 /// EngineServiceImpl.cpp:475-477), requestsHash from the rebuilt header. withdrawalsRoot /
 /// blobGasUsed deref is safe: the engine validation guarantees them present (design doc §4).
-/// Added per wiring Task 1 forward note (announcedCommitmentsOf + payloadBloomToH2048 absent in
-/// the worktree; the seam-switch comparison needs the announced-side projection).
 inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPayload& payload,
     const bcos::h256& transactionsRoot, const bcos::protocol::BlockHeader& ethHeader)
 {

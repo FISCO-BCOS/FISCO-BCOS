@@ -3,7 +3,7 @@
 #pragma once
 
 // Decode primitives for the OP raw-tx envelope decoder (split out of OpSchedulerImpl.h).
-// Group 1-3: bcos<->evmc conversions / bounds-checked narrowing / RLP scalar primitives /
+// bcos<->evmc conversions / bounds-checked narrowing / RLP scalar primitives /
 // composite decoders. These depend only on bcos-codec RLP + evmone/evmc/intx +
 // protocol::BlockHeader — deliberately NOT the evmone package's test headers (those live in
 // OpTxDecode.h).
@@ -105,7 +105,7 @@ inline void requireLowSSignature(const intx::uint256& r, const intx::uint256& s)
 }
 
 /// Build the OP block context from a FISCO header — the single implementation, merged from the
-/// former `OpstackExecutor::buildOpBlockInfo` (round-3 C5 / Task 4). Two deliberate semantic knobs
+/// former `OpstackExecutor::buildOpBlockInfo`. Two deliberate semantic knobs
 /// encode the two call contracts:
 /// - `gasLimitOverride`: block-execution reads the header's own gasLimit (default); the per-tx /
 ///   eth_call path injects the head block's gasLimit as blockGasLeft (a minimal test header may
@@ -249,7 +249,7 @@ inline uint64_t decodeU64Scalar(bcos::bytesRef& in)
     return value;
 }
 
-/// EIP-7702 authorization-tuple yParity (C2, final review batch B). op-geth's
+/// EIP-7702 authorization-tuple yParity. op-geth's
 /// `SetCodeAuthorization.V` is a **uint8** (core/types/tx_setcode.go:76), so its RLP scalar must
 /// fit in a single byte: a wider encoding (e.g. `0x82 0x01 0x00` == 256) overflows that uint8 and
 /// makes op-geth's RLP DecodeRLP fail, which invalidates the WHOLE transaction and therefore the
@@ -273,7 +273,7 @@ inline intx::uint256 decodeAuthYParityScalar(bcos::bytesRef& in)
 
 /// isSystemTransaction (op-geth's DepositTx.IsSystemTransaction, encoded as a plain RLP scalar
 /// 0/1 — Go's rlp package's *native* bool encoding, which false=empty-string(payloadLength=0)/
-/// true=0x01, matching Task 3's own encode side: bcos-rpc's DepositTxHandler::encode encodes
+/// true=0x01, matching the encode side: bcos-rpc's DepositTxHandler::encode encodes
 /// this field via the generic UnsignedByte scalar path (`isSystemTransactionByte ? 1 : 0`), not
 /// `bcos::codec::rlp::encode(bytes&, bool&)` — no such overload exists in RLPEncode.h (`bool`
 /// does not satisfy the `UnsignedByte`/`UnsignedIntegral` concepts). Correspondingly,
@@ -282,7 +282,7 @@ inline intx::uint256 decodeAuthYParityScalar(bcos::bytesRef& in)
 /// this field; decoding it as a generic scalar (decodeU64Scalar, which does treat
 /// payloadLength==0 as value 0) is the byte-correct match for what op-geth actually emits.
 ///
-/// Strictness (B4-2): Go's `rlp` accepts exactly two encodings for a bool -- the empty string
+/// Strictness: Go's `rlp` accepts exactly two encodings for a bool -- the empty string
 /// (false) and single-byte `0x01` (true) -- and answers "rlp: invalid boolean value" to anything
 /// else, including the single byte `0x00`. Accepting "any non-zero scalar" (or a canonical `0x00`,
 /// which does not exist in Go's output) would let two different encodings mean the same
@@ -299,7 +299,7 @@ inline bool decodeBoolField(bcos::bytesRef& in)
 
 inline evmc::address decodeAddressField(bcos::bytesRef& in)
 {
-    // Exactly 20 bytes (B4-2). The previous `decode(in, bcos::Address&)` route accepted any
+    // Exactly 20 bytes. The previous `decode(in, bcos::Address&)` route accepted any
     // length and right-padded/truncated -- on a deposit envelope (no signature to cross-check it)
     // that silently substitutes a DIFFERENT address.
     auto payload = readFixedWidth(in, sizeof(evmc::address::bytes), "address");
@@ -393,7 +393,7 @@ inline evmone::state::AuthorizationList decodeAuthorizationList(bcos::bytesRef& 
         auth.chain_id = decodeU256Scalar(entryBody);
         auth.addr = decodeAddressField(entryBody);
         auth.nonce = decodeU64Scalar(entryBody);
-        auth.v = decodeAuthYParityScalar(entryBody);  // C2: uint8-width, see helper
+        auth.v = decodeAuthYParityScalar(entryBody);  // uint8-width, see helper
         auth.r = decodeU256Scalar(entryBody);
         auth.s = decodeU256Scalar(entryBody);
         expectExhausted(entryBody, "authorization tuple");
@@ -416,7 +416,7 @@ inline evmc::bytes_view toAddressView(const std::optional<evmc::address>& addr) 
 inline evmc::address recoverTxSender(const evmc::bytes& signingPreimage,
     const intx::uint256& yParity, const intx::uint256& r, const intx::uint256& s)
 {
-    requireLowSSignature(r, s);  // C3 (coordinator review): EIP-2 malleability guard.
+    requireLowSSignature(r, s);  // EIP-2 malleability guard.
     const auto hash =
         evmone::keccak256(evmc::bytes_view{signingPreimage.data(), signingPreimage.size()});
     const auto rBytes = intx::be::store<evmc::bytes32>(r);

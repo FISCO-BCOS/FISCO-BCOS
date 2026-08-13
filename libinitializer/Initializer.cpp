@@ -512,7 +512,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // OP composition root (spec 2026-08-07-op-composition-root-design.md §4): executor_version >=
     // 3 enters OP mode. EngineService is assembled with OpSchedulerImpl so the engine's c_opMode
     // SFINAE probe (EngineServiceImpl.h:200-201, on computeTxRoot) activates the OP branch
-    // (block execution via the delegate's route B). engineApiForV1Only (<2) and opStackMode (>=3)
+    // (block execution via the delegate). engineApiForV1Only (<2) and opStackMode (>=3)
     // are mutually exclusive;
     // version 2 (pure EthereumExecutor) still has no Engine API. PBFT double-execution is gated
     // separately (W3); MultiVersionScheduler is untouched.
@@ -549,8 +549,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Wiring Task 5a/5c: engine block-execution delegate = OpScheduler (slot-3, same instance).
         // A single OpSchedulerImpl serves the engine's SchedulerType seam surface (c_opMode probe /
         // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot); OpScheduler itself no longer
-        // holds an execution kernel (route A executeOpBlock retired) — block execution is the
-        // delegate's route B (runOpBlockInjection).
+        // holds an execution kernel — block execution is the delegate's runOpBlockInjection.
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),

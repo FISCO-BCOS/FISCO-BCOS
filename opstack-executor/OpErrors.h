@@ -5,13 +5,40 @@
 // Shared error types + the block-execution result for the OP scheduler. Split out of
 // OpSchedulerImpl.h so the decode layers (OpRlpDecode.h / OpTxDecode.h) can throw without
 // depending on the class template — and so neither side needs an include-order guarantee.
+// OpBlockSeal lives here too (not in OpBlockExecute.h): OpExecuteBlockResult carries it by
+// value, and this header must stay independent of OpBlockExecute.h so the merged block-execution
+// header can include OpErrors.h without a cycle.
 
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <opstack-executor/OpBlockExecute.h>  // OpBlockSeal (merged into the block-execution module)
+#include <bcos-evm/eth/state/bloom_filter.hpp>
+#include <evmc/evmc.hpp>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+namespace bcos::evm::opstack
+{
+/// Block-header commitment fields. Jovian BlobGasUsed (the DA footprint header field) was
+/// reclaimed into this struct.
+struct OpBlockSeal
+{
+    evmone::hash256 receiptsRoot;
+    evmone::state::BloomFilter logsBloom;
+    evmone::hash256 withdrawalsRoot;
+    std::optional<evmone::hash256> requestsHash;  // Isthmus+ has a value; CANCUN-family fork
+                                                  // headers lack this field
+    /// Jovian block-header BlobGasUsed reuse slot = DA footprint (CalcDAFootprint,
+    /// rollup_cost.go:563-591: only non-deposit txs accumulate, each tx = EstimatedDASize ×
+    /// scalar). This implementation = Σ of the meta.da_footprint over non-deposit receipts; a
+    /// deposits-only block sums no terms and is always 0 ≡ op-geth's first-Jovian-block special
+    /// case (the equivalence reason being that there are no terms). op-geth's validation-side
+    /// "reject footprint > gasLimit" (block_validator.go:131) is a validation responsibility; this
+    /// function only produces the value. When has_da_footprint is false there is always no value.
+    std::optional<uint64_t> blobGasUsed;
+};
+}  // namespace bcos::evm::opstack
 
 namespace bcos::evm::engine
 {

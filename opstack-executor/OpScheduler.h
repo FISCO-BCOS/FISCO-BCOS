@@ -14,13 +14,12 @@
 //
 // Engine seam: the engine's SchedulerType stays OpSchedulerImpl (computeTxRoot/… dependent names
 // unchanged); OP block execution goes through this class's execute hook → runOpBlockInjection
-// (route B, the per-tx injection loop). Route A (executeOpBlock) is retired.
+// (the per-tx injection loop).
 //
 // EnvelopeToTarsConverter is injected by the composition root (opstack-executor does not link
-// engine — opEnvelopeToTars lives in the engine lib; reuses the alias OpBlockRegister.h:24).
+// engine — opEnvelopeToTars lives in the engine lib; reuses the alias OpBlockExecute.h).
 
-#include <opstack-executor/OpBlockInjector.h>  // runOpBlockInjection (route B)
-#include <opstack-executor/OpBlockRegister.h>
+#include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / opstackRegisterBlock / OpBlockSeal
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpTxDecode.h>  // detail::decodeOneRawTx (execute hook)
 #include <opstack-executor/OpstackExecutor.h>
@@ -106,8 +105,8 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    /// ② Execution kernel: route B — runOpBlockInjection (the per-tx injection loop,
-    /// OpBlockInjector.h:31). Assembly: rawTxBytes = each tx's
+    /// ② Execution kernel: runOpBlockInjection (the per-tx injection loop,
+    /// OpBlockExecute.h). Assembly: rawTxBytes = each tx's
     /// extraTransactionBytes (block assembly overwrote it with the full envelope);
     /// txs = detail::decodeOneRawTx(chainId); normalTxs = EnvelopeToTarsConverter (a
     /// composition-root-injected lambda, passed in the ctor — its result must overwrite
@@ -148,7 +147,7 @@ public:
             for (auto const& raw : rawTxBytes)
                 txs.push_back(detail::decodeOneRawTx(raw, m_chainId));
             // normalTxs: converter per tx (skipping deposits, in block order) — aligned with the
-            // injector's normalIdx advancing only on the non-deposit branch (OpBlockInjector.h:71).
+            // injector's normalIdx advancing only on the non-deposit branch (OpBlockExecute.h).
             // Whether the conversion succeeds decides extraTransactionBytes overwrite. A
             // conversion failure: the envelope reaching execution already passed the
             // engine's step-2 static validation (canonical + enumerated), so it is a local fault —
@@ -219,7 +218,7 @@ public:
         // Copy (cheap shared_ptr vector) rather than move: both `SchedulerExecuteResult.receipts`
         // (the skeleton's pushResult / callback surface) and `OpExecuteExtra.result.receipts` (the
         // commit hook's opstackRegisterBlock checks rawTxBytes.size() != result.receipts.size(),
-        // OpBlockRegister.h:113) must hold the full receipts.
+        // OpBlockExecute.h) must hold the full receipts.
         out.receipts = result.receipts;
         // No txpool submission on the OP path — set a non-empty empty table so the skeleton
         // coCommitBlock's notifyBlockNumber does not dereference the null `*result->m_transactions`
@@ -598,7 +597,7 @@ public:
     }
 
     /// Commit continuity (head-advance guard): opstackRegisterBlock's write of
-    /// SYS_CURRENT_STATE is unconditional (MAIN OpBlockRegister.h:75-80) — the engine's original
+    /// SYS_CURRENT_STATE is unconditional (MAIN OpBlockExecute.h) — the engine's original
     /// guarded write (blockNumber > currentHead, EngineServiceImpl inline path) moved to
     /// OpScheduler's commit and is carried by this override, preserving the monotonic-guard
     /// semantics (rejecting already-committed / discontinuous commits). The skeleton base reads

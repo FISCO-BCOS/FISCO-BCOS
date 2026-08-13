@@ -189,8 +189,8 @@ public:
     /// `executeOpBlock` probe did. Address-of is an unevaluated operand inside a
     /// requires-expression ([expr.prim.req.simple]), so it does not odr-use the function body.
     ///
-    /// Route A (`executeOpBlock`) was removed — OP block execution is always the delegate's route B
-    /// (`m_delegate->executeBlock` → `runOpBlockInjection`). `c_opMode` now only means "this is an
+    /// OP block execution is always the delegate's path (`m_delegate->executeBlock` →
+    /// `runOpBlockInjection`). `c_opMode` now only means "this is an
     /// OP scheduler": the engine reaches `computeTxRoot` / `isIsthmusActiveAt` / `isJovianActiveAt`
     /// as dependent names inside `if constexpr (c_opMode)`.
     static constexpr bool c_opMode =
@@ -1157,8 +1157,7 @@ private:
     /// FULL envelope, not the signing preimage (`takeToTarsTransaction` stores the preimage;
     /// the delegate's execute hook re-derives rawTxBytes from extraTransactionBytes, so the
     /// overwrite is load-bearing). Precedent: OpDualPathEquivalenceTest.cpp:566-568. Used only
-    /// by the delegate path (Task 5b); the retired route A's inline `executeOpBlock` carried its
-    /// own raw-byte vector.
+    /// by the delegate path.
     [[maybe_unused]] bcos::protocol::Block::Ptr buildOpBlock(
         const ExecutionPayload& payload, bcos::protocol::BlockHeader::Ptr header)
     {
@@ -1179,8 +1178,7 @@ private:
                 // decode envelopes, so reaching assembly does not imply every envelope is
                 // canonical and enumerated. Carry the raw envelope in a minimal tars tx (only the
                 // hash and wire bytes populated) so the delegate's execute hook re-derives it and
-                // decodeOneRawTx issues the verdict (OpConsensusError -> INVALID -- the same
-                // verdict the retired route A's executeOpBlock produced).
+                // decodeOneRawTx issues the verdict (OpConsensusError -> INVALID).
                 bcostars::Transaction fallback;
                 fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
                 tarsTx = std::move(fallback);

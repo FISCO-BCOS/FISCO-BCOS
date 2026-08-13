@@ -18,10 +18,9 @@
 /// header baseFee via value_or(0), and the full field set.
 ///
 /// Adapter reuse: the storage-backed StateView and state-diff writeback are shared with
-/// EthereumExecutor via ethereum-executor (PR #5366). This module links the ethereum-executor
-/// target. v2 adaptation: opTransition/runDeposit now produce the final FISCO receipt directly
-/// (OP metadata + effective gas price already projected), so no receipt-meta conversion is needed
-/// here.
+/// EthereumExecutor via ethereum-executor. This module links the ethereum-executor target.
+/// opTransition/runDeposit produce the final FISCO receipt directly (OP metadata + effective gas
+/// price already projected), so no receipt-meta conversion is needed here.
 
 #pragma once
 
@@ -37,7 +36,6 @@
 #include "bcos-task/TBBWait.h"
 #include "ethereum-executor/BCOS2Evmone.h"
 #include "ethereum-executor/StorageStateView.h"
-#include "opstack-executor/OpBlockExecute.h"  // finalizeOpBlock (merged into the block-execution module)
 #include "opstack-executor/OpRlpDecode.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
@@ -46,6 +44,16 @@
 #include <optional>
 #include <string>
 #include <utility>
+
+namespace bcos::evm::opstack
+{
+// Defined in OpBlockExecute.cpp — forward-declared here (OpForkConfig is a complete type via
+// OpForkSchedule.h, evmone::state::StateView is forward-declared by OpFeeParams.h) so this header
+// does not include OpBlockExecute.h (that header includes OpstackExecutor.h for
+// runOpBlockInjection).
+evmone::state::StateDiff finalizeOpBlock(
+    const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
+}  // namespace bcos::evm::opstack
 
 namespace bcos::executor_v1::opstack
 {
@@ -57,7 +65,7 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
 class OpstackExecutor
 {
 public:
-    /// @param receiptFactory produces the BCOS receipt (v2 opTransition/runDeposit take it and
+    /// @param receiptFactory produces the BCOS receipt (opTransition/runDeposit take it and
     ///        return the final receipt with OP metadata already projected).
     /// @param hashImpl        keccak used by the state-diff writeback.
     /// @param forkConfig      the active OP fork. The config is a reference into a static
@@ -84,9 +92,9 @@ public:
     static evmone::state::BlockInfo buildOpBlockInfo(
         protocol::BlockHeader const& header, uint64_t gasLimit)
     {
-        // Single toBlockInfo implementation (round-3 C5 / Task 4), parameterized by lenient
-        // optionals + injected gasLimit. The block-execution path (runOpBlockInjection) keeps the
-        // strict .value() semantics via toBlockInfo's default argument.
+        // Single toBlockInfo implementation, parameterized by lenient optionals + injected
+        // gasLimit. The block-execution path (runOpBlockInjection) keeps the strict .value()
+        // semantics via toBlockInfo's default argument.
         return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, /*lenientOptionals=*/true);
     }
 
@@ -283,7 +291,7 @@ private:
     // Stage 2 — execute: injection-style opTransition reusing props.fee (the validate-time
     // snapshot), so the validate/transition pair can never be fed different OpFeeParams. The OP
     // block info / evmone tx / signed envelope are rebuilt here (pure conversions), keeping the
-    // stage self-contained. chainId and real block hashes are orchestrator-supplied. v2
+    // stage self-contained. chainId and real block hashes are orchestrator-supplied.
     // opTransition returns the final FISCO receipt (OP meta + effective gas price already
     // projected) and returns the state diff via `diff` out-param.
     template <class Storage>
@@ -309,7 +317,7 @@ private:
     }
 
     // Stage 3 — writeback: apply the transition's state diff to storage and return the already
-    // final receipt (v2 opTransition projected the OP metadata + effective gas price onto it).
+    // final receipt (opTransition projected the OP metadata + effective gas price onto it).
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> m_finish(Storage& storage,
         protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,

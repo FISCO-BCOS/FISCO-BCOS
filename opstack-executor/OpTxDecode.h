@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OP raw-tx envelope decoders (split out of OpSchedulerImpl.h). Group 4-5: the per-type
+// OP raw-tx envelope decoders (split out of OpSchedulerImpl.h): the per-type
 // tx decoders (deposit / eip1559 / setcode / access-list / legacy) plus the canonical
 // whole-envelope round-trip. Canonical re-encoding uses the production bcos-codec RLP encoder
 // (encodeTuple in bcos-evm/eth/RlpEncodeTuple.h — a byte-for-byte equivalent of evmone's test-only
@@ -39,15 +39,15 @@ namespace bcos::evm::engine::detail
 using bcos::evm::eth::detail::encodeRlp;
 using bcos::evm::eth::detail::encodeTuple;
 
-/// DepositTx (OpDepositTx.h field order, cross-checked against Task 3's encode side,
+/// DepositTx (OpDepositTx.h field order, cross-checked against the encode side,
 /// bcos-rpc TxHandler.cpp DepositTxHandler::encode): [sourceHash, from, to, mint, value, gas,
 /// isSystemTransaction, data] — no signature (`from` is explicit); `signedEnvelope` stays
 /// empty per OpBlockExecute.h's OpBlockTx contract ("empty for deposit", OpBlockExecute.h:18).
 inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 {
     // envelope shape: 0x7E || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction,
-    // data]) — `body` starts at the LIST HEADER, not at the first field (fix C1, coordinator
-    // review: golden bytes are literally `0x7e f9…`); enterList() consumes that header and
+    // data]) — `body` starts at the LIST HEADER, not at the first field (golden bytes are
+    // literally `0x7e f9…`); enterList() consumes that header and
     // returns a view scoped to the list's own payload for the field-by-field decode below.
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
@@ -64,7 +64,7 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
     dep.mint = decodeU256Scalar(listBody);
     dep.value = decodeU256Scalar(listBody);
     dep.gas_limit =
-        narrowGasLimit(decodeU64Scalar(listBody), "deposit.gas");  // C4 (coordinator review).
+        narrowGasLimit(decodeU64Scalar(listBody), "deposit.gas");
     dep.is_system_tx = decodeBoolField(listBody);
     dep.data = decodeBytesField(listBody);
     expectExhausted(listBody, "deposit envelope fields");
@@ -76,8 +76,8 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 /// value, data, accessList, yParity, r, s] — field order per rlp_encode.cpp:43-47.
 ///
 /// `chainId` (the scheduler's own chain id, threaded in from its `m_chainId` via
-/// `decodeOneRawTx`) is compared against the decoded `tx.chain_id` immediately below (C2,
-/// coordinator review): nothing downstream (`OpValidate.cpp` -> `validate_transaction`,
+/// `decodeOneRawTx`) is compared against the decoded `tx.chain_id` immediately below: nothing
+/// downstream (`OpValidate.cpp` -> `validate_transaction`,
 /// eth/state/state.cpp:420-529) checks chain id at all — it is used only for the CHAINID opcode
 /// and EIP-7702 authorization matching — so a transaction signed for a *different* chain replays
 /// unmodified here (ecrecover succeeds, sender is correct, execution is normal, block is VALID),
@@ -86,7 +86,7 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
-    // envelope shape: 0x02 || rlp([...]) — same list-header fix as decodeDepositTx (C1).
+    // envelope shape: 0x02 || rlp([...]) — same list-header fix as decodeDepositTx.
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
     evmone::state::Transaction tx;
@@ -98,14 +98,14 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint6
     tx.max_priority_gas_price = decodeU256Scalar(listBody);
     tx.max_gas_price = decodeU256Scalar(listBody);
     tx.gas_limit =
-        narrowGasLimit(decodeU64Scalar(listBody), "eip1559.gasLimit");  // C4 (coordinator review).
+        narrowGasLimit(decodeU64Scalar(listBody), "eip1559.gasLimit");
     tx.to = decodeOptionalAddressField(listBody);
     tx.value = decodeU256Scalar(listBody);
     tx.data = decodeBytesField(listBody);
     tx.access_list = decodeAccessList(listBody);
     const auto yParity = decodeU256Scalar(listBody);
-    // I1 (coordinator review): op-geth rejects yParity > 1 as "invalid y parity" before it ever
-    // reaches sender recovery; without this check a >1 value gets silently truncated by
+    // op-geth rejects yParity > 1 as "invalid y parity" before it ever reaches sender recovery;
+    // without this check a >1 value gets silently truncated by
     // `static_cast<uint8_t>` into a bogus-but-plausible 0/1 that could pass downstream, and
     // `recoverTxSender`'s `yParity != 0` test would treat any nonzero value (including 256,
     // 257, ...) as parity=1.
@@ -128,13 +128,13 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint6
 
 /// EIP-7702 set-code (type 0x04): [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit,
 /// to, value, data, accessList, authorizationList, yParity, r, s] — field order per
-/// rlp_encode.cpp:66-70. `chainId` cross-check: see decodeEip1559Tx's comment (C2, same rationale,
+/// rlp_encode.cpp:66-70. `chainId` cross-check: see decodeEip1559Tx's comment (same rationale,
 /// same outer-tx-only scope — EIP-7702 authorization tuples carry their own independent chain_id
 /// field, already checked inside evmone::state::process_authorization_list, and are unaffected).
 inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
-    // envelope shape: 0x04 || rlp([...]) — same list-header fix as decodeDepositTx (C1).
+    // envelope shape: 0x04 || rlp([...]) — same list-header fix as decodeDepositTx.
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
     evmone::state::Transaction tx;
@@ -146,15 +146,15 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint6
     tx.max_priority_gas_price = decodeU256Scalar(listBody);
     tx.max_gas_price = decodeU256Scalar(listBody);
     tx.gas_limit =
-        narrowGasLimit(decodeU64Scalar(listBody), "setcode.gasLimit");  // C4 (coordinator review).
+        narrowGasLimit(decodeU64Scalar(listBody), "setcode.gasLimit");
     tx.to = decodeOptionalAddressField(listBody);
     tx.value = decodeU256Scalar(listBody);
     tx.data = decodeBytesField(listBody);
     tx.access_list = decodeAccessList(listBody);
     tx.authorization_list = decodeAuthorizationList(listBody);
     const auto yParity = decodeU256Scalar(listBody);
-    // I1 (coordinator review): see the matching check in decodeEip1559Tx — same op-geth
-    // "invalid y parity" rejection, same truncation/mod-256 hazard if left unchecked.
+    // See the matching check in decodeEip1559Tx — same op-geth "invalid y parity" rejection,
+    // same truncation/mod-256 hazard if left unchecked.
     if (yParity > 1)
         throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid y parity (setcode)");
     tx.r = decodeU256Scalar(listBody);
@@ -177,11 +177,11 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint6
 /// accessList, yParity, r, s] — field order per rlp_encode.cpp:29-37. Legacy/access-list carry a
 /// single `gasPrice`, which evmone's Transaction models as `max_gas_price` with
 /// `max_priority_gas_price` set equal (validate_transaction asserts priority<=cap; state.cpp:466).
-/// `chainId` cross-check: same rationale/scope as decodeEip1559Tx (C2).
+/// `chainId` cross-check: same rationale/scope as decodeEip1559Tx.
 inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
-    // envelope shape: 0x01 || rlp([...]) — same list-header handling as decodeEip1559Tx (C1).
+    // envelope shape: 0x01 || rlp([...]) — same list-header handling as decodeEip1559Tx.
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
     evmone::state::Transaction tx;
@@ -199,7 +199,7 @@ inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, ui
     tx.data = decodeBytesField(listBody);
     tx.access_list = decodeAccessList(listBody);
     const auto yParity = decodeU256Scalar(listBody);
-    if (yParity > 1)  // I1: same op-geth "invalid y parity" rejection as the typed decoders.
+    if (yParity > 1)  // Same op-geth "invalid y parity" rejection as the typed decoders.
         throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid y parity (access_list)");
     tx.r = decodeU256Scalar(listBody);
     tx.s = decodeU256Scalar(listBody);
@@ -382,7 +382,7 @@ inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64
 {
     if (rawEntry.empty())
         throw OpConsensusError("OpSchedulerImpl: raw tx decode: empty envelope");
-    constexpr uint8_t kDepositTypeByte = 0x7e;     // DepositTxHandler::encode type byte (Task 3)
+    constexpr uint8_t kDepositTypeByte = 0x7e;     // DepositTxHandler::encode type byte
     constexpr uint8_t kAccessListTypeByte = 0x01;  // evmone::state::Transaction::Type::access_list
     constexpr uint8_t kEip1559TypeByte = 0x02;     // evmone::state::Transaction::Type::eip1559
     constexpr uint8_t kSetCodeTypeByte = 0x04;     // evmone::state::Transaction::Type::set_code

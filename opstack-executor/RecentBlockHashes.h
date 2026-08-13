@@ -8,7 +8,7 @@
 // {N-1: parentHash} (zero storage reads, covers the first block / EIP-2935) and lazily loads
 // earlier ancestors from SYS_NUMBER_2_HASH — equivalent to op-geth's header walk-back on
 // reorg-free chains (given a contiguous table). Constructed per block in the execution path
-// (runOpBlockInjection / the retired executeOpBlock), lives for the block; relies on the engine's
+// (runOpBlockInjection), lives for the block; relies on the engine's
 // x_state-serialized execution segment, so no internal locks.
 
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -46,7 +46,7 @@ public:
 
     evmc::bytes32 get_block_hash(int64_t n) const noexcept override
     {
-        // G1: the interface is noexcept, so the whole body is wrapped in try/catch — emplace and
+        // The interface is noexcept, so the whole body is wrapped in try/catch — emplace and
         // the poison write both allocate; an uncaught bad_alloc in a noexcept function would
         // terminate.
         try
@@ -62,7 +62,7 @@ public:
             if (!entry.has_value())
                 return evmc::bytes32{};  // missing row = op-geth's pruned/unreachable semantics
 
-            // G3: value-length validation, mirroring Storage2State::fetchAllStorage.
+            // Value-length validation, mirroring Storage2State::fetchAllStorage.
             const auto value = entry->get();
             if (value.size() != sizeof(evmc::bytes32::bytes))
             {
@@ -71,7 +71,7 @@ public:
             }
             evmc::bytes32 out{};
             std::memcpy(out.bytes, value.data(), sizeof(out.bytes));
-            // emplace inside try (G1): bad_alloc jumps to catch.
+            // emplace inside try: bad_alloc jumps to catch.
             m_cache.emplace(n, out);
             return out;
         }
