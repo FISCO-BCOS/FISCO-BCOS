@@ -173,13 +173,17 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     {
         payload.excessBlobGas = fromBigQuantity(ep["excessBlobGas"].asString());
     }
-    // withdrawalsRoot is an ExecutionPayloadV4+ field (Isthmus). For V1-V3 requests it
-    // is ignored rather than rejected: the Isthmus spec leaves pre-V4 handling
-    // unspecified and op-geth's NewPayloadV3 (eth/catalyst/api.go) performs no
+    // withdrawalsRoot is an ExecutionPayloadV4+ field (Isthmus), required there. For
+    // V1-V3 requests it is ignored rather than rejected: the Isthmus spec leaves pre-V4
+    // handling unspecified and op-geth's NewPayloadV3 (eth/catalyst/api.go) performs no
     // withdrawalsRoot validation, so rejecting here would diverge from op-geth.
-    if (version >= engine::ApiVersion::V4 && ep.isMember("withdrawalsRoot") &&
-        !ep["withdrawalsRoot"].isNull())
+    if (version >= engine::ApiVersion::V4)
     {
+        if (!ep.isMember("withdrawalsRoot") || ep["withdrawalsRoot"].isNull())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "withdrawalsRoot is required for ExecutionPayloadV4"));
+        }
         payload.withdrawalsRoot = parseH256(ep["withdrawalsRoot"].asString());
     }
 
@@ -199,6 +203,39 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     if (version >= engine::ApiVersion::V3 && params.size() >= 3 && !params[2].isNull())
     {
         request.parentBeaconBlockRoot = parseH256(params[2].asString());
+    }
+    if (version >= engine::ApiVersion::V4)
+    {
+        // engine_newPayloadV4 takes all four params, none nullable — op-geth answers
+        // InvalidParams for a nil executionRequests ("nil executionRequests post-prague"),
+        // and a missing beacon root can never be defaulted. Emptiness of the two lists is
+        // a payload-validity question and is judged by the engine service, not here.
+        if (params.size() < 4 || !params[1].isArray() || params[2].isNull() || !params[3].isArray())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+                "engine_newPayloadV4 expects [executionPayload, expectedBlobVersionedHashes, "
+                "parentBeaconBlockRoot, executionRequests]"));
+        }
+        std::vector<bytes> executionRequests;
+        executionRequests.reserve(params[3].size());
+        for (auto const& item : params[3])
+        {
+            if (!item.isString())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "executionRequests entries must be hex strings"));
+            }
+            try
+            {
+                executionRequests.push_back(fromHex(item.asString()));
+            }
+            catch (std::exception const&)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "executionRequests entries must be hex strings"));
+            }
+        }
+        request.executionRequests = std::move(executionRequests);
     }
     return request;
 }
@@ -482,10 +519,11 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     {
         ep["excessBlobGas"] = toQuantity(*payload.excessBlobGas);
     }
-    // V4+ only (Isthmus): never emitted in V1-V3 payload shapes.
-    if (version >= engine::ApiVersion::V4 && payload.withdrawalsRoot.has_value())
+    // V4+ only (Isthmus): a required field of the payload shape, never emitted in V1-V3.
+    // Locally built payloads may still carry the documented zero placeholder (Types.h).
+    if (version >= engine::ApiVersion::V4)
     {
-        ep["withdrawalsRoot"] = payload.withdrawalsRoot->hexPrefixed();
+        ep["withdrawalsRoot"] = payload.withdrawalsRoot.value_or(h256{}).hexPrefixed();
     }
     return ep;
 }
@@ -537,6 +575,19 @@ void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
     }
     _result["blobsBundle"] = std::move(blobsBundle);
     _result["shouldOverrideBuilder"] = _response->shouldOverrideBuilder;
+    // V4/V5: executionRequests is part of the response shape; Karst always answers [].
+    if (version >= engine::ApiVersion::V4)
+    {
+        Json::Value executionRequests(Json::arrayValue);
+        if (_response->executionRequests.has_value())
+        {
+            for (auto const& executionRequest : *_response->executionRequests)
+            {
+                executionRequests.append(toHexStringWithPrefix(executionRequest));
+            }
+        }
+        _result["executionRequests"] = std::move(executionRequests);
+    }
     if (_response->parentBeaconBlockRoot.has_value())
     {
         _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();

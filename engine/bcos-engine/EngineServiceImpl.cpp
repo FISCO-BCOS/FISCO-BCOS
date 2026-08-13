@@ -46,10 +46,14 @@ bcos::h256 bcos::engine::detail::syntheticHash(std::string_view seed)
 
 std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 {
-    return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
-        "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
-        "engine_getPayloadV2", "engine_getPayloadV3", "engine_newPayloadV1", "engine_newPayloadV2",
-        "engine_newPayloadV3"};
+    // Karst-only Engine surface: op-node's version selection (rollup/types.go) drives a
+    // Karst chain with exactly forkchoiceUpdatedV3 + getPayloadV5 + newPayloadV4, so only
+    // those are advertised. Pre-Karst method versions stay routable but answer -38005
+    // Unsupported fork (matching op-geth, where a versioned call outside its fork window
+    // returns engine.UnsupportedFork — e.g. "fcuV1 called post-shanghai" — rather than
+    // method-not-found).
+    return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV3", "engine_getPayloadV5",
+        "engine_newPayloadV4"};
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
@@ -66,6 +70,16 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     if (requestVersion == ApiVersion::V3)
     {
         return payloadVersion <= 3;
+    }
+    if (requestVersion == ApiVersion::V4)
+    {
+        return payloadVersion <= 4;
+    }
+    if (requestVersion == ApiVersion::V5)
+    {
+        // Karst payloads are built via forkchoiceUpdatedV3 (payloadVersion 3) and
+        // retrieved via getPayloadV5, so V5 accepts every older build version.
+        return payloadVersion <= 5;
     }
     return false;
 }
@@ -160,12 +174,19 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     if (version <= 2 &&
         (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
     {
-        return std::string("blob gas fields are only valid for ExecutionPayloadV3");
+        return std::string("blob gas fields are only valid for ExecutionPayloadV3 and later");
     }
-    if (version == 3 &&
+    if (version >= 3 &&
         (!executionPayload.blobGasUsed.has_value() || !executionPayload.excessBlobGas.has_value()))
     {
-        return std::string("blob gas fields are required for ExecutionPayloadV3");
+        return std::string("blob gas fields are required for ExecutionPayloadV3 and later");
+    }
+    // Isthmus: an ExecutionPayloadV4 always carries the L2ToL1MessagePasser storage root.
+    // Pre-V4 payloads with the field present are tolerated (mirrors the parse side, which
+    // ignores it below V4 the way op-geth's NewPayloadV3 performs no withdrawalsRoot check).
+    if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
+    {
+        return std::string("withdrawalsRoot is required for ExecutionPayloadV4");
     }
     return std::nullopt;
 }

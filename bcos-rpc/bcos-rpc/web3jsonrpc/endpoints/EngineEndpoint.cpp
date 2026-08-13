@@ -70,16 +70,31 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     buildJsonContent(result, response);
 }
 
-task::Task<void> EngineEndpoint::forkchoiceUpdatedV1(
-    const Json::Value& request, Json::Value& response)
+void EngineEndpoint::buildPreKarstVersionError(std::string_view method, Json::Value& response) const
 {
-    co_await handleForkchoiceUpdated(engine::ApiVersion::V1, request, response);
+    // Karst-only Engine surface: only engine_forkchoiceUpdatedV3 / engine_getPayloadV5 /
+    // engine_newPayloadV4 (plus exchangeCapabilities) are served. Every other version
+    // stays routable but answers -38005, matching op-geth where a versioned call outside
+    // its fork window returns engine.UnsupportedFork (e.g. "fcuV1 called post-shanghai")
+    // rather than method-not-found.
+    Json::Value request;
+    buildJsonError(request, EngineError::UnsupportedFork,
+        std::string(method) +
+            " is not supported on this chain; use engine_forkchoiceUpdatedV3 / "
+            "engine_getPayloadV5 / engine_newPayloadV4",
+        response);
 }
 
-task::Task<void> EngineEndpoint::forkchoiceUpdatedV2(
-    const Json::Value& request, Json::Value& response)
+task::Task<void> EngineEndpoint::forkchoiceUpdatedV1(const Json::Value&, Json::Value& response)
 {
-    co_await handleForkchoiceUpdated(engine::ApiVersion::V2, request, response);
+    buildPreKarstVersionError("engine_forkchoiceUpdatedV1", response);
+    co_return;
+}
+
+task::Task<void> EngineEndpoint::forkchoiceUpdatedV2(const Json::Value&, Json::Value& response)
+{
+    buildPreKarstVersionError("engine_forkchoiceUpdatedV2", response);
+    co_return;
 }
 
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
@@ -90,10 +105,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
 
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(const Json::Value&, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_forkchoiceUpdatedV4 is not yet supported", response);
+    buildPreKarstVersionError("engine_forkchoiceUpdatedV4", response);
     co_return;
 }
 
@@ -120,28 +132,35 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     buildJsonContent(jsonResult, response);
 }
 
-task::Task<void> EngineEndpoint::getPayloadV1(const Json::Value& request, Json::Value& response)
+task::Task<void> EngineEndpoint::getPayloadV1(const Json::Value&, Json::Value& response)
 {
-    co_await handleGetPayload(engine::ApiVersion::V1, request, response);
+    buildPreKarstVersionError("engine_getPayloadV1", response);
+    co_return;
 }
 
-task::Task<void> EngineEndpoint::getPayloadV2(const Json::Value& request, Json::Value& response)
+task::Task<void> EngineEndpoint::getPayloadV2(const Json::Value&, Json::Value& response)
 {
-    co_await handleGetPayload(engine::ApiVersion::V2, request, response);
+    buildPreKarstVersionError("engine_getPayloadV2", response);
+    co_return;
 }
 
-task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::Value& response)
+task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value&, Json::Value& response)
 {
-    co_await handleGetPayload(engine::ApiVersion::V3, request, response);
+    buildPreKarstVersionError("engine_getPayloadV3", response);
+    co_return;
 }
 
 task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value&, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_getPayloadV4 is not yet supported", response);
+    // Karst getPayload goes straight from V3 (build) to V5 (Osaka response shape);
+    // op-node never issues V4 against a Karst chain.
+    buildPreKarstVersionError("engine_getPayloadV4", response);
     co_return;
+}
+
+task::Task<void> EngineEndpoint::getPayloadV5(const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetPayload(engine::ApiVersion::V5, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleGetPayload(
@@ -154,9 +173,28 @@ task::Task<void> EngineEndpoint::handleGetPayload(
         co_return;
     }
 
+    if (request.size() < 1 || !request[0u].isString())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "engine_getPayload expects [payloadId]"));
+    }
     engine::PayloadID payloadId = request[0u].asString();
-    auto engineResult =
-        co_await engineService->getPayload(payloadId, static_cast<uint32_t>(version));
+    engine::GetPayloadResult engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->getPayload(payloadId, static_cast<uint32_t>(version));
+    }
+    catch (engine::UnknownPayload const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
+            "Unknown payload: no build process identified by the given payloadId"));
+    }
+    catch (engine::IncompatiblePayloadVersion const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
+            "Unsupported fork: payload was built by a different method version"));
+    }
     if (!engineResult)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
@@ -168,28 +206,27 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     buildJsonContent(result, response);
 }
 
-task::Task<void> EngineEndpoint::newPayloadV1(const Json::Value& request, Json::Value& response)
+task::Task<void> EngineEndpoint::newPayloadV1(const Json::Value&, Json::Value& response)
 {
-    co_await handleNewPayload(engine::ApiVersion::V1, request, response);
-}
-
-task::Task<void> EngineEndpoint::newPayloadV2(const Json::Value& request, Json::Value& response)
-{
-    co_await handleNewPayload(engine::ApiVersion::V2, request, response);
-}
-
-task::Task<void> EngineEndpoint::newPayloadV3(const Json::Value& request, Json::Value& response)
-{
-    co_await handleNewPayload(engine::ApiVersion::V3, request, response);
-}
-
-task::Task<void> EngineEndpoint::newPayloadV4(const Json::Value&, Json::Value& response)
-{
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_newPayloadV4 is not yet supported", response);
+    buildPreKarstVersionError("engine_newPayloadV1", response);
     co_return;
+}
+
+task::Task<void> EngineEndpoint::newPayloadV2(const Json::Value&, Json::Value& response)
+{
+    buildPreKarstVersionError("engine_newPayloadV2", response);
+    co_return;
+}
+
+task::Task<void> EngineEndpoint::newPayloadV3(const Json::Value&, Json::Value& response)
+{
+    buildPreKarstVersionError("engine_newPayloadV3", response);
+    co_return;
+}
+
+task::Task<void> EngineEndpoint::newPayloadV4(const Json::Value& request, Json::Value& response)
+{
+    co_await handleNewPayload(engine::ApiVersion::V4, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleNewPayload(

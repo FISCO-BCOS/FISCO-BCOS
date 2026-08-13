@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <optional>
@@ -42,9 +43,17 @@ enum class ApiVersion : std::uint8_t
     V2 = 2,
     V3 = 3,
     V4 = 4,
+    V5 = 5,
 };
 
 using PayloadID = std::string;
+
+/// Engine API error conditions shared by the service implementation and the RPC
+/// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
+/// -38001, the two version mismatches -> -38005 Unsupported fork.
+DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
+DERIVE_BCOS_EXCEPTION(UnknownPayload);
+DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 
 struct WithdrawalV1
 {
@@ -60,6 +69,11 @@ struct BlobsBundleV1
     std::vector<bytes> proofs;
     std::vector<bytes> blobs;
 };
+
+/// Osaka BlobsBundleV2 (execution-apis osaka.md): same three-array field shape as V1,
+/// differing only in that `proofs` carries cell proofs. OP L2 forbids blob transactions
+/// entirely, so every array is always empty here — no separate struct is needed.
+using BlobsBundleV2 = BlobsBundleV1;
 
 struct ForkchoiceState
 {
@@ -188,19 +202,20 @@ struct ForkchoiceUpdatedResult
 
 struct GetPayloadData
 {
-    // Required by engine_getPayloadV1/V2/V3/V4/V6.
+    // Required by engine_getPayloadV1/V2/V3/V4/V5.
     ExecutionPayload executionPayload;
 
-    // Required by engine_getPayloadV2/V3/V4/V6.
+    // Required by engine_getPayloadV2/V3/V4/V5.
     u256 blockValue = 0;
 
-    // Required by engine_getPayloadV3/V4.
+    // Required by engine_getPayloadV3/V4/V5 (V5: BlobsBundleV2 shape, always empty on L2).
     std::optional<BlobsBundleV1> blobsBundle;
 
-    // Required by engine_getPayloadV3/V4/V6.
+    // Required by engine_getPayloadV3/V4/V5.
     bool shouldOverrideBuilder = false;
 
-    // Required by engine_getPayloadV4/V6.
+    // Required by engine_getPayloadV4/V5. Karst carries no execution-layer requests, so
+    // getPayloadV5 responds with an empty array.
     std::optional<std::vector<bytes>> executionRequests;
 
     // OP Stack getPayload response extension: the beacon root the payload was built

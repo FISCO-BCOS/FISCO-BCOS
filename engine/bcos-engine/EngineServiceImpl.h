@@ -57,12 +57,11 @@
 
 namespace bcos::engine
 {
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
+// UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
+// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes.
 DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 
 namespace detail
 {
@@ -127,7 +126,7 @@ public:
         const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
         std::uint32_t version)
     {
-        if (!isVersionSupported(version))
+        if (!isForkchoiceVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -357,10 +356,27 @@ private:
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
     };
 
-    static bool isVersionSupported(std::uint32_t version)
+    /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
+    /// version Karst payload building runs on), newPayload at V4 (Isthmus payload with
+    /// executionRequests), getPayload at V5 (Osaka response shape). The RPC endpoint
+    /// additionally rejects every pre-Karst version with -38005; the wider windows here
+    /// keep in-process callers and existing V1-V3 service-level tests working.
+    static bool isForkchoiceVersionSupported(std::uint32_t version)
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
                version <= static_cast<std::uint32_t>(ApiVersion::V3);
+    }
+
+    static bool isNewPayloadVersionSupported(std::uint32_t version)
+    {
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V4);
+    }
+
+    static bool isGetPayloadVersionSupported(std::uint32_t version)
+    {
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V5);
     }
 
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -376,7 +392,7 @@ private:
 
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const
     {
-        if (!isVersionSupported(version))
+        if (!isGetPayloadVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -401,7 +417,11 @@ private:
             .blockValue = it->second.blockValue,
             .blobsBundle = it->second.blobsBundle,
             .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
-            .executionRequests = std::nullopt,
+            // getPayloadV4/V5 responses must carry executionRequests; Karst never has
+            // any, so the value is a present-but-empty list (serialized as []).
+            .executionRequests = version >= static_cast<std::uint32_t>(ApiVersion::V4) ?
+                                     std::optional<std::vector<bytes>>{std::in_place} :
+                                     std::nullopt,
             .parentBeaconBlockRoot = it->second.parentBeaconBlockRoot,
         });
     }
@@ -409,7 +429,7 @@ private:
     bcos::task::Task<PayloadStatus> handleNewPayload(
         const NewPayloadRequest& request, std::uint32_t version)
     {
-        if (!isVersionSupported(version))
+        if (!isNewPayloadVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -427,19 +447,35 @@ private:
         if (version <= 2 && request.parentBeaconBlockRoot.has_value())
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                std::string("parentBeaconBlockRoot is only valid for newPayloadV3"));
+                std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
         }
-        if (version == 3)
+        if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
         {
-            if (!request.parentBeaconBlockRoot.has_value())
+            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string(
+                    "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and later"));
+        }
+        if (version == 3 && request.expectedBlobVersionedHashes.empty() &&
+            !request.executionPayload.transactions.empty())
+        {
+            co_return makeStatus(PayloadValidationStatus::Accepted, std::nullopt, std::nullopt);
+        }
+        if (version >= 4)
+        {
+            // L2 (Ecotone onwards) forbids blob transactions, so the CL can never
+            // legitimately expect blob hashes; and Karst carries no execution-layer
+            // requests. Unlike V3 there is no unverifiable-blob ACCEPTED escape: with
+            // both lists required-empty the payload is fully checkable.
+            if (!request.expectedBlobVersionedHashes.empty())
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                    std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3"));
+                    std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
+                                "transactions)"));
             }
-            if (request.expectedBlobVersionedHashes.empty() &&
-                !request.executionPayload.transactions.empty())
+            if (request.executionRequests.has_value() && !request.executionRequests->empty())
             {
-                co_return makeStatus(PayloadValidationStatus::Accepted, std::nullopt, std::nullopt);
+                co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    std::string("executionRequests must be empty on this chain"));
             }
         }
 
@@ -658,6 +694,11 @@ private:
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
+            // Isthmus payload shape (V4/V5, fed by forkchoiceUpdatedV3 on Karst): the
+            // field must be present so getPayloadV5 -> newPayloadV4 round-trips. Zero
+            // placeholder until the real L2ToL1MessagePasser storage-root header wiring
+            // lands (see Types.h).
+            executionPayload.withdrawalsRoot = h256{};
         }
 
         // Step 2a: Get LedgerConfig via storage-based LedgerMethods

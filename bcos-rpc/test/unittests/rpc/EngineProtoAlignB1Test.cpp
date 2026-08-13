@@ -263,15 +263,28 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
     auto const withdrawalsRootHex =
         std::string("0x9999999999999999999999999999999999999999999999999999999999999999");
 
+    auto const beaconRootHex =
+        std::string("0x8888888888888888888888888888888888888888888888888888888888888888");
+    auto appendV4Tail = [&](Json::Value& params) {
+        // engine_newPayloadV4 takes all four params (B4): blob hashes, beacon root,
+        // executionRequests.
+        params.append(Json::Value(Json::arrayValue));
+        params.append(beaconRootHex);
+        params.append(Json::Value(Json::arrayValue));
+    };
+
     auto ep = makeBaseExecutionPayload();
     ep["withdrawalsRoot"] = withdrawalsRootHex;
     Json::Value params(Json::arrayValue);
     params.append(ep);
+    appendV4Tail(params);
 
     // withdrawalsRoot is a V4+ (Isthmus) payload field, so the round trip runs at V4.
     auto request = parseNewPayloadRequest(params, engine::ApiVersion::V4);
     BOOST_REQUIRE(request.executionPayload.withdrawalsRoot.has_value());
     BOOST_CHECK_EQUAL(request.executionPayload.withdrawalsRoot->hexPrefixed(), withdrawalsRootHex);
+    BOOST_REQUIRE(request.executionRequests.has_value());
+    BOOST_CHECK(request.executionRequests->empty());
 
     auto serialized = serializeExecutionPayload(request.executionPayload, engine::ApiVersion::V4);
     BOOST_REQUIRE(serialized.isMember("withdrawalsRoot"));
@@ -280,6 +293,7 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
     // Parse the serialized payload again: the field survives a full round trip.
     Json::Value reparseParams(Json::arrayValue);
     reparseParams.append(serialized);
+    appendV4Tail(reparseParams);
     auto reparsed = parseNewPayloadRequest(reparseParams, engine::ApiVersion::V4);
     BOOST_CHECK(
         reparsed.executionPayload.withdrawalsRoot == request.executionPayload.withdrawalsRoot);
