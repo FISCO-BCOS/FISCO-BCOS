@@ -147,6 +147,70 @@ namespace bcos::evm::engine
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes);
 
+/// Block-level finalization shared between the injection loop and the shared scheduler path:
+/// finalizeBlock (MessagePasser snapshot) → seal → stateRoot → txRoot. txTypes are rebuilt from
+/// rawTxBytes[i][0] (the FISCO receipt has no tx-type slot; sealOpBlock's EncodeIndex receipts-root
+/// leaf needs the EIP-2718 type byte — mirror of the per-tx loop's classification). hashErr is
+/// checked here (poisoned block-hash lookup → OpStorageError). **cumulativeGasUsed backfill is NOT
+/// in scope** (it stays in the per-tx loop / ExecuteContext::finish).
+template <class Storage>
+OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackExecutor& executor,
+    Storage& view, bcos::protocol::BlockHeader const& header,
+    bcos::ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpForkConfig const& cfg,
+    std::vector<bcos::protocol::TransactionReceipt::Ptr> const& receipts,
+    std::vector<bcos::bytes> const& rawTxBytes, int64_t cumulative,
+    std::optional<std::string> const& hashErr)
+{
+    namespace op = bcos::evm::opstack;
+    namespace detail = bcos::evm::engine::detail;
+
+    bcos::task::syncWait(executor.finalizeBlock(view, header, ledgerConfig));
+
+    // Rebuild txTypes from rawTxBytes[i][0] (mirror of the per-tx loop's classification): deposit
+    // 0x7e → kDepositTxType; normal legacy (>=0xc0) → 0, typed (0x01/0x02/0x04) → its type byte.
+    constexpr uint8_t kDepositTypeByte = 0x7e;
+    constexpr uint8_t kRlpListBase = 0xc0;
+    std::vector<uint8_t> txTypes;
+    txTypes.reserve(rawTxBytes.size());
+    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+    {
+        if (rawTxBytes[i].empty())  // defensive: the per-tx loop already rejects empty envelopes
+            throw OpConsensusError("op block: empty envelope");
+        if (rawTxBytes[i][0] == kDepositTypeByte)
+            txTypes.emplace_back(static_cast<uint8_t>(op::kDepositTxType));
+        else
+            txTypes.emplace_back(rawTxBytes[i][0] >= kRlpListBase ? 0 : rawTxBytes[i][0]);
+    }
+
+    op::OpBlockResult result;
+    result.receipts = receipts;
+    result.txTypes = std::move(txTypes);
+    result.gasUsed = cumulative;
+    if (hashErr.has_value())
+        throw OpStorageError("block-hash lookup failed: " + *hashErr);
+
+    // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot.
+    std::map<evmc::bytes32, evmc::bytes32> mpStorage;
+    bcos::evm::evmstate::Storage2State<Storage> bridge(view);
+    bridge.visitAccounts([&](auto const& acc) {
+        if (acc.addr == op::OP_L2_TO_L1_MESSAGE_PASSER)
+        {
+            mpStorage = acc.storage;
+            return false;
+        }
+        return true;
+    });
+    if (bridge.poisoned())
+        throw OpStorageError("poisoned: " + std::string(bridge.firstError()));
+    auto seal = op::sealOpBlock(result, cfg, mpStorage);
+    auto root = bcos::evm::stateRootOf(bridge);
+    if (bridge.poisoned())
+        throw OpStorageError("poisoned after stateRootOf: " + std::string(bridge.firstError()));
+    auto txRoot = computeOpTxRoot(rawTxBytes);
+    return OpExecuteBlockResult{std::move(result.receipts), seal, detail::toBcosH256(root),
+        static_cast<uint64_t>(cumulative), txRoot};
+}
+
 // ---- block execution: per-transaction injection loop ----
 
 /// Per-tx injection loop replicating processOpBlock's orchestration through OpstackExecutor.
@@ -282,32 +346,8 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
             result.txTypes.emplace_back(rawTxBytes[i][0] >= kRlpListBase ? 0 : rawTxBytes[i][0]);
         }
     }
-    bcos::task::syncWait(executor.finalizeBlock(view, header, ledgerConfig));
-    result.gasUsed = cumulative;
-    if (hashErr.has_value())
-        throw OpStorageError("runOpBlockInjection: block-hash lookup failed: " + *hashErr);
-
-    // (4) commitments: MessagePasser snapshot → seal → stateRoot → txRoot.
-    std::map<evmc::bytes32, evmc::bytes32> mpStorage;
-    bcos::evm::evmstate::Storage2State<Storage> bridge(view);
-    bridge.visitAccounts([&](auto const& acc) {
-        if (acc.addr == op::OP_L2_TO_L1_MESSAGE_PASSER)
-        {
-            mpStorage = acc.storage;
-            return false;
-        }
-        return true;
-    });
-    if (bridge.poisoned())
-        throw OpStorageError("runOpBlockInjection: poisoned: " + std::string(bridge.firstError()));
-    auto seal = op::sealOpBlock(result, cfg, mpStorage);
-    auto root = bcos::evm::stateRootOf(bridge);
-    if (bridge.poisoned())
-        throw OpStorageError(
-            "runOpBlockInjection: poisoned after stateRootOf: " + std::string(bridge.firstError()));
-    auto txRoot = computeOpTxRoot(rawTxBytes);
-    return OpExecuteBlockResult{std::move(result.receipts), seal, detail::toBcosH256(root),
-        static_cast<uint64_t>(cumulative), txRoot};
+    return finalizeOpBlockResult(
+        executor, view, header, ledgerConfig, cfg, result.receipts, rawTxBytes, cumulative, hashErr);
 }
 
 /// Project the payload/header announced commitments into OpBlockCommitments (the "announced" side
