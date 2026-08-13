@@ -61,31 +61,6 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-/// A header carrying every optional field executeOpBlock's `toBlockInfo` reads (all `.value()`).
-std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeOpHeader(
-    bcos::protocol::BlockNumber number, int64_t timestampMillis)
-{
-    auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
-    h->setNumber(number);
-    h->setTimestamp(timestampMillis);
-    h->setParentInfo(
-        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = bcos::h256{}});
-    h->setCoinbase(bcos::Address{});
-    h->setStateRoot(bcos::h256{});
-    h->setTxsRoot(bcos::h256{});
-    h->setReceiptsRoot(bcos::h256{});
-    h->setGasLimit(bcos::u256(30000000));
-    h->setGasUsed(bcos::u256(0));
-    h->setExtraData(bcos::bytes{});
-    h->setPrevRandao(bcos::h256{});
-    h->setBaseFee(bcos::u256(1000000000));
-    h->setWithdrawalsRoot(bcos::h256{});
-    h->setBlobGasUsed(bcos::u256(0));
-    h->setExcessBlobGas(bcos::u256(0));
-    h->setParentBeaconBlockRoot(bcos::h256{});
-    h->setRequestsHash(bcos::h256{});
-    return h;
-}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerImplSmokeSuite)
@@ -139,28 +114,9 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     BOOST_CHECK_EQUAL(commitments.txRoot, txRoot);
 }
 
-BOOST_AUTO_TEST_CASE(EmptyBlockRejected)
-{
-    BackendMemStorage backendStorage;
-    CheckpointBackend checkpointBackend(backendStorage);
-    MLS multiLayerStorage(checkpointBackend);
-    auto view = multiLayerStorage.fork();
-    view.newMutable();
-
-    constexpr uint64_t kIsthmusTime = 1000;
-    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(nullptr, 0x2105,
-        bcos::evm::opstack::OpForkTimestamps{
-            .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1});
-
-    auto header = makeOpHeader(1, static_cast<int64_t>(kIsthmusTime) * 1000);
-    std::vector<bcos::bytes> emptyTxs;
-    // processOpBlock rejects an empty block; executeOpBlock's classification surfaces it as a
-    // runtime_error subclass (OpConsensusError or OpStorageError, depending on the documented
-    // RTTI-bypass behaviour at the -fno-rtti evmone boundary).
-    BOOST_CHECK_THROW(bcos::task::syncWait(scheduler.executeOpBlock(view, *header, emptyTxs)),
-        std::runtime_error);
-}
-
+// 注：route A（executeOpBlock）已退役——空块拒绝测试随 route B（runOpBlockInjection）迁移至
+// OpBlockInjectorTest（EmptyBlockRejectedByInjector）。OpSchedulerImpl 现为纯引擎 seam，
+// 不再执行块，此处无对应执行用例。
 // C2 (W8 review): EIP-7702 authorization yParity is a uint8 in op-geth
 // (core/types/tx_setcode.go:76). A wider RLP scalar — e.g. 0x82 0x01 0x00 (256) — overflows that
 // uint8 and must be rejected at decode time by readCanonicalScalar(in, 1, "authorization

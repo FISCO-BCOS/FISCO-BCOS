@@ -22,7 +22,7 @@
 #include <opstack-executor/OpBlockInjector.h>  // runOpBlockInjection（route B，Task 6 P4 M3）
 #include <opstack-executor/OpBlockRegister.h>
 #include <opstack-executor/OpSchedulerImpl.h>
-#include <opstack-executor/OpstackExecutor.h>  // 含 OpstackExecutorCache（分叉键缓存，SEV-9，已并入）
+#include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <transaction-scheduler/bcos-transaction-scheduler/SchedulerSkeleton.h>
 
@@ -109,8 +109,9 @@ public:
     /// （composition-root 注入的 lambda，经构造传入——转换结果须覆写 extraTransactionBytes =
     /// 完整信封，opEnvelopeToTars 不设该字段，先例 EngineServiceImpl.h:1192 /
     /// OpDualPathEquivalenceTest.cpp:566-568）；cfg = configAt(timestamp/1000, forkTimestamps)；
-    /// executor = OpstackExecutorCache 分叉键取（SEV-9，不每调现构造）；ledgerConfig 只需
-    /// evmcRevision（injector 的 executeDeposit/executeTransaction/finalizeBlock 校验它）。
+    /// executor = 每块现构造的 OpstackExecutor（持一个 evmc::VM；删除分叉键缓存后恢复 SEV-9
+    /// 前接线）；ledgerConfig 只需 evmcRevision（injector 的 executeDeposit/executeTransaction/
+    /// finalizeBlock 校验它）。
     /// route A（executeOpBlock，OpSchedulerImpl.h:202）保留为注释对照的 fallback——换芯前该
     /// hook 即 `co_await m_schedulerImpl.executeOpBlock(view, header, rawTxBytes)`（m_schedulerImpl
     /// 成员保留），如需回退恢复注释体即可。
@@ -172,7 +173,8 @@ public:
             bcos::ledger::LedgerConfig ledgerConfig;
             ledgerConfig.setEVMCRevision(cfg.rev);
 
-            auto& executor = m_executorCache.get(m_forkTimestamps, m_chainId, cfg);
+            // 每块现构造 executor（持一个 evmc::VM）——删除分叉键缓存后恢复 SEV-9 前接线。
+            OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
             result = bcos::evm::engine::runOpBlockInjection(executor, view, header, txs, normalTxs,
                 cfg, m_chainId, ledgerConfig, rawTxBytes, m_hashImpl);
@@ -522,9 +524,6 @@ public:
         bcos::evm::engine::EnvelopeToTarsConverter envelopeToTars)
       : SchedulerBase(),
         m_schedulerImpl(receiptFactory, chainId, forkTimestamps),
-        // 分叉键缓存：拷贝 Ptr（shared_ptr）后再 move 给 m_receiptFactory/m_hashImpl——缓存
-        // 持有的拷贝独立存活。
-        m_executorCache(receiptFactory, hashImpl),
         m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
@@ -689,8 +688,9 @@ private:
         detail::RecentBlockHashes<ViewType> hashes(
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
-        // SEV-9：分叉键缓存取 executor（不每调现构造——OpBlockScheduler.h:298 先例的接线后形态）。
-        auto& executor = m_executorCache.get(m_forkTimestamps, m_chainId, cfg);
+        // 每调现构造 executor（持一个 evmc::VM）——删除分叉键缓存后恢复 OpBlockScheduler.h:298
+        // 先例的接线形态。
+        OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
         auto receipt = co_await executor.executeTransaction(view, header, *transaction,
             /*contextID=*/0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
@@ -706,7 +706,6 @@ private:
     static const bcos::h64 c_posNonce;
 
     bcos::evm::engine::OpSchedulerImpl<ViewType> m_schedulerImpl;
-    bcos::executor_v1::opstack::OpstackExecutorCache m_executorCache;
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     uint64_t m_chainId;

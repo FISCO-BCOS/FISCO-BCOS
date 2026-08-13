@@ -3,12 +3,12 @@
 
 // OpSchedulerTest — 接线 Task 4（OpScheduler 新类）的最小 OP 块 + 三分类单测。
 //
-// 1. ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock：最小 OP 块（deposit + 1 normal 带
-// envelope，
+// 1. ExecutesMinimalOpBlockEqualToDirectRouteB：最小 OP 块（deposit + 1 normal 带 envelope，
 //    SEV-8：extraTransactionBytes=完整信封，先例 OpDualPathEquivalenceTest.cpp:566-568）经
-//    OpScheduler.executeBlock 驱动 == 直调 executeOpBlock 结果（receipts/status/gasUsed +
-//    六字段承诺）。 语料锚：isthmus_transfer_basic.json 的 deposit + eip1559 envelope（op-geth
-//    真实签名）； 直调锚 = 同一 MLS 上独立 OpSchedulerImpl 的 executeOpBlock。
+//    OpScheduler.executeBlock 驱动 == 直调 route B（runOpBlockInjection）结果（receipts/status/
+//    gasUsed + 六字段承诺）。 语料锚：isthmus_transfer_basic.json 的 deposit + eip1559 envelope
+//    （op-geth 真实签名）； 直调锚 = 同一 MLS 上独立 route B（runOpBlockInjection，route A
+//    executeOpBlock 已退役——双路径 harness 已证明 route B 与其语义等价）。
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected：execute hook 抛 OpConsensusError
 //    （unsupported tx type byte 0x03，decodeOneRawTx 确定性抛）→ 骨架 coExecuteBlock 经
 //    classifyException → Error 码 == OpConsensusRejected。
@@ -17,7 +17,7 @@
 // 4. CommitPersistsSevenLedgerTables（Task 5c 槽位 3 E2E）：executeBlock + commitBlock 后 7 张
 //    SYS 表落盘断言（SEV-10，取代被删 OpBlockScheduler 的 RefuseStubs）。
 //
-// 黄金约束：最小 OP 块 receipts/status/gasUsed == 直调 executeOpBlock。
+// 黄金约束：最小 OP 块 receipts/status/gasUsed == 直调 route B（runOpBlockInjection）。
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpTxDecode.h>  // detail::canonicalEnvelopeBytes（deposit 信封重建）
@@ -159,7 +159,8 @@ bcos::evm::opstack::DepositTx makeDeposit()
 
 /// 语料环境（isthmus_transfer_basic env）的 OP 头。timestamp 存毫秒（FISCO 惯例，/1000 给 OP 秒）。
 /// commitment 字段（stateRoot/txsRoot/receiptsRoot/gasUsed/withdrawalsRoot/logsBloom/requestsHash）
-/// 由调用方在直调 executeOpBlock 后按结果回填——announced 头即真实承诺，verify 六字段对比通过。
+/// 由调用方在直调 route B（runOpBlockInjection）后按结果回填——announced 头即真实承诺，verify
+/// 六字段对比通过。
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
@@ -186,8 +187,8 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
     return h;
 }
 
-/// 用 executeOpBlock 结果回填 announced 头的承诺字段（finishExecute 也写同一批字段，verify
-/// 因此相等）。
+/// 用 route B（runOpBlockInjection）结果回填 announced 头的承诺字段（finishExecute 也写同一批
+/// 字段，verify 因此相等）。
 void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
     bcos::evm::engine::OpExecuteBlockResult const& result)
 {
@@ -383,12 +384,47 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
     bcos::task::syncWait(account.setBalance(balance));
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
+
+/// route B 直调锚（route A executeOpBlock 退役后，独立执行对照改 runOpBlockInjection）：装配
+/// txs/normalTxs + OpstackExecutor 后直调，返回 OpExecuteBlockResult。装配与 OpScheduler execute
+/// hook（OpScheduler.h:127-179）/ OpDualPathEquivalenceTest route
+/// B（:1015-1034）同款（免复制漂移）。
+bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& view,
+    bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxBytes)
+{
+    namespace op = bcos::evm::opstack;
+    const auto& cfg =
+        op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, f.forkTimestamps);
+    std::vector<op::OpBlockTx> txs;
+    txs.reserve(rawTxBytes.size());
+    for (auto const& raw : rawTxBytes)
+        txs.push_back(detail::decodeOneRawTx(raw, kChainId));
+    std::vector<bcos::protocol::Transaction::Ptr> normalTxs;
+    normalTxs.reserve(rawTxBytes.size());
+    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+    {
+        if (std::holds_alternative<op::DepositTx>(txs[i].tx))
+            continue;
+        const auto txHash = f.hashImpl->hash(rawTxBytes[i]);
+        auto tarsTx = makeConverter()(rawTxBytes[i], txHash);
+        if (!tarsTx)
+            throw std::runtime_error("route B direct: envelope failed opEnvelopeToTars");
+        tarsTx->extraTransactionBytes.assign(rawTxBytes[i].begin(), rawTxBytes[i].end());
+        normalTxs.push_back(std::make_shared<bcostars::protocol::TransactionImpl>(
+            [tarsTx = std::move(*tarsTx)]() mutable { return &tarsTx; }));
+    }
+    bcos::ledger::LedgerConfig ledgerConfig;
+    ledgerConfig.setEVMCRevision(cfg.rev);
+    bcos::executor_v1::opstack::OpstackExecutor executor{f.receiptFactory, f.hashImpl, cfg};
+    return bcos::evm::engine::runOpBlockInjection(executor, view, header, txs, normalTxs, cfg,
+        kChainId, ledgerConfig, rawTxBytes, f.hashImpl);
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSuite)
 
-/// 黄金约束：最小 OP 块（deposit + 1 normal 带 envelope）经 OpScheduler == 直调 executeOpBlock。
-BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock)
+/// 黄金约束：最小 OP 块（deposit + 1 normal 带 envelope）经 OpScheduler == 直调 route B。
+BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
 {
     Fixture f;
 
@@ -402,24 +438,23 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock)
 
     auto header = makeHeader();
 
-    // 直调锚：同一 MLS 上独立 OpSchedulerImpl（route A），同一 header 环境。
-    bcos::evm::engine::OpSchedulerImpl<ViewType> directScheduler(
-        f.receiptFactory, kChainId, f.forkTimestamps);
+    // 直调锚：同一 MLS 上独立 route B（runOpBlockInjection），同一 header 环境。
+    // （route A executeOpBlock 已退役——双路径 harness 已证明 route B 与其语义等价。）
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
     bcos::evm::engine::OpExecuteBlockResult resultA;
     try
     {
-        resultA = bcos::task::syncWait(directScheduler.executeOpBlock(viewA, *header, rawTxBytes));
+        resultA = runRouteBDirect(f, viewA, *header, rawTxBytes);
     }
     catch (const std::exception& e)
     {
-        BOOST_ERROR("direct executeOpBlock threw: " << e.what());
+        BOOST_ERROR("direct runOpBlockInjection threw: " << e.what());
         return;
     }
     catch (...)
     {
-        BOOST_ERROR("direct executeOpBlock threw an unknown (RTTI-bypassed) exception");
+        BOOST_ERROR("direct runOpBlockInjection threw an unknown (RTTI-bypassed) exception");
         return;
     }
 
@@ -492,8 +527,9 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock)
             std::string(resultA.receipts[i]->effectiveGasPrice()));
     }
 
-    // Task 6（P4 M3）黄金约束：executeBlock 内部经 runOpBlockInjection（route B）的完整结果
-    // == 直调 executeOpBlock（route A）——peekExecuteResult 暴露骨架 m_results 里的原始结果。
+    // Task 6（P4 M3）黄金约束：executeBlock（骨架驱动，execute hook = runOpBlockInjection
+    // route B）的完整结果 == 直调 runOpBlockInjection（route B）——peekExecuteResult 暴露骨架
+    // m_results 里的原始结果。
     auto routeB = f.scheduler->peekExecuteResult();
     BOOST_REQUIRE_MESSAGE(routeB.has_value(), "executeBlock must stash an OpExecuteBlockResult");
     BOOST_CHECK_EQUAL(routeB->stateRoot, resultA.stateRoot);
@@ -521,7 +557,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 {
     Fixture f;
 
-    // 语料信封（同 ExecutesMinimalOpBlockEqualToDirectExecuteOpBlock）：deposit + eip1559。
+    // 语料信封（同 ExecutesMinimalOpBlockEqualToDirectRouteB）：deposit + eip1559。
     auto depTx = makeDeposit();
     bcos::bytes depEnv = detail::canonicalEnvelopeBytes(bcos::evm::opstack::OpBlockTx{depTx, {}});
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
@@ -530,13 +566,12 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 
     auto header = makeHeader();
 
-    // 直调 executeOpBlock 得真实承诺，回填 announced 头（verify 六字段对比通过）。
-    bcos::evm::engine::OpSchedulerImpl<ViewType> directScheduler(
-        f.receiptFactory, kChainId, f.forkTimestamps);
+    // 直调 route B 得真实承诺，回填 announced 头（verify 六字段对比通过）。
+    // （route A executeOpBlock 已退役——双路径 harness 已证明 route B 与其语义等价。）
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
     bcos::evm::engine::OpExecuteBlockResult resultA =
-        bcos::task::syncWait(directScheduler.executeOpBlock(viewA, *header, rawTxBytes));
+        runRouteBDirect(f, viewA, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, resultA);
 

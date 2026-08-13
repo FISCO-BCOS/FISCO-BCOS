@@ -214,4 +214,35 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     BOOST_CHECK_GT(manual, 0);  // both txs actually consumed gas
 }
 
+/// 空块拒绝（route A executeOpBlock 退役后，空块拒绝语义随 route B 迁到注入器）：
+/// runOpBlockInjection 空 txs → OpConsensusError（std::runtime_error 子类）。原 OpSchedulerImpl
+/// SmokeTest::EmptyBlockRejected 覆盖 executeOpBlock 的同一分类——此处为 route B 等价覆盖。
+BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByInjector)
+{
+    namespace op = bcos::evm::opstack;
+    namespace engine = bcos::evm::engine;
+
+    constexpr uint64_t kIsthmusTime = 0;
+    constexpr uint64_t kJovianTime = std::numeric_limits<uint64_t>::max();
+    const auto& cfg = op::configAt(1000, op::OpForkTimestamps{kIsthmusTime, kJovianTime});
+
+    MutableStorage storage;
+    auto cryptoSuite = makeCryptoSuite();
+    auto hashImpl = cryptoSuite->hashImpl();
+    auto receiptFactory = makeReceiptFactory();
+    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
+
+    auto header = makeHeader(1'000'000);
+    bcos::ledger::LedgerConfig ledgerConfig;
+    ledgerConfig.setEVMCRevision(cfg.rev);
+
+    // 空 txs → "op block: missing L1 attributes deposit (empty block)" → OpConsensusError。
+    std::vector<op::OpBlockTx> txs;
+    std::vector<bcos::protocol::Transaction::Ptr> normalTxs;
+    std::vector<bcos::bytes> rawTxBytes;
+    BOOST_CHECK_THROW(engine::runOpBlockInjection(executor, storage, *header, txs, normalTxs, cfg,
+                          kChainId, ledgerConfig, rawTxBytes, hashImpl),
+        std::runtime_error);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
