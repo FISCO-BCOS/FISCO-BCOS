@@ -45,6 +45,26 @@ DERIVE_BCOS_EXCEPTION(EvmcRevisionNotConfigured);
 DERIVE_BCOS_EXCEPTION(OpForkRevisionMismatch);
 DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
 
+/// Per-block execution state threaded through ExecuteContext (shared scheduler plan Task 3).
+/// fee is loaded lazily on the first NORMAL tx (after the L1 attributes deposit has run);
+/// blockGasLeft / cumulativeGasUsed / seenNonDeposit are mutated per tx; hashes / chainId are
+/// fixed at block construction; daFootprintGasScalar (Jovian) overrides
+/// fee.da_footprint_gas_scalar when set. The first five fields are mutable so a
+/// `BlockContext const*` can write them. Namespace-scope (not nested) so OpScheduler / tests can
+/// value-initialize it (a nested struct's default member initializers are unusable outside
+/// OpstackExecutor's member functions).
+struct OpBlockExecutionContext
+{
+    mutable bcos::evm::opstack::OpFeeParams fee;   // lazy-load + DA scalar override (H1/H1c)
+    mutable bool feeLoaded = false;                // fee lazy-load flag (H1)
+    mutable int64_t blockGasLeft;                  // decremented per tx
+    mutable int64_t cumulativeGasUsed = 0;         // accumulated across txs (H4)
+    mutable bool seenNonDeposit = false;           // deposit-after-non-deposit gate (M2)
+    evmone::state::BlockHashes* blockHashes;       // built once at block level (H3)
+    uint64_t chainId;                              // constant (H3)
+    std::optional<uint16_t> daFootprintGasScalar;  // Jovian DA scalar (H1c)
+};
+
 class OpstackExecutor
 {
 public:
@@ -78,6 +98,9 @@ public:
     }
 
     // ---- TransactionExecutor concept: ExecuteContext with prepare/execute/finish ----
+    // BlockContext aliases the namespace-scope OpBlockExecutionContext (defined above).
+    using BlockContext = OpBlockExecutionContext;
+
     template <class Storage>
     struct ExecuteContext
     {
@@ -93,9 +116,15 @@ public:
         bcos::evm::opstack::OpTxProperties m_props;   // set by prepare()
         protocol::TransactionReceipt::Ptr m_receipt;  // set by execute()
         evmone::state::StateDiff m_diff;              // writeback deferred to finish()
+        bcos::evm::opstack::DepositTx m_deposit;      // set by prepare() for deposit txs
+
+        // Shared per-block context; the mutable fields above are written through this const
+        // pointer. The caller owns the BlockContext and must keep it alive across the lifecycle.
+        BlockContext const* m_ctx;
 
         ExecuteContext(OpstackExecutor& exec, Storage& st, protocol::BlockHeader const& bh,
-            protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c)
+            protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c,
+            BlockContext const& blockCtx)
           : executor(exec),
             storage(st),
             blockHeader(bh),
@@ -105,33 +134,93 @@ public:
             call(c),
             m_props{},
             m_receipt{},
-            m_diff{}
+            m_diff{},
+            m_deposit{},
+            m_ctx(&blockCtx)
         {}
 
-        // concept lifecycle: prepare (validate) -> execute (transition) -> finish (writeback)
+        // concept lifecycle: prepare (validate) -> execute (transition) -> finish (writeback).
+        // Deposit txs short-circuit (no opValidate / fee / m_finish writeback); normal txs run the
+        // three shared stages with the block-context fee (lazily loaded) + blockGasLeft.
         task::Task<void> prepare()
         {
-            m_props = co_await executor.m_prepare(storage, blockHeader, transaction, ledgerConfig);
+            if (transaction.isDepositTx())
+            {
+                if (m_ctx->seenNonDeposit)  // M2 order gate
+                    throw bcos::evm::engine::OpConsensusError(
+                        "op block: deposit after non-deposit");
+                m_deposit = OpstackExecutor::depositFromTransaction(transaction);
+                co_return;  // deposit has no opValidate
+            }
+            m_ctx->seenNonDeposit = true;
+            if (!m_ctx->feeLoaded)
+            {  // H1 fee lazy load (after the L1 attributes deposit has executed)
+                namespace eth = bcos::executor_v1::eth;
+                namespace op = bcos::evm::opstack;
+                eth::StorageStateView<Storage> stateView(storage);
+                m_ctx->fee = op::loadOpFeeParams(stateView);
+                if (m_ctx->daFootprintGasScalar)  // H1c DA scalar override
+                    m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
+                m_ctx->feeLoaded = true;
+            }
+            try
+            {  // M1 normalization: validation failure -> consensus rejection
+                m_props = co_await executor.m_prepare(storage, blockHeader, transaction,
+                    ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft);
+            }
+            catch (const OpTxValidationFailed& e)
+            {
+                throw bcos::evm::engine::OpConsensusError(
+                    std::string("runOpBlockInjection: normal tx validation failed: ") + e.what());
+            }
         }
         task::Task<void> execute()
         {
-            m_receipt = co_await executor.m_execute(
-                storage, blockHeader, transaction, ledgerConfig, m_props, m_diff);
+            if (transaction.isDepositTx())
+            {
+                // executeDeposit member (not the op::runDeposit free function); applies the state
+                // diff internally.
+                m_receipt = co_await executor.executeDeposit(storage, blockHeader, m_deposit,
+                    m_ctx->chainId, m_ctx->blockGasLeft, ledgerConfig, m_ctx->blockHashes);
+            }
+            else
+            {
+                m_receipt = co_await executor.m_execute(storage, blockHeader, transaction,
+                    ledgerConfig, m_props, m_diff, m_ctx->chainId, m_ctx->blockGasLeft,
+                    m_ctx->blockHashes);  // H3
+            }
         }
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
-            co_return co_await executor.m_finish(
-                storage, blockHeader, ledgerConfig, m_receipt, m_diff);
+            namespace op = bcos::evm::opstack;
+            protocol::TransactionReceipt::Ptr receipt;
+            if (transaction.isDepositTx())
+            {
+                receipt = m_receipt;  // executeDeposit already applied the state diff
+            }
+            else
+            {
+                receipt = co_await executor.m_finish(
+                    storage, blockHeader, ledgerConfig, m_receipt, m_diff);
+            }
+            // H4: sole owner of cumulative-gas backfill + blockGasLeft decrement (narrowGasUsed /
+            // hexCumulative live in OpCommon.h).
+            auto gasUsed = op::narrowGasUsed(receipt->gasUsed());
+            m_ctx->cumulativeGasUsed += gasUsed;
+            receipt->setCumulativeGasUsed(op::hexCumulative(m_ctx->cumulativeGasUsed));
+            m_ctx->blockGasLeft -= gasUsed;
+            co_return receipt;
         }
     };
 
     template <class Storage>
     task::Task<ExecuteContext<Storage>> createExecuteContext(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
+        BlockContext const& blockCtx = BlockContext{})
     {
-        co_return ExecuteContext<Storage>{
-            *this, storage, blockHeader, transaction, contextID, ledgerConfig, call};
+        co_return ExecuteContext<Storage>{*this, storage, blockHeader, transaction, contextID,
+            ledgerConfig, call, blockCtx};
     }
 
     /// Execute a single OP normal transaction (injection-style, mirroring processOpBlock).

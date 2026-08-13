@@ -408,6 +408,52 @@ TEST_F(Fixture, ExecutesDepositThroughExecuteTransaction)
     EXPECT_EQ(*meta->deposit_receipt_version, 1u);
 }
 
+TEST_F(Fixture, DepositLifecycleThroughExecuteContext)
+{
+    // Concept lifecycle (createExecuteContext -> prepare -> execute -> finish) on a deposit tx:
+    // the deposit branch must short-circuit opValidate and run executeDeposit, and finish() must
+    // decrement ctx.blockGasLeft + backfill the receipt's cumulativeGasUsed.
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    auto tx = buildDepositTx();
+    constexpr auto from = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, from, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256(0));
+        co_await acc.setNonce("0");
+        co_return;
+    }());
+
+    constexpr int64_t kInitialGasLeft = 30000000;
+    OpBlockExecutionContext ctx{};
+    ctx.blockGasLeft = kInitialGasLeft;
+    ctx.chainId = 10;  // blockHashes left null -> executeDeposit uses ZeroBlockHashes
+
+    auto context = task::syncWait(executor.createExecuteContext(
+        storage, blockHeader, tx, /*contextID=*/0, ledgerConfig, /*call=*/false, ctx));
+    task::syncWait(context.prepare());
+    task::syncWait(context.execute());
+    auto receipt = task::syncWait(context.finish());
+
+    ASSERT_NE(receipt, nullptr);
+    EXPECT_EQ(receipt->status(), 0);
+    // mint(5) applied to the from balance (distinguishes the deposit path from a no-op).
+    ledger::account::EVMAccount<MutableStorage> acc(storage, from, false);
+    auto bal = task::syncWait(acc.balance());
+    EXPECT_EQ(bal, 5u);
+    // blockGasLeft decremented by the deposit's gasUsed; cumulative gas backfilled on the receipt.
+    auto const gasUsed = bcos::evm::opstack::narrowGasUsed(receipt->gasUsed());
+    EXPECT_LT(ctx.blockGasLeft, kInitialGasLeft);
+    EXPECT_EQ(ctx.blockGasLeft, kInitialGasLeft - gasUsed);
+    EXPECT_EQ(ctx.cumulativeGasUsed, gasUsed);
+    EXPECT_EQ(std::string(receipt->cumulativeGasUsed()),
+        bcos::evm::opstack::hexCumulative(gasUsed));
+}
+
 TEST_F(Fixture, DepositGasLimitReachedIsBlockError)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};

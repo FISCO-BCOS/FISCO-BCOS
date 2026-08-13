@@ -23,6 +23,7 @@
 #include <evmc/evmc.hpp>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -45,6 +46,23 @@ struct OpBlockSeal
     /// special case. When has_da_footprint is false there is always no value.
     std::optional<uint64_t> blobGasUsed;
 };
+
+/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool).
+[[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
+{
+    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
+    if (gasUsed > kMaxInt64)
+        throw std::runtime_error("op block: receipt gasUsed exceeds int64_t range");
+    return static_cast<int64_t>(gasUsed);
+}
+
+/// "0x" + lowercase hex (op-geth hexutil.Uint64); parsed back by encodeReceiptForRoot.
+[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
+{
+    std::ostringstream oss;
+    oss << "0x" << std::hex << cumulative;
+    return oss.str();
+}
 }  // namespace bcos::evm::opstack
 
 namespace bcos::evm::engine

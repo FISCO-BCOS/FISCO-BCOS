@@ -94,23 +94,6 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
 }
 
-/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool).
-[[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
-{
-    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
-    if (gasUsed > kMaxInt64)
-        throw std::runtime_error("op block: receipt gasUsed exceeds int64_t range");
-    return static_cast<int64_t>(gasUsed);
-}
-
-/// "0x" + lowercase hex (op-geth hexutil.Uint64); parsed back by encodeReceiptForRoot.
-[[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
-{
-    std::ostringstream oss;
-    oss << "0x" << std::hex << cumulative;
-    return oss.str();
-}
-
 /// Block finalize: no ommers / block reward; Prague requests suppressed (false throws).
 evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
