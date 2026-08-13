@@ -21,6 +21,7 @@
  *        the same StateStorage: the second call sees the existing genesis
  *        block and enters the verify path.
  */
+#include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -78,6 +79,7 @@ struct AllocsHashFixture
                 .nonce = "0",
                 .code = "6080604052",
                 .storage = {}});
+        appendGenesisFeatureFlagsSlot(genesisConfig);
         return genesisConfig;
     }
 

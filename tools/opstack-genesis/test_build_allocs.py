@@ -99,7 +99,7 @@ def _system_config_predeploy(**overrides):
         "address": SYSTEM_CONFIG_ADDR,
         "sol_file": "SystemConfig.sol",
         "proxy": {"implementation": SYSTEM_CONFIG_IMPL},
-        "system_config": {"chain_id": 901, "gas_limit": 30_000_000},
+        "system_config": {"chain_id": 901, "gas_limit": 30_000_000, "feature_flags": 0x2A},
     }
     predeploy.update(overrides)
     return predeploy
@@ -274,16 +274,21 @@ def test_system_config_entry_slots_use_mapping_formula(tmp_path):
 
     # entrySlot(key) = keccak256(utf8(key) || be32(101)); genesis entries have
     # enableNumber 0, so the packed word equals the bare value.
-    for key, value in (("chain_id", 901), ("gas_limit", 30_000_000)):
+    for key, value in (("chain_id", 901), ("gas_limit", 30_000_000),
+                       ("feature_flags", 0x2A)):
         slot = int.from_bytes(build_allocs.keccak256(
             key.encode() + (101).to_bytes(32, "big")), "big")
         assert storage[slot] == value
 
 
-def test_system_config_rejects_feature_flags(tmp_path):
+def test_missing_feature_flags_rejected(tmp_path):
+    # The C++ genesis path VERIFIES (no longer injects) the feature_flags
+    # Entry slot, so the SystemConfig predeploy alloc must carry it — the
+    # genesis state root would otherwise not commit the feature set.
     contracts = _base_contracts(tmp_path)
     base = _load_base(tmp_path)
-    predeploy = _system_config_predeploy(system_config={"feature_flags": 1})
+    predeploy = _system_config_predeploy(
+        system_config={"chain_id": 901, "gas_limit": 30_000_000})
     with pytest.raises(ValueError, match="feature_flags"):
         build_allocs.build_allocs(_config(predeploy), str(contracts), base)
 
@@ -291,12 +296,14 @@ def test_system_config_rejects_feature_flags(tmp_path):
 def test_system_config_value_bounds(tmp_path):
     contracts = _base_contracts(tmp_path)
     base = _load_base(tmp_path)
-    oversized = _system_config_predeploy(system_config={"chain_id": 1 << 192})
+    oversized = _system_config_predeploy(
+        system_config={"chain_id": 1 << 192, "feature_flags": 1})
     with pytest.raises(ValueError, match="uint192"):
         build_allocs.build_allocs(_config(oversized), str(contracts), base)
     # a zero-valued entry writes a zero slot -> unrepresentable in the trie,
     # the loader would see the key as missing; must fail loud.
-    zero_valued = _system_config_predeploy(system_config={"gas_limit": 0})
+    zero_valued = _system_config_predeploy(
+        system_config={"gas_limit": 0, "feature_flags": 1})
     with pytest.raises(ValueError, match="positive uint192"):
         build_allocs.build_allocs(_config(zero_valued), str(contracts), base)
 
@@ -307,7 +314,7 @@ def test_raw_storage_accepts_int_and_hex_string_values(tmp_path):
     contracts = _base_contracts(tmp_path)
     base = _load_base(tmp_path)
     predeploy = _system_config_predeploy(
-        system_config={}, storage={16: 16, "0x20": "0x2a"})
+        system_config={"feature_flags": 1}, storage={16: 16, "0x20": "0x2a"})
     allocs = build_allocs.build_allocs(_config(predeploy), str(contracts), base)
     storage = {a["address"]: a for a in allocs}[SYSTEM_CONFIG_ADDR.lower()]["storage"]
     assert storage[16] == 16      # int slot/value used verbatim
@@ -368,7 +375,7 @@ def test_quoted_hex_config_values_parse_as_hex(tmp_path):
     contracts = _base_contracts(tmp_path)
     base = _load_base(tmp_path)
     predeploy = _system_config_predeploy(
-        system_config={"compatibility_version": "0x03120000"})
+        system_config={"compatibility_version": "0x03120000", "feature_flags": 1})
     allocs = build_allocs.build_allocs(_config(predeploy), str(contracts), base)
     storage = {a["address"]: a for a in allocs}[SYSTEM_CONFIG_ADDR.lower()]["storage"]
     slot = int.from_bytes(build_allocs.keccak256(
@@ -381,7 +388,8 @@ def test_quoted_decimal_config_value_rejected(tmp_path):
     # parser; config values are consensus parameters, so it must fail loud.
     contracts = _base_contracts(tmp_path)
     base = _load_base(tmp_path)
-    predeploy = _system_config_predeploy(system_config={"gas_limit": "100"})
+    predeploy = _system_config_predeploy(
+        system_config={"gas_limit": "100", "feature_flags": 1})
     with pytest.raises(ValueError, match="0x-prefixed"):
         build_allocs.build_allocs(_config(predeploy), str(contracts), base)
 
@@ -409,6 +417,7 @@ def test_same_admin_and_owner_rejected(tmp_path):
     config["governance_owner"] = PROXY_ADMIN
     with pytest.raises(ValueError, match="different"):
         build_allocs.build_allocs(config, str(contracts), base)
+
 
 
 def test_reserved_namespace_rejected(tmp_path):

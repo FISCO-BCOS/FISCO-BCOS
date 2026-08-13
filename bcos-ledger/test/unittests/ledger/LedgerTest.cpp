@@ -24,6 +24,7 @@
 #include "bcos-ledger/Ledger.h"
 #include <bcos-framework/storage/Serialize.h>
 #include "../../mock/MockKeyFactor.h"
+#include "GenesisFeatureFlagsHelper.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
@@ -1661,6 +1662,7 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
                 .nonce = {},
                 .code = "6080604052",
                 .storage = {}});
+        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 

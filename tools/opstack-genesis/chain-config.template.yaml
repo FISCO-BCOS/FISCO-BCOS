@@ -15,9 +15,7 @@
 
 # Self-written predeploys (SystemConfig, L2ValidatorSet) are materialized in
 # their post-deployment terminal state: a Proxy account (EIP-1967 slots +
-# contract storage) plus a separate implementation account. The `feature_flags`
-# SystemConfig entry is still injected by the C++ genesis path (Ledger), which
-# alone knows the version-gated feature set — never list it here.
+# contract storage) plus a separate implementation account.
 
 # Two-authority split (the tool REJECTS these being the same entity):
 #   proxy_admin       -> EIP-1967 admin slot: upgrade authority (ProxyAdmin
@@ -56,6 +54,15 @@ predeploys:
       gas_limit: 30000000
       block_tx_count_limit: 1000
       compatibility_version: 0x03120000  # 3.18.0
+      # REQUIRED - must equal the node's Features::toFlagsNumber() for this
+      # chain's genesis feature set (version defaults + explicitly enabled
+      # flags; note an rpbft-consensus chain additionally auto-sets the
+      # feature_rpbft bit at genesis). The node VERIFIES this slot at first
+      # start and refuses to build genesis on mismatch; it no longer injects
+      # the value, so the genesis state root commits it on both FISCO and the
+      # op-reth oracle. The example below is a placeholder bitmap - compute
+      # the real one.
+      feature_flags: 0x1
   - name: L2ValidatorSet
     address: "0x43000000000000000000000000000000000000C1"
     sol_file: L2ValidatorSet.sol

@@ -36,9 +36,12 @@ Two-authority split: the EIP-1967 admin slot (upgrade authority) is
 ProxyAdmin, while `Ownable.owner` (config/validator write authority) is the
 governance entity — two independent slots, never the same entity (enforced).
 
-The `feature_flags` SystemConfig entry is still written by the C++ genesis
-path (Ledger), which alone knows the version-gated feature set after
-Features::setGenesisFeatures(version). This tool must not write that key.
+The `feature_flags` SystemConfig entry is a REQUIRED input for the
+SystemConfig predeploy: it must equal the node's
+Features::toFlagsNumber() at genesis, it is written here as a packed Entry
+slot like every other config key, and the C++ genesis path VERIFIES it
+(no longer injects it) — so the genesis state root, the op-reth alloc JSON
+and FISCO's readable state all commit the same slot.
 
 If a self-written implementation artifact still carries immutableReferences
 (unfilled immutables), the build aborts naming the contract.
@@ -160,6 +163,13 @@ _OP_CODE_NAMESPACE_BASE = 0xC0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D30000
 # forever; unlike the zero address it slips past a non-zero check — reject it
 # explicitly.
 PLACEHOLDER_ADDRESS = 0xDEAD
+
+# The FISCO SystemConfig predeploy (0x43...00C0). Its alloc MUST carry the
+# feature_flags Entry slot: the C++ genesis path verifies (and no longer
+# injects) that slot, so omitting it here would leave the genesis state root
+# not committing the feature set the node actually runs with.
+SYSTEM_CONFIG_PREDEPLOY = 0x43000000000000000000000000000000000000C0
+
 
 
 def in_reserved_namespace(address_int):
@@ -313,10 +323,6 @@ def system_config_entry_storage(entries):
     """
     storage = {}
     for key, value in entries.items():
-        if key == "feature_flags":
-            raise ValueError(
-                "feature_flags is written by the C++ genesis path (Ledger); "
-                "remove it from system_config")
         # YAML ints verbatim; quoted values must be explicit 0x-hex.
         value = config_word(value, f"system_config['{key}']")
         if value <= 0 or value >= (1 << 192):
@@ -490,13 +496,22 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
             f"in the base allocs")
     proxy_code = source_account["code"]
 
+    system_config = predeploy.get("system_config", {}) or {}
+    if proxy_address == SYSTEM_CONFIG_PREDEPLOY and "feature_flags" not in system_config:
+        raise ValueError(
+            f"{name}: system_config must carry feature_flags (= the node's "
+            f"Features::toFlagsNumber() at genesis). The C++ genesis path "
+            f"verifies this slot instead of injecting it, so omitting it "
+            f"would leave the genesis state root not committing the feature "
+            f"set the chain runs with")
+
     storage = {
         OZ_INITIALIZED_SLOT: INITIALIZED_RAN,
         OZ_OWNER_SLOT: address_int(governance_owner),
         EIP1967_IMPLEMENTATION_SLOT: implementation_address,
         EIP1967_ADMIN_SLOT: address_int(proxy_admin),
     }
-    storage.update(system_config_entry_storage(predeploy.get("system_config", {})))
+    storage.update(system_config_entry_storage(system_config))
     storage.update(validator_storage(predeploy.get("validators", []), name))
     for slot, value in (predeploy.get("storage") or {}).items():
         storage[word_int(slot)] = word_int(value)
