@@ -154,10 +154,11 @@ std::string hexU256Bcos(const bcos::u256& v)
     return "0x" + v.str(0, std::ios_base::hex);
 }
 
-// ── DivergenceLedger (OpT8nReplayTest.cpp:266-337 pattern; dedicated FINDING-dual- entryId prefix) ─────
-// This harness shares t8n/vectors/DIVERGENCES.md with OpT8nReplayTest: each ledger only manages
-// entries with its own prefix, so finish()'s stale check does not false-positive across suites
-// (existing FINDING-create-output entries belong to OpT8nReplay; FINDING-dual-* to this harness).
+// ── DivergenceLedger (OpT8nReplayTest.cpp:266-337 pattern; dedicated FINDING-dual- entryId prefix)
+// ───── This harness shares t8n/vectors/DIVERGENCES.md with OpT8nReplayTest: each ledger only
+// manages entries with its own prefix, so finish()'s stale check does not false-positive across
+// suites (existing FINDING-create-output entries belong to OpT8nReplay; FINDING-dual-* to this
+// harness).
 
 struct AllowEntry
 {
@@ -1108,7 +1109,8 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
             fixture.blockFactory, fixture.multiLayerStorage,
             [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
                 return bcos::engine::detail::opEnvelopeToTars(env, txHash);
-            });
+            },
+            /*ledger=*/nullptr);
 
         bcos::Error::Ptr routeAErr;
         opScheduler->executeBlock(block, /*verify=*/true,

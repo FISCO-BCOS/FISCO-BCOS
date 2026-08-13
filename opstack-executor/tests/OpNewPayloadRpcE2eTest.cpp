@@ -169,11 +169,12 @@ struct OpE2eFixture
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
         scheduler(forkTimestamps),
-        opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage,
+        opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
+            receiptFactory, hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage,
             [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
                 return bcos::engine::detail::opEnvelopeToTars(env, txHash);
-            })),
+            },
+            /*ledger=*/nullptr)),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             opDelegate)

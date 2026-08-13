@@ -557,7 +557,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
                 [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
                     return bcos::engine::detail::opEnvelopeToTars(env, txHash);
-                });
+                },
+                // Task 2: wire the OP delegate's ledger (same LedgerInterface::Ptr as the ethereum
+                // root) so Task 3's commit hook can call prewriteBlockToBuffer. The engine service
+                // below keeps /*ledger=*/nullptr — only the delegate consumes it, avoiding the
+                // EngineServiceImpl.h:714-748 local-build double-write path.
+                m_ledger);
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,

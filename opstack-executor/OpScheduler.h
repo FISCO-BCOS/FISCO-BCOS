@@ -540,7 +540,8 @@ public:
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
         bcos::evm::opstack::OpForkTimestamps forkTimestamps,
         bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
-        bcos::evm::engine::EnvelopeToTarsConverter envelopeToTars)
+        bcos::evm::engine::EnvelopeToTarsConverter envelopeToTars,
+        bcos::ledger::LedgerInterface::Ptr ledger = nullptr)
       : SchedulerBase(),
         m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
@@ -550,6 +551,14 @@ public:
     {
         this->m_multiLayerStorage = &multiLayerStorage;
         this->m_blockFactory = blockFactory.get();
+        // Ledger injection (Task 2): reuse the skeleton's protected m_ledger member — no new
+        // duplicate member. Null is allowed: the T2 commit hook is still opstackRegisterBlock
+        // (ledger not yet consumed); Task 3 switches it to prewriteBlockToBuffer and wires a
+        // functional ledger so CommitPersistsSevenLedgerTables can verify the prewrite path.
+        if (ledger)
+        {
+            this->m_ledger = ledger.get();
+        }
         // OP commit's notifyBlockNumber goes through the skeleton (m_asyncGroup);
         // OP has no RPC push needs — register no-op notifiers by default, overridable by the
         // composition root (Initializer) via setBlockNumberNotifier/setTransactionNotifier. A

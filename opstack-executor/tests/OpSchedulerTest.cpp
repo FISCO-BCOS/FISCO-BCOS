@@ -285,7 +285,8 @@ struct Fixture
 
     Fixture()
       : scheduler(std::make_shared<TestOpScheduler>(receiptFactory, hashImpl, kChainId,
-            forkTimestamps, blockFactory, multiLayerStorage, makeConverter()))
+            forkTimestamps, blockFactory, multiLayerStorage, makeConverter(),
+            /*ledger=*/nullptr))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
     }
