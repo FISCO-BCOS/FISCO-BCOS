@@ -48,7 +48,7 @@
 
 - [ ] **Step 1: 抽函数（先不删 runOpBlockInjection 的旧代码）**
 
-在 `opstack-executor/OpBlockExecute.h` 新增 `finalizeOpBlockResult`（把现 runOpBlockInjection 285-310 行的逻辑整体搬入，形参改为函数参数，并补 txTypes 重建 + cumulativeGasUsed 回填 + hashErr 检查）。`runOpBlockInjection` 仍保留原样（Task 5 才删），先不改它。
+在 `opstack-executor/OpBlockExecute.h` 新增 `finalizeOpBlockResult`（把现 runOpBlockInjection 285-310 行的逻辑整体搬入，形参改为函数参数，并补 txTypes 重建 + hashErr 检查；**不回填 cumulativeGasUsed**——回填在循环内，不在尾部）。`runOpBlockInjection` 仍保留原样（Task 5 才删），先不改它。
 
 - [ ] **Step 2: 构建验证不破坏**
 
@@ -57,7 +57,7 @@ Expected: 编译通过（新增函数未使用不报错，头文件内联模板�
 
 - [ ] **Step 3: 让 runOpBlockInjection 改用 finalizeOpBlockResult**
 
-把 `runOpBlockInjection` 尾部（285-310）替换为 `return finalizeOpBlockResult(executor, view, header, ledgerConfig, cfg, result.receipts, rawTxBytes, cumulative, hashErr);`——注意 `executor.finalizeBlock` 被调用一次即可。finalizeOpBlockResult **内部从 rawTxBytes 重建 txTypes**（runOpBlockInjection 旧循环的 txTypes 填充随尾部一起移入），并顺序回填 cumulativeGasUsed、检查 hashErr。
+把 `runOpBlockInjection` 尾部（285-310）替换为 `return finalizeOpBlockResult(executor, view, header, ledgerConfig, cfg, result.receipts, rawTxBytes, cumulative, hashErr);`——注意 `executor.finalizeBlock` 被调用一次即可。finalizeOpBlockResult **内部从 rawTxBytes 重建 txTypes**（runOpBlockInjection 旧循环的 txTypes 填充随尾部一起移入），并检查 hashErr；**不回填 cumulativeGasUsed**（回填在 runOpBlockInjection 循环内 236/280 行，保留不动）。
 
 - [ ] **Step 4: 跑 block 测试确认行为不变**
 
