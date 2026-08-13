@@ -1,0 +1,36 @@
+flowchart TD
+    A[OpScheduler.execute]
+    B[decodeOneRawTx]
+    C[runOpBlockInjection]
+    D[deposit branch]
+    E[normal tx branch]
+    F[executeDeposit]
+    G[runDeposit]
+    H[executeTransaction]
+    I[m_prepare]
+    J[m_execute]
+    K[m_finish]
+    L[finalizeBlock]
+
+    A --> B
+    B --> C
+    C --> D
+    C --> E
+
+    D --> F
+    F --> G
+
+    E --> H
+    H --> I
+    I --> J
+    J --> K
+
+    C --> L
+
+    classDef op fill:#e8f1ff,stroke:#4a78d1,stroke-width:1px;
+    classDef tx fill:#edf7ed,stroke:#3d8b3d,stroke-width:1px;
+    classDef dep fill:#fff4e5,stroke:#d97706,stroke-width:1px;
+
+    class A,B,C op;
+    class H,I,J,K,E tx;
+    class D,F,G,L dep;
