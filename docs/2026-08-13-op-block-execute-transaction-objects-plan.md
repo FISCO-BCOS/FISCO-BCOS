@@ -14,7 +14,7 @@
 - 共识不变：低-s / chain-id / yParity 拒绝必须保持（六路承诺比较不兜底这三项）。
 - `OpBlockTx`/`processOpBlock`/`validateJovianBlockShape(span<OpBlockTx>)` **保留不动**（route-A 测试参照，无生产调用者）。
 - 引擎侧 `buildOpBlock`/`opEnvelopeToTars` 不动；`executeDeposit` 仍吃 `DepositTx`。
-- 双路径等价测试 DIVERGE=0、语料（125 向量）必须保持绿。
+- 双路径等价测试 DIVERGE=0、语料（131 向量）必须保持绿。
 - eth_call 语义不变（`call==true` 跳过三项检查）。
 - 提交前 `git add` 已格式化文件；commit 被 clang-format hook 拒时用 `--no-verify`（仅 .md 提交场景）。
 
@@ -201,7 +201,9 @@ Expected: 编译通过但用例失败 —— 跨链信封没被拒（m_prepare �
 
 ```cpp
 if (!call && !envRef.empty())
-    detail::validateEnvelopeSignature(envRef, chainId);
+    // envRef 是 bytesConstRef（Transaction.h:89），validateEnvelopeSignature 收 bcos::bytes——
+    // 需 .toBytes() 拷贝（每 tx 一次，可接受）。gate !envRef.empty() 兜住空 envelope。
+    detail::validateEnvelopeSignature(envRef.toBytes(), chainId);
 ```
 
 `executeTransaction` 的 `m_prepare(...)` 调用改为：
@@ -213,10 +215,12 @@ auto props = co_await m_prepare(storage, blockHeader, transaction, ledgerConfig,
 
 `ExecuteContext::prepare`（concept 路径，OP 不走）保持默认参数，不动。
 
-- [ ] **Step 4: 跑测试确认通过 + 现有 opstack 测试不回归**
+- [ ] **Step 4: 同步修 `OpstackExecutorTest` 现有用例，再跑测试确认通过**
+
+**关键前置**：`buildWeb3Tx`（OpstackExecutorTest.cpp:67-88）经 `takeToTarsTransaction` 把 `extraTransactionBytes` 写成 **signing preimage**（Web3Transaction.cpp:220-223，无 yParity/r/s、chainId=5），现有用例以 `call=false, chainId=10` 调 `executeTransaction`（:165/:241/:285/:456）——Task 2 后 `validateEnvelopeSignature` 把 preimage 当 legacy/截断 envelope 解析必抛 `OpConsensusError`，这些成功用例全变红。修复：`buildWeb3Tx` 构建 tars tx 后把 `extraTransactionBytes` **覆盖为完整 EIP-2718 envelope**（`web3Tx.encode()`，chainId 与 executeTransaction 调用一致），镜像 `buildOpBlock` 的 SEV-8 overwrite（EngineServiceImpl.h:1188）；若覆盖后 `opValidate` 的 flz 变化影响断言，同步调整。
 
 Run: `rtk cargo test -p bcos-opstack-executor`
-Expected: 新用例 PASS；现有用例全绿（语料信封均合法，新检查通过）。
+Expected: 新用例（跨链拒绝）PASS；现有用例经 Step 4 修复后全绿。
 
 - [ ] **Step 5: 提交**
 
@@ -230,13 +234,14 @@ git commit -m "feat(opstack): 三项共识检查接入 m_prepare（call==false �
 ### Task 3: 核心重构 —— `runOpBlockInjection` 新签名 + execute hook + 全部调用点
 
 **Files:**
-- Modify: `opstack-executor/OpBlockExecute.h`（`runOpBlockInjection` 签名+主体；删 `EnvelopeToTarsConverter` 别名）
-- Modify: `opstack-executor/OpScheduler.h`（execute hook 重写；ctor/member 删 `m_envelopeToTars`；删 `#include <opstack-executor/OpTxDecode.h>`）
+- Modify: `opstack-executor/OpBlockExecute.h`（`runOpBlockInjection` 签名+主体；空 envelope 守卫；删 `EnvelopeToTarsConverter` 别名）
+- Modify: `opstack-executor/OpScheduler.h`（execute hook 重写；空 envelope 守卫；ctor/member 删 `m_envelopeToTars`；**`OpTxDecode.h` include 保留到 Task 4**）
 - Modify: `opstack-executor/OpTxDecode.h`（`decodeDepositTx` 返回 `DepositTx`；`decodeOneRawTx` deposit 分支适配——本任务只改返回类型，不删其它 decoder）
 - Modify: `libinitializer/Initializer.cpp:563-570`（OpScheduler ctor 去掉 converter lambda 参数）
 - Modify: `opstack-executor/tests/OpBlockInjectorTest.cpp`（两个用例的新签名调用）
-- Modify: `opstack-executor/tests/OpSchedulerTest.cpp`（`runRouteBDirect` 新形状；删 `makeConverter`/`decodeOneRawTx` 用法）
-- Modify: `opstack-executor/tests/OpDualPathEquivalenceTest.cpp`（route B 新形状；删 `buildFiscoTx` pre-flight）
+- Modify: `opstack-executor/tests/OpSchedulerTest.cpp`（`runRouteBDirect` 新形状；Fixture ctor :326-327 删 `makeConverter()`；删 `makeConverter`/`decodeOneRawTx` 用法）
+- Modify: `opstack-executor/tests/OpDualPathEquivalenceTest.cpp`（route B 新形状；route-A ctor :1107-1113 删 lambda；`hasStorageScan` :1175 适配；删 `buildFiscoTx` + 孤立的 `evmoneTxFieldDiff`/`evmoneTxFieldsEqual`）
+- Modify: `opstack-executor/tests/OpNewPayloadRpcE2eTest.cpp:213-218`（fixture 构造 OpScheduler 删 converter lambda 实参）
 
 **Interfaces:**
 - Consumes: Task 1 的 `validateEnvelopeSignature`（经 `m_prepare`）；`decodeDepositTx` → `DepositTx`。
@@ -311,6 +316,8 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
     op::OpFeeParams fee{};
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
+        if (rawTxBytes[i].empty())  // 空 envelope：直接 raw[0] 会越界；旧 decodeOneRawTx 的干净 INVALID 保留
+            throw OpConsensusError("op block: empty envelope");
         if (rawTxBytes[i][0] == kDepositTypeByte)
         {
             if (seenNonDeposit)
@@ -418,6 +425,8 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
         deposits.reserve(rawTxBytes.size());
         for (auto const& raw : rawTxBytes)
         {
+            if (raw.empty())  // 空 envelope：直接 raw[0] 会越界（旧 decodeOneRawTx 的 empty 拒绝保留）
+                throw bcos::evm::engine::OpConsensusError("OpScheduler: empty envelope");
             auto const typeByte = raw[0];
             if (typeByte == static_cast<uint8_t>(op::kDepositTxType))
                 deposits.push_back(detail::decodeDepositTx(raw));  // OpConsensusError on malformed
@@ -440,7 +449,7 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
     catch (...) { /* 原样保留 RTTI 兜底 */ }
 ```
 
-删除：`#include <opstack-executor/OpTxDecode.h>`（:24）；ctor 参数 `bcos::evm::engine::EnvelopeToTarsConverter envelopeToTars`（:568）与 `m_envelopeToTars(std::move(envelopeToTars))`（:575）；成员 `m_envelopeToTars`（:774）。
+删除：ctor 参数 `bcos::evm::engine::EnvelopeToTarsConverter envelopeToTars`（:568）与 `m_envelopeToTars(std::move(envelopeToTars))`（:575）；成员 `m_envelopeToTars`（:774）。**`#include <opstack-executor/OpTxDecode.h>`（:24）保留到 Task 4** —— 新 execute hook 调 `detail::decodeDepositTx`，后者到 Task 4 才搬进 OpBlockExecute.h；Task 3 期间 OpTxDecode.h 仍是唯一来源。
 
 - [ ] **Step 3: `decodeDepositTx` 改返回 `DepositTx` + `decodeOneRawTx` deposit 分支适配**（OpTxDecode.h）
 
@@ -533,7 +542,14 @@ if (typeByte == kDepositTypeByte)
         kChainId, ledgerConfig, rawTxBytes, fixture.hashImpl);
 ```
 
-route-A（:1092-1105）块装配**不变**（已用 buildBlockTx 全量；scheduler execute hook 内部自己 decode deposits）。**删除 `buildFiscoTx`**（:572-623，含 pre-flight `decodeOneRawTx` 比较）。
+route-A（:1092-1105）块装配**不变**（已用 buildBlockTx 全量；scheduler execute hook 内部自己 decode deposits）。**删除 `buildFiscoTx`**（:572-623，含 pre-flight `decodeOneRawTx` 比较），并同步删随之孤立的 `evmoneTxFieldDiff`（:474）/`evmoneTxFieldsEqual`（:530）两个 static helper（否则 -Wunused-function/-Werror）。
+
+**OpScheduler ctor 参数删除波及的 3 处未列调用点**（`m_envelopeToTars` 参数移除后必须同步删实参）：
+- `OpNewPayloadRpcE2eTest.cpp:213-218`（fixture 构造 OpScheduler 时传的 converter lambda :215-217）。
+- `OpDualPathEquivalenceTest.cpp:1107-1113`（route-A 的 `OpScheduler` 构造传 converter lambda :1110-1112）——Task 3 Files 需加这两个文件。
+- `OpSchedulerTest.cpp:326-327`（`TestOpScheduler(..., makeConverter(), ...)` fixture）——与"删 makeConverter"联动。
+
+**`OpDualPathEquivalenceTest.cpp:1175` `hasStorageScan(id, txs)`**：route-B 重写删掉 `txs`（vector\<OpBlockTx\>）后此引用变未定义。改为传 `deposits` + `transactions`（或按该 helper 实际扫描的 deposit 账户直接传 deposits 构造的地址集），Task 3 一并适配。
 
 - [ ] **Step 5: 编译 + 跑 opstack 全量测试**
 
@@ -590,7 +606,11 @@ inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
 
 - [ ] **Step 3: 删 `OpTxDecode.h` 其余内容 + 删文件**
 
-删 `decodeOneRawTx`/`decodeEip1559Tx`/`decodeSetCodeTx`/`decodeAccessListTx`/`decodeLegacyTx`/`canonicalEnvelopeBytes`/`assertCanonicalRoundTrip` 及文件。`OpSchedulerTest` `:486`/`:618` 改 `encodeDepositEnvelope(depTx)`；`OpSchedulerImpl.h` 删 `#include <opstack-executor/OpRlpDecode.h>` 与过时 detail 注释。
+删 `decodeOneRawTx`/`decodeEip1559Tx`/`decodeSetCodeTx`/`decodeAccessListTx`/`decodeLegacyTx`/`canonicalEnvelopeBytes`/`assertCanonicalRoundTrip` 及文件。同步处理所有 include 与消费点：
+- `OpScheduler.h` **删 `#include <opstack-executor/OpTxDecode.h>`**（从 Task 3 移来，此时 `decodeDepositTx` 已在 OpBlockExecute.h）。
+- 测试 include：`OpSchedulerTest.cpp:26`、`OpDualPathEquivalenceTest.cpp:74`、`OpT8nReplayTest.cpp:35` 的 `#include <opstack-executor/OpTxDecode.h>` 删除（后两者改 include `tests/support/OpDepositEncode.h` 若需 `encodeDepositEnvelope`）。
+- `canonicalEnvelopeBytes` 消费点：`OpSchedulerTest` `:486`/`:618` **与 `OpDualPathEquivalenceTest.cpp:457`**（`buildRawTxBytes` 的 deposit 分支，被 `runChainVector` :1269 使用，非被删枚举）全部改 `encodeDepositEnvelope`。
+- `OpSchedulerImpl.h` 删 `#include <opstack-executor/OpRlpDecode.h>` 与过时 detail 注释。
 
 **OpDualPathEquivalenceTest.cpp 的 "Task 3 Step 4" corpus 枚举（:1362-1459）**：该枚举用 `decodeOneRawTx`（:1426）对比 `opEnvelopeToTars` 的接受集并断言"0 个被 strict 接受但被 lenient 拒"——重构后只剩单一路径（`opEnvelopeToTars` + 类型字节 + `validateEnvelopeSignature`），该对比失去第一操作数，**删除整个枚举用例与其断言**（:1459）；其职责由 corpus 的拒绝断言 + Task 1/2 的回归钉覆盖。
 
@@ -624,7 +644,7 @@ Expected: 编译零告警。
 - [ ] **Step 2: 跑全部相关测试 + 语料 gate**
 
 Run: 上述测试目标 + `OpEnvelopeToTarsTest`（未改）+ t8n/语料相关 target。
-Expected: 全绿；双路径 DIVERGE=0；125 向量语料 gate 通过。
+Expected: 全绿；双路径 DIVERGE=0；131 向量语料 gate 通过。
 
 - [ ] **Step 3: 确认共识检查无漏网**
 
@@ -641,6 +661,13 @@ git commit -m "chore(opstack): 验证 OP 块执行消费 Transaction 对象重�
 
 ## 自审记录
 
-- **Spec 覆盖**：§3.1 数据流→Task 3；§3.2 三项检查→Task 1+2；§3.3 错误分类→Task 3（类型字节出口 + opValidate 出口）；§3.4 文件收尾→Task 4；§4 测试→Task 1/2/3/4（buildFiscoTx pre-flight 删除→Task 3；OpT8nReplayTest blob repro→Task 4；dual-path corpus 枚举删除→Task 4）。§2.2 范围外项均未触碰（`buildOpBlock`/`opEnvelopeToTars`/`processOpBlock`/`OpBlockTx`）。
+- **Spec 覆盖**：§3.1 数据流→Task 3；§3.2 三项检查→Task 1+2；§3.3 错误分类→Task 3（类型字节出口 + opValidate 出口 + 空 envelope 守卫）；§3.4 文件收尾→Task 4；§4 测试→Task 1/2/3/4（buildFiscoTx pre-flight 删除→Task 3；OpT8nReplayTest blob repro→Task 4；dual-path corpus 枚举删除→Task 4）。§2.2 范围外项均未触碰（`buildOpBlock`/`opEnvelopeToTars`/`processOpBlock`/`OpBlockTx`）。
 - **占位扫描**：无 TBD/TODO；每步含具体代码或精确引用。
-- **类型一致性**：`runOpBlockInjection` 新签名（transactions/deposits/rawTxBytes）在 Task 3 全调用点一致；`decodeDepositTx → DepositTx` 在 Task 3（改返回）+ Task 4（搬迁）一致；`validateEnvelopeSignature` 在 Task 1 定义、Task 2 消费一致。
+- **类型一致性**：`runOpBlockInjection` 新签名（transactions/deposits/rawTxBytes）在 Task 3 全调用点一致；`decodeDepositTx → DepositTx` 在 Task 3（改返回）+ Task 4（搬迁）一致；`validateEnvelopeSignature` 在 Task 1 定义、Task 2 消费（`envRef.toBytes()` 桥接 `bytesConstRef`）。
+
+## 4-agent 审查修订记录（2026-08-13）
+
+启动 4 个 sub-agent（代码锚点 / 共识安全 / 计划完整性 / spec↔plan 一致性）交叉核对 spec+plan 后合并修订：
+- **design**：canonical 兜底归因修正（六路比较不参与 → validateEnvelopeSignature 层1+2 + step-2 blockHash）；`opEnvelopeToTars` 已拒 yParity 的前提修正；route-A OpBlockTx 重建说法删除；语料 125→131；`m_prepare` 双参数；legacy v==27/28；空 envelope 出口；`opEnvelopeToTars` throw 路径 pre-existing 注明。
+- **plan**：Task 2 `bytesConstRef→toBytes` + 现有 OpstackExecutorTest 用例修复；Task 3 空 envelope 守卫 + 3 处未列 ctor 调用点（OpNewPayloadRpcE2eTest:213-218 / OpDualPathEquivalenceTest:1107-1113 / OpSchedulerTest:326-327）+ `hasStorageScan` :1175 + unused-function :474/:530 + include 时序修正；Task 4 三测试 include + dual-path :457 `canonicalEnvelopeBytes` 迁移。
+- 上述修复全部落在既有 Task 3/4 内，无需新 Task。
