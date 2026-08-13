@@ -826,14 +826,88 @@ BOOST_AUTO_TEST_CASE(forkchoice_attributes_reject_blob_forced_transactions)
     BOOST_CHECK_EQUAL(static_cast<int>(badHexResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
 
-    // A deposit in the forced transaction list is admissible (dep-1 arrives this way).
+    // A deposit in the forced transaction list is admissible (dep-1 arrives this way)
+    // AND actually lands in the built payload, byte-for-byte.
     auto depositAttributes = makePayloadAttributesV3();
     depositAttributes.transactions = std::vector<std::string>{"0x7e010203"};
     auto depositResult =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(depositResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Valid));
-    BOOST_CHECK(depositResult.payloadId.has_value());
+    BOOST_REQUIRE(depositResult.payloadId.has_value());
+    auto depositPayload = task::syncWait(engineService.getPayload(*depositResult.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(depositPayload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(depositPayload->executionPayload.transactions.front().raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03}));
+}
+
+BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("abababababababababab", 20);
+    auto poolTx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // Two forced transactions (dep-1 first) plus one mempool transaction:
+    // payload order = forced list order, then pool transactions.
+    auto attributes = makePayloadAttributesV3();
+    attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
+    // Forced first, in the order the attributes gave them, byte-for-byte.
+    BOOST_CHECK(payload->executionPayload.transactions[0].raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
+    BOOST_CHECK(payload->executionPayload.transactions[0].decoded == nullptr);
+    BOOST_CHECK(payload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
+    // The mempool transaction follows the forced list.
+    BOOST_CHECK(payload->executionPayload.transactions[2].decoded == poolTx);
+}
+
+BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("cdcdcdcdcdcdcdcdcdcd", 20);
+    auto poolTx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // noTxPool=true with a forced deposit: the payload contains exactly the forced
+    // list; the sealable mempool transaction must not appear and stays in the pool.
+    auto attributes = makePayloadAttributesV3();
+    attributes.noTxPool = true;
+    attributes.transactions = std::vector<std::string>{"0x7e010203"};
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(
+        payload->executionPayload.transactions.front().raw == (bytes{0x7e, 0x01, 0x02, 0x03}));
+    auto retained = memPool.get(std::vector{poolTx->hash()});
+    BOOST_REQUIRE_EQUAL(retained.size(), 1);
+    BOOST_CHECK(retained[0]);
+
+    // noTxPool=true with no forced transactions: an empty payload.
+    auto emptyAttributes = makePayloadAttributesV3();
+    emptyAttributes.noTxPool = true;
+    auto emptyResult =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &emptyAttributes, 3));
+    BOOST_REQUIRE(emptyResult.payloadId.has_value());
+    auto emptyPayload = task::syncWait(engineService.getPayload(*emptyResult.payloadId, 3));
+    BOOST_CHECK(emptyPayload->executionPayload.transactions.empty());
 }
 
 BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)

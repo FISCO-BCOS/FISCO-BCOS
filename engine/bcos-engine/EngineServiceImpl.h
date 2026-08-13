@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Types.h"
@@ -34,6 +35,7 @@
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
@@ -43,6 +45,9 @@
 #include <mutex>
 #include <optional>
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <range/v3/view/transform.hpp>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -245,8 +250,15 @@ public:
         // state nonce here is still the committed one.
         std::vector<protocol::Transaction::Ptr> sealedTxs;
         view.newMutable();
-        m_memPool.get().remove(view);
-        m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+        // noTxPool=true (OP Stack): the payload must not take any transaction from the
+        // pool — it contains exactly the forced transaction list (possibly none). Skip
+        // both pool hygiene and sealing; forced transactions are prepended in
+        // buildPayload.
+        if (!payloadAttributes->noTxPool.value_or(false))
+        {
+            m_memPool.get().remove(view);
+            m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+        }
 
         // Step 3: Build the payload on the executed view (already mutable above).
         auto payloadId = nextPayloadID();
@@ -493,9 +505,16 @@ private:
                 // this restores parity with that path (eth_getLogs uses it as a filter).
                 auto const& bloom = it->second.executionPayload.logsBloom;
                 block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+                // Raw-only entries (forced transactions) carry no decoded form and are
+                // not modeled as ledger transactions until execution wiring lands; the
+                // persisted transaction list therefore matches the receipts list, which
+                // also only covers the executed (decoded) subset.
                 for (auto const& tx : it->second.executionPayload.transactions)
                 {
-                    block->appendTransaction(tx.decoded);
+                    if (tx.decoded)
+                    {
+                        block->appendTransaction(tx.decoded);
+                    }
                 }
                 for (auto const& receipt : it->second.receipts)
                 {
@@ -503,6 +522,7 @@ private:
                 }
                 auto blockTxs = std::make_shared<protocol::ConstTransactions>(
                     it->second.executionPayload.transactions |
+                    ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
                     ::ranges::views::transform([](auto const& tx) {
                         return protocol::Transaction::ConstPtr(tx.decoded);
                     }) |
@@ -566,7 +586,28 @@ private:
         // eth_sendRawTransaction, which admits Web3 transactions exclusively, so the
         // exclusion only ever triggers for in-process callers.
         std::vector<EngineTransaction> engineTransactions;
-        engineTransactions.reserve(sealedTxs.size());
+        engineTransactions.reserve(
+            payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() +
+            sealedTxs.size());
+        // Forced transactions (OP attributes.transactions) come FIRST, in the order the
+        // CL gave them — this is the only OP-sanctioned path for deposits. Their raw
+        // EIP-2718 bytes are carried byte-for-byte (hex validity and dispatch
+        // admissibility were already enforced by validatePayloadAttributes, which runs
+        // before buildPayload). They carry no decoded executable form yet: 0x7E deposit
+        // execution (runDeposit) and raw->executable decoding for typed/legacy forced
+        // transactions belong to the execution-lane wiring, so raw-only entries are
+        // placed in the payload, participate in the transactions root via their
+        // canonical keccak256(raw) hash, but are not executed and do not advance state.
+        if (payloadAttributes.transactions.has_value())
+        {
+            for (auto const& forcedHex : *payloadAttributes.transactions)
+            {
+                engineTransactions.push_back(EngineTransaction{
+                    .raw = fromHex(forcedHex),
+                    .decoded = nullptr,
+                });
+            }
+        }
         for (auto& sealedTx : sealedTxs)
         {
             if (sealedTx->type() !=
@@ -669,15 +710,19 @@ private:
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
 
         // Step 2c: Execute transactions via the scheduler, over the decoded executable
-        // forms (locally sealed transactions always carry one).
-        auto receipts =
-            co_await m_scheduler.get().executeBlock(view, m_executor.get(), *blockHeader,
-                executionPayload.transactions |
-                    ::ranges::views::transform(
-                        [](auto const& transaction) -> bcos::protocol::Transaction const& {
-                            return *transaction.decoded;
-                        }),
-                ledgerConfig);
+        // forms. Raw-only entries (forced transactions from the OP attributes list) have
+        // no executable form yet and are skipped — see the forced-transaction comment
+        // above. Materialized into a vector because scheduler implementations require a
+        // sized range (a lazy filter view is not sized).
+        auto executableTransactions =
+            executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
+                return transaction.decoded != nullptr;
+            }) |
+            ::ranges::views::transform(
+                [](auto const& transaction) { return transaction.decoded; }) |
+            ::ranges::to<std::vector>();
+        auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
+            *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
         // Step 2d: Compute transaction root (Merkle over tx hashes)
         // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
@@ -692,8 +737,13 @@ private:
             if (!executionPayload.transactions.empty())
             {
                 auto txHashes =
-                    executionPayload.transactions |
-                    ::ranges::views::transform([](auto& tx) { return tx.decoded->hash(); });
+                    executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
+                        // Canonical txHash: decoded transactions expose it directly;
+                        // raw-only (forced) entries hash their EIP-2718 bytes, which is
+                        // the canonical hash for every raw transaction kind.
+                        return tx.decoded ? tx.decoded->hash() :
+                                            bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
+                    });
                 std::vector<h256> merkleTrie;
                 merkle.generateMerkle(txHashes, merkleTrie);
                 if (!merkleTrie.empty())
