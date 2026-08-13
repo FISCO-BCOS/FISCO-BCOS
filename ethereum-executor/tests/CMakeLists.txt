@@ -23,3 +23,14 @@ set_target_properties(test-ethereum-state-smoke PROPERTIES RUNTIME_OUTPUT_DIRECT
 # SearchTestCases.cmake only discovers BOOST_*TEST_* targets; this standalone
 # target must register itself so ctest actually runs it in CI.
 add_test(NAME test-ethereum-state-smoke COMMAND test-ethereum-state-smoke)
+
+# OP Stack execution lane: 0x7E decoding, executeDeposit, and the
+# feature_l2_ethereum_compat dispatch onto opTransition.
+add_executable(test-opstack-execution TestOpStackExecution.cpp)
+target_link_libraries(test-opstack-execution
+    ethereum-executor protocol-tars bcos-framework bcos-task codec bcos-utilities
+    evmone::evmone intx::intx TBB::tbb)
+set_source_files_properties("TestOpStackExecution.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_target_properties(test-opstack-execution PROPERTIES UNITY_BUILD OFF)
+set_target_properties(test-opstack-execution PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+add_test(NAME test-opstack-execution COMMAND test-opstack-execution)

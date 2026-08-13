@@ -27,12 +27,14 @@
 #pragma once
 
 #include "EthereumTransition.h"
-#include "bcos-framework/storage2/RollbackableStorage.h"
+#include "OpStackTransition.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
 #include <bcos-utilities/Exceptions.h>
@@ -154,6 +156,59 @@ public:
             }
             std::rethrow_exception(failure);
         }
+    }
+
+    /// Execute one OP Stack 0x7E deposit from its raw EIP-2718 envelope
+    /// (OP Stack lane; deposits are consensus-injected via the Engine payload
+    /// attributes and never exist as protocol::Transaction). Throws on a
+    /// malformed envelope or a block-level deposit rejection (is_system_tx,
+    /// 20M gas cap, block gas) — an invalid deposit invalidates the payload.
+    /// Same all-or-nothing storage guarantee as execute(): the journal rolls
+    /// every write back before the exception propagates.
+    template <class Storage>
+    task::Task<protocol::TransactionReceipt::Ptr> executeDeposit(Storage& storage,
+        protocol::BlockHeader const& blockHeader, bcos::bytesConstRef rawDeposit,
+        ledger::LedgerConfig const& ledgerConfig)
+    {
+        auto revOpt = ledgerConfig.evmcRevisionForBlock(blockHeader.number());
+        if (!revOpt.has_value())
+        {
+            BOOST_THROW_EXCEPTION(
+                EvmcRevisionNotConfigured() << errinfo_comment("evmcRevision not configured"));
+        }
+        auto blockInfo = buildBlockInfo(blockHeader, ledgerConfig, *revOpt);
+        uint64_t chainId = 0;
+        if (auto const& cid = ledgerConfig.chainId(); cid.has_value())
+        {
+            chainId = static_cast<uint64_t>(intx::be::load<intx::uint256>(*cid));
+        }
+
+        Rollbackable<Storage> rollable(storage);
+        const auto savepoint = rollable.current();
+        std::exception_ptr failure;
+        protocol::TransactionReceipt::Ptr receipt;
+        try
+        {
+            receipt = co_await executeOpStackDeposit(rollable, blockInfo, m_blockHashLookup,
+                rawDeposit, m_vm, chainId, m_receiptFactory, blockHeader.number());
+        }
+        catch (...)
+        {
+            failure = std::current_exception();
+        }
+        if (failure)
+        {
+            try
+            {
+                co_await rollable.rollback(savepoint);
+            }
+            catch (...)
+            {
+                // Ignore the cleanup error; the original failure wins.
+            }
+            std::rethrow_exception(failure);
+        }
+        co_return receipt;
     }
 
     // TransactionExecutor concept support: ExecuteContext
@@ -283,7 +338,8 @@ public:
                 //   state read, so it is resolved in execute() (the only
                 //   phase allowed to touch state).
             }
-            m_blobGasLeft = static_cast<int64_t>(evm::max_blob_gas_per_block(blobParamsForRevision(m_rev)));
+            m_blobGasLeft =
+                static_cast<int64_t>(evm::max_blob_gas_per_block(blobParamsForRevision(m_rev)));
             co_return;
         }
 
@@ -343,39 +399,55 @@ public:
 
             try
             {
-                if (call && transaction.get().nonce().empty())
+                // OP Stack lane (feature_l2_ethereum_compat): real execution runs
+                // under Karst semantics — L1 data fee, operator fee, fee vault
+                // routing, precompile overrides — through bcos-evm's opTransition
+                // (see OpStackTransition.h). The eth_call dry-run (call == true)
+                // stays on the pure-Ethereum lane: a dry run is never charged, so
+                // the OP fee assembly has nothing to price (geth's eth_call skips
+                // the L1 fee the same way).
+                if (!call && ledgerConfig.get().features().get(
+                                 ledger::Features::Flag::feature_l2_ethereum_compat))
                 {
-                    // Resolve the sender's current nonce for the eth_call shape
-                    // (0 would fail NONCE_TOO_LOW for a sender past its first tx).
-                    auto senderAcc = state.find(ethSender(transaction.get()));
-                    m_callParams.nonce = senderAcc ? senderAcc->nonce : 0;
-                }
-
-                auto validationResult = validateTransaction(state, m_blockInfo, transaction.get(),
-                    m_rev, m_blockInfo.gas_limit /*block_gas_left*/,
-                    m_blobGasLeft /*blob_gas_left*/, m_callParams);
-                if (auto* props = std::get_if<EthTxProperties>(&validationResult))
-                {
-                    // Valid against the current state — use the computed properties.
-                    // NOTE: we do not special-case SENDER_NOT_EOA here. EIP-3607
-                    // requires rejecting transactions whose sender has non-delegating
-                    // code; only accounts with empty code or a 0xef0100 delegation
-                    // designator may be senders, which validate_transaction already
-                    // accepts.
-                    m_receipt = co_await runTransaction(state, m_blockInfo,
-                        executor.get().m_blockHashLookup, transaction.get(), m_rev,
-                        executor.get().m_vm, *props, nodeChainId(), m_callParams,
-                        executor.get().m_receiptFactory, blockHeader.get().number());
+                    m_receipt = co_await executeOpStackTransaction(rollable, m_blockInfo,
+                        executor.get().m_blockHashLookup, transaction.get(), executor.get().m_vm,
+                        nodeChainId(), executor.get().m_receiptFactory, blockHeader.get().number());
                 }
                 else
                 {
-                    // Genuinely invalid — skip execution; finish() produces a
-                    // failure receipt and nothing is written for this transaction.
-                    m_validationError = std::get<std::error_code>(validationResult);
-                    BCOS_LOG(INFO) << LOG_BADGE("EXECUTE")
-                                   << LOG_DESC("tx validation failed")
-                                   << LOG_KV("error", m_validationError.value().message())
-                                   << LOG_KV("code", m_validationError.value().value());
+                    if (call && transaction.get().nonce().empty())
+                    {
+                        // Resolve the sender's current nonce for the eth_call shape
+                        // (0 would fail NONCE_TOO_LOW for a sender past its first tx).
+                        auto senderAcc = state.find(ethSender(transaction.get()));
+                        m_callParams.nonce = senderAcc ? senderAcc->nonce : 0;
+                    }
+
+                    auto validationResult = validateTransaction(state, m_blockInfo,
+                        transaction.get(), m_rev, m_blockInfo.gas_limit /*block_gas_left*/,
+                        m_blobGasLeft /*blob_gas_left*/, m_callParams);
+                    if (auto* props = std::get_if<EthTxProperties>(&validationResult))
+                    {
+                        // Valid against the current state — use the computed properties.
+                        // NOTE: we do not special-case SENDER_NOT_EOA here. EIP-3607
+                        // requires rejecting transactions whose sender has non-delegating
+                        // code; only accounts with empty code or a 0xef0100 delegation
+                        // designator may be senders, which validate_transaction already
+                        // accepts.
+                        m_receipt = co_await runTransaction(state, m_blockInfo,
+                            executor.get().m_blockHashLookup, transaction.get(), m_rev,
+                            executor.get().m_vm, *props, nodeChainId(), m_callParams,
+                            executor.get().m_receiptFactory, blockHeader.get().number());
+                    }
+                    else
+                    {
+                        // Genuinely invalid — skip execution; finish() produces a
+                        // failure receipt and nothing is written for this transaction.
+                        m_validationError = std::get<std::error_code>(validationResult);
+                        BCOS_LOG(INFO) << LOG_BADGE("EXECUTE") << LOG_DESC("tx validation failed")
+                                       << LOG_KV("error", m_validationError.value().message())
+                                       << LOG_KV("code", m_validationError.value().value());
+                    }
                 }
             }
             catch (...)
