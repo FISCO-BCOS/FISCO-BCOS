@@ -73,7 +73,9 @@ inline address ethSender(protocol::Transaction const& tx)
     address a{};
     auto const& sb = tx.sender();
     if (sb.size() >= sizeof(evmc_address))
+    {
         std::copy_n(sb.begin(), sizeof(evmc_address), a.bytes);
+    }
     return a;
 }
 
@@ -82,11 +84,17 @@ inline intx::uint256 ethMaxGasPrice(
     protocol::Transaction const& tx, EthCallParams const& callParams)
 {
     if (callParams.free)
+    {
         return 0;
+    }
     if (auto mf = tx.maxFeePerGas(); mf.has_value())
+    {
         return evm::toIntxU256(*mf);
+    }
     if (auto gp = tx.gasPrice(); gp.has_value())
+    {
         return evm::toIntxU256(*gp);
+    }
     return 0;
 }
 
@@ -95,16 +103,22 @@ inline intx::uint256 ethMaxPriorityGasPrice(
     protocol::Transaction const& tx, EthCallParams const& callParams)
 {
     if (callParams.free)
+    {
         return 0;
+    }
     // Legacy / access-list txs carry no priority-fee field in their signed RLP:
     // the whole gas price is the tip above the base fee. Decide on the kind
     // FIRST, so an unvalidated Tars mirror value (present-and-zero, reachable
     // over P2P) cannot override it — the old bridge's `== 0` fixup had the
     // same effect.
     if (tx.web3TypedTxKind() <= 1)
+    {
         return ethMaxGasPrice(tx, callParams);
+    }
     if (auto mp = tx.maxPriorityFeePerGas(); mp.has_value())
+    {
         return evm::toIntxU256(*mp);
+    }
     return 0;
 }
 
@@ -112,7 +126,9 @@ inline intx::uint256 ethMaxPriorityGasPrice(
 inline intx::uint256 ethMaxBlobGasPrice(protocol::Transaction const& tx)
 {
     if (auto mb = tx.maxFeePerBlobGas(); mb.has_value())
+    {
         return evm::toIntxU256(*mb);
+    }
     return 0;
 }
 
@@ -120,7 +136,9 @@ inline intx::uint256 ethMaxBlobGasPrice(protocol::Transaction const& tx)
 inline int64_t effectiveGasLimit(protocol::Transaction const& tx, EthCallParams const& callParams)
 {
     if (callParams.gasLimit.has_value())
+    {
         return *callParams.gasLimit;
+    }
     return tx.gasLimit();
 }
 
@@ -128,7 +146,9 @@ inline int64_t effectiveGasLimit(protocol::Transaction const& tx, EthCallParams 
 inline uint64_t effectiveNonce(protocol::Transaction const& tx, EthCallParams const& callParams)
 {
     if (callParams.nonce.has_value())
+    {
         return *callParams.nonce;
+    }
     return bcos::safeFromQuantity(tx.nonce()).value_or(0);
 }
 
@@ -270,33 +290,51 @@ evmc_storage_status EthereumHost<Storage>::set_storage(
     if (!dirty && !restored)
     {
         if (current_is_zero)
+        {
             status = EVMC_STORAGE_ADDED;  // 0 → 0 → Z
+        }
         else if (value_is_zero)
+        {
             status = EVMC_STORAGE_DELETED;  // X → X → 0
+        }
         else
+        {
             status = EVMC_STORAGE_MODIFIED;  // X → X → Z
+        }
     }
     else if (dirty && !restored)
     {
         if (current_is_zero && !value_is_zero)
+        {
             status = EVMC_STORAGE_DELETED_ADDED;  // X → 0 → Z
+        }
         else if (!current_is_zero && value_is_zero)
+        {
             status = EVMC_STORAGE_MODIFIED_DELETED;  // X → Y → 0
+        }
     }
     else if (dirty)
     {
         assert(restored);  // Always true.
         if (current_is_zero)
+        {
             status = EVMC_STORAGE_DELETED_RESTORED;  // X → 0 → X
+        }
         else if (value_is_zero)
+        {
             status = EVMC_STORAGE_ADDED_DELETED;  // 0 → Y → 0
+        }
         else
+        {
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
+        }
     }
 
     // In Berlin this is handled in access_storage().
     if (m_rev < EVMC_BERLIN)
+    {
         m_state.journal_storage_change(addr, key, storage_slot);
+    }
     storage_slot.current = value;  // Update current value.
     return status;
 }
@@ -333,11 +371,17 @@ namespace eth_host_detail
 [[nodiscard]] inline bool is_create_collision(const EthAccount& acc) noexcept
 {
     if (acc.nonce != 0)
+    {
         return true;
+    }
     if (acc.code_hash != EthAccount::EMPTY_CODE_HASH)
+    {
         return true;
+    }
     if (acc.has_initial_storage)
+    {
         return true;
+    }
 
     // The hot storage is ignored because it can contain elements from access list.
     assert(!acc.destructed && "untested");
@@ -357,7 +401,9 @@ bytes32 EthereumHost<Storage>::get_code_hash(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
     if (acc == nullptr || acc->is_empty())
+    {
         return {};
+    }
 
     return acc->code_hash;
 }
@@ -378,7 +424,9 @@ bool EthereumHost<Storage>::selfdestruct(
     const address& addr, const address& beneficiary) noexcept
 {
     if (m_state.find(beneficiary) == nullptr)
+    {
         m_state.journal_create(beneficiary, false);
+    }
     auto& acc = m_state.get(addr);
     const auto balance = acc.balance;
     auto& beneficiary_acc = m_state.touch(beneficiary);
@@ -424,7 +472,9 @@ std::optional<evmc_message> EthereumHost<Storage>::prepare_message(evmc_message 
 
         // EIP-2681 (already checked for depth 0 during transaction validation).
         if (sender_acc.nonce == EthAccount::NonceMax)
+        {
             return {};  // Light early exception.
+        }
 
         if (msg.depth != 0)
         {
@@ -441,8 +491,10 @@ std::optional<evmc_message> EthereumHost<Storage>::prepare_message(evmc_message 
             assert(sender_acc.nonce != 0);
             const auto creation_sender_nonce = sender_acc.nonce - 1;
             if (msg.kind == EVMC_CREATE)
+            {
                 msg.recipient =
                     evm::compute_create_address(msg.sender, creation_sender_nonce);
+            }
             else
             {
                 assert(msg.kind == EVMC_CREATE2);
@@ -451,7 +503,7 @@ std::optional<evmc_message> EthereumHost<Storage>::prepare_message(evmc_message 
             }
 
             // By EIP-2929, the access to new created address is never reverted.
-            access_account(msg.recipient);
+            [[maybe_unused]] const auto access_status = access_account(msg.recipient);
         }
     }
 
@@ -466,16 +518,22 @@ evmc::Result EthereumHost<Storage>::create(const evmc_message& msg) noexcept
     auto* new_acc = m_state.find(msg.recipient);
     const bool new_acc_exists = new_acc != nullptr;
     if (!new_acc_exists)
+    {
         new_acc = &m_state.insert(msg.recipient);
+    }
     else if (eth_host_detail::is_create_collision(*new_acc))
+    {
         return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+    }
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
     assert(new_acc->nonce == 0);
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON)
+    {
         new_acc->nonce = 1;  // No need to journal: create revert will 0 the nonce.
+    }
 
     new_acc->just_created = true;
 
@@ -504,7 +562,9 @@ evmc::Result EthereumHost<Storage>::create(const evmc_message& msg) noexcept
     const bytes_view code{result.output_data, result.output_size};
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > evmone::MAX_CODE_SIZE)
+    {
         return evmc::Result{EVMC_FAILURE};
+    }
 
     // Code deployment cost.
     const auto cost = std::ssize(code) * 200;
@@ -520,7 +580,9 @@ evmc::Result EthereumHost<Storage>::create(const evmc_message& msg) noexcept
     {
         // EIP-3541: Reject new contract code starting with the 0xEF byte.
         if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
+        {
             return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        }
 
         new_acc->code_hash = evm::keccak256(code);
         new_acc->code = code;
@@ -535,19 +597,25 @@ evmc::Result EthereumHost<Storage>::execute_message(const evmc_message& msg) noe
 {
     assert(msg.kind != EVMC_EOFCREATE);
     if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
+    {
         return create(msg);
+    }
 
     if (msg.kind == EVMC_CALL)
     {
         const auto exists = m_state.find(msg.recipient) != nullptr;
         if (!exists)
+        {
             m_state.journal_create(msg.recipient, exists);
+        }
     }
 
     if (msg.kind == EVMC_CALL)
     {
         if (evmc::is_zero(msg.value))
+        {
             m_state.touch(msg.recipient);
+        }
         else
         {
             // We skip touching if we send value, because account cannot end up empty.
@@ -568,12 +636,16 @@ evmc::Result EthereumHost<Storage>::execute_message(const evmc_message& msg) noe
 
     // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
     if ((msg.flags & EVMC_DELEGATED) == 0 && evm::is_precompile(m_rev, msg.code_address))
+    {
         return evm::call_precompile(m_rev, msg);
+    }
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
+    {
         return evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+    }
 
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -583,7 +655,9 @@ evmc::Result EthereumHost<Storage>::call(const evmc_message& orig_msg) noexcept
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
+    {
         return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+    }
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
@@ -602,7 +676,9 @@ evmc::Result EthereumHost<Storage>::call(const evmc_message& orig_msg) noexcept
 
         // The 0x03 quirk: the touch on this address is never reverted.
         if (is_03_touched && m_rev >= EVMC_SPURIOUS_DRAGON)
+        {
             m_state.touch(addr_03);
+        }
     }
     return result;
 }
@@ -682,14 +758,18 @@ template <class Storage>
 evmc_access_status EthereumHost<Storage>::access_account(const address& addr) noexcept
 {
     if (m_rev < EVMC_BERLIN)
+    {
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
+    }
 
     EthAccount fresh;
     fresh.erase_if_empty = true;
     auto& acc = m_state.get_or_insert(addr, std::move(fresh));
 
     if (acc.access_status == EVMC_ACCESS_WARM || evm::is_precompile(m_rev, addr))
+    {
         return EVMC_ACCESS_WARM;
+    }
 
     m_state.journal_access_account(addr);
     acc.access_status = EVMC_ACCESS_WARM;

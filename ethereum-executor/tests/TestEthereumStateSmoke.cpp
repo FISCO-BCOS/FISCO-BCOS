@@ -59,7 +59,7 @@ namespace
 /// Parse a 0x-prefixed 40-hex-digit string into an evmc::address.
 evmc::address addressFromHex(const std::string& hex)
 {
-    const auto start = (hex.rfind("0x", 0) == 0) ? 2u : 0u;
+    const auto start = (hex.starts_with("0x")) ? 2U : 0U;
     evmc::address out{};
     for (size_t i = 0; i < 40; ++i)
     {
@@ -74,7 +74,7 @@ evmc::address addressFromHex(const std::string& hex)
 /// Parse a 0x-prefixed 64-hex-digit string into an evmc::bytes32.
 evmc::bytes32 bytes32FromHex(const std::string& hex)
 {
-    const auto start = (hex.rfind("0x", 0) == 0) ? 2u : 0u;
+    const auto start = (hex.starts_with("0x")) ? 2U : 0U;
     evmc::bytes32 out{};
     for (size_t i = 0; i < 64; ++i)
     {
@@ -166,7 +166,7 @@ void testBlobGasPrice()
     CHECK(eth_evm::compute_blob_gas_price(params, 16777216) == 152);      // 2**24
     CHECK(eth_evm::compute_blob_gas_price(params, 33554432) == 23174);    // 2**25
     CHECK(eth_evm::compute_blob_gas_price(params, 67108864) == 537070730);  // 2**26
-    CHECK(eth_evm::max_blob_gas_per_block(params) == 6 * eth_evm::GAS_PER_BLOB);
+    CHECK(eth_evm::max_blob_gas_per_block(params) == uint64_t{6} * eth_evm::GAS_PER_BLOB);
 
     // Degenerate schedule (base_fee_update_fraction == 0) must not divide by
     // zero; the guard returns the maximum like the overflow path.
@@ -189,7 +189,11 @@ void testRecoverAuthority()
     auth.s = bcos::u256("0x7399ba8d6bdec8bacec1cfb93d1f1bd00bedbade84959bda53464acaaa32f330");
 
     const auto recovered = eth_evm::recoverAuthority(auth);
-    CHECK(recovered.has_value());
+    if (!recovered.has_value())
+    {
+        CHECK(false);  // a valid EIP-7702 signature must recover an authority
+        return;
+    }
     CHECK(sameAddress(
         *recovered, addressFromHex("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")));
 }
@@ -253,6 +257,6 @@ int main()
         std::cerr << "TestEthereumStateSmoke: " << g_failures << " check(s) failed\n";
         return EXIT_FAILURE;
     }
-    std::cout << "TestEthereumStateSmoke: all checks passed" << std::endl;
+    std::cout << "TestEthereumStateSmoke: all checks passed" << '\n';
     return EXIT_SUCCESS;
 }

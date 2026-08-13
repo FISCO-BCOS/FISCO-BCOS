@@ -151,6 +151,7 @@ public:
             catch (...)
             {
                 // Ignore the cleanup error; the original failure wins.
+                (void)failure;
             }
             std::rethrow_exception(failure);
         }
@@ -220,7 +221,9 @@ public:
         uint64_t nodeChainId() const
         {
             if (auto const& cid = ledgerConfig.get().chainId(); cid.has_value())
+            {
                 return static_cast<uint64_t>(intx::be::load<intx::uint256>(*cid));
+            }
             return 0;
         }
 
@@ -398,6 +401,7 @@ public:
                 catch (...)
                 {
                     // Ignore the cleanup error; the original failure wins.
+                    (void)failure;
                 }
                 std::rethrow_exception(failure);
             }

@@ -46,9 +46,13 @@ inline constexpr evm::BlobParams CANCUN_BLOB_PARAMS{
 inline evm::BlobParams blobParamsForRevision(evmc_revision rev) noexcept
 {
     if (rev >= EVMC_PRAGUE)
+    {
         return PRAGUE_BLOB_PARAMS;  // Prague/Osaka.
+    }
     if (rev == EVMC_CANCUN)
+    {
         return CANCUN_BLOB_PARAMS;  // Cancun.
+    }
     return {};
 }
 
@@ -86,7 +90,9 @@ inline std::optional<address> ethToAddress(protocol::Transaction const& tx)
 {
     auto const& tb = tx.to();
     if (tb.empty())
+    {
         return std::nullopt;
+    }
 
     const bool has0x = tb.size() >= 2 && tb[0] == '0' && (tb[1] == 'x' || tb[1] == 'X');
     const bool is40Hex = tb.size() == sizeof(evmc_address) * 2 &&
@@ -147,7 +153,9 @@ inline int64_t compute_access_list_cost(const protocol::Web3AccessList& access_l
 
     int64_t cost = 0;
     for (const auto& entry : access_list)
+    {
         cost += ADDRESS_COST + static_cast<int64_t>(entry.storageKeys.size()) * STORAGE_KEY_COST;
+    }
     return cost;
 }
 
@@ -190,7 +198,7 @@ inline TransactionCost compute_tx_intrinsic_cost(
 
     // EIP-7623: Compute the minimum cost for the transaction by. If disabled, just use 0.
     const auto min_cost =
-        rev >= EVMC_PRAGUE ? TX_BASE_COST + num_tokens * TOTAL_COST_FLOOR_PER_TOKEN : 0;
+        rev >= EVMC_PRAGUE ? TX_BASE_COST + (num_tokens * TOTAL_COST_FLOOR_PER_TOKEN) : 0;
 
     return {intrinsic_cost, min_cost};
 }
@@ -234,23 +242,33 @@ int64_t processAuthorizationList(
     {
         // 1. Verify the chain id is either 0 or the chain's current ID.
         if (auth.chainId != 0 && auth.chainId != chainId)
+        {
             continue;
+        }
 
         // 2. Verify the nonce is less than 2**64 - 1.
         if (auth.nonce == EthAccount::NonceMax)
+        {
             continue;
+        }
 
         // 3. y_parity must be 0 or 1; s must be <= secp256k1n/2 (EIP-2).
         if (auth.v > 1)
+        {
             continue;
+        }
         if (evm::toIntxU256(auth.s) > evm::SECP256K1N_OVER_2)
+        {
             continue;
+        }
 
         // 4. Always recover the signer via real ecrecover (never honour an
         //    attacker-supplied signer field).
         const auto signer = recoverAuthority(auth);
         if (!signer.has_value())
+        {
             continue;  // ecrecover failed → skip this authorization
+        }
 
         evmc::address target{};
         std::copy_n(auth.address.begin(), sizeof(evmc_address), target.bytes);
@@ -266,11 +284,15 @@ int64_t processAuthorizationList(
         // 6. Verify the code of authority is either empty or already delegated.
         if (authority.code_hash != EthAccount::EMPTY_CODE_HASH &&
             !evmone::is_code_delegated(state.get_code(*signer)))
+        {
             continue;
+        }
 
         // 7. Verify the nonce of authority is equal to nonce.
         if (auth.nonce != authority.nonce)
+        {
             continue;
+        }
 
         // 8. Refund if authority existed before (empty implies non-existent).
         if (!authority.is_empty())
@@ -329,7 +351,9 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     // trip the maxPriorityGasPrice assert (debug) or silently run as legacy
     // (release), diverging from geth.
     if (txKind > 4)
+    {
         return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+    }
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto nonce = effectiveNonce(tx, callParams);
     const auto maxGasPrice = ethMaxGasPrice(tx, callParams);
@@ -341,32 +365,52 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     {
     case 3:  // blob
         if (rev < EVMC_CANCUN)
+        {
             return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+        }
         if (!hasTo)
+        {
             return make_error_code(ErrorCode::CREATE_BLOB_TX);
+        }
         if (blobHashes.empty())
+        {
             return make_error_code(ErrorCode::EMPTY_BLOB_HASHES_LIST);
+        }
         if (rev >= EVMC_OSAKA && blobHashes.size() > evm::MAX_TX_BLOB_COUNT)
+        {
             return make_error_code(ErrorCode::BLOB_GAS_LIMIT_EXCEEDED);
+        }
 
         assert(block.blob_base_fee.has_value());
         if (ethMaxBlobGasPrice(tx) < *block.blob_base_fee)
+        {
             return make_error_code(ErrorCode::BLOB_FEE_CAP_LESS_THAN_BLOCKS);
+        }
 
         if (std::ranges::any_of(blobHashes, [](const auto& h) { return h[0] != 0x01; }))
+        {
             return make_error_code(ErrorCode::INVALID_BLOB_HASH_VERSION);
+        }
         if (static_cast<uint64_t>(evm::GAS_PER_BLOB) * blobHashes.size() >
             static_cast<uint64_t>(blobGasLeft))
+        {
             return make_error_code(ErrorCode::BLOB_GAS_LIMIT_EXCEEDED);
+        }
         break;
 
     case 4:  // set_code
         if (rev < EVMC_PRAGUE)
+        {
             return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+        }
         if (!hasTo)
+        {
             return make_error_code(ErrorCode::CREATE_SET_CODE_TX);
+        }
         if (tx.authorizationList().empty())
+        {
             return make_error_code(ErrorCode::EMPTY_AUTHORIZATION_LIST);
+        }
         break;
 
     default:;
@@ -378,52 +422,73 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     case 3:  // blob
     case 2:  // eip1559
         if (rev < EVMC_LONDON)
+        {
             return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+        }
 
         if (maxPriorityGasPrice > maxGasPrice)
+        {
             return make_error_code(ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too high.
+        }
         [[fallthrough]];
 
     case 1:  // access_list
         if (rev < EVMC_BERLIN)
+        {
             return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+        }
         [[fallthrough]];
 
-    case 0:;  // legacy
+    default:;  // legacy (case 0) and out-of-range (txKind>4 already rejected) fall through.
     }
 
     assert(maxPriorityGasPrice <= maxGasPrice);
 
     if (rev >= EVMC_OSAKA && gasLimit > evm::MAX_TX_GAS_LIMIT)
+    {
         return make_error_code(ErrorCode::MAX_GAS_LIMIT_EXCEEDED);
+    }
 
     if (gasLimit > blockGasLeft)
+    {
         return make_error_code(ErrorCode::GAS_LIMIT_REACHED);
+    }
 
     if (maxGasPrice < block.base_fee)
+    {
         return make_error_code(ErrorCode::FEE_CAP_LESS_THAN_BLOCKS);
+    }
 
     // We need some information about the sender so lookup the account in the state.
     const auto* const senderPtr = state.find(ethSender(tx));
     const auto senderNonce = senderPtr != nullptr ? senderPtr->nonce : 0;
 
-    if (senderPtr != nullptr &&
-        senderPtr->code_hash != EthAccount::EMPTY_CODE_HASH &&
+    if (senderPtr != nullptr && senderPtr->code_hash != EthAccount::EMPTY_CODE_HASH &&
         !evmone::is_code_delegated(state.get_code(ethSender(tx))))
+    {
         return make_error_code(ErrorCode::SENDER_NOT_EOA);  // Origin must not be a contract (EIP-3607).
+    }
 
-    if (senderNonce == EthAccount::NonceMax)  // Nonce value limit (EIP-2681).
+    if (senderNonce == EthAccount::NonceMax)
+    {  // Nonce value limit (EIP-2681).
         return make_error_code(ErrorCode::NONCE_HAS_MAX_VALUE);
+    }
 
     if (senderNonce < nonce)
+    {
         return make_error_code(ErrorCode::NONCE_TOO_HIGH);
+    }
 
     if (senderNonce > nonce)
+    {
         return make_error_code(ErrorCode::NONCE_TOO_LOW);
+    }
 
     // initcode size is limited by EIP-3860.
     if (rev >= EVMC_SHANGHAI && !hasTo && tx.input().size() > evmone::MAX_INITCODE_SIZE)
+    {
         return make_error_code(ErrorCode::INIT_CODE_SIZE_LIMIT_EXCEEDED);
+    }
 
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
     auto max_total_fee =
@@ -438,12 +503,16 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     }
     const auto senderBalance = senderPtr != nullptr ? senderPtr->balance : intx::uint256{};
     if (senderBalance < max_total_fee)
+    {
         return make_error_code(ErrorCode::INSUFFICIENT_FUNDS);
+    }
 
     const auto [intrinsic_cost, min_cost] =
         eth_transition_detail::compute_tx_intrinsic_cost(rev, tx);
     if (gasLimit < std::max(intrinsic_cost, min_cost))
+    {
         return make_error_code(ErrorCode::INTRINSIC_GAS_TOO_LOW);
+    }
 
     const auto execution_gas_limit = gasLimit - intrinsic_cost;
     return EthTxProperties{execution_gas_limit, min_cost};
@@ -491,7 +560,9 @@ protocol::TransactionReceipt::Ptr buildBcosReceipt(EthereumHost<Storage>& host,
         bcos::bytes addr(l.addr.bytes, l.addr.bytes + sizeof(evmc_address));
         bcos::h256s topics;
         for (auto const& t : l.topics)
+        {
             topics.emplace_back(bcos::bytesConstRef(t.bytes, sizeof(evmc_bytes32)));
+        }
         bcos::bytes data(l.data.begin(), l.data.end());
         logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
     }
@@ -562,7 +633,9 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Tx sender is always warm.
     if (to.has_value())
+    {
         host.access_account(*to);
+    }
     for (const auto& entry : tx.web3AccessList())
     {
         evmc::address a{};
@@ -577,7 +650,9 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     }
     // EIP-3651: Warm COINBASE.
     if (rev >= EVMC_SHANGHAI)
+    {
         host.access_account(block.coinbase);
+    }
 
     auto message = eth_transition_detail::build_message(tx, txProps.execution_gas_limit);
     if (to.has_value())
@@ -633,7 +708,9 @@ task::Task<void> finalizeState(EthereumState<Storage>& state, evmc_revision rev,
     }
 
     for (const auto& withdrawal : withdrawals)
+    {
         state.touch(withdrawal.recipient).balance += withdrawal.get_amount();
+    }
 
     co_await state.applyToStorage(rev);
 }
