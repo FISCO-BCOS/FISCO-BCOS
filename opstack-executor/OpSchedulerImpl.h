@@ -6,8 +6,8 @@
 // scheduler_v1::TransactionScheduler concept check only (the concept is unconditional; OP mode
 // never calls it — throws immediately). OP block execution goes through the delegate's
 // runOpBlockInjection. Every other method
-// re-publishes the seam surface from OpEngineSeam.h so the engine reaches it as a dependent name
-// on `SchedulerType`.
+// re-publishes the seam surface from OpErrors.h / OpBlockExecute.h so the engine reaches it as a
+// dependent name on `SchedulerType`.
 //
 // Layering: a pure template header (same shape as Storage2State.h) — depends on bcos-framework
 // (Storage template parameter is instantiated against storage2/MultiLayerStorage::ViewType,
@@ -20,8 +20,8 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <opstack-executor/OpEngineSeam.h>
-#include <opstack-executor/OpErrors.h>
+#include <opstack-executor/OpBlockExecute.h>  // computeOpTxRoot / announcedCommitmentsOf
+#include <opstack-executor/OpErrors.h>  // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
 #include <opstack-executor/OpRlpDecode.h>
 #include <cstdint>
 #include <optional>
@@ -65,8 +65,8 @@ public:
     // `#include` anything from bcos-evm (library purity, see the `c_opMode` comment in
     // EngineServiceImpl.h), and dependent names are looked up at instantiation, inside
     // `if constexpr (c_opMode)`, in a TU that has already included this header. The definitions
-    // live in `OpEngineSeam.h`; this block only re-publishes them under the class scope the
-    // engine can reach.
+    // live in OpErrors.h / OpBlockExecute.h; this block only re-publishes them under the class
+    // scope the engine can reach.
 
     /// The block-execution environment the engine fills in from the payload — the FISCO
     /// `protocol::BlockHeader` itself (PR #5385 gave every former OpBlockEnv field a tars slot).
@@ -90,8 +90,8 @@ public:
     }
 
     /// Announced-side projection for the six-field comparison: the payload's
-    /// announced commitments, re-published from OpEngineSeam.h so the engine reaches it as a
-    /// dependent name (MAIN seam-surface parity).
+    /// announced commitments, re-published from OpErrors.h / OpBlockExecute.h so the engine reaches
+    /// it as a dependent name (MAIN seam-surface parity).
     static bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
         const bcos::engine::ExecutionPayload& payload, const bcos::h256& transactionsRoot,
         const bcos::protocol::BlockHeader& ethHeader)
@@ -100,7 +100,8 @@ public:
     }
 
     /// Eight-field commitments comparison: returns the first mismatching field name, or nullopt.
-    /// Re-published from OpEngineSeam.h so the engine reaches it as a dependent name.
+    /// Re-published from OpErrors.h / OpBlockExecute.h so the engine reaches it as a dependent
+    /// name.
     static std::optional<std::string> mismatchedFieldOf(
         const OpBlockCommitments& computed, const OpBlockCommitments& announced)
     {

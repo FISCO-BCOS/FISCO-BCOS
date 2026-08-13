@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bcos-codec/rlp/RLPEncode.h>            // rlp::encode (computeOpTxRoot)
 #include <bcos-concepts/ByteBuffer.h>            // bytebuffer::toView (opstackRegisterBlock)
 #include <bcos-evm/adapter/StateDiffSanitize.h>  // sanitizeStateDiff (runOpBlockInjection)
 #include <bcos-evm/adapter/StateRootCompute.h>   // stateRootOf (runOpBlockInjection)
@@ -8,6 +9,7 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/engine/Errors.h>  // OpExecutionInternalError
+#include <bcos-framework/engine/Types.h>   // ExecutionPayload (announcedCommitmentsOf)
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>  // SYS_* table constants
 #include <bcos-framework/protocol/BlockFactory.h>
@@ -17,13 +19,13 @@
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>  // storage2::writeOne
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/HashBuilder.h>                  // computeTrieRootVarKey (computeOpTxRoot)
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>  // bcostars::Transaction
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <ethereum-executor/BCOS2Evmone.h>  // applyStateDiff
 #include <ethereum-executor/StorageStateView.h>
-#include <opstack-executor/OpEngineSeam.h>     // computeOpTxRoot / toBcosH256
-#include <opstack-executor/OpErrors.h>         // OpBlockSeal / OpExecuteBlockResult / errors
+#include <opstack-executor/OpErrors.h>         // OpBlockSeal / OpBlockCommitments / conversions
 #include <opstack-executor/OpRlpDecode.h>      // toBlockInfo / narrowU256ToU64 / toEvmcBytes32
 #include <opstack-executor/OpstackExecutor.h>  // runOpBlockInjection's injection entries
 #include <opstack-executor/RecentBlockHashes.h>
@@ -46,6 +48,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -59,14 +62,8 @@ struct OpBlockTx
     evmc::bytes signedEnvelope;  // empty for deposit
 };
 
-/// Block execution result. receipts keep their original in-block order (the receipts-root /
-/// block-level bloom depend on this order; cumulative_gas_used is already filled in interleaved
-/// order). Each receipt is a bcos::protocol::TransactionReceipt directly produced by the execution
-/// layer — the OP metadata (l1/operator/DA, or deposit_nonce/version) rides in
-/// its opStackMeta, so no evmone receipt wrapper survives here. txTypes[i] carries the EIP-2718
-/// type byte that produced receipts[i] (kDepositTxType for deposits, else the Transaction::Type
-/// value): the FISCO receipt interface has no tx-type slot, and sealOpBlock's EncodeIndex
-/// receipts-root leaf needs the typed prefix (op-geth Receipts.EncodeIndex semantics).
+/// Block execution result. Receipts keep block order; txTypes[i] is the EIP-2718 type byte for
+/// receipts[i] (the FISCO receipt has no tx-type slot; sealOpBlock's EncodeIndex leaf needs it).
 struct OpBlockResult
 {
     std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
@@ -76,64 +73,40 @@ struct OpBlockResult
                                             // applyDiff)
 };
 
-/// Execute a whole block (execution ordering): system_call_block_start → first L1 attributes
-/// deposit → loadOpFeeParams → per-transaction (gas pool / cumulative / per-transaction write-back)
-/// → finalizeOpBlock. Write-back callback: invoked immediately after each diff segment is produced;
-/// the view read by the next step must already reflect it.
-/// **discard-writes contract**: after any throw from this function, the caller must discard the
-/// entire write set already applied via applyDiff within this block (same semantics as op-geth
-/// Process discarding the whole statedb on error, state_processor.go:109-113). Throws
-/// std::runtime_error (block-level error): txs empty or first tx is not the L1 attributes deposit
-/// (to==OP_L1_BLOCK && from==OP_DEPOSITOR, stricter-than-spec); a deposit appears after a
-/// non-deposit (stricter-than-spec); any tx gasLimit exceeds the remaining block gas; is_system_tx;
-/// any validate error on a normal tx (op-geth has no failed-receipt mechanism for normal txs,
-/// state_processor.go:109-113).
+/// Execute a whole block: system_call_block_start → L1 attributes deposit → loadOpFeeParams →
+/// per-tx (gas pool / cumulative / write-back) → finalizeOpBlock. **Discard-writes contract**: on
+/// any throw the caller must discard all writes already applied (op-geth Process semantics).
+/// Throws std::runtime_error (block-level) on empty/ill-formed blocks, gas overruns, or a
+/// validate error on a normal tx.
 OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff);
 
-// ---- Jovian L1-attributes block shape ----
-// op-geth pins these in `core/types/rollup_cost.go`: the first (L1 attributes) deposit's calldata
-// is `IsthmusL1AttributesLen` (176) bytes on the Jovian *activation* block (the DA-footprint gas
-// scalar is not set yet) and `JovianL1AttributesLen` (178) bytes with `JovianL1AttributesSelector`
-// (0x3db6be2b) thereafter (`rollup_cost.go:46-47/:65`).
+// ---- Jovian L1-attributes block shape (op-geth rollup_cost.go) ----
+// The L1-attributes deposit's calldata is 176B (IsthmusL1AttributesLen) on the Jovian activation
+// block and 178B with JovianL1AttributesSelector thereafter.
 inline constexpr std::size_t IsthmusL1AttributesLen = 176;
 inline constexpr std::size_t JovianL1AttributesLen = 178;
 inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6, 0xbe, 0x2b};
 
-/// Validate the Jovian L1-attributes block shape (selector/length + activation deposits-only).
-/// No-op for pre-Jovian configs (`cfg.has_da_footprint == false`) and for the
-/// degenerate cases `processOpBlock` already rejects (empty block / non-deposit first tx), so it
-/// is safe to call unconditionally at the top of `processOpBlock`. Mirrors the validation half of
-/// op-geth `core/types/rollup_cost.go`'s `CalcDAFootprint` (`:563-591`); the footprint *sum* stays
-/// on the seal side (OpBlockSeal.cpp). Throws `std::runtime_error` (block-level error) on a shape
-/// violation, the same channel as `processOpBlock`'s sibling structural checks.
+/// Validate the Jovian L1-attributes block shape (C-3 selector/length, C-4 activation
+/// deposits-only). No-op pre-Jovian. Mirrors the validation half of op-geth CalcDAFootprint;
+/// throws std::runtime_error (block-level).
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg);
 
-// ---- shared per-receipt helpers ----
-// `narrowGasUsed` / `hexCumulative` / `isL1AttributesTx` were promoted out of OpBlockExecute.cpp's
-// anonymous namespace (OpBlockExecute.cpp:16-49) so the per-transaction injector loop
-// (runOpBlockInjection) and processOpBlock share ONE implementation — the
-// "no copy drift" guard of the equivalence harness. Pure refactor: these three
-// are only used inside OpBlockExecute.cpp (verified by grep), and the anonymous-namespace copies
-// are deleted alongside, so no TU sees two definitions.
+// ---- shared per-receipt helpers (one implementation shared with runOpBlockInjection) ----
 
-/// Stricter-than-spec: validate the L1 attributes deposit by content. op-geth's EL does not
-/// perform this validation (pushed down to the CL layer); op-node always prepends a deposit
-/// that satisfies both conditions, so a divergent verdict is only reachable via a hand-crafted
-/// payload fed directly to engine_newPayload. Keep the check: it rejects malformed blocks
-/// op-geth accepts, at zero cost on legitimate payloads.
+/// Stricter-than-spec content check for the L1 attributes deposit (to==OP_L1_BLOCK &&
+/// from==OP_DEPOSITOR). op-geth pushes this to the CL; kept here to reject hand-crafted payloads.
 [[nodiscard]] inline bool isL1AttributesTx(const DepositTx& dep) noexcept
 {
     return dep.to.has_value() && *dep.to == OP_L1_BLOCK && dep.from == OP_DEPOSITOR;
 }
 
-/// Narrow the FISCO receipt's gasUsed (u256) back to the int64 the gas pool/cumulative accounting
-/// uses. The execution layer only ever stores a small positive gas_used, but the "widen -> check ->
-/// narrow" discipline (Storage2State.h precedent) applies: a corrupt receipt must not silently
-/// wrap blockGasLeft/cumulative.
+/// Narrow receipt gasUsed (u256) to int64 with bounds check (a corrupt receipt must not wrap the
+/// gas pool).
 [[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
 {
     static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
@@ -142,9 +115,7 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
     return static_cast<int64_t>(gasUsed);
 }
 
-/// "0x" + lowercase hex, no leading zeros (op-geth hexutil.Uint64 convention). Stored on the
-/// receipt's cumulativeGasUsed string field; encodeReceiptForRoot parses it back to the exact
-/// uint64 for the EncodeIndex leaf (see OpBlockSeal.cpp).
+/// "0x" + lowercase hex (op-geth hexutil.Uint64). Parsed back by encodeReceiptForRoot.
 [[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
 {
     std::ostringstream oss;
@@ -152,83 +123,55 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
     return oss.str();
 }
 
-/// OP block finalize: withdrawals are always empty, no ommers / block reward; EIP-6110/7002/7251
-/// requests are suppressed per cfg.disable_prague_requests — op-geth explicitly disables them for
-/// OP Isthmus (state_processor.go:140-156), and this switch is always true for every OP fork; false
-/// throws std::runtime_error (block-level rejection, not a local fault). Scope note: on OP Isthmus
-/// op-geth still runs the EIP-4788/2935 **pre-execution** system call (state_processor.go:90-95) —
-/// that is a precondition step wired in during block-level orchestration, not part of this finalize
+/// Block finalize: no ommers / block reward; Prague requests suppressed
+/// (cfg.disable_prague_requests is always true for OP; false throws runtime_error). The
+/// EIP-4788/2935 pre-execution system call is a separate orchestration step, not part of this
 /// function.
 evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
 
-// ---- block-header commitment fields + seal ----
-// `OpBlockSeal` (the commitment struct) lives in OpErrors.h (OpExecuteBlockResult carries it by
-// value); this section holds the seal *functions* + the requests-hash constant. The seal functions
-// compute the commitment fields from the block execution result.
+// ---- seal: header commitment functions (OpBlockSeal struct lives in OpErrors.h) ----
 using evmc::literals::operator""_bytes32;
 
-/// OP Isthmus+ block-header requestsHash is a fixed value = sha256("") (op-geth EmptyRequestsHash,
-/// hashes.go:43-44; on the build side worker.go:283-290 calls CalcRequestsHash on an empty list, on
-/// the validation side block_validator.go:177-184 always matches Process's nil requests).
+/// Isthmus+ requestsHash = sha256("") (op-geth EmptyRequestsHash).
 inline constexpr auto OP_EMPTY_REQUESTS_HASH =
     0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855_bytes32;
 
-/// Single-account storage root (secure-trie: key = keccak256(slot), value = rlp(trim(value)),
-/// zero-value slots skipped — aligned with the private helper in evmone mpt_hash.cpp:13-24; the
-/// upstream does not export it, so it is reproduced here as an exported piece and registered in the
-/// upstream-diff manifest to watch for drift).
+/// Single-account storage root (secure trie: key = keccak256(slot), value = rlp(trimmed));
+/// reproduced from evmone's private mpt_hash.cpp helper.
 [[nodiscard]] evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage);
 
-/// Compute the block-header commitment fields from the block execution result.
-/// messagePasserStorage: the storage snapshot of OP_L2_TO_L1_MESSAGE_PASSER (0x4200…0016,
-/// protocol_params.go:31) **after end-of-block finalize** (on the op-geth build side
-/// consensus.go:416-427 takes it after IntermediateRoot — the timing point is a documented
-/// contract; decision point 3 ruling (a): the caller provides it, keeping the StateView narrow
-/// interface). pre-Isthmus forks ignore it (withdrawalsRoot = empty-list root EMPTY_MPT_HASH,
-/// Canyon+ withdrawals list is always empty). Precondition: result.receipts is non-empty
-/// (guaranteed by processOpBlock's first-attributes invariant; an empty sequence produces
-/// EMPTY_MPT_HASH rather than an error).
+/// Compute the header commitment fields. messagePasserStorage = the post-finalize storage snapshot
+/// of OP_L2_TO_L1_MESSAGE_PASSER (op-geth takes it after IntermediateRoot); pre-Isthmus forks use
+/// the empty-list withdrawals root.
 [[nodiscard]] OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage);
 
-/// receipts-root leaf encoding rebuilt from a bcos::protocol::TransactionReceipt (replaces the
-/// former OpDepositReceipt/OpTxReceipt-based encoders). `txType` is the EIP-2718
-/// type byte that produced the receipt (kDepositTxType for deposits, else the Transaction::Type
-/// value) — the FISCO receipt interface has no tx-type slot, so the caller threads it through
-/// OpBlockResult::txTypes. Byte-for-byte op-geth `Receipts.EncodeIndex` semantics
-/// (receipt.go:568-592 — note this is NOT MarshalBinary :279-288; the two deliberately differ for
-/// a receipt that "has nonce, has no version", and the function-header comment :564-567
-/// explicitly forbids changing that):
-///   deposit: 0x7E || rlp([status, cumulativeGasUsed, logsBloom, logs, depositNonce,
-///   depositReceiptVersion]) — nonce/version read from opStackMeta (depositReceiptRLP :136-148).
-///   normal tx: typed raw-byte prefix (empty for legacy) + rlp([status, cumGas, bloom, logs]),
-///   byte-identical to EncodeIndex for type 0/1/2/4.
-/// status is projected as bool (FISCO 0 == success); cumulativeGasUsed() is parsed from its hex
-/// string; logsBloom() is the 256-byte bloom; logEntries() re-encode the evmone Log shape.
+/// Receipts-root leaf: byte-for-byte op-geth `Receipts.EncodeIndex` semantics.
+///   deposit: 0x7E || rlp([status, cumGas, bloom, logs, nonce, version])
+///   normal:  typed prefix + rlp([status, cumGas, bloom, logs])
+/// status is bool (FISCO 0 == success); cumGas from the hex string; bloom 256 bytes.
 [[nodiscard]] evmc::bytes encodeReceiptForRoot(
     const bcos::protocol::TransactionReceipt& r, uint8_t txType);
 }  // namespace bcos::evm::opstack
 
-// ---- block registration (merged from OpBlockRegister.h) ----
+// ---- block registration + execution ----
 
 namespace bcos::evm::engine
 {
-/// raw EIP-2718 envelope -> tars Transaction. Signature matches the engine's
-/// `bcos::engine::detail::opEnvelopeToTars`; the composition root (Initializer) injects a lambda
-/// invoking it — opstack-executor does not link bcos-rpc / bcos-engine.
+// Defined at the end of this block — forward-declared because runOpBlockInjection calls it.
+template <class RawTxRange>
+[[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes);
+
+/// raw EIP-2718 envelope -> tars Transaction (the engine's opEnvelopeToTars, injected by the
+/// composition root — opstack-executor does not link engine).
 using EnvelopeToTarsConverter = std::function<std::optional<bcostars::Transaction>(
     bcos::bytes const&, bcos::crypto::HashType const&)>;
 
-/// Write the block tables — the OP equivalent of ledger::prewriteBlockToBuffer. Moved line by
-/// line from the engine's registerOpBlock, with data sources switched to explicit parameters.
-/// Five tables:
-///   SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
-///   SYS_HASH_2_RECEIPT / SYS_HASH_2_TX
-/// Error classification: receipt-count invariant / null receipt -> OpExecutionInternalError; write
-/// failures propagate as-is (the engine barrier classifies -32603). blockHash is passed in
-/// explicitly by the caller (already validated by engine step 2 == header.opHeaderHash(
-/// opHeaderConst())); not recomputed here, avoiding constant drift.
+/// Write the block tables (OP prewriteBlockToBuffer): SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER /
+/// SYS_NUMBER_2_BLOCK_HEADER / SYS_HASH_2_RECEIPT / SYS_HASH_2_TX + the eth read-path tables.
+/// Receipt-count mismatch / null receipt -> OpExecutionInternalError (internal fault, not a block
+/// verdict). blockHash comes from the caller (already validated), not recomputed here.
 template <class ViewType>
 inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
     bcos::protocol::BlockHeader const& header, bcos::crypto::HashType const& blockHash,
@@ -250,10 +193,7 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
             bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(hashToNumberEntry));
 
-    // The OP header lands in the standard s_number_2_header table as a tars BlockHeader (same
-    // table/format as ordinary FISCO blocks). dataHash is empty -> header.hash() throws
-    // EmptyBlockHeaderHash; this path never calls it. encode() is a `void encode(bytes&)` out-param
-    // (BlockHeader.h:50) — build a buffer first, then read it.
+    // OP header -> standard s_number_2_header (never call header.hash(): empty dataHash throws).
     bcos::storage::Entry headerEntry;
     bcos::bytes headerBuffer;
     header.encode(headerBuffer);
@@ -262,19 +202,9 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
         std::move(headerEntry));
 
-    // ---- legacy-ledger read-path parity (ethereum executor `Ledger::asyncPrewriteBlock`): ----
-    // The OP path used to write only 5 tables; the eth RPC read path depends on two more, without
-    // which a VALID block is unqueryable:
-    //   1. SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — eth_blockNumber reads it and returns 0
-    //      (block committed but head not advanced); entry = blockNumber string, matching the
-    //      production precedent Ledger.cpp:266-270.
-    //   2. SYS_NUMBER_2_TXS — tx metadata (hash + to list, persisted via Block::encode);
-    //      getBlockData (RECEIPTS/TRANSACTIONS/TRANSACTIONS_HASH) reads it first to get the tx
-    //      hash list, then queries SYS_HASH_2_*; without it receipts/txs read empty and
-    //      getBlockByNumber(1) returns null. Format matches Ledger.cpp:284-310:
-    //      createBlock + appendTransactionMetaData(hash, to) + block.encode().
-    // Both writes use storage2::writeOne(view, ...), landing in the same mergeView batch as the
-    // OP tables, with identical key encoding.
+    // The eth RPC read path needs 2 more tables: SYS_CURRENT_STATE/SYS_KEY_CURRENT_NUMBER
+    // (eth_blockNumber) and SYS_NUMBER_2_TXS (tx metadata for getBlockData); without them a VALID
+    // block is unqueryable.
     bcos::storage::Entry numberEntry;
     numberEntry.set(blockNumberStr);
     co_await bcos::storage2::writeOne(view,
@@ -283,14 +213,8 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         std::move(numberEntry));
 
     auto& hashImpl = *blockFactory.cryptoSuite()->hashImpl();
-    // Must use blockFactory.createBlock() (not any stateful object the blockFactory already
-    // holds): appendTransactionMetaData expects an empty block to carry the metadata. The hash may
-    // come from hashImpl (already computed) or the tars tx's hash(); this path uniformly uses
-    // hashImpl.hash(rawEnvelope) — the same source as the SYS_HASH_2_TX / SYS_HASH_2_RECEIPT keys
-    // (see the loop below), so the metadata's hash matches the lookup keys byte-for-byte. `to`
-    // comes from the tars tx's to() (rows whose envelopeToTars fails are skipped, same
-    // skip-on-conversion-failure semantics as SYS_HASH_2_TX, keeping metadata and the tx table
-    // consistent).
+    // Metadata hashes use hashImpl.hash(rawEnvelope) — the same source as the SYS_HASH_2_* keys.
+    // Rows whose envelopeToTars fails are skipped (consistent with the tx table).
     auto transactionsBlock = blockFactory.createBlock();
     for (std::size_t index = 0; index < rawTxBytes.size(); ++index)
     {
@@ -313,8 +237,7 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr},
         std::move(number2TxEntry));
 
-    // processOpBlock produces exactly one receipt per tx; a count mismatch is a broken execution
-    // invariant, failing loudly (an internal error, not a verdict on the block).
+    // One receipt per tx is a broken-execution invariant.
     if (rawTxBytes.size() != result.receipts.size())
     {
         BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
@@ -340,8 +263,7 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
                 bcos::ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
             std::move(receiptEntry));
 
-        // Conversion failure (malformed / un-enumerated envelope) -> skip the row; the block stays
-        // VALID, that tx is just not queryable by hash.
+        // Conversion failure -> skip the row (the tx stays valid but unqueryable by hash).
         if (auto tarsTx = envelopeToTars(rawTxBytes[index], txHash))
         {
             bcostars::protocol::TransactionImpl txImpl(
@@ -358,17 +280,13 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
     }
 }
 
-// ---- block execution: route B per-transaction injection loop (merged from OpBlockInjector.h) ----
+// ---- block execution: route B per-transaction injection loop ----
 
-/// Per-transaction injection loop: replicates processOpBlock's orchestration
-/// (system_call_block_start → deposit-first → lazy loadOpFeeParams + Jovian D-1 override →
-/// per-tx blockGasLeft decrement + setCumulativeGasUsed → finalizeBlock), executed through the
-/// OpstackExecutor injection-style entry points. Returns the same result shape as processOpBlock.
-/// Normal txs' FISCO Transactions are pre-built by the caller (normalTxs maps 1:1 to
-/// the non-deposit txs) — opEnvelopeToTars lives in the engine lib; building it here would create
-/// a link cycle.
-/// Error classification — poison/hashErr → OpStorageError, block shape/validation →
-/// OpConsensusError.
+/// Route B: per-tx injection loop replicating processOpBlock's orchestration through
+/// OpstackExecutor (system_call_block_start → deposit-first → lazy fee → per-tx gas/cumulative →
+/// finalizeBlock). normalTxs are pre-built by the caller (opEnvelopeToTars lives in the engine
+/// lib; building it here would create a link cycle). poison/hashErr → OpStorageError,
+/// shape/validation → OpConsensusError.
 template <class Storage>
 OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExecutor& executor,
     Storage& view, bcos::protocol::BlockHeader const& header,
@@ -388,15 +306,13 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     eth::StorageStateView<Storage> stateView(view);
 
-    // (1) Pre-block system_call_block_start (no executor entry; evmone called directly).
+    // (1) Pre-block system call (evmone called directly; no executor entry).
     auto sysDiff =
         evmone::state::system_call_block_start(stateView, blk, hashes, cfg.rev, executor.vm());
     bcos::task::syncWait(eth::applyStateDiff(
         view, bcos::evm::sanitizeStateDiff(stateView, sysDiff), cfg.rev, *hashImpl));
 
-    // (2) deposit-first content check + Jovian shape. Block-shape rejection → OpConsensusError.
-    // Call the exported op::isL1AttributesTx (exported to OpBlockExecute.h) rather than inlining
-    // a copy — a duplicate would drift from processOpBlock.
+    // (2) deposit-first content check + Jovian shape (shared isL1AttributesTx — no copy drift).
     if (txs.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     auto const* firstDep = std::get_if<op::DepositTx>(&txs[0].tx);
@@ -449,21 +365,14 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
                 feeLoaded = true;
             }
             auto const& tx = std::get<evmone::state::Transaction>(btx.tx);
-            // Normal txs are pre-built by the caller (normalTxs[i], whose extraTransactionBytes
-            // is already the full envelope — takeToTarsTransaction stores the signing preimage
-            // and must be overwritten). normalIdx has no upper-bound guard; a short caller vector
-            // would OOB (BaselineScheduler consumes this in production).
+            // normalTxs[i] pre-built by the caller (full envelope already overwritten). normalIdx
+            // has no guard; a short caller vector would OOB.
             if (normalIdx >= normalTxs.size())
                 throw OpConsensusError(
                     "runOpBlockInjection: normalTxs exhausted (caller-provided "
                     "normal txs mismatch block txs)");
-            // Classification contract: validation failure (opValidate rejects a normal tx) →
-            // OpConsensusError (INVALID), not -32603. OpTxValidationFailed only appeared in the
-            // direct injector (the harness skips invalid_ vectors); on the engine delegate path,
-            // misclassification would report INVALID vectors as -32603 (mapDelegateError throws
-            // an internal error) — aligned with processOpBlock's validate-error channel
-            // (runtime_error → OpConsensusError). syncWait rethrows synchronously; FISCO types
-            // have stable typeinfo, so typed catch binds reliably.
+            // Validation failure → OpConsensusError (INVALID), not -32603 — same channel as
+            // processOpBlock's validate-error.
             protocol::TransactionReceipt::Ptr receipt;
             try
             {
@@ -512,5 +421,48 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
     auto txRoot = computeOpTxRoot(rawTxBytes);
     return OpExecuteBlockResult{std::move(result.receipts), seal, detail::toBcosH256(root),
         static_cast<uint64_t>(cumulative), txRoot};
+}
+
+/// Project the payload/header announced commitments into OpBlockCommitments (the "announced" side
+/// of mismatchedFieldOf): 5 fields from ExecutionPayload, txRoot from computeTxRoot, blobGasUsed
+/// reverse-narrowed, requestsHash from the rebuilt header.
+inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPayload& payload,
+    const bcos::h256& transactionsRoot, const bcos::protocol::BlockHeader& ethHeader)
+{
+    OpBlockCommitments out{
+        .receiptsRoot = payload.receiptsRoot,
+        .logsBloom = payloadBloomToH2048(payload.logsBloom),
+        .withdrawalsRoot = *payload.withdrawalsRoot,
+        .stateRoot = payload.stateRoot,
+        .gasUsed = payload.gasUsed,
+        .txRoot = transactionsRoot,
+        .blobGasUsed = payload.blobGasUsed.has_value() ?
+                           std::optional<uint64_t>(bcos::evm::engine::detail::narrowU256ToU64(
+                               *payload.blobGasUsed, "ExecutionPayload.blobGasUsed")) :
+                           std::nullopt,
+        .requestsHash = ethHeader.requestsHash(),
+    };
+    return out;
+}
+
+/// transactionsRoot over the block's raw EIP-2718 envelopes: trie key = rlp(index), value = the
+/// raw wire bytes as received. NOT op-geth's DeriveSha (which re-encodes from the parsed struct);
+/// the two coincide because the raw-tx decoders reject every non-canonical encoding (the
+/// assertCanonicalRoundTrip backstop fails closed if that ever lapses). One function, two call
+/// sites: the engine's pre-execution blockHash check and runOpBlockInjection's txRoot.
+template <class RawTxRange>
+[[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
+{
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> entries;
+    entries.reserve(rawTxBytes.size());
+    uint64_t index = 0;
+    for (auto const& rawItem : rawTxBytes)
+    {
+        bcos::bytes key;
+        bcos::codec::rlp::encode(key, index);
+        entries.emplace_back(std::move(key), bcos::bytes(std::begin(rawItem), std::end(rawItem)));
+        ++index;
+    }
+    return bcos::ledger::mpt::computeTrieRootVarKey(entries).root;
 }
 }  // namespace bcos::evm::engine

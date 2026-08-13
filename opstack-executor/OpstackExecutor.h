@@ -14,7 +14,7 @@
 /// Semantics: uses the INJECTION-style opValidate/opTransition with an orchestrator-supplied
 /// OpFeeParams (including the D-1 attributes-calldata DA-scalar override), a decrementing
 /// blockGasLeft, the chain id, and real block hashes — mirroring processOpBlock. The eth_call
-/// block context (buildOpBlockInfo) mirrors detail::toBlockInfo (OpRlpDecode.h): seconds timestamp,
+/// block context (buildBlockInfo) mirrors detail::toBlockInfo (OpRlpDecode.h): seconds timestamp,
 /// header baseFee via value_or(0), and the full field set.
 ///
 /// Adapter reuse: the storage-backed StateView and state-diff writeback are shared with
@@ -89,7 +89,7 @@ public:
     /// headers, and any header whose field the engine did not fill) reads as 0 rather than
     /// throwing. gasLimit stays an injection because the RPC call path threads the head block's
     /// gas limit as blockGasLeft.
-    static evmone::state::BlockInfo buildOpBlockInfo(
+    static evmone::state::BlockInfo buildBlockInfo(
         protocol::BlockHeader const& header, uint64_t gasLimit)
     {
         // Single toBlockInfo implementation, parameterized by lenient optionals + injected
@@ -210,7 +210,7 @@ public:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo = buildOpBlockInfo(
+        auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         eth::StorageStateView<Storage> stateView(storage);
         eth::ZeroBlockHashes zeroBlockHashes;
@@ -274,7 +274,7 @@ private:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        auto blockInfo = buildOpBlockInfo(
+        auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
@@ -305,7 +305,7 @@ private:
         namespace eth = bcos::executor_v1::eth;
 
         (void)ledgerConfig;
-        auto blockInfo = buildOpBlockInfo(
+        auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);

@@ -51,7 +51,7 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
     return out;
 }
 
-// `toBcosH256` (evmc::bytes32 -> bcos::h256) lives in OpEngineSeam.h: that header needs the same
+// `toBcosH256` (evmc::bytes32 -> bcos::h256) lives in OpErrors.h: that header needs the same
 // conversion, and two identical inline definitions of one name in `bcos::evm::engine::detail`
 // would be a redefinition error.
 

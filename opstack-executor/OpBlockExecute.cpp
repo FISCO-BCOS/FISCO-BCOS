@@ -16,24 +16,16 @@
 #include <sstream>
 #include <stdexcept>
 
-// isL1AttributesTx / narrowGasUsed / hexCumulative were exported to OpBlockExecute.h
-// (shared with runOpBlockInjection — one implementation, no copy drift);
-// the anonymous-namespace copies are removed so processOpBlock sees exactly one definition.
+// isL1AttributesTx / narrowGasUsed / hexCumulative live in OpBlockExecute.h (shared with
+// runOpBlockInjection — one implementation, no copy drift).
 
 namespace bcos::evm::opstack
 {
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg)
 {
-    // Jovian-only: op-geth calls CalcDAFootprint only under `IsJovian`
-    // (block_validator.go:120) and CalcDAFootprint is documented "must not be called for pre-Jovian
-    // blocks" (rollup_cost.go:562). `has_da_footprint` is true iff the active config is Jovian
-    // (OpForkSchedule.cpp).
-    if (!cfg.has_da_footprint)
+    if (!cfg.has_da_footprint)  // Jovian-only (op-geth CalcDAFootprint)
         return;
-    // The empty-block and non-deposit-first-tx cases are rejected by processOpBlock's own checks
-    // (and by op-geth's `len(txs) == 0 || !txs[0].IsDepositTx()` guard). Return here rather than
-    // duplicate that verdict, so this function's contract is exactly "the Jovian attributes shape".
-    if (txs.empty())
+    if (txs.empty())  // rejected by processOpBlock anyway
         return;
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
     if (firstDep == nullptr)
@@ -42,19 +34,16 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
     const auto& data = firstDep->data;
     if (data.size() == IsthmusL1AttributesLen)
     {
-        // Jovian *activation* block. The first Jovian block still carries Isthmus-length L1
-        // attributes (no DA-footprint gas scalar yet) and op-geth requires it to be deposits-only
-        // (rollup_cost.go:568-576). Checking the LAST tx is sufficient because deposits always
-        // precede non-deposits (enforced by processOpBlock's "deposit after non-deposit" guard),
-        // exactly op-geth's own justification.
+        // Jovian activation block: Isthmus-length attributes, must be deposits-only (op-geth
+        // rollup_cost.go:568-576). Checking the last tx suffices (deposits always precede
+        // non-deposits).
         if (!std::holds_alternative<DepositTx>(txs.back().tx))
             throw std::runtime_error(
                 "op block: unexpected non-deposit transactions in Jovian activation block");
         return;
     }
 
-    // A normal Jovian block's L1 attributes calldata must carry the Jovian selector and be at
-    // least the Jovian length (op-geth `ExtractDAFootprintGasScalar`, rollup_cost.go:547-556).
+    // Normal Jovian block: L1 attributes must carry the Jovian selector and be ≥ Jovian length.
     if (data.size() < JovianL1AttributesLen)
         throw std::runtime_error(
             "op block: L1 attributes transaction data too short for DA footprint gas scalar");
@@ -68,9 +57,7 @@ evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase)
 {
     if (!cfg.disable_prague_requests)
-        // std::runtime_error (NOT invalid_argument): the scheduler's catch ladder treats the
-        // logic_error family as a local fault (-32603) but runtime_error as a block-level
-        // rejection (INVALID); a Prague-request block on an OP chain is the latter.
+        // runtime_error (not logic_error): block-level rejection (INVALID), not a local fault.
         throw std::runtime_error("op finalize: prague requests unsupported on OP chains");
     return bcos::evm::sanitizeStateDiff(
         view, evmone::state::finalize(view, cfg.rev, coinbase, std::nullopt, {}, {}));
@@ -82,22 +69,16 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff)
 {
-    // Step 1: pre-block system call (4788/2935; revision-gating and silent skip on missing code
-    // are both handled inside evmone).
+    // Step 1: pre-block system call (4788/2935; gating/skip handled inside evmone).
     applyDiff(bcos::evm::sanitizeStateDiff(
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
-    // Step 2 precondition: the first tx must be the L1 attributes deposit (stricter-than-spec).
+    // Step 2: first tx must be the L1 attributes deposit (stricter-than-spec) + Jovian shape.
     if (txs.empty())
         throw std::runtime_error("op block: missing L1 attributes deposit (empty block)");
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
     if (firstDep == nullptr || !isL1AttributesTx(*firstDep))
         throw std::runtime_error("op block: first tx is not the L1 attributes deposit");
-
-    // Step 2 precondition: Jovian L1-attributes block shape — attributes selector/length and the
-    // activation block's deposits-only rule. No-op pre-Jovian. Placed before the
-    // per-tx loop so an activation block carrying a user tx is refused before any of it executes,
-    // mirroring op-geth's `CalcDAFootprint` in block validation.
     validateJovianBlockShape(txs, cfg);
 
     OpBlockResult result;
@@ -130,28 +111,15 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             seenNonDeposit = true;
             if (!feeLoaded)
             {
-                // Step 2: fee params are read from the storage slot values after this block's
-                // attributes tx executes; deferred lazily to the first normal tx, equivalent to
-                // op-geth's per-block cache (rollup_cost.go:162-164/:199-207).
+                // Fee params lazily loaded at the first normal tx (op-geth's per-block cache). DA
+                // scalar reads calldata[176:178] (authoritative even if the attributes deposit
+                // rolled back L1Block slot8); activation block (176B) forces 0.
                 fee = loadOpFeeParams(view);
-                // The Jovian DA footprint gas scalar's authoritative source is the first L1
-                // attributes deposit's calldata[176:178] (op-geth ExtractDAFootprintGasScalar,
-                // rollup_cost.go:555), not L1Block slot8: if the attributes deposit fails, the EVM
-                // rolls back the storage write so slot8 keeps the previous block's stale value,
-                // while calldata always carries this block's correct value. An activation block
-                // (data.size()==176) forces 0 (op-geth CalcDAFootprint:571-577); a normal block
-                // (data.size()>=178) reads the fixed offset [176:178] (not len-2).
                 if (cfg.has_da_footprint)
                 {
                     const auto& attrData = std::get<DepositTx>(txs[0].tx).data;
                     if (attrData.size() == IsthmusL1AttributesLen)
-                    {
-                        // The activation block has no user tx, so this branch is structurally
-                        // unreachable; if the deposits-only rule were ever relaxed, op-geth would
-                        // reject the block here (CalcDAFootprint requires deposits-only for
-                        // Isthmus length, rollup_cost.go:572-575) rather than set 0.
                         fee.da_footprint_gas_scalar = 0;
-                    }
                     else if (attrData.size() >= JovianL1AttributesLen)
                     {
                         fee.da_footprint_gas_scalar = static_cast<uint16_t>(
@@ -165,12 +133,9 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             const evmc::bytes_view env{btx.signedEnvelope.data(), btx.signedEnvelope.size()};
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
-                // op-geth: a normal tx that fails validation has no failed-receipt mechanism;
-                // Process voids the whole block outright (state_transition preCheck →
-                // state_processor.go:109-113).
+                // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
                 throw std::runtime_error("op block: invalid non-deposit tx: " + err->message());
-            // L1/DA/operator cost were derived from `env` in opValidate and frozen into props;
-            // opTransition charges from that same snapshot (no second fee read, no re-encoding).
+            // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
             auto receipt = opTransition(view, block, hashes, tx, cfg, vm,
                 std::get<OpTxProperties>(v), chainId, receiptFactory, diff);
@@ -192,11 +157,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     return result;
 }
 
-// ---- block-header seal (merged from OpBlockSeal.cpp) ----
+// ---- block-header seal ----
 namespace
 {
-/// Parse the receipt's cumulativeGasUsed string (set by processOpBlock as "0x" + lowercase hex,
-/// op-geth hexutil.Uint64 convention) back to the exact uint64 the EncodeIndex leaf needs.
+/// Parse "0x"-prefixed lowercase hex back to uint64 (the EncodeIndex leaf's cumulativeGasUsed).
 [[nodiscard]] uint64_t parseHexUint64(std::string_view s)
 {
     if (s.size() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
@@ -218,31 +182,24 @@ namespace
     return v;
 }
 
-/// Appends the RLP list of logs: for each log, [address(20B), [topics...], data]; the whole
-/// collection is itself wrapped in a list. Byte-identical to evmone's rlp::encode_container over
-/// std::vector<Log> (rlp.hpp encode_container + rlp_encode(Log) = encode_tuple(addr, topics,
-/// data)); rebuilt from bcos::protocol::LogEntry (the same raw bytes mapOpLogs stored).
+/// RLP list of logs: [address, [topics...], data] each, whole collection wrapped in a list
+/// (byte-identical to evmone's rlp::encode_container over vector<Log>).
 inline void encodeLogsList(bcos::bytes& to, gsl::span<const bcos::protocol::LogEntry> logs)
 {
     bcos::bytes content;
     for (const auto& log : logs)
     {
         bcos::bytes entry;
-        // address (raw 20 bytes, LogEntry::address() reinterprets as binary, not hex)
         bcos::codec::rlp::encode(entry, log.address());
-        // topics list
         bcos::bytes topics;
         for (const auto& topic : log.topics())
-            bcos::codec::rlp::encode(topics, topic);  // h256 -> 32-byte string
+            bcos::codec::rlp::encode(topics, topic);
         bcos::codec::rlp::encodeHeader(entry, {.isList = true, .payloadLength = topics.size()});
         entry.insert(entry.end(), topics.begin(), topics.end());
-        // data
         bcos::codec::rlp::encode(entry, log.data());
-        // wrap one log entry as a list
         bcos::codec::rlp::encodeHeader(content, {.isList = true, .payloadLength = entry.size()});
         content.insert(content.end(), entry.begin(), entry.end());
     }
-    // wrap the log collection as a list
     bcos::codec::rlp::encodeHeader(to, {.isList = true, .payloadLength = content.size()});
     to.insert(to.end(), content.begin(), content.end());
 }
@@ -250,9 +207,7 @@ inline void encodeLogsList(bcos::bytes& to, gsl::span<const bcos::protocol::LogE
 
 evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage)
 {
-    // Secure-trie over one account's live slot map, built with FISCO computeTrieRoot (same
-    // construction as the retired evmone mpt_hash.cpp:13-24: key = keccak256(slot), value =
-    // rlp(trimmed value)). Defensive continue on zero values.
+    // Secure trie over the live slot map (key = keccak256(slot), leaf = rlp(trimmed value)).
     std::map<bcos::h256, bcos::bytes> entries;
     for (const auto& [key, value] : storage)
     {
@@ -263,12 +218,6 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
         {
             ++first;
         }
-        // op-geth's storage-trie leaf value is rlp(trimmed value) (trie/secure_trie.go
-        // UpdateStorage: v,_ := rlp.EncodeToBytes(value) enters the trie), i.e. a SECOND RLP
-        // wrapping of the trimmed bytes. The old implementation used the raw trimmed bytes as the
-        // leaf value, producing d00be84d... instead of op-geth's 02dffd0c... on single-slot
-        // accounts (exposed by the L2 message_passer_write case). Aligned with accountStorageRoot
-        // (adapter/StateRootCompute.cpp:21-22): rlp-encode the trimmed value into the leaf first.
         bcos::bytes leaf;
         bcos::codec::rlp::encode(
             leaf, bcos::bytes(value.bytes + first, value.bytes + sizeof(value.bytes)));
@@ -282,16 +231,13 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
 
 evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, uint8_t txType)
 {
-    // FISCO 0 == success. RLP bool semantics (op-geth statusEncoding): true → 0x01, false → 0x80
-    // (empty string). Pushed manually because bcos::codec::rlp::encode's UnsignedByte path
-    // instantiates toCompactBigEndian(bool|byte), which is either shift-overflow or
-    // -Wundefined-inline; the value space is exactly {0x01, 0x80} so a raw push is equivalent.
+    // RLP bool semantics: true → 0x01, false → 0x80 (raw push; the UnsignedByte encode path
+    // mis-handles bool). Payload = rlp([status, cumGas, bloom, logs]) + (deposit) [nonce, version].
     const bool success = (r.status() == 0);
     const uint64_t cumGas = parseHexUint64(r.cumulativeGasUsed());
     const auto bloom = r.logsBloom();
     const auto logs = r.logEntries();
 
-    // payload = rlp([status, cumGas, bloom, logs]) + (deposit) [nonce, version]
     bcos::bytes payload;
     payload.push_back(success ? 0x01 : 0x80);
     bcos::codec::rlp::encode(payload, cumGas);
@@ -322,9 +268,7 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
 {
     OpBlockSeal seal{};
 
-    // receipts-root: key = rlp(index), leaf = EncodeIndex-semantics encoding. Built with FISCO
-    // computeTrieRootVarKey (variable-length keys rlp(0..N), ascending, non-prefix-of-each-other —
-    // the same construction as the retired evmone list-trie mpt_hash.cpp:38-46).
+    // receipts-root: var-key trie (key = rlp(index), leaf = EncodeIndex encoding).
     std::vector<std::pair<bcos::bytes, bcos::bytes>> receiptsEntries;
     receiptsEntries.reserve(result.receipts.size());
     for (size_t i = 0; i < result.receipts.size(); ++i)
@@ -338,9 +282,7 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     std::memcpy(
         seal.receiptsRoot.bytes, receiptsResult.root.data(), sizeof(seal.receiptsRoot.bytes));
 
-    // Block-level logsBloom: bitwise-OR each receipt's 256-byte bloom (the FISCO receipt carries
-    // its own logsBloom, set by the execution layer — same projection the evmone span overload
-    // in bloom_filter.cpp:46-53 produces).
+    // Block-level logsBloom = bitwise-OR of each receipt's 256-byte bloom.
     for (const auto& r : result.receipts)
     {
         const auto bloom = r->logsBloom();
@@ -348,7 +290,8 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
             seal.logsBloom.bytes[i] |= bloom[i];
     }
 
-    // withdrawalsRoot / requestsHash: semantics switch starting at Isthmus.
+    // Isthmus+: withdrawalsRoot = MessagePasser storage root, requestsHash = sha256("").
+    // Pre-Isthmus: withdrawals list is always empty → empty-trie root; no requests field.
     if (cfg.fork >= OpFork::Isthmus)
     {
         seal.withdrawalsRoot = opStorageRoot(messagePasserStorage);
@@ -356,17 +299,13 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     }
     else
     {
-        // Canyon+ withdrawals list is always empty → empty-trie root; the requests header field
-        // does not exist in the CANCUN family. FISCO emptyRootHash() == keccak256(RLP("")).
         auto const emptyRoot = bcos::ledger::mpt::emptyRootHash();
         std::memcpy(
             seal.withdrawalsRoot.bytes, emptyRoot.data(), sizeof(seal.withdrawalsRoot.bytes));
     }
 
-    // Jovian block-header BlobGasUsed reuse slot (equivalent to CalcDAFootprint, see header
-    // comment). Only non-deposit receipts carry
-    // da_footprint in their opStackMeta — deposits always have it nullopt, so summing over every
-    // receipt is equivalent to the old OpTxReceipt-only loop.
+    // Jovian: header blobGasUsed slot = DA footprint (Σ da_footprint over non-deposit receipts;
+    // deposits carry nullopt, so summing every receipt is equivalent).
     if (cfg.has_da_footprint)
     {
         uint64_t footprint = 0;

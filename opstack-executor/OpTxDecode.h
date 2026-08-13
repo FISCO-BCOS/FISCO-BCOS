@@ -226,7 +226,7 @@ inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, ui
 /// `v` is read as a canonical scalar (decodeU256Scalar → no leading zero, width-bounded), so
 /// v-canonicality is enforced identically to the other types — a non-minimal v cannot silently
 /// produce a divergent txRoot. txRoot itself is taken over the raw wire bytes (computeOpTxRoot,
-/// OpEngineSeam.h), so `tx.v`'s uint8 width does not bound the legacy v space; the full v lives in
+/// OpBlockExecute.h), so `tx.v`'s uint8 width does not bound the legacy v space; the full v lives in
 /// `signedEnvelope` and only parity/chainId are extracted here.
 inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64_t chainId)
 {

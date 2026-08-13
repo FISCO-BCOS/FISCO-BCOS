@@ -775,7 +775,7 @@ private:
     /// `SchedulerType` is the OP scheduler -- which is what makes every `SchedulerType::`-qualified
     /// name below legal without this library depending on bcos-evm: they are dependent names,
     /// resolved at instantiation in a translation unit that included the OP scheduler header (see
-    /// `bcos-evm/bcos-evm/engine/OpEngineSeam.h`'s file comment for the seam's full rationale, and
+    /// `opstack-executor/OpErrors.h`'s file comment for the seam's full rationale, and
     /// `c_opMode` above for the purity constraint).
     ///
     /// This function is the version gate plus a **classification barrier**: it guarantees that
@@ -882,7 +882,7 @@ private:
         }
         // `ExecutionPayload` carries no transactionsRoot, so it is derived from the raw envelopes
         // here -- the same derivation the execution path performs internally (one shared function,
-        // `OpEngineSeam.h`'s `computeOpTxRoot`), which is what lets the blockHash check stay
+        // `OpBlockExecute.h`'s `computeOpTxRoot`), which is what lets the blockHash check stay
         // genuinely static (before parentKnown and before execution).
         const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
         const auto ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),

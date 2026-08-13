@@ -13,7 +13,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <opstack-executor/OpEngineSeam.h>
+#include <opstack-executor/OpErrors.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
