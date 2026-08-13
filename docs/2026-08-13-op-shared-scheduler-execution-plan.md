@@ -41,10 +41,10 @@
   ```
   - 行为 = 现 `runOpBlockInjection` 第 285-310 行的块级收尾（注意是 **285** 起，非 282——282 仍在逐笔循环内）：
     1. **从 rawTxBytes[i][0] 重建 txTypes**（镜像 225-282 循环的分类逻辑，`sealOpBlock` 的 `encodeReceiptForRoot` 需要每笔 type 字节）；
-    2. **顺序回填 cumulativeGasUsed**（遍历 receipts 累积并 `setCumulativeGasUsed`，`encodeReceiptForRoot` 依赖它，否则 receiptsRoot 错——H4）；
-    3. `executor.finalizeBlock(view, header, ledgerConfig)` → MessagePasser 快照（Storage2State bridge）→ `sealOpBlock(result, cfg, mpStorage)` → `stateRootOf(bridge)` → `computeOpTxRoot(rawTxBytes)`；
-    4. **hashErr 检查**（非空 → `throw OpStorageError("block-hash lookup failed: ...")`）；
-    5. 返回 `OpExecuteBlockResult{receipts, seal, stateRoot, gasUsed, txRoot}`。
+    2. `executor.finalizeBlock(view, header, ledgerConfig)` → MessagePasser 快照（Storage2State bridge）→ `sealOpBlock(result, cfg, mpStorage)` → `stateRootOf(bridge)` → `computeOpTxRoot(rawTxBytes)`；
+    3. **hashErr 检查**（非空 → `throw OpStorageError("block-hash lookup failed: ...")`）；
+    4. 返回 `OpExecuteBlockResult{receipts, seal, stateRoot, gasUsed, txRoot}`。
+  - **不回填 cumulativeGasUsed**（H4 唯一 owner = ExecuteContext::finish，见 Task 3）；`narrowGasUsed`/`hexCumulative` 已搬到 OpCommon.h。
 
 - [ ] **Step 1: 抽函数（先不删 runOpBlockInjection 的旧代码）**
 
@@ -148,12 +148,14 @@ git commit -m "feat(scheduler): SchedulerSerialImpl 串行模式（chunkSize/ser
   ```cpp
   // OpstackExecutor 内（OpBlockExecutionContext 字段完整——审查修正，非 {fee, blockGasLeft} 简化版）
   struct OpBlockExecutionContext {
-      bcos::evm::opstack::OpFeeParams fee;         // 可变：惰性加载（第一个普通 tx 时）
-      bool feeLoaded = false;                      // fee 惰性加载标志（H1）
-      int64_t blockGasLeft;                        // 可变：逐 tx 递减
-      int64_t cumulativeGasUsed = 0;               // 可变：跨 tx 累积（H4，setCumulativeGasUsed 用）
-      evmone::state::BlockHashes* blockHashes;     // 块级构造一次（H3）
-      uint64_t chainId;                            // 常量（H3）
+      mutable bcos::evm::opstack::OpFeeParams fee;  // 可变：惰性加载 + DA scalar 覆盖（H1/H1c）
+      mutable bool feeLoaded = false;               // fee 惰性加载标志（H1）
+      mutable int64_t blockGasLeft;                 // 可变：逐 tx 递减
+      mutable int64_t cumulativeGasUsed = 0;        // 可变：跨 tx 累积（H4）
+      mutable bool seenNonDeposit = false;          // 可变：deposit-after-non-deposit 门（M2）
+      evmone::state::BlockHashes* blockHashes;      // 只读：块级构造一次（H3）
+      uint64_t chainId;                             // 只读：常量（H3）
+      std::optional<uint16_t> daFootprintGasScalar; // 只读：preBlockOpSteps 算（H1c）
   };
   using BlockContext = OpBlockExecutionContext;
 
@@ -161,69 +163,75 @@ git commit -m "feat(scheduler): SchedulerSerialImpl 串行模式（chunkSize/ser
   task::Task<ExecuteContext<Storage>> createExecuteContext(Storage& storage,
       protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
       int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
-      BlockContext& blockCtx);   // 非 const 引用——blockGasLeft/fee 跨 tx 可变
-  // ExecuteContext 增成员 `BlockContext* m_ctx`（非 const 指针）；prepare/execute/finish 用它。
+      BlockContext const& blockCtx);   // const& —— 可变字段标 mutable，允许 const 下修改
+  // ExecuteContext 增成员 `BlockContext const* m_ctx`；prepare/execute/finish 用它（改 mutable 字段）。
   ```
 
 - [ ] **Step 1: 定义 OpBlockExecutionContext + BlockContext 别名**
 
-在 `OpstackExecutor.h` 加 `OpBlockExecutionContext{fee, feeLoaded, blockGasLeft, blockHashes, chainId}`（5 字段）+ `using BlockContext = OpBlockExecutionContext`。字段见 Interfaces。
+在 `OpstackExecutor.h` 加 `OpBlockExecutionContext`（8 字段，前 5 个 mutable，见 Interfaces）+ `using BlockContext = OpBlockExecutionContext`。
 
 - [ ] **Step 2: createExecuteContext 加 7th 参 + ExecuteContext 存 context**
 
-`createExecuteContext` 加 `BlockContext& blockCtx`（非 const），ExecuteContext 存 `BlockContext* m_ctx`（非 const 指针——finish 要改 `blockGasLeft`，prepare 要改 `fee`/`feeLoaded`）。
+`createExecuteContext` 加 `BlockContext const& blockCtx`（const&，可变字段标 mutable），ExecuteContext 存 `BlockContext const* m_ctx`。
 
-- [ ] **Step 3: ExecuteContext::prepare() 加 deposit 分流 + fee 惰性 + 错误归一化**
+- [ ] **Step 3: ExecuteContext::prepare() 加 deposit 分流 + fee 惰性 + DA scalar + seenNonDeposit + 归一**
 
 ```cpp
 task::Task<void> prepare() {
     if (transaction.isDepositTx()) {
-        m_deposit = OpstackExecutor::depositFromTransaction(transaction);  // 自建（无 * 解引用）
-        co_return;                                                          // deposit 无 opValidate
+        if (m_ctx->seenNonDeposit)                                    // M2 顺序门
+            throw bcos::evm::engine::OpConsensusError("op block: deposit after non-deposit");
+        m_deposit = OpstackExecutor::depositFromTransaction(transaction);
+        co_return;                                                     // deposit 无 opValidate
     }
-    // fee 惰性加载（H1）：第一个普通 tx 处才读——此时 deposit 已执行并写入 L1Block 槽
-    if (m_ctx && !m_ctx->feeLoaded) {
+    m_ctx->seenNonDeposit = true;
+    if (!m_ctx->feeLoaded) {                                           // H1 fee 惰性加载
         eth::StorageStateView<Storage> stateView(storage);
         m_ctx->fee = op::loadOpFeeParams(stateView);
+        if (m_ctx->daFootprintGasScalar)                               // H1c DA scalar 覆盖
+            m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
         m_ctx->feeLoaded = true;
     }
-    // OpTxValidationFailed → OpConsensusError 归一（M1）：否则错误面漂到 UnknownError
-    try {
+    try {                                                              // M1 归一
         m_props = co_await executor.m_prepare(storage, blockHeader, transaction, ledgerConfig,
-            m_ctx ? m_ctx->fee : op::OpFeeParams{}, m_ctx ? m_ctx->blockGasLeft : 0);
+            m_ctx->fee, m_ctx->blockGasLeft);
     } catch (const OpTxValidationFailed& e) {
-        throw bcos::evm::engine::OpConsensusError(std::string("op block: ") + e.what());
+        throw bcos::evm::engine::OpConsensusError(
+            std::string("runOpBlockInjection: normal tx validation failed: ") + e.what());
     }
 }
 ```
 
-- [ ] **Step 4: ExecuteContext::execute()/finish() 支持 deposit + runDeposit + hashes/chainId + cumulativeGasUsed**
+- [ ] **Step 4: ExecuteContext::execute()/finish() 支持 deposit（executeDeposit）+ hashes/chainId + cumulativeGasUsed**
 
 ```cpp
 task::Task<void> execute() {
     if (transaction.isDepositTx()) {
-        // 复用 runDeposit（M3），不手写 transition——保留 mint/is_system_tx/L1 attributes 语义
-        m_receipt = co_await executor.runDeposit(storage, blockHeader, m_deposit,
-            m_ctx ? m_ctx->chainId : 0, m_ctx ? m_ctx->blockGasLeft : 0, ledgerConfig,
-            m_ctx ? m_ctx->blockHashes : nullptr);
+        // 调 executeDeposit 成员（非 op::runDeposit 自由函数）；内部 applyStateDiff
+        m_receipt = co_await executor.executeDeposit(storage, blockHeader, m_deposit,
+            m_ctx->chainId, m_ctx->blockGasLeft, ledgerConfig, m_ctx->blockHashes);
     } else {
-        // 传 chainId + blockHashes（H3），否则 CHAINID=0、BLOCKHASH=全零
         m_receipt = co_await executor.m_execute(storage, blockHeader, transaction, ledgerConfig,
-            m_props, m_diff, m_ctx ? m_ctx->chainId : 0, m_ctx ? m_ctx->blockGasLeft : 0,
-            m_ctx ? m_ctx->blockHashes : nullptr);
+            m_props, m_diff, m_ctx->chainId, m_ctx->blockGasLeft, m_ctx->blockHashes);  // H3
     }
 }
 task::Task<protocol::TransactionReceipt::Ptr> finish() {
-    auto receipt = co_await executor.m_finish(storage, blockHeader, ledgerConfig, m_receipt, m_diff);
-    if (m_ctx) {
-        // H4：顺序回填 cumulativeGasUsed（encodeReceiptForRoot 依赖）；并递减 gasLeft
-        receipt->setCumulativeGasUsed(/* 累积值 = m_ctx 上的累计器 */);
-        m_ctx->blockGasLeft -= /* receipt gasUsed */;
+    protocol::TransactionReceipt::Ptr receipt;
+    if (transaction.isDepositTx()) {
+        receipt = m_receipt;              // executeDeposit 已 applyStateDiff，不再 apply
+    } else {
+        receipt = co_await executor.m_finish(storage, blockHeader, ledgerConfig, m_receipt, m_diff);
     }
+    // H4：唯一 owner，累积 + 回填 + 递减（narrowGasUsed/hexCumulative 已在 OpCommon.h）
+    auto gasUsed = op::narrowGasUsed(receipt->gasUsed());
+    m_ctx->cumulativeGasUsed += gasUsed;
+    receipt->setCumulativeGasUsed(op::hexCumulative(m_ctx->cumulativeGasUsed));
+    m_ctx->blockGasLeft -= gasUsed;
     co_return receipt;
 }
 ```
-注意：cumulativeGasUsed 需要一个跨 tx 的累积器——放在 `m_ctx` 上加 `int64_t cumulativeGasUsed` 字段，finish() 内 `m_ctx->cumulativeGasUsed += gasUsed; receipt->setCumulativeGasUsed(hexCumulative(m_ctx->cumulativeGasUsed));`（镜像 runOpBlockInjection 的 `hexCumulative`）。
+**前置**：把 `narrowGasUsed` + `hexCumulative` 从 OpBlockExecute.h **搬到 OpCommon.h**（OpstackExecutor.h 不能 include OpBlockExecute.h，否则循环包含——OpstackExecutorTest.cpp 只 include OpstackExecutor.h 会编译失败）。
 
 - [ ] **Step 5: 写 deposit 生命周期测试（红）**
 
@@ -262,34 +270,35 @@ git commit -m "feat(opstack): ExecuteContext 生命周期支持 BlockContext（f
 
 替换 `execute()` 内 `runOpBlockInjection` 调用为：
 ```cpp
-// ① 块前步骤（H2 + M2）：从 runOpBlockInjection 头部抽出的 preBlockOpSteps
-//    system_call_block_start(stateView, blk, hashes, cfg.rev, vm) + applyStateDiff
-//    deposit-first 检查（首 tx 必须 L1 attributes）+ Jovian shape 校验
-//    构造 RecentBlockHashes hashes(view, blk.number, parentHash, &hashErr)
+// ① 块前步骤（preBlockOpSteps，确定函数——Task 5 抽成，此处先内联同义代码）
+//    deposits 向量保留（预解码），供 deposit-first 校验 + DA scalar 用
 auto blk = detail::toBlockInfo(header);
 std::optional<std::string> hashErr;
 detail::RecentBlockHashes<ViewType> hashes(view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 eth::StorageStateView<ViewType> stateView(view);
-auto sysDiff = evmone::state::system_call_block_start(stateView, blk, hashes, cfg.rev, executor.vm());
+auto sysDiff = evmone::state::system_call_block_start(stateView, blk, hashes, cfg.rev, executor.vm());  // H2
 bcos::task::syncWait(eth::applyStateDiff(view, bcos::evm::sanitizeStateDiff(stateView, sysDiff), cfg.rev, *m_hashImpl));
-// deposit-first 检查 + Jovian shape（镜像 runOpBlockInjection 180-211 行，照抄）
+// deposit-first 检查（首 tx 必须 L1 attributes，用 deposits[0]）+ Jovian shape（镜像 runOpBlockInjection 180-211 行）
+// DA scalar（H1c）：Jovian 从 deposits[0].data[176:178] 提取大端 uint16 存入 daFootprintGasScalar
+std::optional<uint16_t> daFootprintGasScalar = /* 照抄 runOpBlockInjection 251-260 */;
 
 // ② 建 context（fee 不在此加载——惰性，见 Task 3 Step 3）
 OpBlockExecutionContext ctx{
     .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
-    .blockHashes = &hashes, .chainId = m_chainId};
+    .blockHashes = &hashes, .chainId = m_chainId,
+    .daFootprintGasScalar = daFootprintGasScalar};
 
 // ③ 逐笔（串行调度器，每块新建）
 SchedulerSerialImpl serialScheduler(m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
 auto receipts = co_await serialScheduler.executeBlock(
     view, executor, header, transactions, execLedgerConfig, ctx);
 
-// ④ 块后收尾（含 hashErr 检查——finalizeOpBlockResult 内部）
-int64_t cumulative = ctx.cumulativeGasUsed;   // finish() 内已累积
+// ④ 块后收尾（hashErr 检查在 finalizeOpBlockResult 内部）
 auto result = bcos::evm::engine::finalizeOpBlockResult(
-    executor, view, header, execLedgerConfig, cfg, receipts, rawTxBytes, cumulative, hashErr);
+    executor, view, header, execLedgerConfig, cfg, receipts, rawTxBytes,
+    ctx.cumulativeGasUsed, hashErr);
 ```
-（`executor` 为块内新建的 OpstackExecutor；`cfg` 来自 `op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, m_forkTimestamps)`——**configAt 是双参**，补 `m_forkTimestamps`；`execLedgerConfig` 只带 evmcRevision。）
+（`executor` 为块内新建的 OpstackExecutor；`cfg` 来自 `op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, m_forkTimestamps)`——**configAt 是双参**，补 `m_forkTimestamps`；`execLedgerConfig` 只带 evmcRevision；`deposits` 向量由 execute() 预解码保留。）
 
 - [ ] **Step 3: 更新 4 个构造点（Initializer + 3 测试 fixture）**
 
@@ -323,9 +332,19 @@ git commit -m "feat(opstack): OpScheduler::execute 切到 SchedulerSerialImpl �
 - Consumes: `finalizeOpBlockResult`（Task 1）+ `preBlockOpSteps`（Task 4 Step 2 里"镜像 runOpBlockInjection 180-211 行"的块前步骤，若 Task 4 是内联则此处抽成函数）。
 - Produces: `runOpBlockInjection` 不再存在；`executeDeposit` 保留（eth_call 用）。
 
-- [ ] **Step 1: 删 runOpBlockInjection + 过渡期等价测试**
+- [ ] **Step 1: 删 runOpBlockInjection + 抽 preBlockOpSteps + 过渡期等价测试**
 
-删除 `OpBlockExecute.h` 的 `runOpBlockInjection` 整个函数——它已拆成 `preBlockOpSteps`（块前，Task 4 内联或此处抽函数）+ 逐笔循环（SchedulerSerialImpl）+ `finalizeOpBlockResult`（Task 1）。若 Task 4 Step 2 是内联块前步骤，则此处把 174-211 行抽成 `preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor, hashImpl, hashes, hashErr)` 供 Task 4 复用（消除重复）。删除 Task 4 的过渡期等价测试（route B 消失）。
+删除 `OpBlockExecute.h` 的 `runOpBlockInjection` 整个函数——它已拆成 `preBlockOpSteps`（块前）+ 逐笔循环（SchedulerSerialImpl）+ `finalizeOpBlockResult`（Task 1）。把 168-211 行（hashes 构造 + system_call + deposit-first/Jovian 校验 + DA scalar）抽成确定函数供 Task 4 复用：
+```cpp
+// 输出 hashes / hashErr / daFootprintGasScalar 为引用参数
+template <class Storage>
+void preBlockOpSteps(Storage& view, protocol::BlockHeader const& header,
+    OpForkConfig const& cfg, std::vector<bcos::bytes> const& rawTxBytes,
+    std::vector<op::DepositTx> const& deposits, OpstackExecutor& executor,
+    crypto::Hash::Ptr const& hashImpl, detail::RecentBlockHashes<Storage>& hashes,
+    std::optional<std::string>& hashErr, std::optional<uint16_t>& daFootprintGasScalar);
+```
+删除 Task 4 的过渡期等价测试（route B 消失）。
 
 - [ ] **Step 2: dual-path 测试改单路径**
 
