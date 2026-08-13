@@ -1040,10 +1040,9 @@ public:
                 int64_t blockNumber, int64_t /*currentHeight*/) -> evmc::bytes32 {
                 return blockHashes->get_block_hash(blockNumber);
             })
-    {}
-
-    void configureFork(std::string const& forkName)
     {
+        // Non-owning shared_ptr over the receiptFactory member (the runner
+        // outlives every synchronous opTransition call that consumes it).
         m_receiptFactoryPtr = std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl>(
             &receiptFactory, [](bcostars::protocol::TransactionReceiptFactoryImpl*) {});
     }
