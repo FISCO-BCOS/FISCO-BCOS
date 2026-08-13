@@ -140,6 +140,33 @@ inline constexpr auto OP_EMPTY_REQUESTS_HASH =
 
 namespace bcos::evm::engine
 {
+namespace detail
+{
+/// Decode a 0x7E deposit envelope into a DepositTx. DepositTx field order:
+/// [sourceHash, from, to, mint, value, gas, isSystemTransaction, data] — no signature (`from` is
+/// explicit). Envelope 0x7E || rlp([...]); body starts at the list header.
+inline bcos::evm::opstack::DepositTx decodeDepositTx(bcos::bytes rawEntry)
+{
+    // Envelope 0x7E || rlp([...]); body starts at the list header.
+    bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
+    auto listBody = enterList(body);
+    bcos::evm::opstack::DepositTx dep;
+    dep.source_hash = decodeHashField(listBody);
+    dep.from = decodeAddressField(listBody);
+    dep.to = decodeOptionalAddressField(listBody);
+    // mint/value nilability: nil and a present-but-zero big.Int are RLP-indistinguishable (both
+    // encode to the empty string), so decode as a plain scalar defaulting to 0.
+    dep.mint = decodeU256Scalar(listBody);
+    dep.value = decodeU256Scalar(listBody);
+    dep.gas_limit = narrowGasLimit(decodeU64Scalar(listBody), "deposit.gas");
+    dep.is_system_tx = decodeBoolField(listBody);
+    dep.data = decodeBytesField(listBody);
+    expectExhausted(listBody, "deposit envelope fields");
+    expectExhausted(body, "deposit envelope (trailing bytes after the field list)");
+    return dep;
+}
+}  // namespace detail
+
 // Forward-declared; defined at the end of this block.
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes);

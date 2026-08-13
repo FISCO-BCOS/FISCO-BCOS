@@ -11,7 +11,6 @@
 
 #include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / OpBlockSeal
 #include <opstack-executor/OpSchedulerImpl.h>
-#include <opstack-executor/OpTxDecode.h>  // detail::decodeOneRawTx (execute hook)
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <transaction-scheduler/bcos-transaction-scheduler/SchedulerSkeleton.h>

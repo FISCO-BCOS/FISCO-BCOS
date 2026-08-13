@@ -10,8 +10,8 @@
 // Per-tx BlockInfo gasLimit==header is deliberately NOT asserted here — that is Task 6's job
 // (OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit) and would be red at this phase.
 
+#include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpTxDecode.h>  // detail::canonicalEnvelopeBytes (deposit envelope; Task 4 → helper)
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -199,8 +199,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     // 块序 transactions：索引0 是 deposit 占位（deposit 分支不触碰），索引1 是 normal。
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{nullptr, buildEip1559FiscoTx()};
     // makeAttributesDeposit 的 signedEnvelope 为空，runOpBlockInjection 需按 rawTxBytes[0][0]
-    // 分类 → 用 canonicalEnvelopeBytes 重建真实 0x7e 信封（Task 4 换 encodeDepositEnvelope）。
-    bcos::bytes depEnv = detail::canonicalEnvelopeBytes(depTx);
+    // 分类 → 用 encodeDepositEnvelope 重建真实 0x7e 信封。
+    bcos::bytes depEnv = encodeDepositEnvelope(std::get<op::DepositTx>(depTx.tx));
     bcos::bytes normEnv(normTx.signedEnvelope.begin(), normTx.signedEnvelope.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, normEnv};
 

@@ -22,9 +22,9 @@
 //
 // Golden constraint: minimal OP block receipts/status/gasUsed == direct route B
 // (runOpBlockInjection).
+#include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
-#include <opstack-executor/OpTxDecode.h>  // detail::canonicalEnvelopeBytes (deposit envelope reconstruction)
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -472,10 +472,10 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
 {
     Fixture f;
 
-    // Envelopes: deposit rebuilt via canonicalEnvelopeBytes (0x7e || rlp([...8 fields]),
-    // OpTxDecode.h:307); normal uses the corpus's real op-geth-signed envelope.
+    // Envelopes: deposit rebuilt via encodeDepositEnvelope (0x7e || rlp([...8 fields])); normal
+    // uses the corpus's real op-geth-signed envelope.
     auto depTx = makeDeposit();
-    bcos::bytes depEnv = detail::canonicalEnvelopeBytes(bcos::evm::opstack::OpBlockTx{depTx, {}});
+    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, eipEnvBytes};
@@ -607,7 +607,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 
     // Corpus envelopes (same as ExecutesMinimalOpBlockEqualToDirectRouteB): deposit + eip1559.
     auto depTx = makeDeposit();
-    bcos::bytes depEnv = detail::canonicalEnvelopeBytes(bcos::evm::opstack::OpBlockTx{depTx, {}});
+    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, eipEnvBytes};

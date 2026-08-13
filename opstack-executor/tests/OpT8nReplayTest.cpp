@@ -32,7 +32,6 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockExecute.h>  // seal (merged into the block-execution module)
 #include <opstack-executor/OpSchedulerImpl.h>
-#include <opstack-executor/OpTxDecode.h>  // decodeOneRawTx (blob decode-class reject repro)
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>
@@ -528,8 +527,8 @@ struct BlockContext
     uint64_t chainId = kCorpusChainId;
     // decode-class reject (blob): processOpBlock never reaches raw-tx decode
     // (txs are already OpBlockTx), so the load section reproduces the real
-    // decode rejection via decodeOneRawTx and records the message here for
-    // assertRejectThrow to assert directly.
+    // rejection via the type-byte classification (execute hook / runOpBlockInjection)
+    // and records the message here for assertRejectThrow to assert directly.
     std::optional<std::string> decodeRejectMessage;
 };
 
@@ -743,18 +742,26 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
         {
             // Task 4 blob arm: type-0x3 blob txs are decode-class rejected on OP chains.
             // processOpBlock never reaches raw-tx decode (txs are already OpBlockTx), so
-            // reproduce the real decode rejection via decodeOneRawTx, record the message,
-            // and let assertRejectThrow assert it directly (consumer-first; review R16
+            // reproduce the real rejection via the type-byte classification the execute hook /
+            // runOpBlockInjection apply (rawTxBytes[i][0] == 0x03 → OpConsensusError), record the
+            // message, and let assertRejectThrow assert it directly (consumer-first; review R16
             // consumer:both).
             const auto raw = test::from_json<bytes>(jAt(t, "_op_raw"));
+            const bcos::bytes rawVec(raw.begin(), raw.end());
             try
             {
-                // decodeOneRawTx lives in bcos::evm::engine::detail and takes
-                // bcos::bytes (a vector); raw is evmc::bytes (basic_string), copy byte-by-byte.
-                const bcos::bytes rawVec(raw.begin(), raw.end());
-                (void)bcos::evm::engine::detail::decodeOneRawTx(
-                    rawVec, vectorChainId.value_or(kCorpusChainId));
-                BOOST_ERROR(id << ": blob raw envelope must be rejected at decode");
+                // Same type-byte classification as OpScheduler::execute / runOpBlockInjection:
+                // blob (0x03) is not in {0x01, 0x02, 0x04} and not a legacy RLP list (>= 0xc0).
+                if (rawVec.empty())
+                    throw bcos::evm::engine::OpConsensusError("op block: empty envelope");
+                constexpr uint8_t kRlpListBase = 0xc0;
+                const auto typeByte = rawVec[0];
+                if (typeByte < kRlpListBase && typeByte != 0x01 && typeByte != 0x02 &&
+                    typeByte != 0x04)
+                    throw bcos::evm::engine::OpConsensusError(
+                        "op block: unsupported tx type byte 0x" + std::to_string(typeByte));
+                BOOST_ERROR(
+                    id << ": blob raw envelope must be rejected by type-byte classification");
                 return false;
             }
             catch (const std::runtime_error& e)
@@ -763,7 +770,8 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                 // brings in a hidden non-unique typeinfo for std::exception, so typed
                 // catch does not reliably bind the runtime_error subtree
                 // (see OpSchedulerImpl.h:1083-1104); the runtime_error branch is
-                // verified to bind (assertRejectThrow).
+                // verified to bind (assertRejectThrow). OpConsensusError is a FISCO-side
+                // runtime_error subclass with libc++ unique typeinfo — it binds.
                 out.decodeRejectMessage = std::string(e.what());
             }
             // Placeholder tx: keeps the post-deposit non-deposit structure (the
@@ -1167,7 +1175,7 @@ void assertRejectThrow(const std::string& id, const JsonValue& v, evmc::VM& vm,
     BlockContext bc;
     if (!loadBlockContext(id, v, bc))
         return;
-    // decode-class reject (blob): the load section already reproduced the decodeOneRawTx
+    // decode-class reject (blob): the load section already reproduced the type-byte-classification
     // rejection and recorded the message. processOpBlock never reaches that decode (txs
     // are already OpBlockTx); assert the recorded message directly (same string as the engine
     // side).
@@ -1455,11 +1463,11 @@ BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
 }
 
 // ── blob decode-class reject (Task 4, consumer:both) ─────────────────────────
-// The blob arm reproduces the real decode rejection via decodeOneRawTx
+// The blob arm reproduces the real rejection via the type-byte classification
 // (processOpBlock never reaches raw-tx decode); the message is
-// "unsupported tx type byte 0x3" (OpSchedulerImpl.h:893). _op_raw only needs the
-// type-0x03 first byte to hit the decode branch (decode checks the type byte before
-// parsing any field).
+// "op block: unsupported tx type byte 0x3" (runOpBlockInjection / OpScheduler execute hook).
+// _op_raw only needs the type-0x03 first byte to hit the classification branch (it checks the
+// type byte before parsing any field).
 BOOST_AUTO_TEST_CASE(RejectBlobDecode)
 {
     auto vm = evmc::VM{evmc_create_evmone()};

@@ -42,6 +42,7 @@
 // tripwire derived-table prefix assertion (accountTableName(addr) prefix == apps/).
 
 #include "support/GoldenSample.h"
+#include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include "support/SeedPreState.h"
 
 #include <bcos-concepts/ByteBuffer.h>
@@ -70,7 +71,6 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpScheduler.h>  // route A surgery (Task 6 P1-8): executeBlock drives
 #include <opstack-executor/OpSchedulerImpl.h>
-#include <opstack-executor/OpTxDecode.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/Storage2State.h>
 #include <opstack-executor/Storage2StateHelpers.h>
@@ -427,7 +427,7 @@ bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& e
 }
 
 /// Build raw envelope bytes from vector block.transactions (for txRoot / executeOpBlock decode):
-/// deposit → rebuild DepositTx from _op_deposit → canonicalEnvelopeBytes (OpTxDecode.h:307);
+/// deposit → rebuild DepositTx from _op_deposit → encodeDepositEnvelope (tests/support);
 /// normal → _op_raw as-is. Asserts _op_raw is present (every chain-vector normal tx carries it).
 std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::string& id)
 {
@@ -452,8 +452,7 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
             dep.gas_limit = static_cast<int64_t>(w6test::jsonU64(jAt(d, "gas").asString()));
             dep.is_system_tx = jAt(d, "is_system_tx").asBool();
             dep.data = w6test::jsonBytes(jAt(t, "data").asString());
-            bcos::evm::opstack::OpBlockTx btx{dep, {}};
-            rawTxBytes.push_back(detail::canonicalEnvelopeBytes(btx));
+            rawTxBytes.push_back(encodeDepositEnvelope(dep));
         }
         else
         {
@@ -1183,106 +1182,6 @@ BOOST_AUTO_TEST_CASE(Vectors)
 
     ledger.finish();
     std::cout << "dual-path KNOWN-DIVERGE total=" << ledger.knownCount() << "\n";
-}
-
-/// Task 3 Step 4: enumerate every corpus envelope and count "decodeOneRawTx (OP spec) accepts but
-/// opEnvelopeToTars (web3) rejects". Expected 0 — opEnvelopeToTars is strictly more permissive
-/// (RLP-decode into Web3Transaction) than decodeOneRawTx (canonical round-trip + enum check). The
-/// 131-vector Vectors gate already asserts this transitively (every envelope goes through both
-/// parsers in buildFiscoTx/buildBlockTx — a web3 rejection would BOOST_ERROR), so the scan is a
-/// belt-and-braces explicit count that also prints each offending envelope.
-BOOST_AUTO_TEST_CASE(EnvelopeParserDivergenceScan)
-{
-    const fs::path vectorsDir = OP_T8N_VECTORS_DIR;
-    BOOST_REQUIRE_MESSAGE(fs::is_directory(vectorsDir), vectorsDir);
-
-    std::vector<std::string> names;
-    for (const auto& entry : fs::directory_iterator(vectorsDir))
-    {
-        if (entry.is_regular_file() && entry.path().extension() == ".json")
-            names.push_back(entry.path().filename().string());
-    }
-    std::sort(names.begin(), names.end());
-
-    Fixture fixture;
-    std::size_t files = 0;
-    std::size_t envelopes = 0;
-    std::size_t decodeRejected = 0;  // OP rejects too → both sides agree, not a divergence
-    std::size_t opOkWeb3Fail = 0;    // OP accepts but web3 rejects → the divergence to watch
-    for (const auto& name : names)
-    {
-        std::ifstream input(vectorsDir / name);
-        const auto doc = jParse(input);
-        std::string id;
-        const JsonValue* vec = nullptr;
-        for (const auto& key : doc.getMemberNames())
-        {
-            if (key == "_op_test_vectors")
-                continue;
-            if (vec != nullptr)
-                throw std::runtime_error("more than one vector object in file");
-            id = key;
-            vec = &doc[key];
-        }
-        if (vec == nullptr)
-            continue;
-        ++files;
-        const auto visitBlock = [&](const Json::Value& blk) {
-            std::vector<bcos::bytes> rawTxBytes;
-            try
-            {
-                rawTxBytes = buildRawTxBytes(blk, id);
-            }
-            catch (const std::exception&)
-            {
-                // Malformed vector (e.g. an invalid_* deposit not rebuildable into a canonical
-                // envelope): not a valid-block envelope, skip the whole block.
-                return;
-            }
-            catch (...)
-            {
-                // RTTI-bypass fallback: runtime_error subclasses may escape typed catch.
-                return;
-            }
-            for (const auto& raw : rawTxBytes)
-            {
-                ++envelopes;
-                try
-                {
-                    (void)detail::decodeOneRawTx(raw, kChainId);
-                }
-                catch (const std::exception&)
-                {
-                    ++decodeRejected;  // OP rejects too — both parsers agree
-                    continue;
-                }
-                catch (...)
-                {
-                    ++decodeRejected;  // RTTI-bypass fallback (runtime_error subclass typeinfo)
-                    continue;
-                }
-                const auto txHash = fixture.hashImpl->hash(raw);
-                if (!bcos::engine::detail::opEnvelopeToTars(raw, txHash))
-                {
-                    ++opOkWeb3Fail;
-                    std::cout << "OP-OK-WEB3-FAIL " << id << " env=" << bcos::toHex(raw) << "\n";
-                }
-            }
-        };
-        if (vec->isMember("blocks"))
-        {
-            for (const auto& blk : (*vec)["blocks"])
-                visitBlock(blk);  // each chain block carries its own "block" member
-        }
-        else if (vec->isMember("block"))
-        {
-            visitBlock(*vec);  // flat vector: buildRawTxBytes expects the object holding "block"
-        }
-    }
-    std::cout << "envelope-divergence-scan: files=" << files << " envelopes=" << envelopes
-              << " decodeRejected=" << decodeRejected << " opOkWeb3Fail=" << opOkWeb3Fail << "\n";
-    BOOST_CHECK_MESSAGE(opOkWeb3Fail == 0,
-        "corpus must have 0 envelopes accepted by decodeOneRawTx but rejected by opEnvelopeToTars");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
