@@ -282,10 +282,8 @@ public:
 
     std::vector<bcos::protocol::TransactionReceipt::Ptr> lastExecutedReceipts()
     {
-        std::unique_lock<std::mutex> lock(this->m_resultsMutex);
-        if (this->m_results.empty())
-            return {};
-        return this->m_results.front()->receipts;
+        auto peeked = peekExecuteResult();
+        return peeked ? peeked->receipts : std::vector<bcos::protocol::TransactionReceipt::Ptr>{};
     }
 };
 

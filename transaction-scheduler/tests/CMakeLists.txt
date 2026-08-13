@@ -34,10 +34,5 @@ set_source_files_properties(
 # entities would collide with the other unity-merged TUs; compile standalone.
 set_source_files_properties(
     "TestEthereumExecutorScheduler.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-# SchedulerSkeletonTest carries the SchedulerSkeleton.h CRTP template (coroutines +
-# its own FakeDerived/anonymous-namespace stand-ins); compile standalone to avoid
-# unity-build collisions.
-set_source_files_properties(
-    "SchedulerSkeletonTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")
