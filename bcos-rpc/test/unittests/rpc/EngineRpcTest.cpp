@@ -18,12 +18,12 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-framework/engine/AnyEngineService.h>
-#include <bcos-rpc/web3jsonrpc/utils/Common.h>
-#include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
+#include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 #include <memory>
 
@@ -67,8 +67,8 @@ public:
     }
 
     task::Task<engine::ForkchoiceUpdatedResult> updateForkchoice(
-        const engine::ForkchoiceState& forkchoiceState,
-        const engine::PayloadAttributes*, std::uint32_t version)
+        const engine::ForkchoiceState& forkchoiceState, const engine::PayloadAttributes*,
+        std::uint32_t version)
     {
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
@@ -92,7 +92,10 @@ public:
     }
 
     std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
-    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
+    {
+        return std::nullopt;
+    }
 };
 
 class EngineRpcTestFixture : public RPCFixture
@@ -102,8 +105,7 @@ public:
     {
         nodeService->engineService() =
             std::make_shared<bcos::engine::AnyEngineService>(mockService);
-        endpoints = std::make_unique<Endpoints>(
-            nodeService, nullptr, false);
+        endpoints = std::make_unique<Endpoints>(nodeService, nullptr, false);
     }
 
     std::unique_ptr<Endpoints> endpoints;
@@ -111,9 +113,9 @@ public:
 };
 
 // Helper macro: call an EngineEndpoint method through Endpoints
-#define CALL_ENGINE(method, params, response) \
+#define CALL_ENGINE(method, params, response)                                          \
     task::wait([&](Endpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> { \
-        co_await ep->method(p, r); \
+        co_await ep->method(p, r);                                                     \
     }(endpoints.get(), params, response))
 
 BOOST_FIXTURE_TEST_SUITE(EngineRpcTest, EngineRpcTestFixture)
@@ -148,8 +150,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV1)
     BOOST_CHECK(!response["result"].isMember("payloadId"));
 
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceState.has_value());
-    BOOST_CHECK_EQUAL(
-        mockService.m_state->capturedForkchoiceState->headBlockHash.hex(),
+    BOOST_CHECK_EQUAL(mockService.m_state->capturedForkchoiceState->headBlockHash.hex(),
         "1111111111111111111111111111111111111111111111111111111111111111");
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 1);
@@ -191,7 +192,8 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     attrs["timestamp"] = "0x1";
     attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
     attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
-    attrs["parentBeaconBlockRoot"] = "0x6666666666666666666666666666666666666666666666666666666666666666";
+    attrs["parentBeaconBlockRoot"] =
+        "0x6666666666666666666666666666666666666666666666666666666666666666";
     params.append(attrs);
 
     Json::Value response;
@@ -307,9 +309,9 @@ BOOST_AUTO_TEST_CASE(newPayloadV1)
 
 BOOST_AUTO_TEST_CASE(newPayloadV2)
 {
-    auto tx = m_blockFactory->transactionFactory()->createTransaction(
-        0, "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
-        chainId, groupId, static_cast<int64_t>(utcTime()));
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100, chainId,
+        groupId, static_cast<int64_t>(utcTime()));
     bytes encodedTx;
     tx->encode(encodedTx);
     auto encodedTxHex = toHexStringWithPrefix(encodedTx);
@@ -353,8 +355,8 @@ BOOST_AUTO_TEST_CASE(newPayloadV2)
     auto& capturedReq = *mockService.m_state->capturedNewPayloadRequest;
     BOOST_CHECK_EQUAL(capturedReq.executionPayload.transactions.size(), 1);
     BOOST_REQUIRE(capturedReq.executionPayload.withdrawals.has_value());
-    BOOST_CHECK_EQUAL(capturedReq.executionPayload.withdrawals->front().amount,
-        fromBigQuantity(largeQuantity));
+    BOOST_CHECK_EQUAL(
+        capturedReq.executionPayload.withdrawals->front().amount, fromBigQuantity(largeQuantity));
     BOOST_REQUIRE(capturedReq.executionPayload.blobGasUsed.has_value());
     BOOST_CHECK_EQUAL(*capturedReq.executionPayload.blobGasUsed, fromBigQuantity(largeQuantity));
     BOOST_REQUIRE(capturedReq.executionPayload.excessBlobGas.has_value());
@@ -365,9 +367,9 @@ BOOST_AUTO_TEST_CASE(newPayloadV2)
 
 BOOST_AUTO_TEST_CASE(newPayloadV3)
 {
-    auto tx = m_blockFactory->transactionFactory()->createTransaction(
-        0, "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
-        chainId, groupId, static_cast<int64_t>(utcTime()));
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100, chainId,
+        groupId, static_cast<int64_t>(utcTime()));
     bytes encodedTx;
     tx->encode(encodedTx);
     auto encodedTxHex = toHexStringWithPrefix(encodedTx);
@@ -421,8 +423,8 @@ BOOST_AUTO_TEST_CASE(newPayloadV4)
 BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
 {
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
-        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
-        chainId, groupId, static_cast<int64_t>(utcTime()));
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100, chainId,
+        groupId, static_cast<int64_t>(utcTime()));
     bytes encodedTx;
     tx->encode(encodedTx);
     auto encodedTxHex = toHexStringWithPrefix(encodedTx);
@@ -472,12 +474,12 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     BOOST_REQUIRE(
         mockService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals.has_value());
     BOOST_CHECK_EQUAL(
-        mockService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front().amount,
+        mockService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
+            .amount,
         expectedLargeValue);
     BOOST_REQUIRE(
         mockService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed.has_value());
-    BOOST_CHECK_EQUAL(
-        *mockService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed,
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed,
         expectedLargeValue);
     BOOST_REQUIRE(
         mockService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas.has_value());
@@ -485,10 +487,12 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
         *mockService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas,
         expectedLargeValue);
 
-    bytes decodedEncodedTx;
-    mockService.m_state->capturedNewPayloadRequest->executionPayload.transactions.front()->encode(
-        decodedEncodedTx);
-    BOOST_CHECK_EQUAL(toHexStringWithPrefix(decodedEncodedTx), encodedTxHex);
+    // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
+    BOOST_CHECK_EQUAL(
+        toHexStringWithPrefix(
+            mockService.m_state->capturedNewPayloadRequest->executionPayload.transactions.front()
+                .raw),
+        encodedTxHex);
 
     // --- engine_getPayloadV2 ---
     mockService.m_state->getPayloadResult->executionPayload =
@@ -508,14 +512,15 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     BOOST_CHECK(getPayloadResponse["result"].isMember("executionPayload"));
     BOOST_CHECK_EQUAL(getPayloadResponse["result"]["executionPayload"]["transactions"].size(), 1);
     BOOST_CHECK_EQUAL(
-        getPayloadResponse["result"]["executionPayload"]["transactions"][0u].asString(), encodedTxHex);
+        getPayloadResponse["result"]["executionPayload"]["transactions"][0u].asString(),
+        encodedTxHex);
     BOOST_CHECK_EQUAL(
         getPayloadResponse["result"]["executionPayload"]["withdrawals"][0u]["amount"].asString(),
         largeQuantity);
     BOOST_CHECK_EQUAL(
         getPayloadResponse["result"]["executionPayload"]["blobGasUsed"].asString(), largeQuantity);
-    BOOST_CHECK_EQUAL(
-        getPayloadResponse["result"]["executionPayload"]["excessBlobGas"].asString(), largeQuantity);
+    BOOST_CHECK_EQUAL(getPayloadResponse["result"]["executionPayload"]["excessBlobGas"].asString(),
+        largeQuantity);
     BOOST_CHECK_EQUAL(getPayloadResponse["result"]["blockValue"].asString(), largeQuantity);
 }
 

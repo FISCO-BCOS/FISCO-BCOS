@@ -1,4 +1,5 @@
 #include "MemPoolImpl.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/exception/diagnostic_information.hpp>
@@ -52,6 +53,18 @@ void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
     if (transaction->tainted()) [[unlikely]]
     {
         bcos::throwTrace(InvalidTaintedTransaction{});
+    }
+
+    // L2 never admits blob (type-3) transactions (OP Stack, Ecotone onwards). The RPC
+    // entry rejects them before decoding; this is the second gate for in-process callers.
+    // For Web3 transactions the signing payload (extraTransactionBytes) starts with the
+    // same EIP-2718 type byte as the raw envelope, so the shared dispatch table applies.
+    if (transaction->type() ==
+            static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction) &&
+        bcos::engine::dispatchRawTransaction(transaction->extraTransactionBytes()) ==
+            bcos::engine::RawTransactionKind::Blob) [[unlikely]]
+    {
+        bcos::throwTrace(InvalidBlobTransaction{});
     }
 
     auto& nonceIndex = m_transactions.get<0>();

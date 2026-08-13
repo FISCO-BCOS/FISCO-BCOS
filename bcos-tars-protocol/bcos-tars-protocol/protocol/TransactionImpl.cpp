@@ -22,6 +22,7 @@
 #include "TransactionImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
+#include "Web3RawTransaction.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -84,7 +85,7 @@ bcos::crypto::HashType bcostars::protocol::TransactionImpl::hash() const
     return hashResult;
 }
 
-static bcos::crypto::HashType recomputeWeb3CanonicalHash(
+bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
     bcos::bytesConstRef payload, bcos::bytesConstRef signature)
 {
     // The byte-splice logic mirrors Web3Transaction::encode() / txHash() in
@@ -115,10 +116,10 @@ static bcos::crypto::HashType recomputeWeb3CanonicalHash(
     auto const yParity = static_cast<uint64_t>(signature[64]);
 
     auto throwDecode = [](std::string_view stage) {
-        BCOS_LOG(INFO) << LOG_DESC("recompute canonical Web3 txHash: decode failed")
+        BCOS_LOG(INFO) << LOG_DESC("reassemble raw Web3 transaction: decode failed")
                        << LOG_KV("stage", stage);
         BOOST_THROW_EXCEPTION(std::invalid_argument(
-            std::string("recompute canonical Web3 txHash: decode failed at ").append(stage)));
+            std::string("reassemble raw Web3 transaction: decode failed at ").append(stage)));
     };
     if (payload.empty()) [[unlikely]]
     {
@@ -234,7 +235,7 @@ static bcos::crypto::HashType recomputeWeb3CanonicalHash(
         full.insert(full.end(), fields.begin(), fields.end());
         full.insert(full.end(), sig.begin(), sig.end());
     }
-    return bcos::crypto::keccak256Hash(bcos::ref(full));
+    return full;
 }
 
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
@@ -247,8 +248,8 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // The recompute is a byte splice plus one keccak, cheap enough to always run.
     if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
-        auto const canonicalTxHash =
-            recomputeWeb3CanonicalHash(extraTransactionBytes(), signatureData());
+        auto const canonicalTxHash = bcos::crypto::keccak256Hash(
+            bcos::ref(reassembleWeb3RawTransaction(extraTransactionBytes(), signatureData())));
         m_inner()->extraTransactionHash.assign(canonicalTxHash.begin(), canonicalTxHash.end());
         return;
     }

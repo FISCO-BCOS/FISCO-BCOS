@@ -18,14 +18,52 @@
  */
 
 #include "EngineHelper.h"
-#include <bcos-framework/protocol/TransactionFactory.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
 
+namespace
+{
+/// Holocene eip1559Params: 4-byte denominator followed by 4-byte elasticity.
+constexpr std::size_t c_eip1559ParamsBytes = 8;
+
+/// Validate and decode one element of a JSON `transactions` array. The element must be
+/// a string, "0x"-prefixed and valid hex. Shared by the payloadAttributes and the
+/// executionPayload parse paths so both reject malformed entries with the same
+/// InvalidParams shape, naming the offending index.
+bcos::bytes parseRawTransactionElement(
+    Json::Value const& element, char const* container, Json::ArrayIndex index)
+{
+    auto reject = [&]() -> bcos::bytes {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+            std::string(container) + ".transactions[" + std::to_string(index) +
+                "] must be a 0x-prefixed hex string"));
+    };
+    if (!element.isString())
+    {
+        return reject();
+    }
+    auto const hex = element.asString();
+    // <= 2 also rejects a bare "0x" (empty transaction); the odd-length check matters
+    // because bcos::fromHex silently left-pads odd-length input with a '0' nibble,
+    // which would break the "hex-decoded verbatim" byte-fidelity contract.
+    if (hex.size() <= 2 || hex.size() % 2 != 0 || hex[0] != '0' || (hex[1] != 'x' && hex[1] != 'X'))
+    {
+        return reject();
+    }
+    try
+    {
+        return bcos::fromHex(hex);
+    }
+    catch (std::exception const&)
+    {
+        return reject();
+    }
+}
+}  // namespace
+
 bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
-    Json::Value const& params, bcos::protocol::TransactionFactory& transactionFactory,
-    engine::ApiVersion version)
+    Json::Value const& params, engine::ApiVersion version)
 {
     auto const& ep = params[0u];
     bcos::engine::ExecutionPayload payload{
@@ -42,13 +80,12 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .extraData = {},
         .feeRecipient = parseAddress(ep["feeRecipient"].asString()),
         .timestamp = fromQuantity(std::string(ep["timestamp"].asString())),
-        .blockNumber = static_cast<bcos::protocol::BlockNumber>(
-            fromQuantity(ep["blockNumber"].asString())),
+        .blockNumber =
+            static_cast<bcos::protocol::BlockNumber>(fromQuantity(ep["blockNumber"].asString())),
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
-        .blockAccessList = std::nullopt,
-        .slotNumber = std::nullopt,
+        .withdrawalsRoot = std::nullopt,
     };
     if (ep.isMember("extraData"))
     {
@@ -59,19 +96,28 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         auto bloomBytes = fromHex(ep["logsBloom"].asString());
         if (bloomBytes.size() != BloomBytesSize)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                InvalidParams, "Expected 256-byte hex string for logsBloom, got " +
-                                   std::to_string(bloomBytes.size()) + " bytes"));
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Expected 256-byte hex string for logsBloom, got " +
+                                                    std::to_string(bloomBytes.size()) + " bytes"));
         }
         std::copy(bloomBytes.begin(), bloomBytes.end(), payload.logsBloom.begin());
     }
     if (ep.isMember("transactions") && !ep["transactions"].isNull())
     {
-        payload.transactions.reserve(ep["transactions"].size());
-        for (auto const& tx : ep["transactions"])
+        if (!ep["transactions"].isArray())
         {
-            auto txData = fromHex(tx.asString());
-            payload.transactions.push_back(transactionFactory.decodeTransaction(ref(txData)));
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
+        }
+        // Raw EIP-2718 bytes, hex-decoded verbatim. No transaction decoding happens
+        // here — getPayload must later return exactly these bytes.
+        payload.transactions.reserve(ep["transactions"].size());
+        for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
+        {
+            payload.transactions.push_back(bcos::engine::EngineTransaction{
+                .raw = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i),
+                .decoded = nullptr,
+            });
         }
     }
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
@@ -96,6 +142,15 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     {
         payload.excessBlobGas = fromBigQuantity(ep["excessBlobGas"].asString());
     }
+    // withdrawalsRoot is an ExecutionPayloadV4+ field (Isthmus). For V1-V3 requests it
+    // is ignored rather than rejected: the Isthmus spec leaves pre-V4 handling
+    // unspecified and op-geth's NewPayloadV3 (eth/catalyst/api.go) performs no
+    // withdrawalsRoot validation, so rejecting here would diverge from op-geth.
+    if (version >= engine::ApiVersion::V4 && ep.isMember("withdrawalsRoot") &&
+        !ep["withdrawalsRoot"].isNull())
+    {
+        payload.withdrawalsRoot = parseH256(ep["withdrawalsRoot"].asString());
+    }
 
     bcos::engine::NewPayloadRequest request{
         .executionPayload = std::move(payload),
@@ -103,16 +158,14 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .parentBeaconBlockRoot = std::nullopt,
         .executionRequests = std::nullopt,
     };
-    if (version >= engine::ApiVersion::V3 &&
-        params.size() >= 2 && params[1].isArray())
+    if (version >= engine::ApiVersion::V3 && params.size() >= 2 && params[1].isArray())
     {
         for (auto const& h : params[1])
         {
             request.expectedBlobVersionedHashes.push_back(parseH256(h.asString()));
         }
     }
-    if (version >= engine::ApiVersion::V3 &&
-        params.size() >= 3 && !params[2].isNull())
+    if (version >= engine::ApiVersion::V3 && params.size() >= 3 && !params[2].isNull())
     {
         request.parentBeaconBlockRoot = parseH256(params[2].asString());
     }
@@ -138,10 +191,7 @@ Json::Value bcos::rpc::serializePayloadStatus(
         result["status"] = "ACCEPTED";
         break;
     case bcos::engine::PayloadValidationStatus::InvalidBlockHash:
-        result["status"] =
-            (version >= engine::ApiVersion::V3) ?
-                "INVALID" :
-                "INVALID_BLOCK_HASH";
+        result["status"] = (version >= engine::ApiVersion::V3) ? "INVALID" : "INVALID_BLOCK_HASH";
         break;
     }
     if (status.latestValidHash.has_value())
@@ -169,8 +219,11 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
         .timestamp = fromQuantity(std::string(pa["timestamp"].asString())),
         .withdrawals = std::nullopt,
         .parentBeaconBlockRoot = std::nullopt,
-        .slotNumber = std::nullopt,
-        .targetGasLimit = std::nullopt,
+        .transactions = std::nullopt,
+        .noTxPool = std::nullopt,
+        .gasLimit = std::nullopt,
+        .eip1559Params = std::nullopt,
+        .minBaseFee = std::nullopt,
     };
     if (pa.isMember("withdrawals") && !pa["withdrawals"].isNull())
     {
@@ -190,7 +243,138 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     {
         attrs.parentBeaconBlockRoot = parseH256(pa["parentBeaconBlockRoot"].asString());
     }
+    // OP Stack attributes. Raw transaction hex strings are stored verbatim without
+    // decoding — the Engine transaction codec consumes them downstream.
+    if (pa.isMember("transactions") && !pa["transactions"].isNull())
+    {
+        if (!pa["transactions"].isArray())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected array of hex strings for payloadAttributes.transactions"));
+        }
+        std::vector<std::string> transactions;
+        transactions.reserve(pa["transactions"].size());
+        for (Json::ArrayIndex i = 0; i < pa["transactions"].size(); ++i)
+        {
+            // Validate shape and hex, but keep the original string verbatim — the
+            // forced-transaction list must pass through byte-identical.
+            parseRawTransactionElement(pa["transactions"][i], "payloadAttributes", i);
+            transactions.push_back(pa["transactions"][i].asString());
+        }
+        attrs.transactions = std::move(transactions);
+    }
+    if (pa.isMember("noTxPool") && !pa["noTxPool"].isNull())
+    {
+        // Strict: jsoncpp asBool() silently converts numbers/strings, so gate on the
+        // JSON type (op-node serializes NoTxPool as a JSON bool).
+        if (!pa["noTxPool"].isBool())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Expected boolean for payloadAttributes.noTxPool"));
+        }
+        attrs.noTxPool = pa["noTxPool"].asBool();
+    }
+    // The three fields below wrap their conversions: fromQuantity / fromHex throw plain
+    // std::exception subclasses (malformed input, uint64 overflow), which the RPC entry
+    // point would surface as InternalError — a client input error must map to
+    // InvalidParams naming the field instead.
+    if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())
+    {
+        try
+        {
+            attrs.gasLimit = fromQuantity(std::string(pa["gasLimit"].asString()));
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected uint64 quantity for payloadAttributes.gasLimit"));
+        }
+    }
+    if (pa.isMember("eip1559Params") && !pa["eip1559Params"].isNull())
+    {
+        bytes paramsBytes;
+        try
+        {
+            paramsBytes = fromHex(pa["eip1559Params"].asString());
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected hex string for payloadAttributes.eip1559Params"));
+        }
+        if (paramsBytes.size() != c_eip1559ParamsBytes)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected 8-byte hex string for eip1559Params, got " +
+                                   std::to_string(paramsBytes.size()) + " bytes"));
+        }
+        attrs.eip1559Params = std::move(paramsBytes);
+    }
+    if (pa.isMember("minBaseFee") && !pa["minBaseFee"].isNull())
+    {
+        try
+        {
+            attrs.minBaseFee = fromQuantity(std::string(pa["minBaseFee"].asString()));
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected uint64 quantity for payloadAttributes.minBaseFee"));
+        }
+    }
     return attrs;
+}
+
+Json::Value bcos::rpc::serializePayloadAttributes(bcos::engine::PayloadAttributes const& attrs)
+{
+    Json::Value pa(Json::objectValue);
+    pa["timestamp"] = toQuantity(attrs.timestamp);
+    pa["prevRandao"] = attrs.prevRandao.hexPrefixed();
+    pa["suggestedFeeRecipient"] = attrs.suggestedFeeRecipient.hexPrefixed();
+    if (attrs.withdrawals.has_value())
+    {
+        Json::Value withdrawals(Json::arrayValue);
+        for (auto const& w : *attrs.withdrawals)
+        {
+            Json::Value item(Json::objectValue);
+            item["index"] = toQuantity(w.index);
+            item["validatorIndex"] = toQuantity(w.validatorIndex);
+            item["address"] = w.address.hexPrefixed();
+            item["amount"] = toQuantity(w.amount);
+            withdrawals.append(std::move(item));
+        }
+        pa["withdrawals"] = std::move(withdrawals);
+    }
+    if (attrs.parentBeaconBlockRoot.has_value())
+    {
+        pa["parentBeaconBlockRoot"] = attrs.parentBeaconBlockRoot->hexPrefixed();
+    }
+    if (attrs.transactions.has_value())
+    {
+        Json::Value transactions(Json::arrayValue);
+        for (auto const& transaction : *attrs.transactions)
+        {
+            transactions.append(transaction);
+        }
+        pa["transactions"] = std::move(transactions);
+    }
+    if (attrs.noTxPool.has_value())
+    {
+        pa["noTxPool"] = *attrs.noTxPool;
+    }
+    if (attrs.gasLimit.has_value())
+    {
+        pa["gasLimit"] = toQuantity(*attrs.gasLimit);
+    }
+    if (attrs.eip1559Params.has_value())
+    {
+        pa["eip1559Params"] = toHexStringWithPrefix(*attrs.eip1559Params);
+    }
+    if (attrs.minBaseFee.has_value())
+    {
+        pa["minBaseFee"] = toQuantity(*attrs.minBaseFee);
+    }
+    return pa;
 }
 
 bcos::engine::ForkchoiceState bcos::rpc::parseForkchoiceState(Json::Value const& params)
@@ -236,9 +420,9 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     Json::Value transactions(Json::arrayValue);
     for (auto const& transaction : payload.transactions)
     {
-        bytes encoded;
-        transaction->encode(encoded);
-        transactions.append(toHexStringWithPrefix(encoded));
+        // Raw EIP-2718 bytes out, exactly as carried — byte-for-byte what newPayload
+        // received or what buildPayload reassembled.
+        transactions.append(toHexStringWithPrefix(transaction.raw));
     }
     ep["transactions"] = std::move(transactions);
 
@@ -264,12 +448,16 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     {
         ep["excessBlobGas"] = toQuantity(*payload.excessBlobGas);
     }
+    // V4+ only (Isthmus): never emitted in V1-V3 payload shapes.
+    if (version >= engine::ApiVersion::V4 && payload.withdrawalsRoot.has_value())
+    {
+        ep["withdrawalsRoot"] = payload.withdrawalsRoot->hexPrefixed();
+    }
     return ep;
 }
 
-void bcos::rpc::combineGetPayloadResponse(
-    Json::Value& _result, bcos::engine::GetPayloadResult const& _response,
-    engine::ApiVersion version)
+void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
+    bcos::engine::GetPayloadResult const& _response, engine::ApiVersion version)
 {
     if (version == engine::ApiVersion::V1)
     {
@@ -315,4 +503,8 @@ void bcos::rpc::combineGetPayloadResponse(
     }
     _result["blobsBundle"] = std::move(blobsBundle);
     _result["shouldOverrideBuilder"] = _response->shouldOverrideBuilder;
+    if (_response->parentBeaconBlockRoot.has_value())
+    {
+        _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();
+    }
 }
