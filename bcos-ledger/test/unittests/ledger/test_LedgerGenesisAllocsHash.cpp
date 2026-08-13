@@ -21,6 +21,7 @@
  *        the same StateStorage: the second call sees the existing genesis
  *        block and enters the verify path.
  */
+#include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -73,11 +74,12 @@ struct AllocsHashFixture
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
         genesisConfig.m_allocs.push_back(
-            Alloc{.address = "42000000000000000000000000000000000000c0",
+            Alloc{.address = "43000000000000000000000000000000000000c0",
                 .balance = u256(0),
                 .nonce = "0",
                 .code = "6080604052",
                 .storage = {}});
+        appendGenesisFeatureFlagsSlot(genesisConfig);
         return genesisConfig;
     }
 

@@ -23,6 +23,10 @@
  *        rule (l2 flag checked first in shouldBuildMPT).
  */
 #include "FullChainFixture.h"
+// Test-asset helper shared with the bcos-ledger genesis tests: computes the
+// feature_flags Entry slot Ledger's genesis verification requires in the
+// SystemConfig predeploy alloc (quoted include resolves relative to this file).
+#include "../../bcos-ledger/test/unittests/ledger/GenesisFeatureFlagsHelper.h"
 #include "bcos-ledger/mpt/Account.h"
 #include "bcos-ledger/mpt/Constants.h"
 #include "bcos-ledger/mpt/HashBuilder.h"
@@ -36,7 +40,7 @@ using namespace bcos;
 using namespace bcos::test::fullchain;
 namespace mpt = bcos::ledger::mpt;
 
-constexpr std::string_view c_genContractAddress = "42000000000000000000000000000000000000c0";
+constexpr std::string_view c_genContractAddress = "43000000000000000000000000000000000000c0";
 constexpr std::string_view c_genContractCode = "6080604052";
 constexpr std::string_view c_genEoaAddress = "1100000000000000000000000000000000000011";
 
@@ -71,6 +75,10 @@ ledger::GenesisConfig genL2Genesis()
         ledger::FeatureSet{ledger::Features::Flag::feature_l2_ethereum_compat, 1});
     genesis.m_allocs.push_back(genContractAlloc());
     genesis.m_allocs.push_back(genEoaAlloc());
+    // The contract sits at the SystemConfig predeploy address: Ledger verifies
+    // the feature_flags Entry slot is IN the alloc (P0: the state root commits
+    // it), so the fixture must carry it like real build-allocs.py output.
+    bcos::test::appendGenesisFeatureFlagsSlot(genesis);
     return genesis;
 }
 
@@ -91,7 +99,11 @@ Address genAddress(std::string_view hex)
 h256 genContractStorageRoot(std::map<h256, bytes> const& extraSlots = {})
 {
     std::map<h256, bytes> entries;
-    for (auto const& [slotHexKey, valueHex] : genContractAlloc().storage)
+    // Iterate the ACTUAL genesis alloc storage (includes the feature_flags
+    // Entry slot appended in genL2Genesis), not a bare genContractAlloc() —
+    // the oracle must cover exactly what genesis committed.
+    auto const genesisForOracle = genL2Genesis();
+    for (auto const& [slotHexKey, valueHex] : genesisForOracle.m_allocs[0].storage)
     {
         auto slotBytes = bcos::fromHex(slotHexKey);
         auto valueBytes = bcos::fromHex(valueHex);

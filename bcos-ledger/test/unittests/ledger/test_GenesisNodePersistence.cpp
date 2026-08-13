@@ -19,6 +19,7 @@
  *        incremental MPT build (buildAndCollect over the genesis root) can read its parents.
  */
 #include "../mpt/TestHelpers.h"
+#include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -84,7 +85,7 @@ struct GenesisNodeFixture
 };
 
 // Contract account: code + two storage slots (the storage sub-trie has real nodes).
-constexpr std::string_view c_contractAddress = "42000000000000000000000000000000000000c0";
+constexpr std::string_view c_contractAddress = "43000000000000000000000000000000000000c0";
 constexpr std::string_view c_contractCode = "6080604052";
 // EOA account: balance only.
 constexpr std::string_view c_eoaAddress = "1100000000000000000000000000000000000011";
@@ -283,6 +284,7 @@ BOOST_AUTO_TEST_CASE(L2GenesisPersistsAllTrieNodes)
             FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
         genesisConfig.m_allocs.push_back(contractAlloc());
         genesisConfig.m_allocs.push_back(eoaAlloc());
+        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
         BOOST_REQUIRE(ok);
@@ -341,6 +343,7 @@ BOOST_AUTO_TEST_CASE(NonL2ChainsWriteNoNodeRows)
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
             auto genesisConfig = baseConfig();
             genesisConfig.m_allocs.push_back(contractAlloc());
+            appendGenesisFeatureFlagsSlot(genesisConfig);
             auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
             BOOST_REQUIRE(ok);
             BOOST_CHECK_EQUAL(countMPTRows(*storage), 0);
@@ -364,6 +367,7 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
             FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
         genesisConfig.m_allocs.push_back(contractAlloc());
         genesisConfig.m_allocs.push_back(eoaAlloc());
+        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
         BOOST_REQUIRE(ok);
@@ -402,7 +406,9 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
         };
 
         std::map<h256, bcos::bytes> storageEntries;
-        for (auto const& [slotHexKey, valueHex] : contractAlloc().storage)
+        // iterate the ACTUAL genesis alloc (includes the feature_flags Entry
+        // slot the helper appended), not a fresh contractAlloc()
+        for (auto const& [slotHexKey, valueHex] : genesisConfig.m_allocs[0].storage)
         {
             auto slotBytes = bcos::fromHex(slotHexKey);
             auto valueBytes = bcos::fromHex(valueHex);
