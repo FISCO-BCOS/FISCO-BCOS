@@ -570,7 +570,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 // root) so Task 3's commit hook can call prewriteBlockToBuffer. The engine service
                 // below keeps /*ledger=*/nullptr — only the delegate consumes it, avoiding the
                 // EngineServiceImpl.h:714-748 local-build double-write path.
-                m_ledger);
+                m_ledger,
+                // Task 4: SchedulerSerialImpl (serial mode) defers context destruction onto this
+                // pool — required, no default.
+                m_ioServicePool);
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,

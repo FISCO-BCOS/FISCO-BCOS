@@ -11,11 +11,13 @@
 //   1. the blockGasLeft pool — each tx validates against the gas left AFTER prior txs ran;
 //   2. state-diff visibility — each tx reads the state written by the previous tx;
 //   3. deposit ordering — L1 attributes are injected strictly in order.
-// runOpBlockInjection is the linear executor (per-tx full lifecycle
-// prepare→execute→finish before the next tx). SchedulerParallelImpl must never drive OP;
-// SchedulerSerialImpl would require grain-size 1, which degenerates to this same loop.
+// runOpBlockInjection was the linear executor; Task 4 replaced the per-tx loop with the shared
+// SchedulerSerialImpl(serial=true) (grain-size 1 — the same degenerate loop, now shared).
+// SchedulerParallelImpl must never drive OP. The three sequential dependencies above forbid any
+// parallel or chunked-staged execution model.
 //
-// executeBlock → runOpBlockInjection → six-way verify → stash m_pending;
+// executeBlock → (preBlockOpSteps → SchedulerSerialImpl per-tx → finalizeOpBlockResult) →
+// six-way verify → stash m_pending;
 // commitBlock → prewriteBlockToBuffer(announcedHash) → mergeBackStorage. OP execution is
 // synchronous single-block — the engine holds x_state across executeBlock→commitBlock
 // (EngineServiceImpl runOpNewPayloadSteps), so a single m_pending slot survives the two
@@ -49,8 +51,10 @@
 #include <bcos-ledger/LedgerMethods.h>  // getCurrentBlockNumber / getBlockData CPO tag_invoke
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>  // serial per-tx scheduler (Task 4)
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/IOServicePool.h>  // IOServicePool::Ptr (Task 4 ctor param)
 #include <ethereum-executor/StorageStateView.h>
 #include <fmt/format.h>
 #include <boost/algorithm/hex.hpp>
@@ -252,17 +256,23 @@ public:
         return m_pending->result;
     }
 
+    /// Both ledger and ioServicePool are required (no defaults — a defaulted param cannot precede a
+    /// non-defaulted one, and the compiler must force every construction site to pass the pool:
+    /// SchedulerSerialImpl's GC defers context destruction onto it, a null pool would crash on the
+    /// first deferred collect). ledger may still be nullptr explicitly (execute tolerates it).
     OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
         bcos::evm::opstack::OpForkTimestamps forkTimestamps,
         bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
-        bcos::ledger::LedgerInterface::Ptr ledger = nullptr)
+        bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::IOServicePool::Ptr ioServicePool)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
         m_forkTimestamps(forkTimestamps),
         m_multiLayerStorage(&multiLayerStorage),
-        m_blockFactory(blockFactory.get())
+        m_blockFactory(blockFactory.get()),
+        m_ioServicePool(std::move(ioServicePool))
     {
         // A null ledger is tolerated by the execute path but committing would throw a null deref.
         if (ledger)
@@ -519,15 +529,18 @@ private:
         }) | ::ranges::to<std::vector>();
     }
 
-    /// ② Execution kernel: runOpBlockInjection. rawTxBytes = each tx's extraTransactionBytes;
-    /// deposits = decoded 0x7E envelopes; cfg = configAt(timestamp/1000); executor = a per-block
-    /// OpstackExecutor (one evmc::VM); ledgerConfig only needs evmcRevision.
+    /// ② Execution kernel: three-phase — ① pre-block (system_call + deposit-first + Jovian shape +
+    /// DA scalar) → ② SchedulerSerialImpl(serial=true) per-tx → ③ finalizeOpBlockResult. rawTxBytes
+    /// = each tx's extraTransactionBytes; deposits = decoded 0x7E envelopes; cfg =
+    /// configAt(timestamp/1000); executor = a per-block OpstackExecutor (one evmc::VM);
+    /// ledgerConfig only needs evmcRevision.
     task::Task<ExecuteOutcome> execute(ViewType& view, protocol::BlockHeader const& header,
         std::vector<protocol::Transaction::ConstPtr> const& transactions,
         ledger::LedgerConfig const& ledgerConfig)
     {
         namespace op = bcos::evm::opstack;
         namespace detail = bcos::evm::engine::detail;
+        namespace eth = bcos::executor_v1::eth;
 
         std::vector<bcos::bytes> rawTxBytes;
         rawTxBytes.reserve(transactions.size());
@@ -578,8 +591,88 @@ private:
 
             OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
-            result = bcos::evm::engine::runOpBlockInjection(executor, view, header, transactions,
-                deposits, cfg, m_chainId, execLedgerConfig, rawTxBytes, m_hashImpl);
+            // ① Block-pre steps (preBlockOpSteps — Task 5 extracts to a pure function; inlined
+            // here mirroring runOpBlockInjection's opening): system_call_block_start, deposit-first
+            // content check + Jovian shape, and the DA footprint gas scalar.
+            auto blk = detail::toBlockInfo(header);
+            std::optional<std::string> hashErr;
+            detail::RecentBlockHashes<ViewType> hashes(
+                view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
+            eth::StorageStateView<ViewType> stateView(view);
+            auto sysDiff = evmone::state::system_call_block_start(
+                stateView, blk, hashes, cfg.rev, executor.vm());
+            bcos::task::syncWait(eth::applyStateDiff(
+                view, bcos::evm::sanitizeStateDiff(stateView, sysDiff), cfg.rev, *m_hashImpl));
+
+            // deposit-first content check + Jovian shape (mirror of runOpBlockInjection's pre-loop
+            // guard; the deposits vector was pre-decoded above).
+            constexpr uint8_t kDepositTypeByte = 0x7e;
+            if (rawTxBytes.empty())
+                throw bcos::evm::engine::OpConsensusError(
+                    "op block: missing L1 attributes deposit (empty block)");
+            if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty() ||
+                !op::isL1AttributesTx(deposits[0]))
+                throw bcos::evm::engine::OpConsensusError(
+                    "op block: first tx is not the L1 attributes deposit");
+            if (cfg.has_da_footprint)
+            {
+                auto const& data = deposits[0].data;
+                if (data.size() == op::IsthmusL1AttributesLen)
+                {
+                    if (rawTxBytes.back().empty() || rawTxBytes.back()[0] != kDepositTypeByte)
+                        throw bcos::evm::engine::OpConsensusError(
+                            "op block: unexpected non-deposit transactions in Jovian activation "
+                            "block");
+                }
+                else
+                {
+                    if (data.size() < op::JovianL1AttributesLen)
+                        throw bcos::evm::engine::OpConsensusError(
+                            "op block: L1 attributes transaction data too short for DA footprint "
+                            "gas scalar");
+                    if (!std::equal(op::JovianL1AttributesSelector.begin(),
+                            op::JovianL1AttributesSelector.end(), data.begin()))
+                        throw bcos::evm::engine::OpConsensusError(
+                            "op block: L1 attributes transaction data does not have Jovian "
+                            "selector");
+                }
+            }
+
+            // DA scalar (H1c): Jovian extracts big-endian uint16 from deposits[0].data[176:178];
+            // the 176B Isthmus activation attributes → 0.
+            std::optional<uint16_t> daFootprintGasScalar;
+            if (cfg.has_da_footprint)
+            {
+                auto const& attrData = deposits[0].data;
+                if (attrData.size() == op::IsthmusL1AttributesLen)
+                    daFootprintGasScalar = 0;
+                else if (attrData.size() >= op::JovianL1AttributesLen)
+                    daFootprintGasScalar = static_cast<uint16_t>(
+                        (static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 2]) << 8) |
+                        static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 1]));
+            }
+
+            // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
+            OpBlockExecutionContext ctx{
+                .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
+                .blockHashes = &hashes, .chainId = m_chainId,
+                .daFootprintGasScalar = daFootprintGasScalar};
+
+            // ③ Per-tx execution via the shared serial scheduler (one per block; serial=true
+            // forces grain size 1 — OP is linear-only, see the class header's DESIGN INVARIANT).
+            bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
+                m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
+            auto transactionsRefs = transactions |
+                ::ranges::views::transform(
+                    [](protocol::Transaction::ConstPtr const& ptr) -> protocol::Transaction const& {
+                        return *ptr;
+                    });
+            auto receipts = co_await serialScheduler.executeBlock(
+                view, executor, header, transactionsRefs, execLedgerConfig, ctx);
+
+            // ④ Block-post finalize (hashErr check lives inside finalizeOpBlockResult).
+            result = bcos::evm::engine::finalizeOpBlockResult(executor, view, header,
+                execLedgerConfig, cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr);
         }
         catch (const bcos::evm::engine::OpConsensusError&)
         {
@@ -891,6 +984,7 @@ private:
     MultiLayerStorage* m_multiLayerStorage = nullptr;
     bcos::protocol::BlockFactory* m_blockFactory = nullptr;
     bcos::ledger::LedgerInterface* m_ledger = nullptr;
+    bcos::IOServicePool::Ptr m_ioServicePool;
     std::function<void(bcos::protocol::BlockNumber)> m_blockNumberNotifier;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(bcos::Error::Ptr)>)>

@@ -196,6 +196,8 @@ struct OpE2eFixture
     /// forkchoice tests depend on that branch staying inert).
     std::shared_ptr<bcos::storage::LegacyStorageWrapper<BackendMemStorage>> legacyLedgerStorage;
     std::shared_ptr<bcos::ledger::Ledger> ledger;
+    // Task 4: SchedulerSerialImpl (the delegate's per-tx driver) needs a live io pool.
+    bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
     /// The engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
     /// A single OpSchedulerSeam serves the seam SchedulerType (route A executeOpBlock retired);
     /// OpScheduler holds no execution kernel — block execution is the delegate's route B.
@@ -211,7 +213,8 @@ struct OpE2eFixture
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger)),
+            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger,
+            ioServicePool)),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             opDelegate)

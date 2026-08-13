@@ -305,6 +305,7 @@ struct Fixture
     // backendStorage is declared first and outlives it.
     std::shared_ptr<bcos::storage::LegacyStorageWrapper<BackendMemStorage>> legacyLedgerStorage;
     std::shared_ptr<bcos::ledger::Ledger> ledger;
+    bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
     std::shared_ptr<TestOpScheduler> scheduler;
 
     Fixture()
@@ -313,7 +314,7 @@ struct Fixture
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         scheduler(std::make_shared<TestOpScheduler>(receiptFactory, hashImpl, kChainId,
-            forkTimestamps, blockFactory, multiLayerStorage, ledger))
+            forkTimestamps, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -469,8 +470,10 @@ bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& vi
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSuite)
 
-/// Golden constraint: minimal OP block (deposit + 1 normal with envelope) via OpScheduler == direct
-/// route B.
+/// Transition-period equivalence guard (Task 4): the SAME minimal OP block (deposit + 1 normal
+/// with envelope) executed via OpScheduler.executeBlock — whose execute() now drives the shared
+/// SchedulerSerialImpl(serial=true) — must equal direct runOpBlockInjection on receipts / stateRoot
+/// / txRoot / gasUsed. Guards Task 5's deletion of runOpBlockInjection.
 BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
 {
     Fixture f;
@@ -575,9 +578,9 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
             std::string(resultA.receipts[i]->effectiveGasPrice()));
     }
 
-    // Golden constraint: executeBlock's (skeleton-driven, execute hook = runOpBlockInjection
-    // route B) full result == direct runOpBlockInjection (route B) — peekExecuteResult exposes
-    // the raw result stashed in the skeleton's m_results.
+    // Golden constraint: executeBlock's full result — execute() now routes per-tx execution through
+    // SchedulerSerialImpl(serial=true) + finalizeOpBlockResult — == direct runOpBlockInjection
+    // (route B). peekExecuteResult exposes the raw result stashed in the skeleton's m_results.
     auto routeB = f.scheduler->peekExecuteResult();
     BOOST_REQUIRE_MESSAGE(routeB.has_value(), "executeBlock must stash an OpExecuteBlockResult");
     BOOST_CHECK_EQUAL(routeB->stateRoot, resultA.stateRoot);

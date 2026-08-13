@@ -364,6 +364,8 @@ struct Fixture
     bcos::crypto::Hash::Ptr hashImpl{cryptoSuite->hashImpl()};
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{makeReceiptFactory()};
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
+    // Task 4: SchedulerSerialImpl (route A's per-tx driver) needs a live io pool.
+    bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
 };
 
 struct GoldenStats
@@ -940,7 +942,8 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
 
         auto opScheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
             fixture.receiptFactory, fixture.hashImpl, kChainId, forkTimestampsFor(jovian),
-            fixture.blockFactory, fixture.multiLayerStorage, /*ledger=*/nullptr);
+            fixture.blockFactory, fixture.multiLayerStorage, /*ledger=*/nullptr,
+            fixture.ioServicePool);
 
         bcos::Error::Ptr routeAErr;
         opScheduler->executeBlock(block, /*verify=*/true,
