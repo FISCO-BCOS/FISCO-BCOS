@@ -332,6 +332,57 @@ BOOST_AUTO_TEST_CASE(typedTxYParityOverOneRejected)
     }
 }
 
+// EIP-2 canonical-s: a malleable (high-s) signature must be rejected at decode. decode() is the
+// single funnel for both OP paths — eth_sendRawTransaction (EthEndpoint) and engine newPayload
+// (opEnvelopeToTars) — so this covers admission AND block processing, matching op-geth. Flipping
+// s -> n - s recovers the same sender and would otherwise execute byte-for-byte identically.
+BOOST_AUTO_TEST_CASE(highSsignatureRejectedAtDecode)
+{
+    const u256 kSecpOrder("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+    const u256 kSecpHalfOrder = kSecpOrder / 2;
+
+    Web3Transaction tx;
+    tx.value = 1000000000000000000;
+    tx.type = rpc::TransactionType::Legacy;
+    tx.data = {};
+    tx.to = Address("0x1e58529dAA467406645d0f4B63dec96CA0b87d70");
+    tx.nonce = 19;
+    tx.gasLimit = 210000;
+    tx.maxFeePerGas = 20000000000;
+    tx.maxPriorityFeePerGas = 20000000000;
+    tx.chainId = 31337;
+
+    auto signData = tx.encodeForSign();
+    std::string priv = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+    auto key = std::make_shared<KeyImpl>(fromHex(priv));
+    auto newHash = crypto::keccak256Hash(ref(signData));
+    auto signatureImpl = bcos::crypto::Secp256k1Crypto();
+    auto keyPair = std::make_unique<Secp256k1KeyPair>(key);
+    auto signature = signatureImpl.sign(*keyPair, newHash, false);
+    tx.signatureR = {signature->begin(), signature->begin() + 32};
+    tx.signatureS = {signature->begin() + 32, signature->begin() + 64};
+    tx.signatureV = signature->back();
+
+    // Guard: libsecp256k1 signs canonical low-s — confirm before flipping, so a future
+    // libsecp256k1 behavior change fails loudly instead of silently weakening the test.
+    const u256 s = u256("0x" + toHex(tx.signatureS));
+    BOOST_REQUIRE(s <= kSecpHalfOrder);
+
+    // Malleability flip: s' = n - s is high-s but recovers the same sender.
+    tx.signatureS = toBigEndian(kSecpOrder - s);
+    const u256 flipped = u256("0x" + toHex(tx.signatureS));
+    BOOST_REQUIRE(flipped > kSecpHalfOrder);
+
+    bcos::bytes encoded;
+    codec::rlp::encode(encoded, tx);
+    auto bRef = bcos::ref(encoded);
+    Web3Transaction decoded;
+    auto e = codec::rlp::decode(bRef, decoded);
+    BOOST_REQUIRE(e != nullptr);
+    BOOST_CHECK_EQUAL(
+        e->errorCode(), static_cast<int64_t>(codec::rlp::DecodingError::InvalidVInSignature));
+}
+
 BOOST_AUTO_TEST_CASE(testEIP7702Transaction)
 {
     // clang-format off

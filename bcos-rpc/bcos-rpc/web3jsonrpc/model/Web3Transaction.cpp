@@ -31,6 +31,32 @@
 
 namespace bcos
 {
+namespace
+{
+// EIP-2 canonical-s guard. The secp256k1 group order n and its half. A signature with s > n/2 is
+// "malleable": flipping s -> n - s recovers the same sender and executes byte-for-byte
+// identically, so op-geth rejects it at both admission and block processing. Without this check a
+// mixed-deployment OP chain would silently fork.
+const u256 c_secp256k1n("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
+
+/// Returns a decode error if r/s fall outside EIP-2's valid range (r,s in [1, n-1], s <= n/2),
+/// else nullptr. r/s are the raw 32-byte big-endian scalars (already zero-padded by the handler).
+bcos::Error::UniquePtr checkEip2Signature(
+    bcos::bytes const& signatureR, bcos::bytes const& signatureS)
+{
+    const u256 r = u256("0x" + toHex(signatureR));
+    const u256 s = u256("0x" + toHex(signatureS));
+    if (r == 0 || r >= c_secp256k1n || s == 0 || s >= c_secp256k1n || s > c_secp256k1nOver2)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+            "EIP-2: invalid signature (r/s out of [1,n-1], or s exceeds secp256k1n/2 — "
+            "malleable signature)");
+    }
+    return nullptr;
+}
+}  // namespace
+
 namespace rpc
 {
 // These three using-declarations are NOT dead: they are the ADL bridge that lets the generic
@@ -70,21 +96,17 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     {
         // Legacy: no type byte
         type = TransactionType::Legacy;
-        auto err = handlerFor(type).decode(in, *this, withSig);
-        if (err == nullptr && !in.empty())
-        {
-            return BCOS_ERROR_UNIQUE_PTR(
-                codec::rlp::DecodingError::InputTooLong, "Trailing bytes after RLP list");
-        }
-        return err;
     }
-    auto txType = magic_enum::enum_cast<TransactionType>(firstByte);
-    if (!txType.has_value())
+    else
     {
-        return BCOS_ERROR_UNIQUE_PTR(
-            codec::rlp::DecodingError::UnsupportedTransactionType, "Unsupported transaction type");
+        auto txType = magic_enum::enum_cast<TransactionType>(firstByte);
+        if (!txType.has_value())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnsupportedTransactionType,
+                "Unsupported transaction type");
+        }
+        type = txType.value();
     }
-    type = txType.value();
     // ⚠️ Do not pre-strip the type byte: the typed handler consumes the envelope itself (see the
     // Web3TxHandler.h decode contract); stripping it again here would skip the list header a second
     // time and fail every typed tx decode.
@@ -93,6 +115,15 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     {
         return BCOS_ERROR_UNIQUE_PTR(
             codec::rlp::DecodingError::InputTooLong, "Trailing bytes after RLP list");
+    }
+    // EIP-2: reject malleable (high-s) signatures at decode time. This member is the shared funnel
+    // for BOTH OP paths — eth_sendRawTransaction (EthEndpoint.cpp) and engine newPayload
+    // (opEnvelopeToTars) — so the check covers admission AND block processing, matching op-geth.
+    // Deposits (0x7e) are unsigned; the EIP-7702 authorization entries are gated separately
+    // (Eip7702Recover.h) and left untouched here.
+    if (err == nullptr && withSig && type != TransactionType::Deposit)
+    {
+        err = checkEip2Signature(signatureR, signatureS);
     }
     return err;
 }
