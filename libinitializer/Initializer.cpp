@@ -373,6 +373,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // respond "engine service not available" (see EngineEndpoint.cpp).
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
 
+    // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
+    // endpoint would silently serve the v1 EngineService built below, and an external
+    // op-node — which trusts the EL and never cross-checks state roots — would drive a
+    // chain with v1 (non-Ethereum) semantics. Fail fast instead. (The v1 Engine API stays
+    // available to the in-process single-node driver for local testing.)
+    if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "op_engine_rpc requires executor_version >= " +
+                std::to_string(scheduler_v1::ETHEREUM_EXECUTOR_VERSION) +
+                " (the pure-Ethereum executor): on executor_version < 2 the endpoint would "
+                "serve v1 semantics that diverge from an OP Stack chain"));
+    }
+
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =

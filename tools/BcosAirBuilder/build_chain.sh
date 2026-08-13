@@ -769,6 +769,21 @@ parse_params() {
         if [[ "${sm_mode}" == "true" && "${enable_op_engine_rpc}" == "true" ]]; then
             LOG_FATAL "-O (op_engine_rpc) is not supported together with SM mode (-s) yet"
         fi
+        if [[ "${enable_op_engine_rpc}" == "true" ]]; then
+            # op_engine_rpc requires the v2 pure-Ethereum executor (the node refuses to boot
+            # otherwise), and executor version=2 in turn requires compatibility_version >= 3.18.0
+            local compat_num="${compatibility_version//[vV]/}"
+            local compat_major compat_minor
+            compat_major=$(echo "${compat_num}" | cut -d. -f1)
+            compat_minor=$(echo "${compat_num}" | cut -d. -f2)
+            if ! [[ "${compat_major}" =~ ^[0-9]+$ && "${compat_minor}" =~ ^[0-9]+$ ]] ||
+                [ "${compat_major}" -lt 3 ] ||
+                { [ "${compat_major}" -eq 3 ] && [ "${compat_minor}" -lt 18 ]; }; then
+                LOG_FATAL "-O (op_engine_rpc) requires -v 3.18.0 or newer (got ${compatibility_version}): executor version=2 needs compatibility_version >= 3.18.0"
+            fi
+            executor_version=2
+            LOG_INFO "-O: config.genesis executor version=2 + evm_revision=cancun (op_engine_rpc requires the v2 pure-Ethereum executor with an explicit on-chain EVM revision)"
+        fi
         if [[ "$mtail_binary_path" != "" ]]; then
             file_must_exists "${mtail_binary_path}"
         fi
@@ -779,6 +794,9 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
         fi
     else
+        if [[ "${enable_op_engine_rpc}" == "true" ]]; then
+            LOG_FATAL "-O (op_engine_rpc) only supports air mode; pro/max deployments have no op-engine assembly"
+        fi
         if [[ "$isPortSpecified" = "true" ]]; then
             if [ ${#proOrmax_port_start[@]} -lt 2 ]; then LOG_WARN "service start port error. e.g: 30300,20200" && exit 1; fi
         fi
@@ -1790,6 +1808,14 @@ generate_genesis_config() {
     local output=${1}
     local node_list=${2}
 
+    # executor version=2 refuses to boot without an explicit on-chain EVM revision, so -O
+    # (which pins version=2) must also pin one; edit before the first boot to change it
+    local executor_evm_revision_line=""
+    if [[ "${enable_op_engine_rpc}" == "true" ]]; then
+        executor_evm_revision_line="
+    evm_revision=cancun"
+    fi
+
     cat <<EOF >"${output}"
 [chain]
     ; use SM crypto or not, should nerver be changed
@@ -1830,7 +1856,7 @@ generate_genesis_config() {
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
     is_serial_execute=${serial_mode}
-    version=${executor_version}
+    version=${executor_version}${executor_evm_revision_line}
 EOF
 }
 

@@ -90,10 +90,10 @@ rm -rf "${WORK_ROOT}/nodes"
 [ -f "${NODE_DIR}/config.genesis" ] || fail "config.genesis not generated"
 
 cd "${NODE_DIR}"
-# post-Karst L2 execution layer: v2 executor + on-chain evm revision (boot refusal
-# in Initializer requires the genesis evm_revision row for executor_version=2)
-perl -p -i -e 's/^(\s*)version=1\s*$/$1version=2\n/' config.genesis
-perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
+# build_chain.sh -O already pins the genesis to the v2 executor with an explicit
+# evm_revision (op_engine_rpc refuses anything else); assert instead of patching
+grep -qE '^\s*version=2' config.genesis || fail "build_chain -O did not pin executor version=2"
+grep -qE '^\s*evm_revision=' config.genesis || fail "build_chain -O did not pin an evm_revision"
 perl -p -i -e "s/chain_id=20200/chain_id=${L2_CHAIN_ID}/" config.genesis
 cat >> config.genesis <<'GENESIS_EOF'
 
