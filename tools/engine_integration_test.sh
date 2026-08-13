@@ -204,6 +204,9 @@ listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
 jwt_secret_file=${WORK_DIR}/jwt.hex
 clock_skew_secs=300
+; this harness drives the v1 EngineService over the endpoint (no [executor] version=2
+; here); production chains must never set this test-only escape hatch
+unsafe_allow_v1_executor=true
 
 [p2p]
 listen_ip=0.0.0.0

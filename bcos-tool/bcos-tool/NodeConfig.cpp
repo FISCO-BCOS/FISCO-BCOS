@@ -839,14 +839,27 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     const std::string jwtSecretFile =
         _pt.get<std::string>("op_engine_rpc.jwt_secret_file", "conf/op-engine/jwt.hex");
     const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
+    // test-only escape hatch, see Initializer's executor-version guard
+    const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
 
     m_enableOpEngineRpc = enableOpEngineRpc;
+    // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
+    // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
+    // order and also when a loader is invoked on its own.
+    if (m_enableOpEngineRpc && m_enableSingleNodeConsensus)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
+                "exclusive: both drive the same EngineService; enable at most one"));
+    }
     m_opEngineRpcListenIP = listenIP;
     m_opEngineRpcListenPort = listenPort;
     m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
     m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
     m_opEngineJwtSecretFile = jwtSecretFile;
     m_opEngineClockSkewSecs = clockSkewSecs;
+    m_opEngineAllowV1Executor = allowV1Executor;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
                          << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
@@ -854,7 +867,8 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
                          << LOG_KV("jwtSecretFile", jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", clockSkewSecs);
+                         << LOG_KV("clockSkewSecs", clockSkewSecs)
+                         << LOG_KV("unsafeAllowV1Executor", allowV1Executor);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -1218,17 +1232,25 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
         produce_empty_blocks=true
         fee_recipient=0x0
     */
-    m_enableSingleNodeConsensus =
-        _pt.get<bool>("consensus.enable_single_node_consensus", false);
+    m_enableSingleNodeConsensus = _pt.get<bool>("consensus.enable_single_node_consensus", false);
+    // Mutual exclusion with [op_engine_rpc].enable: the built-in single-node driver and an
+    // external op-node would both drive the same EngineService forkchoice/payload state.
+    // Refuse the combination at startup instead of leaving two block producers reachable by
+    // configuration. The check is symmetric (loadOpEngineRpcConfig carries the same guard),
+    // so it does not depend on the order the two loaders run in loadConfig.
+    if (m_enableSingleNodeConsensus && m_enableOpEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
+                "exclusive: both drive the same EngineService; enable at most one"));
+    }
     m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
-    m_singleNodeConsensusProduceEmptyBlocks =
-        _pt.get<bool>("consensus.produce_empty_blocks", true);
+    m_singleNodeConsensusProduceEmptyBlocks = _pt.get<bool>("consensus.produce_empty_blocks", true);
     m_singleNodeConsensusFeeRecipient = _pt.get<std::string>(
         "consensus.fee_recipient", "0x0000000000000000000000000000000000000000");
-    m_singleNodeConsensusPrevRandao =
-        _pt.get<std::string>("consensus.prev_randao", "");
-    m_singleNodeConsensusFixedTimestamp =
-        _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
+    m_singleNodeConsensusPrevRandao = _pt.get<std::string>("consensus.prev_randao", "");
+    m_singleNodeConsensusFixedTimestamp = _pt.get<std::uint64_t>("consensus.fixed_timestamp", 0);
     NodeConfig_LOG(INFO) << LOG_DESC("loadSingleNodeConsensusConfig")
                          << LOG_KV("enableSingleNodeConsensus", m_enableSingleNodeConsensus)
                          << LOG_KV("blockInterval", m_singleNodeConsensusBlockInterval)
@@ -2296,6 +2318,11 @@ bool NodeConfig::enableSingleNodeConsensus() const
     return m_enableSingleNodeConsensus;
 }
 
+bool NodeConfig::engineDrivenBlockProduction() const
+{
+    return m_enableSingleNodeConsensus || m_enableOpEngineRpc;
+}
+
 uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
 {
     return m_singleNodeConsensusBlockInterval;
@@ -2344,6 +2371,11 @@ uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
 const std::string& NodeConfig::opEngineJwtSecretFile() const
 {
     return m_opEngineJwtSecretFile;
+}
+
+bool NodeConfig::opEngineAllowV1Executor() const
+{
+    return m_opEngineAllowV1Executor;
 }
 
 int32_t NodeConfig::opEngineClockSkewSecs() const
@@ -2647,7 +2679,8 @@ std::string bcos::tool::generateGenesisData(
            << "compatibility_version:"
            << bcos::protocol::BlockVersion(genesisConfig.m_compatibilityVersion) << '\n'
            << "[tx]" << '\n'
-           << "gaslimit:" << genesisConfig.m_txGasLimit << '\n'
+           << "gaslimit:" << genesisConfig.m_txGasLimit
+           << '\n'
            // tx.gas_price / tx.excess_blob_gas are seeded into SYS_CONFIG at genesis and feed
            // v2 execution (base fee / blob base fee), so they must be part of the genesis pin
            // the guard at Ledger::buildGenesisBlock compares on restart — otherwise two nodes
