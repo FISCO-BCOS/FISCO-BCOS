@@ -83,11 +83,11 @@ struct AuthorizationListEntry
     uint8_t yParity{0};
     u256 r{0};
     u256 s{0};
-    friend bool operator==(const AuthorizationListEntry& lhs, const AuthorizationListEntry& rhs) noexcept
+    friend bool operator==(
+        const AuthorizationListEntry& lhs, const AuthorizationListEntry& rhs) noexcept
     {
-        return lhs.chainId == rhs.chainId && lhs.address == rhs.address &&
-               lhs.nonce == rhs.nonce && lhs.yParity == rhs.yParity && lhs.r == rhs.r &&
-               lhs.s == rhs.s;
+        return lhs.chainId == rhs.chainId && lhs.address == rhs.address && lhs.nonce == rhs.nonce &&
+               lhs.yParity == rhs.yParity && lhs.r == rhs.r && lhs.s == rhs.s;
     }
 };
 

@@ -25,8 +25,8 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
-#include <range/v3/algorithm/move.hpp>
 #include <limits>
+#include <range/v3/algorithm/move.hpp>
 #include <utility>
 
 namespace bcos
@@ -203,10 +203,10 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
             // entry must still be KEPT in the list: a set_code transaction with an empty
             // authorization list is rejected by the executor, and dropping it would change
             // the signing hash.
-            tarsEntry.chainID = static_cast<int64_t>(
-                entry.chainId > std::numeric_limits<uint64_t>::max() ?
-                    UINT64_MAX :
-                    static_cast<uint64_t>(entry.chainId));
+            tarsEntry.chainID =
+                static_cast<int64_t>(entry.chainId > std::numeric_limits<uint64_t>::max() ?
+                                         UINT64_MAX :
+                                         static_cast<uint64_t>(entry.chainId));
             tarsEntry.address = entry.address.hex();  // 40-char hex, no 0x prefix
             tarsEntry.nonce = static_cast<int64_t>(entry.nonce);
             tarsEntry.v = static_cast<tars::Char>(entry.yParity);

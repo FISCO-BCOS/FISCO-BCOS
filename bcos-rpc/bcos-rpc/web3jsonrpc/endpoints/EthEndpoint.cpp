@@ -21,9 +21,9 @@
 #include "EthEndpoint.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -502,8 +502,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         {
             WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction mempool verify failed")
                               << LOG_KV("reason", boost::diagnostic_information(e));
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "invalid transaction signature"));
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid transaction signature"));
         }
         std::vector<protocol::Transaction::Ptr> txs;
         txs.push_back(std::move(tx));

@@ -960,6 +960,190 @@ struct EIP4844TxHandler : Web3TxHandler
         return decodeError;
     }
 };
+
+struct EIP7702TxHandler : Web3TxHandler
+{
+    static codec::rlp::Header headerTxBase(const Web3Transaction& tx) noexcept
+    {
+        codec::rlp::Header h{.isList = true};
+        h.payloadLength += codec::rlp::length(tx.chainId.value_or(0));
+        h.payloadLength += codec::rlp::length(tx.nonce);
+        h.payloadLength += codec::rlp::length(tx.maxPriorityFeePerGas);
+        h.payloadLength += codec::rlp::length(tx.maxFeePerGas);
+        h.payloadLength += codec::rlp::length(tx.gasLimit);
+        h.payloadLength += (tx.to.has_value()) ? (Address::SIZE + 1) : 1;
+        h.payloadLength += codec::rlp::length(tx.value);
+        h.payloadLength += codec::rlp::length(tx.data);
+        h.payloadLength += codec::rlp::length(tx.accessList);
+        h.payloadLength += codec::rlp::length(tx.authorizationList);
+        return h;
+    }
+
+    // Signing preimage: 0x04 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+    // gas_limit, destination, amount, data, access_list, authorization_list])
+    bcos::bytes encodeForSign(const Web3Transaction& tx) const override
+    {
+        bcos::bytes out;
+        out.push_back(static_cast<bcos::byte>(TransactionType::EIP7702));
+        codec::rlp::encodeHeader(out, headerTxBase(tx));
+        codec::rlp::encode(out, tx.chainId.value_or(0));
+        codec::rlp::encode(out, tx.nonce);
+        codec::rlp::encode(out, tx.maxPriorityFeePerGas);
+        codec::rlp::encode(out, tx.maxFeePerGas);
+        codec::rlp::encode(out, tx.gasLimit);
+        if (tx.to.has_value())
+        {
+            codec::rlp::encode(out, tx.to.value().ref());
+        }
+        else
+        {
+            out.push_back(codec::rlp::BYTES_HEAD_BASE);
+        }
+        codec::rlp::encode(out, tx.value);
+        codec::rlp::encode(out, tx.data);
+        codec::rlp::encode(out, tx.accessList);
+        codec::rlp::encode(out, tx.authorizationList);
+        return out;
+    }
+
+    // Full RLP: 0x04 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
+    // gas_limit, destination, amount, data, access_list, authorization_list, signature_y_parity,
+    // signature_r, signature_s])
+    bcos::bytes encode(const Web3Transaction& tx) const override
+    {
+        bcos::bytes out;
+        out.push_back(static_cast<bcos::byte>(TransactionType::EIP7702));
+        codec::rlp::encodeHeader(out, header(tx));
+        codec::rlp::encode(out, tx.chainId.value_or(0));
+        codec::rlp::encode(out, tx.nonce);
+        codec::rlp::encode(out, tx.maxPriorityFeePerGas);
+        codec::rlp::encode(out, tx.maxFeePerGas);
+        codec::rlp::encode(out, tx.gasLimit);
+        if (tx.to.has_value())
+        {
+            codec::rlp::encode(out, tx.to.value());
+        }
+        else
+        {
+            out.push_back(codec::rlp::BYTES_HEAD_BASE);
+        }
+        codec::rlp::encode(out, tx.value);
+        codec::rlp::encode(out, tx.data);
+        codec::rlp::encode(out, tx.accessList);
+        codec::rlp::encode(out, tx.authorizationList);
+        codec::rlp::encode(out, tx.signatureV);
+        codec::rlp::encode(out, trimLeadingZeroBytes(bcos::ref(tx.signatureR)));
+        codec::rlp::encode(out, trimLeadingZeroBytes(bcos::ref(tx.signatureS)));
+        return out;
+    }
+
+    // RLP header (length computation)
+    codec::rlp::Header header(const Web3Transaction& tx) const override
+    {
+        auto h = headerTxBase(tx);
+        h.payloadLength += 1;
+        h.payloadLength += codec::rlp::length(trimLeadingZeroBytes(bcos::ref(tx.signatureR)));
+        h.payloadLength += codec::rlp::length(trimLeadingZeroBytes(bcos::ref(tx.signatureS)));
+        return h;
+    }
+
+    // Decode: 0x04 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit,
+    // destination, amount, data, access_list, authorization_list, yParity, r, s])
+    bcos::Error::UniquePtr decode(
+        bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
+    {
+        if (in.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
+        if (in[0] != static_cast<bcos::byte>(TransactionType::EIP7702))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnsupportedTransactionType,
+                "Unsupported transaction type");
+        }
+        out.type = TransactionType::EIP7702;
+        in = in.getCroppedData(1);
+        auto&& [e, head] = codec::rlp::decodeHeader(in);
+        if (e != nullptr)
+        {
+            return std::move(e);
+        }
+        if (!head.isList)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
+        }
+        uint64_t chainId = 0;
+        if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
+            error != nullptr)
+        {
+            return error;
+        }
+        out.chainId.emplace(chainId);
+        if (auto error = codec::rlp::decode(in, out.maxFeePerGas); error != nullptr)
+        {
+            return error;
+        }
+
+        if (auto error = codec::rlp::decode(in, out.gasLimit); error != nullptr)
+        {
+            return error;
+        }
+
+        if (in.empty()) [[unlikely]]
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                codec::rlp::DecodingError::InputTooShort, "Input too short");
+        }
+        if (in[0] == codec::rlp::BYTES_HEAD_BASE)
+        {
+            out.to = std::nullopt;
+            in = in.getCroppedData(1);
+        }
+        else
+        {
+            Address addr{};
+            if (auto error = codec::rlp::decode(in, addr); error != nullptr)
+            {
+                return error;
+            }
+            out.to.emplace(addr);
+        }
+
+        if (auto error = codec::rlp::decodeItems(in, out.value, out.data, out.accessList);
+            error != nullptr)
+        {
+            return error;
+        }
+
+        if (auto error = codec::rlp::decode(in, out.authorizationList); error != nullptr)
+        {
+            return error;
+        }
+
+        bcos::Error::UniquePtr decodeError = nullptr;
+        if (withSig)
+        {
+            decodeError =
+                codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
+            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
+            // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
+            // transactions.
+            if (decodeError == nullptr && out.signatureV > 1)
+            {
+                return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+                    "typed tx y_parity must be 0 or 1");
+            }
+        }
+        if (withSig)
+        {
+            // rehandle signature and chainId
+            padSignature(out.signatureR, out.signatureS);
+        }
+        return decodeError;
+    }
+};
 }  // namespace
 
 Web3TxHandler& handlerFor(TransactionType type)
@@ -968,6 +1152,7 @@ Web3TxHandler& handlerFor(TransactionType type)
     static EIP2930TxHandler eip2930;
     static EIP1559TxHandler eip1559;
     static EIP4844TxHandler eip4844;
+    static EIP7702TxHandler eip7702;
     static DepositTxHandler deposit;
     switch (type)
     {
@@ -979,6 +1164,8 @@ Web3TxHandler& handlerFor(TransactionType type)
         return eip1559;
     case TransactionType::EIP4844:
         return eip4844;
+    case TransactionType::EIP7702:
+        return eip7702;
     case TransactionType::Deposit:
         return deposit;
     }
@@ -1035,5 +1222,36 @@ void encode(bcos::bytes& out, const AccessListEntry& entry) noexcept
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry& out) noexcept
 {
     return decode(in, out.account, out.storageKeys);
+}
+
+// EIP-7702 authorization entry RLP codec. Each entry is itself an RLP list:
+// [chain_id, address, nonce, y_parity, r, s] (EIP-7702 set-code transactions, Prague+).
+// The corresponding decode() lives in Web3Transaction.cpp (kept there by the re-split); the
+// handlers are the primary consumer of header/length/encode (they encode/decode
+// tx.authorizationList), so the three land here next to the AccessListEntry codec.
+Header header(const AuthorizationListEntry& entry) noexcept
+{
+    auto len = codec::rlp::length(entry.chainId) + Address::SIZE + 1 +
+               codec::rlp::length(entry.nonce) +
+               codec::rlp::length(static_cast<uint64_t>(entry.yParity)) +
+               codec::rlp::length(entry.r) + codec::rlp::length(entry.s);
+    return {.isList = true, .payloadLength = len};
+}
+
+size_t length(AuthorizationListEntry const& entry) noexcept
+{
+    auto head = header(entry);
+    return lengthOfLength(head.payloadLength) + head.payloadLength;
+}
+
+void encode(bcos::bytes& out, const AuthorizationListEntry& entry) noexcept
+{
+    encodeHeader(out, header(entry));
+    encode(out, entry.chainId);
+    encode(out, entry.address.ref());
+    encode(out, entry.nonce);
+    encode(out, static_cast<uint64_t>(entry.yParity));
+    encode(out, entry.r);
+    encode(out, entry.s);
 }
 }  // namespace bcos::codec::rlp
