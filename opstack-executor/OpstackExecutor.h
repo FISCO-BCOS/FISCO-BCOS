@@ -37,7 +37,7 @@
 #include "bcos-task/TBBWait.h"
 #include "ethereum-executor/BCOS2Evmone.h"
 #include "ethereum-executor/StorageStateView.h"
-#include "opstack-executor/OpBlockExecute.h"  // finalizeOpBlock（已并入块执行模块）
+#include "opstack-executor/OpBlockExecute.h"  // finalizeOpBlock (merged into the block-execution module)
 #include "opstack-executor/OpRlpDecode.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
@@ -84,32 +84,19 @@ public:
     static evmone::state::BlockInfo buildOpBlockInfo(
         protocol::BlockHeader const& header, uint64_t gasLimit)
     {
-        // `detail` aliases bcos::evm::engine::detail (OpRlpDecode.h) — narrowU256ToU64 /
-        // toEvmcAddress / toEvmcBytes32 live there, NOT in this namespace (round-3 C5).
-        namespace detail = bcos::evm::engine::detail;
-        evmone::state::BlockInfo blk;
-        blk.number = header.number();
-        blk.timestamp = static_cast<uint64_t>(header.timestamp()) / 1000;  // ms -> s
-        blk.gas_limit = static_cast<int64_t>(gasLimit);
-        blk.base_fee =
-            detail::narrowU256ToU64(header.baseFee().value_or(bcos::u256{0}), "BlockInfo::baseFee");
-        blk.coinbase = detail::toEvmcAddress(header.coinbase());
-        blk.prev_randao = detail::toEvmcBytes32(header.prevRandao());
-        blk.parent_beacon_block_root =
-            detail::toEvmcBytes32(header.parentBeaconBlockRoot().value_or(bcos::h256{}));
-        blk.extra_data = evmc::bytes(header.extraData().begin(), header.extraData().end());
-        blk.blob_gas_used = detail::narrowU256ToU64(
-            header.blobGasUsed().value_or(bcos::u256{0}), "BlockInfo::blobGasUsed");
-        return blk;
+        // Single toBlockInfo implementation (round-3 C5 / Task 4), parameterized by lenient
+        // optionals + injected gasLimit. The block-execution path (runOpBlockInjection) keeps the
+        // strict .value() semantics via toBlockInfo's default argument.
+        return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, /*lenientOptionals=*/true);
     }
 
-    /// BlockInfo gasLimit：真实块头 gasLimit（EVM 可见 GASLIMIT 常数，与 processOpBlock 的
-    /// toBlockInfo 一致）；header gasLimit 未设（==0，如最小测试头）时回退调用方 blockGasLeft
-    /// （保留 eth_call/OpstackExecutorTest 现状——那里 blockGasLeft==header.gasLimit()）。
+    /// BlockInfo gasLimit: the real header gasLimit (EVM-visible GASLIMIT constant, consistent
+    /// with processOpBlock's toBlockInfo); falls back to the caller's blockGasLeft when the header
+    /// leaves it unset (==0, e.g. minimal test headers — there blockGasLeft==header.gasLimit()).
     static uint64_t opBlockGasLimit(protocol::BlockHeader const& header, uint64_t fallback)
     {
-        namespace detail = bcos::evm::engine::detail;  // 第三轮 P0-3：移入函数体
-        auto const gl = header.gasLimit();  // 非 optional 的 u256（BlockHeader.h:156）
+        namespace detail = bcos::evm::engine::detail;
+        auto const gl = header.gasLimit();  // non-optional u256 (BlockHeader.h:156)
         return (gl == 0) ? fallback : detail::narrowU256ToU64(gl, "BlockInfo::gasLimit");
     }
 

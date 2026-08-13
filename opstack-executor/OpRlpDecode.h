@@ -4,19 +4,20 @@
 
 // Decode primitives for the OP raw-tx envelope decoder (split out of OpSchedulerImpl.h).
 // Group 1-3: bcos<->evmc conversions / bounds-checked narrowing / RLP scalar primitives /
-// composite decoders. These depend only on bcos-codec RLP + evmone/evmc/intx + protocol::BlockHeader
-// — deliberately NOT the evmone package's test headers (those live in OpTxDecode.h).
+// composite decoders. These depend only on bcos-codec RLP + evmone/evmc/intx +
+// protocol::BlockHeader — deliberately NOT the evmone package's test headers (those live in
+// OpTxDecode.h).
 
 #include <opstack-executor/OpErrors.h>
 
 #include <bcos-codec/rlp/RLPDecode.h>
-#include <bcos-evm/eth/state/block.hpp>
-#include <bcos-evm/eth/state/hash_utils.hpp>
-#include <bcos-evm/eth/state/transaction.hpp>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-evm/eth/state/block.hpp>
+#include <bcos-evm/eth/state/hash_utils.hpp>
+#include <bcos-evm/eth/state/transaction.hpp>
 #include <cstdint>
 #include <cstring>
 #include <evmc/evmc.hpp>
@@ -103,20 +104,38 @@ inline void requireLowSSignature(const intx::uint256& r, const intx::uint256& s)
             "secp256k1n/2 — EIP-2 malleable signature)");
 }
 
-inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& env)
+/// Build the OP block context from a FISCO header — the single implementation, merged from the
+/// former `OpstackExecutor::buildOpBlockInfo` (round-3 C5 / Task 4). Two deliberate semantic knobs
+/// encode the two call contracts:
+/// - `gasLimitOverride`: block-execution reads the header's own gasLimit (default); the per-tx /
+///   eth_call path injects the head block's gasLimit as blockGasLeft (a minimal test header may
+///   leave gasLimit==0, so the caller resolves it via `opBlockGasLimit` first).
+/// - `lenientOptionals`: block-execution uses `.value()` — an unset optional is an engine-fill bug
+///   and throws (→ OpStorageError); the eth_call / minimal-test-header path tolerates unset
+///   optional header fields as 0.
+inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& env,
+    std::optional<uint64_t> gasLimitOverride = std::nullopt, bool lenientOptionals = false)
 {
     evmone::state::BlockInfo blk;
     blk.number = static_cast<int64_t>(env.number());
     // FISCO tars store milliseconds; evmone wants seconds (blockHash/execution surface is always
     // in seconds).
     blk.timestamp = static_cast<uint64_t>(env.timestamp()) / 1000;
-    blk.gas_limit = narrowU256ToU64(env.gasLimit(), "BlockInfo::gasLimit");
-    blk.base_fee = narrowU256ToU64(env.baseFee().value(), "BlockInfo::baseFee");
+    blk.gas_limit = gasLimitOverride.has_value() ?
+                        static_cast<int64_t>(*gasLimitOverride) :
+                        narrowU256ToU64(env.gasLimit(), "BlockInfo::gasLimit");
+    blk.base_fee = narrowU256ToU64(
+        lenientOptionals ? env.baseFee().value_or(bcos::u256{0}) : env.baseFee().value(),
+        "BlockInfo::baseFee");
     blk.coinbase = toEvmcAddress(env.coinbase());
     blk.prev_randao = toEvmcBytes32(env.prevRandao());
-    blk.parent_beacon_block_root = toEvmcBytes32(env.parentBeaconBlockRoot().value());
+    blk.parent_beacon_block_root =
+        toEvmcBytes32(lenientOptionals ? env.parentBeaconBlockRoot().value_or(bcos::h256{}) :
+                                         env.parentBeaconBlockRoot().value());
     blk.extra_data = evmc::bytes(env.extraData().begin(), env.extraData().end());
-    blk.blob_gas_used = narrowU256ToU64(env.blobGasUsed().value(), "BlockInfo::blobGasUsed");
+    blk.blob_gas_used = narrowU256ToU64(
+        lenientOptionals ? env.blobGasUsed().value_or(bcos::u256{0}) : env.blobGasUsed().value(),
+        "BlockInfo::blobGasUsed");
     return blk;
 }
 
