@@ -96,6 +96,7 @@ public:
     std::string_view sourceHash() const override;
     bcos::u256 mint() const override;
     bool isDepositTx() const override;
+    bool depositIsSystemTransaction() const override;
     bcos::protocol::Web3AccessList web3AccessList() const override;
     bcos::protocol::AuthorizationList authorizationList() const override;
     bcos::protocol::VersionedHashes blobVersionedHashes() const override;

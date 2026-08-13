@@ -463,6 +463,13 @@ bool bcostars::protocol::TransactionImpl::isDepositTx() const
     return web3TypedTxKind() == kDepositTxType;
 }
 
+bool bcostars::protocol::TransactionImpl::depositIsSystemTransaction() const
+{
+    // tars field 15 (optional byte) generates as tars::Char (0 when unset). Distinct from
+    // Transaction::systemTx() (m_systemTx).
+    return m_inner()->isSystemTransaction != 0;
+}
+
 bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))

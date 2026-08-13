@@ -95,6 +95,24 @@ struct Fixture : public ::testing::Test
         return bcostars::protocol::TransactionImpl([tarsHolder]() { return tarsHolder.get(); });
     }
 
+    // Deposit tx mirror for single-tx deposit dispatch (Task 1/2). isSystemTx mirrors the
+    // deposit RLP field (tars field 15), NOT Transaction::systemTx().
+    bcostars::protocol::TransactionImpl buildDepositTx(bool isSystemTx = false)
+    {
+        bcos::rpc::Web3Transaction w3{};
+        w3.type = bcos::rpc::TransactionType::Deposit;
+        w3.sourceHash =
+            bcos::h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+        w3.from = bcos::Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001");
+        w3.to = bcos::Address("0x4200000000000000000000000000000000000015");
+        w3.mint = bcos::u256(5);
+        w3.value = bcos::u256(0);
+        w3.gasLimit = 100000;
+        w3.isSystemTx = isSystemTx;
+        auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+        return bcostars::protocol::TransactionImpl([tarsHolder]() { return tarsHolder.get(); });
+    }
+
     template <class T>
     static T sync(task::Task<T> t)
     {
@@ -534,4 +552,15 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     ledger::account::EVMAccount<MutableStorage> obs(storage, kObserver, false);
     auto slot = task::syncWait(obs.storage(evmc_bytes32{}));  // EVMAccount.h:210
     EXPECT_EQ(intx::be::load<intx::uint256>(slot.bytes), intx::uint256(1000000));
+}
+
+TEST_F(Fixture, DepositIsSystemTransactionGetter)
+{
+    auto tx = buildDepositTx(/*isSystemTx=*/true);
+    EXPECT_TRUE(tx.isDepositTx());                 // web3TypedTxKind == 0x7e
+    EXPECT_TRUE(tx.depositIsSystemTransaction());  // tars field 15 == 1
+
+    auto tx2 = buildDepositTx(/*isSystemTx=*/false);
+    EXPECT_TRUE(tx2.isDepositTx());
+    EXPECT_FALSE(tx2.depositIsSystemTransaction());  // tars field 15 == 0
 }

@@ -95,6 +95,8 @@ public:
     virtual std::string_view sourceHash() const { return {}; }
     virtual u256 mint() const { return {}; }
     virtual bool isDepositTx() const { return false; }
+    /// deposit-only RLP field (tars field 15). Distinct from systemTx() (the BCOS m_systemTx flag).
+    virtual bool depositIsSystemTransaction() const { return false; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
     virtual Web3AccessList web3AccessList() const;
 
