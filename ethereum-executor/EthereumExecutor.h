@@ -1,10 +1,15 @@
 /// @file EthereumExecutor.h
-/// @brief A pure-Ethereum transaction executor based on bcos-evm.
+/// @brief A pure-Ethereum transaction executor.
 ///
-/// Implements the bcos::executor_v1::TransactionExecutor concept.
-/// Internally delegates all EVM execution and transaction validation to
-/// the bcos-evm library (evmone::state::transition / validate_transaction),
-/// which provides full Ethereum consensus compatibility.
+/// Implements the bcos::executor_v1::TransactionExecutor concept. The outer EVM
+/// logic (state machine, host, transaction validation / execution / block
+/// finalization) is ported from bcos-evm and integrated here so that it reads
+/// and writes BCOS storage directly through ledger::account::EVMAccount +
+/// storage2 — there is no evmone::state::StateView / BlockHashes / StateDiff
+/// adapter layer (StorageStateView / StorageBlockHashes / applyStateDiff are
+/// gone), transactions are the bcos protocol::Transaction directly, and block
+/// headers are the bcos protocol::BlockHeader directly (see the
+/// Rollbackable / EthereumState / EthereumHost / EthereumTransition headers).
 ///
 /// This executor does NOT support FISCO BCOS native transaction features
 /// (precompiled management, auth committee, gas payment precheck, etc.).
@@ -21,10 +26,8 @@
 
 #pragma once
 
-#include "BCOS2Evmone.h"
-#include "StorageStateView.h"
-#include "bcos-evm/eth/state/errors.hpp"
-#include "bcos-evm/eth/state/state.hpp"
+#include "EthereumTransition.h"
+#include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -36,6 +39,7 @@
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
 #include <algorithm>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -44,52 +48,49 @@
 
 namespace bcos::executor_v1::eth
 {
+// The journaling storage wrapper is shared with the transaction-executor (now
+// defined in bcos-framework/storage2/RollbackableStorage.h).
+using bcos::executor_v1::Rollbackable;
 
-DERIVE_BCOS_EXCEPTION(NonceAtMaxValue);
-DERIVE_BCOS_EXCEPTION(GasPriceBelowBaseFee);
-DERIVE_BCOS_EXCEPTION(PriorityGasPriceExceedsMax);
-DERIVE_BCOS_EXCEPTION(IntrinsicGasTooLow);
-DERIVE_BCOS_EXCEPTION(BlobTxMissingTo);
-DERIVE_BCOS_EXCEPTION(EmptyBlobVersionedHashes);
-DERIVE_BCOS_EXCEPTION(BlobFeeCapBelowBaseFee);
-DERIVE_BCOS_EXCEPTION(InsufficientBalance);
 DERIVE_BCOS_EXCEPTION(EvmcRevisionNotConfigured);
-DERIVE_BCOS_EXCEPTION(TransactionValidationFailed);
+
+// Non-template helpers — defined in EthereumExecutor.cpp.
+/// Build the EVM block parameters from the BCOS BlockHeader + LedgerConfig.
+EthBlockInfo buildBlockInfo(
+    protocol::BlockHeader const& header, ledger::LedgerConfig const& config, evmc_revision rev);
+
+/// Builds a failed BCOS receipt for a transaction that failed validation
+/// (see evm::ErrorCode in EVMSupport.h).
+protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& error,
+    protocol::TransactionReceiptFactory const& rf, int64_t blockNumber);
 
 class EthereumExecutor
 {
 public:
-    /// @param blockHashes Optional BlockHashes provider used for BLOCKHASH
-    ///                     lookups during execution. When omitted, all BLOCKHASH
-    ///                     reads return zero (Ethereum "unknown block"
-    ///                     semantics). A storage-backed provider that reads
-    ///                     hashes through the ledger::getBlockHash LedgerMethod
-    ///                     is provided by StorageBlockHashes.h.
+    /// @param blockHashLookup Optional BLOCKHASH provider used for BLOCKHASH
+    ///                        lookups during execution. It is called with the
+    ///                        queried height and the executing block's height
+    ///                        (from the execution context, so a storage-backed
+    ///                        provider need not read the current height itself).
+    ///                        When omitted, all BLOCKHASH reads return zero
+    ///                        (Ethereum "unknown block" semantics). In production
+    ///                        a storage-backed provider resolving
+    ///                        ledger::getBlockHash is injected (see libinitializer);
+    ///                        EEST injects an in-memory map.
     ///
     /// The injected provider is deliberately bound to the storage handed to
     /// the *constructor* (the committed/global storage), not to the per-chunk
     /// view a transaction executes against: BLOCKHASH resolves historical
     /// committed hashes, which are never modified by the block being executed.
-    /// This means the executor can be reused across blocks as long as the
-    /// committed storage backing the provider outlives it.
     EthereumExecutor(protocol::TransactionReceiptFactory const& receiptFactory,
-        crypto::Hash::Ptr hashImpl, std::shared_ptr<evmone::state::BlockHashes> blockHashes = {})
+        BlockHashLookup blockHashLookup = {})
       : m_receiptFactory(receiptFactory),
-        m_hashImpl(std::move(hashImpl)),
         m_vm(evmc_create_evmone()),
-        m_blockHashes(std::move(blockHashes))
+        m_blockHashLookup(std::move(blockHashLookup))
     {}
 
     /// Access the EVM instance (needed for system_call functions).
     evmc::VM& vm() { return m_vm; }
-
-    /// The BlockHashes provider used for BLOCKHASH lookups during execution.
-    /// Falls back to all-zero hashes when none was injected at construction.
-    evmone::state::BlockHashes const& blockHashes() const noexcept
-    {
-        return m_blockHashes ? *m_blockHashes :
-                               static_cast<evmone::state::BlockHashes const&>(m_zeroBlockHashes);
-    }
 
     /// Execute a single Ethereum transaction.
     ///
@@ -114,21 +115,45 @@ public:
     template <class Storage>
     task::Task<void> finalizeBlock(Storage& storage, protocol::BlockHeader const& blockHeader,
         ledger::LedgerConfig const& ledgerConfig, evmc_revision rev,
-        std::optional<uint64_t> blockReward,
-        std::vector<evmone::state::Withdrawal> const& withdrawals = {})
+        std::optional<uint64_t> blockReward, std::vector<EthWithdrawal> const& withdrawals = {})
     {
-        StorageStateView<Storage> stateView(storage);
+        // Same all-or-nothing guarantee as execute(): if finalizeState throws
+        // part-way (a reward/withdrawal storage write fails), roll the journal
+        // back so the block's rewards are not left half-applied, then rethrow.
+        Rollbackable<Storage> rollable(storage);
+        EthereumState<Rollbackable<Storage>> state(rollable);
+        const auto savepoint = rollable.current();
+        // co_await is not permitted inside an exception handler ([expr.await]/2),
+        // so the failure is captured here and the rollback runs after it.
+        std::exception_ptr failure;
 
-        evmc_address coinbase{};
-        auto const& coinbaseBytes = blockHeader.coinbase();
-        if (coinbaseBytes.size() == sizeof(evmc_address))
+        try
         {
-            std::copy_n(coinbaseBytes.begin(), sizeof(evmc_address), coinbase.bytes);
+            evmc_address coinbase{};
+            auto const& coinbaseBytes = blockHeader.coinbase();
+            if (coinbaseBytes.size() == sizeof(evmc_address))
+            {
+                std::copy_n(coinbaseBytes.begin(), sizeof(evmc_address), coinbase.bytes);
+            }
+
+            co_await finalizeState(state, rev, coinbase, blockReward, withdrawals);
         }
-
-        auto diff = evmone::state::finalize(stateView, rev, coinbase, blockReward, {}, withdrawals);
-
-        co_await applyStateDiff(storage, diff, rev, *m_hashImpl);
+        catch (...)
+        {
+            failure = std::current_exception();
+        }
+        if (failure)
+        {
+            try
+            {
+                co_await rollable.rollback(savepoint);
+            }
+            catch (...)
+            {
+                // Ignore the cleanup error; the original failure wins.
+            }
+            std::rethrow_exception(failure);
+        }
     }
 
     // TransactionExecutor concept support: ExecuteContext
@@ -143,15 +168,15 @@ public:
     // context (never shared between contexts), so the three phases of
     // different transactions may run in parallel. The only state shared
     // through the executor is:
-    //   - m_vm            : evmone VM execution is thread-safe (a fresh
-    //                       execution state is created per call).
-    //   - m_hashImpl      : stateless hash computation, safe for concurrency.
-    //   - m_receiptFactory: createReceipt allocates a fresh receipt per call.
-    //   - m_blockHashes   : const noexcept lookups. StorageBlockHashes reads
-    //                       straight through to a read-only committed table
-    //                       and therefore relies on the injected Storage's
-    //                       support for concurrent reads (see StorageBlockHashes.h);
-    //                       ZeroBlockHashes is stateless.
+    //   - m_vm              : evmone VM execution is thread-safe (a fresh
+    //                         execution state is created per call).
+    //   - m_receiptFactory  : createReceipt allocates a fresh receipt per call.
+    //   - m_blockHashLookup : invoked for BLOCKHASH. The production provider
+    //                         reads a read-only committed table straight
+    //                         through the injected storage (see libinitializer)
+    //                         and therefore relies on that Storage's support
+    //                         for concurrent reads; an absent provider is
+    //                         stateless.
     template <class Storage>
     struct ExecuteContext
     {
@@ -168,11 +193,8 @@ public:
 
         // Per-phase state — owned by this context, safe for concurrent phases.
         evmc_revision m_rev = EVMC_FRONTIER;
-        evmone::state::BlockInfo m_blockInfo;
-        evmone::state::Transaction m_evmTx;
-        StorageStateView<Storage> m_stateView;
-        evmone::state::TransactionProperties m_txProps;
-        evmone::state::BlobParams m_blobParams;
+        EthBlockInfo m_blockInfo;
+        EthCallParams m_callParams;
         int64_t m_blobGasLeft = 0;
         // Set when execute()'s validate_transaction failed against the state
         // the transaction would actually run on. Validation runs once, in
@@ -181,7 +203,7 @@ public:
         // transaction is genuinely invalid and gets a failure receipt from
         // finish(), with no state written for it.
         std::optional<std::error_code> m_validationError;
-        evmone::state::TransactionReceipt m_evmReceipt;
+        protocol::TransactionReceipt::Ptr m_receipt;
 
         ExecuteContext(EthereumExecutor& exec, Storage& st, protocol::BlockHeader const& bh,
             protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c)
@@ -191,8 +213,7 @@ public:
             transaction(std::ref(tx)),
             contextID(cid),
             ledgerConfig(std::ref(cfg)),
-            call(c),
-            m_stateView(storage.get())
+            call(c)
         {}
 
         /// Node chain id for EIP-7702 auth validation; 0 if unconfigured.
@@ -205,8 +226,8 @@ public:
 
         /// Phase 1 — setup (no state access).
         ///
-        /// Converts the BCOS types to evmone types and resolves the block-level
-        /// parameters (revision, block info, blob schedule). The scheduler
+        /// Resolves the block-level parameters (revision, block info, blob
+        /// schedule) and the eth_call normalization overrides. The scheduler
         /// batches prepare() across a whole chunk (and the serial pipeline
         /// overlaps a chunk's prepare filter with the previous chunk's execute
         /// filter), so this phase deliberately reads no state: validation
@@ -215,12 +236,9 @@ public:
         ///
         /// blob_gas_left is the block's remaining blob gas (max_blob_gas_per_block
         /// minus already-included blobs). It must NOT be the tx's own blob gas,
-        /// otherwise a tx with too many blobs would pass validation. Matches
-        /// evmone's t8n/blockchaintest runners which start blob_gas_left at
-        /// max_blob_gas_per_block(blob_params). EIP-7840 blob schedule
-        /// constants (target, max, base_fee_update_fraction) live in
-        /// BCOS2Evmone.h so both this executor and blockHeaderToBlockInfo
-        /// share them.
+        /// otherwise a tx with too many blobs would pass validation.
+        /// EIP-7840 blob schedule constants live in EthereumTransition.h so
+        /// both this executor and buildBlockInfo share them.
         task::Task<void> prepare()
         {
             auto revOpt = ledgerConfig.get().evmcRevisionForBlock(blockHeader.get().number());
@@ -230,147 +248,174 @@ public:
                     EvmcRevisionNotConfigured() << errinfo_comment("evmcRevision not configured"));
             }
             m_rev = *revOpt;
-            m_blockInfo = blockHeaderToBlockInfo(blockHeader.get(), ledgerConfig.get(), m_rev);
-            m_evmTx = bcosTransactionToEvmone(transaction.get());
+            m_blockInfo = buildBlockInfo(blockHeader.get(), ledgerConfig.get(), m_rev);
+            m_callParams = {};
             m_validationError.reset();
-            m_blobParams = blobParamsForRevision(m_rev);
-            m_blobGasLeft =
-                static_cast<int64_t>(evmone::state::max_blob_gas_per_block(m_blobParams));
+            m_receipt.reset();
+            if (call)
+            {
+                // Dry-run (eth_call / eth_estimateGas): normalize to Ethereum
+                // RPC semantics so the standard MetaMask / ethers.js call shape
+                // — no gas, no nonce, no gasPrice — is not rejected by
+                // consensus-level admission checks:
+                //   * omitted gas -> the block gas limit, capped to the per-tx
+                //     limit on Osaka+ (EIP-7825: MAX_TX_GAS_LIMIT = 2^24).
+                //   * price: a dry run is never charged, so clear gas price,
+                //     tip and the block base fee unconditionally (geth's
+                //     NoBaseFee for eth_call).
+                if (transaction.get().gasLimit() == 0)
+                {
+                    auto gasCap = m_blockInfo.gas_limit;
+                    if (m_rev >= EVMC_OSAKA)
+                    {
+                        gasCap = std::min<int64_t>(gasCap, evm::MAX_TX_GAS_LIMIT);
+                    }
+                    m_callParams.gasLimit = gasCap;
+                }
+                m_callParams.free = true;
+                m_blockInfo.base_fee = 0;
+                // blob_base_fee is intentionally NOT zeroed for the dry run:
+                // geth's eth_call still enforces the blob-fee cap
+                // (BLOB_FEE_CAP_LESS_THAN_BLOCKS) and still includes the blob
+                // fee in the balance check, so a blob eth_call / estimateGas
+                // keeps those semantics. Only the non-blob price is cleared.
+                // * omitted nonce -> the sender's current nonce. This needs a
+                //   state read, so it is resolved in execute() (the only
+                //   phase allowed to touch state).
+            }
+            m_blobGasLeft = static_cast<int64_t>(evm::max_blob_gas_per_block(blobParamsForRevision(m_rev)));
             co_return;
         }
 
         /// Phase 2 — validate & execute.
         ///
-        /// Runs evmone's validate_transaction() against the current storage
-        /// state, then — if valid — transition() and immediately applies the
-        /// returned StateDiff back to the storage.
+        /// Runs validateTransaction() against the current storage state, then —
+        /// if valid — runTransaction() and immediately applies the resulting
+        /// state changes back to the storage.
         ///
         /// Validation happens here, once per transaction, against the state the
         /// transaction actually executes on. It must not live in prepare():
         /// the schedulers batch prepare() for a whole chunk before any
         /// execute(), so validating there would run every transaction against
-        /// the pre-chunk state. Both directions are wrong:
-        ///   * a transaction invalid at prepare() (e.g. nonce ahead of an
-        ///     earlier same-chunk transaction) can be valid by the time it
-        ///     executes, and
-        ///   * a transaction valid at prepare() but invalidated by an earlier
-        ///     same-chunk transaction (same sender, same nonce; or a sender
-        ///     drained by an earlier transaction) must be rejected, not
-        ///     executed: evmone's transition() trusts its caller and does not
-        ///     re-check nonce/balance (state.cpp bumps the sender nonce and
-        ///     subtracts the max cost unconditionally, and the balance is an
-        ///     intx::uint256 that would wrap).
-        /// A transaction that fails this validation is genuinely invalid: it is
-        /// skipped (no state written) and finish() emits a failure receipt.
+        /// the pre-chunk state. A transaction that fails this validation is
+        /// genuinely invalid: it is skipped (no state written) and finish()
+        /// emits a failure receipt.
         ///
-        /// Writing the diff here — not in finish() — is what gives transactions
-        /// within a chunk sequential read-through semantics, matching
+        /// The state is applied here — not in finish() — so transactions within
+        /// a chunk have sequential read-through semantics, matching
         /// TransactionExecutorImpl: both schedulers batch each phase across a
-        /// whole chunk, so if the diff were only applied in finish(), every
+        /// whole chunk, so if the writes were only applied in finish(), every
         /// transaction in the chunk would execute against the same unmodified
-        /// state (and, since the diffs are absolute post-state values, later
-        /// diffs would silently discard earlier ones). Reads through the state
-        /// view are synchronously bridged with task::tbb::syncWait.
+        /// state.
         task::Task<void> execute()
         {
-            if (call)
+            // The per-transaction state is local to this phase: it reads the
+            // current storage (earlier same-chunk transactions' writes already
+            // landed) through a journaling Rollbackable wrapper.
+            //
+            // NOTE (dry-run): runTransaction() unconditionally writes the state
+            // back via applyToStorage(), including for call=true. A dry-run
+            // (eth_call / eth_estimateGas) therefore leaves no trace ONLY
+            // because every call=true call site executes against a throwaway
+            // forked view (coCallLatest / callAtBlock); do not add a call=true
+            // path that runs against the live storage.
+            //
+            // Transaction atomicity (all-or-nothing): take a savepoint up front
+            // so that if anything below throws — e.g. a storage write inside
+            // runTransaction()->applyToStorage() fails part-way — the journal
+            // can undo every write this transaction applied to the underlying
+            // storage, instead of leaving partial writes behind. The receipt is
+            // only produced in finish(), so no receipt leaks for a rolled-back
+            // transaction; the exception is rethrown for the caller to handle.
+            // Per-transaction journaling costs one in-memory pre-image read +
+            // Record copy per writeOne (a value transfer ≈ 6-9 writes). This
+            // is the deliberate price of all-or-nothing atomicity on a partial
+            // applyToStorage failure — a correctness improvement over the old
+            // executor, which could leave partial writes behind. On the happy
+            // path the journal is discarded with this local scope (no
+            // cross-block accumulation).
+            Rollbackable<Storage> rollable(storage.get());
+            EthereumState<Rollbackable<Storage>> state(rollable);
+            const auto savepoint = rollable.current();
+            // co_await is not permitted inside an exception handler ([expr.await]/2),
+            // so the failure is captured here and the rollback runs after it.
+            std::exception_ptr failure;
+
+            try
             {
-                // Dry-run (eth_call / eth_estimateGas): the request is a read-only
-                // probe against a throwaway view (coCallLatest forks it, so nothing
-                // here persists), not a transaction to be admitted to the chain.
-                // Normalize it to Ethereum RPC semantics before validation so the
-                // standard MetaMask / ethers.js call shape — no gas, no nonce, no
-                // gasPrice — is not rejected by consensus-level admission checks:
-                //   * omitted gas -> the block gas limit, capped to the per-tx limit
-                //     on Osaka+ (EIP-7825: MAX_TX_GAS_LIMIT = 2^24). FISCO's block
-                //     ceiling is DEFAULT_GAS_LIMIT = 3e9, far above that cap, so a
-                //     bare assignment would fail MAX_GAS_LIMIT_EXCEEDED on any chain
-                //     at revision >= Osaka — which includes EVMC_REVISION_DEFAULT.
-                //     geth likewise never assigns the block ceiling to a call; it
-                //     uses a separate RPC gas cap.
-                //   * omitted nonce -> the sender's current nonce (0 would fail
-                //     NONCE_TOO_LOW for a sender past its first tx);
-                //   * price: a dry run is never charged, so clear gas price, tip and
-                //     the block base fee unconditionally (geth's NoBaseFee for
-                //     eth_call). This closes both the fee-cap check and the
-                //     balance-for-gas*fee check in one move — otherwise a call that
-                //     carries a gasPrice (eth_estimateGas frequently does) would
-                //     require the sender to hold gas_limit*gasPrice (e.g. 3e9 wei at
-                //     gasPrice 1). estimateGas is not meant to simulate affordability
-                //     at a given price, and geth does not either.
-                // An explicitly supplied gas / nonce is still validated normally
-                // (too-low gas still fails, an explicit nonce still has to be the
-                // current one), matching geth.
-                if (m_evmTx.gas_limit == 0)
+                if (call && transaction.get().nonce().empty())
                 {
-                    auto gasCap = m_blockInfo.gas_limit;
-                    if (m_rev >= EVMC_OSAKA)
-                    {
-                        gasCap = std::min<int64_t>(gasCap, evmone::state::MAX_TX_GAS_LIMIT);
-                    }
-                    m_evmTx.gas_limit = gasCap;
+                    // Resolve the sender's current nonce for the eth_call shape
+                    // (0 would fail NONCE_TOO_LOW for a sender past its first tx).
+                    auto senderAcc = state.find(ethSender(transaction.get()));
+                    m_callParams.nonce = senderAcc ? senderAcc->nonce : 0;
                 }
-                if (transaction.get().nonce().empty())
+
+                auto validationResult = validateTransaction(state, m_blockInfo, transaction.get(),
+                    m_rev, m_blockInfo.gas_limit /*block_gas_left*/,
+                    m_blobGasLeft /*blob_gas_left*/, m_callParams);
+                if (auto* props = std::get_if<EthTxProperties>(&validationResult))
                 {
-                    auto senderAcc = m_stateView.get_account(m_evmTx.sender);
-                    m_evmTx.nonce = senderAcc ? senderAcc->nonce : 0;
+                    // Valid against the current state — use the computed properties.
+                    // NOTE: we do not special-case SENDER_NOT_EOA here. EIP-3607
+                    // requires rejecting transactions whose sender has non-delegating
+                    // code; only accounts with empty code or a 0xef0100 delegation
+                    // designator may be senders, which validate_transaction already
+                    // accepts.
+                    m_receipt = co_await runTransaction(state, m_blockInfo,
+                        executor.get().m_blockHashLookup, transaction.get(), m_rev,
+                        executor.get().m_vm, *props, nodeChainId(), m_callParams,
+                        executor.get().m_receiptFactory, blockHeader.get().number());
                 }
-                m_evmTx.max_gas_price = 0;
-                m_evmTx.max_priority_gas_price = 0;
-                m_blockInfo.base_fee = 0;
+                else
+                {
+                    // Genuinely invalid — skip execution; finish() produces a
+                    // failure receipt and nothing is written for this transaction.
+                    m_validationError = std::get<std::error_code>(validationResult);
+                    BCOS_LOG(INFO) << LOG_BADGE("EXECUTE")
+                                   << LOG_DESC("tx validation failed")
+                                   << LOG_KV("error", m_validationError.value().message())
+                                   << LOG_KV("code", m_validationError.value().value());
+                }
             }
-
-            auto validationResult =
-                evmone::state::validate_transaction(m_stateView, m_blockInfo, m_evmTx, m_rev,
-                    m_blockInfo.gas_limit /*block_gas_left*/, m_blobGasLeft /*blob_gas_left*/);
-            if (auto* props = std::get_if<evmone::state::TransactionProperties>(&validationResult))
+            catch (...)
             {
-                // Valid against the current state — use evmone's computed properties.
-                m_txProps = *props;
+                // Record the failure (any writes already applied to the
+                // underlying storage are undone below).
+                failure = std::current_exception();
             }
-            else
+            if (failure)
             {
-                // Genuinely invalid — skip execution; finish() produces a
-                // failure receipt and nothing is written for this transaction.
-                // NOTE: we do not special-case SENDER_NOT_EOA here. EIP-3607
-                // requires rejecting transactions whose sender has non-delegating
-                // code, and EEST tests check this (e.g.
-                // test_set_code_from_account_with_non_delegating_code). Only
-                // accounts with empty code or a 0xef0100 delegation designator
-                // may be senders, which evmone's validate_transaction already
-                // accepts.
-                m_validationError = std::get<std::error_code>(validationResult);
-                BCOS_LOG(INFO) << LOG_BADGE("EXECUTE") << LOG_DESC("tx validation failed")
-                               << LOG_KV("error", m_validationError.value().message())
-                               << LOG_KV("code", m_validationError.value().value());
-                co_return;
+                // Undo every write this transaction applied to the underlying
+                // storage, restoring the pre-transaction state, then rethrow.
+                // If the rollback itself fails, keep the original failure — it
+                // is the real cause worth reporting (a failed rollback leaves
+                // partial writes, which is no worse than today).
+                try
+                {
+                    co_await rollable.rollback(savepoint);
+                }
+                catch (...)
+                {
+                    // Ignore the cleanup error; the original failure wins.
+                }
+                std::rethrow_exception(failure);
             }
-
-            m_evmReceipt = evmone::state::transition(m_stateView, m_blockInfo,
-                executor.get().blockHashes(), m_evmTx, m_rev, executor.get().vm(), m_txProps,
-                nodeChainId());
-
-            // Apply the resulting state diff immediately so later transactions
-            // in the same chunk observe it.
-            co_await applyStateDiff(
-                storage.get(), m_evmReceipt.state_diff, m_rev, *executor.get().m_hashImpl);
             co_return;
         }
 
         /// Phase 3 — finalize.
         ///
         /// Produces the BCOS receipt. The state was already applied in
-        /// execute(); this phase only converts the evmone receipt. The one
+        /// execute(); this phase only returns the receipt built there. The one
         /// exception is a transaction that failed validation in execute(): it
         /// gets a failure receipt and no state was written for it.
         ///
         /// Known limitation: the produced receipt carries no contract return
-        /// data. evmone's TransactionReceipt does not store output (return data
-        /// is consumed during execution), so under executor_version=2 an
-        /// eth_call on a contract read returns empty data — the call executes
+        /// data. The evmc host does not retain output (return data is consumed
+        /// during execution), so under executor_version=2 an eth_call on a
+        /// contract read returns empty data — the call executes
         /// (status/gasUsed are correct) but the return value is not surfaced.
-        /// This is a documented limitation of the v2 executor; see the PR
-        /// description's "Known limitations".
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
             if (m_validationError.has_value())
@@ -378,8 +423,7 @@ public:
                 co_return validationErrorReceipt(*m_validationError,
                     executor.get().m_receiptFactory, blockHeader.get().number());
             }
-            co_return evmoneReceiptToBcos(
-                m_evmReceipt, executor.get().m_receiptFactory, blockHeader.get().number());
+            co_return m_receipt;
         }
     };
 
@@ -394,10 +438,8 @@ public:
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;
-    crypto::Hash::Ptr m_hashImpl;
     evmc::VM m_vm;
-    std::shared_ptr<evmone::state::BlockHashes> m_blockHashes;
-    ZeroBlockHashes m_zeroBlockHashes;
+    BlockHashLookup m_blockHashLookup;
 };
 
 }  // namespace bcos::executor_v1::eth

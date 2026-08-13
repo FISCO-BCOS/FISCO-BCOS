@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include "EthereumBlockHashLookup.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -45,7 +46,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "ethereum-executor/EthereumExecutor.h"
-#include "ethereum-executor/StorageBlockHashes.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
@@ -389,15 +389,23 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // EthereumExecutor (executor_version=2): pure-Ethereum execution layer driven through the
     // same scheduler prepare()/execute()/finish() pipeline as TransactionExecutorImpl.
-    // The injected StorageBlockHashes provider resolves BLOCKHASH against the committed
-    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash LedgerMethod), so
-    // it outlives any single block's execute view — matching the semantics documented in
-    // EthereumExecutor.h.
+    // The injected block-hash lookup resolves BLOCKHASH against the committed
+    // global-storage backend (SYS_NUMBER_2_HASH via the ledger::getBlockHash
+    // LedgerMethod), so it outlives any single block's execute view — matching the
+    // semantics documented in EthereumExecutor.h. The lookup fails closed: a broken
+    // backend or an out-of-window request reports an unknown block (zero hash).
+    // It reads storage directly (no cache): one getBlockHash read per BLOCKHASH.
+    // The 256-ancestor window is bounded by the current block height, which the
+    // executor's execution context already knows (EthereumHost passes
+    // m_block.number), so no storage read for the current height is needed.
+    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
+                                       int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
+        // The body lives in EthereumBlockHashLookup.h (shared with the
+        // scheduler integration test so they exercise the same provider).
+        return ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
+    };
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
-        *m_protocolInitializer->blockFactory()->receiptFactory(),
-        m_protocolInitializer->cryptoSuite()->hashImpl(),
-        std::make_shared<executor_v1::eth::StorageBlockHashes<GlobalStateStorage::OpenedStorage>>(
-            m_globalStateStorageInitializer->storage().latestBackend()));
+        *m_protocolInitializer->blockFactory()->receiptFactory(), std::move(ethereumBlockHashLookup));
 
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
@@ -452,17 +460,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
         // scheduler. Only one scheduler version is active at a time (selected via
         // MultiVersionScheduler), so a dedicated instance avoids any cross-version state.
-        auto ethereumParallelScheduler =
-            std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>(
-                m_ioServicePool);
-        ethereumParallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
-        if (tbbThreadCount > 0)
-        {
-            ethereumParallelScheduler->m_maxConcurrency = tbbThreadCount;
-        }
+        //
+        // The v2 pipeline is deliberately SERIAL-ONLY even when the node is configured for
+        // parallel baseline scheduling: EthereumState::has_storage scans the account table via
+        // storage2::range(), which ReadWriteSetStorage does not record in the read/write set,
+        // so on SchedulerParallelImpl a chunk writing an account's storage would not be
+        // ordered against a chunk reading that account's has_storage (an EIP-7610
+        // CREATE-collision input) — a consensus divergence. Revisit (record the range read)
+        // before v2 is allowed to run on a parallel scheduler.
+        auto ethereumSerialScheduler =
+            std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumParallelScheduler,
+                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, !m_nodeConfig->enableSingleNodeConsensus());
         // Single-node consensus mode on the v2 EthereumExecutor: build the Engine API service
@@ -471,10 +481,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // producer, so the v1-only gate above does not apply.
         if (!engineApiForV1Only && m_nodeConfig->enableSingleNodeConsensus())
         {
-            m_engineServiceInitializer =
-                EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                    m_protocolInitializer->blockFactory(), ethereumParallelScheduler,
-                    ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
+            m_engineServiceInitializer = EngineServiceInitializer::build(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger);
         }
     }
     else

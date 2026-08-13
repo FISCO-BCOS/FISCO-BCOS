@@ -37,6 +37,7 @@
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
+#include "mpt/Constants.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -1938,10 +1939,11 @@ bool Ledger::buildGenesisBlock(
         auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
         // op-geth-compatible Ethereum state trie over the allocs: the root is
-        // empty (zero) for pbft chains with no allocs, set as the L2 genesis
-        // block's stateRoot below, and re-derived on restart to guard alloc
-        // immutability; the produced nodes are persisted further below on
-        // first init of an L2 chain. computeGenesisStateTrie only reads
+        // empty (zero) for pbft chains with no allocs (an empty-alloc L2 chain
+        // instead publishes mpt::emptyRootHash(), see the header-building branch
+        // below), set as the L2 genesis block's stateRoot below, and re-derived
+        // on restart to guard alloc immutability; the produced nodes are
+        // persisted further below on first init of an L2 chain. computeGenesisStateTrie only reads
         // genesis.m_allocs, so it does not depend on the genesis state being
         // written first.
         GenesisStateTrie ethStateTrie;
@@ -2108,9 +2110,25 @@ bool Ledger::buildGenesisBlock(
         // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
         // per-block state-change hashes, a different domain from this MPT root,
         // so only the (previously empty) genesis block carries it.
+        bool const l2EthereumCompat = std::any_of(genesis.m_features.begin(),
+            genesis.m_features.end(), [](ledger::FeatureSet const& featureSet) {
+                return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
+                       featureSet.enable > 0;
+            });
         if (!genesis.m_allocs.empty())
         {
             header->setStateRoot(ethStateTrie.root);
+        }
+        else if (l2EthereumCompat)
+        {
+            // Empty-alloc L2 genesis: NodeConfig::validateL2Invariants rejects this
+            // combination, but buildGenesisBlock is callable directly. Publish the
+            // canonical empty-trie root instead of a zero h256 — commitTrie()
+            // recognizes only emptyRootHash() as the from-empty marker
+            // (mpt/HashBuilder.h), so a zero parent root would send block 1's
+            // incremental MPT build down the node-reading merge path and abort on
+            // the nonexistent zero-hash node.
+            header->setStateRoot(mpt::emptyRootHash());
         }
         header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
@@ -2199,11 +2217,7 @@ bool Ledger::buildGenesisBlock(
         // (MPTInvariantViolation). Non-MPT chains never read these rows and get none; scenario
         // A (feature_mpt_state_root activated mid-chain) starts its first MPT block from
         // emptyRootHash() and needs no genesis nodes either.
-        if (std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
-                [](ledger::FeatureSet const& featureSet) {
-                    return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
-                           featureSet.enable > 0;
-                }))
+        if (l2EthereumCompat)
         {
             for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
             {
