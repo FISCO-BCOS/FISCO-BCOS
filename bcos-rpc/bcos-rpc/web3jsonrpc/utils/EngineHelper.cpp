@@ -274,13 +274,34 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
         }
         attrs.noTxPool = pa["noTxPool"].asBool();
     }
+    // The three fields below wrap their conversions: fromQuantity / fromHex throw plain
+    // std::exception subclasses (malformed input, uint64 overflow), which the RPC entry
+    // point would surface as InternalError — a client input error must map to
+    // InvalidParams naming the field instead.
     if (pa.isMember("gasLimit") && !pa["gasLimit"].isNull())
     {
-        attrs.gasLimit = fromQuantity(std::string(pa["gasLimit"].asString()));
+        try
+        {
+            attrs.gasLimit = fromQuantity(std::string(pa["gasLimit"].asString()));
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected uint64 quantity for payloadAttributes.gasLimit"));
+        }
     }
     if (pa.isMember("eip1559Params") && !pa["eip1559Params"].isNull())
     {
-        auto paramsBytes = fromHex(pa["eip1559Params"].asString());
+        bytes paramsBytes;
+        try
+        {
+            paramsBytes = fromHex(pa["eip1559Params"].asString());
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected hex string for payloadAttributes.eip1559Params"));
+        }
         if (paramsBytes.size() != c_eip1559ParamsBytes)
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(
@@ -291,7 +312,15 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     }
     if (pa.isMember("minBaseFee") && !pa["minBaseFee"].isNull())
     {
-        attrs.minBaseFee = fromQuantity(std::string(pa["minBaseFee"].asString()));
+        try
+        {
+            attrs.minBaseFee = fromQuantity(std::string(pa["minBaseFee"].asString()));
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "Expected uint64 quantity for payloadAttributes.minBaseFee"));
+        }
     }
     return attrs;
 }

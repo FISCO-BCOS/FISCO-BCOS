@@ -153,6 +153,39 @@ BOOST_AUTO_TEST_CASE(payloadAttributesEip1559ParamsLengthRejected)
         JsonRpcException);
 }
 
+BOOST_AUTO_TEST_CASE(payloadAttributesMalformedQuantitiesMapToInvalidParams)
+{
+    // Malformed / overflowing gasLimit, minBaseFee and non-hex eip1559Params must
+    // surface as InvalidParams (a plain std::exception from the converters would be
+    // mapped to InternalError by the RPC entry point).
+    auto expectInvalidParams = [](Json::Value attrs) {
+        BOOST_CHECK_EXCEPTION(
+            parsePayloadAttributes(makeAttributesParams(std::move(attrs)), engine::ApiVersion::V3),
+            JsonRpcException,
+            [](JsonRpcException const& error) { return error.code() == InvalidParams; });
+    };
+
+    auto malformedGasLimit = makeBaseAttributes();
+    malformedGasLimit["gasLimit"] = "0xzz";
+    expectInvalidParams(malformedGasLimit);
+
+    auto overflowGasLimit = makeBaseAttributes();
+    overflowGasLimit["gasLimit"] = "0x10000000000000000";  // 2^64, exceeds uint64
+    expectInvalidParams(overflowGasLimit);
+
+    auto malformedMinBaseFee = makeBaseAttributes();
+    malformedMinBaseFee["minBaseFee"] = "not-a-quantity";
+    expectInvalidParams(malformedMinBaseFee);
+
+    auto overflowMinBaseFee = makeBaseAttributes();
+    overflowMinBaseFee["minBaseFee"] = "0x10000000000000000";
+    expectInvalidParams(overflowMinBaseFee);
+
+    auto malformedEip1559 = makeBaseAttributes();
+    malformedEip1559["eip1559Params"] = "0xzzzzzzzzzzzzzzzz";  // 8 bytes long, invalid hex
+    expectInvalidParams(malformedEip1559);
+}
+
 BOOST_AUTO_TEST_CASE(payloadAttributesTransactionsMustBeArray)
 {
     auto attrs = makeBaseAttributes();

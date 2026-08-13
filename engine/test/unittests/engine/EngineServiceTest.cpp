@@ -663,13 +663,54 @@ BOOST_AUTO_TEST_CASE(build_payload_reassembles_web3_raw_bytes)
     // Dual model: the decoded executable form is the sealed mempool transaction itself.
     BOOST_CHECK(engineTx.decoded == tx);
 
-    // A native Tars encoding, by contrast, dispatches as Unsupported — pinning why the
-    // buildPayload Tars fallback wire form cannot pass newPayload validation and is
-    // reserved for flows that stop at getPayload.
+    // A native Tars encoding, by contrast, dispatches as Unsupported — pinning why
+    // buildPayload excludes native transactions instead of emitting their Tars bytes
+    // (such a wire form could never pass newPayload validation).
     bytes tarsEncoded;
     makeTx(sender, 1)->encode(tarsEncoded);
     BOOST_CHECK(bcos::engine::dispatchRawTransaction(bcos::ref(tarsEncoded)) ==
                 bcos::engine::RawTransactionKind::Unsupported);
+}
+
+BOOST_AUTO_TEST_CASE(build_payload_excludes_native_transactions_full_loop)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    // One native Tars transaction and one Web3 transaction, both sealable.
+    std::string nativeSender("eeeeeeeeeeeeeeeeeeee", 20);
+    std::string web3Sender("ffffffffffffffffffff", 20);
+    auto nativeTx = makeTx(nativeSender, 0);
+    auto web3Tx = makeWeb3Tx(web3Sender, 0);
+    memPool.add(std::vector{nativeTx, web3Tx});
+    globalStateStorageFixture.setNonce(nativeSender, "0");
+    globalStateStorageFixture.setNonce(web3Sender, "0");
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    // The native transaction is excluded from the OP payload (no EIP-2718 wire form);
+    // only the Web3 transaction remains, carried as its genuine raw envelope.
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(payload->executionPayload.transactions.front().decoded == web3Tx);
+    BOOST_CHECK(bcos::engine::dispatchRawTransaction(
+                    bcos::ref(payload->executionPayload.transactions.front().raw)) ==
+                bcos::engine::RawTransactionKind::DynamicFee);
+
+    // The full loop closes: the payload this service built passes its own newPayload
+    // validation (the seal/validate asymmetry the exclusion removes).
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 }
 
 BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
@@ -803,7 +844,8 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
     std::string sender("cccccccccccccccccccc", 20);
-    auto tx = makeTx(sender, 0);
+    // Web3-shaped: only transactions with an EIP-2718 wire form enter OP payloads.
+    auto tx = makeWeb3Tx(sender, 0);
     memPool.add(std::vector{tx});
     globalStateStorageFixture.setNonce(sender, "0");
     auto payloadAttributes = makePayloadAttributesV2();

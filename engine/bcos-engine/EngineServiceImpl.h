@@ -32,6 +32,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
+#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
@@ -552,32 +553,38 @@ private:
     {
         // Dual carrier: every sealed transaction is stored with both its raw EIP-2718
         // bytes (the wire form getPayload returns) and the decoded executable form (used
-        // for execution and ledger persistence). Web3 transactions reassemble their exact
-        // signed raw bytes from the signing payload + signature — the same splice that
-        // produces the canonical txHash. Native Tars transactions have no EIP-2718 form
-        // and keep the legacy Tars encoding as a fallback. NOTE: a Tars-encoded wire form
-        // does NOT pass this service's own newPayload validation (its first byte
-        // dispatches as Unsupported), so a payload built from a native transaction only
-        // serves flows that stop at getPayload. In production the mempool's sole ingress
-        // is eth_sendRawTransaction, which admits Web3 transactions exclusively, so this
-        // branch is unreachable there; it exists for legacy test fixtures.
+        // for execution and ledger persistence). Web3 transactions reassemble their
+        // exact signed raw bytes from the signing payload + signature — the same splice
+        // that produces the canonical txHash.
+        //
+        // Only transactions with a genuine EIP-2718 wire form enter the OP payload. A
+        // native Tars transaction has no such form — any bytes emitted for it would be
+        // rejected by this service's own newPayload dispatch, so sealing one would make
+        // the service build a payload it then judges INVALID (an FCU -> getPayload ->
+        // newPayload livelock). Such transactions are excluded from the payload with a
+        // warning and remain in the mempool. In production the mempool's sole ingress is
+        // eth_sendRawTransaction, which admits Web3 transactions exclusively, so the
+        // exclusion only ever triggers for in-process callers.
         std::vector<EngineTransaction> engineTransactions;
         engineTransactions.reserve(sealedTxs.size());
         for (auto& sealedTx : sealedTxs)
         {
-            bytes raw;
-            if (sealedTx->type() ==
+            if (sealedTx->type() !=
                 static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
             {
-                raw = bcostars::protocol::reassembleWeb3RawTransaction(
-                    sealedTx->extraTransactionBytes(), sealedTx->signatureData());
+                BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
+                                  << LOG_DESC(
+                                         "buildPayload: excluding transaction without an EIP-2718 "
+                                         "wire form from the OP payload")
+                                  << LOG_KV("hash", sealedTx->hash().hex())
+                                  << LOG_KV("type", static_cast<int>(sealedTx->type()));
+                continue;
             }
-            else
-            {
-                sealedTx->encode(raw);
-            }
-            engineTransactions.push_back(
-                EngineTransaction{.raw = std::move(raw), .decoded = std::move(sealedTx)});
+            engineTransactions.push_back(EngineTransaction{
+                .raw = bcostars::protocol::reassembleWeb3RawTransaction(
+                    sealedTx->extraTransactionBytes(), sealedTx->signatureData()),
+                .decoded = std::move(sealedTx),
+            });
         }
 
         ExecutionPayload executionPayload{
