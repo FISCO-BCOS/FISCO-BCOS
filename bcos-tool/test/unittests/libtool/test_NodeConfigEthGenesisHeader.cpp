@@ -160,11 +160,15 @@ BOOST_AUTO_TEST_CASE(EachMissingFieldFailsFast)
     }
 }
 
-BOOST_AUTO_TEST_CASE(SectionAbsentMeansNoEthHeader)
+BOOST_AUTO_TEST_CASE(L2WithoutSectionRejected)
 {
+    // The section and the L2 feature are bound both ways: an L2 chain
+    // without [eth_genesis_header] would mint a Tars-hashed B0 no
+    // op-node/op-reth could match, so it fails fast.
     auto cfg = makeEthNodeConfig();
-    cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0));
-    BOOST_CHECK(!cfg->genesisConfig().m_ethGenesisHeader.has_value());
+    BOOST_CHECK_THROW(
+        cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0)),
+        bcos::tool::InvalidConfig);
 }
 
 BOOST_AUTO_TEST_CASE(SectionWithoutL2FeatureRejected)
@@ -221,8 +225,10 @@ BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)
     cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(tampered)));
     BOOST_CHECK(withHeader != generateGenesisData(cfg2->genesisConfig(), emptyLedgerConfig));
 
+    // A non-L2 chain (no feature, no allocs, no section) must not mention
+    // the section in its genesis pin at all.
     auto cfg3 = makeEthNodeConfig();
-    cfg3->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0));
+    cfg3->loadGenesisConfig(parseEthIni(std::string(kEthBase)));
     auto withoutHeader = generateGenesisData(cfg3->genesisConfig(), emptyLedgerConfig);
     BOOST_CHECK(withoutHeader.find("[ethGenesisHeader]") == std::string::npos);
 }

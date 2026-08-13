@@ -425,15 +425,23 @@ void NodeConfig::validateL2Invariants()
                                   "[alloc.*] section requires feature_l2_ethereum_compat enabled "
                                   "in [features]"));
     }
-    // The Ethereum B0 header only makes sense for an L2 chain: a pbft chain
-    // with an [eth_genesis_header] section is a mis-assembled config. The
-    // reverse (L2 without the section) stays legal — those chains keep the
-    // native Tars genesis header.
+    // The Ethereum B0 header and L2 mode are bound both ways: a pbft chain
+    // with an [eth_genesis_header] section is a mis-assembled config, and an
+    // L2 chain WITHOUT the section would mint a Tars-hashed B0 that no
+    // op-node/op-reth can ever match — fail fast in both directions.
     if (!l2Enabled && genesis.m_ethGenesisHeader.has_value())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("[eth_genesis_header] section requires "
                                                "feature_l2_ethereum_compat enabled in [features]"));
+    }
+    if (l2Enabled && !genesis.m_ethGenesisHeader.has_value())
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "feature_l2_ethereum_compat requires an [eth_genesis_header] section in "
+                "config.genesis (all 22 fields from the merged genesis artifact); an L2 chain "
+                "without it would build a non-Ethereum genesis block"));
     }
 }
 
