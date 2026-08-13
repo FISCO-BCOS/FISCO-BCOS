@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 """
-mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Phase 2)
+mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Karst dialect)
 
-模拟以太坊共识层客户端（Consensus Layer），对 EL 节点的 Engine API
-按照 CL 的标准调用流程进行自动化冒烟测试：
+模拟 op-node 对 EL 节点的 Engine API 调用流程(W0 mock,B4 起说 Karst 方言):
 
-  1. engine_exchangeCapabilities   — 能力协商
-  2. engine_forkchoiceUpdatedV2    — Forkchoice 状态更新（无 payloadAttributes）
-  3. engine_forkchoiceUpdatedV2    — Forkchoice 状态更新（带 payloadAttributes，触发构建）
-  4. engine_getPayloadV2           — 获取构建好的 Payload
-  5. engine_newPayloadV2           — 新 Payload 下发与校验
+  1. engine_exchangeCapabilities   — 只允许 Karst 面:FCU V3 / getPayloadV5 / newPayloadV4
+  2. engine_forkchoiceUpdatedV3    — 无 payloadAttributes(纯状态更新)
+  3. engine_forkchoiceUpdatedV3    — 带 payloadAttributes:秒级时间戳、注入一笔 0x7e
+                                     deposit 裸交易、noTxPool true/false 轮换
+  4. engine_getPayloadV5           — 校验 V5 响应形状,断言 deposit 原字节在列
+  5. engine_newPayloadV4           — [payload, [], beaconRoot, []] 提交
+  6. 负测                          — 旧版本方法 -38005、未知 payloadId -38001、缺参 -32602
 
 用法:
     pip install requests
-    python3 mock_consensus_client.py [RPC_URL]
+    python3 mock_consensus_client.py [RPC_URL] [JWT_SECRET_FILE]
 
 退出码: 0 = 全部通过, 1 = 有测试失败
 """
 
 import json
 import sys
+import time
 from typing import Any, Dict, List, Optional
 
 try:
@@ -35,6 +37,64 @@ except ImportError:
 RPC_URL = "http://127.0.0.1:8545"
 HEADERS = {"Content-Type": "application/json"}
 TIMEOUT = 30
+
+ZERO_HASH = "0x" + "00" * 32
+FEE_RECIPIENT = "0x0000000000000000000000000000000000000001"
+PREV_RANDAO = "0x" + "00" * 31 + "01"
+
+# Karst-only Engine surface (must match detail::supportedCapabilities()).
+KARST_CAPABILITIES = {
+    "engine_exchangeCapabilities",
+    "engine_forkchoiceUpdatedV3",
+    "engine_getPayloadV5",
+    "engine_newPayloadV4",
+}
+
+# ---- Minimal RLP encoder (enough for the deposit fixture) ----
+
+
+def _rlp_bytes(payload: bytes) -> bytes:
+    if len(payload) == 1 and payload[0] < 0x80:
+        return payload
+    assert len(payload) <= 55
+    return bytes([0x80 + len(payload)]) + payload
+
+
+def _rlp_int(value: int) -> bytes:
+    if value == 0:
+        return b"\x80"
+    return _rlp_bytes(value.to_bytes((value.bit_length() + 7) // 8, "big"))
+
+
+def _rlp_list(items: List[bytes]) -> bytes:
+    body = b"".join(items)
+    if len(body) <= 55:
+        return bytes([0xC0 + len(body)]) + body
+    length = len(body).to_bytes((len(body).bit_length() + 7) // 8, "big")
+    return bytes([0xF7 + len(length)]) + length + body
+
+
+def build_deposit_raw() -> str:
+    """dep-1: 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data]).
+
+    Fixed L1 info; same field shapes as the EngineRawTxB2B3Test C++ fixture.
+    """
+    body = _rlp_list(
+        [
+            _rlp_bytes(bytes.fromhex("11" * 32)),  # sourceHash
+            _rlp_bytes(bytes.fromhex("22" * 20)),  # from
+            _rlp_bytes(bytes.fromhex("33" * 20)),  # to
+            _rlp_int(1000),  # mint
+            _rlp_int(7),  # value
+            _rlp_int(21000),  # gas
+            _rlp_int(0),  # isSystemTx = false
+            _rlp_bytes(bytes.fromhex("deadbeef")),  # data
+        ]
+    )
+    return "0x7e" + body.hex()
+
+
+DEPOSIT_RAW = build_deposit_raw()
 
 # ---- Helpers ----
 
@@ -67,8 +127,8 @@ def _log_info(msg: str) -> None:
     print(f"  {YELLOW}ℹ️  {msg}{NC}")
 
 
-def rpc(method: str, params: List[Any], req_id: int = 1) -> Dict[str, Any]:
-    """Send a JSON-RPC request, return the full response dict."""
+def rpc_raw(method: str, params: List[Any], req_id: int = 1) -> Dict[str, Any]:
+    """Send a JSON-RPC request, return the full response dict (error included)."""
     payload: Dict[str, Any] = {
         "jsonrpc": "2.0",
         "id": req_id,
@@ -77,204 +137,216 @@ def rpc(method: str, params: List[Any], req_id: int = 1) -> Dict[str, Any]:
     }
     resp = requests.post(RPC_URL, json=payload, headers=HEADERS, timeout=TIMEOUT)
     resp.raise_for_status()
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(f"RPC error [{method}]: {data['error']}")
-    return data
+    return resp.json()
 
 
 def rpc_result(method: str, params: List[Any], req_id: int = 1) -> Any:
-    """Send a JSON-RPC request, return result only."""
-    return rpc(method, params, req_id)["result"]
+    data = rpc_raw(method, params, req_id)
+    if "error" in data:
+        raise RuntimeError(f"RPC error [{method}]: {data['error']}")
+    return data["result"]
+
+
+def expect_error_code(method: str, params: List[Any], expected_code: int) -> None:
+    """Assert a call fails with exactly the given JSON-RPC error code."""
+    _log_test(f"{method} -> error {expected_code}")
+    data = rpc_raw(method, params, req_id=99)
+    if "error" not in data:
+        _log_fail(f"expected error {expected_code}, got success: {data.get('result')}")
+        return
+    code = data["error"]["code"]
+    if code != expected_code:
+        _log_fail(f"expected {expected_code}, got {code}: {data['error']}")
+        return
+    _log_info(f"message = {data['error'].get('message', '')[:80]}")
+    _log_pass()
 
 
 # ---- Test Cases ----
 
 
 def test_exchange_capabilities() -> None:
-    """Verify engine_exchangeCapabilities returns all expected capabilities."""
-    _log_test("engine_exchangeCapabilities")
+    """The advertised surface is Karst-only: no V1/V2 methods, no getPayloadV1-V4."""
+    _log_test("engine_exchangeCapabilities (Karst-only surface)")
 
-    result = rpc_result("engine_exchangeCapabilities", [["engine_newPayloadV2"]])
+    result = rpc_result("engine_exchangeCapabilities", [sorted(KARST_CAPABILITIES)])
     returned = set(result)
 
-    expected = {
-        "engine_exchangeCapabilities",
-        "engine_forkchoiceUpdatedV1",
-        "engine_forkchoiceUpdatedV2",
-        "engine_forkchoiceUpdatedV3",
-        "engine_getPayloadV1",
-        "engine_getPayloadV2",
-        "engine_getPayloadV3",
-        "engine_newPayloadV1",
-        "engine_newPayloadV2",
-        "engine_newPayloadV3",
-    }
-
-    missing = expected - returned
-    if missing:
-        _log_fail(f"Missing capabilities: {missing}")
+    if returned != KARST_CAPABILITIES:
+        _log_fail(
+            f"capability mismatch: missing={KARST_CAPABILITIES - returned} "
+            f"extra={returned - KARST_CAPABILITIES}"
+        )
         return
 
-    _log_info(f"All {len(expected)} capabilities present")
+    _log_info(f"exactly {len(returned)} Karst capabilities advertised")
     _log_pass()
 
 
 def get_head_hash() -> str:
-    """Retrieve the latest block hash from the node."""
     block = rpc_result("eth_getBlockByNumber", ["latest", False])
     return block["hash"]
 
 
-def test_forkchoice_updated_without_payload() -> None:
-    """Verify forkchoiceUpdatedV2 works without payloadAttributes (pure state update)."""
-    _log_test("engine_forkchoiceUpdatedV2 (without payloadAttributes)")
+def test_forkchoice_v3_without_payload() -> None:
+    _log_test("engine_forkchoiceUpdatedV3 (without payloadAttributes)")
 
     head_hash = get_head_hash()
-    _log_info(f"headBlockHash = {head_hash}")
-
     fc_state = {
         "headBlockHash": head_hash,
         "safeBlockHash": head_hash,
         "finalizedBlockHash": head_hash,
     }
-
-    result = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, None])
+    result = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, None])
     status = result["payloadStatus"]["status"]
     _log_info(f"payloadStatus.status = {status}")
-
     if status in ("VALID", "SYNCING"):
         _log_pass()
     else:
         _log_fail(f"Unexpected status: {status}")
 
 
-def test_forkchoice_updated_with_payload() -> Optional[str]:
-    """Verify forkchoiceUpdatedV2 triggers payload build and returns a payloadId."""
-    _log_test("engine_forkchoiceUpdatedV2 (with payloadAttributes)")
+_timestamp_bump = 0
+
+
+def next_timestamp() -> str:
+    """Engine wire timestamps are Unix SECONDS (execution-apis; op-node sends seconds)."""
+    global _timestamp_bump
+    _timestamp_bump += 1
+    return hex(int(time.time()) + _timestamp_bump)
+
+
+def run_karst_block_flow(no_tx_pool: bool) -> bool:
+    """One op-node-shaped block: FCU V3 (deposit injected) -> getPayloadV5 -> newPayloadV4."""
+    label = f"noTxPool={str(no_tx_pool).lower()}"
+    _log_test(f"FCU V3 + getPayloadV5 + newPayloadV4 ({label})")
 
     head_hash = get_head_hash()
-    _log_info(f"headBlockHash = {head_hash}")
-
     fc_state = {
         "headBlockHash": head_hash,
         "safeBlockHash": head_hash,
         "finalizedBlockHash": head_hash,
     }
-
     payload_attrs = {
-        "timestamp": "0x100",
-        "prevRandao": "0x" + "00" * 31 + "01",
-        "suggestedFeeRecipient": "0x0000000000000000000000000000000000000001",
+        "timestamp": next_timestamp(),
+        "prevRandao": PREV_RANDAO,
+        "suggestedFeeRecipient": FEE_RECIPIENT,
         "withdrawals": [],
+        "parentBeaconBlockRoot": ZERO_HASH,
+        "transactions": [DEPOSIT_RAW],
+        "noTxPool": no_tx_pool,
+        "gasLimit": "0x1c9c380",
     }
 
-    result = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, payload_attrs])
-    status = result["payloadStatus"]["status"]
-    _log_info(f"payloadStatus.status = {status}")
+    fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
+    status = fcu["payloadStatus"]["status"]
+    payload_id = fcu.get("payloadId")
+    _log_info(f"FCU status={status}, payloadId={payload_id}")
+    if status != "VALID" or not payload_id:
+        _log_fail(f"FCU did not build a payload: status={status}, payloadId={payload_id}")
+        return False
 
-    if status not in ("VALID", "SYNCING"):
-        _log_fail(f"Unexpected status: {status}")
-        return None
+    result = rpc_result("engine_getPayloadV5", [payload_id])
 
-    payload_id = result.get("payloadId")
-    if payload_id:
-        _log_info(f"payloadId = {payload_id}")
-        _log_pass()
-        return payload_id
+    # V5 response shape (op-node expectation).
+    for field in (
+        "executionPayload",
+        "blockValue",
+        "blobsBundle",
+        "shouldOverrideBuilder",
+        "executionRequests",
+    ):
+        if field not in result:
+            _log_fail(f"getPayloadV5 response missing '{field}': {sorted(result.keys())}")
+            return False
+    bundle = result["blobsBundle"]
+    if any(bundle.get(k) != [] for k in ("commitments", "proofs", "blobs")):
+        _log_fail(f"blobsBundle must be three empty arrays, got {bundle}")
+        return False
+    if result["executionRequests"] != [] or result["shouldOverrideBuilder"] is not False:
+        _log_fail("executionRequests must be [] and shouldOverrideBuilder false")
+        return False
+
+    payload = result["executionPayload"]
+    if "withdrawalsRoot" not in payload:
+        _log_fail("executionPayload missing withdrawalsRoot (Isthmus V4 shape)")
+        return False
+
+    # dep-1 byte fidelity: the injected deposit's raw bytes lead the transaction list.
+    txs = payload["transactions"]
+    if not txs or txs[0].lower() != DEPOSIT_RAW.lower():
+        _log_fail(f"deposit raw bytes not first in payload transactions: {txs[:2]}")
+        return False
+    if no_tx_pool and len(txs) != 1:
+        _log_fail(f"noTxPool=true payload must contain exactly the forced deposit, got {len(txs)}")
+        return False
+    _log_info(f"deposit in payload at index 0 ({len(txs)} tx total)")
+
+    beacon_root = result.get("parentBeaconBlockRoot", ZERO_HASH)
+    new_status = rpc_result("engine_newPayloadV4", [payload, [], beacon_root, []])
+    _log_info(f"newPayloadV4 status = {new_status['status']}")
+    if new_status["status"] not in ("VALID", "ACCEPTED"):
+        _log_fail(f"newPayloadV4 rejected the built payload: {new_status}")
+        return False
+
+    # Wait for the committed block to become the eth_* head (ledger rows are written
+    # inside newPayload, so this is normally immediate).
+    committed_hash = payload["blockHash"]
+    for _ in range(20):
+        if get_head_hash() == committed_hash:
+            break
+        time.sleep(0.5)
     else:
-        _log_info("No payloadId returned (node may be SYNCING)")
-        _log_pass()
-        return None
-
-
-def test_get_payload(payload_id: str) -> Optional[Dict[str, Any]]:
-    """Verify engine_getPayloadV2 returns a well-formed ExecutionPayload."""
-    _log_test(f"engine_getPayloadV2 (payloadId={payload_id})")
-
-    result = rpc_result("engine_getPayloadV2", [payload_id])
-
-    # V2 wraps the execution payload under "executionPayload" key
-    if "executionPayload" in result:
-        result = result["executionPayload"]
-
-    required_fields = [
-        "parentHash", "feeRecipient", "stateRoot", "receiptsRoot",
-        "logsBloom", "prevRandao", "blockNumber", "gasLimit", "gasUsed",
-        "timestamp", "extraData", "baseFeePerGas", "blockHash",
-        "transactions", "withdrawals",
-    ]
-
-    missing = [f for f in required_fields if f not in result]
-    if missing:
-        _log_fail(f"Missing fields in ExecutionPayload: {missing}")
-        return None
-
-    _log_info(f"blockHash      = {result['blockHash']}")
-    _log_info(f"blockNumber    = {result['blockNumber']}")
-    _log_info(f"txCount        = {len(result['transactions'])}")
-    _log_info(f"withdrawals    = {len(result.get('withdrawals', []))}")
+        _log_fail(f"committed block {committed_hash} never became the eth_* head")
+        return False
 
     _log_pass()
-    return result
+    return True
 
 
-def test_new_payload(payload: Dict[str, Any]) -> None:
-    """Verify engine_newPayloadV2 accepts and validates a payload."""
-    _log_test("engine_newPayloadV2")
+def test_negative_cases() -> None:
+    """Error semantics: -38005 for pre-Karst versions, -38001 unknown payload, -32602 shape."""
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+    # Pre-Karst method versions are rejected with -38005 Unsupported fork.
+    expect_error_code("engine_forkchoiceUpdatedV1", [fc_state, None], -38005)
+    expect_error_code("engine_forkchoiceUpdatedV2", [fc_state, None], -38005)
+    expect_error_code("engine_getPayloadV2", ["0x0000000000000001"], -38005)
+    expect_error_code("engine_getPayloadV4", ["0x0000000000000001"], -38005)
+    expect_error_code("engine_newPayloadV3", [{}, [], ZERO_HASH], -38005)
 
-    result = rpc_result("engine_newPayloadV2", [payload])
-    status = result["status"]
-    _log_info(f"payloadStatus = {status}")
+    # Unknown payloadId -> -38001 Unknown payload.
+    expect_error_code("engine_getPayloadV5", ["0x00000000deadbeef"], -38001)
 
-    valid_statuses = {"VALID", "INVALID", "SYNCING", "ACCEPTED", "INVALID_BLOCK_HASH"}
-    if status not in valid_statuses:
-        _log_fail(f"Unexpected status: {status}")
-        return
+    # Missing/malformed params -> -32602 InvalidParams.
+    expect_error_code("engine_getPayloadV5", [], -32602)
+    expect_error_code("engine_newPayloadV4", [], -32602)
 
-    if status in ("VALID", "ACCEPTED"):
-        _log_pass()
-    else:
-        _log_info(f"Status '{status}' is expected for synthetic/test payloads")
-        _log_pass()
-
-
-def test_invalid_method() -> None:
-    """Verify proper error handling for unknown methods."""
-    _log_test("engine_unknownMethod (negative test)")
-
-    resp = requests.post(
-        RPC_URL,
-        json={
-            "jsonrpc": "2.0",
-            "id": 99,
-            "method": "engine_unknownMethod",
-            "params": [],
-        },
-        headers=HEADERS,
-        timeout=TIMEOUT,
-    )
-    data = resp.json()
-    if "error" in data:
-        code = data["error"]["code"]
-        _log_info(f"Error code = {code}")
-        if code == -32601:  # MethodNotFound
-            _log_pass()
-        else:
-            _log_fail(f"Expected -32601, got {code}")
-    else:
-        _log_fail("Expected error response, got success")
+    # Unknown method -> -32601 MethodNotFound.
+    expect_error_code("engine_unknownMethod", [], -32601)
 
 
 # ---- Main ----
 
+
 def generate_jwt(secret_file: str) -> str:
-    import base64, hashlib, hmac, time as _time
+    import base64
+    import hashlib
+    import hmac
+
     with open(secret_file, "r") as f:
         secret = bytes.fromhex(f.read().strip())
-    h = base64.urlsafe_b64encode(json.dumps({"alg":"HS256","typ":"JWT"}).encode()).rstrip(b"=").decode()
-    p = base64.urlsafe_b64encode(json.dumps({"iat":int(_time.time()),"id":"12345678","clv":"FISCO-BCOS"}).encode()).rstrip(b"=").decode()
-    sig = base64.urlsafe_b64encode(hmac.new(secret,f"{h}.{p}".encode(),hashlib.sha256).digest()).rstrip(b"=").decode()
+    h = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).rstrip(b"=").decode()
+    p = base64.urlsafe_b64encode(
+        json.dumps({"iat": int(time.time()), "id": "12345678", "clv": "FISCO-BCOS"}).encode()
+    ).rstrip(b"=").decode()
+    sig = base64.urlsafe_b64encode(
+        hmac.new(secret, f"{h}.{p}".encode(), hashlib.sha256).digest()
+    ).rstrip(b"=").decode()
     return f"{h}.{p}.{sig}"
 
 
@@ -286,33 +358,28 @@ def main() -> int:
     if len(sys.argv) > 2:
         jwt_token = generate_jwt(sys.argv[2])
         HEADERS["Authorization"] = f"Bearer {jwt_token}"
-        _log_info(f"JWT token generated")
+        _log_info("JWT token generated")
 
     print("=" * 50)
-    print("  FISCO-BCOS Engine API Smoke Test (Python)")
+    print("  FISCO-BCOS Engine API Smoke Test (Karst dialect)")
     print(f"  Target: {RPC_URL}")
     print("=" * 50)
     print()
 
     try:
-        # 1. Capability negotiation
+        # 1. Capability negotiation: Karst-only surface.
         test_exchange_capabilities()
 
-        # 2. Pure forkchoice update (no payload build)
-        test_forkchoice_updated_without_payload()
+        # 2. Pure forkchoice update (no payload build).
+        test_forkchoice_v3_without_payload()
 
-        # 3. Forkchoice update with payloadAttributes → get payloadId
-        payload_id = test_forkchoice_updated_with_payload()
+        # 3./4./5. Two full block flows with noTxPool rotation: the forced deposit must
+        # be the whole payload under noTxPool=true, and still lead it under false.
+        if run_karst_block_flow(no_tx_pool=True):
+            run_karst_block_flow(no_tx_pool=False)
 
-        # 4. Get the built payload
-        if payload_id:
-            payload = test_get_payload(payload_id)
-            # 5. Submit payload validation
-            if payload:
-                test_new_payload(payload)
-
-        # 6. Negative test
-        test_invalid_method()
+        # 6. Error semantics.
+        test_negative_cases()
 
     except requests.ConnectionError:
         print(f"\n{RED}❌ Cannot connect to {RPC_URL}{NC}")
@@ -321,6 +388,7 @@ def main() -> int:
     except Exception as e:
         print(f"\n{RED}❌ TEST ERROR: {e}{NC}")
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -329,10 +397,6 @@ def main() -> int:
     print("=" * 50)
     print(f"  Results: {GREEN}{PASS} passed{NC}, {RED}{FAIL} failed{NC}")
     print("=" * 50)
-
-    if FAIL > 0:
-        print(f"\n{RED}🎉 ALL SMOKE TESTS PASSED!{NC}" if FAIL == 0 else
-              f"\n{RED}Some tests FAILED. Check the output above.{NC}")
 
     return 0 if FAIL == 0 else 1
 

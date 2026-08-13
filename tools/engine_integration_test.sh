@@ -436,26 +436,35 @@ else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.2 engine_exchangeCapabilities
-log_test "engine_exchangeCapabilities"
-RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV2"]]')
+# 3.2 engine_exchangeCapabilities — Karst-only surface (B4)
+log_test "engine_exchangeCapabilities (Karst-only)"
+RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV4"]]')
 if echo "${RESP}" | grep -q '"result"'; then
-    if echo "${RESP}" | grep -q '"engine_exchangeCapabilities"'; then
+    if echo "${RESP}" | grep -q '"engine_getPayloadV5"' \
+        && echo "${RESP}" | grep -q '"engine_forkchoiceUpdatedV3"' \
+        && echo "${RESP}" | grep -q '"engine_newPayloadV4"' \
+        && ! echo "${RESP}" | grep -q '"engine_forkchoiceUpdatedV1"' \
+        && ! echo "${RESP}" | grep -q '"engine_getPayloadV1"'; then
         log_pass
     else
-        log_fail "Missing expected capabilities"
+        log_fail "Capability list is not Karst-only: ${RESP}"
     fi
 else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.3 engine_forkchoiceUpdatedV2 (without payloadAttributes)
-log_test "engine_forkchoiceUpdatedV2 (no payload)"
+# Zero beacon root: this mock CL has no beacon chain.
+ZERO_ROOT="0x0000000000000000000000000000000000000000000000000000000000000000"
+# Engine wire timestamps are Unix seconds.
+TS_HEX=$(printf '0x%x' "$(date +%s)")
+
+# 3.3 engine_forkchoiceUpdatedV3 (without payloadAttributes)
+log_test "engine_forkchoiceUpdatedV3 (no payload)"
 HEAD_RESP=$(rpc_call "eth_getBlockByNumber" '["latest",false]')
 HEAD_HASH=$(json_val "${HEAD_RESP}" "hash")
 
 if [ -n "${HEAD_HASH}" ]; then
-    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV3" \
         "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},null]")
     if echo "${RESP}" | grep -q '"result"'; then
         STATUS=$(json_fcu_status "${RESP}")
@@ -472,12 +481,12 @@ else
     log_fail "Cannot get head hash"
 fi
 
-# 3.4 engine_forkchoiceUpdatedV2 (with payloadAttributes)
-log_test "engine_forkchoiceUpdatedV2 (with payload)"
+# 3.4 engine_forkchoiceUpdatedV3 (with V3 payloadAttributes: withdrawals + beacon root)
+log_test "engine_forkchoiceUpdatedV3 (with payload)"
 PAYLOAD_ID=""
 if [ -n "${HEAD_HASH}" ]; then
-    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
-        "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},{\"timestamp\":\"0x100\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[]}]")
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV3" \
+        "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},{\"timestamp\":\"${TS_HEX}\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[],\"parentBeaconBlockRoot\":\"${ZERO_ROOT}\"}]")
     if echo "${RESP}" | grep -q '"result"'; then
         STATUS=$(json_fcu_status "${RESP}")
         PAYLOAD_ID=$(json_val "${RESP}" "payloadId")
@@ -494,31 +503,37 @@ else
     log_fail "No head hash available"
 fi
 
-# 3.5 engine_getPayloadV2 + engine_newPayloadV2
-log_test "engine_getPayloadV2 + engine_newPayloadV2"
+# 3.5 engine_getPayloadV5 + engine_newPayloadV4
+log_test "engine_getPayloadV5 + engine_newPayloadV4"
 if [ -n "${PAYLOAD_ID:-}" ]; then
     # getPayload
-    GET_RESP=$(rpc_call "engine_getPayloadV2" "[\"${PAYLOAD_ID}\"]")
+    GET_RESP=$(rpc_call "engine_getPayloadV5" "[\"${PAYLOAD_ID}\"]")
     if echo "${GET_RESP}" | grep -q '"blockHash"'; then
-        # Extract payload and feed to newPayload. Use a temp file to avoid
-        # shell quoting issues with the multi-KB JSON.
+        # V5 response shape: executionRequests must be present.
+        if ! echo "${GET_RESP}" | grep -q '"executionRequests"'; then
+            log_fail "getPayloadV5 response missing executionRequests: ${GET_RESP}"
+        fi
+        # Extract payload and feed to newPayloadV4 with the required
+        # [payload, [], beaconRoot, []] parameter shape. Use a temp file to
+        # avoid shell quoting issues with the multi-KB JSON.
         NEW_REQ_FILE="${WORK_DIR}/newPayload_req.json"
         echo "${GET_RESP}" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)['result']
 p=d['executionPayload'] if 'executionPayload' in d else d
-print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params':[p]}))
+root=d.get('parentBeaconBlockRoot','${ZERO_ROOT}')
+print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV4','params':[p,[],root,[]]}))
 " 2>/dev/null > "${NEW_REQ_FILE}"
         NEW_RESP=$(curl -s -X POST "${RPC_URL}" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${JWT_TOKEN}" \
             -d "@${NEW_REQ_FILE}" 2>/dev/null || echo '{}')
         NEW_STATUS=$(json_val "${NEW_RESP}" "status")
-        log_info "newPayload status = ${NEW_STATUS}"
+        log_info "newPayloadV4 status = ${NEW_STATUS}"
         if [ "${NEW_STATUS}" = "VALID" ] || [ "${NEW_STATUS}" = "ACCEPTED" ]; then
             log_pass
         else
-            log_fail "Unexpected newPayload status: ${NEW_STATUS}"
+            log_fail "Unexpected newPayloadV4 status: ${NEW_RESP}"
         fi
     else
         log_fail "getPayload failed: ${GET_RESP}"
@@ -526,6 +541,15 @@ print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params'
 else
     log_info "Skipping (no payloadId from forkchoiceUpdated)"
     log_pass
+fi
+
+# 3.6 pre-Karst versions answer -38005
+log_test "engine_getPayloadV2 rejected with -38005"
+RESP=$(rpc_call "engine_getPayloadV2" "[\"0x0000000000000001\"]")
+if echo "${RESP}" | grep -q '\-38005'; then
+    log_pass
+else
+    log_fail "Expected -38005 Unsupported fork, got: ${RESP}"
 fi
 
 # ---- Step 4: Python mock consensus client ----
