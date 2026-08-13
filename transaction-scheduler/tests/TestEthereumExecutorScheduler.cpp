@@ -58,6 +58,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 // Anonymous namespace + EE prefix: this TU is unity-merged with the other
@@ -256,6 +257,20 @@ task::Task<void> EERunTransfers(Scheduler& scheduler, EthereumExecutor& executor
             actual == expected, "balance mismatch: expected " << expected << " got " << actual);
     }
 }
+
+// BlockContextOf SFINAE contract: an executor without its own BlockContext
+// falls back to EmptyBlockContext; one that defines BlockContext uses its own.
+struct TSMWithBlockContext
+{
+    struct BlockContext
+    {
+        int value = 0;
+    };
+};
+static_assert(std::is_same_v<scheduler_v1::BlockContextOf<EthereumExecutor>::type,
+    scheduler_v1::EmptyBlockContext>);
+static_assert(std::is_same_v<scheduler_v1::BlockContextOf<TSMWithBlockContext>::type,
+    TSMWithBlockContext::BlockContext>);
 
 BOOST_FIXTURE_TEST_SUITE(TestEthereumExecutorScheduler, TestEthereumExecutorSchedulerFixture)
 
@@ -471,6 +486,94 @@ BOOST_AUTO_TEST_CASE(parallelSharedRecipient)
         co_await EERunTransfers(scheduler, *executor, multiLayerStorage, backendStorage,
             cryptoSuite, txs,
             {{sender0, EEFunding - 100}, {sender1, EEFunding - 200}, {recipient, 300}});
+    }());
+}
+
+// Serial-mode equivalence (the OP shared-scheduler contract): serial=true
+// (chunk forced to 1 and pipeline max_tokens forced to 1, regardless of the
+// requested chunkSize) must produce receipts identical to the default pipelined
+// mode for the same independent transaction sequence. OP blocks will execute
+// through this SchedulerSerialImpl with serial=true and must see exactly the
+// receipts the default pipeline produces.
+BOOST_AUTO_TEST_CASE(serialModeEquivalentToDefaultPipeline)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        co_await EEWriteBlockHash(
+            backendStorage, 0, cryptoSuite->hashImpl()->hash(std::string("genesis")));
+        co_await EEWriteBlockHash(
+            backendStorage, 1, cryptoSuite->hashImpl()->hash(std::string("block-1")));
+        co_await EEWriteCurrentNumber(backendStorage, 0);
+
+        // 3 independent sender→recipient transfers: no read/write overlap, so
+        // both modes deterministically produce the same receipts.
+        auto sender0 = EEMakeAddress(101);
+        auto sender1 = EEMakeAddress(102);
+        auto sender2 = EEMakeAddress(103);
+        auto recipient0 = EEMakeAddress(111);
+        auto recipient1 = EEMakeAddress(112);
+        auto recipient2 = EEMakeAddress(113);
+
+        co_await EEFundAccount(backendStorage, sender0, EEFunding);
+        co_await EEFundAccount(backendStorage, sender1, EEFunding);
+        co_await EEFundAccount(backendStorage, sender2, EEFunding);
+        co_await EEFundAccount(backendStorage, recipient0, 0);
+        co_await EEFundAccount(backendStorage, recipient1, 0);
+        co_await EEFundAccount(backendStorage, recipient2, 0);
+
+        std::vector<protocol::Transaction::Ptr> txs;
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender0, recipient0, 100, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender1, recipient1, 200, "0"));
+        txs.emplace_back(
+            EEMakeTransferTx(transactionFactory, cryptoSuite, sender2, recipient2, 300, "0"));
+
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setNumber(1);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        ledger::LedgerConfig ledgerConfig;
+        ledgerConfig.setEVMCRevision(EVMC_SHANGHAI);
+
+        auto transactions =
+            txs | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
+
+        // Each run executes on a fresh fork of the same committed state.
+        auto run = [&](SchedulerSerialImpl& scheduler)
+            -> task::Task<std::vector<protocol::TransactionReceipt::Ptr>> {
+            auto view = multiLayerStorage.fork();
+            view.newMutable();
+            co_return co_await scheduler.executeBlock(
+                view, *executor, blockHeader, transactions, ledgerConfig);
+        };
+
+        auto defaultPool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialEqDefaultGC");
+        SchedulerSerialImpl defaultScheduler(defaultPool);  // chunkSize=0, serial=false
+
+        auto serialPool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialEqSerialGC");
+        SchedulerSerialImpl serialScheduler(serialPool, 1, true);  // chunkSize=1, serial=true
+
+        // serial=true with the default chunkSize=0 must still force chunk=1.
+        auto forcedPool = std::make_shared<bcos::IOServicePool>(1, "testEthSerialEqForcedGC");
+        SchedulerSerialImpl forcedScheduler(forcedPool, 0, true);
+
+        auto defaultReceipts = co_await run(defaultScheduler);
+        auto serialReceipts = co_await run(serialScheduler);
+        auto forcedReceipts = co_await run(forcedScheduler);
+
+        BOOST_REQUIRE_EQUAL(defaultReceipts.size(), txs.size());
+        BOOST_REQUIRE_EQUAL(serialReceipts.size(), txs.size());
+        BOOST_REQUIRE_EQUAL(forcedReceipts.size(), txs.size());
+
+        for (size_t i = 0; i < txs.size(); ++i)
+        {
+            // All three modes must agree on the real execution outcome.
+            BOOST_CHECK_EQUAL(defaultReceipts[i]->status(), 0);
+            BOOST_CHECK_EQUAL(serialReceipts[i]->status(), defaultReceipts[i]->status());
+            BOOST_CHECK_EQUAL(serialReceipts[i]->gasUsed(), defaultReceipts[i]->gasUsed());
+            BOOST_CHECK_EQUAL(forcedReceipts[i]->status(), defaultReceipts[i]->status());
+            BOOST_CHECK_EQUAL(forcedReceipts[i]->gasUsed(), defaultReceipts[i]->gasUsed());
+        }
     }());
 }
 

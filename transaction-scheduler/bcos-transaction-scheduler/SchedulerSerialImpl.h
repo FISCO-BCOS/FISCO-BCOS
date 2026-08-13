@@ -13,27 +13,56 @@
 #include <tbb/task_arena.h>
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/iota.hpp>
+#include <type_traits>
 
 namespace bcos::scheduler_v1
 {
+
+/// Default per-block context type when the executor does not define its own.
+/// Used as the 6th executeBlock parameter so executors that accept a
+/// BlockContext (e.g. the OP executor) can receive per-block metadata without
+/// the callers of BlockContext-less executors passing anything.
+struct EmptyBlockContext
+{};
+
+/// SFINAE: use the executor's own BlockContext type when it defines one,
+/// otherwise fall back to EmptyBlockContext.
+template <class E, class = void>
+struct BlockContextOf
+{
+    using type = EmptyBlockContext;
+};
+template <class E>
+struct BlockContextOf<E, std::void_t<typename E::BlockContext>>
+{
+    using type = typename E::BlockContext;
+};
 
 #define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
 class SchedulerSerialImpl
 {
     GC m_gc;
+    std::size_t m_chunkSize;
+    bool m_serial;
 
 public:
     constexpr static auto MIN_TRANSACTION_GRAIN_SIZE = 16;
 
-    explicit SchedulerSerialImpl(bcos::IOServicePool::Ptr ioServicePool)
-      : m_gc(std::move(ioServicePool))
+    /// @param chunkSize explicit chunk size (0 = default formula
+    ///        max(count/max_concurrency, MIN_TRANSACTION_GRAIN_SIZE))
+    /// @param serial     serial mode: chunk forced to 1 and pipeline max_tokens
+    ///                   forced to 1, regardless of chunkSize
+    explicit SchedulerSerialImpl(bcos::IOServicePool::Ptr ioServicePool,
+        std::size_t chunkSize = 0, bool serial = false)
+      : m_gc(std::move(ioServicePool)), m_chunkSize(chunkSize), m_serial(serial)
     {}
 
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
+        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig,
+        typename BlockContextOf<TransactionExecutor>::type const& ctx = {})
     {
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().SERIAL_SCHEDULER,
             ittapi::ITT_DOMAINS::instance().SERIAL_EXECUTE);
@@ -42,10 +71,17 @@ public:
         std::vector<typename TransactionExecutor::template ExecuteContext<Storage>> contexts;
         contexts.reserve(count);
 
-        auto chunks = ::ranges::views::iota(0, count) |
-                      ::ranges::views::chunk(std::max<size_t>(
-                          (size_t)(count / tbb::this_task_arena::max_concurrency()),
-                          (size_t)SchedulerSerialImpl::MIN_TRANSACTION_GRAIN_SIZE));
+        // serial mode forces chunk=1 regardless of the requested chunkSize
+        // (guards against a caller forgetting to pass chunkSize=1); otherwise
+        // m_chunkSize==0 selects the default formula.
+        auto const chunkSize = m_serial ?
+                                   1 :
+                                   (m_chunkSize == 0 ?
+                                           std::max<size_t>((size_t)(count /
+                                                                  tbb::this_task_arena::max_concurrency()),
+                                               (size_t)SchedulerSerialImpl::MIN_TRANSACTION_GRAIN_SIZE) :
+                                           m_chunkSize);
+        auto chunks = ::ranges::views::iota(0, count) | ::ranges::views::chunk(chunkSize);
         using ChunkRange = ::ranges::range_value_t<decltype(chunks)>;
         ::ranges::range_size_t<decltype(transactions)> chunkIndex = 0;
 
@@ -56,7 +92,8 @@ public:
         // Four-stage pipeline, with 3 threads
         static tbb::task_arena arena(3, 1, tbb::task_arena::priority::high);
         arena.execute([&]() {
-            tbb::parallel_pipeline(SchedulerSerialImpl::MIN_TRANSACTION_GRAIN_SIZE,
+            tbb::parallel_pipeline(
+                m_serial ? 1 : SchedulerSerialImpl::MIN_TRANSACTION_GRAIN_SIZE,
                 tbb::make_filter<void, ChunkRange>(tbb::filter_mode::serial_in_order,
                     [&](tbb::flow_control& control) -> ChunkRange {
                         return task::tbb::syncWait([&]() -> task::Task<ChunkRange> {
@@ -72,8 +109,20 @@ public:
                             auto range = chunks[chunkIndex++];
                             for (auto i : range)
                             {
-                                contexts.emplace_back(co_await executor.createExecuteContext(
-                                    storage, blockHeader, transactions[i], i, ledgerConfig, false));
+                                if constexpr (requires { executor.createExecuteContext(storage,
+                                                   blockHeader, transactions[i], i, ledgerConfig,
+                                                   false, ctx); })
+                                {
+                                    contexts.emplace_back(co_await executor.createExecuteContext(
+                                        storage, blockHeader, transactions[i], i, ledgerConfig,
+                                        false, ctx));
+                                }
+                                else
+                                {
+                                    contexts.emplace_back(co_await executor.createExecuteContext(
+                                        storage, blockHeader, transactions[i], i, ledgerConfig,
+                                        false));
+                                }
                             }
                             co_return range;
                         }());
