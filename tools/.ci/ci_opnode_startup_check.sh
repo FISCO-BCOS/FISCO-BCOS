@@ -150,11 +150,34 @@ jq -e '.genesis.system_config.batcherAddr and (.chain_op_config | length > 0)' \
     "${WORK_ROOT}/rollup.json" >/dev/null || fail "rollup.json missing required fields"
 
 # ---- 4. op-node must survive Config.Check + genesis validation ----
+# op-node v1.19.3 with a custom (non superchain-registry) L1 chain id loads the L1
+# chain spec from --rollup.l1-chain-config at startup, before any endpoint is dialed
+# (verified against the real binary: without the file it dies with "failed to read
+# chain spec"). Emit a minimal geth-genesis-shaped chain config for the anvil L1.
+cat > "${WORK_ROOT}/l1-chain-config.json" <<L1CFG_EOF
+{
+  "config": {
+    "chainId": ${L1_CHAIN_ID},
+    "homesteadBlock": 0, "eip150Block": 0, "eip155Block": 0, "eip158Block": 0,
+    "byzantiumBlock": 0, "constantinopleBlock": 0, "petersburgBlock": 0,
+    "istanbulBlock": 0, "muirGlacierBlock": 0, "berlinBlock": 0, "londonBlock": 0,
+    "arrowGlacierBlock": 0, "grayGlacierBlock": 0, "mergeNetsplitBlock": 0,
+    "shanghaiTime": 0, "cancunTime": 0, "pragueTime": 0,
+    "terminalTotalDifficulty": 0,
+    "blobSchedule": {
+      "cancun": {"target": 3, "max": 6, "baseFeeUpdateFraction": 3338477},
+      "prague": {"target": 6, "max": 9, "baseFeeUpdateFraction": 5007716}
+    }
+  }
+}
+L1CFG_EOF
+
 log "starting op-node (--sequencer.stopped)"
 op-node \
     --l1="${L1_RPC_URL}" --l1.trustrpc --l1.rpckind=any --l1.beacon.ignore=true \
     --l2="${ENGINE_URL}" --l2.jwt-secret="${NODE_DIR}/conf/op-engine/jwt.hex" \
     --rollup.config="${WORK_ROOT}/rollup.json" \
+    --rollup.l1-chain-config="${WORK_ROOT}/l1-chain-config.json" \
     --sequencer.enabled --sequencer.stopped --sequencer.l1-confs=0 \
     --p2p.disable --rpc.enable-admin --rpc.port=9545 \
     >"${WORK_ROOT}/op-node.log" 2>&1 &

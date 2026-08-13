@@ -116,3 +116,17 @@ def test_main_rejects_bad_config_with_nonzero_exit(capsys):
     ])
     assert rc == 1
     assert "must differ" in capsys.readouterr().err
+
+
+def test_zero_overhead_accepted():
+    """Zero overhead must PASS check(): overhead is a pre-Ecotone L1-fee parameter
+    (deprecated at Ecotone) and op-node v1.19.3 Config.Check() (rollup/types.go:317
+    at tag op-node/v1.19.3) validates no overhead field. Verified against a real
+    op-node v1.19.3: a zero-overhead rollup.json passes config validation and
+    reaches L1 dialing, while a zero scalar dies there ("missing genesis system
+    config scalar"). This test pins that fact - do not "fix" the default to a
+    non-zero magic value or add a zero-overhead rejection: post-Ecotone chains
+    ship overhead 0x00...00."""
+    config = gen.build_rollup_config(_args())
+    assert config["genesis"]["system_config"]["overhead"] == "0x" + "00" * 32
+    gen.check(config)  # must not raise

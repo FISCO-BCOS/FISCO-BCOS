@@ -177,6 +177,12 @@ def parse_args(argv):
     parser.add_argument("--batcher-addr",
                         default="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
                         help="dev default: anvil account #2")
+    # Zero is the CORRECT default, not an oversight: overhead is a pre-Ecotone L1-fee
+    # parameter (deprecated at Ecotone), and op-node v1.19.3 rollup.Config.Check()
+    # (op-node/rollup/types.go:317 at tag op-node/v1.19.3) validates no overhead field —
+    # verified against a real op-node v1.19.3: a zero-overhead rollup.json passes config
+    # validation and reaches L1 dialing, while a zero *scalar* is rejected right there
+    # ("missing genesis system config scalar"). Pinned by test_zero_overhead_accepted.
     parser.add_argument("--overhead", default=ZERO_HASH)
     parser.add_argument("--scalar", default=DEFAULT_SCALAR)
     parser.add_argument("--batch-inbox-address",
