@@ -85,16 +85,19 @@ const OpForkConfig& jovianConfig() noexcept
     return cfg;
 }
 
-// Karst is NOT independently adapted yet: its execution/receipt behavior is temporarily an alias
-// of Jovian (placeholder). Do not treat karstConfig() as a real Karst adaptation. Derived from
-// jovianConfig, changing only the fork tag, the same pattern as granite/holocene deriving from
-// fjord -- future Jovian changes are automatically carried into Karst, avoiding parallel-literal
-// drift.
+// Karst on top of Jovian: the EVM revision moves to Osaka (EIP-7825 tx gas cap — normal
+// transactions only, deposits stay exempt, see runDeposit —, EIP-7823/7883 MODEXP limits,
+// EIP-7939 CLZ, EIP-7951 P256 all gate on EVMC_OSAKA in the vendored state layer) and
+// bn256Pairing's input limit tightens to 57600 (karstPrecompileOverrides, which also stops
+// overriding P256 so EIP-7951 pricing applies). Fee/receipt semantics (operator fee, DA
+// footprint) carry over from Jovian unchanged.
 const OpForkConfig& karstConfig() noexcept
 {
     static const OpForkConfig cfg = [] {
         OpForkConfig c = jovianConfig();
         c.fork = OpFork::Karst;
+        c.rev = EVMC_OSAKA;
+        c.precompiles = &karstPrecompileOverrides();
         return c;
     }();
     return cfg;

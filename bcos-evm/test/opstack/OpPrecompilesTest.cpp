@@ -76,7 +76,36 @@ BOOST_AUTO_TEST_CASE(JovianLimitsStricterThanIsthmus)
     BOOST_CHECK_EQUAL(
         jovianPrecompileOverrides().find(evmc::address{0x0f})->max_input_size, 156672u);
     BOOST_CHECK_EQUAL(jovianConfig().precompiles, &jovianPrecompileOverrides());
-    BOOST_CHECK_EQUAL(karstConfig().precompiles, &jovianPrecompileOverrides());
+}
+
+// Karst re-tightens only bn256Pairing (81984 -> 57600); P256Verify and the BLS
+// MSM/pairing limits carry over from Jovian unchanged.
+BOOST_AUTO_TEST_CASE(KarstTightensBn256OnlyOverJovian)
+{
+    const auto& karst = karstPrecompileOverrides();
+    const auto& jovian = jovianPrecompileOverrides();
+
+    const auto* k08 = karst.find(evmc::address{0x08});
+    BOOST_REQUIRE((k08) != nullptr);
+    BOOST_CHECK_EQUAL(k08->max_input_size, 57600u);
+    BOOST_CHECK_LT(k08->max_input_size, jovian.find(evmc::address{0x08})->max_input_size);
+    BOOST_CHECK_LT(k08->gas_cost_override, 0);
+
+    for (const auto& addr : {evmc::address{0x0c}, evmc::address{0x0e}, evmc::address{0x0f}})
+    {
+        const auto* k = karst.find(addr);
+        const auto* j = jovian.find(addr);
+        BOOST_REQUIRE((k) != nullptr);
+        BOOST_REQUIRE((j) != nullptr);
+        BOOST_CHECK_EQUAL(k->max_input_size, j->max_input_size);
+        BOOST_CHECK_EQUAL(k->gas_cost_override, j->gas_cost_override);
+    }
+    // Karst does NOT override P256Verify: EIP-7951 (gas 6900) applies via the vendored
+    // Osaka-gated precompile, so 0x100 must be absent from the Karst table (an entry
+    // would pin the pre-Karst RIP-7212 gas 3450). Jovian still carries it.
+    BOOST_CHECK(!karst.contains(evmc::address{0x100}));
+    BOOST_CHECK(jovian.contains(evmc::address{0x100}));
+    BOOST_CHECK_EQUAL(karstConfig().precompiles, &karst);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

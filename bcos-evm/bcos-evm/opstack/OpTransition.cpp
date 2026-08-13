@@ -325,11 +325,20 @@ OpDepositReceipt runDeposit(const evmone::state::StateView& view,
 
     // Deposit skips the fee cap validation; validate is used only to compute intrinsic gas / the
     // EIP-7623 floor.
+    //
+    // The revision is clamped to Prague for this call ONLY: Karst does not enable the
+    // EIP-7825 per-tx gas cap for deposits (they are metered on L1 — the OptimismPortal
+    // caps deposits at 20M gas total per L1 block; the L2 EL performs no deposit gas
+    // check of its own), yet validate_transaction enforces the cap at Osaka+ (the
+    // MAX_TX_GAS_LIMIT check in the vendored state.cpp). The only other Osaka-gated
+    // validate rule is the blob count (MAX_TX_BLOB_COUNT, same function), and a deposit
+    // carries no blobs; compute_tx_intrinsic_cost has no Osaka-gated terms. Execution
+    // below still runs at the real cfg.rev.
     evmone::state::BlockInfo validateBlock = block;
     validateBlock.base_fee = 0;
     const DepositValidationView maskedView{view, dep.from};
     const auto props = evmone::state::validate_transaction(
-        maskedView, validateBlock, tx, cfg.rev, blockGasLeft, 0);
+        maskedView, validateBlock, tx, std::min(cfg.rev, EVMC_PRAGUE), blockGasLeft, 0);
 
     evmone::state::TransactionReceipt receipt;
     receipt.type = kDepositTxType;

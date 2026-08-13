@@ -114,6 +114,9 @@ constexpr auto kDepositTxType = static_cast<evmone::state::Transaction::Type>(0x
 /// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the
 /// nonce; is_system_tx==true throws std::runtime_error (block-level error). gas_limit exceeding
 /// blockGasLeft throws std::runtime_error (op-geth ErrGasLimitReached, block-level error).
+/// Deposits are exempt from the EIP-7825 per-tx cap (Karst meters deposit gas on L1 — the
+/// OptimismPortal caps deposits at 20M gas total per L1 block; the EL performs no deposit
+/// gas check of its own).
 OpDepositReceipt runDeposit(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,

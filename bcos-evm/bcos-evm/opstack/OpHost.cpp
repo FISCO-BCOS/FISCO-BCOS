@@ -96,7 +96,11 @@ evmc_tx_context OpHost::get_tx_context() const noexcept
         m_block.prev_randao,
         intx::be::store<evmc::uint256be>(intx::uint256{m_chain_id}),
         intx::be::store<evmc::uint256be>(intx::uint256{m_block.base_fee}),
-        intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
+        // OP L2 semantics: excessBlobGas is fixed at 0, so a caller that fills
+        // block.blob_base_fee computes fake_exponential(1, 0, ...) == 1 and that value is
+        // used as-is. The DEFAULT for an unfilled field is 1, not 0 (the EIP-4844
+        // minimum): a 0 would misprice any contract reading BLOBBASEFEE.
+        intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(1)),
         m_tx.blob_hashes.data(),
         m_tx.blob_hashes.size(),
         nullptr,

@@ -42,6 +42,32 @@ BOOST_AUTO_TEST_CASE(GetTxContextUsesConfiguredChainId)
     BOOST_CHECK_EQUAL(intx::be::load<intx::uint256>(ctx.chain_id), intx::uint256{1234});
 }
 
+// BLOBBASEFEE: a filled block.blob_base_fee is used as-is (an OP block computes
+// fake_exponential over excessBlobGas == 0, which yields 1); an UNFILLED field defaults
+// to the EIP-4844 minimum of 1, never 0 (the old value_or(0) default mispriced any
+// contract reading BLOBBASEFEE when the executor left the field unset).
+BOOST_AUTO_TEST_CASE(GetTxContextBlobBaseFeeDefaultsToOneAndKeepsInput)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    state::State st{ts};
+    test::TestBlockHashes hashes;
+    state::Transaction tx;
+    tx.sender = 0x00000000000000000000000000000000000000aa_address;
+
+    auto block = makeBlock();
+    BOOST_REQUIRE(!block.blob_base_fee.has_value());
+    OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
+    BOOST_CHECK_EQUAL(
+        intx::be::load<intx::uint256>(host.get_tx_context().blob_base_fee), intx::uint256{1});
+
+    // Filled field is passed through, not overridden.
+    block.blob_base_fee = intx::uint256{5};
+    OpHost hostFilled{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, nullptr};
+    BOOST_CHECK_EQUAL(
+        intx::be::load<intx::uint256>(hostFilled.get_tx_context().blob_base_fee), intx::uint256{5});
+}
+
 BOOST_AUTO_TEST_CASE(GetTxContextGasPriceZeroForSystemCall)
 {
     auto vm = evmc::VM{evmc_create_evmone()};

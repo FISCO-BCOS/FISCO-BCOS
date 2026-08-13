@@ -40,6 +40,19 @@ constexpr PrecompileOverrides::Entry kJovianEntries[] = {
     {.addr = evmc::address{0x0f}, .gas_cost_override = -1, .max_input_size = 156672},
 };
 
+// Karst re-tightens only bn256Pairing (81984 -> 57600); the BLS MSM/pairing limits carry
+// over from Jovian unchanged. P256Verify deliberately has NO Karst entry: Karst adopts
+// EIP-7951 (P256VERIFY at gas 6900), and karstConfig().rev is EVMC_OSAKA, so with no
+// override OpHost::call falls through to the vendored Osaka-gated p256verify with exactly
+// the EIP-7951 pricing — the pre-Karst 3450 (RIP-7212 P256VerifyGasFjord) entries stop at
+// Jovian.
+constexpr PrecompileOverrides::Entry kKarstEntries[] = {
+    {.addr = evmc::address{0x08}, .gas_cost_override = -1, .max_input_size = 57600},
+    {.addr = evmc::address{0x0c}, .gas_cost_override = -1, .max_input_size = 288960},
+    {.addr = evmc::address{0x0e}, .gas_cost_override = -1, .max_input_size = 278784},
+    {.addr = evmc::address{0x0f}, .gas_cost_override = -1, .max_input_size = 156672},
+};
+
 // Fjord: only P256Verify. No bn256 limit yet (that arrives with Granite) and no BLS at all
 // (CANCUN). Citations as above.
 constexpr PrecompileOverrides::Entry kFjordEntries[] = {
@@ -61,6 +74,12 @@ const PrecompileOverrides& isthmusPrecompileOverrides() noexcept
 const PrecompileOverrides& jovianPrecompileOverrides() noexcept
 {
     static const PrecompileOverrides overrides{.entries = kJovianEntries};
+    return overrides;
+}
+
+const PrecompileOverrides& karstPrecompileOverrides() noexcept
+{
+    static const PrecompileOverrides overrides{.entries = kKarstEntries};
     return overrides;
 }
 

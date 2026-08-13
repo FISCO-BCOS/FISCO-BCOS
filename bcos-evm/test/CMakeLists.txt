@@ -21,6 +21,7 @@ add_executable(bcos-evm-opstack-tests
     opstack/OpValidateTest.cpp
     opstack/OpTransitionTest.cpp
     opstack/OpDepositTest.cpp
+    opstack/OpDepositGasCapTest.cpp
     opstack/OpZeroDiffTest.cpp
     opstack/OpReceiptMetaTest.cpp
     opstack/Op7702Test.cpp

@@ -27,13 +27,16 @@ BOOST_AUTO_TEST_CASE(JovianAndKarstConfigs)
     BOOST_CHECK(j.disable_prague_requests);
     BOOST_CHECK((j.precompiles) != nullptr);
 
+    // Karst is a real adaptation, no longer a Jovian alias: Osaka revision and its own
+    // precompile table. Fee/receipt flags still carry over from Jovian.
     const auto& k = karstConfig();
     BOOST_CHECK_EQUAL(k.fork, OpFork::Karst);
-    BOOST_CHECK_EQUAL(k.rev, j.rev);
+    BOOST_CHECK_EQUAL(k.rev, EVMC_OSAKA);
+    BOOST_CHECK_EQUAL(k.precompiles, &karstPrecompileOverrides());
     BOOST_CHECK_EQUAL(k.has_operator_fee, j.has_operator_fee);
     BOOST_CHECK_EQUAL(k.has_jovian_operator_formula, j.has_jovian_operator_formula);
     BOOST_CHECK_EQUAL(k.has_da_footprint, j.has_da_footprint);
-    BOOST_CHECK_EQUAL(k.precompiles, j.precompiles);
+    BOOST_CHECK_EQUAL(k.disable_prague_requests, j.disable_prague_requests);
 }
 
 BOOST_AUTO_TEST_CASE(IsthmusDisablesJovianFlags)
