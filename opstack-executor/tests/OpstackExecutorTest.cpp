@@ -105,7 +105,7 @@ TEST(OpstackExecutor, ConstructsWithJovianFork)
 
 TEST(OpstackExecutor, BuildOpBlockInfoMirrorsBlockPath)
 {
-    // buildOpBlockInfo must mirror toBlockInfo's field mapping (OpRlpDecode.h:106-121) so eth_call
+    // buildBlockInfo must mirror toBlockInfo's field mapping (OpRlpDecode.h:106-121) so eth_call
     // sees the same block context as block execution: seconds timestamp, header baseFee (via
     // value_or(0), so optional-less test headers do not throw), and the full field set.
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
@@ -120,7 +120,7 @@ TEST(OpstackExecutor, BuildOpBlockInfoMirrorsBlockPath)
     h->setExtraData(bcos::bytes{0xde, 0xad});
     h->setBlobGasUsed(bcos::u256(0x1234));
 
-    const auto blk = bcos::executor_v1::opstack::OpstackExecutor::buildOpBlockInfo(*h, 30'000'000);
+    const auto blk = bcos::executor_v1::opstack::OpstackExecutor::buildBlockInfo(*h, 30'000'000);
     EXPECT_EQ(blk.number, 7);
     EXPECT_EQ(blk.timestamp, 1'234'567ULL);                 // ms -> s
     EXPECT_EQ(blk.gas_limit, 30'000'000);                   // injected gasLimit
@@ -392,7 +392,7 @@ TEST_F(Fixture, FinalizeOpBlockNoReward)
 
 TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
 {
-    // spec §8 (v2: gasLimit only): buildOpBlockInfo's gasLimit takes header.gasLimit (not
+    // spec §8 (v2: gasLimit only): buildBlockInfo's gasLimit takes header.gasLimit (not
     // blockGasLeft). Behavior assertion: executing a minimal GASLIMIT-reading contract, slot0 must
     // store == header.gasLimit(). Before the fix: executeTransaction's BlockInfo.gasLimit =
     // blockGasLeft (injected value), so the contract stored blockGasLeft; injecting
