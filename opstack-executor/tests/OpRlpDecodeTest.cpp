@@ -6,7 +6,9 @@
 
 #include <opstack-executor/OpRlpDecode.h>
 
+#include <bcos-evm/eth/RlpEncodeTuple.h>
 #include <boost/test/unit_test.hpp>
+#include <intx/intx.hpp>
 
 namespace bcos::evm::engine::detail
 {
@@ -19,6 +21,28 @@ namespace
 bcos::bytesRef makeRef(bcos::bytes& b)
 {
     return bcos::bytesRef(b.data(), b.size());
+}
+
+using bcos::evm::eth::detail::encodeTuple;
+
+// 0x02 envelope: [chainId, nonce, maxPriority, maxFee, gas, to, value, data, accessList,
+// yParity, r, s]
+bcos::bytes makeEip1559(uint64_t chainId, intx::uint256 yParity, intx::uint256 r, intx::uint256 s)
+{
+    auto body = encodeTuple(chainId, uint64_t{0}, intx::uint256{0}, intx::uint256{0},
+        uint64_t{21000}, evmc::bytes_view{}, intx::uint256{0}, evmc::bytes_view{},
+        evmone::state::AccessList{}, yParity, r, s);
+    bcos::bytes out{0x02};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+// legacy envelope: [nonce, gasPrice, gas, to, value, data, v, r, s]
+bcos::bytes makeLegacy(intx::uint256 v)
+{
+    auto body = encodeTuple(uint64_t{0}, intx::uint256{1}, uint64_t{21000}, evmc::bytes_view{},
+        intx::uint256{0}, evmc::bytes_view{}, v, intx::uint256{1}, intx::uint256{1});
+    return {body.begin(), body.end()};
 }
 }  // namespace
 
@@ -162,6 +186,31 @@ BOOST_AUTO_TEST_CASE(decodeAddressFieldTest)
         auto r = makeRef(b);
         BOOST_CHECK_THROW(decodeAddressField(r), OpConsensusError);
     }
+}
+
+BOOST_AUTO_TEST_CASE(ValidateEnvelopeSignature)
+{
+    constexpr uint64_t kChainId = 0x2105;
+    // Valid eip1559 envelope (r=1, s=1 low-s).
+    BOOST_CHECK_NO_THROW(validateEnvelopeSignature(makeEip1559(kChainId, 0, 1, 1), kChainId));
+    // chain-id mismatch.
+    BOOST_CHECK_THROW(
+        validateEnvelopeSignature(makeEip1559(kChainId, 0, 1, 1), kChainId + 1), OpConsensusError);
+    // yParity=2 rejected.
+    BOOST_CHECK_THROW(
+        validateEnvelopeSignature(makeEip1559(kChainId, 2, 1, 1), kChainId), OpConsensusError);
+    // s > secp256k1n/2 rejected (EIP-2 high-s malleable signature).
+    BOOST_CHECK_THROW(validateEnvelopeSignature(
+                          makeEip1559(kChainId, 0, 1, intx::uint256{1} << 255), kChainId),
+        OpConsensusError);
+    // legacy v=27 (pre-EIP-155) accepted; v = chainId*2+35+0 accepted (chain matches).
+    BOOST_CHECK_NO_THROW(validateEnvelopeSignature(makeLegacy(27), kChainId));
+    BOOST_CHECK_NO_THROW(validateEnvelopeSignature(makeLegacy(0x2105 * 2 + 35), kChainId));
+    // legacy v = chainId*2+35+2: parity 2 pollutes the division -> derived chainId mismatch.
+    BOOST_CHECK_THROW(validateEnvelopeSignature(makeLegacy(0x2105 * 2 + 35 + 2), kChainId),
+        OpConsensusError);
+    // deposit 0x7e: unsigned, returns before any signature check.
+    BOOST_CHECK_NO_THROW(validateEnvelopeSignature(bcos::bytes{0x7e}, kChainId));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
