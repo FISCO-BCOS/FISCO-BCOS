@@ -511,8 +511,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // OP composition root (spec 2026-08-07-op-composition-root-design.md §4): executor_version >=
     // 3 enters OP mode. EngineService is assembled with OpSchedulerImpl so the engine's c_opMode
-    // SFINAE probe (EngineServiceImpl.h:200-201) activates the OP branch (executeOpBlock drives OP
-    // blocks via engine API). engineApiForV1Only (<2) and opStackMode (>=3) are mutually exclusive;
+    // SFINAE probe (EngineServiceImpl.h:200-201, on computeTxRoot) activates the OP branch
+    // (block execution via the delegate's route B). engineApiForV1Only (<2) and opStackMode (>=3)
+    // are mutually exclusive;
     // version 2 (pure EthereumExecutor) still has no Engine API. PBFT double-execution is gated
     // separately (W3); MultiVersionScheduler is untouched.
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
@@ -544,14 +545,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
-                m_protocolInitializer->blockFactory()->receiptFactory(), opChainId, forkTimestamps);
+                forkTimestamps);
         // Wiring Task 5a/5c: engine block-execution delegate = OpScheduler (slot-3, same instance).
-        // Dual OpSchedulerImpl instance (design §4 pin, "倾向共享，若不可行则明确双实例并存"):
-        // the seam SchedulerType (opScheduler above) serves the engine's c_opMode probe /
-        // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot; the delegate owns its own
-        // OpSchedulerImpl for executeOpBlock. Sharing would require OpScheduler to accept an
-        // existing OpSchedulerImpl (its ctor currently constructs one, owning an evmc::VM) — kept
-        // dual-instance this cycle.
+        // A single OpSchedulerImpl serves the engine's SchedulerType seam surface (c_opMode probe /
+        // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot); OpScheduler itself no longer
+        // holds an execution kernel (route A executeOpBlock retired) — block execution is the
+        // delegate's route B (runOpBlockInjection).
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),
@@ -572,7 +571,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             GlobalStateStorage, executor_v1::TransactionExecutorImpl,
             std::remove_reference_t<decltype(*opScheduler)>>;
         static_assert(OpEngineServiceT::c_opMode,
-            "OP composition root must activate c_opMode (executeOpBlock SFINAE probe)");
+            "OP composition root must activate c_opMode (computeTxRoot SFINAE probe)");
 
         // Slot-3 RPC-face scheduler = OpScheduler (Task 5c): the SAME instance as the engine's
         // m_delegate. Serves eth_call (OpScheduler::call, absorbed from OpBlockScheduler) and

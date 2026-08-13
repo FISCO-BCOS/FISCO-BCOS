@@ -160,16 +160,15 @@ struct OpE2eFixture
     EngineOpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerImpl<ViewType>)
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     /// Wiring Task 5a/5b: the engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
-    /// A second OpSchedulerImpl lives inside it (own evmc::VM) — the dual-instance pin
-    /// (design §4, "share when possible, otherwise explicit dual instances"); fork timestamps
-    /// match the seam's.
+    /// A single OpSchedulerImpl serves the seam SchedulerType (route A executeOpBlock retired);
+    /// OpScheduler holds no execution kernel — block execution is the delegate's route B.
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngineService service;
 
     explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
-        scheduler(receiptFactory, kChainId, forkTimestamps),
+        scheduler(forkTimestamps),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
             hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage,
             [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {

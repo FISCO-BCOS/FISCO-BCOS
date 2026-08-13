@@ -75,7 +75,7 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 /// EIP-1559 (type 0x02): [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit, to,
 /// value, data, accessList, yParity, r, s] — field order per rlp_encode.cpp:43-47.
 ///
-/// `chainId` (the scheduler's own chain id, threaded in from `executeOpBlock`'s `m_chainId` via
+/// `chainId` (the scheduler's own chain id, threaded in from its `m_chainId` via
 /// `decodeOneRawTx`) is compared against the decoded `tx.chain_id` immediately below (C2,
 /// coordinator review): nothing downstream (`OpValidate.cpp` -> `validate_transaction`,
 /// eth/state/state.cpp:420-529) checks chain id at all — it is used only for the CHAINID opcode

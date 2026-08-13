@@ -14,10 +14,8 @@
 // `<ViewType, OpenedStorage>` template precedent).
 //
 // Engine seam: the engine's SchedulerType stays OpSchedulerImpl (computeTxRoot/… dependent names
-// unchanged); this class holds one OpSchedulerImpl instance (m_schedulerImpl, whose ctor builds an
-// evmc::VM). Task 6 (P4 M3) swapped the core: the execute hook now goes through
-// runOpBlockInjection (route B, OpBlockInjector.h:31, the per-tx injection loop); route A
-// (executeOpBlock) is kept as a comment-only fallback for comparison.
+// unchanged); OP block execution goes through this class's execute hook → runOpBlockInjection
+// (route B, OpBlockInjector.h:31, the per-tx injection loop). Route A (executeOpBlock) is retired.
 //
 // EnvelopeToTarsConverter is injected by the composition root (v4 P0-2: opstack-executor does not
 // link engine — opEnvelopeToTars lives in the engine lib; reuses the using alias from Task 1,
@@ -26,6 +24,7 @@
 #include <opstack-executor/OpBlockInjector.h>  // runOpBlockInjection (route B, Task 6 P4 M3)
 #include <opstack-executor/OpBlockRegister.h>
 #include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpTxDecode.h>  // detail::decodeOneRawTx (execute hook)
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <transaction-scheduler/bcos-transaction-scheduler/SchedulerSkeleton.h>
@@ -120,9 +119,6 @@ public:
     /// (one evmc::VM; reverts to the pre-SEV-9 wiring after the cache removal); ledgerConfig only
     /// needs evmcRevision (the injector's executeDeposit/executeTransaction/finalizeBlock validate
     /// it).
-    /// Route A (executeOpBlock, OpSchedulerImpl.h:202) is kept as a comment-only fallback — before
-    /// the swap this hook was `co_await m_schedulerImpl.executeOpBlock(view, header, rawTxBytes)`
-    /// (m_schedulerImpl member retained); restore the commented body to revert.
     /// → Produces SchedulerExecuteResult{receipts, modeExtra=OpExecuteExtra{result, rawTxBytes}}.
     task::Task<bcos::scheduler_v1::SchedulerExecuteResult> execute(ViewType& view,
         protocol::BlockHeader const& header,
@@ -154,7 +150,6 @@ public:
             txs.reserve(rawTxBytes.size());
             for (auto const& raw : rawTxBytes)
                 txs.push_back(detail::decodeOneRawTx(raw, m_chainId));
-
             // normalTxs: converter per tx (skipping deposits, in block order) — aligned with the
             // injector's normalIdx advancing only on the non-deposit branch (OpBlockInjector.h:71).
             // Whether the conversion succeeds decides extraTransactionBytes overwrite (SEV-8
@@ -555,7 +550,6 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
         bcos::evm::engine::EnvelopeToTarsConverter envelopeToTars)
       : SchedulerBase(),
-        m_schedulerImpl(receiptFactory, chainId, forkTimestamps),
         m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
@@ -746,7 +740,6 @@ private:
     static const bcos::h256 c_emptyOmmersHash;
     static const bcos::h64 c_posNonce;
 
-    bcos::evm::engine::OpSchedulerImpl<ViewType> m_schedulerImpl;
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     uint64_t m_chainId;

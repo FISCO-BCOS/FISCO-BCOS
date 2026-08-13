@@ -24,7 +24,7 @@ namespace bcos::evm::engine
 /// Per-transaction injection loop: replicates processOpBlock's orchestration
 /// (system_call_block_start → deposit-first → lazy loadOpFeeParams + Jovian D-1 override →
 /// per-tx blockGasLeft decrement + setCumulativeGasUsed → finalizeBlock), executed through the
-/// OpstackExecutor injection-style entry points. Returns the same result shape as executeOpBlock.
+/// OpstackExecutor injection-style entry points. Returns the same result shape as processOpBlock.
 /// Review D6: normal txs' FISCO Transactions are pre-built by the caller (normalTxs maps 1:1 to
 /// the non-deposit txs) — opEnvelopeToTars lives in the engine lib; building it here would create
 /// a link cycle.

@@ -200,7 +200,7 @@ inline std::optional<std::string> mismatchedFieldOf(
 /// ever relaxed, this equivalence lapses with it, which is why the round-trip invariant exists:
 /// to fail closed on a future change.
 ///
-/// Factored out of `OpSchedulerImpl::executeOpBlock`'s step 6 because the engine needs the *same*
+/// Factored out of the block-execution path's txRoot step because the engine needs the *same*
 /// value **before** execution: `ExecutionPayload` carries no `transactionsRoot` field, so the
 /// header reconstruction the blockHash check depends on (a static check that must precede
 /// parentKnown/execution) has to derive it — exactly as op-geth's `ExecutableDataToBlock` does

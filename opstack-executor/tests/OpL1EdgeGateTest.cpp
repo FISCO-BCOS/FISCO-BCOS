@@ -178,7 +178,7 @@ struct OpE2eFixture
     OpEngineService service;
 
     explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
-      : scheduler(receiptFactory, kChainId, forkTimestamps),
+      : scheduler(forkTimestamps),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             /*delegate=*/nullptr)

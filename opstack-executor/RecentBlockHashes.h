@@ -7,8 +7,9 @@
 // (evmone instructions.hpp:681-691); outside it the opcode layer returns zero. This type seeds
 // {N-1: parentHash} (zero storage reads, covers the first block / EIP-2935) and lazily loads
 // earlier ancestors from SYS_NUMBER_2_HASH — equivalent to op-geth's header walk-back on
-// reorg-free chains (given a contiguous table). Constructed inside executeOpBlock, lives for the
-// block; relies on the engine's x_state-serialized execution segment, so no internal locks.
+// reorg-free chains (given a contiguous table). Constructed per block in the execution path
+// (runOpBlockInjection / the retired executeOpBlock), lives for the block; relies on the engine's
+// x_state-serialized execution segment, so no internal locks.
 
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>

@@ -30,8 +30,9 @@
 #include <evmone/evmone.h>
 #include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpBlockExecute.h>   // seal (merged into the block-execution module)
-#include <opstack-executor/OpSchedulerImpl.h>  // decodeOneRawTx (blob decode-class reject repro)
+#include <opstack-executor/OpBlockExecute.h>  // seal (merged into the block-execution module)
+#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpTxDecode.h>  // decodeOneRawTx (blob decode-class reject repro)
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>

@@ -178,29 +178,23 @@ public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
     /// Compile-time OP-mode probe (no runtime bool, matching this class's all-template style):
-    /// detects `SchedulerType::executeOpBlock` via an unevaluated `requires`-expression. Only the
-    /// OP scheduler defines that member, so `c_opMode` is false for every scheduler used by the
-    /// generic composition root (StubScheduler/BloomScheduler in EngineServiceTest.cpp,
-    /// SchedulerSerialImpl in production) and the generic path is byte-for-byte unaffected.
+    /// detects `SchedulerType::computeTxRoot` via an unevaluated `requires`-expression. Only the
+    /// OP scheduler exposes that member (OpSchedulerImpl.h:137), so `c_opMode` is false for every
+    /// scheduler used by the generic composition root (StubScheduler/BloomScheduler in
+    /// EngineServiceTest.cpp, SchedulerSerialImpl in production) and the generic path is
+    /// byte-for-byte unaffected.
     ///
-    /// Takes the *address* of the member function template rather than calling it, pinning an
-    /// explicit template argument only for the sole `auto`-deduced parameter (`executeOpBlock`'s
-    /// third, `::ranges::input_range auto const& rawTxBytes`); the fixed `OpBlockEnv`-typed second
-    /// parameter needs no argument *value* to resolve, so no bcos-evm type needs to be named here
-    /// (library-purity constraint). `std::vector<bcos::bytes>` matches how the real scheduler is
-    /// instantiated. Address-of is an unevaluated operand inside a requires-expression
-    /// ([expr.prim.req.simple]), so it does not odr-use (and therefore does not force
-    /// instantiation of) the function body.
+    /// `computeTxRoot` is a static member function template over the raw-tx range; the explicit
+    /// `<std::vector<bcos::bytes>>` pins the sole `auto`-deduced parameter exactly as the removed
+    /// `executeOpBlock` probe did. Address-of is an unevaluated operand inside a
+    /// requires-expression ([expr.prim.req.simple]), so it does not odr-use the function body.
     ///
-    /// This does not separately verify that `executeOpBlock`'s first parameter (`Storage&`) is
-    /// exactly this class's `ViewType` -- redundant by construction: the enclosing class
-    /// template's own `requires` clause already requires
-    /// `scheduler_v1::TransactionScheduler<SchedulerType, ViewType, ExecutorType, ...>`, which
-    /// for `OpSchedulerImpl<Storage>` can only be satisfied (via its dummy `executeBlock`'s
-    /// `Storage&` parameter) when `Storage == ViewType` -- so any `SchedulerType` reaching this
-    /// point already has that identity pinned by the class's own instantiation constraint.
+    /// Route A (`executeOpBlock`) was removed — OP block execution is always the delegate's route B
+    /// (`m_delegate->executeBlock` → `runOpBlockInjection`). `c_opMode` now only means "this is an
+    /// OP scheduler": the engine reaches `computeTxRoot` / `isIsthmusActiveAt` / `isJovianActiveAt`
+    /// as dependent names inside `if constexpr (c_opMode)`.
     static constexpr bool c_opMode =
-        requires { &SchedulerType::template executeOpBlock<std::vector<bcos::bytes>>; };
+        requires { &SchedulerType::template computeTxRoot<std::vector<bcos::bytes>>; };
 
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
@@ -609,7 +603,7 @@ private:
         }
         // ---- opMode silent-failure guardrail ----
         //
-        // `c_opMode` is a SFINAE probe on `executeOpBlock`'s exact signature shape. If the probe
+        // `c_opMode` is a SFINAE probe on `computeTxRoot`'s presence. If the probe
         // ever silently collapses (signature change), a V4 request would fall through to the
         // generic path, where an OP payload is accepted and answered VALID with its self-reported
         // blockHash without the block ever being executed -- a validator that rubber-stamps is
@@ -824,8 +818,8 @@ private:
 
         // ---- Classification barrier ----
         //
-        // The `catch (...)` added around `executeOpBlock` in the first pass closed only ONE
-        // window. Everything else in the OP branch still ran outside any handler: step 2's
+        // The `catch (...)` added around the OP block-execution path in the first pass closed only
+        // ONE window. Everything else in the OP branch still ran outside any handler: step 2's
         // `computeTxRoot` / `rebuildOpEthHeader` / `hash()`, step 5's `commitmentsOf` and the
         // comparisons, and the whole of step 6's `registerOpBlock` -- whose `lexical_cast`,
         // `Entry::set`, `ethHeader.encode()`, `receipt->encode()`, `hashImpl.hash()` and four
@@ -887,7 +881,7 @@ private:
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
         }
         // `ExecutionPayload` carries no transactionsRoot, so it is derived from the raw envelopes
-        // here -- the same derivation `executeOpBlock` performs internally (one shared function,
+        // here -- the same derivation the execution path performs internally (one shared function,
         // `OpEngineSeam.h`'s `computeOpTxRoot`), which is what lets the blockHash check stay
         // genuinely static (before parentKnown and before execution).
         const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
@@ -1106,7 +1100,7 @@ private:
 
         // ---- Step 4: delegate block execution + commit (wiring Task 5b) ----
         //
-        // The OP block's executeOpBlock / six-way comparison / registerOpBlock are no longer
+        // The OP block's execution / six-way comparison / registerOpBlock are no longer
         // driven inline here: they are absorbed by the delegate (OpScheduler's execute /
         // verifyResult / commit hooks running on the shared SchedulerSkeleton). The engine keeps
         // the static validation above (parentKnown / continuity / 3a / 3a-2 / 3b / 3c) and the
@@ -1163,9 +1157,8 @@ private:
     /// FULL envelope, not the signing preimage (`takeToTarsTransaction` stores the preimage;
     /// the delegate's execute hook re-derives rawTxBytes from extraTransactionBytes, so the
     /// overwrite is load-bearing). Precedent: OpDualPathEquivalenceTest.cpp:566-568. Used only
-    /// by the delegate path (Task 5b); the inline `executeOpBlock` path keeps its raw-byte
-    /// carrier. `[[maybe_unused]]` in the 5a intermediate state, before the delegate path
-    /// consumes it.
+    /// by the delegate path (Task 5b); the retired route A's inline `executeOpBlock` carried its
+    /// own raw-byte vector.
     [[maybe_unused]] bcos::protocol::Block::Ptr buildOpBlock(
         const ExecutionPayload& payload, bcos::protocol::BlockHeader::Ptr header)
     {
@@ -1186,8 +1179,8 @@ private:
                 // decode envelopes, so reaching assembly does not imply every envelope is
                 // canonical and enumerated. Carry the raw envelope in a minimal tars tx (only the
                 // hash and wire bytes populated) so the delegate's execute hook re-derives it and
-                // decodeOneRawTx issues the verdict -- the same envelope the old inline path
-                // handed to executeOpBlock (which threw OpConsensusError -> INVALID).
+                // decodeOneRawTx issues the verdict (OpConsensusError -> INVALID -- the same
+                // verdict the retired route A's executeOpBlock produced).
                 bcostars::Transaction fallback;
                 fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
                 tarsTx = std::move(fallback);
@@ -1466,7 +1459,7 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     /// OP block-execution delegate (wiring Task 5): when non-null and `c_opMode`, newPayload
     /// routes block execution + commit through `m_delegate->executeBlock/commitBlock`
-    /// (SchedulerInterface face) instead of the inline `executeOpBlock` path. The delegate is
+    /// (SchedulerInterface face) instead of any inline OP block-execution path. The delegate is
     /// the composition root's `OpScheduler` (slot 3). Null for the generic composition root and
     /// for OP fixtures that never drive block execution (ethereum instances).
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
