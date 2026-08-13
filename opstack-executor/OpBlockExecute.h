@@ -209,7 +209,9 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
     constexpr uint8_t kRlpListBase = 0xc0;
     if (rawTxBytes.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
-    if (rawTxBytes[0][0] != kDepositTypeByte || deposits.empty() ||
+    // 空 envelope 守卫：任何 raw[0]/raw.back()[0] 访问之前（Global Constraints；首元素非空才可取
+    // 类型字节）。
+    if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty() ||
         !op::isL1AttributesTx(deposits[0]))
         throw OpConsensusError("op block: first tx is not the L1 attributes deposit");
     if (cfg.has_da_footprint)
@@ -217,7 +219,8 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
         auto const& data = deposits[0].data;
         if (data.size() == op::IsthmusL1AttributesLen)
         {
-            if (rawTxBytes.back()[0] != kDepositTypeByte)
+            // 空 envelope 守卫：back()[0] 访问之前（末交易为空 → 同拒绝路径）。
+            if (rawTxBytes.back().empty() || rawTxBytes.back()[0] != kDepositTypeByte)
                 throw OpConsensusError(
                     "op block: unexpected non-deposit transactions in Jovian activation block");
         }
