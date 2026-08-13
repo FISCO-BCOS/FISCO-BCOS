@@ -64,14 +64,17 @@ struct Fixture : public ::testing::Test
         ledgerConfig.setGasPrice({"0x0", 0});
     }
 
-    bcostars::protocol::TransactionImpl buildWeb3Tx()
+    bcostars::protocol::TransactionImpl buildWeb3Tx(uint64_t chainId = 10)
     {
-        // Construct a minimal EIP-2930 Web3 tx directly (chainId=5, nonce=7, gasPrice, gasLimit,
-        // to, value, empty data/accessList, yParity=0, 32-byte r/s) — the v1 raw-RLP fixture no
-        // longer decodes under the v2 Web3Transaction path, so build fields instead of RLP.
+        // Construct a minimal EIP-2930 Web3 tx directly (nonce=7, gasPrice, gasLimit, to, value,
+        // empty data/accessList, yParity=0, 32-byte r/s) — the v1 raw-RLP fixture no longer
+        // decodes under the v2 Web3Transaction path, so build fields instead of RLP. chainId
+        // defaults to 10 to match every executeTransaction call site below: Task 2 makes the
+        // envelope's chain id binding (a mismatch is rejected in m_prepare before opValidate),
+        // so the fixture envelope must carry the same chain id the call passes.
         bcos::rpc::Web3Transaction w3{};
         w3.type = bcos::rpc::TransactionType::EIP2930;
-        w3.chainId = 5;
+        w3.chainId = chainId;
         w3.nonce = 7;
         w3.maxFeePerGas = bcos::u256(30000000000);  // gasPrice (EIP-2930)
         w3.maxPriorityFeePerGas = w3.maxFeePerGas;
@@ -84,6 +87,11 @@ struct Fixture : public ::testing::Test
         auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
         auto const txHash = w3.txHash();
         tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
+        // takeToTarsTransaction stores the signing preimage (Web3Transaction.cpp:220-223);
+        // overwrite with the full EIP-2718 envelope (mirroring EngineServiceImpl buildOpBlock's
+        // SEV-8 overwrite) so m_prepare's validateEnvelopeSignature sees canonical wire bytes.
+        auto const envelope = w3.encode();
+        tarsHolder->extraTransactionBytes.assign(envelope.begin(), envelope.end());
         return bcostars::protocol::TransactionImpl([tarsHolder]() { return tarsHolder.get(); });
     }
 
@@ -300,6 +308,61 @@ TEST_F(Fixture, ReceiptMetaSurvives)
     EXPECT_EQ(receipt->effectiveGasPrice(), "0x6fc23ac00");
 }
 
+TEST_F(Fixture, RejectsCrossChainEnvelopeUnlessCall)
+{
+    // Task 2: m_prepare runs validateEnvelopeSignature (chain-id binding, EIP-2 low-s, yParity<=1)
+    // before opValidate for call=false. A cross-chain envelope (chainId 0x2106) vs the passed
+    // chainId (0x2105) must be rejected as OpConsensusError. call=true (eth_call) skips the check
+    // and proceeds to opValidate, so no OpConsensusError is thrown there.
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    auto tx = buildWeb3Tx(/*chainId=*/0x2106);  // cross-chain envelope
+    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+    tx.clearSenderAndHash();
+    tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256("100000000000000000000"));
+        // EIP-3607: seed the canonical empty-code hash so the sender is recognised as an EOA.
+        co_await acc.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        std::string nonceStr(tx.nonce());
+        if (nonceStr.empty())
+            nonceStr = "0";
+        co_await acc.setNonce(nonceStr);
+        co_return;
+    }());
+
+    bcos::evm::opstack::OpFeeParams fee{};
+    constexpr uint64_t kChainId = 0x2105;
+
+    // call=true (eth_call): envelope signature validation is skipped; execution proceeds, so no
+    // OpConsensusError is thrown for the cross-chain envelope. Runs first so the account nonce is
+    // pristine for both assertions (the real-execution path below persists the nonce bump).
+    try
+    {
+        auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+            /*contextID=*/0, ledgerConfig, /*call=*/true, fee, /*blockGasLeft=*/30000000,
+            /*chainId=*/kChainId));
+        EXPECT_NE(receipt, nullptr);
+    }
+    catch (bcos::evm::engine::OpConsensusError const&)
+    {
+        FAIL() << "call=true must skip validateEnvelopeSignature";
+    }
+
+    // call=false: chain-id mismatch rejected in m_prepare, before opValidate.
+    EXPECT_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+                     /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
+                     /*chainId=*/kChainId)),
+        bcos::evm::engine::OpConsensusError);
+}
+
 // ---- executeDeposit + finalizeBlock (reuse bcos-evm/opstack runDeposit / finalizeOpBlock) ----
 
 TEST_F(Fixture, ExecutesDepositMint)
@@ -430,10 +493,11 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
         co_return;
     }());
 
-    // EIP-1559 tx calling the observer with empty data, value 0.
+    // EIP-1559 tx calling the observer with empty data, value 0. chainId=10 matches the
+    // executeTransaction call below (Task 2: envelope chain-id binding is enforced in m_prepare).
     bcos::rpc::Web3Transaction w3{};
     w3.type = bcos::rpc::TransactionType::EIP1559;
-    w3.chainId = 5;
+    w3.chainId = 10;
     w3.nonce = 0;
     w3.maxFeePerGas = bcos::u256(30000000000);
     w3.maxPriorityFeePerGas = bcos::u256(0);
@@ -446,6 +510,9 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
+    // Overwrite the signing preimage with the full EIP-2718 envelope (SEV-8 pattern).
+    auto const envelope = w3.encode();
+    tarsHolder->extraTransactionBytes.assign(envelope.begin(), envelope.end());
     bcostars::protocol::TransactionImpl tx([tarsHolder]() { return tarsHolder.get(); });
     tx.clearSenderAndHash();
     tx.forceSender(bcos::bytes(kSender.bytes, kSender.bytes + sizeof(kSender.bytes)));

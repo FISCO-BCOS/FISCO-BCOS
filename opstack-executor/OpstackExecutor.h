@@ -1,26 +1,11 @@
 /// @file OpstackExecutor.h
-/// @brief An OP Stack (Optimism L2) transaction executor based on bcos-evm/opstack.
+/// @brief OP Stack (Optimism L2) transaction executor based on bcos-evm/opstack.
 ///
 /// Implements the bcos::executor_v1::TransactionExecutor concept (ExecuteContext with
-/// prepare/execute/finish). It is the OP analogue of EthereumExecutor: instead of evmone's stock
-/// validate_transaction / transition, it drives the OP transition pipeline in bcos-evm/opstack —
-/// opValidate (L1 + operator fee pre-charge, blob rejection) followed by opTransition (base/L1/
-/// operator fees routed to the OP fee vaults).
-///
-/// Scope: NORMAL transactions (executeTransaction), 0x7E deposits (executeDeposit), and block
-/// finalize (finalizeBlock). Deposit decoding (raw envelope -> DepositTx) is NOT this module's
-/// concern — the caller passes an already-decoded DepositTx.
-///
-/// Semantics: uses the INJECTION-style opValidate/opTransition with an orchestrator-supplied
-/// OpFeeParams (including the D-1 attributes-calldata DA-scalar override), a decrementing
-/// blockGasLeft, the chain id, and real block hashes — mirroring processOpBlock. The eth_call
-/// block context (buildBlockInfo) mirrors detail::toBlockInfo (OpRlpDecode.h): seconds timestamp,
-/// header baseFee via value_or(0), and the full field set.
-///
-/// Adapter reuse: the storage-backed StateView and state-diff writeback are shared with
-/// EthereumExecutor via ethereum-executor. This module links the ethereum-executor target.
-/// opTransition/runDeposit produce the final FISCO receipt directly (OP metadata + effective gas
-/// price already projected), so no receipt-meta conversion is needed here.
+/// prepare/execute/finish): opValidate + opTransition for NORMAL transactions, runDeposit for
+/// 0x7E deposits, finalizeOpBlock for block finalize. The caller passes an already-decoded
+/// DepositTx. Storage-backed StateView and state-diff writeback are shared with EthereumExecutor
+/// via ethereum-executor.
 
 #pragma once
 
@@ -47,10 +32,8 @@
 
 namespace bcos::evm::opstack
 {
-// Defined in OpBlockExecute.cpp — forward-declared here (OpForkConfig is a complete type via
-// OpForkSchedule.h, evmone::state::StateView is forward-declared by OpFeeParams.h) so this header
-// does not include OpBlockExecute.h (that header includes OpstackExecutor.h for
-// runOpBlockInjection).
+// Defined in OpBlockExecute.cpp — forward-declared here to avoid including OpBlockExecute.h
+// (which includes this header).
 evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
 }  // namespace bcos::evm::opstack
@@ -65,11 +48,6 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
 class OpstackExecutor
 {
 public:
-    /// @param receiptFactory produces the BCOS receipt (opTransition/runDeposit take it and
-    ///        return the final receipt with OP metadata already projected).
-    /// @param hashImpl        keccak used by the state-diff writeback.
-    /// @param forkConfig      the active OP fork. The config is a reference into a static
-    ///        singleton (jovianConfig()), so storing a const& is safe.
     OpstackExecutor(protocol::TransactionReceiptFactory::Ptr receiptFactory,
         crypto::Hash::Ptr hashImpl,
         bcos::evm::opstack::OpForkConfig const& forkConfig = bcos::evm::opstack::jovianConfig())
@@ -82,25 +60,16 @@ public:
     /// Access the EVM instance (needed for system_call functions).
     evmc::VM& vm() { return m_vm; }
 
-    /// OP-specific blockInfo for the eth_call path — mirrors `detail::toBlockInfo`
-    /// (OpRlpDecode.h:106-121) so an eth_call sees the same block context as block execution:
-    /// timestamp in seconds (tars ms -> evmone s), baseFee / blobGasUsed / parentBeaconBlockRoot
-    /// from the header via value_or(0) — a header that leaves an optional unset (minimal test
-    /// headers, and any header whose field the engine did not fill) reads as 0 rather than
-    /// throwing. gasLimit stays an injection because the RPC call path threads the head block's
-    /// gas limit as blockGasLeft.
+    /// eth_call block context, mirroring detail::toBlockInfo: lenient optionals (unset header
+    /// fields read as 0 rather than throwing), gasLimit injected as blockGasLeft.
     static evmone::state::BlockInfo buildBlockInfo(
         protocol::BlockHeader const& header, uint64_t gasLimit)
     {
-        // Single toBlockInfo implementation, parameterized by lenient optionals + injected
-        // gasLimit. The block-execution path (runOpBlockInjection) keeps the strict .value()
-        // semantics via toBlockInfo's default argument.
         return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, /*lenientOptionals=*/true);
     }
 
-    /// BlockInfo gasLimit: the real header gasLimit (EVM-visible GASLIMIT constant, consistent
-    /// with processOpBlock's toBlockInfo); falls back to the caller's blockGasLeft when the header
-    /// leaves it unset (==0, e.g. minimal test headers — there blockGasLeft==header.gasLimit()).
+    /// Real header gasLimit, falling back to the caller's blockGasLeft when the header leaves it
+    /// unset (==0, e.g. minimal test headers).
     static uint64_t opBlockGasLimit(protocol::BlockHeader const& header, uint64_t fallback)
     {
         namespace detail = bcos::evm::engine::detail;
@@ -120,10 +89,7 @@ public:
         ledger::LedgerConfig const& ledgerConfig;
         bool call;
 
-        // Per-transaction state threaded across the concept lifecycle. The concept call carries no
-        // injection params, so the stages run with default injection (zero fee / zero blockGasLeft
-        // / zero chainId / no block hashes); the orchestrator's executeTransaction path threads
-        // the real injection params through the same three stages.
+        // Per-transaction state threaded across the concept lifecycle.
         bcos::evm::opstack::OpTxProperties m_props;   // set by prepare()
         protocol::TransactionReceipt::Ptr m_receipt;  // set by execute()
         evmone::state::StateDiff m_diff;              // writeback deferred to finish()
@@ -168,11 +134,8 @@ public:
             *this, storage, blockHeader, transaction, contextID, ledgerConfig, call};
     }
 
-    /// Execute a single OP Stack normal transaction (INJECTION-style, semantics mirror
-    /// processOpBlock). Orchestrator supplies: fee (with D-1 calldata override), decrementing
-    /// blockGasLeft, chainId, and real block hashes. fee/blockGasLeft/chainId default so the
-    /// concept's 6-argument call lands on this injection path (default injection: zero fee, zero
-    /// blockGasLeft, zero chainId).
+    /// Execute a single OP normal transaction (injection-style, mirroring processOpBlock).
+    /// Orchestrator supplies fee, decrementing blockGasLeft, chainId, and real block hashes.
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
@@ -181,10 +144,9 @@ public:
         uint64_t chainId = 0, evmone::state::BlockHashes const* blockHashes = nullptr)
     {
         (void)contextID;
-        (void)call;
 
-        auto props =
-            co_await m_prepare(storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft);
+        auto props = co_await m_prepare(
+            storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft, chainId, call);
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(storage, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes);
@@ -251,19 +213,20 @@ public:
     }
 
 private:
-    // ---- Shared normal-tx pipeline: concept lifecycle (ExecuteContext::prepare/execute/finish)
-    // ---- and executeTransaction drive the same three stages (no duplicated logic).
-    // Stage 1 — validate: fork/evmc revision check, OP block info + evmone tx + signed envelope
-    // build, then injection-style opValidate (pairing constraint, OpTransition.h): fee is supplied
-    // by the orchestrator, props.fee is snapshotted here and reused by the transition stage.
+    // ---- Shared normal-tx pipeline: the concept lifecycle and executeTransaction drive the same
+    // ---- three stages.
+    // Stage 1 — validate: fork/evmc revision check, block info + evmone tx + signed envelope, then
+    // injection-style opValidate (fee supplied by the orchestrator; props.fee snapshotted for the
+    // transition stage).
     template <class Storage>
     task::Task<bcos::evm::opstack::OpTxProperties> m_prepare(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee = {},
-        int64_t blockGasLeft = 0)
+        int64_t blockGasLeft = 0, uint64_t chainId = 0, bool call = false)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
+        namespace detail = bcos::evm::engine::detail;
 
         auto revOpt = ledgerConfig.evmcRevision();
         if (!revOpt.has_value())
@@ -279,6 +242,13 @@ private:
         auto evmTx = eth::bcosTransactionToEvmone(transaction);
         eth::StorageStateView<Storage> stateView(storage);
         auto envRef = transaction.extraTransactionBytes();
+        if (!call && !envRef.empty())
+            // Consensus envelope checks (chain-id binding, EIP-2 low-s, yParity<=1) run before
+            // opValidate on real (call=false) transactions; eth_call skips them. envRef is a
+            // bytesConstRef — validateEnvelopeSignature takes bcos::bytes, so .toBytes() copies
+            // (per-tx, acceptable). The !envRef.empty() gate covers an empty envelope, which the
+            // validation helper would otherwise reject.
+            detail::validateEnvelopeSignature(envRef.toBytes(), chainId);
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
         auto validated =
@@ -289,11 +259,8 @@ private:
     }
 
     // Stage 2 — execute: injection-style opTransition reusing props.fee (the validate-time
-    // snapshot), so the validate/transition pair can never be fed different OpFeeParams. The OP
-    // block info / evmone tx / signed envelope are rebuilt here (pure conversions), keeping the
-    // stage self-contained. chainId and real block hashes are orchestrator-supplied.
-    // opTransition returns the final FISCO receipt (OP meta + effective gas price already
-    // projected) and returns the state diff via `diff` out-param.
+    // snapshot), so the pair can never be fed different OpFeeParams. Returns the final FISCO
+    // receipt and the state diff via `diff` out-param.
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> m_execute(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
@@ -316,8 +283,7 @@ private:
             chainId, m_receiptFactory, diff);
     }
 
-    // Stage 3 — writeback: apply the transition's state diff to storage and return the already
-    // final receipt (opTransition projected the OP metadata + effective gas price onto it).
+    // Stage 3 — writeback: apply the transition's state diff to storage, return the final receipt.
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> m_finish(Storage& storage,
         protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,

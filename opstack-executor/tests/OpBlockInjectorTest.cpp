@@ -126,9 +126,11 @@ bcos::evm::opstack::OpBlockTx makeEip1559OpBlockTx()
 /// never fires), and the dummy r/s is neutralized by forceSender.
 bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
 {
+    // chainId must match the block chainId (kChainId, 0x2105): Task 2 made the envelope's chain id
+    // binding — m_prepare's validateEnvelopeSignature rejects a mismatch before opValidate.
     bcos::rpc::Web3Transaction w3{};
     w3.type = bcos::rpc::TransactionType::EIP1559;
-    w3.chainId = 5;
+    w3.chainId = kChainId;
     w3.nonce = 0;
     w3.maxFeePerGas = bcos::u256(30'000'000'000ULL);
     w3.maxPriorityFeePerGas = 0;
@@ -141,6 +143,11 @@ bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
     auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
+    // takeToTarsTransaction stores the signing preimage (which a full-envelope consumer would
+    // reject as a truncated typed envelope); overwrite with the full EIP-2718 envelope (SEV-8,
+    // precedent OpSchedulerTest.cpp:228 / OpstackExecutorTest buildWeb3Tx).
+    auto const envelope = w3.encode();
+    tarsHolder->extraTransactionBytes.assign(envelope.begin(), envelope.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [tarsHolder]() { return tarsHolder.get(); });
     tx->clearSenderAndHash();
