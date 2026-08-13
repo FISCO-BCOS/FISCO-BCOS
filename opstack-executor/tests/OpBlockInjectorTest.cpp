@@ -1,12 +1,15 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpBlockInjectorTest — drives runOpBlockInjection (opstack-executor/OpBlockExecute.h) over a
-// plain MutableStorage fixture (spec §7(a); the injector is a Storage template, so no MLS is
+// OpBlockInjectorTest — drives the shared block-execution path (preBlockOpSteps →
+// SchedulerSerialImpl(serial=true) → finalizeOpBlockResult — runOpBlockInjection's successor, Task
+// 5) over a plain MutableStorage fixture (spec §7(a); the path is Storage templates, so no MLS is
 // needed). A minimal "L1 attributes deposit + eip1559" block verifies:
 //   (1) the system-call BlockInfo's gas_limit == header.gasLimit (toBlockInfo, trivially true);
 //   (2) receipt count == tx count;
-//   (3) the injector's block-level gasUsed == manual Σ per-receipt gasUsed.
+//   (3) the block-level gasUsed == manual Σ per-receipt gasUsed.
+// Plus: preBlockOpSteps rejects an empty block with OpConsensusError (the retired injector's
+// empty-block guard now lives there).
 // Per-tx BlockInfo gasLimit==header is deliberately NOT asserted here — that belongs to
 // OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit.
 
@@ -26,6 +29,9 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
+#include <engine/bcos-engine/EngineServiceImpl.h>  // detail::opEnvelopeToTars (tests link engine)
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>  // per-tx loop (Task 5)
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
 #include <limits>
@@ -165,6 +171,60 @@ void fundSender(MutableStorage& storage, bcos::crypto::Hash::Ptr const& hashImpl
     bcos::task::syncWait(account.setNonce("0"));
     bcos::task::syncWait(account.setBalance(bcos::u256(1) << 200));
 }
+
+/// FISCO Transaction from a raw envelope (opEnvelopeToTars + full-envelope override, precedent
+/// OpDualPathEquivalenceTest.cpp buildBlockTx): the shared path's per-tx loop re-derives deposits
+/// from the Transaction objects, so index 0 must carry a REAL deposit tx (not a placeholder).
+bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
+    bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
+{
+    auto txHash = hashImpl->hash(env);
+    auto tarsTx = bcos::engine::detail::opEnvelopeToTars(env, txHash);
+    if (!tarsTx)
+        return nullptr;
+    tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tars = std::move(*tarsTx)]() mutable { return &tars; });
+}
+
+/// Drive the shared block-execution path (preBlockOpSteps → SchedulerSerialImpl(serial=true) →
+/// finalizeOpBlockResult) — runOpBlockInjection's successor (Task 5). Mirrors OpScheduler::execute
+/// over a plain MutableStorage (no MLS needed: preBlockOpSteps / SchedulerSerialImpl / finalize are
+/// Storage templates). preBlockOpSteps throws OpConsensusError on block-level shape faults (the
+/// empty-block guard).
+bcos::evm::engine::OpExecuteBlockResult runSharedPath(MutableStorage& storage,
+    bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxBytes,
+    std::vector<bcos::protocol::Transaction::ConstPtr> const& transactions,
+    std::vector<bcos::evm::opstack::DepositTx> const& deposits,
+    bcos::evm::opstack::OpForkConfig const& cfg,
+    bcos::executor_v1::opstack::OpstackExecutor& executor,
+    bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
+{
+    namespace detail = bcos::evm::engine::detail;
+    bcos::ledger::LedgerConfig execLedgerConfig;
+    execLedgerConfig.setEVMCRevision(cfg.rev);
+
+    std::optional<std::string> hashErr;
+    std::optional<uint16_t> daFootprintGasScalar;
+    std::optional<detail::RecentBlockHashes<MutableStorage>> hashes;
+    bcos::evm::engine::preBlockOpSteps(storage, header, cfg, rawTxBytes, deposits, executor, hashImpl,
+        hashes, hashErr, daFootprintGasScalar);
+    bcos::executor_v1::opstack::OpBlockExecutionContext ctx{
+        .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
+        .blockHashes = &*hashes, .chainId = kChainId,
+        .daFootprintGasScalar = daFootprintGasScalar};
+    bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
+        ioServicePool, /*chunkSize=*/1, /*serial=*/true);
+    auto transactionsRefs = transactions |
+        ::ranges::views::transform(
+            [](bcos::protocol::Transaction::ConstPtr const& ptr) -> bcos::protocol::Transaction const& {
+                return *ptr;
+            });
+    auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
+        storage, executor, header, transactionsRefs, execLedgerConfig, ctx));
+    return bcos::evm::engine::finalizeOpBlockResult(executor, storage, header, execLedgerConfig, cfg,
+        receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr);
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpBlockInjector)
@@ -185,26 +245,30 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     auto hashImpl = cryptoSuite->hashImpl();
     auto receiptFactory = makeReceiptFactory();
     bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
 
     auto header = makeHeader(1'000'000);  // 1000 s
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setEVMCRevision(cfg.rev);
 
     fundSender(storage, hashImpl);
 
     auto depTx = makeAttributesDeposit();  // OpBlockTx
     auto normTx = makeEip1559OpBlockTx();  // OpBlockTx
     std::vector<op::DepositTx> deposits{std::get<op::DepositTx>(depTx.tx)};
-    // Block-order transactions: index 0 is the deposit placeholder (untouched by the deposit branch), index 1 is normal.
-    std::vector<bcos::protocol::Transaction::ConstPtr> transactions{nullptr, buildEip1559FiscoTx()};
-    // makeAttributesDeposit leaves signedEnvelope empty; runOpBlockInjection classifies by
+    // makeAttributesDeposit leaves signedEnvelope empty; the type-byte classification reads
     // rawTxBytes[0][0] -> rebuild the real 0x7e envelope with encodeDepositEnvelope.
     bcos::bytes depEnv = encodeDepositEnvelope(std::get<op::DepositTx>(depTx.tx));
     bcos::bytes normEnv(normTx.signedEnvelope.begin(), normTx.signedEnvelope.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, normEnv};
 
-    auto result = engine::runOpBlockInjection(executor, storage, *header, transactions, deposits,
-        cfg, kChainId, ledgerConfig, rawTxBytes, hashImpl);
+    // Block-order transactions: index 0 is a REAL deposit tx (the shared per-tx loop re-derives
+    // deposits from the Transaction objects), index 1 is normal.
+    auto depFiscoTx = buildFiscoTxFromEnvelope(depEnv, hashImpl);
+    BOOST_REQUIRE(depFiscoTx != nullptr);
+    std::vector<bcos::protocol::Transaction::ConstPtr> transactions{
+        depFiscoTx, buildEip1559FiscoTx()};
+
+    auto result = runSharedPath(
+        storage, *header, rawTxBytes, transactions, deposits, cfg, executor, hashImpl, ioServicePool);
 
     // System-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
     const auto sysBlk = detail::toBlockInfo(*header);
@@ -215,7 +279,7 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     // Receipt count == tx count (both txs execute).
     BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());
 
-    // gasUsed == manual Σ per-receipt gasUsed (the injector's cumulative accumulator).
+    // gasUsed == manual Σ per-receipt gasUsed (the block-level cumulative accumulator).
     int64_t manual = 0;
     for (auto const& r : result.receipts)
         manual += op::narrowGasUsed(r->gasUsed());
@@ -223,12 +287,13 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     BOOST_CHECK_GT(manual, 0);  // both txs actually consumed gas
 }
 
-/// Empty-block rejection: runOpBlockInjection with empty txs → OpConsensusError (a
-/// std::runtime_error subclass).
-BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByInjector)
+/// Empty-block rejection: preBlockOpSteps with empty rawTxBytes → OpConsensusError (a
+/// std::runtime_error subclass). The retired runOpBlockInjection's empty-block guard lives here now.
+BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
 {
     namespace op = bcos::evm::opstack;
     namespace engine = bcos::evm::engine;
+    namespace detail = bcos::evm::engine::detail;
 
     constexpr uint64_t kIsthmusTime = 0;
     constexpr uint64_t kJovianTime = std::numeric_limits<uint64_t>::max();
@@ -241,16 +306,16 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByInjector)
     bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
 
     auto header = makeHeader(1'000'000);
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setEVMCRevision(cfg.rev);
 
-    // Empty transactions/deposits/rawTxBytes → "op block: missing L1 attributes deposit (empty
-    // block)" → OpConsensusError.
-    std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
+    // Empty deposits/rawTxBytes → "op block: missing L1 attributes deposit (empty block)" →
+    // OpConsensusError.
     std::vector<op::DepositTx> deposits;
     std::vector<bcos::bytes> rawTxBytes;
-    BOOST_CHECK_THROW(engine::runOpBlockInjection(executor, storage, *header, transactions,
-                          deposits, cfg, kChainId, ledgerConfig, rawTxBytes, hashImpl),
+    std::optional<std::string> hashErr;
+    std::optional<uint16_t> daFootprintGasScalar;
+    std::optional<detail::RecentBlockHashes<MutableStorage>> hashes;
+    BOOST_CHECK_THROW(engine::preBlockOpSteps(storage, *header, cfg, rawTxBytes, deposits, executor,
+                          hashImpl, hashes, hashErr, daFootprintGasScalar),
         std::runtime_error);
 }
 

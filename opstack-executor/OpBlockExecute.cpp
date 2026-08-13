@@ -17,7 +17,7 @@
 #include <stdexcept>
 
 // isL1AttributesTx lives in OpBlockExecute.h; narrowGasUsed / hexCumulative live in OpCommon.h
-// (both shared with runOpBlockInjection — one implementation, no copy drift).
+// (both shared with the per-tx loop — one implementation, no copy drift).
 
 namespace bcos::evm::opstack
 {

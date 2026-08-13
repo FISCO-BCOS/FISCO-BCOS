@@ -171,7 +171,7 @@ public:
             catch (const OpTxValidationFailed& e)
             {
                 throw bcos::evm::engine::OpConsensusError(
-                    std::string("runOpBlockInjection: normal tx validation failed: ") + e.what());
+                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
             }
         }
         task::Task<void> execute()

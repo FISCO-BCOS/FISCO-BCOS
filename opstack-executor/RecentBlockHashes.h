@@ -8,7 +8,7 @@
 // {N-1: parentHash} (zero storage reads, covers the first block / EIP-2935) and lazily loads
 // earlier ancestors from SYS_NUMBER_2_HASH — equivalent to op-geth's header walk-back on
 // reorg-free chains (given a contiguous table). Constructed per block in the execution path
-// (runOpBlockInjection), lives for the block; relies on the engine's
+// (OpBlockExecute.h's preBlockOpSteps), lives for the block; relies on the engine's
 // x_state-serialized execution segment, so no internal locks.
 
 #include <bcos-framework/ledger/LedgerTypeDef.h>

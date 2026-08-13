@@ -559,8 +559,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 forkTimestamps);
         // Wiring Task 5a/5c: engine block-execution delegate = OpScheduler (slot-3, same instance).
         // A single OpSchedulerSeam serves the engine's SchedulerType seam surface (c_opMode probe /
-        // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot); OpScheduler itself no longer
-        // holds an execution kernel — block execution is the delegate's runOpBlockInjection.
+        // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot); OpScheduler itself owns the block
+        // execution path (preBlockOpSteps → SchedulerSerialImpl per-tx → finalizeOpBlockResult).
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),

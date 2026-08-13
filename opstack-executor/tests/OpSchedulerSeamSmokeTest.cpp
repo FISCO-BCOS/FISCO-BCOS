@@ -110,10 +110,10 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     BOOST_CHECK_EQUAL(commitments.txRoot, txRoot);
 }
 
-// Note: route A (executeOpBlock) is retired — the empty-block rejection test moved to route B
-// (runOpBlockInjection) in OpBlockInjectorTest (EmptyBlockRejectedByInjector). OpSchedulerSeam is
-// now a pure engine seam and no longer executes blocks, so there is no matching execution case
-// here. The EIP-7702 authorization yParity width test was removed with the RLP decode primitives
-// (decodeAuthYParityScalar retired in OpCommon.h).
+// Note: the empty-block rejection test lives in OpBlockInjectorTest
+// (EmptyBlockRejectedByBlockPreSteps), now driving preBlockOpSteps (the retired
+// runOpBlockInjection's guard). OpSchedulerSeam is a pure engine seam and no longer executes
+// blocks, so there is no matching execution case here. The EIP-7702 authorization yParity width
+// test was removed with the RLP decode primitives (decodeAuthYParityScalar retired in OpCommon.h).
 
 BOOST_AUTO_TEST_SUITE_END()

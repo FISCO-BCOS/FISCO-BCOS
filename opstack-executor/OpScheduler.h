@@ -11,8 +11,10 @@
 //   1. the blockGasLeft pool — each tx validates against the gas left AFTER prior txs ran;
 //   2. state-diff visibility — each tx reads the state written by the previous tx;
 //   3. deposit ordering — L1 attributes are injected strictly in order.
-// runOpBlockInjection was the linear executor; Task 4 replaced the per-tx loop with the shared
-// SchedulerSerialImpl(serial=true) (grain-size 1 — the same degenerate loop, now shared).
+// runOpBlockInjection (the linear per-tx executor) was retired in Task 5: the per-tx loop is the
+// shared SchedulerSerialImpl(serial=true) (grain-size 1 — the same degenerate loop, now shared),
+// the block-pre steps live in OpBlockExecute.h's preBlockOpSteps, the block-post steps in
+// finalizeOpBlockResult.
 // SchedulerParallelImpl must never drive OP. The three sequential dependencies above forbid any
 // parallel or chunked-staged execution model.
 //
@@ -23,7 +25,7 @@
 // (EngineServiceImpl runOpNewPayloadSteps), so a single m_pending slot survives the two
 // calls (no pipelining deque needed; that is an ethereum concern).
 
-#include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / OpBlockSeal
+#include <opstack-executor/OpBlockExecute.h>  // preBlockOpSteps / finalizeOpBlockResult / OpBlockSeal
 #include <opstack-executor/OpCommitments.h>   // OpBlockCommitments / mismatchedFieldOf / toBcosH256
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
@@ -540,7 +542,6 @@ private:
     {
         namespace op = bcos::evm::opstack;
         namespace detail = bcos::evm::engine::detail;
-        namespace eth = bcos::executor_v1::eth;
 
         std::vector<bcos::bytes> rawTxBytes;
         rawTxBytes.reserve(transactions.size());
@@ -591,71 +592,19 @@ private:
 
             OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
-            // ① Block-pre steps (preBlockOpSteps — Task 5 extracts to a pure function; inlined
-            // here mirroring runOpBlockInjection's opening): system_call_block_start, deposit-first
-            // content check + Jovian shape, and the DA footprint gas scalar.
-            auto blk = detail::toBlockInfo(header);
+            // ① Block-pre steps (preBlockOpSteps, OpBlockExecute.h — the single home shared with the
+            // retired runOpBlockInjection): recent-block-hashes construction, system_call_block_start
+            // + applyStateDiff, deposit-first content check + Jovian shape, DA footprint gas scalar.
             std::optional<std::string> hashErr;
-            detail::RecentBlockHashes<ViewType> hashes(
-                view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
-            eth::StorageStateView<ViewType> stateView(view);
-            auto sysDiff = evmone::state::system_call_block_start(
-                stateView, blk, hashes, cfg.rev, executor.vm());
-            bcos::task::syncWait(eth::applyStateDiff(
-                view, bcos::evm::sanitizeStateDiff(stateView, sysDiff), cfg.rev, *m_hashImpl));
-
-            // deposit-first content check + Jovian shape (mirror of runOpBlockInjection's pre-loop
-            // guard; the deposits vector was pre-decoded above).
-            constexpr uint8_t kDepositTypeByte = 0x7e;
-            if (rawTxBytes.empty())
-                throw bcos::evm::engine::OpConsensusError(
-                    "op block: missing L1 attributes deposit (empty block)");
-            if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty() ||
-                !op::isL1AttributesTx(deposits[0]))
-                throw bcos::evm::engine::OpConsensusError(
-                    "op block: first tx is not the L1 attributes deposit");
-            if (cfg.has_da_footprint)
-            {
-                auto const& data = deposits[0].data;
-                if (data.size() == op::IsthmusL1AttributesLen)
-                {
-                    if (rawTxBytes.back().empty() || rawTxBytes.back()[0] != kDepositTypeByte)
-                        throw bcos::evm::engine::OpConsensusError(
-                            "op block: unexpected non-deposit transactions in Jovian activation "
-                            "block");
-                }
-                else
-                {
-                    if (data.size() < op::JovianL1AttributesLen)
-                        throw bcos::evm::engine::OpConsensusError(
-                            "op block: L1 attributes transaction data too short for DA footprint "
-                            "gas scalar");
-                    if (!std::equal(op::JovianL1AttributesSelector.begin(),
-                            op::JovianL1AttributesSelector.end(), data.begin()))
-                        throw bcos::evm::engine::OpConsensusError(
-                            "op block: L1 attributes transaction data does not have Jovian "
-                            "selector");
-                }
-            }
-
-            // DA scalar (H1c): Jovian extracts big-endian uint16 from deposits[0].data[176:178];
-            // the 176B Isthmus activation attributes → 0.
             std::optional<uint16_t> daFootprintGasScalar;
-            if (cfg.has_da_footprint)
-            {
-                auto const& attrData = deposits[0].data;
-                if (attrData.size() == op::IsthmusL1AttributesLen)
-                    daFootprintGasScalar = 0;
-                else if (attrData.size() >= op::JovianL1AttributesLen)
-                    daFootprintGasScalar = static_cast<uint16_t>(
-                        (static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 2]) << 8) |
-                        static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 1]));
-            }
+            std::optional<detail::RecentBlockHashes<ViewType>> hashes;
+            bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor,
+                m_hashImpl, hashes, hashErr, daFootprintGasScalar);
 
             // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
             OpBlockExecutionContext ctx{
                 .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
-                .blockHashes = &hashes, .chainId = m_chainId,
+                .blockHashes = &*hashes, .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};
 
             // ③ Per-tx execution via the shared serial scheduler (one per block; serial=true
@@ -696,7 +645,7 @@ private:
             // would bypass the skeleton's catch(std::exception&). Normalize to a FISCO type so
             // classifyException receives a catchable one.
             throw bcos::evm::engine::OpConsensusError(
-                "OpScheduler: runOpBlockInjection threw an unrecognized (RTTI-bypassed) exception; "
+                "OpScheduler: execute threw an unrecognized (RTTI-bypassed) exception; "
                 "raw tx decode or block-level consensus fault");
         }
 

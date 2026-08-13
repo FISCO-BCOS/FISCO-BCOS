@@ -190,7 +190,8 @@ public:
     /// requires-expression ([expr.prim.req.simple]), so it does not odr-use the function body.
     ///
     /// OP block execution is always the delegate's path (`m_delegate->executeBlock` →
-    /// `runOpBlockInjection`). `c_opMode` now only means "this is an
+    /// OpScheduler's preBlockOpSteps + SchedulerSerialImpl + finalizeOpBlockResult). `c_opMode` now
+    /// only means "this is an
     /// OP scheduler": the engine reaches `computeTxRoot` / `isIsthmusActiveAt` / `isJovianActiveAt`
     /// as dependent names inside `if constexpr (c_opMode)`.
     static constexpr bool c_opMode =

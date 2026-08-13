@@ -85,7 +85,7 @@ inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6
 /// No-op pre-Jovian. Throws std::runtime_error.
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg);
 
-// ---- shared per-receipt helpers (one implementation shared with runOpBlockInjection) ----
+// ---- shared per-receipt helpers (one implementation shared with the per-tx loop) ----
 
 /// Stricter-than-spec content check for the L1 attributes deposit (to==OP_L1_BLOCK &&
 /// from==OP_DEPOSITOR); rejects hand-crafted payloads.
@@ -194,39 +194,43 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
         static_cast<uint64_t>(cumulative), txRoot};
 }
 
-// ---- block execution: per-transaction injection loop ----
+// ---- block execution: block-pre steps + per-transaction execution ----
+//
+// runOpBlockInjection (the linear per-tx injection loop) was retired in Task 5 — its three
+// responsibilities now live in: preBlockOpSteps (below, block-pre) + SchedulerSerialImpl(serial=true)
+// (per-tx loop, driven by OpScheduler::execute) + finalizeOpBlockResult (block-post). executeDeposit
+// survives on OpstackExecutor (eth_call uses it directly).
 
-/// Per-tx injection loop replicating processOpBlock's orchestration through OpstackExecutor.
-/// `transactions` and `deposits` are consumed directly; rawTxBytes[i][0] dispatches deposit vs
-/// normal. poison/hashErr → OpStorageError, shape/validation → OpConsensusError.
+/// Block-pre steps shared by the OpScheduler execution path (and previously the retired
+/// runOpBlockInjection): recent-block-hashes construction → system_call_block_start + applyStateDiff
+/// → deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs hashes (emplaced
+/// in place — RecentBlockHashes holds a storage reference, not assignable, hence the
+/// std::optional carrier), hashErr, and daFootprintGasScalar via reference params. Throws
+/// OpConsensusError on shape/validation faults.
 template <class Storage>
-OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExecutor& executor,
-    Storage& view, bcos::protocol::BlockHeader const& header,
-    std::span<bcos::protocol::Transaction::ConstPtr const> transactions,
-    std::span<bcos::evm::opstack::DepositTx const> deposits,
-    bcos::evm::opstack::OpForkConfig const& cfg, uint64_t chainId,
-    bcos::ledger::LedgerConfig const& ledgerConfig, std::vector<bcos::bytes> const& rawTxBytes,
-    bcos::crypto::Hash::Ptr const& hashImpl)
+void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
+    bcos::evm::opstack::OpForkConfig const& cfg, std::vector<bcos::bytes> const& rawTxBytes,
+    std::vector<bcos::evm::opstack::DepositTx> const& deposits,
+    bcos::executor_v1::opstack::OpstackExecutor& executor,
+    bcos::crypto::Hash::Ptr const& hashImpl,
+    std::optional<detail::RecentBlockHashes<Storage>>& hashes,
+    std::optional<std::string>& hashErr, std::optional<uint16_t>& daFootprintGasScalar)
 {
-    namespace detail = bcos::evm::engine::detail;
     namespace op = bcos::evm::opstack;
     namespace eth = bcos::executor_v1::eth;
 
     auto blk = detail::toBlockInfo(header);
-    std::optional<std::string> hashErr;
-    detail::RecentBlockHashes<Storage> hashes(
-        view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
+    hashes.emplace(view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     eth::StorageStateView<Storage> stateView(view);
 
     // (1) Pre-block system call.
     auto sysDiff =
-        evmone::state::system_call_block_start(stateView, blk, hashes, cfg.rev, executor.vm());
+        evmone::state::system_call_block_start(stateView, blk, *hashes, cfg.rev, executor.vm());
     bcos::task::syncWait(eth::applyStateDiff(
         view, bcos::evm::sanitizeStateDiff(stateView, sysDiff), cfg.rev, *hashImpl));
 
     // (2) deposit-first content check + Jovian shape (type-byte classification, no raw-tx parse).
     constexpr uint8_t kDepositTypeByte = 0x7e;
-    constexpr uint8_t kRlpListBase = 0xc0;
     if (rawTxBytes.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     // Empty-envelope guard: the first envelope must be non-empty before its type byte is read
@@ -257,80 +261,18 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
         }
     }
 
-    op::OpBlockResult result;
-    result.receipts.reserve(rawTxBytes.size());
-    int64_t blockGasLeft = blk.gas_limit;
-    int64_t cumulative = 0;
-    bool seenNonDeposit = false;
-    bool feeLoaded = false;
-    std::size_t depIdx = 0;
-    op::OpFeeParams fee{};
-    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+    // (3) DA scalar (H1c): Jovian extracts big-endian uint16 from deposits[0].data[176:178]; the
+    // 176B Isthmus activation attributes → 0.
+    if (cfg.has_da_footprint)
     {
-        if (rawTxBytes[i].empty())  // empty envelope: raw[0] would be out of bounds
-            throw OpConsensusError("op block: empty envelope");
-        if (rawTxBytes[i][0] == kDepositTypeByte)
-        {
-            if (seenNonDeposit)
-                throw OpConsensusError("op block: deposit after non-deposit tx");
-            if (depIdx >= deposits.size())
-                throw OpConsensusError("runOpBlockInjection: deposits list shorter than block");
-            auto receipt = bcos::task::syncWait(executor.executeDeposit(
-                view, header, deposits[depIdx++], chainId, blockGasLeft, ledgerConfig, &hashes));
-            auto const gasUsed = op::narrowGasUsed(receipt->gasUsed());
-            blockGasLeft -= gasUsed;
-            cumulative += gasUsed;
-            receipt->setCumulativeGasUsed(op::hexCumulative(cumulative));
-            result.receipts.emplace_back(std::move(receipt));
-            result.txTypes.emplace_back(static_cast<uint8_t>(op::kDepositTxType));
-        }
-        else
-        {
-            // normal: 0x01/0x02/0x04/legacy (>=0xc0); unknown typed byte -> consensus reject.
-            if (rawTxBytes[i][0] < kRlpListBase && rawTxBytes[i][0] != 0x01 &&
-                rawTxBytes[i][0] != 0x02 && rawTxBytes[i][0] != 0x04)
-                throw OpConsensusError(
-                    "op block: unsupported tx type byte 0x" + std::to_string(rawTxBytes[i][0]));
-            seenNonDeposit = true;
-            if (!feeLoaded)
-            {
-                fee = op::loadOpFeeParams(stateView);
-                if (cfg.has_da_footprint)
-                {
-                    auto const& attrData = deposits[0].data;
-                    if (attrData.size() == op::IsthmusL1AttributesLen)
-                        fee.da_footprint_gas_scalar = 0;
-                    else if (attrData.size() >= op::JovianL1AttributesLen)
-                        fee.da_footprint_gas_scalar = static_cast<uint16_t>(
-                            (static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 2]) << 8) |
-                            static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 1]));
-                }
-                feeLoaded = true;
-            }
-            if (i >= transactions.size())
-                throw OpConsensusError("runOpBlockInjection: transactions list shorter than block");
-            protocol::TransactionReceipt::Ptr receipt;
-            try
-            {
-                receipt = bcos::task::syncWait(
-                    executor.executeTransaction(view, header, *transactions[i], /*contextID=*/0,
-                        ledgerConfig, /*call=*/false, fee, blockGasLeft, chainId, &hashes));
-            }
-            catch (const bcos::executor_v1::opstack::OpTxValidationFailed& e)
-            {
-                throw OpConsensusError(
-                    "runOpBlockInjection: normal tx validation failed: " + std::string(e.what()));
-            }
-            auto const gasUsed = op::narrowGasUsed(receipt->gasUsed());
-            blockGasLeft -= gasUsed;
-            cumulative += gasUsed;
-            receipt->setCumulativeGasUsed(op::hexCumulative(cumulative));
-            result.receipts.emplace_back(std::move(receipt));
-            result.txTypes.emplace_back(rawTxBytes[i][0] >= kRlpListBase ? 0 : rawTxBytes[i][0]);
-        }
+        auto const& attrData = deposits[0].data;
+        if (attrData.size() == op::IsthmusL1AttributesLen)
+            daFootprintGasScalar = 0;
+        else if (attrData.size() >= op::JovianL1AttributesLen)
+            daFootprintGasScalar = static_cast<uint16_t>(
+                (static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 2]) << 8) |
+                static_cast<uint16_t>(attrData[op::JovianL1AttributesLen - 1]));
     }
-    return finalizeOpBlockResult(
-        executor, view, header, ledgerConfig, cfg, result.receipts, rawTxBytes, cumulative, hashErr);
 }
 
 /// Project the payload/header announced commitments into OpBlockCommitments (the "announced" side
@@ -357,7 +299,7 @@ inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPa
 /// transactionsRoot over raw EIP-2718 envelopes (trie key = rlp(index), value = raw wire bytes).
 /// Matches op-geth's DeriveSha because the raw-tx decoders reject non-canonical encodings
 /// (assertCanonicalRoundTrip fails closed if that lapses). Two call sites: the engine's
-/// pre-execution blockHash check and runOpBlockInjection's txRoot.
+/// pre-execution blockHash check and finalizeOpBlockResult's txRoot.
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
 {

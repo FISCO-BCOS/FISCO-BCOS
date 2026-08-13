@@ -1,27 +1,21 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpSchedulerTest — minimal OP-block + three-way-classification unit tests for the new
-// OpScheduler class.
+// OpSchedulerTest — minimal OP-block + three-way-classification unit tests for the OpScheduler
+// class.
 //
-// 1. ExecutesMinimalOpBlockEqualToDirectRouteB: the minimal OP block (deposit + 1 normal with
-//    envelope, SEV-8: extraTransactionBytes = full envelope, precedent
-//    OpDualPathEquivalenceTest.cpp:566-568) driven via OpScheduler.executeBlock == direct route B
-//    (runOpBlockInjection) result (receipts/status/gasUsed + six-field commitment). Corpus anchor:
-//    deposit + eip1559 envelope of isthmus_transfer_basic.json (real op-geth signatures); direct
-//    anchor = independent route B on the same MLS (runOpBlockInjection; route A executeOpBlock is
-//    retired — the dual-path harness proved route B semantically equivalent to it).
+// 1. CommitPersistsSevenLedgerTables: the minimal OP block (deposit + 1 normal with envelope,
+//    SEV-8: extraTransactionBytes = full envelope, precedent OpDualPathEquivalenceTest.cpp) driven
+//    via OpScheduler.executeBlock + commitBlock; the announced header's commitments come from a
+//    direct execution probe (preBlockOpSteps → SchedulerSerialImpl → finalizeOpBlockResult, the
+//    shared Task 5 path). The transition-equivalence test (OpScheduler vs the retired
+//    runOpBlockInjection) was deleted together with runOpBlockInjection.
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected: the execute hook throws OpConsensusError
 //    (unsupported tx type byte 0x03, type-byte classification throws deterministically) → the
 //    skeleton's coExecuteBlock classifies via classifyException → Error code ==
 //    OpConsensusRejected.
 // 3. classifyException direct three-way mapping: OpConsensusError→OpConsensusRejected /
 //    OpStorageError→OpStorageFault / other→UnknownError.
-// 4. CommitPersistsSevenLedgerTables: after executeBlock + commitBlock, 7 SYS
-//    tables are asserted persisted (SEV-10, replacing the deleted OpBlockScheduler's RefuseStubs).
-//
-// Golden constraint: minimal OP block receipts/status/gasUsed == direct route B
-// (runOpBlockInjection).
 #include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
@@ -159,7 +153,7 @@ bcos::evm::opstack::DepositTx makeDeposit()
 /// OP header from the corpus environment (isthmus_transfer_basic env). timestamp is stored in
 /// milliseconds (FISCO convention; /1000 gives OP seconds). Commitment fields (stateRoot/txsRoot/
 /// receiptsRoot/gasUsed/withdrawalsRoot/logsBloom/requestsHash) are back-filled by the caller from
-/// the direct route B (runOpBlockInjection) result — the announced header carries the true
+/// the direct execution probe (runExecutionProbe) result — the announced header carries the true
 /// commitments, so the six-field comparison verifies.
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
 {
@@ -187,7 +181,7 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
     return h;
 }
 
-/// Back-fill the announced header's commitment fields from the route B (runOpBlockInjection) result
+/// Back-fill the announced header's commitment fields from the execution probe result
 /// (finishExecute writes the same batch of fields, so verify compares equal).
 void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
     bcos::evm::engine::OpExecuteBlockResult const& result)
@@ -273,20 +267,6 @@ void seedSysTables(MLS& mls)
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
-/// Test subclass: exposes the receipts of the latest pending execution result (the skeleton's
-/// m_results is protected; a derived class can read it).
-class TestOpScheduler : public bcos::executor_v1::opstack::OpScheduler<MLS>
-{
-public:
-    using bcos::executor_v1::opstack::OpScheduler<MLS>::OpScheduler;
-
-    std::vector<bcos::protocol::TransactionReceipt::Ptr> lastExecutedReceipts()
-    {
-        auto peeked = peekExecuteResult();
-        return peeked ? peeked->receipts : std::vector<bcos::protocol::TransactionReceipt::Ptr>{};
-    }
-};
-
 struct Fixture
 {
     BackendMemStorage backendStorage{1};
@@ -306,15 +286,16 @@ struct Fixture
     std::shared_ptr<bcos::storage::LegacyStorageWrapper<BackendMemStorage>> legacyLedgerStorage;
     std::shared_ptr<bcos::ledger::Ledger> ledger;
     bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
-    std::shared_ptr<TestOpScheduler> scheduler;
+    std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> scheduler;
 
     Fixture()
       : legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        scheduler(std::make_shared<TestOpScheduler>(receiptFactory, hashImpl, kChainId,
-            forkTimestamps, blockFactory, multiLayerStorage, ledger, ioServicePool))
+        scheduler(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
+            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger,
+            ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -424,14 +405,17 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
-/// route B direct-call anchor (after route A executeOpBlock retired, the independent execution
-/// comparison moved to runOpBlockInjection): assemble deposits + block-order transactions +
-/// OpstackExecutor then call directly, returning OpExecuteBlockResult. Assembly matches
-/// OpScheduler's execute hook (OpScheduler.h) / OpDualPathEquivalenceTest route B (no copy drift).
-bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& view,
+/// Direct execution probe (replaces the retired runOpBlockInjection, Task 5): assemble deposits +
+/// block-order transactions + OpstackExecutor, then drive the SAME shared path OpScheduler::execute
+/// uses — preBlockOpSteps → SchedulerSerialImpl(serial=true) → finalizeOpBlockResult — returning the
+/// OpExecuteBlockResult. The announced header is back-filled from this probe's commitments so the
+/// full executeBlock's six-way verify passes (equal by construction). preBlockOpSteps throws on
+/// block-level faults — the caller wraps the probe accordingly.
+bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
     bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxBytes)
 {
     namespace op = bcos::evm::opstack;
+    namespace detail = bcos::evm::engine::detail;
     const auto& cfg =
         op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, f.forkTimestamps);
     // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full
@@ -460,147 +444,35 @@ bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& vi
         if (rawTxBytes[i][0] == static_cast<uint8_t>(op::kDepositTxType))
             deposits.push_back(bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(
                 *transactions[i]));
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setEVMCRevision(cfg.rev);
+    bcos::ledger::LedgerConfig execLedgerConfig;
+    execLedgerConfig.setEVMCRevision(cfg.rev);
     bcos::executor_v1::opstack::OpstackExecutor executor{f.receiptFactory, f.hashImpl, cfg};
-    return bcos::evm::engine::runOpBlockInjection(executor, view, header, transactions, deposits,
-        cfg, kChainId, ledgerConfig, rawTxBytes, f.hashImpl);
+
+    std::optional<std::string> hashErr;
+    std::optional<uint16_t> daFootprintGasScalar;
+    std::optional<detail::RecentBlockHashes<ViewType>> hashes;
+    bcos::evm::engine::preBlockOpSteps(
+        view, header, cfg, rawTxBytes, deposits, executor, f.hashImpl, hashes, hashErr,
+        daFootprintGasScalar);
+    bcos::executor_v1::opstack::OpBlockExecutionContext ctx{
+        .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
+        .blockHashes = &*hashes, .chainId = kChainId,
+        .daFootprintGasScalar = daFootprintGasScalar};
+    bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
+        f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
+    auto transactionsRefs = transactions |
+        ::ranges::views::transform(
+            [](bcos::protocol::Transaction::ConstPtr const& ptr) -> bcos::protocol::Transaction const& {
+                return *ptr;
+            });
+    auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
+        view, executor, header, transactionsRefs, execLedgerConfig, ctx));
+    return bcos::evm::engine::finalizeOpBlockResult(executor, view, header, execLedgerConfig, cfg,
+        receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr);
 }
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSuite)
-
-/// Transition-period equivalence guard (Task 4): the SAME minimal OP block (deposit + 1 normal
-/// with envelope) executed via OpScheduler.executeBlock — whose execute() now drives the shared
-/// SchedulerSerialImpl(serial=true) — must equal direct runOpBlockInjection on receipts / stateRoot
-/// / txRoot / gasUsed. Guards Task 5's deletion of runOpBlockInjection.
-BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
-{
-    Fixture f;
-
-    // Envelopes: deposit rebuilt via encodeDepositEnvelope (0x7e || rlp([...8 fields])); normal
-    // uses the corpus's real op-geth-signed envelope.
-    auto depTx = makeDeposit();
-    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
-    bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
-    std::vector<bcos::bytes> rawTxBytes{depEnv, eipEnvBytes};
-
-    auto header = makeHeader();
-
-    // Direct anchor: independent route B (runOpBlockInjection) on the same MLS, same header
-    // environment. (Route A executeOpBlock is retired — the dual-path harness proved route B
-    // semantically equivalent to it.)
-    auto viewA = f.multiLayerStorage.fork();
-    viewA.newMutable();
-    bcos::evm::engine::OpExecuteBlockResult resultA;
-    try
-    {
-        resultA = runRouteBDirect(f, viewA, *header, rawTxBytes);
-    }
-    catch (const std::exception& e)
-    {
-        BOOST_ERROR("direct runOpBlockInjection threw: " << e.what());
-        return;
-    }
-    catch (...)
-    {
-        BOOST_ERROR("direct runOpBlockInjection threw an unknown (RTTI-bypassed) exception");
-        return;
-    }
-
-    BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
-    BOOST_CHECK_GT(resultA.gasUsed, 0);
-
-    // Back-fill the announced header with the direct-call commitments (SYS_NUMBER_2_BLOCK_HEADER
-    // is not written — the execute path doesn't write the header table, only compares).
-    fillAnnouncedHeader(header, resultA);
-
-    // Block assembly: extraTransactionBytes = full envelope.
-    auto block = f.blockFactory->createBlock();
-    block->setBlockHeader(header);
-    auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
-    auto eipFiscoTx = buildFiscoTx(eipEnvBytes, f.hashImpl);
-    BOOST_REQUIRE(depFiscoTx != nullptr);
-    BOOST_REQUIRE(eipFiscoTx != nullptr);
-    block->appendTransaction(depFiscoTx);
-    block->appendTransaction(eipFiscoTx);
-
-    // Drive via OpScheduler.
-    bcos::Error::Ptr err;
-    bcos::protocol::BlockHeader::Ptr executedHeader;
-    bool sysBlock = false;
-    bool called = false;
-    f.scheduler->executeBlock(block, /*verify=*/true,
-        [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr h, bool s) {
-            called = true;
-            err = std::move(e);
-            executedHeader = std::move(h);
-            sysBlock = s;
-        });
-    BOOST_REQUIRE(called);
-    BOOST_REQUIRE_MESSAGE(
-        err == nullptr, "executeBlock failed: " << (err ? err->errorMessage() : ""));
-    BOOST_REQUIRE(executedHeader != nullptr);
-    BOOST_CHECK(!sysBlock);
-
-    // Six-field commitments == direct call.
-    BOOST_CHECK_EQUAL(executedHeader->stateRoot(), resultA.stateRoot);
-    BOOST_CHECK_EQUAL(executedHeader->txsRoot(), resultA.txRoot);
-    BOOST_CHECK_EQUAL(
-        executedHeader->receiptsRoot(), detail::toBcosH256(resultA.seal.receiptsRoot));
-    BOOST_CHECK_EQUAL(executedHeader->gasUsed(), bcos::u256(resultA.gasUsed));
-    BOOST_CHECK_EQUAL(executedHeader->withdrawalsRoot().value_or(bcos::h256{}),
-        detail::toBcosH256(resultA.seal.withdrawalsRoot));
-    {
-        auto gotBloom = executedHeader->logsBloom();
-        BOOST_REQUIRE_EQUAL(gotBloom.size(), 256u);
-        BOOST_CHECK(
-            std::equal(gotBloom.begin(), gotBloom.end(), std::begin(resultA.seal.logsBloom.bytes)));
-    }
-    if (resultA.seal.requestsHash.has_value())
-    {
-        BOOST_REQUIRE(executedHeader->requestsHash().has_value());
-        BOOST_CHECK_EQUAL(
-            executedHeader->requestsHash().value(), detail::toBcosH256(*resultA.seal.requestsHash));
-    }
-
-    // Per-tx receipts/status/gasUsed == direct call.
-    auto receipts = f.scheduler->lastExecutedReceipts();
-    BOOST_REQUIRE_EQUAL(receipts.size(), resultA.receipts.size());
-    for (std::size_t i = 0; i < receipts.size(); ++i)
-    {
-        BOOST_CHECK_EQUAL(receipts[i]->status(), resultA.receipts[i]->status());
-        BOOST_CHECK_EQUAL(receipts[i]->gasUsed(), resultA.receipts[i]->gasUsed());
-        BOOST_CHECK_EQUAL(std::string(receipts[i]->cumulativeGasUsed()),
-            std::string(resultA.receipts[i]->cumulativeGasUsed()));
-        BOOST_CHECK_EQUAL(std::string(receipts[i]->effectiveGasPrice()),
-            std::string(resultA.receipts[i]->effectiveGasPrice()));
-    }
-
-    // Golden constraint: executeBlock's full result — execute() now routes per-tx execution through
-    // SchedulerSerialImpl(serial=true) + finalizeOpBlockResult — == direct runOpBlockInjection
-    // (route B). peekExecuteResult exposes the raw result stashed in the skeleton's m_results.
-    auto routeB = f.scheduler->peekExecuteResult();
-    BOOST_REQUIRE_MESSAGE(routeB.has_value(), "executeBlock must stash an OpExecuteBlockResult");
-    BOOST_CHECK_EQUAL(routeB->stateRoot, resultA.stateRoot);
-    BOOST_CHECK_EQUAL(routeB->txRoot, resultA.txRoot);
-    BOOST_CHECK_EQUAL(routeB->gasUsed, resultA.gasUsed);
-    // evmc::bytes32 / BloomFilter have no operator<<, so compare with == / byte-wise
-    // (BOOST_CHECK_EQUAL is unusable).
-    BOOST_CHECK(routeB->seal.receiptsRoot == resultA.seal.receiptsRoot);
-    BOOST_CHECK(std::equal(std::begin(routeB->seal.logsBloom.bytes),
-        std::end(routeB->seal.logsBloom.bytes), std::begin(resultA.seal.logsBloom.bytes)));
-    BOOST_CHECK(routeB->seal.withdrawalsRoot == resultA.seal.withdrawalsRoot);
-    BOOST_CHECK_EQUAL(routeB->seal.requestsHash.has_value(), resultA.seal.requestsHash.has_value());
-    if (routeB->seal.requestsHash.has_value() && resultA.seal.requestsHash.has_value())
-        BOOST_CHECK(*routeB->seal.requestsHash == *resultA.seal.requestsHash);  // evmc::bytes32 has
-                                                                                // no
-                                                                                // <<
-    BOOST_CHECK_EQUAL(routeB->seal.blobGasUsed.has_value(), resultA.seal.blobGasUsed.has_value());
-    if (routeB->seal.blobGasUsed.has_value() && resultA.seal.blobGasUsed.has_value())
-        BOOST_CHECK_EQUAL(*routeB->seal.blobGasUsed, *resultA.seal.blobGasUsed);
-}
 
 /// After OpScheduler executeBlock + commitBlock, 7 SYS tables are persisted
 /// (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER / SYS_CURRENT_STATE /
@@ -619,13 +491,13 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 
     auto header = makeHeader();
 
-    // Direct route B yields the real commitments; back-fill the announced header (so verify's
-    // six-field comparison passes). (Route A executeOpBlock is retired — the dual-path harness
-    // proved route B semantically equivalent to it.)
+    // The execution probe yields the real commitments; back-fill the announced header (so verify's
+    // six-field comparison passes). Same shared path as OpScheduler::execute (preBlockOpSteps →
+    // SchedulerSerialImpl → finalizeOpBlockResult), so the full executeBlock's verify passes.
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
     bcos::evm::engine::OpExecuteBlockResult resultA =
-        runRouteBDirect(f, viewA, *header, rawTxBytes);
+        runExecutionProbe(f, viewA, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, resultA);
 

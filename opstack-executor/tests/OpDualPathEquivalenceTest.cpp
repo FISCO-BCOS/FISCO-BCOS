@@ -1,45 +1,30 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpDualPathEquivalenceTest.cpp — OP dual-path execution equivalence harness (route A moved to
-// OpScheduler.executeBlock).
+// OpDualPathEquivalenceTest.cpp — OP single-path golden execution harness (route B retired with
+// runOpBlockInjection, Task 5). Each t8n vector / chain block is driven through
+// OpScheduler.executeBlock — the production OP execution path (preBlockOpSteps →
+// SchedulerSerialImpl(serial=true) → finalizeOpBlockResult) — with the ANNOUNCED header carrying
+// the op-geth golden commitments (`_op_expected.header` + the deterministic computeOpTxRoot), so
+// the skeleton's unconditional six-way verify asserts FISCO reproduces op-geth's block commitments.
 //
-// Route A (`OpScheduler.executeBlock` — skeleton drives the execute hook = route B, view lifecycle
-// owned by the skeleton) vs route B (`runOpBlockInjection` direct call, per-tx injection loop,
-// OpstackExecutor injectable entry) compared per-block under a dual fork on
-// the t8n/vectors corpus (viewA = executed view the skeleton pushed into MLS, viewB = independent
-// fork):
-//   - hard (mechanics; any divergence is BOOST_ERROR): gasUsed / txRoot / receipt count / per-tx
-//     status / gasUsed / cumulativeGasUsed / effectiveGasPrice / logsCount / log content
-//     (topics/data/address).
-//   - soft (ALLOWLIST-driven): stateRoot / seal five fields / per-tx output / _op_* (driven by
-//     the opStackMeta() set, no hardcoded count). Following the `t8n/vectors/DIVERGENCES.md`
-//     ALLOWLIST pattern (OpT8nReplayTest.cpp:266-328 DivergenceLedger), this harness uses the
-//     `FINDING-dual-*` entryId prefix (coexists without conflict with the existing 6
-//     contract_create entries).
-//   - deposit_basefee×2 green guard: three-way consistent (A==B==golden), not listed in ALLOWLIST.
-//   - golden three-way (path A.stateRoot == vector `_op_expected.header.stateRoot`) hardened in P3
-//     but scoped (G1, round 4 ruling): for isthmus/jovian non-contract_create vectors, mismatch is
-//     a hard BOOST_CHECK failure (guards against "both paths wrong together"); pre-isthmus (golden
-//     fork mismatch is expected output) and contract_create (known route-A-vs-golden divergence in
-//     the OpT8nReplay domain) stay soft REPORT.
+// Scope (per vector):
+//   - isthmus/jovian (incl. chain): route A MUST succeed — the six-way verify is a hard gate
+//     (FISCO == op-geth commitments) — then the golden three-way (path A.stateRoot ==
+//     `_op_expected.header.stateRoot`) is hard for non-contract_create, soft REPORT for
+//     contract_create (the create-output divergence is a known base-layer issue); green guard
+//     (deposit_basefee ×2) is always hard; receipt-count sanity is asserted.
+//   - pre-isthmus (ecotone/fjord/granite): FISCO executes under isthmus semantics by design (the
+//     golden fork mismatch is expected output); the announced golden commitments are a different
+//     fork's, so route A is expected to be rejected at the six-way verify → soft REPORT (never
+//     hard). Any OTHER failure (shape/validation) is a real bug → BOOST_ERROR.
 //
-// Fork model: `forkTimestampsFor(bool jovian)` + `configAt` (isthmus/jovian). In the corpus,
-// ecotone/fjord/granite vectors execute consistently on both paths under isthmus semantics (both
-// paths share the same cfg → A-vs-B still valid; golden three-way REPORTs mismatch due to fork
-// mismatch, soft — pre-isthmus is outside the golden-hard scope).
-//
-// Fork parity: route B explicitly computes cfg = configAt(timestamp/1000,
-// forkTimestampsFor(jovian)) and passes it as arg 6 to runOpBlockInjection, asserting it resolves
-// from the same source as route A's scheduler-internal configAt.
-// Route B consumes the block's Transaction objects (block order) + decoded DepositTx —
-// no raw-tx parse, no normalTxs conversion.
-// Exception handling: per-vector catches use catch(std::exception)/catch(...) (route
-// B's OpTxValidationFailed is a bcos::Exception, not a runtime_error; and libevmone -fno-rtti
-// makes typed catch unreliable) — catch → BOOST_ERROR + continue, never judge divergence by
-// exception type.
-// has_storage scan (same-block create pre-triage; scan without pre-fixing) + /sys
-// tripwire derived-table prefix assertion (accountTableName(addr) prefix == apps/).
+// Fork model: `forkTimestampsFor(bool jovian)` + `configAt` (isthmus/jovian). Fork parity is
+// asserted by resolving cfg from the same source as the scheduler's internal configAt.
+// Exception handling: per-vector catches use catch(std::exception)/catch(...) (libevmone -fno-rtti
+// makes typed catch unreliable) — catch → BOOST_ERROR + continue.
+// has_storage scan (same-block create pre-triage) + /sys tripwire derived-table prefix assertion
+// (accountTableName(addr) prefix == apps/).
 
 #include "support/GoldenSample.h"
 #include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
@@ -117,173 +102,6 @@ inline Json::Value jParse(std::istream& input)
     return root;
 }
 
-// ── Canonical printing (shared with OpT8nReplayTest.cpp:200-240) ─────────────────────
-constexpr const char* kAbsent = "<absent>";
-
-std::string hexU64(uint64_t v)
-{
-    std::ostringstream out;
-    out << "0x" << std::hex << v;
-    return out.str();
-}
-
-std::string hexU256(const intx::uint256& v)
-{
-    return "0x" + intx::to_string(v, 16);
-}
-
-std::string hexHash(const evmone::hash256& h)
-{
-    return "0x" + evmc::hex(evmc::bytes_view{h.bytes, sizeof(h.bytes)});
-}
-
-std::string hexAddr(const evmc::address& a)
-{
-    return "0x" + evmc::hex(evmc::bytes_view{a.bytes, sizeof(a.bytes)});
-}
-
-std::string hexBytes(evmc::bytes_view b)
-{
-    return "0x" + evmc::hex(b);
-}
-
-/// bcos::u256 -> "0x" + lowercase no-leading-zero hex (same as OpT8nReplayTest.cpp:457-460).
-std::string hexU256Bcos(const bcos::u256& v)
-{
-    return "0x" + v.str(0, std::ios_base::hex);
-}
-
-// ── DivergenceLedger (OpT8nReplayTest.cpp:266-337 pattern; dedicated FINDING-dual- entryId prefix)
-// ───── This harness shares t8n/vectors/DIVERGENCES.md with OpT8nReplayTest: each ledger only
-// manages entries with its own prefix, so finish()'s stale check does not false-positive across
-// suites (existing FINDING-create-output entries belong to OpT8nReplay; FINDING-dual-* to this
-// harness).
-
-struct AllowEntry
-{
-    std::string vectorId, field, entryId, attribution, status, want, got;
-    bool exempt = false;
-    int hits = 0;
-};
-
-class DivergenceLedger
-{
-public:
-    // Missing ledger file = FAILURE (ledger is a gate deliverable; absence never means
-    // all-exempt/all-empty).
-    static DivergenceLedger load(const fs::path& path)
-    {
-        DivergenceLedger ledger;
-        std::ifstream input(path);
-        if (!input.is_open())
-        {
-            BOOST_ERROR("DIVERGENCES.md missing: " << path);
-            return ledger;
-        }
-        static const std::regex linePattern(
-            R"(<!--\s*ALLOWLIST\s+vectorId=(\S+)\s+field=(\S+)\s+entry=(\S+)\s+attribution=(\S+)\s+status=(\S+)\s+want=(\S+)\s+got=(\S+)\s*-->)");
-        static const std::regex headingPattern(R"(^##\s+(\S+))");
-        std::string line;
-        std::set<std::string> headings;
-        while (std::getline(input, line))
-        {
-            std::smatch m;
-            if (std::regex_search(line, m, headingPattern))
-                headings.insert(m[1].str());
-            if (std::regex_search(line, m, linePattern))
-            {
-                AllowEntry e{m[1].str(), m[2].str(), m[3].str(), m[4].str(), m[5].str(), m[6].str(),
-                    m[7].str()};
-                e.exempt = (e.attribution == "a" && e.status == "PENDING-FIX") ||
-                           (e.attribution == "c" && e.status == "SIGNED-OFF");
-                // Scope: only FINDING-dual-* entries belong to this (A-vs-B) harness. The
-                // FISCO↔op-geth entries (FINDING-create-output, ...) are managed by OpT8nReplay's
-                // own ledger instance; each finish() only checks its own domain.
-                if (e.entryId.rfind("FINDING-dual-", 0) == 0)
-                    ledger.m_entries.push_back(std::move(e));
-            }
-        }
-        for (const auto& e : ledger.m_entries)
-        {
-            if (!headings.contains(e.entryId))
-                BOOST_ERROR("DIVERGENCES.md ALLOWLIST entry="
-                            << e.entryId << " (vectorId=" << e.vectorId << " field=" << e.field
-                            << ") has no matching '## " << e.entryId << "' heading");
-        }
-        return ledger;
-    }
-
-    void diverge(const std::string& vectorId, const std::string& field, const std::string& want,
-        const std::string& got)
-    {
-        for (auto& e : m_entries)
-        {
-            if (e.exempt && e.vectorId == vectorId && e.field == field && e.want == want &&
-                e.got == got)
-            {
-                ++e.hits;
-                ++m_knownCount;
-                std::cout << "KNOWN-DIVERGE " << vectorId << " " << e.entryId << " field=" << field
-                          << " want=" << want << " got=" << got << "\n";
-                return;
-            }
-        }
-        BOOST_ERROR("DIVERGE " << vectorId << " " << field << " want=" << want << " got=" << got);
-    }
-
-    void finish() const
-    {
-        for (const auto& e : m_entries)
-        {
-            if (e.exempt && e.hits == 0)
-                BOOST_ERROR("stale ALLOWLIST exemption never hit this run: entry="
-                            << e.entryId << " vectorId=" << e.vectorId << " field=" << e.field
-                            << " want=" << e.want << " got=" << e.got);
-        }
-    }
-
-    int knownCount() const { return m_knownCount; }
-
-private:
-    std::vector<AllowEntry> m_entries;
-    int m_knownCount = 0;
-};
-
-// ── Per-vector comparison context ─────────────────────────────────────────────
-struct VectorContext
-{
-    DivergenceLedger& ledger;
-    std::string id;
-    int comparisons = 0;
-
-    // soft: goes through ALLOWLIST (unlisted => BOOST_ERROR).
-    void checkField(const std::string& field, const std::string& want, const std::string& got)
-    {
-        ++comparisons;
-        if (want != got)
-            ledger.diverge(id, field, want, got);
-    }
-
-    void checkOptional(const std::string& field, const std::optional<std::string>& want,
-        const std::optional<std::string>& got)
-    {
-        ++comparisons;
-        if (!want.has_value() && !got.has_value())
-            return;
-        const auto w = want.value_or(kAbsent);
-        const auto g = got.value_or(kAbsent);
-        if (w != g)
-            ledger.diverge(id, field, w, g);
-    }
-
-    // hard: mechanics; any divergence is a failure (no ALLOWLIST).
-    void checkHard(const std::string& field, const std::string& want, const std::string& got)
-    {
-        ++comparisons;
-        if (want != got)
-            BOOST_ERROR(id << ": HARD-DIVERGE " << field << " want=" << want << " got=" << got);
-    }
-};
 
 // ── Fixture (mirrored from OpNewPayloadRpcE2eTest.cpp:48-167) ──────────────────────────
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
@@ -317,7 +135,6 @@ using BackendMemStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     std::hash<StateKey>>;
 using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendMemStorage>;
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
-using ViewType = typename MLS::ViewType;
 
 bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
@@ -483,133 +300,30 @@ bcos::protocol::Transaction::Ptr buildBlockTx(
         [tars = std::move(*tarsTx)]() mutable { return &tars; });
 }
 
-/// Backfill the announced header with route B's real commitments: once
-/// route A goes through OpScheduler.executeBlock, the skeleton's verifyResult always does the
-/// six-field comparison for OP (OpScheduler.h verifyResult ignores the verify boolean) — the
-/// announced header must carry real commitments (finishExecute only fills the commitment fields,
-/// leaving the rest incomplete). Run route B first and backfill from resultB so route A's verify
-/// passes on re-run (dual-path equivalence ⇒ commitments agree).
-/// Fields match OpSchedulerTest.cpp:191-204 fillAnnouncedHeader. blobGasUsed does not participate
-/// in OP execution (opstack never reads blk.blob_gas_used; blob txs are rejected by opValidate),
-/// it is only consumed by the seal six-field comparison — filling it does not change execution.
-void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
-    bcos::evm::engine::OpExecuteBlockResult const& result)
+/// Backfill the announced header's commitment fields from the vector's golden
+/// `_op_expected.header` (op-geth's real block, from the t8n generator), so OpScheduler's
+/// unconditional six-way verify compares FISCO's execution against the op-geth golden. txRoot is
+/// absent from _op_expected — it is the deterministic trie root over rawTxBytes (computeOpTxRoot,
+/// the same function finalizeOpBlockResult uses → equal by construction).
+/// withdrawalsRoot/requestsHash/blobGasUsed are set only when present; blobGasUsed MUST be filled
+/// when the golden carries it (a buildHeaderFromEnv default of 0 would otherwise false-mismatch a
+/// Jovian block whose seal carries a non-zero value).
+void fillAnnouncedHeaderFromGolden(bcos::protocol::BlockHeader::Ptr const& header,
+    const JsonValue& vec, const std::vector<bcos::bytes>& rawTxBytes)
 {
-    header->setStateRoot(result.stateRoot);
-    header->setTxsRoot(result.txRoot);
-    header->setReceiptsRoot(detail::toBcosH256(result.seal.receiptsRoot));
-    header->setGasUsed(bcos::u256(result.gasUsed));
-    header->setLogsBloom(bcos::bytesConstRef(result.seal.logsBloom.bytes, 256));
-    header->setWithdrawalsRoot(detail::toBcosH256(result.seal.withdrawalsRoot));
-    if (result.seal.requestsHash.has_value())
-        header->setRequestsHash(detail::toBcosH256(*result.seal.requestsHash));
-    if (result.seal.blobGasUsed.has_value())
-        header->setBlobGasUsed(bcos::u256(*result.seal.blobGasUsed));
-}
-
-/// Driven by the opStackMeta set: deposit (envelope first byte 0x7E) only carries nonce/version;
-/// normal carries the fee fields. The field set has no hardcoded count — extracted dynamically
-/// from the fields actually present in receipt->opStackMeta().
-std::map<std::string, std::string> opMetaFields(
-    const bcos::protocol::TransactionReceipt::Ptr& receipt, bool isDeposit)
-{
-    std::map<std::string, std::string> out;
-    const auto& meta = receipt->opStackMeta();
-    if (!meta)
-        return out;
-    if (isDeposit)
-    {
-        if (meta->deposit_nonce.has_value())
-            out["_op_deposit_nonce"] = hexU64(*meta->deposit_nonce);
-        if (meta->deposit_receipt_version.has_value())
-            out["_op_deposit_receipt_version"] = hexU64(*meta->deposit_receipt_version);
-        return out;
-    }
-    if (meta->l1_fee.has_value())
-        out["_op_l1_fee"] = hexU256Bcos(*meta->l1_fee);
-    if (meta->l1_gas_price.has_value())
-        out["_op_l1_gas_price"] = hexU256Bcos(*meta->l1_gas_price);
-    if (meta->l1_blob_base_fee.has_value())
-        out["_op_l1_blob_base_fee"] = hexU256Bcos(*meta->l1_blob_base_fee);
-    if (meta->l1_gas_used.has_value())
-        out["_op_l1_gas_used"] = hexU64(*meta->l1_gas_used);
-    if (meta->l1_base_fee_scalar.has_value())
-        out["_op_l1_base_fee_scalar"] = hexU64(*meta->l1_base_fee_scalar);
-    if (meta->l1_blob_base_fee_scalar.has_value())
-        out["_op_l1_blob_base_fee_scalar"] = hexU64(*meta->l1_blob_base_fee_scalar);
-    if (meta->operator_fee.has_value())
-        out["_op_operator_fee"] = hexU256Bcos(*meta->operator_fee);
-    if (meta->operator_fee_scalar.has_value())
-        out["_op_operator_fee_scalar"] = hexU64(*meta->operator_fee_scalar);
-    if (meta->operator_fee_constant.has_value())
-        out["_op_operator_fee_constant"] = hexU64(*meta->operator_fee_constant);
-    if (meta->da_footprint.has_value())
-        out["_op_da_footprint"] = hexU64(*meta->da_footprint);
-    if (meta->da_footprint_gas_scalar.has_value())
-        out["_op_da_footprint_gas_scalar"] = hexU64(*meta->da_footprint_gas_scalar);
-    return out;
-}
-
-/// stateRoot divergence diagnostics: visitAccounts over both views, address-keyed
-/// balance/nonce/codeHash/storage, capped at 20 entries.
-/// Storage2State construction takes Storage& (non-const), so parameters are non-const refs
-/// (viewA/viewB are local forks).
-void dumpAccountDiff(ViewType& viewA, ViewType& viewB)
-{
-    struct AccView
-    {
-        intx::uint256 balance;
-        uint64_t nonce;
-        evmc::bytes32 codeHash;
-        std::map<evmc::bytes32, evmc::bytes32> storage;
-    };
-    std::map<evmc::address, AccView> accsA, accsB;
-    const auto collect = [](ViewType& view, std::map<evmc::address, AccView>& out) {
-        bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-        bridge.visitAccounts([&](auto const& acc) {
-            AccView& v = out[acc.addr];
-            v.balance = acc.balance;
-            v.nonce = acc.nonce;
-            v.codeHash = acc.codeHash;
-            v.storage = acc.storage;
-            return true;
-        });
-    };
-    collect(viewA, accsA);
-    collect(viewB, accsB);
-    std::set<evmc::address> addrs;
-    for (const auto& [a, v] : accsA)
-        addrs.insert(a);
-    for (const auto& [a, v] : accsB)
-        addrs.insert(a);
-    int printed = 0;
-    for (const auto& a : addrs)
-    {
-        if (printed >= 20)
-            break;
-        const auto itA = accsA.find(a);
-        const auto itB = accsB.find(a);
-        const bool pA = itA != accsA.end();
-        const bool pB = itB != accsB.end();
-        if (pA && pB)
-        {
-            const auto& x = itA->second;
-            const auto& y = itB->second;
-            if (x.balance == y.balance && x.nonce == y.nonce && x.codeHash == y.codeHash &&
-                x.storage == y.storage)
-                continue;
-        }
-        std::cout << "  account-diff " << hexAddr(a) << " A=" << (pA ? "present" : "absent")
-                  << " B=" << (pB ? "present" : "absent");
-        if (pA && pB)
-        {
-            std::cout << " balanceA=" << hexU256(itA->second.balance)
-                      << " balanceB=" << hexU256(itB->second.balance)
-                      << " nonceA=" << itA->second.nonce << " nonceB=" << itB->second.nonce;
-        }
-        std::cout << "\n";
-        ++printed;
-    }
+    const auto& ex = jAt(jAt(vec, "_op_expected"), "header");
+    header->setStateRoot(jsonH256(jAt(ex, "stateRoot").asString()));
+    header->setReceiptsRoot(jsonH256(jAt(ex, "receiptsRoot").asString()));
+    header->setGasUsed(jsonBcosU256(jAt(ex, "gasUsed").asString()));
+    header->setTxsRoot(bcos::evm::engine::computeOpTxRoot(rawTxBytes));
+    auto bloom = bcos::fromHex(jAt(ex, "logsBloom").asString());
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    if (ex.isMember("withdrawalsRoot"))
+        header->setWithdrawalsRoot(jsonH256(ex["withdrawalsRoot"].asString()));
+    if (ex.isMember("requestsHash"))
+        header->setRequestsHash(jsonH256(ex["requestsHash"].asString()));
+    if (ex.isMember("blobGasUsed"))
+        header->setBlobGasUsed(jsonBcosU256(ex["blobGasUsed"].asString()));
 }
 
 /// /sys tripwire: derived-table prefix assertion — for every vector
@@ -682,126 +396,6 @@ void hasStorageScan(
                      "trigger)\n";
 }
 
-// ── assertEquivalent：A vs B ──────────────────────────────────────────────────
-
-void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult& resultA,
-    const engine::OpExecuteBlockResult& resultB, ViewType& viewA, ViewType& viewB,
-    const std::vector<bcos::bytes>& rawTxBytes, DivergenceLedger& ledger)
-{
-    VectorContext ctx{ledger, id};
-
-    // hard: block-level mechanics.
-    ctx.checkHard("gasUsed", hexU64(resultA.gasUsed), hexU64(resultB.gasUsed));
-    ctx.checkHard("txRoot", resultA.txRoot.hexPrefixed(), resultB.txRoot.hexPrefixed());
-
-    // soft: stateRoot (ALLOWLIST-driven) + seal five fields.
-    ctx.checkField("stateRoot", resultA.stateRoot.hexPrefixed(), resultB.stateRoot.hexPrefixed());
-    ctx.checkField("seal.receiptsRoot", hexHash(resultA.seal.receiptsRoot),
-        hexHash(resultB.seal.receiptsRoot));
-    ctx.checkField("seal.logsBloom", hexBytes(evmc::bytes_view(resultA.seal.logsBloom)),
-        hexBytes(evmc::bytes_view(resultB.seal.logsBloom)));
-    ctx.checkField("seal.withdrawalsRoot", hexHash(resultA.seal.withdrawalsRoot),
-        hexHash(resultB.seal.withdrawalsRoot));
-    ctx.checkOptional("seal.requestsHash",
-        resultA.seal.requestsHash.has_value() ? std::optional{hexHash(*resultA.seal.requestsHash)} :
-                                                std::nullopt,
-        resultB.seal.requestsHash.has_value() ? std::optional{hexHash(*resultB.seal.requestsHash)} :
-                                                std::nullopt);
-    ctx.checkOptional("seal.blobGasUsed",
-        resultA.seal.blobGasUsed.has_value() ? std::optional{hexU64(*resultA.seal.blobGasUsed)} :
-                                               std::nullopt,
-        resultB.seal.blobGasUsed.has_value() ? std::optional{hexU64(*resultB.seal.blobGasUsed)} :
-                                               std::nullopt);
-
-    // Divergence diagnostics: dumpAccountDiff when stateRoot differs (capped at 20).
-    if (resultA.stateRoot != resultB.stateRoot)
-    {
-        std::cout << "  stateRoot-divergence " << id << " A=" << resultA.stateRoot.hexPrefixed()
-                  << " B=" << resultB.stateRoot.hexPrefixed() << "\n";
-        dumpAccountDiff(viewA, viewB);
-    }
-
-    // per-receipt hard + soft。
-    if (resultA.receipts.size() != resultB.receipts.size())
-    {
-        BOOST_ERROR(id << ": receipt count mismatch: A=" << resultA.receipts.size()
-                       << " B=" << resultB.receipts.size() << " (no zip-min)");
-        return;
-    }
-    for (std::size_t i = 0; i < resultA.receipts.size(); ++i)
-    {
-        const std::string p = "receipts[" + std::to_string(i) + "]";
-        const auto& ra = resultA.receipts[i];
-        const auto& rb = resultB.receipts[i];
-        // F1: the type discriminator is derived from rawTxBytes (envelope first byte 0x7E =
-        // deposit); both paths share the same input so it is inherently consistent. "type" is not
-        // part of the A-vs-B comparison (tautology); it only drives opStackMeta field extraction.
-        const bool isDeposit = !rawTxBytes[i].empty() && rawTxBytes[i][0] == 0x7e;
-
-        ctx.checkHard(p + ".status", std::to_string(ra->status()), std::to_string(rb->status()));
-        ctx.checkHard(p + ".gasUsed", hexU64(op::narrowGasUsed(ra->gasUsed())),
-            hexU64(op::narrowGasUsed(rb->gasUsed())));
-        ctx.checkHard(p + ".cumulativeGasUsed", std::string(ra->cumulativeGasUsed()),
-            std::string(rb->cumulativeGasUsed()));
-        ctx.checkHard(p + ".effectiveGasPrice", std::string(ra->effectiveGasPrice()),
-            std::string(rb->effectiveGasPrice()));
-        ctx.checkHard(p + ".logsCount", std::to_string(ra->logEntries().size()),
-            std::to_string(rb->logEntries().size()));
-
-        // v2 (B8): log content (address/topics/data) — same count with different content would
-        // only surface in logsBloom, so catch it here in P1.
-        const auto la = ra->logEntries();
-        const auto lb = rb->logEntries();
-        if (la.size() == lb.size())
-        {
-            for (std::size_t k = 0; k < la.size(); ++k)
-            {
-                const std::string lp = p + ".logs[" + std::to_string(k) + "]";
-                const auto addrA = la[k].address();
-                const auto addrB = lb[k].address();
-                ctx.checkHard(lp + ".address",
-                    "0x" + bcos::toHex(bcos::bytesConstRef(
-                               reinterpret_cast<const bcos::byte*>(addrA.data()), addrA.size())),
-                    "0x" + bcos::toHex(bcos::bytesConstRef(
-                               reinterpret_cast<const bcos::byte*>(addrB.data()), addrB.size())));
-                const auto ta = la[k].topics();
-                const auto tb = lb[k].topics();
-                ctx.checkHard(
-                    lp + ".topicsCount", std::to_string(ta.size()), std::to_string(tb.size()));
-                for (std::size_t q = 0; q < std::min(ta.size(), tb.size()); ++q)
-                    ctx.checkHard(
-                        lp + ".topics[" + std::to_string(q) + "]", ta[q].hex(), tb[q].hex());
-                const auto da = la[k].data();
-                const auto db = lb[k].data();
-                ctx.checkHard(lp + ".data", "0x" + bcos::toHex(da), "0x" + bcos::toHex(db));
-            }
-        }
-
-        // soft: output + _op_* (opStackMeta-set-driven).
-        ctx.checkField(p + ".output",
-            hexBytes(evmc::bytes_view{ra->output().data(), ra->output().size()}),
-            hexBytes(evmc::bytes_view{rb->output().data(), rb->output().size()}));
-        const auto metaA = opMetaFields(ra, isDeposit);
-        const auto metaB = opMetaFields(rb, isDeposit);
-        std::set<std::string> metaKeys;
-        for (const auto& [k, v] : metaA)
-            metaKeys.insert(k);
-        for (const auto& [k, v] : metaB)
-            metaKeys.insert(k);
-        for (const auto& k : metaKeys)
-        {
-            const auto itA = metaA.find(k);
-            const auto itB = metaB.find(k);
-            ctx.checkOptional(p + "." + k,
-                itA != metaA.end() ? std::optional{itA->second} : std::nullopt,
-                itB != metaB.end() ? std::optional{itB->second} : std::nullopt);
-        }
-    }
-
-    if (ctx.comparisons == 0)
-        BOOST_ERROR(id << ": zero comparisons executed");
-}
-
 /// golden three-way: path A.stateRoot == vector
 /// _op_expected.header.stateRoot. When hardGolden=true, a mismatch is a hard BOOST_CHECK failure
 /// (scope = isthmus/jovian non-contract_create); greenGuard (deposit_basefee green guard) is
@@ -842,26 +436,30 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
     }
 }
 
-/// Single-block equivalence run: seedPreState is already done externally; this function forks
-/// viewB first (route A pushes the executed view into MLS, so viewB must read pre-state), calls
-/// route B directly, backfills the announced header with resultB, runs route A through
-/// OpScheduler.executeBlock, takes resultA + viewA from the skeleton (fork reads through to the
-/// executed view the skeleton pushed), assertEquivalent, then mergeBackStorage persists route A's
-/// authoritative post-state (viewB is discarded after comparison).
+/// Single-block execution: seedPreState is already done externally; the announced header carries
+/// the golden commitments (filled by the caller via fillAnnouncedHeaderFromGolden), route A runs
+/// through OpScheduler.executeBlock, and the golden three-way + receipt sanity are checked.
+/// isthmus/jovian must pass the six-way verify (FISCO == op-geth commitments); pre-isthmus is
+/// expected to be rejected at the verify (fork mismatch) → soft REPORT. mergeBackStorage persists
+/// route A's authoritative post-state (chain inheritance).
 void runBlockEquivalence(const std::string& id, Fixture& fixture,
     bcos::protocol::BlockHeader::Ptr const& header, const std::vector<bcos::bytes>& rawTxBytes,
     const JsonValue& vec, bool jovian, const bcos::evm::opstack::OpForkConfig& vectorCfg,
-    DivergenceLedger& ledger, bool greenGuard, GoldenStats& stats)
+    bool greenGuard, GoldenStats& stats)
 {
     // Fork parity: cfg = configAt(timestamp/1000, forkTimestampsFor(jovian)), resolved
-    // from the same source as route A's scheduler-internal configAt (same forkTimestampsFor, same
+    // from the same source as the scheduler's internal configAt (same forkTimestampsFor, same
     // static singleton object).
     const auto& cfg =
         op::configAt(static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
     BOOST_CHECK_MESSAGE(&cfg == &vectorCfg, id << ": fork parity broken: block cfg != vector cfg");
 
-    // Block-order transactions (buildBlockTx: opEnvelopeToTars + full envelope overwrite,
-    // Web3Transaction supports 0x7e).
+    const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
+    const bool isIsthmusJovian = (hardfork == "isthmus" || hardfork == "jovian");
+    const bool hardGolden = isIsthmusJovian && (id.find("contract_create") == std::string::npos);
+
+    // Deposits (has_storage triage scan), built from the block-order Transaction objects
+    // (mirroring the execute hook, no RLP parse).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
     transactions.reserve(rawTxBytes.size());
     for (auto const& raw : rawTxBytes)
@@ -874,7 +472,6 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         }
         transactions.push_back(tx);
     }
-    // Deposits built from the Transaction objects (mirroring the execute hook, no RLP parse).
     std::vector<op::DepositTx> deposits;
     deposits.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
@@ -882,47 +479,11 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
             deposits.push_back(
                 bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(*transactions[i]));
 
-    // Route B: runOpBlockInjection (per-tx injection loop) — run first, backfill the announced
-    // header from resultB for route A's verify (see fillAnnouncedHeader). viewB forks before
-    // route A — route A's executeBlock pushes the executed view into MLS, so viewB must read
-    // pre-state. viewB lives for the whole comparison (dumpAccountDiff reads it).
-    auto viewB = fixture.multiLayerStorage.fork();
-    viewB.newMutable();
-    engine::OpExecuteBlockResult resultB;
-    try
-    {
-        bcos::ledger::LedgerConfig ledgerConfig;
-        ledgerConfig.setEVMCRevision(cfg.rev);
-        ledgerConfig.setGasLimit({30000000, 0});
-        ledgerConfig.setGasPrice({"0x0", 0});
-        bcos::executor_v1::opstack::OpstackExecutor executor{
-            fixture.receiptFactory, fixture.hashImpl, cfg};
-        resultB = engine::runOpBlockInjection(executor, viewB, *header, transactions, deposits,
-            cfg, kChainId, ledgerConfig, rawTxBytes, fixture.hashImpl);
-    }
-    catch (const std::exception& e)
-    {
-        BOOST_ERROR(id << ": route B threw: " << e.what());
-        return;
-    }
-    catch (...)
-    {
-        const auto* excType = abi::__cxa_current_exception_type();
-        BOOST_ERROR(id << ": route B threw (typed catch bypassed, exception type: "
-                       << (excType ? excType->name() : "<unknown>") << ")");
-        return;
-    }
-
-    // Backfill the announced header with route B's real commitments (route A's verify always
-    // does the six-field comparison and needs the commitments; blobGasUsed does not participate in
-    // OP execution, only consumed by the seal comparison).
-    fillAnnouncedHeader(header, resultB);
-
-    // Route A: OpScheduler.executeBlock — view lifecycle owned by the
-    // skeleton (fork/pushView inside it), execute hook is route B (runOpBlockInjection). Result is
-    // taken from the skeleton's m_results (peekExecuteResult); post-state from the executed view
-    // the skeleton pushed into MLS (fork reads through).
+    // Route A: OpScheduler.executeBlock — view lifecycle owned by the skeleton (fork/pushView
+    // inside it). The announced header carries the golden commitments (filled by the caller), so
+    // the unconditional six-way verify is the FISCO-vs-op-geth gate.
     engine::OpExecuteBlockResult resultA;
+    bcos::Error::Ptr routeAErr;
     try
     {
         // Block assembly: extraTransactionBytes = full envelope (SEV-8, overridden by
@@ -945,14 +506,27 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
             fixture.blockFactory, fixture.multiLayerStorage, /*ledger=*/nullptr,
             fixture.ioServicePool);
 
-        bcos::Error::Ptr routeAErr;
         opScheduler->executeBlock(block, /*verify=*/true,
             [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr, bool) {
                 routeAErr = std::move(e);
             });
         if (routeAErr)
         {
-            BOOST_ERROR(id << ": route A executeBlock failed: " << routeAErr->errorMessage());
+            // isthmus/jovian: any executeBlock error is a real failure (FISCO must reproduce
+            // op-geth). pre-isthmus: a six-way commitment mismatch is the expected fork-mismatch
+            // divergence → soft REPORT; any other error is a real bug.
+            const std::string msg = routeAErr->errorMessage();
+            const bool sixWayMismatch =
+                msg.find("six-way commitment mismatch") != std::string::npos;
+            if (!isIsthmusJovian && sixWayMismatch)
+            {
+                ++stats.mismatch;
+                std::cout << "  GOLDEN-REPORT " << id
+                          << " route A rejected at six-way verify (pre-isthmus fork mismatch): "
+                          << msg << "\n";
+                return;
+            }
+            BOOST_ERROR(id << ": route A executeBlock failed: " << msg);
             return;
         }
         auto peeked = opScheduler->peekExecuteResult();
@@ -976,36 +550,22 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         return;
     }
 
-    // viewA: route A post-state (the executed view the skeleton pushed into MLS, from the
-    // skeleton's storage).
-    auto viewA = fixture.multiLayerStorage.fork();
-
-    // A-vs-B comparison (hard all-green + soft ALLOWLIST).
+    // Route A succeeded — six-way verify passed against the announced golden commitments.
+    // Receipt sanity + golden three-way + /sys tripwire + has_storage scan.
     try
     {
-        assertEquivalent(id, resultA, resultB, viewA, viewB, rawTxBytes, ledger);
+        if (resultA.receipts.size() != rawTxBytes.size())
+            BOOST_ERROR(id << ": receipt count mismatch: got " << resultA.receipts.size()
+                           << " want " << rawTxBytes.size());
+        BOOST_CHECK_GT(resultA.gasUsed, 0);
 
-        // Chain inheritance: route A's authoritative post-state was already pushed into MLS by
-        // the skeleton's pushView; only mergeBackStorage to persist (do not pushView again —
-        // mergeView would push another layer; viewB is discarded after comparison).
-        bcos::task::syncWait(fixture.multiLayerStorage.mergeBackStorage());
-
-        // golden three-way (G1, P3 scoped hard): isthmus/jovian non-contract_create → hard;
-        // pre-isthmus (expected fork mismatch) and contract_create (known divergence) stay soft
-        // REPORT.
-        if (vec.isMember("_op_expected"))
-        {
-            const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
-            const bool hardGolden = (hardfork == "isthmus" || hardfork == "jovian") &&
-                                    (id.find("contract_create") == std::string::npos);
-            reportGolden(id, vec, resultA.stateRoot, greenGuard, hardGolden, stats);
-        }
-
-        // /sys tripwire (derived table prefix for every vector pre/postState/tx/coinbase).
+        reportGolden(id, vec, resultA.stateRoot, greenGuard, hardGolden, stats);
         checkSysTripwire(id, vec);
-
-        // has_storage scan (pre-triage; REPORT only).
         hasStorageScan(id, deposits);
+
+        // Chain inheritance: route A's authoritative post-state was already pushed into MLS by the
+        // skeleton's pushView; only mergeBackStorage to persist (do not pushView again).
+        bcos::task::syncWait(fixture.multiLayerStorage.mergeBackStorage());
     }
     catch (const std::exception& e)
     {
@@ -1019,10 +579,11 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     }
 }
 
-/// Single-block vector: seedPreState → runBlockEquivalence. golden is loaded manually from
-/// .golden.json (isJovianVector throws for pre-isthmus, so loadVectorSample cannot be used).
+/// Single-block vector: seedPreState → build the announced header (golden commitments) →
+/// runBlockEquivalence. golden is loaded manually from .golden.json (isJovianVector throws for
+/// pre-isthmus, so loadVectorSample cannot be used).
 void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixture,
-    DivergenceLedger& ledger, bool greenGuard, GoldenStats& stats)
+    bool greenGuard, GoldenStats& stats)
 {
     w6test::GoldenSample sample;
     sample.id = id;
@@ -1051,9 +612,9 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     // Single-block vector header: isthmus/jovian use decodeGoldenHeader (golden authoritative
     // op-geth header); pre-isthmus (ecotone/fjord/granite) encodedHeaderHex would throw under
     // decodeOpHeader's strict 21-field decode (RTTI-bypass runtime_error, verified empirically),
-    // so fall back to buildHeaderFromEnv (same source as chain). Both paths share the same cfg
-    // (configAt → isthmusConfig), so the A-vs-B equivalence comparison still holds; the golden
-    // three-way REPORTs mismatch due to fork mismatch (soft in P1).
+    // so fall back to buildHeaderFromEnv (same source as chain). Both execute under the same cfg
+    // (configAt → isthmusConfig); the golden three-way REPORTs a fork mismatch for pre-isthmus
+    // (soft) and the six-way verify is expected to reject them (see runBlockEquivalence).
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
     try
     {
@@ -1079,17 +640,20 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     std::vector<bcos::bytes> rawTxBytes;
     for (const auto& raw : sample.golden["rawTransactions"])
         rawTxBytes.push_back(bcos::fromHex(raw.asString()));
+    // The announced header carries the golden commitments (route A's six-way verify = the
+    // FISCO-vs-op-geth gate).
+    fillAnnouncedHeaderFromGolden(header, vec, rawTxBytes);
     const auto& vectorCfg =
         op::configAt(static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
-    runBlockEquivalence(
-        id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, ledger, greenGuard, stats);
+    runBlockEquivalence(id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, greenGuard, stats);
 }
 
-/// Chain vector: dual fork per block, A/B compare, then route A mergeView inherits
-/// (authoritative path). Block 0 pre is explicit; later blocks inherit the previous block's
-/// route A post-state.
+/// Chain vector: per-block runBlockEquivalence with route A mergeView inheritance (authoritative
+/// path). Block 0 pre is explicit; later blocks inherit the previous block's route A post-state.
+/// Each block's announced header carries its golden commitments (isthmus/jovian → the six-way
+/// verify is a hard FISCO-vs-op-geth gate).
 void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixture,
-    DivergenceLedger& ledger, GoldenStats& stats)
+    GoldenStats& stats)
 {
     const auto& blocks = jAt(vec, "blocks");
     for (std::size_t i = 0; i < blocks.size(); ++i)
@@ -1100,10 +664,11 @@ void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixtur
             w6test::seedPreState(fixture.multiLayerStorage, blk["pre"]);
         const auto header = buildHeaderFromEnv(jAt(blk, "env"));
         const auto rawTxBytes = buildRawTxBytes(blk, bid);
+        fillAnnouncedHeaderFromGolden(header, blk, rawTxBytes);
         const bool jovian = (jAt(jAt(blk, "_info"), "hardfork").asString() == "jovian");
         const auto& vectorCfg = op::configAt(
             static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
-        runBlockEquivalence(bid, fixture, header, rawTxBytes, blk, jovian, vectorCfg, ledger,
+        runBlockEquivalence(bid, fixture, header, rawTxBytes, blk, jovian, vectorCfg,
             /*greenGuard=*/false, stats);
         ++stats.chainBlocks;
     }
@@ -1116,8 +681,6 @@ BOOST_AUTO_TEST_CASE(Vectors)
 {
     const fs::path vectorsDir = OP_T8N_VECTORS_DIR;
     BOOST_REQUIRE_MESSAGE(fs::is_directory(vectorsDir), vectorsDir);
-
-    auto ledger = DivergenceLedger::load(vectorsDir / "DIVERGENCES.md");
 
     // Iterate the directory: skip the invalid_ prefix and _op_expected.reject; chain goes
     // through the blocks[] branch.
@@ -1160,7 +723,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
             Fixture fixture;
             if (vec->isMember("blocks"))
             {
-                runChainVector(id, *vec, fixture, ledger, stats);
+                runChainVector(id, *vec, fixture, stats);
                 continue;
             }
             if (vec->isMember("_op_expected") && (*vec)["_op_expected"].isMember("reject"))
@@ -1168,7 +731,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
                            // harness skips them
             ++stats.flat;
             const bool greenGuard = (id.find("deposit_basefee_observer") != std::string::npos);
-            runSingleVector(id, *vec, fixture, ledger, greenGuard, stats);
+            runSingleVector(id, *vec, fixture, greenGuard, stats);
         }
         catch (const std::exception& e)
         {
@@ -1184,12 +747,9 @@ BOOST_AUTO_TEST_CASE(Vectors)
     }
 
     // green guard + golden summary report.
-    std::cout << "dual-path summary: flat=" << stats.flat << " chainBlocks=" << stats.chainBlocks
+    std::cout << "single-path summary: flat=" << stats.flat << " chainBlocks=" << stats.chainBlocks
               << " goldenMatch=" << stats.match << " goldenMismatch=" << stats.mismatch
               << " greenGuard=" << stats.greenGuardOk << "\n";
-
-    ledger.finish();
-    std::cout << "dual-path KNOWN-DIVERGE total=" << ledger.knownCount() << "\n";
 }
 
 BOOST_AUTO_TEST_SUITE_END()
