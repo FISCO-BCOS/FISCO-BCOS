@@ -1144,7 +1144,7 @@ private:
             co_return mapDelegateError(*commitError, latestValidHash);
         }
 
-        // The delegate's commit hook (opstackRegisterBlock) wrote the 7 ledger tables including
+        // The delegate's commit hook (prewriteBlockToBuffer) wrote the 7 ledger tables including
         // SYS_CURRENT_STATE, and the skeleton merged the execute view + commit storage atomically
         // (FIB-104). The head-advance monotonic guard semantics the inline path kept
         // (blockNumber > currentHead) are preserved by OpScheduler::commitContinuityCheck

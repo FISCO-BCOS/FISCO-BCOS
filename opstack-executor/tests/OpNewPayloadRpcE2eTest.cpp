@@ -21,7 +21,9 @@
 // itself (production relies on bcos-rpc unity-build include order). A single-TU
 // direct compile must include TransactionFactory.h first or the declaration fails.
 #include <bcos-framework/protocol/TransactionFactory.h>
+#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the delegate's commit hook (Task 3)
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
+#include <bcos-table/src/LegacyStorageWrapper.h>  // LegacyStorageWrapper<BackendMemStorage>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -142,6 +144,31 @@ using EngineOpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
 using OpEngineService =
     bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, EngineOpScheduler>;
 
+/// Seed the SYS_TABLES meta-rows for the ledger SYS tables (each uses the SYS_VALUE field,
+/// Ledger.cpp buildGenesisBlock). The delegate's commit hook runs prewriteBlockToBuffer, whose
+/// asyncPrewriteBlock ends with asyncGetTotalTransactionCount opening SYS_CURRENT_STATE through
+/// the Ledger's OWN m_stateStorage (here: a LegacyStorageWrapper over the MLS backend). Without
+/// the SYS_TABLES row the open fails and the whole asyncPrewriteBlock errors out. The rows sort
+/// before the /apps/ account range, so stateRoot's visitAccounts scan is unaffected.
+void seedSysTables(MLS& multiLayerStorage)
+{
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    constexpr std::string_view sysTables[] = {bcos::ledger::SYS_CURRENT_STATE,
+        bcos::ledger::SYS_HASH_2_TX, bcos::ledger::SYS_HASH_2_NUMBER,
+        bcos::ledger::SYS_NUMBER_2_HASH, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER,
+        bcos::ledger::SYS_NUMBER_2_TXS, bcos::ledger::SYS_HASH_2_RECEIPT,
+        bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES};
+    for (auto const& table : sysTables)
+    {
+        bcos::storage::Entry e;
+        e.set(std::string(bcos::ledger::SYS_VALUE));
+        bcos::task::syncWait(bcos::storage2::writeOne(
+            view, StateKey{bcos::ledger::SYS_TABLES, std::string(table)}, std::move(e)));
+    }
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+}
+
 struct OpE2eFixture
 {
     // Single-bucket CONCURRENT backend: after the C2 fix, seed/parent lands in the
@@ -159,6 +186,16 @@ struct OpE2eFixture
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory;
     EngineOpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerImpl<ViewType>)
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
+    /// Task 3: a real Ledger wired into the delegate's m_ledger (the commit hook now calls
+    /// prewriteBlockToBuffer; every newPayload VALID submission commits through the delegate).
+    /// prewriteBlockToBuffer writes through the commit hook's MutableStorage, so the Ledger's own
+    /// m_stateStorage is only read by asyncGetTotalTransactionCount (SYS_CURRENT_STATE) — the
+    /// seedSysTables call below makes that open succeed. LegacyStorageWrapper holds a reference;
+    /// backendStorage is declared first and outlives it. The engine service's own ledger stays
+    /// null (its local-payload persist path at EngineServiceImpl.h:714 is null-guarded and the
+    /// forkchoice tests depend on that branch staying inert).
+    std::shared_ptr<bcos::storage::LegacyStorageWrapper<BackendMemStorage>> legacyLedgerStorage;
+    std::shared_ptr<bcos::ledger::Ledger> ledger;
     /// Wiring Task 5a/5b: the engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
     /// A single OpSchedulerImpl serves the seam SchedulerType (route A executeOpBlock retired);
     /// OpScheduler holds no execution kernel — block execution is the delegate's route B.
@@ -169,16 +206,22 @@ struct OpE2eFixture
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
         scheduler(forkTimestamps),
+        legacyLedgerStorage(
+            std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
+                backendStorage)),
+        ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
             receiptFactory, hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage,
             [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
                 return bcos::engine::detail::opEnvelopeToTars(env, txHash);
             },
-            /*ledger=*/nullptr)),
+            ledger)),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             opDelegate)
-    {}
+    {
+        seedSysTables(multiLayerStorage);
+    }
 };
 
 /// Produced header: production-mapping reconstruction (val-loop GateFixture's

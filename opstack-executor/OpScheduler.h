@@ -19,7 +19,7 @@
 // EnvelopeToTarsConverter is injected by the composition root (opstack-executor does not link
 // engine — opEnvelopeToTars lives in the engine lib; reuses the alias OpBlockExecute.h).
 
-#include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / opstackRegisterBlock / OpBlockSeal
+#include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / OpBlockSeal
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpTxDecode.h>  // detail::decodeOneRawTx (execute hook)
 #include <opstack-executor/OpstackExecutor.h>
@@ -28,6 +28,7 @@
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-framework/engine/Errors.h>  // OpExecutionInternalError (commit-hook guard)
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>  // readFromStorage
@@ -61,8 +62,9 @@
 namespace bcos::executor_v1::opstack
 {
 /// OP block execution payload carried through the shared `SchedulerExecuteResult.modeExtra` to
-/// the commit hook: the raw EIP-2718 envelopes plus the execution result — exactly what
-/// `opstackRegisterBlock` needs (rawTxBytes + result + blockFactory + envelopeToTars).
+/// the commit hook: the raw EIP-2718 envelopes plus the execution result. The commit hook keys the
+/// ledger tables by extra.announcedBlockHash and re-encodes the receipts from extra.result; the
+/// rawTxBytes remain available for the injector's blockHash handling.
 template <class MultiLayerStorage>
 class OpScheduler : public bcos::scheduler_v1::SchedulerSkeleton<MultiLayerStorage,
                         bcos::executor_v1::opstack::OpstackExecutor,
@@ -80,7 +82,7 @@ class OpScheduler : public bcos::scheduler_v1::SchedulerSkeleton<MultiLayerStora
         bcos::evm::engine::OpExecuteBlockResult result;
         std::vector<bcos::bytes> rawTxBytes;
         /// The block's OP hash (announced header's `opHeaderHash`) — stashed at execute time so
-        /// the commit hook's opstackRegisterBlock keys the tables by the authoritative block
+        /// the commit hook's prewriteBlockToBuffer keys the tables by the authoritative block
         /// hash without recomputing it from the (commitment-only) executed header. finishExecute
         /// deliberately fills only the commitment fields; the executed header's optional
         /// header fields (baseFee/excessBlobGas/parentBeaconBlockRoot/...) stay empty, so
@@ -217,8 +219,8 @@ public:
         bcos::scheduler_v1::SchedulerExecuteResult out;
         // Copy (cheap shared_ptr vector) rather than move: both `SchedulerExecuteResult.receipts`
         // (the skeleton's pushResult / callback surface) and `OpExecuteExtra.result.receipts` (the
-        // commit hook's opstackRegisterBlock checks rawTxBytes.size() != result.receipts.size(),
-        // OpBlockExecute.h) must hold the full receipts.
+        // commit hook's prewriteBlockToBuffer re-encodes the receipts into the block) must hold
+        // the full receipts.
         out.receipts = result.receipts;
         // No txpool submission on the OP path — set a non-empty empty table so the skeleton
         // coCommitBlock's notifyBlockNumber does not dereference the null `*result->m_transactions`
@@ -239,7 +241,7 @@ public:
 
     /// Override of the skeleton's fastPathHit (hard-contract guard). The base only matches on
     /// block number (SchedulerSkeleton.h); on an OP chain a number does not uniquely identify a
-    /// block — if the previous block executed but commit failed (opstackRegisterBlock /
+    /// block — if the previous block executed but commit failed (prewriteBlockToBuffer /
     /// mergeBackStorage threw), the result stays in m_results, the view stays on the layer stack,
     /// and SYS_HASH_2_NUMBER / SYS_NUMBER_2_HASH are unwritten (neither engine step 3b nor 3c stops
     /// the same-height resend). If op-node then sends a different block at that height, the base
@@ -333,11 +335,15 @@ public:
         co_return nullptr;
     }
 
-    /// ⑤ commit: opstackRegisterBlock writes a standalone MutableStorage and returns it (the
-    /// skeleton's only mergeBackStorage, FIB-104). blockHash uses the execute hook's
-    /// extra.announcedBlockHash (the announced header's opHeaderHash, validated by engine step 2)
-    /// — not recomputed on the executed header (finishExecute fills only the commitment fields;
-    /// an incomplete optional would throw bad_optional_access).
+    /// ⑤ commit: reuse the ethereum ledger write path (ledger::prewriteBlockToBuffer) to persist
+    /// the 7 SYS tables (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
+    /// SYS_CURRENT_STATE / SYS_NUMBER_2_TXS / SYS_HASH_2_RECEIPT / SYS_HASH_2_TX) into a
+    /// standalone MutableStorage and returns it (the skeleton's only mergeBackStorage, FIB-104).
+    /// blockHash uses the execute hook's extra.announcedBlockHash (the announced header's
+    /// opHeaderHash, validated by engine step 2) — not recomputed on the executed header
+    /// (finishExecute fills only the commitment fields; an incomplete optional would throw
+    /// bad_optional_access). writeNonces=false keeps the removed opstackRegisterBlock's behavior
+    /// (OP never writes SYS_BLOCK_NUMBER_2_NONCES).
     /// **The registered header is the announced one (result.m_block->blockHeader()), NOT the
     /// executed header** — finishExecute fills only commitments, so the executed header's tars
     /// encode is incomplete (missing coinbase/gasLimit/baseFee/prevRandao/excessBlobGas/
@@ -351,14 +357,32 @@ public:
         auto& extra = *std::static_pointer_cast<OpExecuteExtra>(result.modeExtra);
         auto storage = std::make_shared<typename MultiLayerStorage::MutableStorage>();
 
-        // The block's header is the announced one (the engine's buildOpBlock set it); finishExecute
-        // built a separate executed header without touching the block's. Keep the Ptr alive:
-        // blockHeader() returns a fresh shared_ptr BY VALUE, and binding a reference to
-        // `*block->blockHeader()` would dangle a temporary.
-        auto announcedHeader = result.m_block->blockHeader();
-        co_await bcos::evm::engine::opstackRegisterBlock(*storage, *announcedHeader,
-            extra.announcedBlockHash, extra.rawTxBytes, extra.result, *this->m_blockFactory,
-            m_envelopeToTars);
+        // 守卫（保留旧 opstackRegisterBlock 不变量）：回执数必须等于交易数。
+        if (result.receipts.size() != result.m_block->transactionsSize())
+            BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
+                                      "OP block execution returned a receipt count differing "
+                                      "from the transaction count"});
+
+        auto block = result.m_block;
+        // 幂等：commit 失败重试同一 pending result 会二次 append，先 clear 再 append。
+        block->clearReceipts();
+        for (auto const& r : result.receipts)
+            block->appendReceipt(r);
+        // 幂等：prewriteBlockToBuffer 对 storeToBackend()==true 的 tx 跳过 SYS_HASH_2_TX 并
+        // setStoreToBackend(true)；重试残留标志会导致第二次整表跳过，先重置。
+        for (auto const& tx : block->transactions())
+            tx->setStoreToBackend(false);
+
+        // blockTxs：复用 getTransactions 钩子写法（AnyTransaction 无 ConstPtr 转换，toShared() &&
+        // 限定）。
+        auto blockTxs = std::make_shared<protocol::ConstTransactions>(
+            block->transactions() | ::ranges::views::transform([](auto tx) {
+                return protocol::Transaction::ConstPtr{std::move(tx).toShared()};
+            }) |
+            ::ranges::to<std::vector>());
+
+        co_await bcos::ledger::prewriteBlockToBuffer(*this->m_ledger, blockTxs, block, *storage,
+            extra.announcedBlockHash, /*writeNonces=*/false);
         co_return storage;
     }
 
@@ -551,10 +575,11 @@ public:
     {
         this->m_multiLayerStorage = &multiLayerStorage;
         this->m_blockFactory = blockFactory.get();
-        // Ledger injection (Task 2): reuse the skeleton's protected m_ledger member — no new
-        // duplicate member. Null is allowed: the T2 commit hook is still opstackRegisterBlock
-        // (ledger not yet consumed); Task 3 switches it to prewriteBlockToBuffer and wires a
-        // functional ledger so CommitPersistsSevenLedgerTables can verify the prewrite path.
+        // Ledger injection (Task 2/3): reuse the skeleton's protected m_ledger member — no new
+        // duplicate member. The commit hook consumes it via prewriteBlockToBuffer (Task 3); a
+        // functional ledger is required for any commit. A null ledger is tolerated by the execute
+        // path (read hooks use the storage view), but committing without one would throw a null
+        // dereference.
         if (ledger)
         {
             this->m_ledger = ledger.get();
@@ -605,8 +630,8 @@ public:
         co_return ledgerConfig;
     }
 
-    /// Commit continuity (head-advance guard): opstackRegisterBlock's write of
-    /// SYS_CURRENT_STATE is unconditional (MAIN OpBlockExecute.h) — the engine's original
+    /// Commit continuity (head-advance guard): prewriteBlockToBuffer's write of
+    /// SYS_CURRENT_STATE is unconditional (Ledger::asyncPrewriteBlock) — the engine's original
     /// guarded write (blockNumber > currentHead, EngineServiceImpl inline path) moved to
     /// OpScheduler's commit and is carried by this override, preserving the monotonic-guard
     /// semantics (rejecting already-committed / discontinuous commits). The skeleton base reads

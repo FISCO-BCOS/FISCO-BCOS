@@ -31,7 +31,9 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the commit hook (Task 3)
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>  // for migrated call cases (Task 5c fix round 1)
+#include <bcos-table/src/LegacyStorageWrapper.h>         // LegacyStorageWrapper<BackendMemStorage>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -255,6 +257,31 @@ void seedSender(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr con
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
+/// Seed the SYS_TABLES meta-rows for the ledger SYS tables (each uses the SYS_VALUE field,
+/// Ledger.cpp buildGenesisBlock). A real bcos::ledger::Ledger's asyncPrewriteBlock ends with
+/// asyncGetTotalTransactionCount, which opens SYS_CURRENT_STATE through the Ledger's OWN
+/// m_stateStorage (here: a LegacyStorageWrapper over the MLS backend, distinct from the
+/// commit-hook MutableStorage that prewriteBlockToBuffer writes through). Without the SYS_TABLES
+/// row the open fails (Table does not exist) and the whole asyncPrewriteBlock errors out.
+void seedSysTables(MLS& mls)
+{
+    auto view = mls.fork();
+    view.newMutable();
+    constexpr std::string_view sysTables[] = {bcos::ledger::SYS_CURRENT_STATE,
+        bcos::ledger::SYS_HASH_2_TX, bcos::ledger::SYS_HASH_2_NUMBER,
+        bcos::ledger::SYS_NUMBER_2_HASH, bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER,
+        bcos::ledger::SYS_NUMBER_2_TXS, bcos::ledger::SYS_HASH_2_RECEIPT,
+        bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES};
+    for (auto const& table : sysTables)
+    {
+        bcos::storage::Entry e;
+        e.set(std::string(bcos::ledger::SYS_VALUE));
+        bcos::task::syncWait(bcos::storage2::writeOne(
+            view, StateKey{bcos::ledger::SYS_TABLES, std::string(table)}, std::move(e)));
+    }
+    bcos::task::syncWait(mls.mergeView(std::move(view)));
+}
+
 /// Test subclass: exposes the receipts of the latest pending execution result (the skeleton's
 /// m_results is protected; a derived class can read it).
 class TestOpScheduler : public bcos::executor_v1::opstack::OpScheduler<MLS>
@@ -281,14 +308,26 @@ struct Fixture
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     bcos::evm::opstack::OpForkTimestamps forkTimestamps{.isthmusTime = 0,
         .jovianTime = std::numeric_limits<uint64_t>::max()};
+    // Task 3: a real Ledger wired into the scheduler's m_ledger (the commit hook now calls
+    // prewriteBlockToBuffer). prewriteBlockToBuffer writes through the commit hook's MutableStorage
+    // (wrapped into a fresh LegacyStorageWrapper by prewriteBlock), so the Ledger's own
+    // m_stateStorage is only read by asyncGetTotalTransactionCount (SYS_CURRENT_STATE) — the
+    // seedSysTables call below makes that open succeed. LegacyStorageWrapper holds a reference;
+    // backendStorage is declared first and outlives it.
+    std::shared_ptr<bcos::storage::LegacyStorageWrapper<BackendMemStorage>> legacyLedgerStorage;
+    std::shared_ptr<bcos::ledger::Ledger> ledger;
     std::shared_ptr<TestOpScheduler> scheduler;
 
     Fixture()
-      : scheduler(std::make_shared<TestOpScheduler>(receiptFactory, hashImpl, kChainId,
-            forkTimestamps, blockFactory, multiLayerStorage, makeConverter(),
-            /*ledger=*/nullptr))
+      : legacyLedgerStorage(
+            std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
+                backendStorage)),
+        ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
+        scheduler(std::make_shared<TestOpScheduler>(receiptFactory, hashImpl, kChainId,
+            forkTimestamps, blockFactory, multiLayerStorage, makeConverter(), ledger))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
+        seedSysTables(multiLayerStorage);
     }
 };
 
@@ -686,6 +725,13 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
         BOOST_REQUIRE_MESSAGE(
             txEntry.has_value(), "SYS_HASH_2_TX must be written for tx " << txHash.hex());
     }
+
+    // OP 不写 SYS_BLOCK_NUMBER_2_NONCES（prewriteBlockToBuffer writeNonces=false）—— 回归守护，
+    // 防止 commit hook 意外多写 nonce 表。
+    auto noncesEntry = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr}));
+    BOOST_CHECK_MESSAGE(!noncesEntry.has_value(),
+        "SYS_BLOCK_NUMBER_2_NONCES must NOT be written for OP commits (writeNonces=false)");
 }
 
 // ── RPC-face case migration (Task 5c fix round 1, verbatim from the deleted OpBlockSchedulerTest;
