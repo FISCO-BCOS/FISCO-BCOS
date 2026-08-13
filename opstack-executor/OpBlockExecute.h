@@ -136,13 +136,12 @@ template <class RawTxRange>
 /// leaf needs the EIP-2718 type byte — mirror of the per-tx loop's classification). hashErr is
 /// checked here (poisoned block-hash lookup → OpStorageError). **cumulativeGasUsed backfill is NOT
 /// in scope** (it stays in the per-tx loop / ExecuteContext::finish).
-template <class Storage>
+template <class Storage, class RawTxRange>
 OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackExecutor& executor,
     Storage& view, bcos::protocol::BlockHeader const& header,
     bcos::ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpForkConfig const& cfg,
     std::vector<bcos::protocol::TransactionReceipt::Ptr> const& receipts,
-    std::vector<bcos::bytes> const& rawTxBytes, int64_t cumulative,
-    std::optional<std::string> const& hashErr)
+    RawTxRange const& rawTxBytes, int64_t cumulative, std::optional<std::string> const& hashErr)
 {
     namespace op = bcos::evm::opstack;
     namespace detail = bcos::evm::engine::detail;
@@ -203,9 +202,9 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
 /// hashes (emplaced in place — RecentBlockHashes holds a storage reference, not assignable, hence
 /// the std::optional carrier), hashErr, and daFootprintGasScalar via reference params. Throws
 /// OpConsensusError on shape/validation faults.
-template <class Storage>
+template <class Storage, class RawTxRange>
 void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
-    bcos::evm::opstack::OpForkConfig const& cfg, std::vector<bcos::bytes> const& rawTxBytes,
+    bcos::evm::opstack::OpForkConfig const& cfg, RawTxRange const& rawTxBytes,
     std::vector<bcos::evm::opstack::DepositTx> const& deposits,
     bcos::executor_v1::opstack::OpstackExecutor& executor, bcos::crypto::Hash::Ptr const& hashImpl,
     std::optional<detail::RecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,

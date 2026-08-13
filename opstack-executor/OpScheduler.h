@@ -543,12 +543,15 @@ private:
         namespace op = bcos::evm::opstack;
         namespace detail = bcos::evm::engine::detail;
 
-        std::vector<bcos::bytes> rawTxBytes;
+        // Views into each tx's live envelope: extraTransactionBytes() returns a bytesConstRef into
+        // the tars Transaction (transactions outlive rawTxBytes — both are consumed within this
+        // execute() scope). One view vector + N*16B view copies replaces N per-envelope heap
+        // allocations.
+        std::vector<bcos::bytesConstRef> rawTxBytes;
         rawTxBytes.reserve(transactions.size());
         for (auto const& tx : transactions)
         {
-            auto const& env = tx->extraTransactionBytes();
-            rawTxBytes.emplace_back(env.begin(), env.end());
+            rawTxBytes.emplace_back(tx->extraTransactionBytes());
         }
 
         bcos::evm::engine::OpExecuteBlockResult result;
