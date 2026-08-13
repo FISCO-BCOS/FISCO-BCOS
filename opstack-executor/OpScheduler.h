@@ -368,8 +368,9 @@ public:
         block->clearReceipts();
         for (auto const& r : result.receipts)
             block->appendReceipt(r);
-        // 幂等：prewriteBlockToBuffer 对 storeToBackend()==true 的 tx 跳过 SYS_HASH_2_TX 并
-        // setStoreToBackend(true)；重试残留标志会导致第二次整表跳过，先重置。
+        // blockTxs 经 toShared() 全新重建（fresh copy），prewriteBlockToBuffer 的
+        // setStoreToBackend(true) 只落在副本上；此处重置是防御性冗余，保证原 block 交易对象
+        // 不被 phase-2 的 storeToBackend 跳过逻辑污染。
         for (auto const& tx : block->transactions())
             tx->setStoreToBackend(false);
 
@@ -635,10 +636,12 @@ public:
     /// guarded write (blockNumber > currentHead, EngineServiceImpl inline path) moved to
     /// OpScheduler's commit and is carried by this override, preserving the monotonic-guard
     /// semantics (rejecting already-committed / discontinuous commits). The skeleton base reads
-    /// *m_ledger (getCurrentBlockNumber(*m_ledger)); the OP composition root does not wire
-    /// LedgerInterface — here the guard reads the storage view instead (getCurrentBlockNumber(view,
-    /// fromStorage), the same source as engine step 3). Public for the same reason as
-    /// loadCommitLedgerConfig (coCommitBlock reaches it via derived()). The isSysContractDeploy
+    /// *m_ledger (getCurrentBlockNumber(*m_ledger), which reads the ledger's own m_stateStorage);
+    /// the OP commit path writes SYS_CURRENT_STATE to the scheduler's storage view (not the
+    /// ledger's m_stateStorage) — here the guard reads the storage view instead
+    /// (getCurrentBlockNumber(view, fromStorage), the same source as engine step 3). Public for
+    /// the same reason as loadCommitLedgerConfig (coCommitBlock reaches it via derived()). The
+    /// isSysContractDeploy
     /// special case is retained (block-0 system-contract deployment, PrecompiledTypeDef.h:31).
     task::Task<bool> commitContinuityCheck(protocol::BlockNumber number)
     {
