@@ -145,6 +145,13 @@ public:
     {
         (void)contextID;
 
+        if (transaction.isDepositTx())
+        {
+            auto dep = depositFromTransaction(transaction);
+            co_return co_await executeDeposit(
+                storage, blockHeader, dep, chainId, blockGasLeft, ledgerConfig, blockHashes);
+        }
+
         auto props = co_await m_prepare(
             storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft, chainId, call);
         evmone::state::StateDiff diff;
@@ -299,6 +306,53 @@ private:
 
         co_await eth::applyStateDiff(storage, diff, rev, *m_hashImpl);
         co_return std::move(receipt);
+    }
+
+    /// Build a DepositTx from a protocol::Transaction whose isDepositTx() is true, reading the
+    /// deposit-only mirrors (sourceHash/mint/isSystemTransaction) from the object. SAFE ONLY for
+    /// single-tx tooling whose input was authoritatively decoded from a trusted RPC/engine-API
+    /// source (NOT a P2P peer) — the block path (processOpBlock) re-derives these from the
+    /// envelope instead. If this entry is ever reused from a P2P path, it MUST switch back to
+    /// envelope re-derivation. mint is always Some(value) (0 == no mint).
+    static bcos::evm::opstack::DepositTx depositFromTransaction(protocol::Transaction const& tx)
+    {
+        namespace op = bcos::evm::opstack;
+        op::DepositTx dep;
+
+        // source_hash: unprefixed hex string_view -> evmc::bytes32 (fail loud on malformed input)
+        auto sh = bcos::safeFromHex(tx.sourceHash());
+        if (!sh || sh->size() != sizeof(evmc::bytes32))
+            BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(
+                                      "deposit sourceHash is not a 32-byte hex string"));
+        std::copy(sh->begin(), sh->end(), dep.source_hash.bytes);
+
+        // from: 20-byte raw string_view -> evmc::address (deposit has no signature; from == sender)
+        auto const& sb = tx.sender();
+        if (sb.size() != sizeof(evmc::address))
+            BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(
+                                      "deposit sender is not a 20-byte address"));
+        std::copy_n(sb.begin(), sizeof(evmc::address), dep.from.bytes);
+
+        // to: hex string_view -> optional<evmc::address> (empty = contract creation)
+        auto const& tb = tx.to();
+        if (!tb.empty())
+        {
+            auto dec = bcos::safeFromHex(tb);
+            if (!dec || dec->size() != sizeof(evmc::address))
+                BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(
+                                          "deposit to is not a 20-byte address"));
+            evmc::address ta{};
+            std::copy(dec->begin(), dec->end(), ta.bytes);
+            dep.to = ta;
+        }
+
+        dep.mint = bcos::executor_v1::eth::evm::toIntxU256(tx.mint());
+        dep.value = bcos::executor_v1::eth::evm::toIntxU256(tx.value());
+        dep.gas_limit = tx.gasLimit();
+        dep.is_system_tx = tx.depositIsSystemTransaction();
+        auto const& input = tx.input();
+        dep.data = evmc::bytes(input.begin(), input.end());
+        return dep;
     }
 
     protocol::TransactionReceiptFactory::Ptr m_receiptFactory;

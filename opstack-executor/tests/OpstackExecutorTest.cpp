@@ -426,6 +426,45 @@ TEST_F(Fixture, ExecutesDepositMint)
     EXPECT_EQ(*meta->deposit_receipt_version, 1u);
 }
 
+TEST_F(Fixture, ExecutesDepositThroughExecuteTransaction)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    auto tx = buildDepositTx();  // Task 1 helper
+    constexpr auto from = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, from, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256(0));
+        co_await acc.setNonce("0");
+        co_return;
+    }());
+
+    // fee default {} — deposit must ignore it (no L1/operator fee).
+    auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/false, /*fee=*/{}, /*blockGasLeft=*/30000000,
+        /*chainId=*/10));
+    ASSERT_NE(receipt, nullptr);
+    EXPECT_EQ(receipt->status(), 0);
+
+    // mint(5) added to from balance (distinguishes deposit from a normal-path run, which mints
+    // nothing).
+    ledger::account::EVMAccount<MutableStorage> acc(storage, from, false);
+    auto bal = task::syncWait(acc.balance());
+    EXPECT_EQ(bal, 5u);
+
+    // deposit_nonce == 0, version == 1 (Canyon+).
+    auto meta = receipt->opStackMeta();
+    ASSERT_TRUE(meta.has_value());
+    ASSERT_TRUE(meta->deposit_nonce.has_value());
+    EXPECT_EQ(*meta->deposit_nonce, 0u);
+    ASSERT_TRUE(meta->deposit_receipt_version.has_value());
+    EXPECT_EQ(*meta->deposit_receipt_version, 1u);
+}
+
 TEST_F(Fixture, DepositGasLimitReachedIsBlockError)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
