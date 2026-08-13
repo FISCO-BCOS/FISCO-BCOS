@@ -1,6 +1,6 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
-#include <bcos-evm/evmstate/MemoryState.h>
+#include "MemoryState.h"
 
 #include <stdexcept>
 
@@ -60,7 +60,8 @@ void MemoryState::applyDiff(const evmone::state::StateDiff& diff, bool seeding)
             account.code = *m.code;
         for (const auto& [key, value] : m.modified_storage)
         {
-            if (value)  // contract ②: a slot value of 0 deletes the slot; zero values are not written
+            if (value)  // contract ②: a slot value of 0 deletes the slot; zero values are not
+                        // written
                 account.storage.insert_or_assign(key, value);
             else
                 account.storage.erase(key);

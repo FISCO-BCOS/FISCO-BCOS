@@ -20,7 +20,8 @@ struct StateAccount
     uint64_t nonce{0};
     intx::uint256 balance;
     evmc::bytes code;
-    std::map<evmc::bytes32, evmc::bytes32> storage;  // zero-valued slots are not stored (contract ②)
+    std::map<evmc::bytes32, evmc::bytes32> storage;  // zero-valued slots are not stored (contract
+                                                     // ②)
 };
 
 /// Self-developed in-memory ledger backend (C-route step 1 replacement for

@@ -58,10 +58,9 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    # 自研内存账本（块级 PR 移植）：MemoryState 是 evmone test_state 的替换品，
     # StateRootCompute 是状态根引擎（AccountVisitor 建根，用 FISCO bcos-ledger/mpt
     # computeTrieRoot，不再依赖 evmone 的 MPT/mpt_hash）。
-    bcos-evm/evmstate/MemoryState.cpp
+    # MemoryState（自研内存账本，evmone test_state 的替换品）已移到 bcos-evm/test/support/。
     bcos-evm/adapter/StateRootCompute.cpp
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
