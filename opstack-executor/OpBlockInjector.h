@@ -1,18 +1,19 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
-// OP 逐笔注入循环生产模块（spec §7.0）。BaselineScheduler 接线时直接消费。
+// OP per-transaction injection loop production module (spec §7.0). Consumed directly at
+// BaselineScheduler wiring.
 #include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/opstack/OpFeeParams.h>  // v2（B1）：loadOpFeeParams / OpFeeParams
-#include <bcos-evm/opstack/OpPredeploys.h>  // v2（B1）：OP_L1_BLOCK / OP_DEPOSITOR / OP_L2_TO_L1_MESSAGE_PASSER（非传递可达）
+#include <bcos-evm/opstack/OpPredeploys.h>  // v2 (B1): OP_L1_BLOCK / OP_DEPOSITOR / OP_L2_TO_L1_MESSAGE_PASSER (not transitively reachable)
 #include <ethereum-executor/BCOS2Evmone.h>  // applyStateDiff
 #include <ethereum-executor/StorageStateView.h>
-#include <opstack-executor/OpBlockExecute.h>  // v2（B5）：narrowGasUsed / hexCumulative / isL1AttributesTx 由本任务从 .cpp 导出到本头（seal 已并入）
-#include <opstack-executor/OpEngineSeam.h>    // computeOpTxRoot / toBcosH256 声明所在
+#include <opstack-executor/OpBlockExecute.h>  // v2 (B5): narrowGasUsed / hexCumulative / isL1AttributesTx exported from .cpp into this header (seal merged here)
+#include <opstack-executor/OpEngineSeam.h>    // computeOpTxRoot / toBcosH256 declarations
 #include <opstack-executor/OpErrors.h>
 #include <opstack-executor/OpRlpDecode.h>  // toBlockInfo / narrowU256ToU64
-#include <opstack-executor/OpSchedulerImpl.h>  // v2（可执行性）：OpExecuteBlockResult 定义在此（:66），缺则编译失败
+#include <opstack-executor/OpSchedulerImpl.h>  // v2 (executability): OpExecuteBlockResult defined here (:66); missing it fails compilation
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
@@ -20,12 +21,15 @@
 
 namespace bcos::evm::engine
 {
-/// 逐笔注入循环：复刻 processOpBlock 的编排（system_call_block_start → deposit-first →
-/// 懒 loadOpFeeParams + Jovian D-1 覆盖 → 逐笔 blockGasLeft 递减 + setCumulativeGasUsed →
-/// finalizeBlock），经 OpstackExecutor 注入式入口执行。返回与 executeOpBlock 同形的结果。
-/// 审查 D6：普通交易的 FISCO Transaction 由**调用方**预构建（normalTxs 与 txs 中普通交易
-/// 一一对应）——opEnvelopeToTars 在 engine lib，injector 内建会成链接循环。
-/// 审查 R3：错误分类 poison/hashErr → OpStorageError，块形状/校验 → OpConsensusError。
+/// Per-transaction injection loop: replicates processOpBlock's orchestration
+/// (system_call_block_start → deposit-first → lazy loadOpFeeParams + Jovian D-1 override →
+/// per-tx blockGasLeft decrement + setCumulativeGasUsed → finalizeBlock), executed through the
+/// OpstackExecutor injection-style entry points. Returns the same result shape as executeOpBlock.
+/// Review D6: normal txs' FISCO Transactions are pre-built by the caller (normalTxs maps 1:1 to
+/// the non-deposit txs) — opEnvelopeToTars lives in the engine lib; building it here would create
+/// a link cycle.
+/// Review R3: error classification — poison/hashErr → OpStorageError, block shape/validation →
+/// OpConsensusError.
 template <class Storage>
 OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExecutor& executor,
     Storage& view, bcos::protocol::BlockHeader const& header,
@@ -45,15 +49,15 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     eth::StorageStateView<Storage> stateView(view);
 
-    // (1) 块前 system_call_block_start（executor 无入口，evmone 直调）。
+    // (1) Pre-block system_call_block_start (no executor entry; evmone called directly).
     auto sysDiff =
         evmone::state::system_call_block_start(stateView, blk, hashes, cfg.rev, executor.vm());
     bcos::task::syncWait(eth::applyStateDiff(
         view, bcos::evm::sanitizeStateDiff(stateView, sysDiff), cfg.rev, *hashImpl));
 
-    // (2) deposit-first 内容检查 + Jovian 形状。审查 R3：块形状拒绝 → OpConsensusError。
-    // 第三轮 P3-7：直接调导出的 op::isL1AttributesTx（R3 导出到 OpBlockExecute.h），
-    // 不内联重写（否则与 processOpBlock 形成第 2 份拷贝，违背"免复制漂移"）。
+    // (2) deposit-first content check + Jovian shape. Review R3: block-shape rejection →
+    // OpConsensusError. Round-3 P3-7: call the exported op::isL1AttributesTx (exported to
+    // OpBlockExecute.h) rather than inlining a copy — a duplicate would drift from processOpBlock.
     if (txs.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     auto const* firstDep = std::get_if<op::DepositTx>(&txs[0].tx);
@@ -67,7 +71,7 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
     int64_t cumulative = 0;
     bool seenNonDeposit = false;
     bool feeLoaded = false;
-    std::size_t normalIdx = 0;  // 审查 D6：消费调用方预构建的 normalTxs
+    std::size_t normalIdx = 0;  // Review D6: consume caller-prebuilt normalTxs
     op::OpFeeParams fee{};
     for (std::size_t i = 0; i < txs.size(); ++i)
     {
@@ -78,11 +82,12 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
                 throw OpConsensusError("op block: deposit after non-deposit tx");
             auto receipt = bcos::task::syncWait(executor.executeDeposit(
                 view, header, *dep, chainId, blockGasLeft, ledgerConfig, &hashes));
-            auto const gasUsed = op::narrowGasUsed(receipt->gasUsed());  // v2：op:: 限定（R3 导出到
-                                                                         // ns bcos::evm::opstack）
+            auto const gasUsed =
+                op::narrowGasUsed(receipt->gasUsed());  // v2: op::-qualified
+                                                        // (R3-exported to ns bcos::evm::opstack)
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
-            receipt->setCumulativeGasUsed(op::hexCumulative(cumulative));  // v2：op:: 限定
+            receipt->setCumulativeGasUsed(op::hexCumulative(cumulative));  // v2: op::-qualified
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(static_cast<uint8_t>(op::kDepositTxType));
         }
@@ -105,20 +110,23 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
                 feeLoaded = true;
             }
             auto const& tx = std::get<evmone::state::Transaction>(btx.tx);
-            // 审查 D6：普通交易由调用方预构建（normalTxs[i]，其 extraTransactionBytes 已是完整
-            // envelope——见 spec §2，takeToTarsTransaction 存的是 signing preimage 需覆盖）。
-            // 终审 I-2：normalIdx 无上界守卫，调用方少传即 OOB（生产模块 BaselineScheduler
-            // 将来消费）。
+            // Review D6: normal txs are pre-built by the caller (normalTxs[i], whose
+            // extraTransactionBytes is already the full envelope — spec §2, takeToTarsTransaction
+            // stores the signing preimage and must be overwritten).
+            // Final review I-2: normalIdx has no upper-bound guard; a short caller vector would
+            // OOB (BaselineScheduler consumes this in production).
             if (normalIdx >= normalTxs.size())
                 throw OpConsensusError(
                     "runOpBlockInjection: normalTxs exhausted (caller-provided "
                     "normal txs mismatch block txs)");
-            // 审查 R3 分类契约：校验失败（opValidate 拒绝普通交易）→ OpConsensusError（INVALID），
-            // 非 -32603。Task 6 换芯前 OpTxValidationFailed 只出现在 direct injector（harness 跳过
-            // invalid_ 向量）；换芯后走引擎 delegate 生产路径，漏分类会把 INVALID 向量误报为
-            // -32603（mapDelegateError 抛内部错误）——与 processOpBlock 的 validate-error 通道
-            // （runtime_error → OpConsensusError）对齐。syncWait 同步重抛；FISCO 类型 typeinfo
-            // 稳定，typed catch 可靠。
+            // Review R3 classification contract: validation failure (opValidate rejects a normal
+            // tx) → OpConsensusError (INVALID), not -32603. Before the Task 6 swap,
+            // OpTxValidationFailed only appeared in the direct injector (the harness skips
+            // invalid_ vectors); on the post-swap engine delegate path, misclassification would
+            // report INVALID vectors as -32603 (mapDelegateError throws an internal error) —
+            // aligned with processOpBlock's validate-error channel (runtime_error →
+            // OpConsensusError). syncWait rethrows synchronously; FISCO types have stable
+            // typeinfo, so typed catch binds reliably.
             protocol::TransactionReceipt::Ptr receipt;
             try
             {
@@ -131,21 +139,22 @@ OpExecuteBlockResult runOpBlockInjection(bcos::executor_v1::opstack::OpstackExec
                 throw OpConsensusError(
                     "runOpBlockInjection: normal tx validation failed: " + std::string(e.what()));
             }
-            auto const gasUsed = op::narrowGasUsed(receipt->gasUsed());  // v2：op:: 限定
+            auto const gasUsed = op::narrowGasUsed(receipt->gasUsed());  // v2: op::-qualified
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
-            receipt->setCumulativeGasUsed(op::hexCumulative(cumulative));  // v2：op:: 限定
+            receipt->setCumulativeGasUsed(op::hexCumulative(cumulative));  // v2: op::-qualified
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(static_cast<uint8_t>(tx.type));
         }
     }
     bcos::task::syncWait(executor.finalizeBlock(view, header, ledgerConfig));
     result.gasUsed = cumulative;
-    // 审查 R3：存储层故障（block-hash 查找 / 毒标记）→ OpStorageError（-32603），非 INVALID。
+    // Review R3: storage-layer failure (block-hash lookup / poison flag) → OpStorageError
+    // (-32603), not INVALID.
     if (hashErr.has_value())
         throw OpStorageError("runOpBlockInjection: block-hash lookup failed: " + *hashErr);
 
-    // (4) commitment：MessagePasser 快照 → seal → stateRoot → txRoot。
+    // (4) commitments: MessagePasser snapshot → seal → stateRoot → txRoot.
     std::map<evmc::bytes32, evmc::bytes32> mpStorage;
     bcos::evm::evmstate::Storage2State<Storage> bridge(view);
     bridge.visitAccounts([&](auto const& acc) {

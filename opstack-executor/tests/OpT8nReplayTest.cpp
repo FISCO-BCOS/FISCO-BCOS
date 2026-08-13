@@ -30,7 +30,7 @@
 #include <evmone/evmone.h>
 #include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpBlockExecute.h>   // seal（已并入块执行模块）
+#include <opstack-executor/OpBlockExecute.h>   // seal (merged into the block-execution module)
 #include <opstack-executor/OpSchedulerImpl.h>  // decodeOneRawTx (blob decode-class reject repro)
 #include <boost/test/unit_test.hpp>
 #include <algorithm>

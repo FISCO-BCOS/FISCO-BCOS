@@ -392,13 +392,15 @@ TEST_F(Fixture, FinalizeOpBlockNoReward)
 
 TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
 {
-    // spec §8（v2：仅 gasLimit）：buildOpBlockInfo 的 gasLimit 取 header.gasLimit（非
-    // blockGasLeft）。 行为断言：执行读 GASLIMIT 的最小合约，slot0 存值必须 == header.gasLimit()。
-    // 修复前：executeTransaction 的 BlockInfo.gasLimit = blockGasLeft（注入值），合约存到
-    // blockGasLeft；这里注入 blockGasLeft(250000) < header.gasLimit(1000000) → 红。
-    // 修复后：BlockInfo.gasLimit = header.gasLimit == 1000000 → 绿。
-    // 第三轮 P0-1 修正：blockGasLeft 必须 ≥ tx.gasLimit(200000)（否则 state.cpp:390
-    // GAS_LIMIT_REACHED 在验证层即拒，测试永远红）且 < header.gasLimit(1000000) 才暴露分叉。
+    // spec §8 (v2: gasLimit only): buildOpBlockInfo's gasLimit takes header.gasLimit (not
+    // blockGasLeft). Behavior assertion: executing a minimal GASLIMIT-reading contract, slot0 must
+    // store == header.gasLimit(). Before the fix: executeTransaction's BlockInfo.gasLimit =
+    // blockGasLeft (injected value), so the contract stored blockGasLeft; injecting
+    // blockGasLeft(250000) < header.gasLimit(1000000) went red. After the fix:
+    // BlockInfo.gasLimit = header.gasLimit == 1000000 → green. Round-3 P0-1 correction:
+    // blockGasLeft must be ≥ tx.gasLimit(200000) (else state.cpp:390 GAS_LIMIT_REACHED rejects at
+    // validation and the test is permanently red) AND < header.gasLimit(1000000) to expose the
+    // fork.
     constexpr auto kObserver = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto kSender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
     const bcos::bytes kObserverCode{0x45, 0x60, 0x00, 0x55, 0x00};  // GASLIMIT; PUSH1 0; SSTORE;
@@ -407,7 +409,7 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
-    blockHeader.setGasLimit(bcos::u256(1000000));  // 触发新路径（gasLimit()!=0）
+    blockHeader.setGasLimit(bcos::u256(1000000));  // exercises the new path (gasLimit()!=0)
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
     ledgerConfig.setEVMCRevision(fork.rev);
 
@@ -449,8 +451,8 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     tx.forceSender(bcos::bytes(kSender.bytes, kSender.bytes + sizeof(kSender.bytes)));
 
     bcos::evm::opstack::OpFeeParams fee{};
-    // 注入 blockGasLeft=250000 < header.gasLimit=1000000（第三轮 P0-1：≥ tx.gasLimit 200000
-    // 过验证层，< header 暴露 GASLIMIT 分叉）—— 暴露 GASLIMIT 分叉的关键。
+    // Inject blockGasLeft=250000 < header.gasLimit=1000000 (round-3 P0-1: ≥ tx.gasLimit 200000
+    // passes validation, < header exposes the GASLIMIT fork) — the key to exposing the fork.
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/250000,
         /*chainId=*/10));
@@ -458,10 +460,10 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     EXPECT_EQ(receipt->status(), 0);
 
     // Read observer slot0: must == header.gasLimit (1000000), not the injected blockGasLeft.
-    // 第三轮 P0-2：存储键是 raw 32 字节（evmc_bytes32{}=32 个 0x00），storageEntry("0")/hex
-    // 串都读不到。 EVMAccount::storage() 返回 evmc_bytes32 值（未设时全零）而非 optional —— 用
-    // slot.bytes
-    // + intx::be::load 解析（32 字节大端），不照抄 storageEntry 的 has_value()/operator->。
+    // Round-3 P0-2: the storage key is raw 32 bytes (evmc_bytes32{}=32 0x00 bytes); neither
+    // storageEntry("0") nor a hex string reads it. EVMAccount::storage() returns an evmc_bytes32
+    // value (all-zero when unset), not an optional — parse slot.bytes with intx::be::load
+    // (32-byte big-endian), not storageEntry's has_value()/operator->.
     ledger::account::EVMAccount<MutableStorage> obs(storage, kObserver, false);
     auto slot = task::syncWait(obs.storage(evmc_bytes32{}));  // EVMAccount.h:210
     EXPECT_EQ(intx::be::load<intx::uint256>(slot.bytes), intx::uint256(1000000));

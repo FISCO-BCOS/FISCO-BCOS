@@ -1,26 +1,29 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpSchedulerTest — 接线 Task 4（OpScheduler 新类）的最小 OP 块 + 三分类单测。
+// OpSchedulerTest — minimal OP-block + three-way-classification unit tests for wired Task 4
+// (the new OpScheduler class).
 //
-// 1. ExecutesMinimalOpBlockEqualToDirectRouteB：最小 OP 块（deposit + 1 normal 带 envelope，
-//    SEV-8：extraTransactionBytes=完整信封，先例 OpDualPathEquivalenceTest.cpp:566-568）经
-//    OpScheduler.executeBlock 驱动 == 直调 route B（runOpBlockInjection）结果（receipts/status/
-//    gasUsed + 六字段承诺）。 语料锚：isthmus_transfer_basic.json 的 deposit + eip1559 envelope
-//    （op-geth 真实签名）； 直调锚 = 同一 MLS 上独立 route B（runOpBlockInjection，route A
-//    executeOpBlock 已退役——双路径 harness 已证明 route B 与其语义等价）。
-// 2. ConsensusRejectionClassifiedAsOpConsensusRejected：execute hook 抛 OpConsensusError
-//    （unsupported tx type byte 0x03，decodeOneRawTx 确定性抛）→ 骨架 coExecuteBlock 经
-//    classifyException → Error 码 == OpConsensusRejected。
-// 3. classifyException 直调三分类：OpConsensusError→OpConsensusRejected / OpStorageError→
-//    OpStorageFault / 其它→UnknownError。
-// 4. CommitPersistsSevenLedgerTables（Task 5c 槽位 3 E2E）：executeBlock + commitBlock 后 7 张
-//    SYS 表落盘断言（SEV-10，取代被删 OpBlockScheduler 的 RefuseStubs）。
+// 1. ExecutesMinimalOpBlockEqualToDirectRouteB: the minimal OP block (deposit + 1 normal with
+//    envelope, SEV-8: extraTransactionBytes = full envelope, precedent
+//    OpDualPathEquivalenceTest.cpp:566-568) driven via OpScheduler.executeBlock == direct route B
+//    (runOpBlockInjection) result (receipts/status/gasUsed + six-field commitment). Corpus anchor:
+//    deposit + eip1559 envelope of isthmus_transfer_basic.json (real op-geth signatures); direct
+//    anchor = independent route B on the same MLS (runOpBlockInjection; route A executeOpBlock is
+//    retired — the dual-path harness proved route B semantically equivalent to it).
+// 2. ConsensusRejectionClassifiedAsOpConsensusRejected: the execute hook throws OpConsensusError
+//    (unsupported tx type byte 0x03, decodeOneRawTx throws deterministically) → the skeleton's
+//    coExecuteBlock classifies via classifyException → Error code == OpConsensusRejected.
+// 3. classifyException direct three-way mapping: OpConsensusError→OpConsensusRejected /
+//    OpStorageError→OpStorageFault / other→UnknownError.
+// 4. CommitPersistsSevenLedgerTables (Task 5c slot-3 E2E): after executeBlock + commitBlock, 7 SYS
+//    tables are asserted persisted (SEV-10, replacing the deleted OpBlockScheduler's RefuseStubs).
 //
-// 黄金约束：最小 OP 块 receipts/status/gasUsed == 直调 route B（runOpBlockInjection）。
+// Golden constraint: minimal OP block receipts/status/gasUsed == direct route B
+// (runOpBlockInjection).
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerImpl.h>
-#include <opstack-executor/OpTxDecode.h>  // detail::canonicalEnvelopeBytes（deposit 信封重建）
+#include <opstack-executor/OpTxDecode.h>  // detail::canonicalEnvelopeBytes (deposit envelope reconstruction)
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -28,7 +31,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>  // 迁移 call 用例（Task 5c fix round 1）
+#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>  // for migrated call cases (Task 5c fix round 1)
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -38,7 +41,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
-#include <engine/bcos-engine/EngineServiceImpl.h>  // detail::opEnvelopeToTars（测试 link engine）
+#include <engine/bcos-engine/EngineServiceImpl.h>  // detail::opEnvelopeToTars (tests link engine)
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
@@ -65,13 +68,15 @@ constexpr uint64_t kChainId = 0x2105;  // 8453 — the FISCO OP chain id (vector
 const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
                                                                             // sender
 
-// 语料 isthmus_transfer_basic.json：block.transactions[1]._op_raw（op-geth 签名 eip1559 信封）。
+// Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
+// envelope).
 constexpr const char* kEip1559EnvelopeHex =
     "0x02f874822105808405f5e100847735940082520894b0b0000000000000000000000000000000000001880de"
     "0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae"
     "693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714";
 
-// 最小 CheckpointStorage stub（源分支 fixture 同款：不 cross-include 其它模块测试私有头）。
+// Minimal CheckpointStorage stub (same as the source-branch fixture: do not cross-include other
+// modules' test-private headers).
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
 struct TrivialCheckpointStorage
 {
@@ -82,7 +87,7 @@ struct TrivialCheckpointStorage
     Storage& open() & { return m_storage; }
     [[noreturn]] Storage& open(CheckpointName const& /*unused*/) &
     {
-        std::abort();  // 该 fixture 永远不需要历史 checkpoint。
+        std::abort();  // this fixture never needs a historical checkpoint.
     }
     void createCheckpoint(Storage& /*unused*/, CheckpointName const& /*unused*/) {}
     void deleteCheckpoint(CheckpointName const& /*unused*/) {}
@@ -129,8 +134,9 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
 }
 
-/// composition-root 注入的 EnvelopeToTarsConverter：包 engine 的 opEnvelopeToTars（测试 link
-/// engine， 生产侧由 Initializer 以同形 lambda 注入——OpScheduler 不内建）。
+/// EnvelopeToTarsConverter injected at the composition root: wraps engine's opEnvelopeToTars
+/// (tests link engine; production injects a same-shape lambda via Initializer — OpScheduler does
+/// not build it in).
 bcos::evm::engine::EnvelopeToTarsConverter makeConverter()
 {
     return [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
@@ -138,11 +144,11 @@ bcos::evm::engine::EnvelopeToTarsConverter makeConverter()
     };
 }
 
-/// L1 attributes deposit（语料 isthmus_transfer_basic 的 deposit 结构）：to==OP_L1_BLOCK &&
-/// from==OP_DEPOSITOR 满足 isL1AttributesTx（OpBlockExecute.h:97-99）。data
-/// 用空——Isthmus（pre-Jovian） 下 validateJovianBlockShape 是
-/// no-op（OpBlockExecute.h:76），processOpBlock 只按 content 判 isL1AttributesTx，不校验
-/// calldata（先例 OpBlockInjectorTest.cpp:88-101 空 data 的 deposit 同样过）。
+/// L1 attributes deposit (the isthmus_transfer_basic corpus deposit shape): to==OP_L1_BLOCK &&
+/// from==OP_DEPOSITOR satisfies isL1AttributesTx (OpBlockExecute.h:97-99). data is empty — under
+/// Isthmus (pre-Jovian) validateJovianBlockShape is a no-op (OpBlockExecute.h:76); processOpBlock
+/// classifies isL1AttributesTx purely by content and never validates calldata (precedent: the
+/// empty-data deposit in OpBlockInjectorTest.cpp:88-101 passes likewise).
 bcos::evm::opstack::DepositTx makeDeposit()
 {
     bcos::evm::opstack::DepositTx dep;
@@ -151,21 +157,22 @@ bcos::evm::opstack::DepositTx makeDeposit()
     dep.to = 0x4200000000000000000000000000000000000015_address;
     dep.mint = std::nullopt;
     dep.value = intx::uint256{0};
-    dep.gas_limit = 0xf4240;  // 1000000（语料 gas: "0xf4240"）
+    dep.gas_limit = 0xf4240;  // 1000000 (corpus gas: "0xf4240")
     dep.is_system_tx = false;
     dep.data = {};
     return dep;
 }
 
-/// 语料环境（isthmus_transfer_basic env）的 OP 头。timestamp 存毫秒（FISCO 惯例，/1000 给 OP 秒）。
-/// commitment 字段（stateRoot/txsRoot/receiptsRoot/gasUsed/withdrawalsRoot/logsBloom/requestsHash）
-/// 由调用方在直调 route B（runOpBlockInjection）后按结果回填——announced 头即真实承诺，verify
-/// 六字段对比通过。
+/// OP header from the corpus environment (isthmus_transfer_basic env). timestamp is stored in
+/// milliseconds (FISCO convention; /1000 gives OP seconds). Commitment fields (stateRoot/txsRoot/
+/// receiptsRoot/gasUsed/withdrawalsRoot/logsBloom/requestsHash) are back-filled by the caller from
+/// the direct route B (runOpBlockInjection) result — the announced header carries the true
+/// commitments, so the six-field comparison verifies.
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     h->setNumber(1);
-    h->setTimestamp(0x3f2 * 1000);  // 0x3f2 = 1010 s（OP 秒）→ 1_010_000 ms
+    h->setTimestamp(0x3f2 * 1000);  // 0x3f2 = 1010 s (OP seconds) → 1_010_000 ms
     h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0,
         .blockHash =
             bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}});
@@ -173,11 +180,11 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
     h->setReceiptsRoot(bcos::h256{});
-    h->setGasLimit(bcos::u256(0x989680));  // 10000000（语料 currentGasLimit）
+    h->setGasLimit(bcos::u256(0x989680));  // 10000000 (corpus currentGasLimit)
     h->setGasUsed(bcos::u256(0));
     h->setExtraData(bcos::bytes{});
     h->setPrevRandao(bcos::h256{});
-    h->setBaseFee(bcos::u256(0x3a699d00));  // 981000000（语料 currentBaseFee）
+    h->setBaseFee(bcos::u256(0x3a699d00));  // 981000000 (corpus currentBaseFee)
     h->setWithdrawalsRoot(bcos::h256{});
     h->setBlobGasUsed(bcos::u256(0));
     h->setExcessBlobGas(bcos::u256(0));
@@ -187,8 +194,8 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
     return h;
 }
 
-/// 用 route B（runOpBlockInjection）结果回填 announced 头的承诺字段（finishExecute 也写同一批
-/// 字段，verify 因此相等）。
+/// Back-fill the announced header's commitment fields from the route B (runOpBlockInjection) result
+/// (finishExecute writes the same batch of fields, so verify compares equal).
 void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
     bcos::evm::engine::OpExecuteBlockResult const& result)
 {
@@ -204,9 +211,9 @@ void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
         header->setBlobGasUsed(bcos::u256(*result.seal.blobGasUsed));
 }
 
-/// opEnvelopeToTars + SEV-8 覆写完整信封（先例 OpDualPathEquivalenceTest.cpp:566-568）：
-/// takeToTarsTransaction 存 signing preimage，executeTransaction 读 extraTransactionBytes 当
-/// 完整信封（OpstackExecutor.h:280-281）。
+/// opEnvelopeToTars + SEV-8 full-envelope override (precedent
+/// OpDualPathEquivalenceTest.cpp:566-568): takeToTarsTransaction stores the signing preimage;
+/// executeTransaction reads extraTransactionBytes as the full envelope (OpstackExecutor.h:280-281).
 bcos::protocol::Transaction::Ptr buildFiscoTx(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
 {
@@ -222,9 +229,9 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     return tx;
 }
 
-/// 一个 0x03 字节的信封——decodeOneRawTx 确定性抛 OpConsensusError（"unsupported tx type byte"，
-/// OpTxDecode.h:405）。用于把 execute hook 稳定驱动到 consensus-rejected 分类（不依赖 RTTI 边界
-/// 的运行时行为）。
+/// A one-byte 0x03 envelope — decodeOneRawTx deterministically throws OpConsensusError
+/// ("unsupported tx type byte", OpTxDecode.h:405). Used to reliably drive the execute hook into the
+/// consensus-rejected classification (independent of RTTI-boundary runtime behavior).
 bcos::protocol::Transaction::Ptr buildUnsupportedTypeTx()
 {
     bcostars::Transaction tars;
@@ -234,8 +241,8 @@ bcos::protocol::Transaction::Ptr buildUnsupportedTypeTx()
     return tx;
 }
 
-/// 在 MLS 后端种入 eip1559 发送方账户（StorageStateView::exists() 需非零 codeHash——create() +
-/// setCode(empty)，裸 setBalance 会判不存在）。
+/// Seed the eip1559 sender account into the MLS backend (StorageStateView::exists() needs a
+/// non-zero codeHash — create() + setCode(empty); a bare setBalance would be deemed non-existent).
 void seedSender(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr const& hashImpl)
 {
     auto view = mls.fork();
@@ -248,7 +255,8 @@ void seedSender(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr con
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
-/// 测试子类：暴露最近一次 pending 执行结果的 receipts（骨架 m_results 是 protected，派生可读）。
+/// Test subclass: exposes the receipts of the latest pending execution result (the skeleton's
+/// m_results is protected; a derived class can read it).
 class TestOpScheduler : public bcos::executor_v1::opstack::OpScheduler<MLS>
 {
 public:
@@ -283,14 +291,16 @@ struct Fixture
     }
 };
 
-// ── call/getCode 用例迁移（Task 5c fix round 1，逐字来自被删 OpBlockSchedulerTest）──
-// OpScheduler 吸收 OpBlockScheduler 的 call/getCode 纯虚实现后，原 OpBlockSchedulerTest 的
-// RPC 面用例（StatusAndResetNoOp / GetCodeEmpty / CallInvalidReturnsError /
-// CallHappyPathInjectsRealBaseFee）迁入本套件，驱动对象换成 OpScheduler（f.scheduler）。
+// ── call/getCode case migration (Task 5c fix round 1, verbatim from the deleted
+//    OpBlockSchedulerTest) ──
+// Once OpScheduler absorbed OpBlockScheduler's call/getCode pure-virtual implementations, the
+// original OpBlockSchedulerTest RPC-face cases (StatusAndResetNoOp / GetCodeEmpty /
+// CallInvalidReturnsError / CallHappyPathInjectsRealBaseFee) moved into this suite, with the driven
+// object changed to OpScheduler (f.scheduler).
 const bcos::Address kCallSender{"0x1000000000000000000000000000000000000000"};
 
 /// A genesis header carrying every field coCallLatest's buildOpBlockInfo/toBlockInfo reads
-/// （baseFee=1e9 是 CallHappyPath 注入断言的目标值）。
+/// (baseFee=1e9 is the target value of CallHappyPath's injection assertion).
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeCallGenesisHeader()
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
@@ -340,11 +350,11 @@ void seedCallGenesis(MLS& mls, bcos::protocol::BlockHeader::Ptr const& genesisHe
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
-/// Build an EIP-1559 (type 2) web3 tx wrapped as a tars Transaction::Ptr（lambda-holder 形式）。
-/// EIP-1559 是刻意的（round-3 C2）：EIP-2930/legacy tx with maxPriorityFeePerGas=0 会触发
-/// BCOS2Evmone 的 access_list override（max_priority=max_gas），effectiveGasPrice =
-/// maxFeePerGas 而非 baseFee——假阳性；EIP-1559 保持 max_priority=0，effectiveGasPrice ==
-/// baseFee 精确（注入敏感）。
+/// Build an EIP-1559 (type 2) web3 tx wrapped as a tars Transaction::Ptr (lambda-holder form).
+/// EIP-1559 is deliberate (round-3 C2): an EIP-2930/legacy tx with maxPriorityFeePerGas=0 would
+/// trigger BCOS2Evmone's access_list override (max_priority=max_gas), making effectiveGasPrice =
+/// maxFeePerGas instead of baseFee — a false positive; EIP-1559 keeps max_priority=0 so
+/// effectiveGasPrice == baseFee exactly (injection-sensitive).
 bcos::protocol::Transaction::Ptr buildWeb3Tx(
     bcos::u256 maxFeePerGas, bcos::u256 maxPriorityFeePerGas)
 {
@@ -371,7 +381,7 @@ bcos::protocol::Transaction::Ptr buildWeb3Tx(
     return tx;
 }
 
-/// Fund an EOA so opValidate passes（同 seedSender 的 create()+setCode(empty) 存在性模式）。
+/// Fund an EOA so opValidate passes (same create()+setCode(empty) existence pattern as seedSender).
 void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr const& hashImpl,
     bcos::u256 const& balance)
 {
@@ -385,10 +395,10 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
-/// route B 直调锚（route A executeOpBlock 退役后，独立执行对照改 runOpBlockInjection）：装配
-/// txs/normalTxs + OpstackExecutor 后直调，返回 OpExecuteBlockResult。装配与 OpScheduler execute
-/// hook（OpScheduler.h:127-179）/ OpDualPathEquivalenceTest route
-/// B（:1015-1034）同款（免复制漂移）。
+/// route B direct-call anchor (after route A executeOpBlock retired, the independent execution
+/// comparison moved to runOpBlockInjection): assemble txs/normalTxs + OpstackExecutor then call
+/// directly, returning OpExecuteBlockResult. Assembly matches OpScheduler's execute hook
+/// (OpScheduler.h:127-179) / OpDualPathEquivalenceTest route B (:1015-1034) (no copy drift).
 bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& view,
     bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxBytes)
 {
@@ -423,13 +433,15 @@ bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& vi
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSuite)
 
-/// 黄金约束：最小 OP 块（deposit + 1 normal 带 envelope）经 OpScheduler == 直调 route B。
+/// Golden constraint: minimal OP block (deposit + 1 normal with envelope) via OpScheduler == direct
+/// route B.
 BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
 {
     Fixture f;
 
-    // 信封：deposit 用 canonicalEnvelopeBytes 重建（0x7e || rlp([...8 字段])，OpTxDecode.h:307）；
-    // normal 用语料的真实 op-geth 签名 envelope。两者都经 decodeOneRawTx 的 canonical round-trip。
+    // Envelopes: deposit rebuilt via canonicalEnvelopeBytes (0x7e || rlp([...8 fields]),
+    // OpTxDecode.h:307); normal uses the corpus's real op-geth-signed envelope. Both pass through
+    // decodeOneRawTx's canonical round-trip.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = detail::canonicalEnvelopeBytes(bcos::evm::opstack::OpBlockTx{depTx, {}});
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
@@ -438,8 +450,9 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
 
     auto header = makeHeader();
 
-    // 直调锚：同一 MLS 上独立 route B（runOpBlockInjection），同一 header 环境。
-    // （route A executeOpBlock 已退役——双路径 harness 已证明 route B 与其语义等价。）
+    // Direct anchor: independent route B (runOpBlockInjection) on the same MLS, same header
+    // environment. (Route A executeOpBlock is retired — the dual-path harness proved route B
+    // semantically equivalent to it.)
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
     bcos::evm::engine::OpExecuteBlockResult resultA;
@@ -458,14 +471,14 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
         return;
     }
 
-    // 直调成功且两笔都执行。
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
     BOOST_CHECK_GT(resultA.gasUsed, 0);
 
-    // announced 头回填直调承诺（SYS_NUMBER_2_BLOCK_HEADER 未落——execute 路径不写头表，只对比）。
+    // Back-fill the announced header with the direct-call commitments (SYS_NUMBER_2_BLOCK_HEADER
+    // is not written — the execute path doesn't write the header table, only compares).
     fillAnnouncedHeader(header, resultA);
 
-    // 块装配：extraTransactionBytes = 完整信封（SEV-8）。
+    // Block assembly: extraTransactionBytes = full envelope (SEV-8).
     auto block = f.blockFactory->createBlock();
     block->setBlockHeader(header);
     auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
@@ -475,7 +488,7 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
     block->appendTransaction(depFiscoTx);
     block->appendTransaction(eipFiscoTx);
 
-    // OpScheduler 驱动。
+    // Drive via OpScheduler.
     bcos::Error::Ptr err;
     bcos::protocol::BlockHeader::Ptr executedHeader;
     bool sysBlock = false;
@@ -493,7 +506,7 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
     BOOST_REQUIRE(executedHeader != nullptr);
     BOOST_CHECK(!sysBlock);
 
-    // 六字段承诺 == 直调。
+    // Six-field commitments == direct call.
     BOOST_CHECK_EQUAL(executedHeader->stateRoot(), resultA.stateRoot);
     BOOST_CHECK_EQUAL(executedHeader->txsRoot(), resultA.txRoot);
     BOOST_CHECK_EQUAL(
@@ -514,7 +527,7 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
             executedHeader->requestsHash().value(), detail::toBcosH256(*resultA.seal.requestsHash));
     }
 
-    // receipts/status/gasUsed 逐笔 == 直调。
+    // Per-tx receipts/status/gasUsed == direct call.
     auto receipts = f.scheduler->lastExecutedReceipts();
     BOOST_REQUIRE_EQUAL(receipts.size(), resultA.receipts.size());
     for (std::size_t i = 0; i < receipts.size(); ++i)
@@ -527,37 +540,40 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
             std::string(resultA.receipts[i]->effectiveGasPrice()));
     }
 
-    // Task 6（P4 M3）黄金约束：executeBlock（骨架驱动，execute hook = runOpBlockInjection
-    // route B）的完整结果 == 直调 runOpBlockInjection（route B）——peekExecuteResult 暴露骨架
-    // m_results 里的原始结果。
+    // Task 6 (P4 M3) golden constraint: executeBlock's (skeleton-driven, execute hook =
+    // runOpBlockInjection route B) full result == direct runOpBlockInjection (route B) —
+    // peekExecuteResult exposes the raw result stashed in the skeleton's m_results.
     auto routeB = f.scheduler->peekExecuteResult();
     BOOST_REQUIRE_MESSAGE(routeB.has_value(), "executeBlock must stash an OpExecuteBlockResult");
     BOOST_CHECK_EQUAL(routeB->stateRoot, resultA.stateRoot);
     BOOST_CHECK_EQUAL(routeB->txRoot, resultA.txRoot);
     BOOST_CHECK_EQUAL(routeB->gasUsed, resultA.gasUsed);
-    // evmc::bytes32 / BloomFilter 无 operator<<，用 == / 字节比较（不可 BOOST_CHECK_EQUAL）。
+    // evmc::bytes32 / BloomFilter have no operator<<, so compare with == / byte-wise
+    // (BOOST_CHECK_EQUAL is unusable).
     BOOST_CHECK(routeB->seal.receiptsRoot == resultA.seal.receiptsRoot);
     BOOST_CHECK(std::equal(std::begin(routeB->seal.logsBloom.bytes),
         std::end(routeB->seal.logsBloom.bytes), std::begin(resultA.seal.logsBloom.bytes)));
     BOOST_CHECK(routeB->seal.withdrawalsRoot == resultA.seal.withdrawalsRoot);
     BOOST_CHECK_EQUAL(routeB->seal.requestsHash.has_value(), resultA.seal.requestsHash.has_value());
     if (routeB->seal.requestsHash.has_value() && resultA.seal.requestsHash.has_value())
-        BOOST_CHECK(*routeB->seal.requestsHash == *resultA.seal.requestsHash);  // evmc::bytes32 无
+        BOOST_CHECK(*routeB->seal.requestsHash == *resultA.seal.requestsHash);  // evmc::bytes32 has
+                                                                                // no
                                                                                 // <<
     BOOST_CHECK_EQUAL(routeB->seal.blobGasUsed.has_value(), resultA.seal.blobGasUsed.has_value());
     if (routeB->seal.blobGasUsed.has_value() && resultA.seal.blobGasUsed.has_value())
         BOOST_CHECK_EQUAL(*routeB->seal.blobGasUsed, *resultA.seal.blobGasUsed);
 }
 
-/// 接线 Task 5c 槽位 3 E2E（SEV-10）：OpScheduler executeBlock + commitBlock 后 7 张 SYS 表落盘
-/// （SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER / SYS_CURRENT_STATE /
-/// SYS_NUMBER_2_TXS / SYS_HASH_2_RECEIPT / SYS_HASH_2_TX）。取代被删 OpBlockScheduler 的
-/// RefuseStubs（OP 块执行/提交不再被拒绝 stub，而是真正经 OpScheduler 落盘）。
+/// Wires Task 5c slot-3 E2E (SEV-10): after OpScheduler executeBlock + commitBlock, 7 SYS tables
+/// are persisted (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
+/// SYS_CURRENT_STATE / SYS_NUMBER_2_TXS / SYS_HASH_2_RECEIPT / SYS_HASH_2_TX). Replaces the
+/// deleted OpBlockScheduler's RefuseStubs (OP block execution/commit is no longer a refused stub
+/// but is genuinely persisted via OpScheduler).
 BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 {
     Fixture f;
 
-    // 语料信封（同 ExecutesMinimalOpBlockEqualToDirectRouteB）：deposit + eip1559。
+    // Corpus envelopes (same as ExecutesMinimalOpBlockEqualToDirectRouteB): deposit + eip1559.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = detail::canonicalEnvelopeBytes(bcos::evm::opstack::OpBlockTx{depTx, {}});
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
@@ -566,8 +582,9 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 
     auto header = makeHeader();
 
-    // 直调 route B 得真实承诺，回填 announced 头（verify 六字段对比通过）。
-    // （route A executeOpBlock 已退役——双路径 harness 已证明 route B 与其语义等价。）
+    // Direct route B yields the real commitments; back-fill the announced header (so verify's
+    // six-field comparison passes). (Route A executeOpBlock is retired — the dual-path harness
+    // proved route B semantically equivalent to it.)
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
     bcos::evm::engine::OpExecuteBlockResult resultA =
@@ -575,7 +592,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, resultA);
 
-    // 块装配（SEV-8 完整信封）。
+    // Block assembly (SEV-8 full envelope).
     auto block = f.blockFactory->createBlock();
     block->setBlockHeader(header);
     auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
@@ -585,7 +602,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     block->appendTransaction(depFiscoTx);
     block->appendTransaction(eipFiscoTx);
 
-    // executeBlock → commitBlock（槽位 3 驱动）。
+    // executeBlock → commitBlock (slot-3 driving).
     bcos::Error::Ptr execErr;
     bcos::protocol::BlockHeader::Ptr executedHeader;
     bool called = false;
@@ -611,13 +628,13 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     BOOST_REQUIRE_MESSAGE(commitErr == nullptr,
         "commitBlock failed: " << (commitErr ? commitErr->errorMessage() : ""));
 
-    // ── 7 张表落盘断言 ──
+    // ── 7-table persistence assertions ──
     auto const blockNumberStr = boost::lexical_cast<std::string>(header->number());
     auto& hashImpl = *f.blockFactory->cryptoSuite()->hashImpl();
     auto view = f.multiLayerStorage.fork();
     const auto expectedBlockHash = header->opHeaderHash(bcos::engine::detail::opHeaderConst());
 
-    // 1. SYS_NUMBER_2_HASH[number] = blockHash（announced header opHeaderHash，commit hook key）。
+    // 1. SYS_NUMBER_2_HASH[number] = blockHash (announced header opHeaderHash, commit hook key).
     auto number2Hash = bcos::task::syncWait(
         bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr}));
     BOOST_REQUIRE_MESSAGE(number2Hash.has_value(), "SYS_NUMBER_2_HASH must be written");
@@ -629,32 +646,32 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
         BOOST_CHECK_EQUAL(bcos::toHex(stored), expectedBlockHash.hex());
     }
 
-    // 2. SYS_HASH_2_NUMBER[blockHash] = number。
+    // 2. SYS_HASH_2_NUMBER[blockHash] = number.
     auto hash2Number = bcos::task::syncWait(
         bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
                                           bcos::concepts::bytebuffer::toView(expectedBlockHash)}));
     BOOST_REQUIRE_MESSAGE(hash2Number.has_value(), "SYS_HASH_2_NUMBER must be written");
     BOOST_CHECK_EQUAL(std::string(hash2Number->get()), blockNumberStr);
 
-    // 3. SYS_NUMBER_2_BLOCK_HEADER[number] = tars header（非空）。
+    // 3. SYS_NUMBER_2_BLOCK_HEADER[number] = tars header (non-empty).
     auto headerEntry = bcos::task::syncWait(bcos::storage2::readOne(
         view, StateKey{bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}));
     BOOST_REQUIRE_MESSAGE(headerEntry.has_value(), "SYS_NUMBER_2_BLOCK_HEADER must be written");
     BOOST_CHECK(!headerEntry->get().empty());
 
-    // 4. SYS_CURRENT_STATE[SYS_KEY_CURRENT_NUMBER] = number（head 推进）。
+    // 4. SYS_CURRENT_STATE[SYS_KEY_CURRENT_NUMBER] = number (head advanced).
     auto currentState = bcos::task::syncWait(bcos::storage2::readOne(
         view, StateKey{bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER}));
     BOOST_REQUIRE_MESSAGE(currentState.has_value(), "SYS_CURRENT_STATE head must advance");
     BOOST_CHECK_EQUAL(std::string(currentState->get()), blockNumberStr);
 
-    // 5. SYS_NUMBER_2_TXS[number] = tx metadata（SEV-10 第 7 表）。
+    // 5. SYS_NUMBER_2_TXS[number] = tx metadata (SEV-10's 7th table).
     auto number2Txs = bcos::task::syncWait(
         bcos::storage2::readOne(view, StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr}));
     BOOST_REQUIRE_MESSAGE(number2Txs.has_value(), "SYS_NUMBER_2_TXS (SEV-10) must be written");
     BOOST_CHECK(!number2Txs->get().empty());
 
-    // 6/7. 每笔 tx 的 SYS_HASH_2_RECEIPT + SYS_HASH_2_TX。
+    // 6/7. SYS_HASH_2_RECEIPT + SYS_HASH_2_TX per tx.
     for (auto const& env : rawTxBytes)
     {
         const auto txHash = hashImpl.hash(env);
@@ -670,10 +687,11 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     }
 }
 
-// ── RPC 面用例迁移（Task 5c fix round 1，逐字来自被删 OpBlockSchedulerTest；驱动对象换成
-//    OpScheduler——f.scheduler 是 TestOpScheduler<OpScheduler>，call/getCode/status/reset 继承）──
+// ── RPC-face case migration (Task 5c fix round 1, verbatim from the deleted OpBlockSchedulerTest;
+//    driven object changed to OpScheduler — f.scheduler is TestOpScheduler<OpScheduler>;
+//    call/getCode/status/reset inherited) ──
 
-/// 骨架默认 no-op status/reset（OpBlockScheduler 同语义）。
+/// Skeleton defaults to no-op status/reset (same semantics as OpBlockScheduler).
 BOOST_AUTO_TEST_CASE(StatusAndResetNoOp)
 {
     Fixture f;
@@ -683,8 +701,8 @@ BOOST_AUTO_TEST_CASE(StatusAndResetNoOp)
     f.scheduler->reset([&](bcos::Error::Ptr err) { BOOST_REQUIRE(err == nullptr); });
 }
 
-/// 未知地址 → 空 code，无错误（getCode 只读 features，不走 getLedgerConfig，OP 头空 dataHash
-/// 不触碰 BlockHeader::hash()）。
+/// Unknown address → empty code, no error (getCode only reads features, never calls
+/// getLedgerConfig; the OP header's empty dataHash doesn't touch BlockHeader::hash()).
 BOOST_AUTO_TEST_CASE(GetCodeEmpty)
 {
     Fixture f;
@@ -699,8 +717,8 @@ BOOST_AUTO_TEST_CASE(GetCodeEmpty)
     BOOST_REQUIRE(called);
 }
 
-/// 无效调用（maxFeePerGas=1 < baseFee(1e9) trips evmone validate FEE_CAP_LESS_THAN_BLOCKS；未
-/// 资金 sender 亦 trip balance check）→ JSON-RPC Error，绝不 status-0 receipt。
+/// Invalid call (maxFeePerGas=1 < baseFee(1e9) trips evmone validate FEE_CAP_LESS_THAN_BLOCKS; an
+/// unfunded sender also trips the balance check) → JSON-RPC Error, never a status-0 receipt.
 BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
 {
     Fixture f;
@@ -710,16 +728,17 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
     f.scheduler->call(
         std::move(tx), [&](bcos::Error::Ptr err, bcos::protocol::TransactionReceipt::Ptr) {
             called = true;
-            BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC)，绝不 status-0 receipt
+            BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC), never a status-0 receipt
         });
     BOOST_REQUIRE(called);
 }
 
-/// 调度器级 call 链路（OpScheduler::call → coCallLatest → buildOpBlockInfo）的 baseFee 注入对拍
-/// （Task 5/dual-path #34）：maxPriorityFeePerGas=0（EIP-1559，BCOS2Evmone access_list override
-/// 不触发）→ effectiveGasPrice == base_fee + min(0, maxFee-base_fee) == base_fee 精确。pre-fix
-/// buildOpBlockInfo 注入 base_fee=0 → egp "0x0"；post-fix header baseFee(1e9) 透出——证明 Task 4
-/// buildOpBlockInfo baseFee 修复在调度器级 call 链路生效。
+/// Scheduler-level call-chain (OpScheduler::call → coCallLatest → buildOpBlockInfo) baseFee
+/// injection cross-check (Task 5/dual-path #34): maxPriorityFeePerGas=0 (EIP-1559, BCOS2Evmone
+/// access_list override not triggered) → effectiveGasPrice == base_fee + min(0, maxFee-base_fee) ==
+/// base_fee exactly. Pre-fix buildOpBlockInfo injected base_fee=0 → egp "0x0"; post-fix the header
+/// baseFee(1e9) shines through — proving Task 4's buildOpBlockInfo baseFee fix takes effect on the
+/// scheduler-level call chain.
 BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
 {
     Fixture f;
@@ -739,16 +758,17 @@ BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
     BOOST_REQUIRE_MESSAGE(
         err == nullptr, "eth_call must succeed, got error: " << (err ? err->errorMessage() : ""));
     BOOST_REQUIRE(got != nullptr);
-    // effectiveGasPrice 是 hex 字符串（"0x...", TransactionReceipt.h:75）。解析成 u256 并断言
-    // == header baseFee(1e9)——精确（EIP-1559 + maxPriority=0 → effectiveGasPrice == baseFee）。
+    // effectiveGasPrice is a hex string ("0x...", TransactionReceipt.h:75). Parse to u256 and
+    // assert
+    // == header baseFee(1e9) — exact (EIP-1559 + maxPriority=0 → effectiveGasPrice == baseFee).
     const auto egp = bcos::u256(std::string(got->effectiveGasPrice()));
     const auto baseFee = bcos::u256(1'000'000'000);
     BOOST_CHECK_MESSAGE(
         egp == baseFee, "effectiveGasPrice " << egp << " must equal header baseFee " << baseFee);
 }
 
-/// execute hook 抛 OpConsensusError（0x03 envelope 经 decodeOneRawTx 确定性抛）→ 骨架 classify →
-/// Error 码 == OpConsensusRejected。
+/// execute hook throws OpConsensusError (the 0x03 envelope is deterministically thrown by
+/// decodeOneRawTx) → skeleton classify → Error code == OpConsensusRejected.
 BOOST_AUTO_TEST_CASE(ConsensusRejectionClassifiedAsOpConsensusRejected)
 {
     Fixture f;
@@ -774,8 +794,8 @@ BOOST_AUTO_TEST_CASE(ConsensusRejectionClassifiedAsOpConsensusRejected)
     BOOST_CHECK(executedHeader == nullptr);
 }
 
-/// 三分类直调：OpConsensusError→OpConsensusRejected / OpStorageError→OpStorageFault /
-/// 其它→Unknown。
+/// Three-way classification direct call: OpConsensusError→OpConsensusRejected /
+/// OpStorageError→OpStorageFault / other→Unknown.
 BOOST_AUTO_TEST_CASE(ClassifyExceptionThreeWayMapping)
 {
     Fixture f;

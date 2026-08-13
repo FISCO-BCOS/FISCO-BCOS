@@ -161,7 +161,8 @@ struct OpE2eFixture
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     /// Wiring Task 5a/5b: the engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
     /// A second OpSchedulerImpl lives inside it (own evmc::VM) — the dual-instance pin
-    /// (design §4, "倾向共享，若不可行则明确双实例并存"); fork timestamps match the seam's.
+    /// (design §4, "share when possible, otherwise explicit dual instances"); fork timestamps
+    /// match the seam's.
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngineService service;
 

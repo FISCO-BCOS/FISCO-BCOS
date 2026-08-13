@@ -114,10 +114,10 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     BOOST_CHECK_EQUAL(commitments.txRoot, txRoot);
 }
 
-// 注：route A（executeOpBlock）已退役——空块拒绝测试随 route B（runOpBlockInjection）迁移至
-// OpBlockInjectorTest（EmptyBlockRejectedByInjector）。OpSchedulerImpl 现为纯引擎 seam，
-// 不再执行块，此处无对应执行用例。
-// C2 (W8 review): EIP-7702 authorization yParity is a uint8 in op-geth
+// Note: route A (executeOpBlock) is retired — the empty-block rejection test moved to route B
+// (runOpBlockInjection) in OpBlockInjectorTest (EmptyBlockRejectedByInjector). OpSchedulerImpl is
+// now a pure engine seam and no longer executes blocks, so there is no matching execution case
+// here. C2 (W8 review): EIP-7702 authorization yParity is a uint8 in op-geth
 // (core/types/tx_setcode.go:76). A wider RLP scalar — e.g. 0x82 0x01 0x00 (256) — overflows that
 // uint8 and must be rejected at decode time by readCanonicalScalar(in, 1, "authorization
 // yParity"). Without this width check the value-range guard (OpTransition.cpp:67, auth.v > 1)

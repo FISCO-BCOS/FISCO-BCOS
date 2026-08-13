@@ -2,24 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OpScheduler — OP 专用调度器（spec 2026-08-12-op-baseline-scheduler-wiring 接线 Task 4 + P4）。
-// 继承 SchedulerSkeleton（统一编排骨架），实现 OP 的 5 个 CRTP hook + 4 个纯虚
-// （call/getCode/getABI/getPendingStorageAt）+ classifyException；锁/连续性/背压/view/
-// 队列/notifier/流程全部继承，无重复。status/reset/preExecuteBlock 用骨架默认（v3 P1-7）。
+// OpScheduler — the OP-specific scheduler (spec 2026-08-12-op-baseline-scheduler-wiring,
+// wiring Task 4 + P4). Derives from SchedulerSkeleton (the shared orchestration skeleton),
+// implementing the OP's 5 CRTP hooks + 4 pure virtuals (call/getCode/getABI/getPendingStorageAt)
+// + classifyException; locks/continuity/backpressure/view/queues/notifier/flow are all inherited.
+// status/reset/preExecuteBlock use the skeleton defaults (v3 P1-7).
 //
-// 层：模板头（template<class MultiLayerStorage>）——真实 GlobalStateStorage 由 composition root
-// （Initializer）在槽位 3 装配时实例化；opstack-executor 不 link libinitializer，故不在此命名
-// GlobalStateStorage（与 OpBlockScheduler 的 `<ViewType, OpenedStorage>` 模板先例同构）。
+// Layering: a template header (template<class MultiLayerStorage>) — the real GlobalStateStorage is
+// instantiated by the composition root (Initializer) at slot 3; opstack-executor does not link
+// libinitializer, so GlobalStateStorage is not named here (homomorphic to OpBlockScheduler's
+// `<ViewType, OpenedStorage>` template precedent).
 //
-// 与引擎 seam 的关系：引擎 SchedulerType 仍为 OpSchedulerImpl（computeTxRoot/… 依赖名不变）；
-// 本类内部持有一个 OpSchedulerImpl 实例（m_schedulerImpl，构造即建 evmc::VM），execute hook 走
-// executeOpBlock（route A）。Task 6（P4 M3）换芯：execute hook 改走 runOpBlockInjection
-// （route B，OpBlockInjector.h:31，逐笔注入循环），route A 保留为注释对照的 fallback。
+// Engine seam: the engine's SchedulerType stays OpSchedulerImpl (computeTxRoot/… dependent names
+// unchanged); this class holds one OpSchedulerImpl instance (m_schedulerImpl, whose ctor builds an
+// evmc::VM). Task 6 (P4 M3) swapped the core: the execute hook now goes through
+// runOpBlockInjection (route B, OpBlockInjector.h:31, the per-tx injection loop); route A
+// (executeOpBlock) is kept as a comment-only fallback for comparison.
 //
-// EnvelopeToTarsConverter 由 composition root 注入（v4 P0-2：opstack-executor 不 link engine——
-// opEnvelopeToTars 在 engine lib；复用 Task 1 带的 using 别名 OpBlockRegister.h:24）。
+// EnvelopeToTarsConverter is injected by the composition root (v4 P0-2: opstack-executor does not
+// link engine — opEnvelopeToTars lives in the engine lib; reuses the using alias from Task 1,
+// OpBlockRegister.h:24).
 
-#include <opstack-executor/OpBlockInjector.h>  // runOpBlockInjection（route B，Task 6 P4 M3）
+#include <opstack-executor/OpBlockInjector.h>  // runOpBlockInjection (route B, Task 6 P4 M3)
 #include <opstack-executor/OpBlockRegister.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpstackExecutor.h>
@@ -90,11 +94,13 @@ class OpScheduler : public bcos::scheduler_v1::SchedulerSkeleton<MultiLayerStora
     };
 
 public:
-    // 5 CRTP hooks + 4 纯虚 + classify 置 public（CRTP 非虚分派：基类经 derived() 需访问派生
-    // 定义；与 BaselineScheduler 同，Task 3b 已定）。status/reset/preExecuteBlock 用骨架默认。
-    /// ① 交易来源：block.transactions() → Transaction::ConstPtr（跳过 txpool——OP 块内联交易）。
-    /// v3（SEV-8）：extraTransactionBytes 是 signing preimage——P3 块装配已覆写为完整信封，
-    /// execute hook 从它提取 raw envelope 供 executeOpBlock。
+    // 5 CRTP hooks + 4 pure virtuals + classify are public (CRTP non-virtual dispatch: the base
+    // reaches derived definitions via derived(); same as BaselineScheduler, decided in Task 3b).
+    // status/reset/preExecuteBlock use the skeleton defaults.
+    /// ① Transaction source: block.transactions() → Transaction::ConstPtr (skips the txpool — OP
+    /// blocks carry inline transactions). v3 (SEV-8): extraTransactionBytes is the signing
+    /// preimage — P3 block assembly overwrote it with the full envelope; the execute hook extracts
+    /// the raw envelope from it.
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
         protocol::Block& block, ViewType& /*view*/)
     {
@@ -103,19 +109,21 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    /// ② 执行内核：route B——runOpBlockInjection（逐笔注入循环，OpBlockInjector.h:31，Task 6
-    /// P4 M3 换芯）。装配：rawTxBytes = 各笔 extraTransactionBytes（P3 块装配已覆写完整信封，
-    /// SEV-8）；txs = detail::decodeOneRawTx(chainId)；normalTxs = EnvelopeToTarsConverter
-    /// （composition-root 注入的 lambda，经构造传入——转换结果须覆写 extraTransactionBytes =
-    /// 完整信封，opEnvelopeToTars 不设该字段，先例 EngineServiceImpl.h:1192 /
-    /// OpDualPathEquivalenceTest.cpp:566-568）；cfg = configAt(timestamp/1000, forkTimestamps)；
-    /// executor = 每块现构造的 OpstackExecutor（持一个 evmc::VM；删除分叉键缓存后恢复 SEV-9
-    /// 前接线）；ledgerConfig 只需 evmcRevision（injector 的 executeDeposit/executeTransaction/
-    /// finalizeBlock 校验它）。
-    /// route A（executeOpBlock，OpSchedulerImpl.h:202）保留为注释对照的 fallback——换芯前该
-    /// hook 即 `co_await m_schedulerImpl.executeOpBlock(view, header, rawTxBytes)`（m_schedulerImpl
-    /// 成员保留），如需回退恢复注释体即可。
-    /// → 包 SchedulerExecuteResult{receipts, modeExtra=OpExecuteExtra{result, rawTxBytes}}。
+    /// ② Execution kernel: route B — runOpBlockInjection (the per-tx injection loop,
+    /// OpBlockInjector.h:31, Task 6 P4 M3 core swap). Assembly: rawTxBytes = each tx's
+    /// extraTransactionBytes (P3 block assembly overwrote it with the full envelope, SEV-8);
+    /// txs = detail::decodeOneRawTx(chainId); normalTxs = EnvelopeToTarsConverter (a
+    /// composition-root-injected lambda, passed in the ctor — its result must overwrite
+    /// extraTransactionBytes with the full envelope, since opEnvelopeToTars does not set that
+    /// field; precedents EngineServiceImpl.h:1192 / OpDualPathEquivalenceTest.cpp:566-568);
+    /// cfg = configAt(timestamp/1000, forkTimestamps); executor = a per-block OpstackExecutor
+    /// (one evmc::VM; reverts to the pre-SEV-9 wiring after the cache removal); ledgerConfig only
+    /// needs evmcRevision (the injector's executeDeposit/executeTransaction/finalizeBlock validate
+    /// it).
+    /// Route A (executeOpBlock, OpSchedulerImpl.h:202) is kept as a comment-only fallback — before
+    /// the swap this hook was `co_await m_schedulerImpl.executeOpBlock(view, header, rawTxBytes)`
+    /// (m_schedulerImpl member retained); restore the commented body to revert.
+    /// → Produces SchedulerExecuteResult{receipts, modeExtra=OpExecuteExtra{result, rawTxBytes}}.
     task::Task<bcos::scheduler_v1::SchedulerExecuteResult> execute(ViewType& view,
         protocol::BlockHeader const& header,
         std::vector<protocol::Transaction::ConstPtr> const& transactions,
@@ -135,22 +143,25 @@ public:
         bcos::evm::engine::OpExecuteBlockResult result;
         try
         {
-            // cfg：forkTimestamps 解析（与 executeOpBlock 同源 configAt；tars 毫秒 → OP 秒）。
+            // cfg: forkTimestamps resolution (same configAt source as executeOpBlock; tars ms →
+            // OP s).
             const auto& cfg =
                 op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, m_forkTimestamps);
 
-            // txs：排序/解码（decodeOneRawTx 内部含 whole-envelope canonical round-trip，P4
-            // 兜底）。
+            // txs: sort/decode (decodeOneRawTx embeds the whole-envelope canonical round-trip,
+            // the P4 backstop).
             std::vector<op::OpBlockTx> txs;
             txs.reserve(rawTxBytes.size());
             for (auto const& raw : rawTxBytes)
                 txs.push_back(detail::decodeOneRawTx(raw, m_chainId));
 
-            // normalTxs：converter 逐笔（跳过 deposit、按块内序）——对齐 injector 的 normalIdx
-            // 仅非 deposit 分支 ++（OpBlockInjector.h:71）。转换成功与否决定 extraTransactionBytes
-            // 覆写（SEV-8 同上）。转换失败：到达执行的 envelope 已通过引擎 step-2 静态校验
-            // （canonical + enumerated），是本地故障——与 engine buildOpBlock 的
-            // OpExecutionInternalError 同语义（EngineServiceImpl.h:1186），非对块的裁决。
+            // normalTxs: converter per tx (skipping deposits, in block order) — aligned with the
+            // injector's normalIdx advancing only on the non-deposit branch (OpBlockInjector.h:71).
+            // Whether the conversion succeeds decides extraTransactionBytes overwrite (SEV-8
+            // above). A conversion failure: the envelope reaching execution already passed the
+            // engine's step-2 static validation (canonical + enumerated), so it is a local fault —
+            // the same semantics as the engine's buildOpBlock OpExecutionInternalError
+            // (EngineServiceImpl.h:1186), not a verdict on the block.
             std::vector<protocol::Transaction::Ptr> normalTxs;
             normalTxs.reserve(rawTxBytes.size());
             for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
@@ -173,7 +184,8 @@ public:
             bcos::ledger::LedgerConfig ledgerConfig;
             ledgerConfig.setEVMCRevision(cfg.rev);
 
-            // 每块现构造 executor（持一个 evmc::VM）——删除分叉键缓存后恢复 SEV-9 前接线。
+            // Construct the executor per block (one evmc::VM); reverts to the pre-SEV-9 wiring
+            // after the cache removal.
             OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
             result = bcos::evm::engine::runOpBlockInjection(executor, view, header, txs, normalTxs,
@@ -181,47 +193,51 @@ public:
         }
         catch (const bcos::evm::engine::OpConsensusError&)
         {
-            // FISCO 类型 typeinfo 稳定，可绑定——原样重抛，保留原始消息（describeException 在
-            // 骨架 catch(...) 兜底处恢复它）。不落到 catch(std::exception&)（-fno-rtti evmone
-            // 边界 std::exception typeinfo 非唯一，不可靠绑定）或 catch(...)（消息丢失）。
+            // FISCO types have stable typeinfo and bind reliably — rethrow as-is, preserving the
+            // original message (describeException restores it at the skeleton's catch(...)
+            // backstop). Do not fall to catch(std::exception&) (the -fno-rtti evmone boundary's
+            // std::exception typeinfo is non-unique, unreliable) or catch(...) (message lost).
             throw;
         }
         catch (const bcos::evm::engine::OpStorageError&)
         {
-            // 同上：storage 故障保留类型与消息——骨架 classifyException 正确映射
-            // OpStorageFault（-32603，非 INVALID）。
+            // Same: keep the type and message for storage faults — the skeleton's classifyException
+            // maps them to OpStorageFault (-32603, not INVALID).
             throw;
         }
         catch (const std::exception&)
         {
-            throw;  // 可绑定类型（logic_error 族 / 正常 typeinfo 的 runtime_error）→ 骨架
-                    // classify。
+            throw;  // Bindable families (logic_error / normally-typed runtime_error) → the skeleton
+                    // classifies.
         }
         catch (...)
         {
-            // RTTI 旁路（Storage2State.h:195-199 实测：runtime_error 子类逃 typed catch，落到
-            // catch(...)）——decodeOneRawTx 的 OpConsensusError 等以坏 typeinfo 逃出本 hook
-            // 会绕过骨架 coExecuteBlock 的 catch(std::exception&)（实测：直接抛到测试）。
-            // 归一为 FISCO 类型（consensus——storage 故障已被 runOpBlockInjection 的
-            // poison-first 归为 OpStorageError 抛在可绑定路径），保证 classifyException 收到
-            // 可 catch 类型。
+            // RTTI bypass (measured in Storage2State.h:195-199: runtime_error subclasses escape
+            // the typed catch into catch(...)) — decodeOneRawTx's OpConsensusError etc. escape
+            // this hook with a broken typeinfo and would bypass the skeleton coExecuteBlock's
+            // catch(std::exception&) (measured: thrown straight to the test). Normalize to a FISCO
+            // type (consensus — storage faults were already normalized to OpStorageError on the
+            // bindable path by runOpBlockInjection's poison-first classification) so
+            // classifyException receives a catchable type.
             throw bcos::evm::engine::OpConsensusError(
                 "OpScheduler: runOpBlockInjection threw an unrecognized (RTTI-bypassed) exception; "
                 "raw tx decode or block-level consensus fault");
         }
 
         bcos::scheduler_v1::SchedulerExecuteResult out;
-        // 拷贝（shared_ptr vector，廉价）而非 move：`SchedulerExecuteResult.receipts`（骨架
-        // pushResult / 回调面）与 `OpExecuteExtra.result.receipts`（commit hook 的
-        // opstackRegisterBlock 校验 rawTxBytes.size() !=
-        // result.receipts.size()，OpBlockRegister.h:113）都要持有完整 receipts。
+        // Copy (cheap shared_ptr vector) rather than move: both `SchedulerExecuteResult.receipts`
+        // (the skeleton's pushResult / callback surface) and `OpExecuteExtra.result.receipts` (the
+        // commit hook's opstackRegisterBlock checks rawTxBytes.size() != result.receipts.size(),
+        // OpBlockRegister.h:113) must hold the full receipts.
         out.receipts = result.receipts;
-        // OP 无 txpool 提交——置非空空表，避免骨架 coCommitBlock 的 notifyBlockNumber 对
-        // `*result->m_transactions` 空指针解引用（SchedulerSkeleton.h:355）。空表使 tx-submit zip
-        // 空循环，blockNumber/transaction notifier 仍正常走。
+        // No txpool submission on the OP path — set a non-empty empty table so the skeleton
+        // coCommitBlock's notifyBlockNumber does not dereference the null `*result->m_transactions`
+        // (SchedulerSkeleton.h:355). The empty table makes the tx-submit zip a no-op loop while the
+        // blockNumber/transaction notifiers still run.
         out.m_transactions = std::make_shared<protocol::ConstTransactions>();
-        // announcedBlockHash: 权威块 hash（announced header 的 opHeaderHash，引擎 step 2 已校验）
-        // 存进 extra——commit hook 用它 key 表，不在 executed header 上重算（其可选字段不全）。
+        // announcedBlockHash: the authoritative block hash (the announced header's opHeaderHash,
+        // validated by engine step 2), stashed so the commit hook keys the tables with it instead
+        // of recomputing on the executed header (whose optional fields are incomplete).
         out.modeExtra = std::make_shared<OpExecuteExtra>(
             OpExecuteExtra{std::move(result), std::move(rawTxBytes),
                 header.opHeaderHash(
@@ -231,16 +247,21 @@ public:
         co_return out;
     }
 
-    /// 覆写骨架 fastPathHit（I-2 硬契约守卫）。骨架 base 只按块号命中（SchedulerSkeleton.h）；
-    /// OP 链上块号不能唯一标识块——若上一块 execute 成功但 commit 失败（opstackRegisterBlock /
-    /// mergeBackStorage 抛），result 滞留 m_results、view 滞留层栈，而 SYS_HASH_2_NUMBER /
-    /// SYS_NUMBER_2_HASH 均未写（引擎 step 3b/3c 都拦不住该同高度重送）。此时 op-node 若送同
-    /// 高度另一块，base 会命中旧块 executedHeader、跳过新块执行 + verify，commit 写旧块状态却
-    /// 报新载荷 VALID —— 链上状态与 op-node 分叉。本覆写在命中时追加比对：缓存块（execute hook
-    /// 存的 OpExecuteExtra::announcedBlockHash）必须等于入块 announced header 的 opHeaderHash，
-    /// 不符返回无命中（强制重执行）。范围匹配逻辑与 base 逐字一致，在单锁内完成（消除
-    /// base-hit 与校验间的 TOCTOU）。返回无命中后骨架 fallthrough 到连续性复查，拒绝该高度的
-    /// 重复块（-32603，诚实拒绝而非假 VALID）。
+    /// Override of the skeleton's fastPathHit (I-2 hard-contract guard). The base only matches on
+    /// block number (SchedulerSkeleton.h); on an OP chain a number does not uniquely identify a
+    /// block — if the previous block executed but commit failed (opstackRegisterBlock /
+    /// mergeBackStorage threw), the result stays in m_results, the view stays on the layer stack,
+    /// and SYS_HASH_2_NUMBER / SYS_NUMBER_2_HASH are unwritten (neither engine step 3b nor 3c stops
+    /// the same-height resend). If op-node then sends a different block at that height, the base
+    /// would hit the stale block's executedHeader, skip the new block's execution + verify, commit
+    /// the old block's state yet report the new payload VALID — forking the chain from op-node.
+    /// This override adds a comparison on a hit: the cached block
+    /// (OpExecuteExtra::announcedBlockHash stashed by the execute hook) must equal the incoming
+    /// announced header's opHeaderHash, else report no hit (forcing re-execution). Range-matching
+    /// logic is verbatim the base's, done under a single lock (eliminating the TOCTOU between
+    /// base-hit and the check). On no-hit the skeleton falls through to the continuity recheck and
+    /// rejects the same-height duplicate
+    /// (-32603 — an honest rejection, not a false VALID).
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
         protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
     {
@@ -274,9 +295,11 @@ public:
         return std::nullopt;
     }
 
-    /// ③ finish：OP 承诺写 executedHeader（setStateRoot/TxsRoot/ReceiptsRoot/GasUsed/LogsBloom/
-    /// WithdrawalsRoot/RequestsHash/BlobGasUsed；跳过 MPT；不调 BlockHeader::hash()）。
-    /// （v3 A8：新建机制——当前 OP 无"计算值回写头"代码，头由 payload announced 重建 + 对比验证。）
+    /// ③ finish: write the OP commitments into the executedHeader (setStateRoot/TxsRoot/
+    /// ReceiptsRoot/GasUsed/LogsBloom/WithdrawalsRoot/RequestsHash/BlobGasUsed; skip MPT; never
+    /// call BlockHeader::hash()). (v3 A8: a new mechanism — OP has no "write computed values back
+    /// to the header" code; the header is rebuilt from the announced payload +
+    /// comparison-verified.)
     task::Task<protocol::BlockHeader::Ptr> finishExecute(ViewType& /*view*/,
         bcos::scheduler_v1::SchedulerExecuteResult& result,
         protocol::BlockHeader const& blockHeader, protocol::Block& /*block*/,
@@ -305,9 +328,9 @@ public:
         co_return executedBlockHeader;
     }
 
-    /// ④ verify：六字段对比（mismatchedFieldOf，Task 1 seam，无条件——verify 门控在 hook 内，
-    /// OP 恒比较）；mismatch 抛 OpConsensusError(mismatchedField)，经骨架 classify →
-    /// OpConsensusRejected。返回 null = 通过。
+    /// ④ verify: six-way comparison (mismatchedFieldOf, Task 1 seam; unconditional — the verify
+    /// gate lives in the hook, OP always compares); a mismatch throws OpConsensusError(
+    /// mismatchedField), classified by the skeleton → OpConsensusRejected. Returns null = pass.
     task::Task<Error::Ptr> verifyResult(protocol::BlockHeader::Ptr executed,
         protocol::BlockHeader const& announced, bool /*verify*/)
     {
@@ -321,16 +344,18 @@ public:
         co_return nullptr;
     }
 
-    /// ⑤ commit：opstackRegisterBlock（Task 1 机制）写独立 MutableStorage → 返回之
-    /// （骨架唯一一次 mergeBackStorage，FIB-104）。blockHash 用 execute hook 存的
-    /// extra.announcedBlockHash（announced header 的 opHeaderHash，引擎 step 2 已校验）——
-    /// 不在 executed header 上重算（finishExecute 只填承诺字段，可选头字段不全会抛
-    /// bad_optional_access，Task 5b 发现）。**注册的头是 announced header
-    /// （result.m_block->blockHeader()），不是 executed header**——finishExecute 只填承诺字段，
-    /// executed 头的 tars encode 不全（缺 coinbase/gasLimit/baseFee/prevRandao/excessBlobGas/
-    /// parentBeaconBlockRoot/...）；子块的 step 3a parent-header 读会经 createBlockHeader 重解析
-    /// 该头，不全的头触发 dataHash 重算抛异常（Task 5b wiring 发现）。OP 头 hash 在 codec，
-    /// 不调 BlockHeader::hash()（A8）。
+    /// ⑤ commit: opstackRegisterBlock (Task 1 mechanism) writes a standalone MutableStorage and
+    /// returns it (the skeleton's only mergeBackStorage, FIB-104). blockHash uses the execute
+    /// hook's extra.announcedBlockHash (the announced header's opHeaderHash, validated by engine
+    /// step 2) — not recomputed on the executed header (finishExecute fills only the commitment
+    /// fields; an incomplete optional would throw bad_optional_access, found in Task 5b).
+    /// **The registered header is the announced one (result.m_block->blockHeader()), NOT the
+    /// executed header** — finishExecute fills only commitments, so the executed header's tars
+    /// encode is incomplete (missing coinbase/gasLimit/baseFee/prevRandao/excessBlobGas/
+    /// parentBeaconBlockRoot/...); a child block's step-3a parent-header read re-parses it via
+    /// createBlockHeader, and the incomplete header would trigger a dataHash-recompute throw
+    /// (Task 5b wiring finding). The OP header hash lives in the codec; BlockHeader::hash() is
+    /// never called (A8).
     task::Task<std::shared_ptr<typename MultiLayerStorage::MutableStorage>> commit(
         ViewType& /*view*/, protocol::BlockHeader::Ptr /*header*/,
         bcos::scheduler_v1::SchedulerExecuteResult const& result)
@@ -350,10 +375,11 @@ public:
         co_return storage;
     }
 
-    /// 测试观察面（Task 6 P1-8 harness 手术）：dual-path harness 经 executeBlock 驱动 execute
-    /// hook 后需要拿回 OpExecuteBlockResult 做 A-vs-B 对比。返回最新 pending 结果里的原始执行
-    /// 结果（骨架 pushResult 后 m_results.front() 即最新块）。生产路径不消费——commit hook 走
-    /// result.modeExtra 的 OpExecuteExtra（字段更全，含 announcedBlockHash/rawTxBytes）。
+    /// Test observation surface (Task 6 P1-8 harness surgery): the dual-path harness drives the
+    /// execute hook via executeBlock and needs the OpExecuteBlockResult back for the A-vs-B
+    /// comparison. Returns the raw execution result of the latest pending block (after the
+    /// skeleton's pushResult, m_results.front() is the newest). Not consumed by production — the
+    /// commit hook uses result.modeExtra's OpExecuteExtra (richer: announcedBlockHash/rawTxBytes).
     std::optional<bcos::evm::engine::OpExecuteBlockResult> peekExecuteResult()
     {
         std::unique_lock<std::mutex> lock(this->m_resultsMutex);
@@ -363,10 +389,12 @@ public:
         return extra.result;
     }
 
-    // ---- 纯虚：call / 存储读（v3 B3：骨架不实现，派生各实现） ----
+    // ---- Pure virtuals: call / storage reads (v3 B3: the skeleton does not implement these;
+    // ---- each derived class does)
 
-    /// eth_call：复刻 OpBlockScheduler::call（coCallLatest，10 参注入 + 手搓 LedgerConfig +
-    /// 双 catch + RTTI-bypass）。错误经回调返回 JSON-RPC Error，绝不 status-0 receipt。
+    /// eth_call: replicates OpBlockScheduler::call (coCallLatest, 10-param injection + a
+    /// hand-built LedgerConfig + double catch + RTTI-bypass). Errors go back via the callback as a
+    /// JSON-RPC Error, never a status-0 receipt.
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
@@ -383,9 +411,10 @@ public:
             }
             catch (...)
             {
-                // Typed-catch RTTI bypass（同 OpBlockScheduler.h:104-118 注释）：-fno-rtti 的
-                // libevmone.a 带隐藏 typeinfo，catch(const std::exception&) 不可靠绑定
-                // runtime_error——兜底返回 Error，不悬挂 RPC 协程。
+                // Typed-catch RTTI bypass (same as the OpBlockScheduler.h:104-118 note): the
+                // -fno-rtti libevmone.a carries hidden typeinfo, so catch(const std::exception&)
+                // does not reliably bind runtime_error — fall back to returning an Error rather
+                // than dangling the RPC coroutine.
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
                        "OpScheduler::call: unknown (RTTI-bypassed) exception"),
                     nullptr);
@@ -393,8 +422,8 @@ public:
         }());
     }
 
-    /// getCode：存储读走 readFromStorage 模式（不走 getLedgerConfig——header.hash() 对 OP 头抛
-    /// EmptyBlockHeaderHash）。
+    /// getCode: storage read via the readFromStorage pattern (not getLedgerConfig — header.hash()
+    /// throws EmptyBlockHeaderHash for OP headers).
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
@@ -469,9 +498,10 @@ public:
         co_return co_await account.storageEntry(key);
     }
 
-    // A3：异常分类——OpConsensusError→OpConsensusRejected / OpStorageError→OpStorageFault /
-    // 其它→UnknownError。类型识别 rethrow + catch（前置：executeOpBlock 内已归一为 FISCO 类型，
-    // 跨 -fno-rtti evmone 边界的 RTTI 陷阱由 executeOpBlock 的 catch(...) 兜底处理，v3 P1-6）。
+    // A3: exception classification — OpConsensusError→OpConsensusRejected /
+    // OpStorageError→OpStorageFault / other→UnknownError. Type recognition via rethrow + catch
+    // (precondition: executeOpBlock already normalized to FISCO types; the RTTI trap across the
+    // -fno-rtti evmone boundary is handled by executeOpBlock's catch(...) backstop, v3 P1-6).
     scheduler::SchedulerError classifyException(std::exception_ptr eptr) const override
     {
         try
@@ -492,11 +522,13 @@ public:
         }
     }
 
-    /// 骨架 catch(...) 兜底处的错误消息恢复（wiring Task 5b）：rethrow + typed catch——FISCO
-    /// 类型 typeinfo 稳定，可靠绑定并取 what()（catch(std::exception&) 在 -fno-rtti evmone 边界
-    /// 不可靠绑定，原消息会丢）。六字段 mismatch（verifyResult 抛的 OpConsensusError）与
-    /// executeOpBlock 的 consensus/storage 拒绝消息都经此恢复，供引擎 barrier 生成带明细的
-    /// validationError（-fno-rtti 边界问题详述见 SchedulerSkeleton.h describeException 注释）。
+    /// Error-message recovery at the skeleton's catch(...) backstop (wiring Task 5b): rethrow +
+    /// typed catch — FISCO types have stable typeinfo, so they bind reliably and yield what()
+    /// (catch(std::exception&) cannot reliably bind across the -fno-rtti evmone boundary and the
+    /// original message would be lost). Both the six-way mismatch (verifyResult's OpConsensusError)
+    /// and executeOpBlock's consensus/storage rejection messages are recovered here so the engine
+    /// barrier can emit a detailed validationError (the -fno-rtti issue is detailed in
+    /// SchedulerSkeleton.h's describeException comment).
     std::string describeException(std::exception_ptr eptr) const override
     {
         try
@@ -532,12 +564,14 @@ public:
     {
         this->m_multiLayerStorage = &multiLayerStorage;
         this->m_blockFactory = blockFactory.get();
-        // v3（M4 尾部）：OP commit 的 notifyBlockNumber 走骨架（m_asyncGroup），OP 无 RPC
-        // 推送需求——默认注册 no-op notifier，composition root（Initializer）可经
-        // setBlockNumberNotifier/setTransactionNotifier 覆盖。缺省为空 std::function 调用会抛
-        // std::bad_function_call（异步任务内 → dtor 的 m_asyncGroup.wait() 重抛 → terminate）。
-        // OP 的 m_transactions 恒为非空空表，tx-submit zip 空循环，m_transactionSubmitResultFactory
-        // 为 null 也安全（createTxSubmitResult 从不被调）。
+        // v3 (end of M4): OP commit's notifyBlockNumber goes through the skeleton (m_asyncGroup);
+        // OP has no RPC push needs — register no-op notifiers by default, overridable by the
+        // composition root (Initializer) via setBlockNumberNotifier/setTransactionNotifier. A
+        // default-empty std::function would throw std::bad_function_call (inside an async task →
+        // rethrown by the dtor's m_asyncGroup.wait() → terminate). OP's m_transactions is always a
+        // non-empty empty table so the tx-submit zip is a no-op loop;
+        // m_transactionSubmitResultFactory being null is also safe (createTxSubmitResult is never
+        // called).
         this->m_blockNumberNotifier = [](bcos::protocol::BlockNumber) {};
         this->m_transactionNotifier =
             [](bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
@@ -548,11 +582,12 @@ public:
     ~OpScheduler() noexcept override = default;
 
 public:
-    /// OP 路径不能走骨架默认的 getLedgerConfig（LedgerMethods.h:347 调 header.hash()，OP 头
-    /// dataHash 为空抛 EmptyBlockHeaderHash）——手搓 LedgerConfig（features only；execute hook 的
-    /// executeOpBlock 不经 LedgerConfig——它吃 header + fork schedule）。
-    /// 置 public：骨架 coExecuteBlock 经 derived()（CRTP）访问派生定义，protected 会触发访问错误
-    /// （与 5 hook 同因，Task 3b）。
+    /// The OP path cannot use the skeleton's default getLedgerConfig (LedgerMethods.h:347 calls
+    /// header.hash(), which throws EmptyBlockHeaderHash for an OP header with empty dataHash) —
+    /// build the LedgerConfig by hand (features only; the execute hook's executeOpBlock does not
+    /// go through LedgerConfig — it consumes the header + fork schedule).
+    /// Public: the skeleton's coExecuteBlock reaches derived definitions via derived() (CRTP);
+    /// protected would trigger an access error (same reason as the 5 hooks, Task 3b).
     task::Task<ledger::LedgerConfig::Ptr> loadLedgerConfig(
         ViewType& view, protocol::BlockNumber number)
     {
@@ -564,8 +599,9 @@ public:
         co_return ledgerConfig;
     }
 
-    /// 同上：骨架默认经 header->hash() + getLedgerConfig(*m_ledger)——OP commit 路径不经
-    /// header.hash()（M4）。置 public 同 loadLedgerConfig（coCommitBlock 经 derived() 访问）。
+    /// Same: the skeleton default goes through header->hash() + getLedgerConfig(*m_ledger) — the
+    /// OP commit path never calls header.hash() (M4). Public for the same reason as
+    /// loadLedgerConfig (coCommitBlock reaches it via derived()).
     task::Task<ledger::LedgerConfig::Ptr> loadCommitLedgerConfig(protocol::BlockHeader::Ptr header)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
@@ -574,14 +610,16 @@ public:
         co_return ledgerConfig;
     }
 
-    /// commit 连续性（v3 P1-6 头推进守卫）：opstackRegisterBlock 写 SYS_CURRENT_STATE 是无条件写
-    /// （MAIN OpBlockRegister.h:75-80）——引擎原有守卫写（blockNumber >
-    /// currentHead，EngineServiceImpl 内联路径）搬到 OpScheduler commit 后由本 override
-    /// 承载，单调守卫语义保留（拒绝已提交 / 断连提交）。骨架 base 版读
-    /// *m_ledger（getCurrentBlockNumber(*m_ledger)），OP composition root 不 wire
-    /// LedgerInterface——这里改读 storage view（getCurrentBlockNumber(view, fromStorage)， 与引擎
-    /// step 3 同源）。置 public 同 loadCommitLedgerConfig（coCommitBlock 经 derived() 访问）。
-    /// isSysContractDeploy 特例保留（block 0 系统合约部署块，PrecompiledTypeDef.h:31）。
+    /// Commit continuity (v3 P1-6 head-advance guard): opstackRegisterBlock's write of
+    /// SYS_CURRENT_STATE is unconditional (MAIN OpBlockRegister.h:75-80) — the engine's original
+    /// guarded write (blockNumber > currentHead, EngineServiceImpl inline path) moved to
+    /// OpScheduler's commit and is carried by this override, preserving the monotonic-guard
+    /// semantics (rejecting already-committed / discontinuous commits). The skeleton base reads
+    /// *m_ledger (getCurrentBlockNumber(*m_ledger)); the OP composition root does not wire
+    /// LedgerInterface — here the guard reads the storage view instead (getCurrentBlockNumber(view,
+    /// fromStorage), the same source as engine step 3). Public for the same reason as
+    /// loadCommitLedgerConfig (coCommitBlock reaches it via derived()). The isSysContractDeploy
+    /// special case is retained (block-0 system-contract deployment, PrecompiledTypeDef.h:31).
     task::Task<bool> commitContinuityCheck(protocol::BlockNumber number)
     {
         if (!isSysContractDeploy(number))
@@ -635,7 +673,7 @@ private:
         };
     }
 
-    /// Strict hex-address parse for getCode/getABI（同 OpBlockScheduler::parseAddress）。
+    /// Strict hex-address parse for getCode/getABI (same as OpBlockScheduler::parseAddress).
     static evmc_address parseAddress(std::string_view view)
     {
         evmc_address out{};
@@ -647,10 +685,11 @@ private:
         return out;
     }
 
-    /// OP eth_call：fork 最新已提交 state，建真实 OP block context（手搓 LedgerConfig，非
-    /// getLedgerConfig），load L1Block fee 参数，跑 OpstackExecutor::executeTransaction
-    /// （注入 chainId/blockGasLeft/block hashes），丢 fork（dry-run）。复刻 OpBlockScheduler::
-    /// coCallLatest（OpBlockScheduler.h:259-306）。
+    /// OP eth_call: fork the latest committed state, build a real OP block context (hand-built
+    /// LedgerConfig, not getLedgerConfig), load the L1Block fee params, run
+    /// OpstackExecutor::executeTransaction (injecting chainId/blockGasLeft/block hashes), then
+    /// discard the fork (dry-run). Replicates OpBlockScheduler::coCallLatest
+    /// (OpBlockScheduler.h:259-306).
     task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
         protocol::Transaction::Ptr transaction)
     {
@@ -664,7 +703,8 @@ private:
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
         auto block = co_await bcos::ledger::getBlockData(
             view, blockNumber, bcos::ledger::HEADER, *this->m_blockFactory);
-        // 保持 header Ptr 存活：blockHeader() 按值返回 fresh shared_ptr，引用会悬空。
+        // Keep the header Ptr alive: blockHeader() returns a fresh shared_ptr BY VALUE; binding a
+        // reference to it would dangle a temporary.
         auto blockHeader = block->blockHeader();
         auto const& header = *blockHeader;
 
@@ -688,8 +728,8 @@ private:
         detail::RecentBlockHashes<ViewType> hashes(
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
-        // 每调现构造 executor（持一个 evmc::VM）——删除分叉键缓存后恢复 OpBlockScheduler.h:298
-        // 先例的接线形态。
+        // Construct the executor per call (one evmc::VM) — reverts to the pre-cache wiring of the
+        // OpBlockScheduler.h:298 precedent.
         OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
         auto receipt = co_await executor.executeTransaction(view, header, *transaction,
@@ -700,8 +740,9 @@ private:
         co_return receipt;
     }
 
-    // 3 post-merge OP header constants（EngineServiceImpl.cpp:81-83 同值，供 commit 的
-    // opHeaderHash 用——引擎经 detail::opHeaderConst() 注入，opstack-executor 不 link engine）。
+    // 3 post-merge OP header constants (same values as EngineServiceImpl.cpp:81-83, used by the
+    // commit's opHeaderHash — the engine injects them via detail::opHeaderConst(); opstack-executor
+    // does not link engine).
     static const bcos::h256 c_emptyOmmersHash;
     static const bcos::h64 c_posNonce;
 

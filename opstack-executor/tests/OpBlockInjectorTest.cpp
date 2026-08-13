@@ -214,9 +214,10 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     BOOST_CHECK_GT(manual, 0);  // both txs actually consumed gas
 }
 
-/// 空块拒绝（route A executeOpBlock 退役后，空块拒绝语义随 route B 迁到注入器）：
-/// runOpBlockInjection 空 txs → OpConsensusError（std::runtime_error 子类）。原 OpSchedulerImpl
-/// SmokeTest::EmptyBlockRejected 覆盖 executeOpBlock 的同一分类——此处为 route B 等价覆盖。
+/// Empty-block rejection (after route A executeOpBlock retired, the empty-block rejection moved to
+/// the injector with route B): runOpBlockInjection with empty txs → OpConsensusError (a
+/// std::runtime_error subclass). The former OpSchedulerImpl SmokeTest::EmptyBlockRejected covered
+/// the same classification for executeOpBlock — this is the route-B equivalent.
 BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByInjector)
 {
     namespace op = bcos::evm::opstack;
@@ -236,7 +237,7 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByInjector)
     bcos::ledger::LedgerConfig ledgerConfig;
     ledgerConfig.setEVMCRevision(cfg.rev);
 
-    // 空 txs → "op block: missing L1 attributes deposit (empty block)" → OpConsensusError。
+    // Empty txs → "op block: missing L1 attributes deposit (empty block)" → OpConsensusError.
     std::vector<op::OpBlockTx> txs;
     std::vector<bcos::protocol::Transaction::Ptr> normalTxs;
     std::vector<bcos::bytes> rawTxBytes;

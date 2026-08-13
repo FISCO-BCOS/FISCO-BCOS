@@ -1,39 +1,46 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpDualPathEquivalenceTest.cpp — OP 双路径执行等价性 harness（plan v3 Task 5，P1 红阶段；
-// Task 6 P1-8 手术：route A 改走 OpScheduler.executeBlock）。
+// OpDualPathEquivalenceTest.cpp — OP dual-path execution equivalence harness (plan v3 Task 5,
+// P1 red phase; Task 6 P1-8 surgery: route A moved to OpScheduler.executeBlock).
 //
-// 路线 A（Task 6 起为 `OpScheduler.executeBlock`——骨架驱动 execute hook = route B，view 生命周期
-// 归骨架）vs 路线 B（`runOpBlockInjection` 直调，逐笔注入循环，OpstackExecutor 注入式入口）在
-// t8n/vectors 语料上逐块双 fork（viewA=骨架 push 进 MLS 的 executed view，viewB=独立 fork）对比：
-//   - hard（mechanics，任何分叉即 BOOST_ERROR）：gasUsed / txRoot / receipt 数 / 每笔 status /
-//     gasUsed / cumulativeGasUsed / effectiveGasPrice / logsCount / log
-//     内容（topics/data/address）。
-//   - soft（ALLOWLIST 驱动）：stateRoot / seal 五字段 / 每笔 output / _op_*（从 opStackMeta()
-//     集合驱动，不硬编码数量）。沿 `t8n/vectors/DIVERGENCES.md` ALLOWLIST 范式
-//     （OpT8nReplayTest.cpp:266-328 DivergenceLedger），本 harness 条目 entryId 用
-//     `FINDING-dual-*` 前缀（与既有 6 条 contract_create 条目并存不冲突）。
-//   - deposit_basefee×2 绿守卫：三方一致（A==B==golden），不列 ALLOWLIST。
-//   - golden 三方（path A.stateRoot == 向量 `_op_expected.header.stateRoot`）P3 翻硬但带作用域
-//     （G1，第四轮裁定）：isthmus/jovian 非 contract_create 向量 mismatch 即 BOOST_CHECK 硬失败
-//     （防「两路径一起错」）；pre-isthmus（golden fork 不匹配是预期产物）与 contract_create
-//     （OpT8nReplay 域已知 route-A-vs-golden 分歧）保持软 REPORT。
+// Route A (from Task 6 onward: `OpScheduler.executeBlock` — skeleton drives the execute hook =
+// route B, view lifecycle owned by the skeleton) vs route B (`runOpBlockInjection` direct call,
+// per-tx injection loop, OpstackExecutor injectable entry) compared per-block under a dual fork on
+// the t8n/vectors corpus (viewA = executed view the skeleton pushed into MLS, viewB = independent
+// fork):
+//   - hard (mechanics; any divergence is BOOST_ERROR): gasUsed / txRoot / receipt count / per-tx
+//     status / gasUsed / cumulativeGasUsed / effectiveGasPrice / logsCount / log content
+//     (topics/data/address).
+//   - soft (ALLOWLIST-driven): stateRoot / seal five fields / per-tx output / _op_* (driven by
+//     the opStackMeta() set, no hardcoded count). Following the `t8n/vectors/DIVERGENCES.md`
+//     ALLOWLIST pattern (OpT8nReplayTest.cpp:266-328 DivergenceLedger), this harness uses the
+//     `FINDING-dual-*` entryId prefix (coexists without conflict with the existing 6
+//     contract_create entries).
+//   - deposit_basefee×2 green guard: three-way consistent (A==B==golden), not listed in ALLOWLIST.
+//   - golden three-way (path A.stateRoot == vector `_op_expected.header.stateRoot`) hardened in P3
+//     but scoped (G1, round 4 ruling): for isthmus/jovian non-contract_create vectors, mismatch is
+//     a hard BOOST_CHECK failure (guards against "both paths wrong together"); pre-isthmus (golden
+//     fork mismatch is expected output) and contract_create (known route-A-vs-golden divergence in
+//     the OpT8nReplay domain) stay soft REPORT.
 //
-// fork 模型：`forkTimestampsFor(bool jovian)` + `configAt`（isthmus/jovian）。语料中
-// ecotone/fjord/granite 向量按 isthmus 语义双路径一致执行（两路径同 cfg → A-vs-B 仍有效；
-// golden 三方因 fork 不匹配 REPORT mismatch，软——pre-isthmus 在 golden-hard 作用域外）。
+// Fork model: `forkTimestampsFor(bool jovian)` + `configAt` (isthmus/jovian). In the corpus,
+// ecotone/fjord/granite vectors execute consistently on both paths under isthmus semantics (both
+// paths share the same cfg → A-vs-B still valid; golden three-way REPORTs mismatch due to fork
+// mismatch, soft — pre-isthmus is outside the golden-hard scope).
 //
-// 第三轮 P2 fork 平价：路径 B 显式算 cfg = configAt(timestamp/1000, forkTimestampsFor(jovian))
-// 传给 runOpBlockInjection 第 6 参，并断言与路径 A scheduler 内部 configAt 解析同源。
-// 第三轮 P3 normalTxs 对齐：normalTxs[k] = 第 k 个非 deposit 交易（跳过 deposit、按块内序），
-// 对齐注入器 normalIdx 仅非 deposit 分支 ++。
-// 审查 I-1 异常捕获：逐向量 catch 用 catch(std::exception)/catch(...)（路径 B 的
-// OpTxValidationFailed 是 bcos::Exception 非 runtime_error；且 libevmone -fno-rtti 使 typed
-// catch 不可靠）——catch → BOOST_ERROR + 继续，不因异常类型差异判 divergence。
-// 第三轮 P4：has_storage 扫描（同块 create 提前 triage，先扫不预先修）+ /sys tripwire 派生
-// 表前缀断言（accountTableName(addr) 前缀 == apps/）+ assertCanonicalRoundTrip（decodeOneRawTx
-// 内部已含 whole-envelope round-trip）。
+// Round 3 P2 fork parity: route B explicitly computes cfg = configAt(timestamp/1000,
+// forkTimestampsFor(jovian)) and passes it as arg 6 to runOpBlockInjection, asserting it resolves
+// from the same source as route A's scheduler-internal configAt.
+// Round 3 P3 normalTxs alignment: normalTxs[k] = the k-th non-deposit tx (skipping deposits, in
+// block order), aligned with the injector's normalIdx incrementing only on the non-deposit branch.
+// Review I-1 exception handling: per-vector catches use catch(std::exception)/catch(...) (route
+// B's OpTxValidationFailed is a bcos::Exception, not a runtime_error; and libevmone -fno-rtti
+// makes typed catch unreliable) — catch → BOOST_ERROR + continue, never judge divergence by
+// exception type.
+// Round 3 P4: has_storage scan (same-block create pre-triage; scan without pre-fixing) + /sys
+// tripwire derived-table prefix assertion (accountTableName(addr) prefix == apps/) +
+// assertCanonicalRoundTrip (decodeOneRawTx already includes the whole-envelope round-trip).
 
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
@@ -62,7 +69,7 @@
 #include <ethereum-executor/BCOS2Evmone.h>
 #include <json/json.h>
 #include <opstack-executor/OpBlockInjector.h>
-#include <opstack-executor/OpScheduler.h>  // route A 手术（Task 6 P1-8）：executeBlock 驱动
+#include <opstack-executor/OpScheduler.h>  // route A surgery (Task 6 P1-8): executeBlock drives
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/OpTxDecode.h>
 #include <opstack-executor/OpstackExecutor.h>
@@ -94,7 +101,7 @@ namespace engine = bcos::evm::engine;
 namespace eth = bcos::executor_v1::eth;
 namespace detail = bcos::evm::engine::detail;
 
-// ── jsoncpp .at() equivalent（OpT8nReplayTest.cpp:60-84 同源）─────────────────
+// ── jsoncpp .at() equivalent (shared with OpT8nReplayTest.cpp:60-84) ─────────────────
 inline const Json::Value& jAt(const Json::Value& v, const std::string& key)
 {
     if (!v.isMember(key))
@@ -111,7 +118,7 @@ inline Json::Value jParse(std::istream& input)
     return root;
 }
 
-// ── Canonical printing（OpT8nReplayTest.cpp:200-240 同源）─────────────────────
+// ── Canonical printing (shared with OpT8nReplayTest.cpp:200-240) ─────────────────────
 constexpr const char* kAbsent = "<absent>";
 
 std::string hexU64(uint64_t v)
@@ -141,16 +148,16 @@ std::string hexBytes(evmc::bytes_view b)
     return "0x" + evmc::hex(b);
 }
 
-/// bcos::u256 -> "0x" + lowercase no-leading-zero hex（同 OpT8nReplayTest.cpp:457-460）。
+/// bcos::u256 -> "0x" + lowercase no-leading-zero hex (same as OpT8nReplayTest.cpp:457-460).
 std::string hexU256Bcos(const bcos::u256& v)
 {
     return "0x" + v.str(0, std::ios_base::hex);
 }
 
-// ── DivergenceLedger（OpT8nReplayTest.cpp:266-337 范式；entryId 前缀 FINDING-dual- 专属）─────
-// 本 harness 与 OpT8nReplayTest 共享 t8n/vectors/DIVERGENCES.md：各自 ledger 只管理自己前缀的
-// 条目，避免 finish() stale 检查跨套件误报（既有 FINDING-create-output 条目归 OpT8nReplay；
-// FINDING-dual-* 归本 harness）。
+// ── DivergenceLedger (OpT8nReplayTest.cpp:266-337 pattern; dedicated FINDING-dual- entryId prefix) ─────
+// This harness shares t8n/vectors/DIVERGENCES.md with OpT8nReplayTest: each ledger only manages
+// entries with its own prefix, so finish()'s stale check does not false-positive across suites
+// (existing FINDING-create-output entries belong to OpT8nReplay; FINDING-dual-* to this harness).
 
 struct AllowEntry
 {
@@ -162,7 +169,8 @@ struct AllowEntry
 class DivergenceLedger
 {
 public:
-    // Missing ledger file = FAILURE（ledger 是 gate 交付物；缺失绝不等于 all-exempt/all-empty）。
+    // Missing ledger file = FAILURE (ledger is a gate deliverable; absence never means
+    // all-exempt/all-empty).
     static DivergenceLedger load(const fs::path& path)
     {
         DivergenceLedger ledger;
@@ -248,7 +256,7 @@ struct VectorContext
     std::string id;
     int comparisons = 0;
 
-    // soft：走 ALLOWLIST（未列出即 BOOST_ERROR）。
+    // soft: goes through ALLOWLIST (unlisted => BOOST_ERROR).
     void checkField(const std::string& field, const std::string& want, const std::string& got)
     {
         ++comparisons;
@@ -268,7 +276,7 @@ struct VectorContext
             ledger.diverge(id, field, w, g);
     }
 
-    // hard：mechanics，任何分叉即失败（不经 ALLOWLIST）。
+    // hard: mechanics; any divergence is a failure (no ALLOWLIST).
     void checkHard(const std::string& field, const std::string& want, const std::string& got)
     {
         ++comparisons;
@@ -277,7 +285,7 @@ struct VectorContext
     }
 };
 
-// ── Fixture（OpNewPayloadRpcE2eTest.cpp:48-167 镜像）──────────────────────────
+// ── Fixture (mirrored from OpNewPayloadRpcE2eTest.cpp:48-167) ──────────────────────────
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
 struct TrivialCheckpointStorage
 {
@@ -347,8 +355,8 @@ bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
 
 struct Fixture
 {
-    // 单桶 CONCURRENT 后端：stateRoot 的 range(SYS_TABLES) 扫描依赖 RANGE_SEEK 语义，多桶扫错
-    // （OpNewPayloadRpcE2eTest.cpp:147-152）。
+    // Single-bucket CONCURRENT backend: the range(SYS_TABLES) scan for stateRoot relies on
+    // RANGE_SEEK semantics; multi-bucket would scan wrong (OpNewPayloadRpcE2eTest.cpp:147-152).
     BackendMemStorage backendStorage{1};
     CheckpointBackend checkpointBackend{backendStorage};
     MLS multiLayerStorage{checkpointBackend};
@@ -367,7 +375,7 @@ struct GoldenStats
     int greenGuardOk = 0;
 };
 
-// ── 帮助函数 ──────────────────────────────────────────────────────────────────
+// ── Helper functions ─────────────────────────────────────────────────────────────────
 
 /// bcos::h256 from a vector hex string, tolerating "0"/"0x0" (zero). jsoncpp vectors write
 /// prev_randao as "0x0" when zero; bcos::h256(string) needs full 64 hex.
@@ -378,22 +386,24 @@ bcos::h256 jsonH256(const std::string& s)
     return bcos::h256(s);
 }
 
-/// bcos::u256 from a vector hex string ("0x...")——boost cpp_int 原生解析 0x 前缀。
+/// bcos::u256 from a vector hex string ("0x...") — boost cpp_int natively parses the 0x prefix.
 bcos::u256 jsonBcosU256(const std::string& s)
 {
     return bcos::u256(s);
 }
 
-/// chain 向量无 golden：从 env（当前块）构建 FISCO BlockHeaderImpl。toBlockInfo 读
-/// number/timestamp/gasLimit/baseFee/coinbase/prevRandao/parentBeaconBlockRoot/extraData/
-/// blobGasUsed（OpRlpDecode.h:106-121，可选字段 .value()）；parentInfo 服务 RecentBlockHashes。
+/// chain vectors have no golden: build a FISCO BlockHeaderImpl from env (current block).
+/// toBlockInfo reads number/timestamp/gasLimit/baseFee/coinbase/prevRandao/
+/// parentBeaconBlockRoot/extraData/blobGasUsed (OpRlpDecode.h:106-121, optional fields .value());
+/// parentInfo serves RecentBlockHashes.
 bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& env)
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     const int64_t number =
         static_cast<int64_t>(w6test::jsonU64(jAt(env, "currentNumber").asString()));
     h->setNumber(number);
-    // FISCO tars 存毫秒；向量 currentTimestamp 是秒（OP 语义）。toBlockInfo 再 /1000 取回秒。
+    // FISCO tars store milliseconds; the vector currentTimestamp is in seconds (OP semantics).
+    // toBlockInfo then /1000 restores seconds.
     h->setTimestamp(
         static_cast<int64_t>(w6test::jsonU64(jAt(env, "currentTimestamp").asString()) * 1000));
     h->setGasLimit(jsonBcosU256(jAt(env, "currentGasLimit").asString()));
@@ -416,9 +426,9 @@ bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& e
     return h;
 }
 
-/// 从向量 block.transactions 构建 raw envelope 字节（供 txRoot / executeOpBlock 解码）：
-/// deposit → 从 _op_deposit 重建 DepositTx → canonicalEnvelopeBytes（OpTxDecode.h:307）；
-/// normal → _op_raw 原样。断言 _op_raw 存在（链向量每笔 normal 都带）。
+/// Build raw envelope bytes from vector block.transactions (for txRoot / executeOpBlock decode):
+/// deposit → rebuild DepositTx from _op_deposit → canonicalEnvelopeBytes (OpTxDecode.h:307);
+/// normal → _op_raw as-is. Asserts _op_raw is present (every chain-vector normal tx carries it).
 std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::string& id)
 {
     std::vector<bcos::bytes> rawTxBytes;
@@ -455,9 +465,10 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
     return rawTxBytes;
 }
 
-/// evmone tx 字段级相等（buildFiscoTx pre-flight）：bcosTransactionToEvmone 不搬 r/s/v
-/// （签名在 tars 的 signature* 字段，该函数不读）；sender 匹配等价覆盖 r/s/v 解码一致性
-/// （decodeOneRawTx 从 r/s/v ecrecover，opEnvelopeToTars 从信封签名者提取）。
+/// evmone tx field-level equality (buildFiscoTx pre-flight): bcosTransactionToEvmone does not
+/// carry r/s/v (the signature lives in tars' signature* fields, which that function never reads);
+/// a sender match equivalently covers r/s/v decode consistency (decodeOneRawTx ecrecovers from
+/// r/s/v, opEnvelopeToTars extracts from the envelope signer).
 /// First mismatching field name (diagnostic; "<none>" when equal).
 std::string evmoneTxFieldDiff(
     const evmone::state::Transaction& a, const evmone::state::Transaction& b)
@@ -500,18 +511,21 @@ std::string evmoneTxFieldDiff(
             return "authorization_list[" + std::to_string(i) + "].r";
         if (x.s != y.s)
             return "authorization_list[" + std::to_string(i) + "].s";
-        // signer 不参与：decodeOneRawTx 留空（恢复延迟到 evmone process_authorization_list），
-        // opEnvelopeToTars 预填（解码时已恢复）——执行等价，仅表示差异。
+        // signer is not compared: decodeOneRawTx leaves it empty (recovery deferred to evmone's
+        // process_authorization_list), opEnvelopeToTars pre-fills it (already recovered at decode)
+        // — execution-equivalent, only a representation difference.
     }
     return "<none>";
 }
 
-/// buildFiscoTx pre-flight 字段级校验。**不含 chain_id**：bcosTransactionToEvmone 把 tars 的
-/// chainID 十进制串（takeToTarsTransaction 存 std::to_string(chainId)，0x2105 → "8451"）当
-/// hex-quantity 解析（safeFromQuantity 剥可选 0x 后按 hex），8451 → 0x8451=33873——这是该
-/// 转换函数的已知表示缺陷（BCOS2Evmone.cpp:221 注释：validate_transaction 不查 chain_id、
-/// 语义由签名上游绑定），非 buildFiscoTx/opEnvelopeToTars 错误。chain_id 是否忠实由端到端
-/// A-vs-B 对比兜底（若某 tx 读 CHAINID opcode，stateRoot/output 必分叉 → 红）。
+/// buildFiscoTx pre-flight field-level check. **Excludes chain_id**: bcosTransactionToEvmone
+/// parses tars' chainID decimal string (takeToTarsTransaction stores
+/// std::to_string(chainId), 0x2105 → "8451") as a hex-quantity (safeFromQuantity strips an
+/// optional 0x then parses as hex), so 8451 → 0x8451=33873 — a known representation defect of
+/// that conversion function (BCOS2Evmone.cpp:221 comment: validate_transaction does not check
+/// chain_id; semantics are bound upstream by the signature), not a buildFiscoTx/
+/// opEnvelopeToTars error. Faithful chain_id is covered end-to-end by the A-vs-B comparison (if a
+/// tx reads the CHAINID opcode, stateRoot/output must diverge → red).
 bool evmoneTxFieldsEqual(const evmone::state::Transaction& a, const evmone::state::Transaction& b)
 {
     if (a.type != b.type)
@@ -540,7 +554,8 @@ bool evmoneTxFieldsEqual(const evmone::state::Transaction& a, const evmone::stat
     {
         const auto& x = a.authorization_list[i];
         const auto& y = b.authorization_list[i];
-        // signer 不参与（恢复延迟 vs 预填，执行等价）；仅比较签名元组字段。
+        // signer is not compared (deferred recovery vs pre-fill, execution-equivalent); only the
+        // signature tuple fields are.
         if (x.chain_id != y.chain_id || x.addr != y.addr || x.nonce != y.nonce || x.r != y.r ||
             x.s != y.s || x.v != y.v)
             return false;
@@ -548,10 +563,11 @@ bool evmoneTxFieldsEqual(const evmone::state::Transaction& a, const evmone::stat
     return true;
 }
 
-/// buildFiscoTx（第三轮 P2 提升为显式步骤）：opEnvelopeToTars(env, hash)（EngineServiceImpl.h:168）
-/// + 覆盖 extraTransactionBytes=env（仅普通交易；deposit 已完整）+ pre-flight
-/// bcosTransactionToEvmone(重建tx) == decodeOneRawTx(env) 字段级校验——路径 B 正确性关键。
-/// 返回 nullptr 时调用方须 BOOST_ERROR（opEnvelopeToTars 失败 / pre-flight 不一致）。
+/// buildFiscoTx (promoted to an explicit step in round 3 P2): opEnvelopeToTars(env, hash)
+/// (EngineServiceImpl.h:168) + override extraTransactionBytes=env (normal txs only; deposit is
+/// already complete) + pre-flight field-level check bcosTransactionToEvmone(rebuilt tx) ==
+/// decodeOneRawTx(env) — key to route B correctness. When returning nullptr the caller must
+/// BOOST_ERROR (opEnvelopeToTars failure / pre-flight mismatch).
 bcos::protocol::Transaction::Ptr buildFiscoTx(
     const bcos::evm::opstack::OpBlockTx& btx, bcos::crypto::Hash::Ptr const& hashImpl)
 {
@@ -564,14 +580,15 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
                         evmc::bytes_view(env.data(), env.size())));
         return nullptr;
     }
-    // 覆盖：takeToTarsTransaction 存 signing preimage，executeTransaction 读
-    // extraTransactionBytes 当完整信封（OpstackExecutor.h:280-281）。tars vector<byte> 是
-    // int8_t 元素，须 assign（同 OpNewPayloadRpcE2eTest txHash 的 assign 惯例）。
+    // Override: takeToTarsTransaction stores the signing preimage, executeTransaction reads
+    // extraTransactionBytes as the full envelope (OpstackExecutor.h:280-281). tars vector<byte>
+    // holds int8_t elements, so assign is required (same assign convention as the
+    // OpNewPayloadRpcE2eTest txHash).
     tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [tars = std::move(*tarsTx)]() mutable { return &tars; });
 
-    // pre-flight：FISCO tx -> evmone tx 与直接信封解码同源。
+    // pre-flight: bcosTransactionToEvmone(FISCO tx) must equal the direct envelope decode.
     const auto rebuilt = eth::bcosTransactionToEvmone(*tx);
     bcos::evm::opstack::OpBlockTx decoded;
     try
@@ -584,8 +601,9 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
         return nullptr;
     }
     const auto* evmTx = std::get_if<evmone::state::Transaction>(&decoded.tx);
-    // 终审 M-1：evmTx==nullptr 须独立分支先 return，勿与字段比较短路同体（否则下方
-    // evmoneTxFieldDiff/hexAddr 会解引用空指针 UB）。
+    // Final review M-1: evmTx==nullptr must return in its own branch first, not share a short-
+    // circuit body with the field comparison (otherwise evmoneTxFieldDiff/hexAddr below would
+    // dereference a null pointer, UB).
     if (evmTx == nullptr)
     {
         BOOST_ERROR("buildFiscoTx pre-flight: decodeOneRawTx returned non-Transaction variant: env="
@@ -603,10 +621,11 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     return tx;
 }
 
-/// 块装配用的 FISCO tx（Task 6 P1-8 harness 手术）：从 raw envelope 建（opEnvelopeToTars +
-/// SEV-8 覆写完整信封），无 buildFiscoTx 的 pre-flight——块装配需要 deposit 也建 tx
-/// （getTransactions 返回全量，execute hook 只从 extraTransactionBytes 提 raw）。先例
-/// EngineServiceImpl.h:1176-1196 buildOpBlock。
+/// FISCO tx for block assembly (Task 6 P1-8 harness surgery): built from the raw envelope
+/// (opEnvelopeToTars + SEV-8 full-envelope override), without buildFiscoTx's pre-flight — block
+/// assembly must also build txs for deposits (getTransactions returns the full set; the execute
+/// hook only pulls raw bytes from extraTransactionBytes). Precedent:
+/// EngineServiceImpl.h:1176-1196 buildOpBlock.
 bcos::protocol::Transaction::Ptr buildBlockTx(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
 {
@@ -619,13 +638,15 @@ bcos::protocol::Transaction::Ptr buildBlockTx(
         [tars = std::move(*tarsTx)]() mutable { return &tars; });
 }
 
-/// 用 route B 的真实承诺回填 announced 头（Task 6 P1-8 手术）：route A 改走
-/// OpScheduler.executeBlock 后，骨架 verifyResult 对 OP 恒做六字段对比（OpScheduler.h verifyResult
-/// 忽略 verify 布尔）——announced 头必须带真实承诺（finishExecute 只填承诺字段，非承诺字段不全）。
-/// 先跑 route B 拿 resultB 回填，保证 route A 复跑时 verify 通过（双路径等价 ⇒ 承诺一致）。
-/// 字段同 OpSchedulerTest.cpp:191-204 fillAnnouncedHeader。blobGasUsed 不参与 OP 执行（opstack
-/// 从不读 blk.blob_gas_used，blob tx 被 opValidate 拒），只被 seal 六字段对比消费——填它不改变
-/// 执行结果。
+/// Backfill the announced header with route B's real commitments (Task 6 P1-8 surgery): once
+/// route A goes through OpScheduler.executeBlock, the skeleton's verifyResult always does the
+/// six-field comparison for OP (OpScheduler.h verifyResult ignores the verify boolean) — the
+/// announced header must carry real commitments (finishExecute only fills the commitment fields,
+/// leaving the rest incomplete). Run route B first and backfill from resultB so route A's verify
+/// passes on re-run (dual-path equivalence ⇒ commitments agree).
+/// Fields match OpSchedulerTest.cpp:191-204 fillAnnouncedHeader. blobGasUsed does not participate
+/// in OP execution (opstack never reads blk.blob_gas_used; blob txs are rejected by opValidate),
+/// it is only consumed by the seal six-field comparison — filling it does not change execution.
 void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
     bcos::evm::engine::OpExecuteBlockResult const& result)
 {
@@ -641,8 +662,9 @@ void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
         header->setBlobGasUsed(bcos::u256(*result.seal.blobGasUsed));
 }
 
-/// opStackMeta 集合驱动：deposit（envelope 首字节 0x7E）只带 nonce/version；normal 带 fee 字段。
-/// 字段集不硬编码数量——按 receipt->opStackMeta() 实际 present 字段动态提取。
+/// Driven by the opStackMeta set: deposit (envelope first byte 0x7E) only carries nonce/version;
+/// normal carries the fee fields. The field set has no hardcoded count — extracted dynamically
+/// from the fields actually present in receipt->opStackMeta().
 std::map<std::string, std::string> opMetaFields(
     const bcos::protocol::TransactionReceipt::Ptr& receipt, bool isDeposit)
 {
@@ -683,8 +705,10 @@ std::map<std::string, std::string> opMetaFields(
     return out;
 }
 
-/// stateRoot 分叉诊断：双视图 visitAccounts，地址键控 balance/nonce/codeHash/storage，上限 20 条。
-/// Storage2State 构造取 Storage&（非 const），故参数为非 const 引用（viewA/viewB 是本地 fork）。
+/// stateRoot divergence diagnostics: visitAccounts over both views, address-keyed
+/// balance/nonce/codeHash/storage, capped at 20 entries.
+/// Storage2State construction takes Storage& (non-const), so parameters are non-const refs
+/// (viewA/viewB are local forks).
 void dumpAccountDiff(ViewType& viewA, ViewType& viewB)
 {
     struct AccView
@@ -743,8 +767,9 @@ void dumpAccountDiff(ViewType& viewA, ViewType& viewB)
     }
 }
 
-/// /sys tripwire（第三轮定案）：派生表前缀断言——每个向量 pre/postState/tx to/from/coinbase 地址
-/// 的 accountTableName(addr) 前缀必须 == apps/（比枚举 c_systemTxsAddress 更健壮）。
+/// /sys tripwire (round 3 decision): derived-table prefix assertion — for every vector
+/// pre/postState/tx to/from/coinbase address, accountTableName(addr) must prefix with apps/
+/// (more robust than enumerating c_systemTxsAddress).
 void checkSysTripwire(const std::string& id, const JsonValue& vec)
 {
     std::set<std::string> tables;
@@ -792,8 +817,9 @@ void checkSysTripwire(const std::string& id, const JsonValue& vec)
     }
 }
 
-/// has_storage 扫描（第三轮 P4，先扫不预先修）：P1 扫「同块 create」提前 triage——语料大概率不
-/// 触发 StorageStateView has_storage 读端不对称；扫到只 REPORT 不失败。
+/// has_storage scan (round 3 P4; scan without pre-fixing): P1 scans same-block creates for
+/// early triage — the corpus likely does not trigger StorageStateView's has_storage read-side
+/// asymmetry; a hit only REPORTs, never fails.
 void hasStorageScan(const std::string& id, const std::vector<bcos::evm::opstack::OpBlockTx>& txs)
 {
     int creates = 0;
@@ -819,11 +845,11 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
 {
     VectorContext ctx{ledger, id};
 
-    // hard：块级 mechanics。
+    // hard: block-level mechanics.
     ctx.checkHard("gasUsed", hexU64(resultA.gasUsed), hexU64(resultB.gasUsed));
     ctx.checkHard("txRoot", resultA.txRoot.hexPrefixed(), resultB.txRoot.hexPrefixed());
 
-    // soft：stateRoot（ALLOWLIST 驱动）+ seal 五字段。
+    // soft: stateRoot (ALLOWLIST-driven) + seal five fields.
     ctx.checkField("stateRoot", resultA.stateRoot.hexPrefixed(), resultB.stateRoot.hexPrefixed());
     ctx.checkField("seal.receiptsRoot", hexHash(resultA.seal.receiptsRoot),
         hexHash(resultB.seal.receiptsRoot));
@@ -842,7 +868,7 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
         resultB.seal.blobGasUsed.has_value() ? std::optional{hexU64(*resultB.seal.blobGasUsed)} :
                                                std::nullopt);
 
-    // 分叉诊断：stateRoot 不一致时 dumpAccountDiff（上限 20 条）。
+    // Divergence diagnostics: dumpAccountDiff when stateRoot differs (capped at 20).
     if (resultA.stateRoot != resultB.stateRoot)
     {
         std::cout << "  stateRoot-divergence " << id << " A=" << resultA.stateRoot.hexPrefixed()
@@ -862,8 +888,9 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
         const std::string p = "receipts[" + std::to_string(i) + "]";
         const auto& ra = resultA.receipts[i];
         const auto& rb = resultB.receipts[i];
-        // F1：type 判别从 rawTxBytes 推（envelope 首字节 0x7E=deposit），两路径输入相同天然一致；
-        // "type" 不参与 A-vs-B 对比（同义反复），仅用于 opStackMeta 字段提取。
+        // F1: the type discriminator is derived from rawTxBytes (envelope first byte 0x7E =
+        // deposit); both paths share the same input so it is inherently consistent. "type" is not
+        // part of the A-vs-B comparison (tautology); it only drives opStackMeta field extraction.
         const bool isDeposit = !rawTxBytes[i].empty() && rawTxBytes[i][0] == 0x7e;
 
         ctx.checkHard(p + ".status", std::to_string(ra->status()), std::to_string(rb->status()));
@@ -876,7 +903,8 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
         ctx.checkHard(p + ".logsCount", std::to_string(ra->logEntries().size()),
             std::to_string(rb->logEntries().size()));
 
-        // v2（B8）：log 内容（address/topics/data）——同 count 异内容只在 logsBloom 露头，P1 就抓。
+        // v2 (B8): log content (address/topics/data) — same count with different content would
+        // only surface in logsBloom, so catch it here in P1.
         const auto la = ra->logEntries();
         const auto lb = rb->logEntries();
         if (la.size() == lb.size())
@@ -904,7 +932,7 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
             }
         }
 
-        // soft：output + _op_*（opStackMeta 集合驱动）。
+        // soft: output + _op_* (opStackMeta-set-driven).
         ctx.checkField(p + ".output",
             hexBytes(evmc::bytes_view{ra->output().data(), ra->output().size()}),
             hexBytes(evmc::bytes_view{rb->output().data(), rb->output().size()}));
@@ -929,10 +957,10 @@ void assertEquivalent(const std::string& id, const engine::OpExecuteBlockResult&
         BOOST_ERROR(id << ": zero comparisons executed");
 }
 
-/// golden 三方（G1，P1 软 → P3 带作用域翻硬）：path A.stateRoot == 向量
-/// _op_expected.header.stateRoot。hardGolden=true 时 mismatch 即 BOOST_CHECK 硬失败
-/// （作用域=isthmus/jovian 非 contract_create）；greenGuard（deposit_basefee 绿守卫）始终硬；
-/// 其余（pre-isthmus / contract_create）保持软 REPORT。
+/// golden three-way (G1: soft in P1 → scoped hard in P3): path A.stateRoot == vector
+/// _op_expected.header.stateRoot. When hardGolden=true, a mismatch is a hard BOOST_CHECK failure
+/// (scope = isthmus/jovian non-contract_create); greenGuard (deposit_basefee green guard) is
+/// always hard; the rest (pre-isthmus / contract_create) stays soft REPORT.
 void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256& stateRootA,
     bool greenGuard, bool hardGolden, GoldenStats& stats)
 {
@@ -969,22 +997,25 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
     }
 }
 
-/// 单块等价执行：seedPreState 已在外部完成；本函数先 fork viewB（route A 会把 executed view push
-/// 进 MLS，viewB 必须读 pre-state）、直调 route B、用 resultB 回填 announced 头、经
-/// OpScheduler.executeBlock 跑 route A、从骨架取 resultA + viewA（fork 读透骨架 push 的 executed
-/// view）、assertEquivalent、mergeBackStorage 持久化 route A 权威 post-state（viewB 对比完即弃）。
+/// Single-block equivalence run: seedPreState is already done externally; this function forks
+/// viewB first (route A pushes the executed view into MLS, so viewB must read pre-state), calls
+/// route B directly, backfills the announced header with resultB, runs route A through
+/// OpScheduler.executeBlock, takes resultA + viewA from the skeleton (fork reads through to the
+/// executed view the skeleton pushed), assertEquivalent, then mergeBackStorage persists route A's
+/// authoritative post-state (viewB is discarded after comparison).
 void runBlockEquivalence(const std::string& id, Fixture& fixture,
     bcos::protocol::BlockHeader::Ptr const& header, const std::vector<bcos::bytes>& rawTxBytes,
     const JsonValue& vec, bool jovian, const bcos::evm::opstack::OpForkConfig& vectorCfg,
     DivergenceLedger& ledger, bool greenGuard, GoldenStats& stats)
 {
-    // 第三轮 P2 fork 平价：cfg = configAt(timestamp/1000, forkTimestampsFor(jovian))，与路径 A
-    // scheduler 内部 configAt 解析同源（同一 forkTimestampsFor，静态单例同一对象）。
+    // Round 3 P2 fork parity: cfg = configAt(timestamp/1000, forkTimestampsFor(jovian)), resolved
+    // from the same source as route A's scheduler-internal configAt (same forkTimestampsFor, same
+    // static singleton object).
     const auto& cfg =
         op::configAt(static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
     BOOST_CHECK_MESSAGE(&cfg == &vectorCfg, id << ": fork parity broken: block cfg != vector cfg");
 
-    // 解码 txs（decodeOneRawTx 内部含 assertCanonicalRoundTrip，即 P4 兜底）。
+    // Decode txs (decodeOneRawTx internally includes assertCanonicalRoundTrip, the P4 fallback).
     std::vector<op::OpBlockTx> txs;
     txs.reserve(rawTxBytes.size());
     try
@@ -998,8 +1029,8 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         return;
     }
 
-    // 第三轮 P3：normalTxs[k] = 第 k 个非 deposit 交易（跳过 deposit、按块内序），对齐注入器
-    // normalIdx 仅非 deposit 分支 ++。
+    // Round 3 P3: normalTxs[k] = the k-th non-deposit tx (skipping deposits, in block order),
+    // aligned with the injector's normalIdx incrementing only on the non-deposit branch.
     std::vector<bcos::protocol::Transaction::Ptr> normalTxs;
     for (const auto& btx : txs)
     {
@@ -1014,10 +1045,10 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         normalTxs.push_back(std::move(tx));
     }
 
-    // 路线 B：runOpBlockInjection（逐笔注入循环）——先跑，拿 resultB 回填 announced 头供 route A
-    // verify 用（见 fillAnnouncedHeader 注释）。viewB 在 route A 之前 fork——route A 的
-    // executeBlock 会把 executed view push 进 MLS，viewB 必须读 pre-state。viewB 生命周期覆盖
-    // 整个对比（dumpAccountDiff 读它）。
+    // Route B: runOpBlockInjection (per-tx injection loop) — run first, backfill the announced
+    // header from resultB for route A's verify (see fillAnnouncedHeader). viewB forks before
+    // route A — route A's executeBlock pushes the executed view into MLS, so viewB must read
+    // pre-state. viewB lives for the whole comparison (dumpAccountDiff reads it).
     auto viewB = fixture.multiLayerStorage.fork();
     viewB.newMutable();
     engine::OpExecuteBlockResult resultB;
@@ -1045,17 +1076,20 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         return;
     }
 
-    // announced 头回填 route B 真实承诺（route A 的 verify 恒六字段对比，需带承诺；blobGasUsed
-    // 不参与 OP 执行，只被 seal 对比消费）。
+    // Backfill the announced header with route B's real commitments (route A's verify always
+    // does the six-field comparison and needs the commitments; blobGasUsed does not participate in
+    // OP execution, only consumed by the seal comparison).
     fillAnnouncedHeader(header, resultB);
 
-    // 路线 A（Task 6 P1-8 手术）：OpScheduler.executeBlock——view 生命周期归骨架（fork/pushView
-    // 在骨架内），execute hook 即 route B（runOpBlockInjection）。结果从骨架 m_results 取
-    // （peekExecuteResult），post-state 从骨架 push 进 MLS 的 executed view 取（fork 读透）。
+    // Route A (Task 6 P1-8 surgery): OpScheduler.executeBlock — view lifecycle owned by the
+    // skeleton (fork/pushView inside it), execute hook is route B (runOpBlockInjection). Result is
+    // taken from the skeleton's m_results (peekExecuteResult); post-state from the executed view
+    // the skeleton pushed into MLS (fork reads through).
     engine::OpExecuteBlockResult resultA;
     try
     {
-        // 块装配：extraTransactionBytes = 完整信封（SEV-8，buildBlockTx 覆写）。
+        // Block assembly: extraTransactionBytes = full envelope (SEV-8, overridden by
+        // buildBlockTx).
         auto block = fixture.blockFactory->createBlock();
         block->setBlockHeader(header);
         for (const auto& raw : rawTxBytes)
@@ -1107,20 +1141,23 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         return;
     }
 
-    // viewA：route A post-state（骨架 push 进 MLS 的 executed view，从骨架的 storage 取）。
+    // viewA: route A post-state (the executed view the skeleton pushed into MLS, from the
+    // skeleton's storage).
     auto viewA = fixture.multiLayerStorage.fork();
 
-    // A-vs-B 对比（hard 全绿 + soft ALLOWLIST）。
+    // A-vs-B comparison (hard all-green + soft ALLOWLIST).
     try
     {
         assertEquivalent(id, resultA, resultB, viewA, viewB, rawTxBytes, ledger);
 
-        // chain 继承：route A 权威 post-state 已由骨架 pushView 进 MLS，只 mergeBackStorage
-        // 持久化（不重复 pushView——mergeView 会再 push 一层，viewB 对比完即弃）。
+        // Chain inheritance: route A's authoritative post-state was already pushed into MLS by
+        // the skeleton's pushView; only mergeBackStorage to persist (do not pushView again —
+        // mergeView would push another layer; viewB is discarded after comparison).
         bcos::task::syncWait(fixture.multiLayerStorage.mergeBackStorage());
 
-        // golden 三方（G1 P3 带作用域翻硬）：isthmus/jovian 非 contract_create → hard；
-        // pre-isthmus（fork 不匹配预期）与 contract_create（已知分歧）保持软 REPORT。
+        // golden three-way (G1, P3 scoped hard): isthmus/jovian non-contract_create → hard;
+        // pre-isthmus (expected fork mismatch) and contract_create (known divergence) stay soft
+        // REPORT.
         if (vec.isMember("_op_expected"))
         {
             const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
@@ -1129,10 +1166,10 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
             reportGolden(id, vec, resultA.stateRoot, greenGuard, hardGolden, stats);
         }
 
-        // /sys tripwire（每个向量 pre/postState/tx/coinbase 派生表前缀）。
+        // /sys tripwire (derived table prefix for every vector pre/postState/tx/coinbase).
         checkSysTripwire(id, vec);
 
-        // has_storage 扫描（P4 提前 triage，只 REPORT）。
+        // has_storage scan (P4 pre-triage; REPORT only).
         hasStorageScan(id, txs);
     }
     catch (const std::exception& e)
@@ -1147,8 +1184,8 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     }
 }
 
-/// 单块向量：seedPreState → runBlockEquivalence。golden 从 .golden.json 手动加载（isJovianVector
-/// 对 pre-isthmus 抛错，不能走 loadVectorSample）。
+/// Single-block vector: seedPreState → runBlockEquivalence. golden is loaded manually from
+/// .golden.json (isJovianVector throws for pre-isthmus, so loadVectorSample cannot be used).
 void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixture,
     DivergenceLedger& ledger, bool greenGuard, GoldenStats& stats)
 {
@@ -1176,11 +1213,12 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
         return;
     }
     bcos::protocol::BlockHeader::Ptr header;
-    // 单块向量头：isthmus/jovian 用 decodeGoldenHeader（golden 权威 op-geth 头）；pre-isthmus
-    // （ecotone/fjord/granite）的 encodedHeaderHex 走 decodeOpHeader 严格 21 字段反解会抛
-    // （RTTI-bypass runtime_error，已实测），故退化为 buildHeaderFromEnv（与 chain 同源）。
-    // 两路径同 cfg（configAt→isthmusConfig），A-vs-B 等价对比仍有效；golden 三方因 fork 不匹配
-    // REPORT mismatch（P1 软）。
+    // Single-block vector header: isthmus/jovian use decodeGoldenHeader (golden authoritative
+    // op-geth header); pre-isthmus (ecotone/fjord/granite) encodedHeaderHex would throw under
+    // decodeOpHeader's strict 21-field decode (RTTI-bypass runtime_error, verified empirically),
+    // so fall back to buildHeaderFromEnv (same source as chain). Both paths share the same cfg
+    // (configAt → isthmusConfig), so the A-vs-B equivalence comparison still holds; the golden
+    // three-way REPORTs mismatch due to fork mismatch (soft in P1).
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
     try
     {
@@ -1201,7 +1239,8 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
                        << (excType ? excType->name() : "<unknown>") << ")");
         return;
     }
-    // golden rawTransactions（单块向量：deposit 已是 0x7E envelope、normal 已是 0x02 envelope）。
+    // golden rawTransactions (single-block vector: deposit is already a 0x7E envelope, normal
+    // already a 0x02 envelope).
     std::vector<bcos::bytes> rawTxBytes;
     for (const auto& raw : sample.golden["rawTransactions"])
         rawTxBytes.push_back(bcos::fromHex(raw.asString()));
@@ -1211,8 +1250,9 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
         id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, ledger, greenGuard, stats);
 }
 
-/// chain 向量：逐块双 fork、A/B 对比后 route A mergeView 继承（权威路径）。块 0 pre 显式，
-/// 后续块继承前块 route A post-state。
+/// Chain vector: dual fork per block, A/B compare, then route A mergeView inherits
+/// (authoritative path). Block 0 pre is explicit; later blocks inherit the previous block's
+/// route A post-state.
 void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixture,
     DivergenceLedger& ledger, GoldenStats& stats)
 {
@@ -1244,7 +1284,8 @@ BOOST_AUTO_TEST_CASE(Vectors)
 
     auto ledger = DivergenceLedger::load(vectorsDir / "DIVERGENCES.md");
 
-    // 遍历目录：跳过 invalid_ 前缀与 _op_expected.reject；chain 走 blocks[] 分支。
+    // Iterate the directory: skip the invalid_ prefix and _op_expected.reject; chain goes
+    // through the blocks[] branch.
     std::vector<std::string> names;
     for (const auto& entry : fs::directory_iterator(vectorsDir))
     {
@@ -1288,7 +1329,8 @@ BOOST_AUTO_TEST_CASE(Vectors)
                 continue;
             }
             if (vec->isMember("_op_expected") && (*vec)["_op_expected"].isMember("reject"))
-                continue;  // reject 类由 OpT8nReplay/OpNewPayloadRpcE2e 消费，harness 跳过
+                continue;  // reject vectors are consumed by OpT8nReplay/OpNewPayloadRpcE2e;
+                           // harness skips them
             ++stats.flat;
             const bool greenGuard = (id.find("deposit_basefee_observer") != std::string::npos);
             runSingleVector(id, *vec, fixture, ledger, greenGuard, stats);
@@ -1306,7 +1348,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
         }
     }
 
-    // 绿守卫 + golden 汇总报告。
+    // green guard + golden summary report.
     std::cout << "dual-path summary: flat=" << stats.flat << " chainBlocks=" << stats.chainBlocks
               << " goldenMatch=" << stats.match << " goldenMismatch=" << stats.mismatch
               << " greenGuard=" << stats.greenGuardOk << "\n";

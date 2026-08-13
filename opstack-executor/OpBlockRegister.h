@@ -2,13 +2,13 @@
 
 #include <bcos-concepts/ByteBuffer.h>             // bcos::concepts::bytebuffer::toView
 #include <bcos-framework/engine/Errors.h>         // OpExecutionInternalError
-#include <bcos-framework/ledger/LedgerTypeDef.h>  // SYS_* 表常量(LedgerTypeDef.h:106-112)
+#include <bcos-framework/ledger/LedgerTypeDef.h>  // SYS_* table constants (LedgerTypeDef.h:106-112)
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/storage/Entry.h>                  // bcos::storage::Entry
 #include <bcos-framework/storage2/Storage.h>               // storage2::writeOne
 #include <bcos-framework/transaction-executor/StateKey.h>  // bcos::executor_v1::StateKey
-#include <bcos-tars-protocol/protocol/TransactionImpl.h>  // bcostars::Transaction + TransactionImpl(自带 tars Transaction.h)
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>  // bcostars::Transaction + TransactionImpl (carries tars Transaction.h)
 #include <bcos-task/Task.h>
 #include <opstack-executor/OpErrors.h>  // OpExecuteBlockResult
 #include <boost/lexical_cast.hpp>
@@ -18,19 +18,21 @@
 
 namespace bcos::evm::engine
 {
-/// raw EIP-2718 envelope -> tars Transaction。签名与 engine 的
-/// `bcos::engine::detail::opEnvelopeToTars` 一致;由 composition root(Initializer)注入 lambda
-/// 调用之——opstack-executor 不 link bcos-rpc / bcos-engine。
+/// raw EIP-2718 envelope -> tars Transaction. Signature matches the engine's
+/// `bcos::engine::detail::opEnvelopeToTars`; the composition root (Initializer) injects a lambda
+/// invoking it — opstack-executor does not link bcos-rpc / bcos-engine.
 using EnvelopeToTarsConverter = std::function<std::optional<bcostars::Transaction>(
     bcos::bytes const&, bcos::crypto::HashType const&)>;
 
-/// 写块表:等效 ethereum 的 ledger::prewriteBlockToBuffer。从 engine 原 registerOpBlock
-/// 逐行搬移,数据来源改为显式参数。5 张表:
+/// Write the block tables — the OP equivalent of ledger::prewriteBlockToBuffer. Moved line by
+/// line from the engine's registerOpBlock, with data sources switched to explicit parameters.
+/// Five tables:
 ///   SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
 ///   SYS_HASH_2_RECEIPT / SYS_HASH_2_TX
-/// 失败分类:receipt 数量不变量 / null receipt -> OpExecutionInternalError;写失败原样上抛
-/// (engine 屏障分类 -32603)。blockHash 由调用方显式传入(engine step 2 已校验
-/// == header.opHeaderHash(opHeaderConst()),不在此重算,避免常量漂移)。
+/// Error classification: receipt-count invariant / null receipt -> OpExecutionInternalError; write
+/// failures propagate as-is (the engine barrier classifies -32603). blockHash is passed in
+/// explicitly by the caller (already validated by engine step 2 == header.opHeaderHash(
+/// opHeaderConst())); not recomputed here, avoiding constant drift.
 template <class ViewType>
 inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
     bcos::protocol::BlockHeader const& header, bcos::crypto::HashType const& blockHash,
@@ -52,9 +54,10 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
             bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(hashToNumberEntry));
 
-    // OP header 以 tars BlockHeader 落标准 s_number_2_header 表(与普通 FISCO 块同表同格式)。
-    // dataHash 为空 -> header.hash() 抛 EmptyBlockHeaderHash;本路径不调用它。encode() 是
-    // `void encode(bytes&)` out-param(BlockHeader.h:50)——先建 buffer 再取。
+    // The OP header lands in the standard s_number_2_header table as a tars BlockHeader (same
+    // table/format as ordinary FISCO blocks). dataHash is empty -> header.hash() throws
+    // EmptyBlockHeaderHash; this path never calls it. encode() is a `void encode(bytes&)` out-param
+    // (BlockHeader.h:50) — build a buffer first, then read it.
     bcos::storage::Entry headerEntry;
     bcos::bytes headerBuffer;
     header.encode(headerBuffer);
@@ -64,14 +67,18 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         std::move(headerEntry));
 
     // ---- legacy-ledger read-path parity (ethereum executor `Ledger::asyncPrewriteBlock`): ----
-    // OP 之前只写 5 张表,eth RPC 的读路径依赖另外两张,缺了它们块虽 VALID 却不可查:
-    //   1. SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER —— eth_blockNumber 读它返回 0(块已提交但
-    //      head 没推进),与生产先例 Ledger.cpp:266-270 一致:entry = blockNumber 字符串。
-    //   2. SYS_NUMBER_2_TXS —— tx metadata(hash + to 列表,Block::encode 落盘);getBlockData
-    //      (RECEIPTS/TRANSACTIONS/TRANSACTIONS_HASH)先读它拿到 tx hash 列表再查 SYS_HASH_2_*,
-    //      缺了它 receipts/txs 读空、getBlockByNumber(1) 返回 null。格式与 Ledger.cpp:284-310
-    //      一致:createBlock + appendTransactionMetaData(hash, to) + block.encode()。
-    // 两处都走 storage2::writeOne(view, ...),与 OP 其它表同批 mergeView 落盘,key 编码一致。
+    // The OP path used to write only 5 tables; the eth RPC read path depends on two more, without
+    // which a VALID block is unqueryable:
+    //   1. SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — eth_blockNumber reads it and returns 0
+    //      (block committed but head not advanced); entry = blockNumber string, matching the
+    //      production precedent Ledger.cpp:266-270.
+    //   2. SYS_NUMBER_2_TXS — tx metadata (hash + to list, persisted via Block::encode);
+    //      getBlockData (RECEIPTS/TRANSACTIONS/TRANSACTIONS_HASH) reads it first to get the tx
+    //      hash list, then queries SYS_HASH_2_*; without it receipts/txs read empty and
+    //      getBlockByNumber(1) returns null. Format matches Ledger.cpp:284-310:
+    //      createBlock + appendTransactionMetaData(hash, to) + block.encode().
+    // Both writes use storage2::writeOne(view, ...), landing in the same mergeView batch as the
+    // OP tables, with identical key encoding.
     bcos::storage::Entry numberEntry;
     numberEntry.set(blockNumberStr);
     co_await bcos::storage2::writeOne(view,
@@ -80,12 +87,14 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         std::move(numberEntry));
 
     auto& hashImpl = *blockFactory.cryptoSuite()->hashImpl();
-    // 这里必须用 blockFactory.createBlock()(而非既有 blockFactory 的任何有状态对象):
-    // appendTransactionMetaData 期望一个空 block 承载 metadata。hash 用 hashImpl(已计算)或
-    // tars tx 的 hash() 均可;这里统一用 hashImpl.hash(rawEnvelope) —— 与 SYS_HASH_2_TX /
-    // SYS_HASH_2_RECEIPT 的 key 同一来源(见下方循环),保证 metadata 里的 hash 与按 hash
-    // 查 tx/receipt 的 key 逐字一致。to 取 tars tx 的 to()(envelopeToTars 失败的行跳过,
-    // 与 SYS_HASH_2_TX 的"转换失败跳过"语义一致,避免 metadata 与 tx 表不一致)。
+    // Must use blockFactory.createBlock() (not any stateful object the blockFactory already
+    // holds): appendTransactionMetaData expects an empty block to carry the metadata. The hash may
+    // come from hashImpl (already computed) or the tars tx's hash(); this path uniformly uses
+    // hashImpl.hash(rawEnvelope) — the same source as the SYS_HASH_2_TX / SYS_HASH_2_RECEIPT keys
+    // (see the loop below), so the metadata's hash matches the lookup keys byte-for-byte. `to`
+    // comes from the tars tx's to() (rows whose envelopeToTars fails are skipped, same
+    // skip-on-conversion-failure semantics as SYS_HASH_2_TX, keeping metadata and the tx table
+    // consistent).
     auto transactionsBlock = blockFactory.createBlock();
     for (std::size_t index = 0; index < rawTxBytes.size(); ++index)
     {
@@ -108,8 +117,8 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
         bcos::executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_TXS, blockNumberStr},
         std::move(number2TxEntry));
 
-    // processOpBlock 每 tx 恰产一
-    // receipt;数量分叉是执行层坏不变量,响亮失败(内部错误,非对块的裁决)。
+    // processOpBlock produces exactly one receipt per tx; a count mismatch is a broken execution
+    // invariant, failing loudly (an internal error, not a verdict on the block).
     if (rawTxBytes.size() != result.receipts.size())
     {
         BOOST_THROW_EXCEPTION(bcos::engine::OpExecutionInternalError{} << bcos::errinfo_comment{
@@ -135,7 +144,8 @@ inline bcos::task::Task<void> opstackRegisterBlock(ViewType& view,
                 bcos::ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
             std::move(receiptEntry));
 
-        // 转换失败(畸形/未枚举 envelope)-> 行跳过,块仍 VALID、该 tx 不可按 hash 查。
+        // Conversion failure (malformed / un-enumerated envelope) -> skip the row; the block stays
+        // VALID, that tx is just not queryable by hash.
         if (auto tarsTx = envelopeToTars(rawTxBytes[index], txHash))
         {
             bcostars::protocol::TransactionImpl txImpl(

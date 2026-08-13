@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
 
-    // The OP composition root relaxes the version-gate upper bound to V4 (spec §6.3, 裁定 B1);
+    // The OP composition root relaxes the version-gate upper bound to V4 (spec §6.3, ruling B1);
     // the generic root's V3 default would refuse version 4 before the OP branch's -38005 gate.
     OpEngine engine(memPool, storage, executor, scheduler, blockFactory,
         /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit,

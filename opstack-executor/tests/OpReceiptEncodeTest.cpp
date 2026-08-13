@@ -3,7 +3,7 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <opstack-executor/OpBlockExecute.h>  // encodeReceiptForRoot（seal 已并入）
+#include <opstack-executor/OpBlockExecute.h>  // encodeReceiptForRoot (seal merged here)
 #include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <sstream>
