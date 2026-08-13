@@ -1,5 +1,5 @@
 #pragma once
-// W6 golden sample loading + OP header decode + engine_newPayloadV4 params construction.
+// Golden sample loading + OP header decode + engine_newPayloadV4 params construction.
 // The golden encodedHeaderHex is op-geth v1.101702.2's full RLP header; parsed via FISCO's
 // BlockHeaderImpl::decodeOpHeader (BlockHeader.h:206, strict 21-field RLP inverse), and the
 // accessors build the params. Timestamp units: decodeOpHeader reads OP seconds and stores
@@ -130,10 +130,12 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     ep["gasUsed"] = quantityOf(header->gasUsed());
     // timestamp: OP seconds (decodeOpHeader stored milliseconds; /1000)
     ep["timestamp"] = quantityOf(bcos::u256(header->timestamp() / 1000));
-    ep["extraData"] = hexOfBytes(header->extraData().toBytes());  // extraData() returns bytesConstRef
-    ep["baseFeePerGas"] = quantityOf(*header->baseFee());         // baseFee() returns optional<u256>
+    ep["extraData"] =
+        hexOfBytes(header->extraData().toBytes());         // extraData() returns bytesConstRef
+    ep["baseFeePerGas"] = quantityOf(*header->baseFee());  // baseFee() returns optional<u256>
     ep["blockHash"] = golden["blockHash"].asString();
-    // OP path requires present-and-empty (validateOpNewPayloadRequest EngineServiceImpl.cpp:301-303)
+    // OP path requires present-and-empty (validateOpNewPayloadRequest
+    // EngineServiceImpl.cpp:301-303)
     ep["withdrawals"] = Json::Value(Json::arrayValue);
     Json::Value txs(Json::arrayValue);
     for (auto const& raw : golden["rawTransactions"])
@@ -141,7 +143,8 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     ep["transactions"] = txs;
     if (header->withdrawalsRoot())
         ep["withdrawalsRoot"] = hexPrefixedH256(*header->withdrawalsRoot());
-    ep["blobGasUsed"] = quantityOf(*header->blobGasUsed());  // optional<u256>, always filled by decodeOpHeader
+    ep["blobGasUsed"] =
+        quantityOf(*header->blobGasUsed());  // optional<u256>, always filled by decodeOpHeader
     ep["excessBlobGas"] =
         quantityOf(*header->excessBlobGas());  // optional<u256>, always filled by decodeOpHeader
 
@@ -155,7 +158,7 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     return params;
 }
 
-/// Task 2: invalid-vector sample. `vector` is the full vector document (contains
+/// Invalid-vector sample. `vector` is the full vector document (contains
 /// `_info`/`pre`/`_op_payload`/`_op_expected.reject`, optional `_op_canonical` — the
 /// -32603 two-pour canonical-sibling carrier).
 struct InvalidSample
@@ -204,7 +207,8 @@ inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
     return params;
 }
 
-/// On-disk corpus loading (Task 3 generator emits `invalid_*.json`; the outer `{ "<stem>": {...} }` wrapper matches existing vectors).
+/// On-disk corpus loading (the generator emits `invalid_*.json`; the outer `{ "<stem>": {...} }`
+/// wrapper matches existing vectors).
 inline InvalidSample loadInvalidSample(std::string const& id)
 {
     InvalidSample sample;

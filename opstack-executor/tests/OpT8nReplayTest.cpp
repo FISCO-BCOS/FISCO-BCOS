@@ -1,4 +1,4 @@
-// OpT8nReplayTest.cpp — M-B3+M6 Task 3: OP block-level differential replay gate.
+// OpT8nReplayTest.cpp — OP block-level differential replay gate.
 //
 // Replays test/opstack/t8n/vectors/*.json (schema v3-block, op-geth
 // GenerateChain+InsertChain golden, generator in t8n/generator/) block-by-block
@@ -434,7 +434,6 @@ std::set<std::string> loadManifest(const fs::path& path)
     std::string line;
     while (std::getline(input, line))
     {
-        // trim
         const auto b = line.find_first_not_of(" \t\r");
         if (b == std::string::npos)
             continue;
@@ -1304,7 +1303,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
         if (!present.contains(name))
             BOOST_ERROR("manifest lists " << name << " but file is missing");
     }
-    // Task 6 exclusions (forced): expectedBlobVersionedHashes / executionRequests cannot
+    // Exclusions (forced): expectedBlobVersionedHashes / executionRequests cannot
     // be expressed through the GoldenSample loader, so the generator still emits files
     // but keeps them out of the manifest. Set equality exempts these two known
     // unregistered static-face files (suffix match, base-independent).
@@ -1365,7 +1364,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
             {
                 const auto consumer = rejectConsumer(*vec);
                 if (consumer == "engine")
-                    continue;  // field-corruption class: OpNewPayloadRpcE2eTest (Task 2) only
+                    continue;  // field-corruption class: OpNewPayloadRpcE2eTest only
                 assertRejectThrow(id, *vec, vm, receiptFactory);  // executor/both
                 continue;
             }
@@ -1391,7 +1390,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
 
 // ── reject branch: processOpBlock must throw std::runtime_error
 //    ("op block: invalid non-deposit tx: ...", OpBlockExecute.cpp:190) for an invalid
-//    non-deposit tx; assert throw + what() substring (review HIGH#5). Inline vector
+//    non-deposit tx; assert throw + what() substring. Inline vector
 //    (not a corpus file, embedded directly here) — fields must satisfy loader
 //    requirements: deposit data at the tx top level (jAt(t, "data")); from=OP_DEPOSITOR
 //    to=OP_L1_BLOCK (OpPredeploys.h / OpBlockExecute.cpp); mint/value/gas as hex strings.
@@ -1462,7 +1461,7 @@ BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
     assertRejectThrow("reject_executor_intrinsic", v, vm, receiptFactory);
 }
 
-// ── blob decode-class reject (Task 4, consumer:both) ─────────────────────────
+// ── blob decode-class reject (consumer:both) ─────────────────────────
 // The blob arm reproduces the real rejection via the type-byte classification
 // (processOpBlock never reaches raw-tx decode); the message is
 // "op block: unsupported tx type byte 0x3" (runOpBlockInjection / OpScheduler execute hook).
@@ -1526,7 +1525,7 @@ BOOST_AUTO_TEST_CASE(RejectBlobDecode)
     assertRejectThrow("reject_blob_decode", v, vm, receiptFactory);
 }
 
-// ── legacy arm loading (Task 3 F1) ───────────────────────────────────────────
+// ── legacy arm loading ───────────────────────────────────────────
 // Verifies _op_type "legacy" loads a type=legacy tx and fills gasPrice into both
 // max/priority (evmone legacy single-price semantics). _op_raw is structural
 // placeholder only (load section does not decode); the full golden path is covered

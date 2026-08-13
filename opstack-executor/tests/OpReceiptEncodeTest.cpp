@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(DepositAndNormalLeavesDiffer)
     BOOST_CHECK_NE(depEnc, normalEnc);
 }
 
-// End-to-end receiptsRoot equivalence (leaf-level proof for the 33-vector gate): building
+// End-to-end receiptsRoot equivalence (leaf-level proof): building
 // the root from FISCO receipts via sealOpBlock must be bit-identical to building it from
 // equivalent evmone receipts via evmone rlp_encode. Of sealOpBlock's three subtrees, only
 // the receiptsRoot leaf encoding is reconstructed here (trie construction unchanged), so

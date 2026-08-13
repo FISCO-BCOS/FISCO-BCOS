@@ -3,8 +3,8 @@
 // Test-genesis seeding for the OP predeploy/vault accounts (moved out of the production
 // opstack module: every caller is a test; the production side only consumes the address
 // constants in OpPredeploys.h).
-// TODO(eth-utils-removal): seedOpPredeploys 形参 TestState→自研内存账本,
-// 需连同全部测试调用方同步改。
+// TODO(eth-utils-removal): seedOpPredeploys parameter TestState -> in-memory ledger; update all
+// test callers together.
 
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <test/utils/test_state.hpp>

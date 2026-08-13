@@ -109,10 +109,9 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
                 "seedPreState: ledger poisoned: " + std::string(bridge.firstError()));
         }
     }
-    // C2 review fix (P1 CRITICAL): mergeBackStorage merges the oldest layer (FIFO).
-    // Drain the stack — the seed lands in the backend immediately, and with an empty
-    // stack before each block push, mergeView persists right away so the backend
-    // assertions can pass.
+    // mergeBackStorage merges the oldest layer (FIFO). Drain the stack — the seed lands in the
+    // backend immediately, and with an empty stack before each block push, mergeView persists
+    // right away so the backend assertions can pass.
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 

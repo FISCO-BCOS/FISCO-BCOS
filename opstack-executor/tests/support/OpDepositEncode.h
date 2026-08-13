@@ -1,14 +1,12 @@
 #pragma once
-// Test-only deposit-envelope encoder (replaces canonicalEnvelopeBytes' deposit branch after
-// OpTxDecode.h is deleted). Production buildOpBlock / DepositTxHandler encode deposit envelopes;
-// the tests rebuild them from a DepositTx for rawTxBytes classification + txRoot.
+// Test-only deposit-envelope encoder. Production buildOpBlock / DepositTxHandler encode deposit
+// envelopes; the tests rebuild them from a DepositTx for rawTxBytes classification + txRoot.
 #include <bcos-evm/eth/RlpEncodeTuple.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.hpp>
 
-// 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data]) —
-// canonicalEnvelopeBytes 的 deposit 分支（OpTxDecode.h:307 删除后测试专用）。
+// 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data]).
 inline bcos::bytes encodeDepositEnvelope(const bcos::evm::opstack::DepositTx& d)
 {
     using bcos::evm::eth::detail::encodeTuple;
