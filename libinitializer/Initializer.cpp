@@ -25,10 +25,10 @@
  */
 
 #include "Initializer.h"
-#include "EthereumBlockHashLookup.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
+#include "EthereumBlockHashLookup.h"
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
@@ -398,14 +398,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // The 256-ancestor window is bounded by the current block height, which the
     // executor's execution context already knows (EthereumHost passes
     // m_block.number), so no storage read for the current height is needed.
-    auto ethereumBlockHashLookup = [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
-                                       int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
+    auto ethereumBlockHashLookup =
+        [&backend = m_globalStateStorageInitializer->storage().latestBackend()](
+            int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
         // The body lives in EthereumBlockHashLookup.h (shared with the
         // scheduler integration test so they exercise the same provider).
         return ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
     };
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
-        *m_protocolInitializer->blockFactory()->receiptFactory(), std::move(ethereumBlockHashLookup));
+        *m_protocolInitializer->blockFactory()->receiptFactory(),
+        std::move(ethereumBlockHashLookup));
 
     // Resolve the effective executor version BEFORE gating Engine API / wiring the
     // schedulers. The on-chain value overrides the genesis-file value and can move to >= 2
@@ -483,8 +485,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
-                ledger);
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
         }
     }
     else
@@ -565,9 +566,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory()->receiptFactory(),
                 m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkTimestamps,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
-                [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
-                    return bcos::engine::detail::opEnvelopeToTars(env, txHash);
-                },
                 // Task 2: wire the OP delegate's ledger (same LedgerInterface::Ptr as the ethereum
                 // root) so Task 3's commit hook can call prewriteBlockToBuffer. The engine service
                 // below keeps /*ledger=*/nullptr — only the delegate consumes it, avoiding the

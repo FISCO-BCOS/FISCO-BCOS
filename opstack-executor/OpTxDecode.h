@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OP raw-tx envelope decoders (split out of OpSchedulerImpl.h): the per-type
-// tx decoders (deposit / eip1559 / setcode / access-list / legacy) plus the canonical
-// whole-envelope round-trip. Canonical re-encoding uses the production bcos-codec RLP encoder
-// (encodeTuple in bcos-evm/eth/RlpEncodeTuple.h — a byte-for-byte equivalent of evmone's test-only
-// rlp::encode_tuple), so this layer carries no evmone test-header dependency.
+// OP raw-tx envelope decoders: the per-type tx decoders plus the canonical whole-envelope
+// round-trip. Canonical re-encoding uses the production bcos-codec RLP encoder (encodeTuple in
+// bcos-evm/eth/RlpEncodeTuple.h), so this layer carries no evmone test-header dependency.
 
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpRlpDecode.h>
@@ -28,27 +26,18 @@
 namespace bcos::evm::engine::detail
 {
 // ---- canonical re-encode helpers (bcos-codec RLP) ----
-//
-// Byte-for-byte equivalents of the evmone *test-only* RLP encoder (test/utils/rlp.hpp +
-// test/utils/rlp_encode.hpp), rebuilt on the production bcos-codec encoder so this production
-// layer carries no evmone test-header dependency. The helpers now live in the shared header
-// bcos-evm/eth/RlpEncodeTuple.h (bcos::evm::eth::detail); they are imported here so the decoders
-// below keep calling them unqualified. Equivalence to evmone is asserted by the 125-vector
-// golden corpus plus the whole-envelope `assertCanonicalRoundTrip` below.
+// Byte-for-byte equivalents of the evmone test-only RLP encoder, rebuilt on the production
+// bcos-codec encoder (helpers in bcos-evm/eth/RlpEncodeTuple.h). Equivalence is asserted by the
+// golden corpus plus the whole-envelope assertCanonicalRoundTrip.
 
 using bcos::evm::eth::detail::encodeRlp;
 using bcos::evm::eth::detail::encodeTuple;
 
-/// DepositTx (OpDepositTx.h field order, cross-checked against the encode side,
-/// bcos-rpc TxHandler.cpp DepositTxHandler::encode): [sourceHash, from, to, mint, value, gas,
-/// isSystemTransaction, data] — no signature (`from` is explicit); `signedEnvelope` stays
-/// empty per OpBlockExecute.h's OpBlockTx contract ("empty for deposit", OpBlockExecute.h:18).
-inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
+/// DepositTx field order: [sourceHash, from, to, mint, value, gas, isSystemTransaction, data] —
+/// no signature (`from` is explicit).
+inline bcos::evm::opstack::DepositTx decodeDepositTx(bcos::bytes rawEntry)
 {
-    // envelope shape: 0x7E || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction,
-    // data]) — `body` starts at the LIST HEADER, not at the first field (golden bytes are
-    // literally `0x7e f9…`); enterList() consumes that header and
-    // returns a view scoped to the list's own payload for the field-by-field decode below.
+    // Envelope 0x7E || rlp([...]); body starts at the list header.
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
     bcos::evm::opstack::DepositTx dep;
@@ -56,11 +45,7 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
     dep.from = decodeAddressField(listBody);
     dep.to = decodeOptionalAddressField(listBody);
     // mint/value nilability: nil and a present-but-zero big.Int are RLP-indistinguishable (both
-    // encode to the empty string) — DepositTxHandler::encode's comment (TxHandler.cpp) resolves
-    // this same ambiguity the same way (a plain, non-optional scalar defaulting to 0); decoding
-    // DepositTx::mint as present-and-possibly-zero rather than guessing nullopt mirrors that,
-    // even though DepositTx::mint (OpDepositTx.h:29) is itself std::optional for execution-side
-    // reasons this decoder cannot recover from the wire bytes alone.
+    // encode to the empty string), so decode as a plain scalar defaulting to 0.
     dep.mint = decodeU256Scalar(listBody);
     dep.value = decodeU256Scalar(listBody);
     dep.gas_limit =
@@ -69,24 +54,19 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
     dep.data = decodeBytesField(listBody);
     expectExhausted(listBody, "deposit envelope fields");
     expectExhausted(body, "deposit envelope (trailing bytes after the field list)");
-    return bcos::evm::opstack::OpBlockTx{.tx = std::move(dep), .signedEnvelope = {}};
+    return dep;
 }
 
 /// EIP-1559 (type 0x02): [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit, to,
-/// value, data, accessList, yParity, r, s] — field order per rlp_encode.cpp:43-47.
+/// value, data, accessList, yParity, r, s].
 ///
-/// `chainId` (the scheduler's own chain id, threaded in from its `m_chainId` via
-/// `decodeOneRawTx`) is compared against the decoded `tx.chain_id` immediately below: nothing
-/// downstream (`OpValidate.cpp` -> `validate_transaction`,
-/// eth/state/state.cpp:420-529) checks chain id at all — it is used only for the CHAINID opcode
-/// and EIP-7702 authorization matching — so a transaction signed for a *different* chain replays
-/// unmodified here (ecrecover succeeds, sender is correct, execution is normal, block is VALID),
-/// while op-geth's own signer rejects it at decode time (`ErrInvalidChainId`,
-/// transaction_signing.go:284-285) and the whole block never reaches execution.
+/// `chainId` cross-check: nothing downstream uses chain id except the CHAINID opcode and EIP-7702
+/// auth matching, so a tx signed for a different chain would replay unmodified here while op-geth
+/// rejects it at decode time (ErrInvalidChainId).
 inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
-    // envelope shape: 0x02 || rlp([...]) — same list-header fix as decodeDepositTx.
+    // Envelope 0x02 || rlp([...]).
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
     evmone::state::Transaction tx;
@@ -104,11 +84,8 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint6
     tx.data = decodeBytesField(listBody);
     tx.access_list = decodeAccessList(listBody);
     const auto yParity = decodeU256Scalar(listBody);
-    // op-geth rejects yParity > 1 as "invalid y parity" before it ever reaches sender recovery;
-    // without this check a >1 value gets silently truncated by
-    // `static_cast<uint8_t>` into a bogus-but-plausible 0/1 that could pass downstream, and
-    // `recoverTxSender`'s `yParity != 0` test would treat any nonzero value (including 256,
-    // 257, ...) as parity=1.
+    // op-geth rejects yParity > 1 ("invalid y parity"); without this it truncates to a
+    // bogus-but-plausible 0/1 and any nonzero value would be treated as parity=1.
     if (yParity > 1)
         throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid y parity (eip1559)");
     tx.r = decodeU256Scalar(listBody);
@@ -127,14 +104,13 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint6
 }
 
 /// EIP-7702 set-code (type 0x04): [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit,
-/// to, value, data, accessList, authorizationList, yParity, r, s] — field order per
-/// rlp_encode.cpp:66-70. `chainId` cross-check: see decodeEip1559Tx's comment (same rationale,
-/// same outer-tx-only scope — EIP-7702 authorization tuples carry their own independent chain_id
-/// field, already checked inside evmone::state::process_authorization_list, and are unaffected).
+/// to, value, data, accessList, authorizationList, yParity, r, s]. `chainId` cross-check: same
+/// rationale as decodeEip1559Tx (authorization tuples carry their own chain_id, checked inside
+/// evmone, and are unaffected).
 inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
-    // envelope shape: 0x04 || rlp([...]) — same list-header fix as decodeDepositTx.
+    // Envelope 0x04 || rlp([...]).
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
     evmone::state::Transaction tx;
@@ -174,14 +150,12 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint6
 }
 
 /// EIP-2930 access-list tx (type 0x01): [chainId, nonce, gasPrice, gasLimit, to, value, data,
-/// accessList, yParity, r, s] — field order per rlp_encode.cpp:29-37. Legacy/access-list carry a
-/// single `gasPrice`, which evmone's Transaction models as `max_gas_price` with
-/// `max_priority_gas_price` set equal (validate_transaction asserts priority<=cap; state.cpp:466).
-/// `chainId` cross-check: same rationale/scope as decodeEip1559Tx.
+/// accessList, yParity, r, s]. Single `gasPrice` is modeled as max_gas_price with
+/// max_priority_gas_price equal (priority<=cap). `chainId` cross-check: same as decodeEip1559Tx.
 inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
-    // envelope shape: 0x01 || rlp([...]) — same list-header handling as decodeEip1559Tx.
+    // Envelope 0x01 || rlp([...]).
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
     auto listBody = enterList(body);
     evmone::state::Transaction tx;
@@ -217,17 +191,12 @@ inline bcos::evm::opstack::OpBlockTx decodeAccessListTx(bcos::bytes rawEntry, ui
 }
 
 /// Legacy tx (no EIP-2718 type byte; the envelope IS the RLP list): [nonce, gasPrice, gasLimit, to,
-/// value, data, v, r, s] — field order per rlp_encode.cpp:23-26. Handles BOTH forms:
-///   * pre-EIP-155: v ∈ {27,28}, parity = v-27, signing preimage = rlp([nonce,gasPrice,gasLimit,to,
-///     value,data]) (6 items).
-///   * EIP-155: v = chainId*2 + 35 + parity, signing preimage = rlp([...6 fields, chainId, 0, 0])
-///     (9 items). The derived chainId must equal the scheduler's chainId (same cross-check/scope as
-///     the typed decoders).
-/// `v` is read as a canonical scalar (decodeU256Scalar → no leading zero, width-bounded), so
-/// v-canonicality is enforced identically to the other types — a non-minimal v cannot silently
-/// produce a divergent txRoot. txRoot itself is taken over the raw wire bytes (computeOpTxRoot,
-/// OpBlockExecute.h), so `tx.v`'s uint8 width does not bound the legacy v space; the full v lives in
-/// `signedEnvelope` and only parity/chainId are extracted here.
+/// value, data, v, r, s]. Handles both forms:
+///   * pre-EIP-155: v ∈ {27,28}, parity = v-27, preimage = rlp([...6 fields]);
+///   * EIP-155: v = chainId*2 + 35 + parity, preimage = rlp([...6 fields, chainId, 0, 0]).
+/// The derived chainId must equal the scheduler's chainId. `v` is read as a canonical scalar so
+/// v-canonicality matches the other types; the full v lives in signedEnvelope (txRoot hashes the
+/// raw bytes), only parity/chainId are extracted here.
 inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
@@ -281,29 +250,10 @@ inline bcos::evm::opstack::OpBlockTx decodeLegacyTx(bcos::bytes rawEntry, uint64
     return bcos::evm::opstack::OpBlockTx{.tx = std::move(tx), .signedEnvelope = fullEnvelope};
 }
 
-/// Dispatches on the EIP-2718 type byte. The OP validator accepts every transaction type op-geth's
-/// own `DecodeTransactions` does: deposit (0x7e), the three typed signed shapes (0x01 access-list,
-/// 0x02 eip1559, 0x04 set-code), and the untyped legacy form (first byte ≥ 0xc0, an RLP list
-/// header). Blob (0x03) stays out on purpose — L2 blocks carry no blob txs. Earlier this list was
-/// only {0x7e, 0x02, 0x04}, on the mistaken premise that "these are the only shapes the variant
-/// understands"; the execution variant (OpBlockExecute.h) has in fact always carried
-/// legacy/access_list too (state.cpp:460-475) — the old set merely mirrored the t8n corpus's three
-/// `_op_type` values, i.e. test coverage, not a capability boundary.
-///
-/// `chainId` is threaded straight through to the two typed-tx decoders — deposit has no chain_id
-/// field and does not take the parameter. This function stays a free function in `detail`, not a
-/// member of `OpSchedulerImpl`, precisely so this parameter never touches the class template's own
-/// member-function signatures (which are eagerly instantiated whenever `OpSchedulerImpl<Storage>`
-/// is named, unlike member bodies — an OP dependent name must not leak into a signature the
-/// generic composition root also instantiates).
-/// Re-encodes a decoded OpBlockTx canonically from its parsed fields, so the caller can compare it
-/// byte-for-byte with the raw envelope. Uses the production bcos-codec RLP encoder (encodeTuple —
-/// byte-for-byte equivalent of evmone's canonical RLP) for every type: deposits are rebuilt as
-/// `0x7e || rlp([...8 fields])` (the isSystemTransaction bool re-emits via the `uint64 0/1` shape,
-/// whose RLP — empty string / 0x01 — matches the wire bool exactly); legacy reconstructs the full
-/// v (pre-155 27+parity, EIP-155 chainId*2+35+parity) that `tx.v`'s uint8 cannot hold; the three
-/// signed typed forms (0x01/0x02/0x04) round-trip through the type byte + encodeTuple field tuple
-/// (field order identical to evmone::state::rlp_encode(const Transaction&)).
+/// Re-encode a decoded OpBlockTx canonically (production bcos-codec RLP) so the caller can
+/// byte-compare with the raw envelope: deposits as 0x7e || rlp([...8 fields]); legacy reconstructs
+/// the full v (pre-155 27+parity, EIP-155 chainId*2+35+parity) that tx.v's uint8 cannot hold; the
+/// typed forms round-trip through the type byte + field tuple.
 inline bcos::bytes canonicalEnvelopeBytes(const bcos::evm::opstack::OpBlockTx& btx)
 {
     if (std::holds_alternative<bcos::evm::opstack::DepositTx>(btx.tx))
@@ -360,14 +310,8 @@ inline bcos::bytes canonicalEnvelopeBytes(const bcos::evm::opstack::OpBlockTx& b
 }
 
 /// Whole-envelope canonical-encoding invariant: decode → re-encode → byte-compare against the
-/// original wire bytes, rejecting any mismatch. Defense-in-depth INDEPENDENT of the per-field and
-/// length-prefix checks — it fails closed if a future decoder change ever lets a non-canonical
-/// byte through, keeping `computeOpTxRoot`'s "hash the raw bytes == op-geth DeriveSha" equivalence
-/// a runtime-checked invariant rather than a prose promise. Cost is one re-encode per tx,
-/// negligible beside the ecrecover each decoder already runs, so it stays enabled in all builds
-/// (a debug-only guard would compile out of this Release consensus path — exactly where it must
-/// hold). Proven free of false-rejects by the 33-vector golden corpus and the t8n legs, whose
-/// real op-geth bytes all round-trip.
+/// original wire bytes, rejecting any mismatch. Fails closed on residual non-canonicality,
+/// keeping the txRoot equivalence a runtime-checked invariant; one cheap re-encode per tx.
 inline void assertCanonicalRoundTrip(
     const bcos::bytes& rawEntry, const bcos::evm::opstack::OpBlockTx& decoded)
 {
@@ -378,6 +322,10 @@ inline void assertCanonicalRoundTrip(
             "OpSchedulerImpl: raw tx decode: non-canonical envelope (re-encode mismatch)");
 }
 
+/// Dispatch on the EIP-2718 type byte: deposit (0x7e), access-list (0x01), eip1559 (0x02),
+/// set-code (0x04), legacy (first byte >= 0xc0). Blob (0x03) stays out — L2 blocks carry no blob
+/// txs. Free function in `detail` so the `chainId` param never touches OpSchedulerImpl's
+/// member-function signatures (which the generic composition root instantiates).
 inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64_t chainId)
 {
     if (rawEntry.empty())
@@ -386,16 +334,17 @@ inline bcos::evm::opstack::OpBlockTx decodeOneRawTx(bcos::bytes rawEntry, uint64
     constexpr uint8_t kAccessListTypeByte = 0x01;  // evmone::state::Transaction::Type::access_list
     constexpr uint8_t kEip1559TypeByte = 0x02;     // evmone::state::Transaction::Type::eip1559
     constexpr uint8_t kSetCodeTypeByte = 0x04;     // evmone::state::Transaction::Type::set_code
-    constexpr uint8_t kRlpListBase = 0xc0;  // EIP-2718: first byte >= 0xc0 is an untyped RLP list
-    // Keep a copy of the wire bytes for the whole-envelope round-trip invariant below; the
-    // sub-decoders consume (move from / crop) rawEntry as they parse.
+    constexpr uint8_t kRlpListBase = 0xc0;  // first byte >= 0xc0 is an untyped RLP list
+    // Keep a copy of the wire bytes for the whole-envelope round-trip invariant; the sub-decoders
+    // consume rawEntry as they parse.
     const bcos::bytes original = rawEntry;
     const auto typeByte = rawEntry[0];
     auto decoded = [&]() -> bcos::evm::opstack::OpBlockTx {
         if (typeByte >= kRlpListBase)  // legacy: no type byte, the envelope is the RLP list itself
             return decodeLegacyTx(std::move(rawEntry), chainId);
         if (typeByte == kDepositTypeByte)
-            return decodeDepositTx(std::move(rawEntry));
+            return bcos::evm::opstack::OpBlockTx{
+                .tx = decodeDepositTx(std::move(rawEntry)), .signedEnvelope = {}};
         if (typeByte == kAccessListTypeByte)
             return decodeAccessListTx(std::move(rawEntry), chainId);
         if (typeByte == kEip1559TypeByte)

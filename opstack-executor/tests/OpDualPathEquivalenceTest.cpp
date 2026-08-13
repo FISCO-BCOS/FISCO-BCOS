@@ -32,15 +32,14 @@
 // Round 3 P2 fork parity: route B explicitly computes cfg = configAt(timestamp/1000,
 // forkTimestampsFor(jovian)) and passes it as arg 6 to runOpBlockInjection, asserting it resolves
 // from the same source as route A's scheduler-internal configAt.
-// Round 3 P3 normalTxs alignment: normalTxs[k] = the k-th non-deposit tx (skipping deposits, in
-// block order), aligned with the injector's normalIdx incrementing only on the non-deposit branch.
+// (refactor) Route B consumes the block's Transaction objects (block order) + decoded DepositTx —
+// no raw-tx parse, no normalTxs conversion.
 // Review I-1 exception handling: per-vector catches use catch(std::exception)/catch(...) (route
 // B's OpTxValidationFailed is a bcos::Exception, not a runtime_error; and libevmone -fno-rtti
 // makes typed catch unreliable) — catch → BOOST_ERROR + continue, never judge divergence by
 // exception type.
 // Round 3 P4: has_storage scan (same-block create pre-triage; scan without pre-fixing) + /sys
-// tripwire derived-table prefix assertion (accountTableName(addr) prefix == apps/) +
-// assertCanonicalRoundTrip (decodeOneRawTx already includes the whole-envelope round-trip).
+// tripwire derived-table prefix assertion (accountTableName(addr) prefix == apps/).
 
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
@@ -466,166 +465,10 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
     return rawTxBytes;
 }
 
-/// evmone tx field-level equality (buildFiscoTx pre-flight): bcosTransactionToEvmone does not
-/// carry r/s/v (the signature lives in tars' signature* fields, which that function never reads);
-/// a sender match equivalently covers r/s/v decode consistency (decodeOneRawTx ecrecovers from
-/// r/s/v, opEnvelopeToTars extracts from the envelope signer).
-/// First mismatching field name (diagnostic; "<none>" when equal).
-std::string evmoneTxFieldDiff(
-    const evmone::state::Transaction& a, const evmone::state::Transaction& b)
-{
-    if (a.type != b.type)
-        return "type";
-    if (a.sender != b.sender)
-        return "sender";
-    if (a.to != b.to)
-        return "to";
-    if (a.nonce != b.nonce)
-        return "nonce";
-    if (a.gas_limit != b.gas_limit)
-        return "gas_limit";
-    if (a.max_gas_price != b.max_gas_price)
-        return "max_gas_price";
-    if (a.max_priority_gas_price != b.max_priority_gas_price)
-        return "max_priority_gas_price";
-    if (a.value != b.value)
-        return "value";
-    if (a.data != b.data)
-        return "data";
-    if (a.access_list != b.access_list)
-        return "access_list";
-    if (a.authorization_list.size() != b.authorization_list.size())
-        return "authorization_list";
-    for (std::size_t i = 0; i < a.authorization_list.size(); ++i)
-    {
-        const auto& x = a.authorization_list[i];
-        const auto& y = b.authorization_list[i];
-        if (x.chain_id != y.chain_id)
-            return "authorization_list[" + std::to_string(i) + "].chain_id";
-        if (x.addr != y.addr)
-            return "authorization_list[" + std::to_string(i) + "].addr";
-        if (x.nonce != y.nonce)
-            return "authorization_list[" + std::to_string(i) + "].nonce";
-        if (x.v != y.v)
-            return "authorization_list[" + std::to_string(i) + "].v";
-        if (x.r != y.r)
-            return "authorization_list[" + std::to_string(i) + "].r";
-        if (x.s != y.s)
-            return "authorization_list[" + std::to_string(i) + "].s";
-        // signer is not compared: decodeOneRawTx leaves it empty (recovery deferred to evmone's
-        // process_authorization_list), opEnvelopeToTars pre-fills it (already recovered at decode)
-        // — execution-equivalent, only a representation difference.
-    }
-    return "<none>";
-}
-
-/// buildFiscoTx pre-flight field-level check. **Excludes chain_id**: bcosTransactionToEvmone
-/// parses tars' chainID decimal string (takeToTarsTransaction stores
-/// std::to_string(chainId), 0x2105 → "8451") as a hex-quantity (safeFromQuantity strips an
-/// optional 0x then parses as hex), so 8451 → 0x8451=33873 — a known representation defect of
-/// that conversion function (BCOS2Evmone.cpp:221 comment: validate_transaction does not check
-/// chain_id; semantics are bound upstream by the signature), not a buildFiscoTx/
-/// opEnvelopeToTars error. Faithful chain_id is covered end-to-end by the A-vs-B comparison (if a
-/// tx reads the CHAINID opcode, stateRoot/output must diverge → red).
-bool evmoneTxFieldsEqual(const evmone::state::Transaction& a, const evmone::state::Transaction& b)
-{
-    if (a.type != b.type)
-        return false;
-    if (a.sender != b.sender)
-        return false;
-    if (a.to != b.to)
-        return false;
-    if (a.nonce != b.nonce)
-        return false;
-    if (a.gas_limit != b.gas_limit)
-        return false;
-    if (a.max_gas_price != b.max_gas_price)
-        return false;
-    if (a.max_priority_gas_price != b.max_priority_gas_price)
-        return false;
-    if (a.value != b.value)
-        return false;
-    if (a.data != b.data)
-        return false;
-    if (a.access_list != b.access_list)
-        return false;
-    if (a.authorization_list.size() != b.authorization_list.size())
-        return false;
-    for (std::size_t i = 0; i < a.authorization_list.size(); ++i)
-    {
-        const auto& x = a.authorization_list[i];
-        const auto& y = b.authorization_list[i];
-        // signer is not compared (deferred recovery vs pre-fill, execution-equivalent); only the
-        // signature tuple fields are.
-        if (x.chain_id != y.chain_id || x.addr != y.addr || x.nonce != y.nonce || x.r != y.r ||
-            x.s != y.s || x.v != y.v)
-            return false;
-    }
-    return true;
-}
-
-/// buildFiscoTx (promoted to an explicit step in round 3 P2): opEnvelopeToTars(env, hash)
-/// (EngineServiceImpl.h:168) + override extraTransactionBytes=env (normal txs only; deposit is
-/// already complete) + pre-flight field-level check bcosTransactionToEvmone(rebuilt tx) ==
-/// decodeOneRawTx(env) — key to route B correctness. When returning nullptr the caller must
-/// BOOST_ERROR (opEnvelopeToTars failure / pre-flight mismatch).
-bcos::protocol::Transaction::Ptr buildFiscoTx(
-    const bcos::evm::opstack::OpBlockTx& btx, bcos::crypto::Hash::Ptr const& hashImpl)
-{
-    bcos::bytes env(btx.signedEnvelope.begin(), btx.signedEnvelope.end());
-    const auto txHash = hashImpl->hash(env);
-    auto tarsTx = bcos::engine::detail::opEnvelopeToTars(env, txHash);
-    if (!tarsTx)
-    {
-        BOOST_ERROR("buildFiscoTx opEnvelopeToTars nullopt: env=" << hexBytes(
-                        evmc::bytes_view(env.data(), env.size())));
-        return nullptr;
-    }
-    // Override: takeToTarsTransaction stores the signing preimage, executeTransaction reads
-    // extraTransactionBytes as the full envelope (OpstackExecutor.h:280-281). tars vector<byte>
-    // holds int8_t elements, so assign is required (same assign convention as the
-    // OpNewPayloadRpcE2eTest txHash).
-    tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
-    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [tars = std::move(*tarsTx)]() mutable { return &tars; });
-
-    // pre-flight: bcosTransactionToEvmone(FISCO tx) must equal the direct envelope decode.
-    const auto rebuilt = eth::bcosTransactionToEvmone(*tx);
-    bcos::evm::opstack::OpBlockTx decoded;
-    try
-    {
-        decoded = detail::decodeOneRawTx(env, kChainId);
-    }
-    catch (const std::exception& e)
-    {
-        BOOST_ERROR("buildFiscoTx pre-flight decodeOneRawTx threw: " << e.what());
-        return nullptr;
-    }
-    const auto* evmTx = std::get_if<evmone::state::Transaction>(&decoded.tx);
-    // Final review M-1: evmTx==nullptr must return in its own branch first, not share a short-
-    // circuit body with the field comparison (otherwise evmoneTxFieldDiff/hexAddr below would
-    // dereference a null pointer, UB).
-    if (evmTx == nullptr)
-    {
-        BOOST_ERROR("buildFiscoTx pre-flight: decodeOneRawTx returned non-Transaction variant: env="
-                    << hexBytes(evmc::bytes_view(env.data(), env.size())));
-        return nullptr;
-    }
-    if (!evmoneTxFieldsEqual(rebuilt, *evmTx))
-    {
-        BOOST_ERROR("buildFiscoTx pre-flight mismatch: env="
-                    << hexBytes(evmc::bytes_view(env.data(), env.size()))
-                    << " diff=" << evmoneTxFieldDiff(rebuilt, *evmTx) << " decoded_sender="
-                    << hexAddr(evmTx->sender) << " rebuilt_sender=" << hexAddr(rebuilt.sender));
-        return nullptr;
-    }
-    return tx;
-}
-
 /// FISCO tx for block assembly (Task 6 P1-8 harness surgery): built from the raw envelope
-/// (opEnvelopeToTars + SEV-8 full-envelope override), without buildFiscoTx's pre-flight — block
-/// assembly must also build txs for deposits (getTransactions returns the full set; the execute
-/// hook only pulls raw bytes from extraTransactionBytes). Precedent:
+/// (opEnvelopeToTars + SEV-8 full-envelope override) — block assembly must also build txs for
+/// deposits (getTransactions returns the full set; the execute hook pulls raw bytes from
+/// extraTransactionBytes and classifies by type byte). Precedent:
 /// EngineServiceImpl.h:1176-1196 buildOpBlock.
 bcos::protocol::Transaction::Ptr buildBlockTx(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
@@ -820,17 +663,17 @@ void checkSysTripwire(const std::string& id, const JsonValue& vec)
 
 /// has_storage scan (round 3 P4; scan without pre-fixing): P1 scans same-block creates for
 /// early triage — the corpus likely does not trigger StorageStateView's has_storage read-side
-/// asymmetry; a hit only REPORTs, never fails.
-void hasStorageScan(const std::string& id, const std::vector<bcos::evm::opstack::OpBlockTx>& txs)
+/// asymmetry; a hit only REPORTs, never fails. Post-refactor the block's txs are deposits +
+/// FISCO Transactions; contract creations are visible as deposits with a nullopt `to` (the L1
+/// attributes deposit always carries a `to`, so a hit would be a genuine create deposit).
+void hasStorageScan(
+    const std::string& id, const std::vector<bcos::evm::opstack::DepositTx>& deposits)
 {
     int creates = 0;
-    for (const auto& btx : txs)
+    for (const auto& dep : deposits)
     {
-        if (const auto* tx = std::get_if<evmone::state::Transaction>(&btx.tx))
-        {
-            if (!tx->to.has_value())
-                ++creates;
-        }
+        if (!dep.to.has_value())
+            ++creates;
     }
     if (creates > 0)
         std::cout << "  has-storage-triage " << id << " creates=" << creates
@@ -1016,34 +859,21 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         op::configAt(static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
     BOOST_CHECK_MESSAGE(&cfg == &vectorCfg, id << ": fork parity broken: block cfg != vector cfg");
 
-    // Decode txs (decodeOneRawTx internally includes assertCanonicalRoundTrip, the P4 fallback).
-    std::vector<op::OpBlockTx> txs;
-    txs.reserve(rawTxBytes.size());
-    try
+    // deposits + block-order transactions（buildBlockTx 已支持 deposit，Web3Transaction 0x7e）。
+    std::vector<op::DepositTx> deposits;
+    std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
+    transactions.reserve(rawTxBytes.size());
+    for (auto const& raw : rawTxBytes)
     {
-        for (const auto& raw : rawTxBytes)
-            txs.push_back(detail::decodeOneRawTx(raw, kChainId));
-    }
-    catch (const std::exception& e)
-    {
-        BOOST_ERROR(id << ": decodeOneRawTx threw: " << e.what());
-        return;
-    }
-
-    // Round 3 P3: normalTxs[k] = the k-th non-deposit tx (skipping deposits, in block order),
-    // aligned with the injector's normalIdx incrementing only on the non-deposit branch.
-    std::vector<bcos::protocol::Transaction::Ptr> normalTxs;
-    for (const auto& btx : txs)
-    {
-        if (std::holds_alternative<op::DepositTx>(btx.tx))
-            continue;
-        auto tx = buildFiscoTx(btx, fixture.hashImpl);
+        if (raw[0] == static_cast<uint8_t>(op::kDepositTxType))
+            deposits.push_back(detail::decodeDepositTx(raw));
+        auto tx = buildBlockTx(raw, fixture.hashImpl);
         if (tx == nullptr)
         {
-            BOOST_ERROR(id << ": buildFiscoTx failed (opEnvelopeToTars nullopt / pre-flight)");
+            BOOST_ERROR(id << ": buildBlockTx failed");
             return;
         }
-        normalTxs.push_back(std::move(tx));
+        transactions.push_back(tx);
     }
 
     // Route B: runOpBlockInjection (per-tx injection loop) — run first, backfill the announced
@@ -1061,8 +891,8 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         ledgerConfig.setGasPrice({"0x0", 0});
         bcos::executor_v1::opstack::OpstackExecutor executor{
             fixture.receiptFactory, fixture.hashImpl, cfg};
-        resultB = engine::runOpBlockInjection(executor, viewB, *header, txs, normalTxs, cfg,
-            kChainId, ledgerConfig, rawTxBytes, fixture.hashImpl);
+        resultB = engine::runOpBlockInjection(executor, viewB, *header, transactions, deposits,
+            cfg, kChainId, ledgerConfig, rawTxBytes, fixture.hashImpl);
     }
     catch (const std::exception& e)
     {
@@ -1106,11 +936,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
 
         auto opScheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
             fixture.receiptFactory, fixture.hashImpl, kChainId, forkTimestampsFor(jovian),
-            fixture.blockFactory, fixture.multiLayerStorage,
-            [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
-                return bcos::engine::detail::opEnvelopeToTars(env, txHash);
-            },
-            /*ledger=*/nullptr);
+            fixture.blockFactory, fixture.multiLayerStorage, /*ledger=*/nullptr);
 
         bcos::Error::Ptr routeAErr;
         opScheduler->executeBlock(block, /*verify=*/true,
@@ -1172,7 +998,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         checkSysTripwire(id, vec);
 
         // has_storage scan (P4 pre-triage; REPORT only).
-        hasStorageScan(id, txs);
+        hasStorageScan(id, deposits);
     }
     catch (const std::exception& e)
     {

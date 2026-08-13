@@ -11,6 +11,7 @@
 // (OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit) and would be red at this phase.
 
 #include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpTxDecode.h>  // detail::canonicalEnvelopeBytes (deposit envelope; Task 4 → helper)
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -100,9 +101,8 @@ bcos::evm::opstack::OpBlockTx makeAttributesDeposit()
     return bcos::evm::opstack::OpBlockTx{dep, {}};
 }
 
-/// The block's normal EIP-1559 tx shell. The injector only reads `tx.type` from this variant
-/// alternative (execution runs off the caller-prebuilt FISCO Transaction in normalTxs); the other
-/// fields are filled for realism.
+/// The block's normal EIP-1559 tx shell. Only `signedEnvelope` is consumed (the raw envelope the
+/// injector classifies by first byte); the evmone fields are filled for realism.
 bcos::evm::opstack::OpBlockTx makeEip1559OpBlockTx()
 {
     namespace detail = bcos::evm::engine::detail;
@@ -193,16 +193,19 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
 
     fundSender(storage, hashImpl);
 
-    auto depTx = makeAttributesDeposit();
-    auto normTx = makeEip1559OpBlockTx();
-    std::vector<op::OpBlockTx> txs{depTx, normTx};
-    std::vector<bcos::protocol::Transaction::Ptr> normalTxs{buildEip1559FiscoTx()};
-    bcos::bytes depEnv(depTx.signedEnvelope.begin(), depTx.signedEnvelope.end());
+    auto depTx = makeAttributesDeposit();  // OpBlockTx
+    auto normTx = makeEip1559OpBlockTx();  // OpBlockTx
+    std::vector<op::DepositTx> deposits{std::get<op::DepositTx>(depTx.tx)};
+    // 块序 transactions：索引0 是 deposit 占位（deposit 分支不触碰），索引1 是 normal。
+    std::vector<bcos::protocol::Transaction::ConstPtr> transactions{nullptr, buildEip1559FiscoTx()};
+    // makeAttributesDeposit 的 signedEnvelope 为空，runOpBlockInjection 需按 rawTxBytes[0][0]
+    // 分类 → 用 canonicalEnvelopeBytes 重建真实 0x7e 信封（Task 4 换 encodeDepositEnvelope）。
+    bcos::bytes depEnv = detail::canonicalEnvelopeBytes(depTx);
     bcos::bytes normEnv(normTx.signedEnvelope.begin(), normTx.signedEnvelope.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, normEnv};
 
-    auto result = engine::runOpBlockInjection(executor, storage, *header, txs, normalTxs, cfg,
-        kChainId, ledgerConfig, rawTxBytes, hashImpl);
+    auto result = engine::runOpBlockInjection(executor, storage, *header, transactions, deposits,
+        cfg, kChainId, ledgerConfig, rawTxBytes, hashImpl);
 
     // R3 P3: system-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
     const auto sysBlk = detail::toBlockInfo(*header);
@@ -211,7 +214,7 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
         static_cast<int64_t>(detail::narrowU256ToU64(header->gasLimit(), "test")));
 
     // Receipt count == tx count (both txs execute).
-    BOOST_CHECK_EQUAL(result.receipts.size(), txs.size());
+    BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());
 
     // gasUsed == manual Σ per-receipt gasUsed (the injector's cumulative accumulator).
     int64_t manual = 0;
@@ -244,12 +247,13 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByInjector)
     bcos::ledger::LedgerConfig ledgerConfig;
     ledgerConfig.setEVMCRevision(cfg.rev);
 
-    // Empty txs → "op block: missing L1 attributes deposit (empty block)" → OpConsensusError.
-    std::vector<op::OpBlockTx> txs;
-    std::vector<bcos::protocol::Transaction::Ptr> normalTxs;
+    // Empty transactions/deposits/rawTxBytes → "op block: missing L1 attributes deposit (empty
+    // block)" → OpConsensusError.
+    std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
+    std::vector<op::DepositTx> deposits;
     std::vector<bcos::bytes> rawTxBytes;
-    BOOST_CHECK_THROW(engine::runOpBlockInjection(executor, storage, *header, txs, normalTxs, cfg,
-                          kChainId, ledgerConfig, rawTxBytes, hashImpl),
+    BOOST_CHECK_THROW(engine::runOpBlockInjection(executor, storage, *header, transactions,
+                          deposits, cfg, kChainId, ledgerConfig, rawTxBytes, hashImpl),
         std::runtime_error);
 }
 

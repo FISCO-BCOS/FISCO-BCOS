@@ -210,12 +210,8 @@ struct OpE2eFixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
-            receiptFactory, hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage,
-            [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
-                return bcos::engine::detail::opEnvelopeToTars(env, txHash);
-            },
-            ledger)),
+        opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
+            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger)),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             opDelegate)

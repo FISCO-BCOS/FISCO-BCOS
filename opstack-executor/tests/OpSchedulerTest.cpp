@@ -12,8 +12,9 @@
 //    anchor = independent route B on the same MLS (runOpBlockInjection; route A executeOpBlock is
 //    retired — the dual-path harness proved route B semantically equivalent to it).
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected: the execute hook throws OpConsensusError
-//    (unsupported tx type byte 0x03, decodeOneRawTx throws deterministically) → the skeleton's
-//    coExecuteBlock classifies via classifyException → Error code == OpConsensusRejected.
+//    (unsupported tx type byte 0x03, type-byte classification throws deterministically) → the
+//    skeleton's coExecuteBlock classifies via classifyException → Error code ==
+//    OpConsensusRejected.
 // 3. classifyException direct three-way mapping: OpConsensusError→OpConsensusRejected /
 //    OpStorageError→OpStorageFault / other→UnknownError.
 // 4. CommitPersistsSevenLedgerTables (Task 5c slot-3 E2E): after executeBlock + commitBlock, 7 SYS
@@ -136,16 +137,6 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
 }
 
-/// EnvelopeToTarsConverter injected at the composition root: wraps engine's opEnvelopeToTars
-/// (tests link engine; production injects a same-shape lambda via Initializer — OpScheduler does
-/// not build it in).
-bcos::evm::engine::EnvelopeToTarsConverter makeConverter()
-{
-    return [](bcos::bytes const& env, bcos::crypto::HashType const& txHash) {
-        return bcos::engine::detail::opEnvelopeToTars(env, txHash);
-    };
-}
-
 /// L1 attributes deposit (the isthmus_transfer_basic corpus deposit shape): to==OP_L1_BLOCK &&
 /// from==OP_DEPOSITOR satisfies isL1AttributesTx (OpBlockExecute.h:97-99). data is empty — under
 /// Isthmus (pre-Jovian) validateJovianBlockShape is a no-op (OpBlockExecute.h:76); processOpBlock
@@ -231,9 +222,9 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     return tx;
 }
 
-/// A one-byte 0x03 envelope — decodeOneRawTx deterministically throws OpConsensusError
-/// ("unsupported tx type byte", OpTxDecode.h:405). Used to reliably drive the execute hook into the
-/// consensus-rejected classification (independent of RTTI-boundary runtime behavior).
+/// A one-byte 0x03 envelope — the execute hook's type-byte classification deterministically throws
+/// OpConsensusError ("unsupported tx type byte", OpScheduler.h). Used to reliably drive the execute
+/// hook into the consensus-rejected classification (independent of RTTI-boundary runtime behavior).
 bcos::protocol::Transaction::Ptr buildUnsupportedTypeTx()
 {
     bcostars::Transaction tars;
@@ -324,7 +315,7 @@ struct Fixture
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         scheduler(std::make_shared<TestOpScheduler>(receiptFactory, hashImpl, kChainId,
-            forkTimestamps, blockFactory, multiLayerStorage, makeConverter(), ledger))
+            forkTimestamps, blockFactory, multiLayerStorage, ledger))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -436,38 +427,40 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
 }
 
 /// route B direct-call anchor (after route A executeOpBlock retired, the independent execution
-/// comparison moved to runOpBlockInjection): assemble txs/normalTxs + OpstackExecutor then call
-/// directly, returning OpExecuteBlockResult. Assembly matches OpScheduler's execute hook
-/// (OpScheduler.h:127-179) / OpDualPathEquivalenceTest route B (:1015-1034) (no copy drift).
+/// comparison moved to runOpBlockInjection): assemble deposits + block-order transactions +
+/// OpstackExecutor then call directly, returning OpExecuteBlockResult. Assembly matches
+/// OpScheduler's execute hook (OpScheduler.h) / OpDualPathEquivalenceTest route B (no copy drift).
 bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& view,
     bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxBytes)
 {
     namespace op = bcos::evm::opstack;
     const auto& cfg =
         op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, f.forkTimestamps);
-    std::vector<op::OpBlockTx> txs;
-    txs.reserve(rawTxBytes.size());
+    std::vector<op::DepositTx> deposits;
+    std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
+    transactions.reserve(rawTxBytes.size());
     for (auto const& raw : rawTxBytes)
-        txs.push_back(detail::decodeOneRawTx(raw, kChainId));
-    std::vector<bcos::protocol::Transaction::Ptr> normalTxs;
-    normalTxs.reserve(rawTxBytes.size());
-    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
-        if (std::holds_alternative<op::DepositTx>(txs[i].tx))
-            continue;
-        const auto txHash = f.hashImpl->hash(rawTxBytes[i]);
-        auto tarsTx = makeConverter()(rawTxBytes[i], txHash);
+        if (raw[0] == static_cast<uint8_t>(op::kDepositTxType))
+            deposits.push_back(detail::decodeDepositTx(raw));
+        const auto txHash = f.hashImpl->hash(raw);
+        auto tarsTx = bcos::engine::detail::opEnvelopeToTars(raw, txHash);
         if (!tarsTx)
-            throw std::runtime_error("route B direct: envelope failed opEnvelopeToTars");
-        tarsTx->extraTransactionBytes.assign(rawTxBytes[i].begin(), rawTxBytes[i].end());
-        normalTxs.push_back(std::make_shared<bcostars::protocol::TransactionImpl>(
+        {  // 镜像 buildOpBlock fallback：minimal tx（hash + wire bytes）
+            bcostars::Transaction fallback;
+            fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
+            fallback.extraTransactionBytes.assign(raw.begin(), raw.end());
+            tarsTx = std::move(fallback);
+        }
+        tarsTx->extraTransactionBytes.assign(raw.begin(), raw.end());
+        transactions.push_back(std::make_shared<bcostars::protocol::TransactionImpl>(
             [tarsTx = std::move(*tarsTx)]() mutable { return &tarsTx; }));
     }
     bcos::ledger::LedgerConfig ledgerConfig;
     ledgerConfig.setEVMCRevision(cfg.rev);
     bcos::executor_v1::opstack::OpstackExecutor executor{f.receiptFactory, f.hashImpl, cfg};
-    return bcos::evm::engine::runOpBlockInjection(executor, view, header, txs, normalTxs, cfg,
-        kChainId, ledgerConfig, rawTxBytes, f.hashImpl);
+    return bcos::evm::engine::runOpBlockInjection(executor, view, header, transactions, deposits,
+        cfg, kChainId, ledgerConfig, rawTxBytes, f.hashImpl);
 }
 }  // namespace
 
@@ -480,8 +473,7 @@ BOOST_AUTO_TEST_CASE(ExecutesMinimalOpBlockEqualToDirectRouteB)
     Fixture f;
 
     // Envelopes: deposit rebuilt via canonicalEnvelopeBytes (0x7e || rlp([...8 fields]),
-    // OpTxDecode.h:307); normal uses the corpus's real op-geth-signed envelope. Both pass through
-    // decodeOneRawTx's canonical round-trip.
+    // OpTxDecode.h:307); normal uses the corpus's real op-geth-signed envelope.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = detail::canonicalEnvelopeBytes(bcos::evm::opstack::OpBlockTx{depTx, {}});
     auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
@@ -814,8 +806,8 @@ BOOST_AUTO_TEST_CASE(CallHappyPathInjectsRealBaseFee)
         egp == baseFee, "effectiveGasPrice " << egp << " must equal header baseFee " << baseFee);
 }
 
-/// execute hook throws OpConsensusError (the 0x03 envelope is deterministically thrown by
-/// decodeOneRawTx) → skeleton classify → Error code == OpConsensusRejected.
+/// execute hook throws OpConsensusError (the 0x03 envelope is deterministically thrown by the
+/// type-byte classification) → skeleton classify → Error code == OpConsensusRejected.
 BOOST_AUTO_TEST_CASE(ConsensusRejectionClassifiedAsOpConsensusRejected)
 {
     Fixture f;
