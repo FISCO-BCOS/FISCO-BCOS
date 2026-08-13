@@ -67,6 +67,15 @@ Entry slots on the proxy account. `allocs.json` is the same merged set in
 geth-style alloc shape — feed it to the op-reth oracle genesis so both chains
 share one account set.
 
+**Pre-freeze output is throwaway.** While `base_allocs_sha256` in the chain
+config is still empty (the tool warns loudly), any `allocs.ini`/genesis you
+produce is for integration testing ONLY. Before launching a real chain,
+regenerate from the FROZEN op-deployer artifact and fill in
+`base_allocs_sha256` (mirrored from `op-fork-pin.toml`
+`[karst_pin].base_allocs_sha256`) — a SHA recorded after the fact will not
+match the base an already-started chain was actually built from, and genesis
+is immutable: there is no fixing it post-launch.
+
 ### 3. Assemble `config.genesis`
 
 Enable the feature under `[features]` and append the generated `allocs.ini`:

@@ -536,6 +536,10 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
     # Proxy bytecode is copied from a designated proxied predeploy in the
     # base allocs (e.g. the L1Block proxy) — byte-identical to what the
     # op-deployer emitted, no separate OP forge build involved.
+    # PREMISE: every OP predeploy proxy ships the same universal/Proxy.sol
+    # runtime bytecode, so any proxied predeploy is a valid donor. If a future
+    # op-contracts bump introduces per-predeploy proxy variants, this
+    # single-donor scheme must be re-reviewed.
     source = config.get("proxy_code_source")
     if not source:
         raise ValueError(
@@ -656,6 +660,12 @@ def emit_alloc_json(allocs):
 
     This is the shape an op-reth / op-geth genesis `alloc` section consumes,
     so the SAME merged set can feed the oracle chain's genesis.
+
+    balance/nonce use python hex(): minimal-form 0x quantities ("0x0",
+    "0x1e8480") — the canonical JSON-RPC QUANTITY encoding geth/op-reth
+    genesis parsers accept (the shortest-even-length rule applies to BYTES
+    fields, not quantities). If a future consumer chokes on "0x0", normalize
+    here rather than at the call sites.
     """
     out = {}
     for alloc in allocs:

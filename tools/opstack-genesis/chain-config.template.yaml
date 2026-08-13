@@ -61,10 +61,11 @@ predeploys:
       gas_limit: 30000000
       block_tx_count_limit: 1000
       compatibility_version: 0x03120000  # 3.18.0
-      # REQUIRED - must equal the node's Features::toFlagsNumber() for this
-      # chain's genesis feature set (version defaults + explicitly enabled
-      # flags; note an rpbft-consensus chain additionally auto-sets the
-      # feature_rpbft bit at genesis). The node VERIFIES this slot at first
+      # REQUIRED - must equal EXACTLY the node's Features::toFlagsNumber()
+      # for this chain's genesis feature set (version defaults + explicitly
+      # enabled flags; note an rpbft-consensus chain additionally auto-sets
+      # the feature_rpbft bit at genesis). Any deviation - even a single bit -
+      # makes every node refuse to start at first init. The node VERIFIES this slot at first
       # start and refuses to build genesis on mismatch; it no longer injects
       # the value, so the genesis state root commits it on both FISCO and the
       # op-reth oracle. The example below is a placeholder bitmap - compute
