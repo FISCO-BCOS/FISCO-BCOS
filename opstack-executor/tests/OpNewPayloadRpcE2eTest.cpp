@@ -1,6 +1,6 @@
 // bcos-evm/test/opstack/OpNewPayloadRpcE2eTest.cpp
 // L2 end-to-end real-chain comparison: real JSON params ->
-// EngineHelper::parseNewPayloadRequest(V4) -> EngineService<OpSchedulerImpl>.newPayload(4)
+// EngineHelper::parseNewPayloadRequest(V4) -> EngineService<OpSchedulerSeam>.newPayload(4)
 // -> executeOpBlock -> seven assertions vs golden. The fixture composition mirrors the
 // val-loop EngineNewPayloadGateTest GateFixture (member order storage->memPool->executor->
 // receiptFactory->scheduler->blockFactory->service).
@@ -15,7 +15,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpScheduler.h>
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
 // bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type
 // itself (production relies on bcos-rpc unity-build include order). A single-TU
@@ -140,7 +140,7 @@ bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
     };
 }
 
-using EngineOpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
+using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngineService =
     bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, EngineOpScheduler>;
 
@@ -184,7 +184,7 @@ struct OpE2eFixture
     StubExecutor executor;
     bcos::crypto::Hash::Ptr hashImpl;
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory;
-    EngineOpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerImpl<ViewType>)
+    EngineOpScheduler scheduler;  // engine seam SchedulerType (OpSchedulerSeam<ViewType>)
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     /// A real Ledger wired into the delegate's m_ledger (the commit hook now calls
     /// prewriteBlockToBuffer; every newPayload VALID submission commits through the delegate).
@@ -197,7 +197,7 @@ struct OpE2eFixture
     std::shared_ptr<bcos::storage::LegacyStorageWrapper<BackendMemStorage>> legacyLedgerStorage;
     std::shared_ptr<bcos::ledger::Ledger> ledger;
     /// The engine's OP block-execution delegate (slot-3 OpScheduler<MLS>).
-    /// A single OpSchedulerImpl serves the seam SchedulerType (route A executeOpBlock retired);
+    /// A single OpSchedulerSeam serves the seam SchedulerType (route A executeOpBlock retired);
     /// OpScheduler holds no execution kernel — block execution is the delegate's route B.
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngineService service;

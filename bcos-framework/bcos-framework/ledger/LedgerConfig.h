@@ -276,7 +276,7 @@ inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 /// executor (setVersion saturates), leaving room above 2 for a future executor.
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
 
-/// The executor version that selects the OP-Stack OpSchedulerImpl (op composition root).
+/// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).
 /// executor_version >= this enters OP mode (spec 2026-08-07-op-composition-root-design.md D1).
 inline constexpr int OPSTACK_EXECUTOR_VERSION = 3;
 

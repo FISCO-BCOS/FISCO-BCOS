@@ -3,7 +3,7 @@
 
 // OpEngineBranchSmokeTest — compile-and-run verification that the ported engine OP branch
 // (`EngineServiceImpl`'s `handleOpNewPayload` / `runOpNewPayloadSteps` / `registerOpBlock`, only
-// instantiated when `c_opMode` is true) type-checks against `OpSchedulerImpl` on this branch.
+// instantiated when `c_opMode` is true) type-checks against `OpSchedulerSeam` on this branch.
 // The full branch-by-branch suite lives on the source branch (EngineOpBranchTest.cpp); this file
 // pins the one thing the two normal build targets cannot: an instantiation with an OP-mode
 // scheduler, which forces the entire `if constexpr (c_opMode)` body to compile. The -38005
@@ -19,7 +19,7 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-task/Wait.h>
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/test/unit_test.hpp>
 #include <stdexcept>
 
@@ -92,7 +92,7 @@ struct StubExecutor
 };
 
 using OpEngine = bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor,
-    bcos::evm::engine::OpSchedulerImpl<ViewType>>;
+    bcos::evm::engine::OpSchedulerSeam<ViewType>>;
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpEngineBranchSmokeSuite)
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
     MLS storage(checkpointBackend);
 
     constexpr uint64_t kIsthmusTime = 1000;
-    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(bcos::evm::opstack::OpForkTimestamps{
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(bcos::evm::opstack::OpForkTimestamps{
         .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1});
     StubMemPool memPool;
     StubExecutor executor;

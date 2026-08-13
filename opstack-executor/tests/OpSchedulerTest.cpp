@@ -24,7 +24,7 @@
 // (runOpBlockInjection).
 #include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpScheduler.h>
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -435,7 +435,8 @@ bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& vi
     namespace op = bcos::evm::opstack;
     const auto& cfg =
         op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, f.forkTimestamps);
-    // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full envelope overwrite).
+    // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full
+    // envelope overwrite).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
     transactions.reserve(rawTxBytes.size());
     for (auto const& raw : rawTxBytes)
@@ -458,8 +459,8 @@ bcos::evm::engine::OpExecuteBlockResult runRouteBDirect(Fixture& f, ViewType& vi
     deposits.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
         if (rawTxBytes[i][0] == static_cast<uint8_t>(op::kDepositTxType))
-            deposits.push_back(
-                bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(*transactions[i]));
+            deposits.push_back(bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(
+                *transactions[i]));
     bcos::ledger::LedgerConfig ledgerConfig;
     ledgerConfig.setEVMCRevision(cfg.rev);
     bcos::executor_v1::opstack::OpstackExecutor executor{f.receiptFactory, f.hashImpl, cfg};

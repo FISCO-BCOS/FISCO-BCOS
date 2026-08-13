@@ -1,8 +1,8 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpSchedulerImplSmokeTest — minimal compile-and-run verification that the ported
-// `bcos::evm::engine::OpSchedulerImpl` header instantiates against the current branch's types and
+// OpSchedulerSeamSmokeTest — minimal compile-and-run verification that the ported
+// `bcos::evm::engine::OpSchedulerSeam` header instantiates against the current branch's types and
 // that its engine-facing seam surface works. Exercises only:
 //   1. construction over a real MultiLayerStorage ViewType;
 //   2. the static seam surface the engine reaches as dependent names
@@ -13,7 +13,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-task/Wait.h>
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/test/unit_test.hpp>
 #include <stdexcept>
 #include <vector>
@@ -61,7 +61,7 @@ using ViewType = typename MLS::ViewType;
 
 }  // namespace
 
-BOOST_AUTO_TEST_SUITE(OpSchedulerImplSmokeSuite)
+BOOST_AUTO_TEST_SUITE(OpSchedulerSeamSmokeSuite)
 
 BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
 {
@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     constexpr uint64_t kJovianTime = 2000;
     // The ctor now takes only fork timestamps (the execution kernel was retired; this is a pure
     // seam shim — no receipt factory / chain id / VM).
-    bcos::evm::engine::OpSchedulerImpl<ViewType> scheduler(bcos::evm::opstack::OpForkTimestamps{
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(bcos::evm::opstack::OpForkTimestamps{
         .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime});
 
     // Fork predicates: threshold comparison stays on the OP side of the seam.
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
 }
 
 // Note: route A (executeOpBlock) is retired — the empty-block rejection test moved to route B
-// (runOpBlockInjection) in OpBlockInjectorTest (EmptyBlockRejectedByInjector). OpSchedulerImpl is
+// (runOpBlockInjection) in OpBlockInjectorTest (EmptyBlockRejectedByInjector). OpSchedulerSeam is
 // now a pure engine seam and no longer executes blocks, so there is no matching execution case
 // here. The EIP-7702 authorization yParity width test was removed with the RLP decode primitives
 // (decodeAuthYParityScalar retired in OpCommon.h).

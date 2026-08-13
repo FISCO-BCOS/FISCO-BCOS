@@ -39,7 +39,7 @@ const OpForkConfig& jovianConfig() noexcept;
 const OpForkConfig& karstConfig() noexcept;
 
 /// Fork-activation timestamps for the OP validator loop (op-validator-minimal-loop design §4.2,
-/// decision A5). Injected via OpSchedulerImpl's constructor (same channel as chainId) rather than
+/// decision A5). Injected via OpSchedulerSeam's constructor (same channel as chainId) rather than
 /// read from SystemConfigs — the minimal loop only distinguishes Isthmus/Jovian, so this struct
 /// intentionally does not grow the full `OpFork` enum's historical fork set.
 struct OpForkTimestamps
@@ -53,7 +53,7 @@ struct OpForkTimestamps
 /// `timestamp` in [jovianTime, +inf) -> Jovian. Timestamps below `isthmusTime` also resolve to
 /// Isthmus (the minimal loop is Isthmus+-only; there is no pre-Isthmus config to fall back to,
 /// and the two documented test partitions never exercise this sub-isthmusTime branch — see
-/// task-4-brief.md Step 1(e)). This is the single function backing both the OpSchedulerImpl
+/// task-4-brief.md Step 1(e)). This is the single function backing both the OpSchedulerSeam
 /// execution-time fork selection (design §4.2) and the engine newPayload -38005 timestamp x
 /// version gate (design §6.1 step 1) — the threshold comparison must not be reimplemented at the
 /// second call site.

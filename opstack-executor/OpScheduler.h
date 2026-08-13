@@ -5,11 +5,12 @@
 // OpScheduler — the OP-specific scheduler: derives from SchedulerSkeleton, implementing the OP's
 // 5 CRTP hooks + 4 pure virtuals (call/getCode/getABI/getPendingStorageAt) + classifyException;
 // the rest is inherited. Template header — the real GlobalStateStorage is instantiated by the
-// composition root at slot 3. OP block execution goes through the execute hook → runOpBlockInjection.
+// composition root at slot 3. OP block execution goes through the execute hook →
+// runOpBlockInjection.
 
 #include <opstack-executor/OpBlockExecute.h>  // runOpBlockInjection / OpBlockSeal
 #include <opstack-executor/OpCommitments.h>   // OpBlockCommitments / mismatchedFieldOf / toBcosH256
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <transaction-scheduler/bcos-transaction-scheduler/SchedulerSkeleton.h>
@@ -54,12 +55,12 @@ namespace bcos::executor_v1::opstack
 template <class MultiLayerStorage>
 class OpScheduler : public bcos::scheduler_v1::SchedulerSkeleton<MultiLayerStorage,
                         bcos::executor_v1::opstack::OpstackExecutor,
-                        bcos::evm::engine::OpSchedulerImpl<typename MultiLayerStorage::ViewType>,
+                        bcos::evm::engine::OpSchedulerSeam<typename MultiLayerStorage::ViewType>,
                         bcos::ledger::LedgerInterface, OpScheduler<MultiLayerStorage>>
 {
     using ViewType = typename MultiLayerStorage::ViewType;
     using SchedulerBase = bcos::scheduler_v1::SchedulerSkeleton<MultiLayerStorage,
-        bcos::executor_v1::opstack::OpstackExecutor, bcos::evm::engine::OpSchedulerImpl<ViewType>,
+        bcos::executor_v1::opstack::OpstackExecutor, bcos::evm::engine::OpSchedulerSeam<ViewType>,
         bcos::ledger::LedgerInterface, OpScheduler<MultiLayerStorage>>;
 
     /// What the execute hook stashes in `SchedulerExecuteResult::modeExtra`.
@@ -126,7 +127,8 @@ public:
                 {
                     try
                     {
-                        deposits.push_back(OpstackExecutor::depositFromTransaction(*transactions[i]));
+                        deposits.push_back(
+                            OpstackExecutor::depositFromTransaction(*transactions[i]));
                     }
                     catch (const OpTxValidationFailed& e)
                     {
@@ -194,7 +196,8 @@ public:
     /// Override of the skeleton's fastPathHit. The base matches only on block number, which is not
     /// unique for an OP block: a resend at the same height after a failed commit would hit the
     /// stale executedHeader and report the new payload VALID — forking the chain. On a hit,
-    /// additionally require the cached announcedBlockHash to equal the incoming header's opHeaderHash.
+    /// additionally require the cached announcedBlockHash to equal the incoming header's
+    /// opHeaderHash.
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
         protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
     {
@@ -295,7 +298,8 @@ public:
         block->clearReceipts();
         for (auto const& r : result.receipts)
             block->appendReceipt(r);
-        // setStoreToBackend should only be set on the toShared() fresh copies; this reset is defensive.
+        // setStoreToBackend should only be set on the toShared() fresh copies; this reset is
+        // defensive.
         for (auto const& tx : block->transactions())
             tx->setStoreToBackend(false);
 

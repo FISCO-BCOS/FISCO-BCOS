@@ -31,7 +31,7 @@
 #include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockExecute.h>  // seal (merged into the block-execution module)
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>
@@ -768,7 +768,7 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                 // Note: must not use catch(std::exception) — libevmone(-fno-rtti)
                 // brings in a hidden non-unique typeinfo for std::exception, so typed
                 // catch does not reliably bind the runtime_error subtree
-                // (see OpSchedulerImpl.h:1083-1104); the runtime_error branch is
+                // (see OpSchedulerSeam.h:1083-1104); the runtime_error branch is
                 // verified to bind (assertRejectThrow). OpConsensusError is a FISCO-side
                 // runtime_error subclass with libc++ unique typeinfo — it binds.
                 out.decodeRejectMessage = std::string(e.what());
@@ -1164,7 +1164,7 @@ std::string rejectConsumer(const JsonValue& v)
 /// what() contains the expected substring. Reuses loadBlockContext loading
 /// (env->BlockInfo / ParentOnlyBlockHashes / transactions->OpBlockTx) but skips the
 /// success-execution assertion path (no header/receipts/postState compares).
-/// The throw side is verified catchable by typed catch: OpSchedulerImplSmokeTest.cpp:161
+/// The throw side is verified catchable by typed catch: OpSchedulerSeamSmokeTest.cpp:161
 /// catches processOpBlock's empty-block rejection via BOOST_CHECK_THROW(..., std::runtime_error)
 /// and is green (FISCO-side throws use libc++ unique typeinfo, not the libevmone
 /// -fno-rtti hidden copy).

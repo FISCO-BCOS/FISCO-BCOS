@@ -173,7 +173,7 @@ public:
     /// tripwire — a deleted_accounts entry missing on the ledger throws.
     ///
     /// Any write-back failure ALSO sets the poison flag before rethrowing. This is error
-    /// CLASSIFICATION, not style: OpSchedulerImpl maps poisoned() -> OpStorageError (-32603) and
+    /// CLASSIFICATION, not style: OpSchedulerSeam maps poisoned() -> OpStorageError (-32603) and
     /// anything else -> OpConsensusError (INVALID); every failure here (ghost delete, system-
     /// address routing, contract-② zero-slot leak, nonce/width violations, the storage backend
     /// itself) is a LOCAL fault, and the diff comes from evmone itself (malformed payloads were

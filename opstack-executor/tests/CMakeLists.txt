@@ -29,7 +29,7 @@ add_executable(opstack-executor-block-tests
     OpReceiptEncodeTest.cpp
     OpL1EdgeGateTest.cpp
     OpNewPayloadRpcE2eTest.cpp
-    OpSchedulerImplSmokeTest.cpp
+    OpSchedulerSeamSmokeTest.cpp
     OpEngineBranchSmokeTest.cpp
     OpSchedulerTest.cpp
     OpBlockInjectorTest.cpp

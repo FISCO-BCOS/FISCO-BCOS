@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// OpSchedulerImpl — the engine-facing seam shim for OP mode. `executeBlock` exists only to
+// OpSchedulerSeam — the engine-facing seam shim for OP mode. `executeBlock` exists only to
 // satisfy the scheduler_v1::TransactionScheduler concept check (OP mode never calls it — throws
 // immediately). A pure template header, no .cpp.
 
@@ -37,10 +37,10 @@ namespace detail
 /// combination (composition-root-owned). It only re-publishes the seam surface the engine reaches
 /// as dependent names on `SchedulerType`.
 template <class Storage>
-class OpSchedulerImpl
+class OpSchedulerSeam
 {
 public:
-    explicit OpSchedulerImpl(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
+    explicit OpSchedulerSeam(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
       : m_forkTimestamps(forkTimestamps)
     {}
 
@@ -109,11 +109,11 @@ public:
         return timestamp >= m_forkTimestamps.jovianTime;
     }
 
-    OpSchedulerImpl(const OpSchedulerImpl&) = delete;
-    OpSchedulerImpl(OpSchedulerImpl&&) = delete;
-    OpSchedulerImpl& operator=(const OpSchedulerImpl&) = delete;
-    OpSchedulerImpl& operator=(OpSchedulerImpl&&) = delete;
-    ~OpSchedulerImpl() = default;
+    OpSchedulerSeam(const OpSchedulerSeam&) = delete;
+    OpSchedulerSeam(OpSchedulerSeam&&) = delete;
+    OpSchedulerSeam& operator=(const OpSchedulerSeam&) = delete;
+    OpSchedulerSeam& operator=(OpSchedulerSeam&&) = delete;
+    ~OpSchedulerSeam() = default;
 
     /// Concept-check only — OP mode never calls this. Throws before any co_await/co_return: safe
     /// because the Task coroutine body does not run until the coroutine is actually resumed.
@@ -123,7 +123,7 @@ public:
         ::ranges::input_range auto const& /*transactions*/,
         bcos::ledger::LedgerConfig const& /*ledgerConfig*/)
     {
-        throw std::logic_error("OpSchedulerImpl::executeBlock: not supported in OP mode");
+        throw std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode");
         co_return {};  // unreachable; satisfies the coroutine's declared return type
     }
 

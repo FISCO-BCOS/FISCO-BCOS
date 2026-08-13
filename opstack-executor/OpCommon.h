@@ -4,7 +4,7 @@
 
 // Shared error types + the block-execution result for the OP scheduler, plus the block-context
 // conversion helpers (bcos<->evmc fixed-size conversions / bounds-checked narrowing / FISCO-header
-// -> evmone BlockInfo build). Split out of OpSchedulerImpl.h so dependent layers can throw without
+// -> evmone BlockInfo build). Split out of OpSchedulerSeam.h so dependent layers can throw without
 // depending on the class template. OpBlockSeal lives here too (not in OpBlockExecute.h):
 // OpExecuteBlockResult carries it by value.
 //
@@ -112,7 +112,7 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
     static const bcos::u256 kMaxU64(std::numeric_limits<uint64_t>::max());
     if (v > kMaxU64)
         throw OpConsensusError(
-            std::string("OpSchedulerImpl: field exceeds uint64_t range: ") + fieldName);
+            std::string("OpSchedulerSeam: field exceeds uint64_t range: ") + fieldName);
     return static_cast<uint64_t>(v);
 }
 

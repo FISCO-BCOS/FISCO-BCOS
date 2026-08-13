@@ -115,7 +115,7 @@ std::optional<std::string> validateExecutionPayload(
 /// Bounds-checked u256 -> uint64 narrowing (nullopt when out of range). Explicit rather than a
 /// bare `convert_to`/`static_cast`: this repo has a documented silent-truncation incident with
 /// unchecked wide-integer narrowing (MEMORY costofprecompiled-int64-overflow), and
-/// `OpSchedulerImpl.h`'s `narrowU256ToU64` applies the same discipline on the execution side.
+/// `OpSchedulerSeam.h`'s `narrowU256ToU64` applies the same discipline on the execution side.
 std::optional<std::uint64_t> narrowU256ToU64(const u256& value);
 
 /// `Bloom` (std::array<byte,256>, the ExecutionPayload representation) -> `h2048` (the
@@ -179,7 +179,7 @@ public:
 
     /// Compile-time OP-mode probe (no runtime bool, matching this class's all-template style):
     /// detects `SchedulerType::computeTxRoot` via an unevaluated `requires`-expression. Only the
-    /// OP scheduler exposes that member (OpSchedulerImpl.h:137), so `c_opMode` is false for every
+    /// OP scheduler exposes that member (OpSchedulerSeam.h:137), so `c_opMode` is false for every
     /// scheduler used by the generic composition root (StubScheduler/BloomScheduler in
     /// EngineServiceTest.cpp, SchedulerSerialImpl in production) and the generic path is
     /// byte-for-byte unaffected.
@@ -943,7 +943,7 @@ private:
         // (`block.Time() <= parent.Time()` -> invalid, latestValidHash = parent) and
         // `consensus/beacon/consensus.go:253-256` (`errInvalidTimestamp`).
         //
-        // Here the timestamp is also the FORK SELECTOR: `OpSchedulerImpl` picks its
+        // Here the timestamp is also the FORK SELECTOR: `OpSchedulerSeam` picks its
         // `OpForkConfig` with `configAt(fiscoHeader.timestamp(), ...)` and step 1's -38005 gate
         // reads the same field, so without monotonicity a payload could roll the active fork
         // backwards (Jovian -> Isthmus), changing DA accounting and baseFee semantics mid-chain.

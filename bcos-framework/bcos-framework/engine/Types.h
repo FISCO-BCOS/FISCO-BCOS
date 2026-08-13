@@ -119,7 +119,7 @@ struct ExecutionPayload
     /// by the generic (non-OP) engine path — zero behavioral change for existing callers.
     /// - rawTransactions: the block's transactions as raw EIP-2718 envelope bytes (typed tx
     ///   MarshalBinary() output, including the OP 0x7E deposit envelope). This is the OP path's
-    ///   only transaction carrier consumed by `bcos::evm::engine::OpSchedulerImpl::executeOpBlock`
+    ///   only transaction carrier consumed by `bcos::evm::engine::OpSchedulerSeam::executeOpBlock`
     ///   (via its `rawTxBytes` parameter) — `transactions` above (bcos::protocol::Transactions)
     ///   is the generic-path carrier and is not populated/read on the OP path.
     /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root field

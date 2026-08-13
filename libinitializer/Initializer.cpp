@@ -79,7 +79,7 @@
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpScheduler.h>
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
 #include <txpool/validator/TxValidator.h>
@@ -521,7 +521,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     // OP composition root (spec 2026-08-07-op-composition-root-design.md §4): executor_version >=
-    // 3 enters OP mode. EngineService is assembled with OpSchedulerImpl so the engine's c_opMode
+    // 3 enters OP mode. EngineService is assembled with OpSchedulerSeam so the engine's c_opMode
     // SFINAE probe (EngineServiceImpl.h:200-201, on computeTxRoot) activates the OP branch
     // (block execution via the delegate). engineApiForV1Only (<2) and opStackMode (>=3)
     // are mutually exclusive;
@@ -555,10 +555,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                       "(decimal or 0x-prefixed hex)"));
         }
         auto opScheduler =
-            std::make_shared<bcos::evm::engine::OpSchedulerImpl<GlobalStateStorage::ViewType>>(
+            std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
                 forkTimestamps);
         // Wiring Task 5a/5c: engine block-execution delegate = OpScheduler (slot-3, same instance).
-        // A single OpSchedulerImpl serves the engine's SchedulerType seam surface (c_opMode probe /
+        // A single OpSchedulerSeam serves the engine's SchedulerType seam surface (c_opMode probe /
         // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot); OpScheduler itself no longer
         // holds an execution kernel — block execution is the delegate's runOpBlockInjection.
         auto opDelegate =
@@ -576,7 +576,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate);
         // Compile-time proof that this production composition root activates the OP engine branch.
-        // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerImpl<...>&（左值引用），若作
+        // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerSeam<...>&（左值引用），若作
         // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），
         // static_assert 编译失败。用 remove_reference_t 取裸类型，与 build 实际推导一致。
         using OpEngineServiceT = bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl,

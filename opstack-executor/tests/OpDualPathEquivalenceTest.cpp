@@ -70,7 +70,7 @@
 #include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpScheduler.h>  // route A surgery (Task 6 P1-8): executeBlock drives
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/Storage2State.h>
 #include <opstack-executor/Storage2StateHelpers.h>

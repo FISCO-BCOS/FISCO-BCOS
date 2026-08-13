@@ -554,7 +554,7 @@ protected:
         catch (...)
         {
             // RTTI-bypass fallback（OpScheduler 接线 Task 4 发现）：-fno-rtti 的 libevmone.a 带
-            // 非唯一 typeinfo，runtime_error 子类（OpSchedulerImpl 的
+            // 非唯一 typeinfo，runtime_error 子类（OpSchedulerSeam 的
             // OpConsensusError/OpStorageError） 会逃出上面的
             // catch(std::exception&)（Storage2State.h:195-199 实测同现象）。没有此兜底， OP
             // 异常会绕过 classifyException 直接逃出 executeBlock。classifyException 的 rethrow +

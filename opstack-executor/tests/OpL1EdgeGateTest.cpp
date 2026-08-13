@@ -21,7 +21,7 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <opstack-executor/OpCommon.h>
-#include <opstack-executor/OpSchedulerImpl.h>
+#include <opstack-executor/OpSchedulerSeam.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
 // bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type
 // itself (production relies on bcos-rpc unity-build include order). A single-TU direct
@@ -161,7 +161,7 @@ bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
     };
 }
 
-using EngineOpScheduler = bcos::evm::engine::OpSchedulerImpl<ViewType>;
+using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngineService =
     bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, EngineOpScheduler>;
 

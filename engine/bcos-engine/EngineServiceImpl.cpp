@@ -388,7 +388,7 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     }
     // gasLimit's *effective* ceiling is int64, not uint64: the execution side narrows it once
     // more with a plain `static_cast<int64_t>` when filling `evmone::state::BlockInfo::gas_limit`
-    // (OpSchedulerImpl.h's `toBlockInfo`), so anything above 2^63-1 becomes a NEGATIVE block gas
+    // (OpSchedulerSeam.h's `toBlockInfo`), so anything above 2^63-1 becomes a NEGATIVE block gas
     // pool. Same "unchecked signed narrowing" class as the deposit `gas_limit` finding, fixed the
     // same way -- explicitly, at the boundary. op-geth pins the identical bound as
     // `params.MaxGasLimit` (consensus/beacon/consensus.go:262-264). No acceptance surface
@@ -409,7 +409,7 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     //      validate/transition) with `gasUsed <= tx.gasLimit`, so the computed `cumulative`
     //      (= OpExecuteBlockResult::gasUsed) can never exceed the block gas limit;
     //   2. by commitment comparison — `payload.gasUsed` is one of the six-way comparison fields
-    //      (bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:94-103, struct OpExecuteBlockResult),
+    //      (bcos-evm/bcos-evm/engine/OpSchedulerSeam.h:94-103, struct OpExecuteBlockResult),
     //      pinned to the computed value, so a payload that CLAIMS `gasUsed > gasLimit` fails the
     //      comparison after execution -> INVALID.
     // Behaviorally equivalent to op-geth, with a different timing: FISCO rejects only after
