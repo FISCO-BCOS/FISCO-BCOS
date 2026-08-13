@@ -105,7 +105,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             cumulative += gasUsed;
             receipt->setCumulativeGasUsed(hexCumulative(cumulative));
             result.receipts.emplace_back(std::move(receipt));
-            result.txTypes.emplace_back(static_cast<uint8_t>(kDepositTxType));
+            result.txTypes.emplace_back(classifyTxType(static_cast<uint8_t>(kDepositTxType)));
         }
         else
         {
@@ -146,7 +146,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             cumulative += gasUsed;
             receipt->setCumulativeGasUsed(hexCumulative(cumulative));
             result.receipts.emplace_back(std::move(receipt));
-            result.txTypes.emplace_back(static_cast<uint8_t>(tx.type));
+            result.txTypes.emplace_back(classifyTxType(static_cast<uint8_t>(tx.type)));
         }
     }
 

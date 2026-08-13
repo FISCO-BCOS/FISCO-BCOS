@@ -149,20 +149,15 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
 
     bcos::task::syncWait(executor.finalizeBlock(view, header, ledgerConfig));
 
-    // Rebuild txTypes from rawTxBytes[i][0] (mirror of the per-tx loop's classification): deposit
-    // 0x7e → kDepositTxType; normal legacy (>=0xc0) → 0, typed (0x01/0x02/0x04) → its type byte.
-    constexpr uint8_t kDepositTypeByte = 0x7e;
-    constexpr uint8_t kRlpListBase = 0xc0;
+    // Rebuild txTypes via the shared classifyTxType helper (single home for the EIP-2718
+    // classification so the deposit loop / this rebuild / processOpBlock can't drift).
     std::vector<uint8_t> txTypes;
     txTypes.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
         if (rawTxBytes[i].empty())  // defensive: the per-tx loop already rejects empty envelopes
             throw OpConsensusError("op block: empty envelope");
-        if (rawTxBytes[i][0] == kDepositTypeByte)
-            txTypes.emplace_back(static_cast<uint8_t>(op::kDepositTxType));
-        else
-            txTypes.emplace_back(rawTxBytes[i][0] >= kRlpListBase ? 0 : rawTxBytes[i][0]);
+        txTypes.emplace_back(op::classifyTxType(rawTxBytes[i][0]));
     }
 
     op::OpBlockResult result;
@@ -197,30 +192,31 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
 // ---- block execution: block-pre steps + per-transaction execution ----
 //
 // runOpBlockInjection (the linear per-tx injection loop) was retired in Task 5 — its three
-// responsibilities now live in: preBlockOpSteps (below, block-pre) + SchedulerSerialImpl(serial=true)
-// (per-tx loop, driven by OpScheduler::execute) + finalizeOpBlockResult (block-post). executeDeposit
-// survives on OpstackExecutor (eth_call uses it directly).
+// responsibilities now live in: preBlockOpSteps (below, block-pre) +
+// SchedulerSerialImpl(serial=true) (per-tx loop, driven by OpScheduler::execute) +
+// finalizeOpBlockResult (block-post). executeDeposit survives on OpstackExecutor (eth_call uses it
+// directly).
 
 /// Block-pre steps shared by the OpScheduler execution path (and previously the retired
-/// runOpBlockInjection): recent-block-hashes construction → system_call_block_start + applyStateDiff
-/// → deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs hashes (emplaced
-/// in place — RecentBlockHashes holds a storage reference, not assignable, hence the
-/// std::optional carrier), hashErr, and daFootprintGasScalar via reference params. Throws
+/// runOpBlockInjection): recent-block-hashes construction → system_call_block_start +
+/// applyStateDiff → deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs
+/// hashes (emplaced in place — RecentBlockHashes holds a storage reference, not assignable, hence
+/// the std::optional carrier), hashErr, and daFootprintGasScalar via reference params. Throws
 /// OpConsensusError on shape/validation faults.
 template <class Storage>
 void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     bcos::evm::opstack::OpForkConfig const& cfg, std::vector<bcos::bytes> const& rawTxBytes,
     std::vector<bcos::evm::opstack::DepositTx> const& deposits,
-    bcos::executor_v1::opstack::OpstackExecutor& executor,
-    bcos::crypto::Hash::Ptr const& hashImpl,
-    std::optional<detail::RecentBlockHashes<Storage>>& hashes,
-    std::optional<std::string>& hashErr, std::optional<uint16_t>& daFootprintGasScalar)
+    bcos::executor_v1::opstack::OpstackExecutor& executor, bcos::crypto::Hash::Ptr const& hashImpl,
+    std::optional<detail::RecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,
+    std::optional<uint16_t>& daFootprintGasScalar)
 {
     namespace op = bcos::evm::opstack;
     namespace eth = bcos::executor_v1::eth;
 
     auto blk = detail::toBlockInfo(header);
-    hashes.emplace(view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
+    hashes.emplace(
+        view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     eth::StorageStateView<Storage> stateView(view);
 
     // (1) Pre-block system call.
@@ -280,6 +276,12 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
 inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPayload& payload,
     const bcos::h256& transactionsRoot, const bcos::protocol::BlockHeader& ethHeader)
 {
+    // Isthmus+ payloads always carry withdrawalsRoot (upstream invariant), but if that ever lapses
+    // the unconditional deref below would throw bad_optional_access (-> UnknownError). Guard it
+    // into a clean consensus-level rejection naming the field (symmetric to mismatchedFieldOf's
+    // report).
+    if (!payload.withdrawalsRoot.has_value())
+        throw OpConsensusError("op block: payload missing withdrawalsRoot");
     OpBlockCommitments out{
         .receiptsRoot = payload.receiptsRoot,
         .logsBloom = payloadBloomToH2048(payload.logsBloom),

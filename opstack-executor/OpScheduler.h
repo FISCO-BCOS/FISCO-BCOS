@@ -568,7 +568,7 @@ private:
                 if (raw.empty())  // empty envelope: raw[0] would be out of bounds
                     throw bcos::evm::engine::OpConsensusError("OpScheduler: empty envelope");
                 auto const typeByte = raw[0];
-                if (typeByte == static_cast<uint8_t>(op::kDepositTxType))
+                if (op::classifyTxType(typeByte) == static_cast<uint8_t>(op::kDepositTxType))
                 {
                     try
                     {
@@ -604,7 +604,10 @@ private:
                 m_hashImpl, hashes, hashErr, daFootprintGasScalar);
 
             // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
-            OpBlockExecutionContext ctx{.blockGasLeft = static_cast<int64_t>(header.gasLimit()),
+            // blockGasLeft via narrowU256ToU64 (silent-truncation guard, same as coCallLatest).
+            OpBlockExecutionContext ctx{
+                .blockGasLeft = static_cast<int64_t>(
+                    detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft")),
                 .blockHashes = &*hashes,
                 .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};

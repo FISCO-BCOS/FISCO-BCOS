@@ -265,8 +265,8 @@ public:
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
-        bcos::evm::opstack::OpFeeParams const& fee = {}, int64_t blockGasLeft = 0,
-        uint64_t chainId = 0, evmone::state::BlockHashes const* blockHashes = nullptr)
+        bcos::evm::opstack::OpFeeParams fee = {}, int64_t blockGasLeft = 0, uint64_t chainId = 0,
+        evmone::state::BlockHashes const* blockHashes = nullptr)
     {
         (void)contextID;
 

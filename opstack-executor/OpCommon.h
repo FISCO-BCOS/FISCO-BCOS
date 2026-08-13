@@ -63,6 +63,28 @@ struct OpBlockSeal
     oss << "0x" << std::hex << cumulative;
     return oss.str();
 }
+
+/// EIP-2718 tx-type classification, single home for the three block-execution sites (the
+/// OpScheduler deposit-classification loop, finalizeOpBlockResult's txTypes rebuild, and
+/// processOpBlock's variant branch) so the mapping can't drift and silently emit a wrong
+/// receiptsRoot leaf. Maps a raw type byte to the value stored in OpBlockResult.txTypes:
+/// OP deposit 0x7e (kDepositTxType, OpTransition.h) → itself; legacy (>= 0xc0 RLP list prefix)
+/// → 0; typed (0x01/0x02/0x04) → its own type byte. Unknown bytes (< 0xc0, not deposit) pass
+/// through unchanged — callers that must reject them (the deposit loop) keep their own guard.
+[[nodiscard]] constexpr uint8_t classifyTxType(uint8_t typeByte) noexcept
+{
+    constexpr uint8_t kDepositTypeByte = 0x7e;  // kDepositTxType (OpTransition.h)
+    constexpr uint8_t kRlpListBase = 0xc0;      // legacy RLP list prefix
+    if (typeByte == kDepositTypeByte)
+    {
+        return typeByte;  // deposit stored as its own type byte
+    }
+    if (typeByte >= kRlpListBase)
+    {
+        return 0;  // legacy
+    }
+    return typeByte;  // typed 0x01/0x02/0x04 — stored as the type byte itself
+}
 }  // namespace bcos::evm::opstack
 
 namespace bcos::evm::engine
