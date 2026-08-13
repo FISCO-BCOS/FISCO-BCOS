@@ -3,8 +3,7 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpBlockSeal.h>
+#include <opstack-executor/OpBlockExecute.h>  // encodeReceiptForRoot（seal 已并入）
 #include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <sstream>
@@ -99,7 +98,8 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
 
     const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
     BOOST_CHECK_EQUAL(enc[0], 0x7e);
-    // evmone's vector<Log> list encoding (independent path) must appear whole — covers the list wrapper bytes
+    // evmone's vector<Log> list encoding (independent path) must appear whole — covers the list
+    // wrapper bytes
     const auto logsBytes = evmone::rlp::encode(std::vector<evmone::state::Log>{evmoneLog});
     BOOST_CHECK_NE(enc.find(logsBytes), evmc::bytes::npos);
     BOOST_REQUIRE_EQUAL(enc.size(), 269u + logsBytes.size());

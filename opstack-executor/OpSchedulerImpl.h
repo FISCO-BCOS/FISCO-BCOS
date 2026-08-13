@@ -30,7 +30,6 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <evmone/evmone.h>
 #include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpBlockSeal.h>
 #include <opstack-executor/OpEngineSeam.h>
 #include <opstack-executor/OpErrors.h>
 #include <opstack-executor/OpRlpDecode.h>
@@ -157,8 +156,9 @@ public:
 
     /// Jovian activation predicate. The engine needs it for one fork-dependent static check: the
     /// header's `blobGasUsed` slot must be 0 under Isthmus, but from Jovian on the same slot is
-    /// repurposed as the DA footprint and is validated by seal comparison instead (OpBlockSeal.h).
-    /// Same "threshold comparison stays on this side" reasoning as `isIsthmusActiveAt`.
+    /// repurposed as the DA footprint and is validated by seal comparison instead
+    /// (OpBlockExecute.h). Same "threshold comparison stays on this side" reasoning as
+    /// `isIsthmusActiveAt`.
     [[nodiscard]] bool isJovianActiveAt(uint64_t timestamp) const noexcept
     {
         return timestamp >= m_forkTimestamps.jovianTime;
@@ -280,7 +280,7 @@ public:
         if (bridge.poisoned() || hashErr.has_value())
             throw OpStorageError(hashErr.has_value() ? *hashErr : std::string(bridge.firstError()));
 
-        // Step 5: MessagePasser post-finalize storage snapshot (OpBlockSeal.h contract) + seal +
+        // Step 5: MessagePasser post-finalize storage snapshot (OpBlockExecute.h contract) + seal +
         // stateRoot, bridge still alive throughout.
         std::map<evmc::bytes32, evmc::bytes32> messagePasserStorage;
         bridge.visitAccounts([&](const auto& accountView) {

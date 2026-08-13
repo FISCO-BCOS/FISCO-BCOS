@@ -22,8 +22,7 @@
 #include <opstack-executor/OpBlockInjector.h>  // runOpBlockInjection（route B，Task 6 P4 M3）
 #include <opstack-executor/OpBlockRegister.h>
 #include <opstack-executor/OpSchedulerImpl.h>
-#include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/OpstackExecutorCache.h>  // 分叉键缓存（SEV-9）
+#include <opstack-executor/OpstackExecutor.h>  // 含 OpstackExecutorCache（分叉键缓存，SEV-9，已并入）
 #include <opstack-executor/RecentBlockHashes.h>
 #include <transaction-scheduler/bcos-transaction-scheduler/SchedulerSkeleton.h>
 

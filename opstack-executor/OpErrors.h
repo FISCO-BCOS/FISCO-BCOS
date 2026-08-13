@@ -8,7 +8,7 @@
 
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <opstack-executor/OpBlockSeal.h>
+#include <opstack-executor/OpBlockExecute.h>  // OpBlockSeal（已并入块执行模块）
 #include <stdexcept>
 #include <string>
 #include <vector>

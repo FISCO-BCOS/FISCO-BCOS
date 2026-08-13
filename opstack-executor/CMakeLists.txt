@@ -7,8 +7,6 @@ find_package(TBB CONFIG REQUIRED)
 add_library(opstack-executor
     OpstackExecutor.cpp
     OpBlockExecute.cpp
-    OpBlockSeal.cpp
-    OpBlockFinalize.cpp
 )
 target_include_directories(opstack-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

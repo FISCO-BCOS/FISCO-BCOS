@@ -30,7 +30,7 @@
 #include <evmone/evmone.h>
 #include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpBlockSeal.h>
+#include <opstack-executor/OpBlockExecute.h>   // seal（已并入块执行模块）
 #include <opstack-executor/OpSchedulerImpl.h>  // decodeOneRawTx (blob decode-class reject repro)
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -857,7 +857,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk, evmone::
         return;
     }
 
-    // seal: message passer storage = end-of-block (post-finalize) snapshot (OpBlockSeal.h
+    // seal: message passer storage = end-of-block (post-finalize) snapshot (OpBlockExecute.h
     // contract).
     const std::map<evmc::bytes32, evmc::bytes32> mpStorage =
         ts.contains(OP_L2_TO_L1_MESSAGE_PASSER) ? ts.at(OP_L2_TO_L1_MESSAGE_PASSER).storage :

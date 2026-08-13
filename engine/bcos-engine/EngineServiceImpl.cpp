@@ -37,7 +37,8 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
     if (auto err = bcos::codec::rlp::decode(envRef, web3Tx); err)
     {
-        return std::nullopt;  // only malformed/un-enumerated envelopes -- no throw; 0x04 is already supported by Web3Transaction
+        return std::nullopt;  // only malformed/un-enumerated envelopes -- no throw; 0x04 is already
+                              // supported by Web3Transaction
     }
     auto tarsTx = web3Tx.takeToTarsTransaction();
     // The read side's tx.hash() returns extraTransactionHash; leaving it empty would throw
@@ -72,10 +73,10 @@ constexpr std::size_t c_payloadIdBytes = 8;
 //
 // Values are byte-identical to the two other places in this repo that pin them:
 // `bcos-evm/test/opstack/EthBlockHeaderTest.cpp`'s `kEmptyOmmersHash`/`kPosNonce` (golden-
-// anchored by the 33-vector gate), and `bcos-evm/bcos-evm/opstack/OpBlockSeal.h`'s
+// anchored by the 33-vector gate), and `opstack-executor/OpBlockExecute.h`'s
 // `OP_EMPTY_REQUESTS_HASH` for the third. The requests-hash copy here is *checked* rather than
 // merely trusted: the OP branch compares the seal's own `requestsHash` against the reconstructed
-// header's, so any drift between this copy and OpBlockSeal.h's surfaces as a comparison failure
+// header's, so any drift between this copy and OpBlockExecute.h's surfaces as a comparison failure
 // instead of a silent wrong block hash. (They are re-declared rather than included because
 // `engine` must not depend on `bcos-evm` -- see EngineServiceImpl.h's `c_opMode` comment.)
 const bcos::h256 c_emptyOmmersHash{
@@ -363,7 +364,8 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     {
         // Isthmus: the slot is a genuine blob-gas counter and OP blocks carry no blobs, so it
         // must be 0. From Jovian on the same header slot is repurposed as the DA footprint
-        // (OpBlockSeal.h:31-38) and is validated by seal comparison instead -- hence this check
+        // (OpBlockExecute.h's OpBlockSeal) and is validated by seal comparison instead -- hence
+        // this check
         // is gated on the fork, not unconditional.
         return std::string("blobGasUsed must be zero before Jovian (OP Isthmus)");
     }
@@ -413,7 +415,8 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     // Behaviorally equivalent to op-geth, with a different timing: FISCO rejects only after
     // executing the block, op-geth rejects before execution (the same "no full
     // VerifyHeader/ValidateBody equivalent" structural note as in
-    // docs/opstack-opgeth-e2e-comparison.md). Not a gap, but deliberately not mirrored here. extraData: OP Holocene+ header shape. op-geth validates it in
+    // docs/opstack-opgeth-e2e-comparison.md). Not a gap, but deliberately not mirrored here.
+    // extraData: OP Holocene+ header shape. op-geth validates it in
     // `consensus/misc/eip1559/eip1559_optimism.go`'s `ValidateHoloceneExtraData` (Isthmus) /
     // `ValidateJovianExtraData` (Jovian), reached from BOTH the block-verify path
     // (`consensus/beacon/consensus.go:240`) and the newPayload path
@@ -478,7 +481,8 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
     }
 
     // Jovian DA-footprint block limit. From Jovian on, the header `blobGasUsed` slot carries the
-    // block's DA footprint (OpBlockSeal.h:31-38); a block whose DA footprint exceeds its own
+    // block's DA footprint (OpBlockExecute.h's OpBlockSeal); a block whose DA footprint exceeds its
+    // own
     // gasLimit is rejected. op-geth checks the recomputed footprint against `block.GasLimit()` in
     // `core/block_validator.go:131` (Jovian branch, DA footprint from
     // `core/types/rollup_cost.go`'s `CalcDAFootprint`). Checking the payload's claimed
@@ -540,7 +544,8 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     header->setBaseFee(payload.baseFeePerGas);
     header->setWithdrawalsRoot(payload.withdrawalsRoot.value());
     header->setBlobGasUsed(payload.blobGasUsed.value());
-    // excessBlobGas is pinned to 0 by validation above (consistent with the retired EthBlockHeader).
+    // excessBlobGas is pinned to 0 by validation above (consistent with the retired
+    // EthBlockHeader).
     header->setExcessBlobGas(bcos::u256(0));
     header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
     header->setRequestsHash(c_opEmptyRequestsHash);

@@ -8,9 +8,8 @@
 #include <bcos-evm/opstack/OpPredeploys.h>  // v2（B1）：OP_L1_BLOCK / OP_DEPOSITOR / OP_L2_TO_L1_MESSAGE_PASSER（非传递可达）
 #include <ethereum-executor/BCOS2Evmone.h>  // applyStateDiff
 #include <ethereum-executor/StorageStateView.h>
-#include <opstack-executor/OpBlockExecute.h>  // v2（B5）：narrowGasUsed / hexCumulative / isL1AttributesTx 由本任务从 .cpp 导出到本头
-#include <opstack-executor/OpBlockSeal.h>
-#include <opstack-executor/OpEngineSeam.h>  // computeOpTxRoot / toBcosH256 声明所在
+#include <opstack-executor/OpBlockExecute.h>  // v2（B5）：narrowGasUsed / hexCumulative / isL1AttributesTx 由本任务从 .cpp 导出到本头（seal 已并入）
+#include <opstack-executor/OpEngineSeam.h>    // computeOpTxRoot / toBcosH256 声明所在
 #include <opstack-executor/OpErrors.h>
 #include <opstack-executor/OpRlpDecode.h>  // toBlockInfo / narrowU256ToU64
 #include <opstack-executor/OpSchedulerImpl.h>  // v2（可执行性）：OpExecuteBlockResult 定义在此（:66），缺则编译失败

@@ -16,7 +16,7 @@
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <opstack-executor/OpBlockSeal.h>
+#include <opstack-executor/OpBlockExecute.h>  // OpBlockSeal / computeOpTxRoot 所在（seal 已并入）
 #include <opstack-executor/OpRlpDecode.h>  // detail::narrowU256ToU64 (announcedCommitmentsOf)
 #include <array>
 #include <cstdint>

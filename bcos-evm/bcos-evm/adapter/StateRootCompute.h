@@ -6,9 +6,9 @@
 // must stay all-green (computeTrieRoot and evmone mpt_hash produce byte-identical roots for the
 // same key set).
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <map>
@@ -35,7 +35,7 @@ inline bcos::bytes trimmedBigEndian(bcos::bytesConstRef v)
 /// Empty state → emptyRootHash() (== keccak256(RLP(""))).
 ///
 /// Timing contract (the block-header production call sequence, anchored to the same point as
-/// OpBlockSeal.h's messagePasserStorage snapshot, aligned with op-geth consensus.go:416-427
+/// OpBlockExecute.h's messagePasserStorage snapshot, aligned with op-geth consensus.go:416-427
 /// IntermediateRoot ordering):
 ///   processOpBlock → applyDiff per-transaction write-back → block-tail finalize → this function
 ///   → sealOpBlock.
@@ -86,8 +86,8 @@ template <class Ledger>
         bcos::bytes leaf;
         bcos::codec::rlp::encode(leaf, account.nonce,
             trimmedBigEndian(bcos::bytesConstRef{balanceBe.bytes, sizeof(balanceBe.bytes)}),
-            bcos::bytesConstRef{accountStorageRoot(account.storage).bytes,
-                sizeof(evmone::hash256::bytes)},
+            bcos::bytesConstRef{
+                accountStorageRoot(account.storage).bytes, sizeof(evmone::hash256::bytes)},
             bcos::bytesConstRef{account.codeHash.bytes, sizeof(evmc::bytes32)});
         entries[bcos::h256{evmone::keccak256(account.addr).bytes, 32}] = std::move(leaf);
         return true;
