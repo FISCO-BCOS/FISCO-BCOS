@@ -450,8 +450,26 @@ TEST_F(Fixture, DepositLifecycleThroughExecuteContext)
     EXPECT_LT(ctx.blockGasLeft, kInitialGasLeft);
     EXPECT_EQ(ctx.blockGasLeft, kInitialGasLeft - gasUsed);
     EXPECT_EQ(ctx.cumulativeGasUsed, gasUsed);
-    EXPECT_EQ(std::string(receipt->cumulativeGasUsed()),
-        bcos::evm::opstack::hexCumulative(gasUsed));
+    EXPECT_EQ(
+        std::string(receipt->cumulativeGasUsed()), bcos::evm::opstack::hexCumulative(gasUsed));
+}
+
+// 6-arg createExecuteContext (generic scheduler / concept form) has no BlockContext: the old
+// default-arg footgun left m_ctx pointing at a destroyed temporary. It must now build a null-ctx
+// context whose prepare() throws a clear OpConsensusError instead of UB.
+TEST_F(Fixture, NullContextSixArgFormThrows)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    auto tx = buildDepositTx();
+    auto context = task::syncWait(executor.createExecuteContext(
+        storage, blockHeader, tx, /*contextID=*/0, ledgerConfig, /*call=*/false));
+    EXPECT_THROW(task::syncWait(context.prepare()), bcos::evm::engine::OpConsensusError);
+    EXPECT_THROW(task::syncWait(context.execute()), bcos::evm::engine::OpConsensusError);
+    EXPECT_THROW(task::syncWait(context.finish()), bcos::evm::engine::OpConsensusError);
 }
 
 TEST_F(Fixture, DepositGasLimitReachedIsBlockError)

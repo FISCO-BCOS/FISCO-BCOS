@@ -124,7 +124,7 @@ public:
 
         ExecuteContext(OpstackExecutor& exec, Storage& st, protocol::BlockHeader const& bh,
             protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c,
-            BlockContext const& blockCtx)
+            BlockContext const* blockCtx)
           : executor(exec),
             storage(st),
             blockHeader(bh),
@@ -136,7 +136,7 @@ public:
             m_receipt{},
             m_diff{},
             m_deposit{},
-            m_ctx(&blockCtx)
+            m_ctx(blockCtx)
         {}
 
         // concept lifecycle: prepare (validate) -> execute (transition) -> finish (writeback).
@@ -144,6 +144,12 @@ public:
         // three shared stages with the block-context fee (lazily loaded) + blockGasLeft.
         task::Task<void> prepare()
         {
+            if (m_ctx == nullptr)
+            {
+                throw bcos::evm::engine::OpConsensusError(
+                    "OpstackExecutor: createExecuteContext called without a BlockContext (the "
+                    "6-arg form is unsupported for OP execution)");
+            }
             if (transaction.isDepositTx())
             {
                 if (m_ctx->seenNonDeposit)  // M2 order gate
@@ -176,6 +182,12 @@ public:
         }
         task::Task<void> execute()
         {
+            if (m_ctx == nullptr)
+            {
+                throw bcos::evm::engine::OpConsensusError(
+                    "OpstackExecutor: createExecuteContext called without a BlockContext (the "
+                    "6-arg form is unsupported for OP execution)");
+            }
             if (transaction.isDepositTx())
             {
                 // executeDeposit member (not the op::runDeposit free function); applies the state
@@ -192,6 +204,12 @@ public:
         }
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
+            if (m_ctx == nullptr)
+            {
+                throw bcos::evm::engine::OpConsensusError(
+                    "OpstackExecutor: createExecuteContext called without a BlockContext (the "
+                    "6-arg form is unsupported for OP execution)");
+            }
             namespace op = bcos::evm::opstack;
             protocol::TransactionReceipt::Ptr receipt;
             if (transaction.isDepositTx())
@@ -213,14 +231,32 @@ public:
         }
     };
 
+    /// 7-arg form (OP path): the caller owns the BlockContext and must keep it alive across the
+    /// prepare/execute/finish lifecycle (SchedulerSerialImpl forwards the ctx that lives in
+    /// OpScheduler's coroutine frame).
     template <class Storage>
     task::Task<ExecuteContext<Storage>> createExecuteContext(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
-        BlockContext const& blockCtx = BlockContext{})
+        BlockContext const& blockCtx)
     {
-        co_return ExecuteContext<Storage>{*this, storage, blockHeader, transaction, contextID,
-            ledgerConfig, call, blockCtx};
+        co_return ExecuteContext<Storage>{
+            *this, storage, blockHeader, transaction, contextID, ledgerConfig, call, &blockCtx};
+    }
+
+    /// 6-arg form (generic scheduler + the TransactionExecutor concept probe): no BlockContext is
+    /// available, so m_ctx is null and any prepare/execute/finish throws. The previous default
+    /// argument `= BlockContext{}` bound a temporary to the const-ref parameter whose lifetime
+    /// ended at the full expression — m_ctx stayed dangling (footgun). OP is never driven through
+    /// this form (SchedulerSerialImpl's requires probe always picks the 7-arg overload), but it
+    /// must stay valid for the concept, which calls with 6 args.
+    template <class Storage>
+    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
+    {
+        co_return ExecuteContext<Storage>{
+            *this, storage, blockHeader, transaction, contextID, ledgerConfig, call, nullptr};
     }
 
     /// Execute a single OP normal transaction (injection-style, mirroring processOpBlock).
@@ -241,8 +277,8 @@ public:
                 storage, blockHeader, dep, chainId, blockGasLeft, ledgerConfig, blockHashes);
         }
 
-        auto props = co_await m_prepare(
-            storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft);
+        auto props =
+            co_await m_prepare(storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft);
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(storage, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes);

@@ -26,7 +26,7 @@
 // calls (no pipelining deque needed; that is an ethereum concern).
 
 #include <opstack-executor/OpBlockExecute.h>  // preBlockOpSteps / finalizeOpBlockResult / OpBlockSeal
-#include <opstack-executor/OpCommitments.h>   // OpBlockCommitments / mismatchedFieldOf / toBcosH256
+#include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / mismatchedFieldOf / toBcosH256
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
@@ -96,10 +96,10 @@ public:
 
     struct PendingBlock
     {
-        protocol::Block::Ptr block;                       // receipts attached at commit time
-        bcos::evm::engine::OpExecuteBlockResult result;   // six commitments + receipts
-        bcos::crypto::HashType announcedBlockHash;        // keyed by the CL-announced hash
-        protocol::BlockHeader::Ptr executedHeader;        // commitment-filled header
+        protocol::Block::Ptr block;                      // receipts attached at commit time
+        bcos::evm::engine::OpExecuteBlockResult result;  // six commitments + receipts
+        bcos::crypto::HashType announcedBlockHash;       // keyed by the CL-announced hash
+        protocol::BlockHeader::Ptr executedHeader;       // commitment-filled header
     };
 
     /// What the execute phase produces before being wrapped into a PendingBlock.
@@ -266,8 +266,7 @@ public:
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
         bcos::evm::opstack::OpForkTimestamps forkTimestamps,
         bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
-        bcos::ledger::LedgerInterface::Ptr ledger,
-        bcos::IOServicePool::Ptr ioServicePool)
+        bcos::ledger::LedgerInterface::Ptr ledger, bcos::IOServicePool::Ptr ioServicePool)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
@@ -336,8 +335,8 @@ private:
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         m_lastExecutedBlockNumber + 1, number);
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
-                               message),
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
             }
 
@@ -369,8 +368,8 @@ private:
             // verify: unconditional six-way comparison; a mismatch throws OpConsensusError →
             // OpConsensusRejected.
             namespace engine = bcos::evm::engine;
-            if (auto mismatch = engine::mismatchedFieldOf(headerCommitments(*executedHeader),
-                    headerCommitments(*blockHeader)))
+            if (auto mismatch = engine::mismatchedFieldOf(
+                    headerCommitments(*executedHeader), headerCommitments(*blockHeader)))
             {
                 throw engine::OpConsensusError(
                     "OpScheduler: six-way commitment mismatch on field " + *mismatch);
@@ -442,8 +441,11 @@ private:
 
             // Validate the pending slot (kept in place until the merge succeeds — the original
             // skeleton popped only after merge, so a failed commit retries from the same data; a
-            // stale slot at a different height is refused). The engine's x_state serializes
-            // execute/commit, so the reference stays valid across the awaits below.
+            // stale slot at a different height is refused). Snapshot the WHOLE PendingBlock under
+            // the lock: block/executedHeader are shared_ptr (refcount-safe copies) and result
+            // holds vector<Receipt::Ptr>, so the copy keeps every reference alive across the
+            // awaits below even if a concurrent executeBlock replaces m_pending (TOCTOU UAF).
+            PendingBlock pending;
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
                 if (!m_pending || m_pending->executedHeader->number() != number)
@@ -452,9 +454,10 @@ private:
                                    "Unexpected empty results!"),
                         nullptr};
                 }
+                pending = *m_pending;
             }
 
-            auto storage = co_await commitPersist(*m_pending);
+            auto storage = co_await commitPersist(pending);
 
             // The one merge (atomic: either all visible or none).
             co_await m_multiLayerStorage->mergeBackStorage(*storage);
@@ -476,8 +479,7 @@ private:
         }
         catch (std::exception& e)
         {
-            auto message =
-                fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
+            auto message = fmt::format("Commit block failed! {}", boost::diagnostic_information(e));
             OP_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
                 nullptr};
@@ -506,13 +508,11 @@ private:
             return std::nullopt;
         }
         if (m_pending->announcedBlockHash !=
-            announcedHeader.opHeaderHash(
-                bcos::protocol::BlockHeader::OpHeaderConst{.ommersHash = c_emptyOmmersHash,
-                    .difficulty = bcos::u256(0),
-                    .nonce = c_posNonce}))
+            announcedHeader.opHeaderHash(bcos::protocol::BlockHeader::OpHeaderConst{
+                .ommersHash = c_emptyOmmersHash, .difficulty = bcos::u256(0), .nonce = c_posNonce}))
         {
-            OP_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height "
-                                   << number << "; ignoring cache and re-executing";
+            OP_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height " << number
+                                   << "; ignoring cache and re-executing";
             return std::nullopt;
         }
         OP_SCHEDULER_LOG(INFO) << "Block has been executed, return result directly";
@@ -592,9 +592,11 @@ private:
 
             OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
 
-            // ① Block-pre steps (preBlockOpSteps, OpBlockExecute.h — the single home shared with the
-            // retired runOpBlockInjection): recent-block-hashes construction, system_call_block_start
-            // + applyStateDiff, deposit-first content check + Jovian shape, DA footprint gas scalar.
+            // ① Block-pre steps (preBlockOpSteps, OpBlockExecute.h — the single home shared with
+            // the retired runOpBlockInjection): recent-block-hashes construction,
+            // system_call_block_start
+            // + applyStateDiff, deposit-first content check + Jovian shape, DA footprint gas
+            // scalar.
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<detail::RecentBlockHashes<ViewType>> hashes;
@@ -602,16 +604,17 @@ private:
                 m_hashImpl, hashes, hashErr, daFootprintGasScalar);
 
             // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
-            OpBlockExecutionContext ctx{
-                .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
-                .blockHashes = &*hashes, .chainId = m_chainId,
+            OpBlockExecutionContext ctx{.blockGasLeft = static_cast<int64_t>(header.gasLimit()),
+                .blockHashes = &*hashes,
+                .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};
 
             // ③ Per-tx execution via the shared serial scheduler (one per block; serial=true
             // forces grain size 1 — OP is linear-only, see the class header's DESIGN INVARIANT).
             bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
                 m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
-            auto transactionsRefs = transactions |
+            auto transactionsRefs =
+                transactions |
                 ::ranges::views::transform(
                     [](protocol::Transaction::ConstPtr const& ptr) -> protocol::Transaction const& {
                         return *ptr;
@@ -661,8 +664,10 @@ private:
     /// BlockHeader::hash() — the header is rebuilt from the announced payload).
     task::Task<protocol::BlockHeader::Ptr> finishExecute(ViewType& /*view*/,
         ExecuteOutcome const& outcome, protocol::BlockHeader const& blockHeader,
-        protocol::Block& /*block*/, std::vector<protocol::Transaction::ConstPtr> const&
-        /*transactions*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool& sysBlock)
+        protocol::Block& /*block*/,
+        std::vector<protocol::Transaction::ConstPtr> const&
+        /*transactions*/,
+        ledger::LedgerConfig const& /*ledgerConfig*/, bool& sysBlock)
     {
         namespace detail = bcos::evm::engine::detail;
         sysBlock = false;
@@ -747,9 +752,8 @@ private:
             }
             if (m_lastCommittedBlockNumber != -1 && number - m_lastCommittedBlockNumber != 1)
             {
-                OP_SCHEDULER_LOG(INFO)
-                    << "Discontinuous commit block number: " << number
-                    << "! expect: " << (m_lastCommittedBlockNumber + 1);
+                OP_SCHEDULER_LOG(INFO) << "Discontinuous commit block number: " << number
+                                       << "! expect: " << (m_lastCommittedBlockNumber + 1);
                 co_return false;
             }
         }
@@ -760,14 +764,14 @@ private:
     void notifyBlockNumber(protocol::BlockNumber number)
     {
         m_blockNumberNotifier(number);
-        m_transactionNotifier(number,
-            std::make_shared<bcos::protocol::TransactionSubmitResults>(),
+        m_transactionNotifier(number, std::make_shared<bcos::protocol::TransactionSubmitResults>(),
             [](const Error::Ptr&) {});
     }
 
     /// The skeleton default calls header.hash(), which throws for an OP header — build the
     /// LedgerConfig by hand (features only).
-    task::Task<ledger::LedgerConfig::Ptr> loadLedgerConfig(ViewType& view, protocol::BlockNumber number)
+    task::Task<ledger::LedgerConfig::Ptr> loadLedgerConfig(
+        ViewType& view, protocol::BlockNumber number)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(number);
