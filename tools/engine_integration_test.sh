@@ -581,7 +581,10 @@ if [ "${RUN_LODESTAR:-0}" = "1" ]; then
         log_test "Lodestar dev mode (60s timeout)"
 
         LODESTAR_OUT="${WORK_DIR}/lodestar_out.log"
-        timeout 60 pnpm dlx @chainsafe/lodestar dev \
+        # Pin Lodestar to the last known-good release: 1.46.0 pulls in snappy@7.4.0,
+        # whose WASI fallback import (@napi-rs/snappy-wasm32-wasi) is skipped by pnpm
+        # and crashes Node on startup with ERR_MODULE_NOT_FOUND.
+        timeout 60 pnpm dlx @chainsafe/lodestar@1.45.0 dev \
             --execution.urls "${RPC_URL}" \
             --execution.engineMock false \
             --jwtSecret "${JWT_FILE}" \
