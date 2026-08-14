@@ -1,7 +1,7 @@
 #pragma once
 // Test-only deposit-envelope encoder. Production buildOpBlock / DepositTxHandler encode deposit
 // envelopes; the tests rebuild them from a DepositTx for rawTxBytes classification + txRoot.
-#include <bcos-evm/eth/RlpEncodeTuple.h>
+#include "RlpEncodeTuple.h"
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.hpp>

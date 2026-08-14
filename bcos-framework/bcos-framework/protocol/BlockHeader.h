@@ -25,7 +25,6 @@
 #include "bcos-utilities/AnyHolder.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
