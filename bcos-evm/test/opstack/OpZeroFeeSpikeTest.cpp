@@ -30,7 +30,8 @@ namespace
 {
 constexpr auto kSender = 0x1000000000000000000000000000000000000001_address;
 constexpr auto kRecipient = 0x2000000000000000000000000000000000000002_address;
-constexpr auto kSenderBalance = 1000000000000000000_u256;  // 1 ETH (explicit wei; no _ether literal)
+constexpr auto kSenderBalance =
+    1000000000000000000_u256;  // 1 ETH (explicit wei; no _ether literal)
 
 state::BlockInfo blk()
 {
@@ -38,8 +39,8 @@ state::BlockInfo blk()
     b.number = 1;
     b.gas_limit = 30000000;
     b.base_fee = 7;
-    b.coinbase =
-        OP_SEQUENCER_FEE_VAULT;  // adaptation: priority tip lands in the sequencer vault (same as OpTransitionTest)
+    b.coinbase = OP_SEQUENCER_FEE_VAULT;  // adaptation: priority tip lands in the sequencer vault
+                                          // (same as OpTransitionTest)
     return b;
 }
 
@@ -82,12 +83,14 @@ BOOST_AUTO_TEST_CASE(zero_fee_params_produce_zero_costs)
     BOOST_CHECK_EQUAL(computeOperatorCost(fee, /*gas=*/21000, isthmus), 0);
 }
 
-// 3) opValidate zero-fee balance check passes: plain transfer (sender 1 ETH), dummy non-empty envelope
+// 3) opValidate zero-fee balance check passes: plain transfer (sender 1 ETH), dummy non-empty
+// envelope
 BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance};  // sender must be inserted; otherwise get_account returns balance=0
-                                                // and the balance check rejects
+    ts[kSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
+    // sender must be inserted; otherwise get_account returns balance=0 and the balance check
+    // rejects
     auto isthmus = isthmusConfig();
     auto block = blk();
     auto tx = baseTx();
@@ -96,19 +99,21 @@ BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(props));
 }
 
-// 4) End-to-end: opTransition executes + .apply(diff) write-back + post assertions — only here does the gate truly verify the spike premise
+// 4) End-to-end: opTransition executes + .apply(diff) write-back + post assertions — only here does
+// the gate truly verify the spike premise
 BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance};
+    ts[kSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
     ts[kRecipient] = {};
     auto isthmus = isthmusConfig();
-    auto vm = evmc::VM{evmc_create_evmone()};  // opTransition signature takes evmc::VM& (evmone::VM is a C
-                                               // struct-derived class, not applicable)
+    auto vm = evmc::VM{evmc_create_evmone()};  // opTransition signature takes evmc::VM& (evmone::VM
+                                               // is a C struct-derived class, not applicable)
     auto block = blk();
     test::TestBlockHashes hashes;
     auto tx = baseTx();
-    tx.to = kRecipient;  // makes the "recipient balance +value" assertion meaningful (baseTx has no to=CREATE)
+    tx.to = kRecipient;  // makes the "recipient balance +value" assertion meaningful (baseTx has no
+                         // to=CREATE)
     tx.value = intx::uint256{12345};
     evmc::bytes envelope{0x02};
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
@@ -129,7 +134,8 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
     //   blk().base_fee = 7; tx.max_gas_price = 1000, tx.max_priority_gas_price = 10
     //   priority = min(max_priority, max_gas - base_fee) = min(10, 993) = 10
     //   effective_gas_price = base_fee + priority = 17
-    //   plain EOA transfer (empty calldata) -> gas_used = intrinsic = 21000 (EIP-7623 floor also 21000)
+    //   plain EOA transfer (empty calldata) -> gas_used = intrinsic = 21000 (EIP-7623 floor also
+    //   21000)
     const auto gasUsed = intx::uint256{static_cast<uint64_t>(txR->gasUsed())};
     BOOST_CHECK_EQUAL(gasUsed, intx::uint256{21000});
     const auto priority = std::min(intx::uint256{tx.max_priority_gas_price},
@@ -144,7 +150,8 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
         ts.at(kSender).balance, kSenderBalance - gasUsed * effective - intx::uint256{tx.value});
     // recipient receives the transferred value.
     BOOST_CHECK_EQUAL(ts.at(kRecipient).balance, intx::uint256{tx.value});
-    // the base_fee portion burns into OP_BASE_FEE_VAULT; the tip goes to coinbase (sequencer vault).
+    // the base_fee portion burns into OP_BASE_FEE_VAULT; the tip goes to coinbase (sequencer
+    // vault).
     BOOST_CHECK_EQUAL(ts.at(OP_BASE_FEE_VAULT).balance, gasUsed * intx::uint256{block.base_fee});
     BOOST_CHECK_EQUAL(ts.at(OP_SEQUENCER_FEE_VAULT).balance, gasUsed * priority);
     // Zero L1/operator fee: both vaults are touched but credited 0 -> build_diff treats
