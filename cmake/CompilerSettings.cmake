@@ -114,6 +114,12 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-Wno-restrict)
         add_compile_options(-Wno-error=format-truncation)
         add_compile_options(-Wno-error=free-nonheap-object)
+        # C++20 designated initializers that skip fields (value-init'd, no bug) — the OP block
+        # code uses this style deliberately; GCC flags every skipped field.
+        add_compile_options(-Wno-error=missing-field-initializers)
+        # GCC 13+ heuristic false-positives on reference-returning helpers (e.g. jAt returning
+        # v[key] into a caller lvalue) — see gcc bugzilla PR107532.
+        add_compile_options(-Wno-error=dangling-reference)
 
         # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
         add_compile_options(-Wno-subobject-linkage)
