@@ -79,7 +79,8 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
     // set the parentHash information
     if (_proposal->index() == _lastAppliedProposal->index() + 1)
     {
-        blockHeader->setParentInfo(ParentInfo{.blockNumber = _lastAppliedProposal->index(),
+        blockHeader->setParentInfo(ParentInfo{
+            .blockNumber = _lastAppliedProposal->index(),
             .blockHash = _lastAppliedProposal->hash()});
         CONSENSUS_LOG(DEBUG) << LOG_DESC("setParentInfo for the proposal")
                              << LOG_KV("proposalIndex", _proposal->index())

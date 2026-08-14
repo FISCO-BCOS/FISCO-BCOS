@@ -34,8 +34,7 @@ class StateMachine : public StateMachineInterface, public std::enable_shared_fro
 public:
     StateMachine(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::IOServicePool::Ptr _ioServicePool)
-      : m_scheduler(std::move(_scheduler)),
-        m_blockFactory(std::move(_blockFactory)),
+      : m_scheduler(std::move(_scheduler)), m_blockFactory(std::move(_blockFactory)),
         m_strand(std::move(_ioServicePool))
     {}
 
