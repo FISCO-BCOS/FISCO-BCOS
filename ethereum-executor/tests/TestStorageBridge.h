@@ -3,9 +3,8 @@
 ///        evmone::state::StateView / StateDiff interfaces.
 ///
 /// The ethereum-executor LIBRARY no longer ships the StateView / StateDiff
-/// adapter layer (StorageStateView / StorageBlockHashes / applyStateDiff were
-/// removed — the executor reads/writes BCOS storage directly through
-/// EVMAccount / storage2). However the EEST runner also drives bcos-evm's
+/// adapter layer — the executor reads/writes BCOS storage directly through
+/// EVMAccount / storage2. However the EEST runner also drives bcos-evm's
 /// system contracts (EIP-4788 / EIP-2935 / EIP-7002 / EIP-7251) directly, and
 /// those keep the upstream evmone::state::{StateView, BlockHashes} interface
 /// (bcos-evm is unchanged). This header is the small local bridge the test tool
