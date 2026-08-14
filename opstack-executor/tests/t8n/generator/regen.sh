@@ -1,7 +1,44 @@
 #!/usr/bin/env bash
-# 整批重生成仪式（spec rev.4 + Phase-2 线 B Task 5 预编译矩阵 + Task 6 增强语料）。
-# 退出 0 ⇔ 全向量生成成功 ∧ manifest 与 cases∪三模式产物集合相等 ∧ 工作树与入库字节等同。
-# Task 7 集成：三模式（corrupt/static/invalid-tx/chain）接入 + diff 源重定义 + golden 覆盖。
+# =============================================================================
+# opstack-executor t8n 向量整批重生成仪式
+#   spec rev.4 + Phase-2 线 B Task 5 预编译矩阵 + Task 6 增强语料 +
+#   Task 7 三模式（corrupt/static/invalid-tx/chain）集成 + diff 源重定义 + golden 覆盖。
+# =============================================================================
+#
+# 用途
+#   op-geth 参考向量（vectors/*.json）与引擎黄金数据（golden/engine/*.golden.json）
+#   的确定性整批重生成 + 可复现性校验。数据源为 generator/*.go 里的 Go 用例定义。
+#
+# 依赖（不满足直接 exit 1）
+#   1. op-geth checkout：默认 $OPGETH=/Users/octopus/octo/code/blockchain-impl/op-geth，
+#      HEAD 必须等于 pin e8800cffe53d459cde8a07c8e8f1de9d86e79e07，且工作树必须干净。
+#   2. Go 工具链：脚本把 generator/ 拷进 op-geth/cmd/opt8n-ref 并 go build。
+#
+# 命令
+#   OPGETH=/path/to/op-geth bash opstack-executor/tests/t8n/generator/regen.sh
+#   （OPGETH 缺省用默认路径；在仓库任意位置运行均可，路径由脚本自行解析）
+#
+# 产物（写入 opstack-executor/tests/t8n/）
+#   - cases/                      逐 case 输入（瞬态，不入库，脚本不校验其字节）
+#   - vectors/*.json              逐 case 参考向量 + 三模式派生（corrupt/static/invalid-tx/chain）
+#   - golden/engine/*.golden.json 引擎黄金 + chained/ 链式黄金
+#   - vectors/manifest.txt        注册表（幂等 append；static item 3/12 强制排除，loader 不可表达）
+#
+# 何时运行
+#   - CI：由 composite action .github/actions/opstack-t8n-regen 在测试前自动执行
+#     （主 workflow build/coverage job 已接入）。
+#   - 本地：跑 opstack-executor 测试前需先手动执行本脚本一次（生成物已 .gitignore，
+#     不入库）。生成的 json 会被 git 忽略，不会污染工作树。
+#
+# 验证判据（全部满足才 exit 0）
+#   1. 每个 cases/*.in.json 都产出对应 vectors/<base>.json 与 golden/engine/<base>.golden.json，
+#      缺任一即失败。
+#   2. manifest 非注释非空行集合 == cases ∪ 三模式产物集合（sort + diff 对拍），
+#      防孤儿向量 / 漏注册。
+#   3. git diff --exit-code 只覆盖非生成契约文件（vectors/manifest.txt、vectors/*.md、
+#      golden/engine/manifest.txt、golden/engine/SHA256SUMS）：regen 绝不能改动它们。
+#      corpus 完整性由 #2 保证；op-geth 参考无漂移由本文件头部 PIN 保证。
+# =============================================================================
 set -euo pipefail
 OPGETH="${OPGETH:-/Users/octopus/octo/code/blockchain-impl/op-geth}"
 PIN="e8800cffe53d459cde8a07c8e8f1de9d86e79e07"
@@ -138,6 +175,17 @@ if ! diff /tmp/opt8n-left.$$ /tmp/opt8n-right.$$; then
 fi
 rm -f /tmp/opt8n-left.$$ /tmp/opt8n-right.$$
 
-# ── 终步：字节等同（Task 7 Step 1，审查 E9：golden 覆盖扩到 golden/engine/ + chained/）──
+# ── 终步：契约文件无漂移（向量 json 不入库后，字节等同判据改为只盯非生成契约）──
+# 生成的 vectors/golden json 已不入库（.gitignore + CI composite action 现场重生成），
+# 因此不再有「与入库字节等同」的基线。此处只保证 regen 绝不改动非生成的契约文件：
+#   - vectors/manifest.txt（corpus 契约；若合法扩 corpus，regen 会 append 它 → 本 gate
+#     失败，开发须按流程提交新 manifest，属预期仪式）
+#   - vectors/*.md（DIVERGENCES / ANCHOR-CORRECTIONS / OP_RECEIPT_FIELDMAP，手维护）
+#   - golden/engine/manifest.txt、golden/engine/SHA256SUMS（测试不读，仅契约）
+# corpus 完整性由上方判据 #2（manifest 集合 == cases∪三模式产物）保证；op-geth 参考
+# 无漂移由脚本头部 PIN 保证。
 git -C "$REPO_ROOT" diff --exit-code -- \
-  "$T8N_DIR/cases/" "$T8N_DIR/vectors/" "$T8N_DIR/golden/engine/"   # 终步：字节等同即脚本状态
+  "$T8N_DIR/vectors/manifest.txt" \
+  "$T8N_DIR/vectors/"*.md \
+  "$T8N_DIR/golden/engine/manifest.txt" \
+  "$T8N_DIR/golden/engine/SHA256SUMS"
