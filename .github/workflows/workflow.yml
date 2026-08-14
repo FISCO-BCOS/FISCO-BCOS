@@ -196,8 +196,11 @@ jobs:
         # pre-funds an EOA via genesis alloc, and drives a simple value transfer
         # reused from an EEST fixture through eth_sendRawTransaction /
         # eth_getTransactionReceipt / eth_getBalance. Requires the EEST fixtures
-        # downloaded by the "Download EEST fixtures" step above.
-        if: matrix.os == 'ubuntu-24.04'
+        # downloaded by the "Download EEST fixtures" step above. Cross-platform:
+        # the ci_check_eth_executor.sh harness only uses POSIX tools (bash/perl/
+        # curl/pgrep/seq), so it runs on every non-Windows matrix OS (x64/arm64
+        # Linux and macOS).
+        if: matrix.os != 'windows-2025'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
