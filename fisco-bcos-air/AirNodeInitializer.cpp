@@ -110,7 +110,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // EngineService seals these txs into blocks (driven by the built-in single-node timer
     // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
     // in these modes.
-    if (nodeConfig->engineDrivenBlockProduction())
+    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus())
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
     }
