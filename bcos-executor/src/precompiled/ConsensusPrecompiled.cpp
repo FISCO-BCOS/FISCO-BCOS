@@ -29,6 +29,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/lexical_cast.hpp>
+#include <range/v3/algorithm/find.hpp>
 #include <utility>
 
 using namespace bcos;

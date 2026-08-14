@@ -23,6 +23,7 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
+#include <range/v3/algorithm/find.hpp>
 
 using namespace bcos;
 using namespace bcos::executor;
