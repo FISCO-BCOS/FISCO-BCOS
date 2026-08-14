@@ -16,9 +16,9 @@
 
 #pragma once
 
+#include <evmc/evmc.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <evmc/evmc.hpp>
 
 namespace bcos::executor_v1::eth::evm
 {

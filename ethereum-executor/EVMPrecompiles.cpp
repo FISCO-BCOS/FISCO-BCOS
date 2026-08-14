@@ -23,9 +23,6 @@
 
 #include "EVMPrecompiles.h"
 
-#include <array>
-#include <bit>
-#include <cassert>
 #include <evmone_precompiles/blake2b.hpp>
 #include <evmone_precompiles/bls.hpp>
 #include <evmone_precompiles/bn254.hpp>
@@ -36,6 +33,9 @@
 #include <evmone_precompiles/secp256r1.hpp>
 #include <evmone_precompiles/sha256.hpp>
 #include <intx/intx.hpp>
+#include <array>
+#include <bit>
+#include <cassert>
 #include <limits>
 #include <span>
 
@@ -843,8 +843,8 @@ evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcep
     const auto output_data = new (std::nothrow) uint8_t[max_output_size];  // TODO: handle nullptr.
     const auto [status_code, output_size] =
         execute(msg.input_data, msg.input_size, output_data, max_output_size);
-    const evmc_result result{
-        status_code, status_code == EVMC_SUCCESS ? gas_left : 0, 0, output_data, output_size,
+    const evmc_result result{status_code, status_code == EVMC_SUCCESS ? gas_left : 0, 0,
+        output_data, output_size,
         [](const evmc_result* res) noexcept { delete[] res->output_data; },
         evmc_address{},  // create_address
         {}               // padding

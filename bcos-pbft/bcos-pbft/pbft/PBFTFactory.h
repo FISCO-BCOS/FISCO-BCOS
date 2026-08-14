@@ -20,11 +20,11 @@
  */
 #pragma once
 #include "PBFTImpl.h"
+#include <boost/asio/io_context.hpp>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <boost/asio/io_context.hpp>
 #include <functional>
 
 namespace bcos::consensus
@@ -33,7 +33,8 @@ class PBFTFactory : public std::enable_shared_from_this<PBFTFactory>
 {
 public:
     using Ptr = std::shared_ptr<PBFTFactory>;
-    PBFTFactory(boost::asio::io_context& _ioService, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    PBFTFactory(boost::asio::io_context& _ioService,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,

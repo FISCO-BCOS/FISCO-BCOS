@@ -64,12 +64,11 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto validator = std::make_shared<TxsValidator>(m_txpool, m_blockFactory, m_txResultFactory);
 
     PBFT_LOG(DEBUG) << LOG_DESC("create StateMachine");
-    auto stateMachine =
-        std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
+    auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftStorage");
-    auto pbftStorage = std::make_shared<LedgerStorage>(
-        m_scheduler, m_storage, m_blockFactory, pbftMessageFactory, m_ioServicePool);
+    auto pbftStorage =
+        std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory, pbftMessageFactory, m_ioServicePool);
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
     PBFTConfig::Ptr pbftConfig =
