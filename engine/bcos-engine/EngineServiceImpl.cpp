@@ -17,6 +17,7 @@
  */
 
 #include "EngineServiceImpl.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <limits>
 
@@ -146,9 +147,51 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     return false;
 }
 
+namespace
+{
+/// Shared over the two transaction carriers (attributes hex strings and payload raw
+/// bytes): a blob (type-3) or unsupported/unknown-type transaction invalidates the whole
+/// carrier — it is never dropped individually (L2 forbids blob transactions entirely).
+std::optional<std::string> validateRawTransactionKind(
+    bcos::engine::RawTransactionKind kind, std::size_t index)
+{
+    using bcos::engine::RawTransactionKind;
+    if (kind == RawTransactionKind::Blob)
+    {
+        return "blob transactions are not allowed (transaction index " + std::to_string(index) +
+               ")";
+    }
+    if (kind == RawTransactionKind::Unsupported)
+    {
+        return "unsupported transaction type (transaction index " + std::to_string(index) + ")";
+    }
+    return std::nullopt;
+}
+}  // namespace
+
 std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version)
 {
+    if (payloadAttributes.transactions.has_value())
+    {
+        for (std::size_t i = 0; i < payloadAttributes.transactions->size(); ++i)
+        {
+            bcos::bytes raw;
+            try
+            {
+                raw = bcos::fromHex((*payloadAttributes.transactions)[i]);
+            }
+            catch (std::exception const&)
+            {
+                return "payloadAttributes.transactions[" + std::to_string(i) +
+                       "] is not a hex string";
+            }
+            if (auto error = validateRawTransactionKind(dispatchRawTransaction(bcos::ref(raw)), i))
+            {
+                return error;
+            }
+        }
+    }
     if (version == 1 && payloadAttributes.withdrawals.has_value())
     {
         return std::string("withdrawals are not part of PayloadAttributesV1");
@@ -171,11 +214,16 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
 std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version)
 {
-    for (auto const& transaction : executionPayload.transactions)
+    for (std::size_t i = 0; i < executionPayload.transactions.size(); ++i)
     {
-        if (!transaction)
+        auto const& raw = executionPayload.transactions[i].raw;
+        if (raw.empty())
         {
-            return std::string("executionPayload.transactions entries must not be null");
+            return "executionPayload.transactions[" + std::to_string(i) + "] is empty";
+        }
+        if (auto error = validateRawTransactionKind(dispatchRawTransaction(bcos::ref(raw)), i))
+        {
+            return error;
         }
     }
     if (version == 1 && executionPayload.withdrawals.has_value())
@@ -528,7 +576,7 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     auto header = factory->createBlockHeader();
     const auto number = static_cast<bcos::protocol::BlockNumber>(payload.blockNumber);
     header->setNumber(number);
-    header->setTimestamp(static_cast<int64_t>(payload.timestamp) * 1000);
+    header->setTimestamp(static_cast<int64_t>(payload.timestamp));
     header->setParentInfo(
         bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
     header->setCoinbase(payload.feeRecipient);

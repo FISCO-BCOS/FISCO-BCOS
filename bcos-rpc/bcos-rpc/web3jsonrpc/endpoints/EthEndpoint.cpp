@@ -19,6 +19,7 @@
  */
 
 #include "EthEndpoint.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -425,6 +426,20 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
+    // Authoritative first-byte dispatch (RawTransactionDispatch.h). L2 never admits blob
+    // (type-3) transactions, and deposits (0x7e) can only be injected by the consensus
+    // layer through the Engine API, never through the public transaction pool.
+    switch (engine::dispatchRawTransaction(bytesRef))
+    {
+    case engine::RawTransactionKind::Blob:
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "blob transactions are not supported"));
+    case engine::RawTransactionKind::Deposit:
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "deposit transactions cannot be submitted via eth_sendRawTransaction"));
+    default:
+        break;
+    }
     Web3Transaction web3Tx;
     if (auto const error = codec::rlp::decode(bytesRef, web3Tx); error != nullptr) [[unlikely]]
     {

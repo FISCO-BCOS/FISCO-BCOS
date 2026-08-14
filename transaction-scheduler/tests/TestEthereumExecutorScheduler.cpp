@@ -26,7 +26,10 @@
  * ledger::getBlockHash LedgerMethod.
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
+#include "bcos-codec/rlp/Common.h"
+#include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -49,10 +52,9 @@
 #include "engine/bcos-engine/EngineServiceImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
+#include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <cstring>
-#include <evmone/evmone.h>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
 #include <sstream>
@@ -200,8 +202,7 @@ public:
         // node wires — not a parallel copy that can drift.
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(
-                backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
     }
@@ -304,12 +305,10 @@ BOOST_AUTO_TEST_CASE(serialExecuteBlock)
         // The storage-backed block-hash lookup resolves committed hashes via LedgerMethod.
         // The transfers above executed in a block of height 1, which is the current
         // height passed to the provider for the 256-ancestor bound.
-        auto h0 = task::tbb::syncWait(
-            ledger::getBlockHash(backendStorage, 0, ledger::fromStorage));
+        auto h0 = task::tbb::syncWait(ledger::getBlockHash(backendStorage, 0, ledger::fromStorage));
         BOOST_CHECK(h0.has_value());
         auto resolved = blockHashLookup(0, 1);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved.bytes, h0->data(), sizeof(evmc_bytes32)), 0);
     }());
 }
 
@@ -785,16 +784,14 @@ BOOST_AUTO_TEST_CASE(blockHashLookbackLimit)
             task::tbb::syncWait(ledger::getBlockHash(backendStorage, 50, ledger::fromStorage));
         BOOST_CHECK(h50.has_value());
         auto resolved50 = blockHashLookup(50, 300);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved50.bytes, h50->data(), sizeof(evmc_bytes32)), 0);
 
         // The oldest reachable ancestor (current - 256) — must resolve.
         auto h44 =
             task::tbb::syncWait(ledger::getBlockHash(backendStorage, 44, ledger::fromStorage));
         BOOST_CHECK(h44.has_value());
         auto resolved44 = blockHashLookup(44, 300);
-        BOOST_CHECK_EQUAL(
-            std::memcmp(resolved44.bytes, h44->data(), sizeof(evmc_bytes32)), 0);
+        BOOST_CHECK_EQUAL(std::memcmp(resolved44.bytes, h44->data(), sizeof(evmc_bytes32)), 0);
 
         // Older than 256 ancestors — unknown (zero hash), despite the hash being stored.
         evmc::bytes32 zero{};
@@ -863,8 +860,8 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup throwingLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             throw std::runtime_error("simulated storage failure");
         };
-        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(throwingLookup), *tx, callParams};
+        eth::EthereumHost<EEMutableStorage> host{
+            EVMC_SHANGHAI, vm, state, block, std::move(throwingLookup), *tx, callParams};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -875,8 +872,8 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup zeroLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             return evmc::bytes32{};
         };
-        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(zeroLookup), *tx, callParams};
+        eth::EthereumHost<EEMutableStorage> host{
+            EVMC_SHANGHAI, vm, state, block, std::move(zeroLookup), *tx, callParams};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -1028,8 +1025,7 @@ BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
         {
             auto to = ethToAddress(*mkTx(toHexStr));
             BOOST_REQUIRE(to.has_value());
-            BOOST_CHECK_EQUAL(
-                std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+            BOOST_CHECK_EQUAL(std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
         }
 
         // Raw 20 bytes (defensive fallback branch) -> the exact recipient address.
@@ -1037,8 +1033,7 @@ BOOST_AUTO_TEST_CASE(toDecodingOnlyWellFormedAddresses)
             bcos::bytes raw(std::begin(recipient.bytes), std::end(recipient.bytes));
             auto to = ethToAddress(*mkTx(std::string(raw.begin(), raw.end())));
             BOOST_REQUIRE(to.has_value());
-            BOOST_CHECK_EQUAL(
-                std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
+            BOOST_CHECK_EQUAL(std::memcmp(to->bytes, recipient.bytes, sizeof(evmc_address)), 0);
         }
 
         // Short hex "0x1234" -> unset (contract creation), never 0x1234000...0.
@@ -1127,7 +1122,13 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
 
         // Submit a real value-transfer tx (nonce 0, matching the sender's state nonce).
         // Built directly as EETestTransactionImpl (the factory returns a base TransactionImpl
-        // which cannot be markClean()'d) with the same inner encoding the factory produces.
+        // which cannot be markClean()'d). Web3-shaped: only transactions with a genuine
+        // EIP-2718 wire form enter OP payloads (buildPayload excludes native Tars
+        // transactions), so the tx carries type=Web3Transaction, an EIP-1559 signing
+        // payload mirroring the transfer fields and a 65-byte signature — the same shape
+        // the eth_sendRawTransaction ingress produces. Execution still reads the inner
+        // interface fields (EthereumTransition converts via tx.web3TypedTxKind() and the
+        // Transaction accessors), so the transfer semantics are unchanged.
         auto tx = std::make_shared<EETestTransactionImpl>();
         {
             auto& inner = tx->mutableInner();
@@ -1142,6 +1143,34 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
             inner.data.gasLimit = 100000;
             inner.data.maxFeePerGas = "0x0";
             inner.data.maxPriorityFeePerGas = "0x0";
+            inner.type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
+            inner.web3TypedTxKind = 2;  // EIP-1559 (matches the 0x02 signing payload below)
+
+            // Signing payload: 0x02 || rlp([chainId, nonce, maxPriorityFeePerGas,
+            // maxFeePerGas, gasLimit, to, value, data, accessList]), mirroring the
+            // transfer fields above.
+            bcos::bytes body;
+            bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));       // chainId
+            bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));       // nonce
+            bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));       // maxPriorityFeePerGas
+            bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));       // maxFeePerGas
+            bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));  // gasLimit
+            bcos::codec::rlp::encode(
+                body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
+            bcos::codec::rlp::encode(body, static_cast<uint64_t>(100));  // value
+            bcos::codec::rlp::encode(body, bcos::bytes{});               // data
+            body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);            // empty accessList
+            bcos::bytes payloadBytes;
+            payloadBytes.push_back(0x02);
+            bcos::codec::rlp::encodeHeader(payloadBytes,
+                bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+            payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
+            inner.extraTransactionBytes.assign(payloadBytes.begin(), payloadBytes.end());
+            bcos::bytes signature(65, 0);
+            signature[31] = 0x12;  // r != 0
+            signature[63] = 0x34;  // s != 0
+            signature[64] = 0x01;  // yParity
+            inner.signature.assign(signature.begin(), signature.end());
         }
         tx->forceSender(bcos::bytes(std::begin(sender.bytes), std::end(sender.bytes)));
         tx->calculateHash(*cryptoSuite->hashImpl());

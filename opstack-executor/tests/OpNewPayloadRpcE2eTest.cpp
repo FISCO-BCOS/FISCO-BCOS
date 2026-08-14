@@ -212,9 +212,9 @@ struct OpE2eFixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger,
-            ioServicePool)),
+        opDelegate(
+            std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
+                kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             opDelegate)
@@ -303,8 +303,7 @@ void runGoldenVector(std::string const& id)
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
 
     auto params = w6test::makeParamsJson(sample);
-    auto request = bcos::rpc::parseNewPayloadRequest(
-        params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
 
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
     // Warning: PayloadValidationStatus is an enum class without operator<<; must compare
@@ -391,10 +390,10 @@ void runChainedPair(std::string const& aId, std::string const& bId)
     // Register A's parent (trusted genesis height 0)
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeaderA->parentInfo().blockHash, 0);
 
-    auto requestA = bcos::rpc::parseNewPayloadRequest(w6test::makeParamsJson(sampleA),
-        *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
-    auto requestB = bcos::rpc::parseNewPayloadRequest(w6test::makeParamsJson(sampleB),
-        *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto requestA = bcos::rpc::parseNewPayloadRequest(
+        w6test::makeParamsJson(sampleA), bcos::engine::ApiVersion::V4);
+    auto requestB = bcos::rpc::parseNewPayloadRequest(
+        w6test::makeParamsJson(sampleB), bcos::engine::ApiVersion::V4);
 
     // Submit B first: parent(A) not yet registered -> SYNCING
     auto earlyB = bcos::task::syncWait(fixture->service.newPayload(requestB, 4));
@@ -459,8 +458,7 @@ runVectorAndGetBlockHash(std::string const& id)
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
     auto params = w6test::makeParamsJson(sample);
-    auto req = bcos::rpc::parseNewPayloadRequest(
-        params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto req = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(req, /*version=*/4));
     BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
                               static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
@@ -532,8 +530,7 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
 
     // Self-consistent: recompute blockHash (the rebuilt header excludes payload.blockHash ->
     // opHeaderHash)
-    auto request = bcos::rpc::parseNewPayloadRequest(
-        params, *blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto header = productionHeaderOf(blockFactory, request);
     ep["blockHash"] =
         w6test::hexPrefixedH256(header->opHeaderHash(bcos::engine::detail::opHeaderConst()));
@@ -668,8 +665,7 @@ void runInvalidVector(std::string const& id)
         // unknown
         w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
         auto params = w6test::makeInvalidParamsJson(sample);
-        auto request = bcos::rpc::parseNewPayloadRequest(
-            params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+        auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
         auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
         BOOST_CHECK_MESSAGE(static_cast<int>(status.status) ==
                                 static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
@@ -687,9 +683,8 @@ void runInvalidVector(std::string const& id)
     {
         auto params = w6test::makeInvalidParamsJson(sample);
         const auto version = fisco.isMember("version") ? fisco["version"].asUInt() : 4u;
-        auto request =
-            bcos::rpc::parseNewPayloadRequest(params, *fixture->blockFactory->transactionFactory(),
-                static_cast<bcos::engine::ApiVersion>(version));
+        auto request = bcos::rpc::parseNewPayloadRequest(
+            params, static_cast<bcos::engine::ApiVersion>(version));
         if (classification == "-38005")
         {
             BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, version)),
@@ -709,8 +704,8 @@ void runInvalidVector(std::string const& id)
             canonicalSample.vector["_op_payload"] = sample.vector["_op_canonical"];
             canonicalSample.jovian = sample.jovian;
             auto canonicalParams = w6test::makeInvalidParamsJson(canonicalSample);
-            auto canonicalReq = bcos::rpc::parseNewPayloadRequest(canonicalParams,
-                *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+            auto canonicalReq =
+                bcos::rpc::parseNewPayloadRequest(canonicalParams, bcos::engine::ApiVersion::V4);
             auto canonicalStatus =
                 bcos::task::syncWait(fixture->service.newPayload(canonicalReq, 4));
             BOOST_REQUIRE_MESSAGE(
@@ -727,8 +722,7 @@ void runInvalidVector(std::string const& id)
 
     // INVALID (default path)
     auto params = w6test::makeInvalidParamsJson(sample);
-    auto request = bcos::rpc::parseNewPayloadRequest(
-        params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
     BOOST_CHECK_MESSAGE(static_cast<int>(status.status) ==
                             static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid),

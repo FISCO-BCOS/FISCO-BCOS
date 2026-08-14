@@ -20,6 +20,7 @@
 #pragma once
 
 #include "bcos-concepts/ByteBuffer.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/engine/EngineService.h"
@@ -39,10 +40,13 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
+#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
 #include <deque>
@@ -50,6 +54,9 @@
 #include <mutex>
 #include <optional>
 #include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/indirect.hpp>
+#include <range/v3/view/transform.hpp>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -408,8 +415,15 @@ public:
             // the state nonce here is still the committed one.
             std::vector<protocol::Transaction::Ptr> sealedTxs;
             view.newMutable();
-            m_memPool.get().remove(view);
-            m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+            // noTxPool=true (OP Stack): the payload must not take any transaction from the
+            // pool — it contains exactly the forced transaction list (possibly none). Skip
+            // both pool hygiene and sealing; forced transactions are prepended in
+            // buildPayload.
+            if (!payloadAttributes->noTxPool.value_or(false))
+            {
+                m_memPool.get().remove(view);
+                m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+            }
 
             // Step 3: Build the payload on the executed view (already mutable above).
             auto payloadId = nextPayloadID();
@@ -422,6 +436,7 @@ public:
                 .blockValue = 0,
                 .blobsBundle = std::nullopt,
                 .shouldOverrideBuilder = false,
+                .parentBeaconBlockRoot = payloadAttributes->parentBeaconBlockRoot,
                 .view = std::make_shared<ViewType>(std::move(view)),
                 .header = std::move(built.header),
                 .receipts = std::move(built.receipts),
@@ -495,6 +510,9 @@ private:
         u256 blockValue = 0;
         std::optional<BlobsBundleV1> blobsBundle;
         bool shouldOverrideBuilder = false;
+        /// Beacon root the payload was built with (from PayloadAttributes) or received
+        /// with (from NewPayloadRequest); echoed in the getPayload response (OP Stack).
+        std::optional<h256> parentBeaconBlockRoot;
         std::shared_ptr<ViewType> view;
         /// Built-block artifacts kept so newPayload() can persist the ledger block tables
         /// (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /
@@ -590,6 +608,7 @@ private:
                 .blobsBundle = it->second.blobsBundle,
                 .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
                 .executionRequests = std::nullopt,
+                .parentBeaconBlockRoot = it->second.parentBeaconBlockRoot,
             });
         }
     }
@@ -691,6 +710,7 @@ private:
                 .blockValue = 0,
                 .blobsBundle = std::nullopt,
                 .shouldOverrideBuilder = false,
+                .parentBeaconBlockRoot = request.parentBeaconBlockRoot,
                 .view = nullptr,
                 .header = nullptr,
                 .receipts = {},
@@ -702,12 +722,9 @@ private:
 
             // If this payload was built locally (via updateForkchoice), commit the view's
             // state changes to storage. Externally received payloads have no view to commit.
-            // mergeView() (commit 589d15dd8) removed the risk of leaking a mutable layer when
-            // mergeBackStorage throws (the OP path at EngineServiceImpl.h:1165 uses it too).
-            // Remaining TODO: avoid holding x_state across a co_await -- the OP path still holds
-            // x_state across mergeView's internal co_await (acknowledged); this generic path
-            // still does the two-step pushView+mergeBackStorage (semantically equivalent, can
-            // switch to mergeView later).
+            // TODO: merge pushView + mergeBackStorage into a single atomic mergeView()
+            // operation. This will eliminate the risk of leaking a mutable layer if
+            // mergeBackStorage throws, and avoid holding x_state across a co_await.
             auto it = m_payloadCache.find(payloadId);
             if (it != m_payloadCache.end() && it->second.view)
             {
@@ -730,9 +747,16 @@ private:
                     // this restores parity with that path (eth_getLogs uses it as a filter).
                     auto const& bloom = it->second.executionPayload.logsBloom;
                     block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+                    // Raw-only entries (forced transactions) carry no decoded form and are
+                    // not modeled as ledger transactions until execution wiring lands; the
+                    // persisted transaction list therefore matches the receipts list, which
+                    // also only covers the executed (decoded) subset.
                     for (auto const& tx : it->second.executionPayload.transactions)
                     {
-                        block->appendTransaction(tx);
+                        if (tx.decoded)
+                        {
+                            block->appendTransaction(tx.decoded);
+                        }
                     }
                     for (auto const& receipt : it->second.receipts)
                     {
@@ -740,8 +764,11 @@ private:
                     }
                     auto blockTxs = std::make_shared<protocol::ConstTransactions>(
                         it->second.executionPayload.transactions |
-                        ::ranges::views::transform(
-                            [](auto const& tx) { return protocol::Transaction::ConstPtr(tx); }) |
+                        ::ranges::views::filter(
+                            [](auto const& tx) { return tx.decoded != nullptr; }) |
+                        ::ranges::views::transform([](auto const& tx) {
+                            return protocol::Transaction::ConstPtr(tx.decoded);
+                        }) |
                         ::ranges::to<std::vector>());
                     co_await ledger::prewriteBlockToBuffer(
                         *m_ledger, blockTxs, block, prewriteStorage);
@@ -771,7 +798,6 @@ private:
                 PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
         }
     }
-
     /// newPayload OP branch. Only ever instantiated when `c_opMode` is true -- i.e. when
     /// `SchedulerType` is the OP scheduler -- which is what makes every `SchedulerType::`-qualified
     /// name below legal without this library depending on bcos-evm: they are dependent names,
@@ -801,7 +827,12 @@ private:
         //
         // Deliberately OUTSIDE the barrier below: `UnsupportedFork` (-38005) is itself a
         // classified outcome and must reach the caller unchanged, not be re-labelled.
-        const bool isthmusActive = m_scheduler.get().isIsthmusActiveAt(payload.timestamp);
+        // ExecutionPayload.timestamp is internal milliseconds (Types.h contract, RPC boundary
+        // converts); the fork schedule's thresholds (isthmusTime/jovianTime) are in Unix seconds,
+        // so convert here — the payload seconds->millis conversion that the pre-merge branch did
+        // in the RPC boundary now happens once, here.
+        const bool isthmusActive =
+            m_scheduler.get().isIsthmusActiveAt(static_cast<uint64_t>(payload.timestamp) / 1000);
         constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;
         if (!isthmusActive)
         {
@@ -876,7 +907,8 @@ private:
         // has been deprecated since Shanghai and the OP branch does not use it (the enumerator
         // stays in Types.h for the generic path).
         if (auto validationError = detail::validateOpNewPayloadRequest(
-                request, m_scheduler.get().isJovianActiveAt(payload.timestamp));
+                request, m_scheduler.get().isJovianActiveAt(
+                             static_cast<uint64_t>(payload.timestamp) / 1000));
             validationError.has_value())
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
@@ -1000,9 +1032,9 @@ private:
             // OP hash. This step only reads timestamp/baseFee/extraData/gasLimit/gasUsed/
             // blobGasUsed, never hash(), so it is unaffected; this is a known consequence of
             // deferred dataHash, and any future consumer of OP headers must not call hash().
-            // Monotonicity: payload seconds -> milliseconds, compared in the same unit as the
-            // parent header (milliseconds).
-            if (static_cast<uint64_t>(payload.timestamp) * 1000 <=
+            // Monotonicity: payload timestamp is internal milliseconds (Types.h contract),
+            // compared in the same unit as the parent header (milliseconds).
+            if (static_cast<uint64_t>(payload.timestamp) <=
                 static_cast<uint64_t>(parentHeader->timestamp()))
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
@@ -1212,6 +1244,63 @@ private:
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
+        // Dual carrier: every sealed transaction is stored with both its raw EIP-2718
+        // bytes (the wire form getPayload returns) and the decoded executable form (used
+        // for execution and ledger persistence). Web3 transactions reassemble their
+        // exact signed raw bytes from the signing payload + signature — the same splice
+        // that produces the canonical txHash.
+        //
+        // Only transactions with a genuine EIP-2718 wire form enter the OP payload. A
+        // native Tars transaction has no such form — any bytes emitted for it would be
+        // rejected by this service's own newPayload dispatch, so sealing one would make
+        // the service build a payload it then judges INVALID (an FCU -> getPayload ->
+        // newPayload livelock). Such transactions are excluded from the payload with a
+        // warning and remain in the mempool. In production the mempool's sole ingress is
+        // eth_sendRawTransaction, which admits Web3 transactions exclusively, so the
+        // exclusion only ever triggers for in-process callers.
+        std::vector<EngineTransaction> engineTransactions;
+        engineTransactions.reserve(
+            payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() +
+            sealedTxs.size());
+        // Forced transactions (OP attributes.transactions) come FIRST, in the order the
+        // CL gave them — this is the only OP-sanctioned path for deposits. Their raw
+        // EIP-2718 bytes are carried byte-for-byte (hex validity and dispatch
+        // admissibility were already enforced by validatePayloadAttributes, which runs
+        // before buildPayload). They carry no decoded executable form yet: 0x7E deposit
+        // execution (runDeposit) and raw->executable decoding for typed/legacy forced
+        // transactions belong to the execution-lane wiring, so raw-only entries are
+        // placed in the payload, participate in the transactions root via their
+        // canonical keccak256(raw) hash, but are not executed and do not advance state.
+        if (payloadAttributes.transactions.has_value())
+        {
+            for (auto const& forcedHex : *payloadAttributes.transactions)
+            {
+                engineTransactions.push_back(EngineTransaction{
+                    .raw = fromHex(forcedHex),
+                    .decoded = nullptr,
+                });
+            }
+        }
+        for (auto& sealedTx : sealedTxs)
+        {
+            if (sealedTx->type() !=
+                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+            {
+                BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
+                                  << LOG_DESC(
+                                         "buildPayload: excluding transaction without an EIP-2718 "
+                                         "wire form from the OP payload")
+                                  << LOG_KV("hash", sealedTx->hash().hex())
+                                  << LOG_KV("type", static_cast<int>(sealedTx->type()));
+                continue;
+            }
+            engineTransactions.push_back(EngineTransaction{
+                .raw = bcostars::protocol::reassembleWeb3RawTransaction(
+                    sealedTx->extraTransactionBytes(), sealedTx->signatureData()),
+                .decoded = std::move(sealedTx),
+            });
+        }
+
         ExecutionPayload executionPayload{
             .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
@@ -1222,7 +1311,7 @@ private:
             .gasUsed = 0,
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
-            .transactions = std::move(sealedTxs),
+            .transactions = std::move(engineTransactions),
             .extraData = {},
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
@@ -1230,8 +1319,7 @@ private:
             .withdrawals = std::nullopt,
             .blobGasUsed = std::nullopt,
             .excessBlobGas = std::nullopt,
-            .blockAccessList = std::nullopt,
-            .slotNumber = std::nullopt,
+            .withdrawalsRoot = std::nullopt,
         };
 
         if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
@@ -1294,10 +1382,20 @@ private:
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
 
-        // Step 2c: Execute transactions via the scheduler
-        // Use views::indirect to dereference shared_ptr<Transaction> -> const Transaction&
+        // Step 2c: Execute transactions via the scheduler, over the decoded executable
+        // forms. Raw-only entries (forced transactions from the OP attributes list) have
+        // no executable form yet and are skipped — see the forced-transaction comment
+        // above. Materialized into a vector because scheduler implementations require a
+        // sized range (a lazy filter view is not sized).
+        auto executableTransactions =
+            executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
+                return transaction.decoded != nullptr;
+            }) |
+            ::ranges::views::transform(
+                [](auto const& transaction) { return transaction.decoded; }) |
+            ::ranges::to<std::vector>();
         auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
-            *blockHeader, executionPayload.transactions | ::ranges::views::indirect, ledgerConfig);
+            *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
         // Step 2d: Compute transaction root (Merkle over tx hashes)
         // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
@@ -1311,8 +1409,14 @@ private:
                 hasher.clone());
             if (!executionPayload.transactions.empty())
             {
-                auto txHashes = executionPayload.transactions |
-                                ::ranges::views::transform([](auto& tx) { return tx->hash(); });
+                auto txHashes =
+                    executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
+                        // Canonical txHash: decoded transactions expose it directly;
+                        // raw-only (forced) entries hash their EIP-2718 bytes, which is
+                        // the canonical hash for every raw transaction kind.
+                        return tx.decoded ? tx.decoded->hash() :
+                                            bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
+                    });
                 std::vector<h256> merkleTrie;
                 merkle.generateMerkle(txHashes, merkleTrie);
                 if (!merkleTrie.empty())

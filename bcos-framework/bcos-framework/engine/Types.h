@@ -73,6 +73,8 @@ struct PayloadAttributes
     // Required by PayloadAttributesV1/V2/V3/V4.
     h256 prevRandao;
     Address suggestedFeeRecipient;
+    // Internal milliseconds, matching BlockHeader::timestamp(); the RPC boundary
+    // converts from/to Engine-API Unix seconds (EngineHelper.cpp).
     std::uint64_t timestamp = 0;
 
     // Required by PayloadAttributesV2/V3/V4.
@@ -81,9 +83,39 @@ struct PayloadAttributes
     // Required by PayloadAttributesV3/V4.
     std::optional<h256> parentBeaconBlockRoot;
 
-    // Required by PayloadAttributesV4.
-    std::optional<std::uint64_t> slotNumber;
-    std::optional<std::uint64_t> targetGasLimit;
+    // OP Stack payload attributes (optimism/specs engine.md). All optional so that
+    // vanilla Ethereum attributes keep their current behavior when absent.
+    // EIP-2718 raw transaction hex strings, passed through verbatim without decoding;
+    // decoding/dispatch belongs to the raw-bytes carrier and type-dispatch work.
+    std::optional<std::vector<std::string>> transactions;
+    // When true the payload must not include transactions picked from the mempool.
+    std::optional<bool> noTxPool;
+    // Block gas limit dictated by the L1 SystemConfig via the CL. 64-bit by protocol:
+    // op-node serializes it as a Uint64Quantity (op-service/eth/types.go,
+    // PayloadAttributes.GasLimit *Uint64Quantity).
+    std::optional<std::uint64_t> gasLimit;
+    // Holocene: 8 bytes = 4-byte EIP-1559 denominator followed by 4-byte elasticity
+    // (op-node: EIP1559Params *Bytes8).
+    std::optional<bytes> eip1559Params;
+    // Jovian: minimum base fee, in wei. 64-bit by protocol: op-node declares it as
+    // MinBaseFee *uint64 (op-service/eth/types.go) and the Jovian block-header
+    // extraData packs it as a big-endian u64 at bytes [9, 17)
+    // (specs.optimism.io jovian/exec-engine); the spec's bare "QUANTITY" wording does
+    // not widen it. Values beyond uint64 are rejected at JSON parse (strict
+    // fromQuantity), matching what the extraData encoding could never carry.
+    std::optional<std::uint64_t> minBaseFee;
+};
+
+/// One Engine-API transaction. The raw EIP-2718 bytes are the canonical wire form and
+/// are preserved byte-for-byte through parse -> payload cache -> serialization (getPayload
+/// must return exactly what newPayload received). The decoded form is the executable
+/// representation where one exists: locally built payloads carry the mempool transaction
+/// here; externally received payloads and deposits carry raw bytes only until execution
+/// wiring decodes them.
+struct EngineTransaction
+{
+    bytes raw;
+    protocol::Transaction::Ptr decoded;
 };
 
 struct ExecutionPayload
@@ -98,9 +130,11 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
-    bcos::protocol::Transactions transactions;
+    std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
+    // Internal milliseconds, matching BlockHeader::timestamp(); the RPC boundary
+    // converts from/to Engine-API Unix seconds (EngineHelper.cpp).
     std::uint64_t timestamp = 0;
     bcos::protocol::BlockNumber blockNumber = 0;
 
@@ -126,6 +160,9 @@ struct ExecutionPayload
     ///   (= MessagePasser storage root) that cannot be derived from the (always-empty)
     ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains (design §5.2).
     std::optional<std::vector<bytes>> rawTransactions;
+    // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
+    // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
+    // header wiring lands.
     std::optional<h256> withdrawalsRoot;
 };
 
@@ -180,6 +217,10 @@ struct GetPayloadData
 
     // Required by engine_getPayloadV4/V6.
     std::optional<std::vector<bytes>> executionRequests;
+
+    // OP Stack getPayload response extension: the beacon root the payload was built
+    // with, echoed back to newPayload by the CL.
+    std::optional<h256> parentBeaconBlockRoot;
 };
 
 using GetPayloadResult = std::unique_ptr<GetPayloadData>;

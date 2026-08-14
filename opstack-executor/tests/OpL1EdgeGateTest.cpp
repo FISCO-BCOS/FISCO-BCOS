@@ -204,8 +204,7 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
     params[0u]["blobGasUsed"] = w6test::quantityOf(gasLimit + 1);
 
     auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(true));
-    auto request = bcos::rpc::parseNewPayloadRequest(
-        params, *fixture->blockFactory->transactionFactory(), bcos::engine::ApiVersion::V4);
+    auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
     // PayloadValidationStatus is an enum class without operator<<; must compare via
     // static_cast<int>.

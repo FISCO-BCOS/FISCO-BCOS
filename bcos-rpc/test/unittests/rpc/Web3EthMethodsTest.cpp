@@ -260,6 +260,22 @@ BOOST_AUTO_TEST_CASE(getFilterChangesUnknownId)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
+BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsBlobTransaction)
+{
+    // L2 never admits blob (type-3) transactions; rejected before RLP decoding.
+    auto resp = call(req("eth_sendRawTransaction", R"(["0x03deadbeef"])"));
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_NE(resp["error"]["message"].asString().find("blob"), std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsDepositTransaction)
+{
+    // Deposits (0x7e) are CL-injected via the Engine API only, never via the tx pool.
+    auto resp = call(req("eth_sendRawTransaction", R"(["0x7edeadbeef"])"));
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_NE(resp["error"]["message"].asString().find("deposit"), std::string::npos);
+}
+
 BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
 {
     // Non-decodable raw tx must surface a JSON-RPC error, not crash.
@@ -330,7 +346,8 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptHappyPath)
         BOOST_CHECK_EQUAL(resp["result"]["transactionHash"].asString(), txHashHex);
         BOOST_CHECK(resp["result"].isMember("logs"));
         BOOST_CHECK(resp["result"].isMember("blockNumber"));
-        // C4: OP extension fields survive the full RPC round-trip (not just combineReceiptResponse).
+        // C4: OP extension fields survive the full RPC round-trip (not just
+        // combineReceiptResponse).
         BOOST_CHECK_EQUAL(resp["result"]["l1GasPrice"].asString(), "0x5");
         BOOST_CHECK_EQUAL(resp["result"]["operatorFeeScalar"].asString(), "0x2");
         // Pinned against the independently-known EIP-55 vector (NOT derived via the same

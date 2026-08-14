@@ -19,12 +19,12 @@
 
 #pragma once
 
-#include <algorithm>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <algorithm>
 #include <string>
 
 namespace bcos::rpc
@@ -36,9 +36,9 @@ inline bcos::h256 parseH256(std::string_view hex)
     auto bytes = fromHex(hex);
     if (bytes.size() != 32)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "Expected 32-byte hex string for h256, got " +
-                               std::to_string(bytes.size()) + " bytes"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Expected 32-byte hex string for h256, got " +
+                                                std::to_string(bytes.size()) + " bytes"));
     }
     h256 result;
     std::ranges::copy(bytes.begin(), bytes.end(), result.begin());
@@ -52,9 +52,9 @@ inline bcos::Address parseAddress(std::string_view hex)
     auto bytes = fromHex(hex);
     if (bytes.size() != 20)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "Expected 20-byte hex string for address, got " +
-                               std::to_string(bytes.size()) + " bytes"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Expected 20-byte hex string for address, got " +
+                                                std::to_string(bytes.size()) + " bytes"));
     }
     Address result;
     std::ranges::copy(bytes.begin(), bytes.end(), result.begin());
@@ -62,18 +62,22 @@ inline bcos::Address parseAddress(std::string_view hex)
 }
 
 // The functions below are defined in EngineHelper.cpp to avoid pulling
-// ~300 lines of serialization code and <TransactionFactory.h> into every
-// translation unit that transitively includes this header.
+// ~300 lines of serialization code into every translation unit that
+// transitively includes this header.
 
+// Transactions are carried as raw EIP-2718 bytes: parsing and serialization only do
+// hex <-> bytes, byte-preserving in both directions. Classification/decoding of the
+// raw bytes is the dispatch table's job (bcos-framework/engine/RawTransactionDispatch.h).
 bcos::engine::NewPayloadRequest parseNewPayloadRequest(
-    Json::Value const& params, bcos::protocol::TransactionFactory& transactionFactory,
-    engine::ApiVersion version);
+    Json::Value const& params, engine::ApiVersion version);
 
 Json::Value serializePayloadStatus(
     bcos::engine::PayloadStatus const& status, engine::ApiVersion version);
 
 std::optional<bcos::engine::PayloadAttributes> parsePayloadAttributes(
     Json::Value const& params, engine::ApiVersion version);
+
+Json::Value serializePayloadAttributes(bcos::engine::PayloadAttributes const& attrs);
 
 bcos::engine::ForkchoiceState parseForkchoiceState(Json::Value const& params);
 
