@@ -30,33 +30,51 @@ start below produces those allocs.
 All paths are relative to the repo root. `tools/opstack-genesis/` holds the
 allocs generator; `bcos-l2-contracts/` holds the Solidity suite.
 
-### 1. Build the contracts and edit a chain config
+### 1. Build the contracts, obtain the base allocs, edit a chain config
 
 ```bash
 cd tools/opstack-genesis
-make contracts    # forge build src/ + clone the pinned OP fork to /tmp + forge build it
+make contracts    # forge build of bcos-l2-contracts/src (the only artifacts genesis needs)
+# obtain final-allocs.json: the op-deployer terminal alloc JSON for the pinned
+# Karst release (bcos-l2-contracts/op-fork-pin.toml [karst_pin]); generating it
+# needs the op-deployer binary — run it wherever that binary is available.
 cp chain-config.template.yaml chain-config.yaml
 $EDITOR chain-config.yaml      # set chain_id, owner, gas/version fields
 ```
 
-`make contracts` (`tools/opstack-genesis/Makefile:36`) compiles the two
-self-written predeploys under `bcos-l2-contracts/src/`, then clones the OP fork
-pinned in `bcos-l2-contracts/op-fork-pin.toml` into `/tmp/op-fork` and builds
-its `packages/contracts-bedrock`. The OP tree is not vendored into this repo —
-see `runbook-op-fork-upgrade.md` to bump the pin.
+The op-deployer output is the ONLY source of the OP-Stack accounts (every
+0x42... proxy, every 0xc0d3... implementation, ProxyAdmin ownership,
+prefunded accounts). The OP fork source tree is NOT part of this pipeline;
+`make op-fork-build` still exists for compiling the pinned sources when you
+need to inspect them (`runbook-op-fork-upgrade.md` covers bumping the pin).
 
 ### 2. Generate the genesis allocs
 
 ```bash
-make allocs CONFIG=chain-config.yaml OUT=allocs.ini
+make allocs CONFIG=chain-config.yaml BASE=final-allocs.json OUT=allocs.ini
 # equivalently:
 python3 build-allocs.py --config chain-config.yaml \
-    --contracts ../../bcos-l2-contracts --out allocs.ini
+    --contracts ../../bcos-l2-contracts \
+    --base-allocs final-allocs.json --out allocs.ini --out-json allocs.json
 ```
 
-`allocs.ini` holds the `[alloc.N]` + `[alloc.N.storage]` fragments for all 13
-predeploys (runtime bytecode + seeded storage). `SystemConfig`'s `chain_id` and
-the other config entries are seeded as storage slots here.
+`allocs.ini` holds one `[alloc.N]` (+ `[alloc.N.storage]`) section per merged
+account: every base-alloc account carried through verbatim, plus 4 overlay
+accounts — the two self-written predeploys each expand to a proxy account
+(EIP-1967 slots + seeded contract storage) and an implementation account.
+`SystemConfig`'s `chain_id` and the other config entries are seeded as packed
+Entry slots on the proxy account. `allocs.json` is the same merged set in
+geth-style alloc shape — feed it to the op-reth oracle genesis so both chains
+share one account set.
+
+**Pre-freeze output is throwaway.** While `base_allocs_sha256` in the chain
+config is still empty (the tool warns loudly), any `allocs.ini`/genesis you
+produce is for integration testing ONLY. Before launching a real chain,
+regenerate from the FROZEN op-deployer artifact and fill in
+`base_allocs_sha256` (mirrored from `op-fork-pin.toml`
+`[karst_pin].base_allocs_sha256`) — a SHA recorded after the fact will not
+match the base an already-started chain was actually built from, and genesis
+is immutable: there is no fixing it post-launch.
 
 ### 3. Assemble `config.genesis`
 
@@ -73,7 +91,7 @@ Enable the feature under `[features]` and append the generated `allocs.ini`:
 
 ; --- appended from allocs.ini ---
 [alloc.0]
-    address = 42000000000000000000000000000000000000c0
+    address = 43000000000000000000000000000000000000c0
     balance = 0
     nonce   = 0
     code    = 0x60806040...
@@ -102,11 +120,11 @@ re-derived and checked on every later startup (see [Immutability](#immutability)
 ### 5. Verify
 
 ```bash
-# all 13 predeploys carry code
-cast code 0x42000000000000000000000000000000000000C0 --rpc-url http://127.0.0.1:8545
+# every merged predeploy carries code (spot-check; genesis-bootstrap.sh sweeps them all)
+cast code 0x43000000000000000000000000000000000000C0 --rpc-url http://127.0.0.1:8545
 
 # SystemConfig returns the seeded chain_id (value, enableNumber)
-cast call 0x42000000000000000000000000000000000000C0 \
+cast call 0x43000000000000000000000000000000000000C0 \
     "getValueByKey(string)" "chain_id" --rpc-url http://127.0.0.1:8545
 
 # eth_chainId agrees with SystemConfig chain_id (PR-4/PR-6 path consistency)
@@ -176,7 +194,7 @@ editing a frozen field means the node is now pointed at a different chain.
 | Enable/disable `feature_l2_ethereum_compat` | changes the genesis feature set (extraData) and allocs; immutable after first init — start a **new chain** |
 | Add / change a predeploy (different allocs) | allocs are pinned by the genesis `stateRoot`; start a **new chain** |
 | Bump the pinned OP fork to a new tag | edit `op-fork-pin.toml` — see `runbook-op-fork-upgrade.md` |
-| Phase B governance handover (DAO switch) | transfer `ProxyAdmin` ownership to the DAO (a runtime `ProxyAdmin.transferOwnership` tx, not a genesis change) |
+| Phase B governance handover (DAO switch) | runtime `transferOwnership` txs, not a genesis change: `Ownable.owner` of SystemConfig / L2ValidatorSet (config + validator authority) and/or `ProxyAdmin` ownership (upgrade authority) — two independent roles, hand over each deliberately |
 
 There is no in-place migration for any frozen genesis field by design: the
 `stateRoot` / `extraData` guards exist to stop a node from silently running on a

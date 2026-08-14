@@ -202,9 +202,17 @@ public:
     uint32_t opEngineBatchRequestSizeLimit() const;
     const std::string& opEngineJwtSecretFile() const;
     int32_t opEngineClockSkewSecs() const;
+    // test-only escape hatch: allow [op_engine_rpc] to serve the v1 EngineService on
+    // executor_version < 2 (the v1 Engine API integration harness drives it over this
+    // endpoint); production configs must never set it
+    bool opEngineAllowV1Executor() const;
 
     // single-node consensus configurations
     bool enableSingleNodeConsensus() const;
+    // true when block production is driven through the EngineService — by the built-in
+    // single-node driver or by an external op-node over [op_engine_rpc] — and the legacy
+    // txpool/PBFT pipeline must therefore stay dormant (sole-producer discipline)
+    bool engineDrivenBlockProduction() const;
     uint64_t singleNodeConsensusBlockInterval() const;
     bool singleNodeConsensusProduceEmptyBlocks() const;
     const std::string& singleNodeConsensusFeeRecipient() const;
@@ -350,6 +358,7 @@ private:
 
     // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
+    void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
     void validateL2Invariants();
 
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
@@ -505,13 +514,13 @@ private:
     uint32_t m_opEngineBatchRequestSizeLimit{};
     std::string m_opEngineJwtSecretFile;
     int32_t m_opEngineClockSkewSecs{60};
+    bool m_opEngineAllowV1Executor = false;
 
     // config for single-node consensus
     bool m_enableSingleNodeConsensus = false;
     uint64_t m_singleNodeConsensusBlockInterval = 1000;
     bool m_singleNodeConsensusProduceEmptyBlocks = true;
-    std::string m_singleNodeConsensusFeeRecipient =
-        "0x0000000000000000000000000000000000000000";
+    std::string m_singleNodeConsensusFeeRecipient = "0x0000000000000000000000000000000000000000";
     // 32-byte hex prevRandao; empty means derive deterministically from a seed.
     std::string m_singleNodeConsensusPrevRandao;
     // fixed block timestamp in seconds; 0 = wall clock.

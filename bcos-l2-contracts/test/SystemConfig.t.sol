@@ -9,6 +9,9 @@ contract SystemConfigTest is Test {
     SystemConfig cfg;
     address owner = address(0xCAFE);
 
+    // The only runtime-writable key (D4 authority boundary).
+    string constant WRITABLE_KEY = "block_tx_count_limit";
+
     function setUp() public {
         cfg = new SystemConfig();
         cfg.initialize(owner);
@@ -16,9 +19,9 @@ contract SystemConfigTest is Test {
 
     function test_SetGetValueByKey_RoundTrip() public {
         vm.prank(owner);
-        cfg.setValueByKey("tx_gas_limit", 3_000_000_000, 5);
-        (uint192 v, uint64 e) = cfg.getValueByKey("tx_gas_limit");
-        assertEq(uint256(v), 3_000_000_000);
+        cfg.setValueByKey(WRITABLE_KEY, 3_000, 5);
+        (uint192 v, uint64 e) = cfg.getValueByKey(WRITABLE_KEY);
+        assertEq(uint256(v), 3_000);
         assertEq(uint256(e), 5);
     }
 
@@ -31,14 +34,37 @@ contract SystemConfigTest is Test {
     function test_SetValueByKey_OnlyOwner() public {
         vm.prank(address(0xBEEF));
         vm.expectRevert("Ownable: caller is not the owner");
-        cfg.setValueByKey("tx_gas_limit", 1, 0);
+        cfg.setValueByKey(WRITABLE_KEY, 1, 0);
+    }
+
+    /// D4 authority boundary: frozen keys revert even for the owner —
+    /// chain_id (chain identity) and gas_limit (authority = op-node payload
+    /// attributes) permanently; compatibility_version / feature_flags
+    /// (state-transition semantics; a runtime write would fork from the OP
+    /// oracle) until a governed, oracle-synced change path exists.
+    function test_SetValueByKey_FrozenKeysRevert() public {
+        string[4] memory frozen = ["chain_id", "gas_limit", "compatibility_version", "feature_flags"];
+        vm.startPrank(owner);
+        for (uint256 i = 0; i < frozen.length; i++) {
+            vm.expectRevert("SystemConfig: key not runtime-writable");
+            cfg.setValueByKey(frozen[i], 1, 0);
+        }
+        vm.stopPrank();
+    }
+
+    /// Whitelist semantics: an unknown key is rejected by default; widening
+    /// the writable set requires a contract upgrade.
+    function test_SetValueByKey_UnknownKeyReverts() public {
+        vm.prank(owner);
+        vm.expectRevert("SystemConfig: key not runtime-writable");
+        cfg.setValueByKey("some_future_key", 1, 0);
     }
 
     function test_SetValueByKey_EmitsConfigUpdate() public {
         vm.expectEmit(true, false, false, true);
-        emit ISystemConfig.ConfigUpdate("web3_chain_id", 901, 5);
+        emit ISystemConfig.ConfigUpdate(WRITABLE_KEY, 901, 5);
         vm.prank(owner);
-        cfg.setValueByKey("web3_chain_id", 901, 5);
+        cfg.setValueByKey(WRITABLE_KEY, 901, 5);
     }
 
     /// value (192 bit) and enableNumber (64 bit) share one slot; setting one to
@@ -47,23 +73,23 @@ contract SystemConfigTest is Test {
         uint192 bigV = type(uint192).max;
         uint64 bigE = type(uint64).max;
         vm.startPrank(owner);
-        cfg.setValueByKey("a", bigV, 0);
-        cfg.setValueByKey("b", 0, bigE);
+        cfg.setValueByKey(WRITABLE_KEY, bigV, 0);
+        (uint192 v1, uint64 e1) = cfg.getValueByKey(WRITABLE_KEY);
+        assertEq(uint256(v1), uint256(bigV));
+        assertEq(uint256(e1), 0);
+        cfg.setValueByKey(WRITABLE_KEY, 0, bigE);
+        (uint192 v2, uint64 e2) = cfg.getValueByKey(WRITABLE_KEY);
+        assertEq(uint256(v2), 0);
+        assertEq(uint256(e2), uint256(bigE));
         vm.stopPrank();
-        (uint192 va, uint64 ea) = cfg.getValueByKey("a");
-        (uint192 vb, uint64 eb) = cfg.getValueByKey("b");
-        assertEq(uint256(va), uint256(bigV));
-        assertEq(uint256(ea), 0);
-        assertEq(uint256(vb), 0);
-        assertEq(uint256(eb), uint256(bigE));
     }
 
     function test_Overwrite_LastWriteWins() public {
         vm.startPrank(owner);
-        cfg.setValueByKey("k", 1, 10);
-        cfg.setValueByKey("k", 2, 20);
+        cfg.setValueByKey(WRITABLE_KEY, 1, 10);
+        cfg.setValueByKey(WRITABLE_KEY, 2, 20);
         vm.stopPrank();
-        (uint192 v, uint64 e) = cfg.getValueByKey("k");
+        (uint192 v, uint64 e) = cfg.getValueByKey(WRITABLE_KEY);
         assertEq(uint256(v), 2);
         assertEq(uint256(e), 20);
     }
@@ -87,8 +113,8 @@ contract SystemConfigTest is Test {
     /// would read garbage, and this fails first.
     function test_SlotAddressing_MatchesKeccakFormula() public {
         vm.prank(owner);
-        cfg.setValueByKey("web3_chain_id", 901, 5);
-        bytes32 slot = keccak256(abi.encodePacked("web3_chain_id", CONFIG_BASE_SLOT));
+        cfg.setValueByKey(WRITABLE_KEY, 901, 5);
+        bytes32 slot = keccak256(abi.encodePacked(WRITABLE_KEY, CONFIG_BASE_SLOT));
         uint256 word = uint256(vm.load(address(cfg), slot));
         assertEq(word & ((uint256(1) << 192) - 1), 901, "value = low 192 bits");
         assertEq(word >> 192, 5, "enableNumber = high 64 bits");

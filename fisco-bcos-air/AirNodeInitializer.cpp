@@ -105,10 +105,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
     nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
 
-    // Single-node consensus mode ([consensus] enable_single_node_consensus): route
-    // sendRawTransaction to the in-process mempool instead of txpool — EngineService
-    // seals these txs into blocks on a timer, bypassing txpool/sealer/pbft.
-    if (nodeConfig->enableSingleNodeConsensus())
+    // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
+    // route sendRawTransaction to the in-process mempool instead of txpool — the
+    // EngineService seals these txs into blocks (driven by the built-in single-node timer
+    // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
+    // in these modes.
+    if (nodeConfig->engineDrivenBlockProduction())
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
     }

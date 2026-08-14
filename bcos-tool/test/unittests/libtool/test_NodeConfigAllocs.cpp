@@ -59,8 +59,39 @@ constexpr auto kBase =
 constexpr auto kFeatureL2 = "[features]\nfeature_l2_ethereum_compat=1\n";
 
 constexpr auto kAlloc0 =
-    "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+    "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
     "balance=0\nnonce=0\ncode=0x6080604052\n";
+
+// A valid [eth_genesis_header] section: L2 mode now REQUIRES it
+// (validateL2Invariants binds the section and the feature both ways).
+constexpr auto kAllocsEthHeader =
+    "[eth_genesis_header]\n"
+    "parent_hash=0x0000000000000000000000000000000000000000000000000000000000000000\n"
+    "sha3_uncles=0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\n"
+    "miner=0x4200000000000000000000000000000000000011\n"
+    "state_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\n"
+    "transactions_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\n"
+    "receipts_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\n"
+    "logs_bloom="
+    "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "00"
+    "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "00"
+    "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "00"
+    "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "00"
+    "000000000000000000000000000000000000\n"
+    "difficulty=0x0\nnumber=0x0\ngas_limit=0x1c9c380\ngas_used=0x0\n"
+    "timestamp=0x689d5c00\nextra_data=0x00000000fa000000060000000000000000\n"
+    "mix_hash=0x0000000000000000000000000000000000000000000000000000000000000000\n"
+    "nonce=0x0000000000000000\nbase_fee_per_gas=0x3b9aca00\n"
+    "withdrawals_root=0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421\n"
+    "blob_gas_used=0x0\nexcess_blob_gas=0x0\n"
+    "parent_beacon_block_root=0x0000000000000000000000000000000000000000000000000000000000000000\n"
+    "requests_hash=0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+    "hash=0xb153f41d2651441ace825becbfe2f2b6bf89092864a0ae04b7e0d40a5cf64cc1\n";
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(NodeConfigAllocsTest)
@@ -75,10 +106,10 @@ BOOST_AUTO_TEST_CASE(DefaultNoFeatureNoAllocs)
 BOOST_AUTO_TEST_CASE(FeatureL2WithAllocsParsed)
 {
     auto cfg = makeNodeConfig();
-    cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2 + kAlloc0));
+    cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2 + kAlloc0 + kAllocsEthHeader));
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs.size(), 1U);
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].address,
-        "0x42000000000000000000000000000000000000c0");  // forced lowercase
+        "0x43000000000000000000000000000000000000c0");  // forced lowercase
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].code, "0x6080604052");
 }
 
@@ -99,8 +130,8 @@ BOOST_AUTO_TEST_CASE(AllocsWithoutFeatureRejected)
 
 BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
 {
-    std::string ini = std::string(kBase) + kFeatureL2 +
-                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+    std::string ini = std::string(kBase) + kFeatureL2 + kAllocsEthHeader +
+                      "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n"
                       "0x0000000000000000000000000000000000000000000000000000000000000000="
@@ -141,7 +172,7 @@ BOOST_AUTO_TEST_CASE(NonHexAddressRejected)
 BOOST_AUTO_TEST_CASE(BadBalanceNamesSection)
 {
     std::string ini = std::string(kBase) + kFeatureL2 +
-                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=garbage\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
@@ -151,9 +182,9 @@ BOOST_AUTO_TEST_CASE(DuplicateAddressRejected)
 {
     // same address, different case -> lowercased dedup must reject.
     std::string ini = std::string(kBase) + kFeatureL2 +
-                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
-                      "[alloc.1]\naddress=0x42000000000000000000000000000000000000c0\n"
+                      "[alloc.1]\naddress=0x43000000000000000000000000000000000000c0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
@@ -163,7 +194,7 @@ BOOST_AUTO_TEST_CASE(BadStorageKeyRejected)
 {
     // storage key is not 64 hex chars -> reject.
     std::string ini = std::string(kBase) + kFeatureL2 +
-                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n0x01=0x01\n";
     auto cfg = makeNodeConfig();
@@ -175,7 +206,7 @@ BOOST_AUTO_TEST_CASE(BadStorageValueRejected)
     // storage value is not 64 hex chars -> reject (importGenesisState unhexes it
     // into a 32-byte word; short/odd values would corrupt genesis storage).
     std::string ini = std::string(kBase) + kFeatureL2 +
-                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n"
                       "0x0000000000000000000000000000000000000000000000000000000000000000=0x01\n";
@@ -189,7 +220,7 @@ BOOST_AUTO_TEST_CASE(NonceOverflowRejected)
     // nonce = 2^64 (one past uint64 max) -> reject; it is decimal-valid but the
     // genesis hash serializes nonce as uint64, so it must not overflow.
     std::string ini = std::string(kBase) + kFeatureL2 +
-                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=18446744073709551616\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);

@@ -18,6 +18,11 @@ target_link_libraries(test-transaction-scheduler
 	Boost::unit_test_framework
 	FakeIt::FakeIt-boost
 )
+# TestEthereumExecutorScheduler shares the production BLOCKHASH provider
+# (EthereumBlockHashLookup.h) from libinitializer; header-only, no link.
+target_include_directories(test-transaction-scheduler PRIVATE
+	"${CMAKE_CURRENT_SOURCE_DIR}/../../libinitializer"
+)
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # FullChainFixture.h pulls RocksDB and testutils headers whose names collide with the
 # using-directives other unity-merged TUs carry; compile its users standalone.

@@ -161,7 +161,7 @@ jobs:
           exit "$fail"
 
   genesis-tooling:
-    name: build-allocs.py pytest
+    name: opstack-genesis pytest
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -177,4 +177,4 @@ jobs:
         # (which loads it by path) needs pyyaml too. pytest runs the suite.
         run: python3 -m pip install --upgrade pip pyyaml pytest
       - name: Run pytest
-        run: python3 -m pytest test_build_allocs.py -v
+        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py -v

@@ -49,7 +49,9 @@ target_include_directories(protocol-tars PUBLIC
 # `codec` carries the RLP headers TransactionImpl.cpp needs for the FIB-New1 canonical Web3
 # txHash recompute. release-3.17.0 spelled it ${CODEC_TARGET}; that variable went away with
 # TargetSettings.cmake (#5174), so it is named directly here.
-target_link_libraries(protocol-tars PUBLIC bcos-concepts bcos-framework bcos-crypto codec tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
+# `rlp-protocol` provides EthBlockHeader, which BlockHeaderImpl::calculateHash uses to
+# recompute the RLP hash for Ethereum-standard headers.
+target_link_libraries(protocol-tars PUBLIC bcos-concepts bcos-framework bcos-crypto codec rlp-protocol tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
 set_target_properties(protocol-tars PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)

@@ -17,6 +17,7 @@
  * @brief buildGenesisBlock L2 branch: allocs flat-KV writes + persisted op-geth
  *        genesis state root row.
  */
+#include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -80,8 +81,8 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
 
-        // single predeploy: address 0x42..00c0, 5-byte code, one storage slot
-        std::string address = "42000000000000000000000000000000000000c0";
+        // single predeploy: address 0x43..00c0, 5-byte code, one storage slot
+        std::string address = "43000000000000000000000000000000000000c0";
         std::string code = "6080604052";             // hex of contract bytecode (5 bytes)
         std::string slotKey = std::string(64, '0');  // slot 0x00..00
         std::string slotValue = std::string(60, '0') + "0385";
@@ -91,6 +92,7 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
             .nonce = "0",
             .code = code,
             .storage = {{slotKey, slotValue}}});
+        appendGenesisFeatureFlagsSlot(genesisConfig);
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 

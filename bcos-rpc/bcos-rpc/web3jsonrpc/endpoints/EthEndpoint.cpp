@@ -19,11 +19,12 @@
  */
 
 #include "EthEndpoint.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -723,6 +724,20 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
+    // Authoritative first-byte dispatch (RawTransactionDispatch.h). L2 never admits blob
+    // (type-3) transactions, and deposits (0x7e) can only be injected by the consensus
+    // layer through the Engine API, never through the public transaction pool.
+    switch (engine::dispatchRawTransaction(bytesRef))
+    {
+    case engine::RawTransactionKind::Blob:
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "blob transactions are not supported"));
+    case engine::RawTransactionKind::Deposit:
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "deposit transactions cannot be submitted via eth_sendRawTransaction"));
+    default:
+        break;
+    }
     Web3Transaction web3Tx;
     if (auto const error = codec::rlp::decode(bytesRef, web3Tx); error != nullptr) [[unlikely]]
     {
@@ -792,8 +807,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         {
             WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction mempool verify failed")
                               << LOG_KV("reason", boost::diagnostic_information(e));
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "invalid transaction signature"));
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid transaction signature"));
         }
         std::vector<protocol::Transaction::Ptr> txs;
         txs.push_back(std::move(tx));

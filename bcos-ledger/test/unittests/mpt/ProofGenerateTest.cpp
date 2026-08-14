@@ -163,18 +163,6 @@ ChainCheck verifyProofChain(
     }
 }
 
-/// Build a state trie holding @p accounts into @p storage; returns the state root.
-bcos::h256 buildStateTrie(
-    MemStorage& storage, std::vector<std::pair<bcos::Address, Account>> const& accounts)
-{
-    std::map<bcos::h256, bcos::bytes> entries;
-    for (auto const& [addr, account] : accounts)
-    {
-        entries[accountKeyHash(addr)] = account.encode();
-    }
-    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
-}
-
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(ProofGenerateSuite)
@@ -188,7 +176,7 @@ BOOST_AUTO_TEST_CASE(SingleAccountProofSelfVerifies)
     Account account;
     account.nonce = 1;
     account.balance = 100;
-    auto const stateRoot = buildStateTrie(storage, {{addr, account}});
+    auto const stateRoot = seedStateTrieFlushed(storage, {{addr, account}});
 
     auto result = bcos::task::syncWait(
         generateProof(storage, stateRoot, addr, std::span<bcos::h256 const>{}));
@@ -229,7 +217,7 @@ BOOST_AUTO_TEST_CASE(MultiAccountProofsSelfVerify)
         account.balance = 1000 + i;
         accounts.emplace_back(makeAddress(i), account);
     }
-    auto const stateRoot = buildStateTrie(storage, accounts);
+    auto const stateRoot = seedStateTrieFlushed(storage, accounts);
 
     for (uint8_t i : {uint8_t{1}, uint8_t{7}, uint8_t{20}})
     {
@@ -266,17 +254,17 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
     bcos::bytes const valueB{0x82, 0x13, 0x37};  // RLP(0x1337): 2-byte string
 
     // Build the storage trie into the SAME node storage; its root becomes account.storageRoot.
-    auto const storageRoot =
-        seedTrieFlushed(storage, emptyRootHash(),
-            {{slotKeyHash(slotA), valueA}, {slotKeyHash(slotB), valueB}})
-            .root;
+    auto const storageRoot = seedTrieFlushed(storage, emptyRootHash(),
+        {{slotKeyHash(slotA), valueA},
+            {slotKeyHash(slotB),
+                valueB}}).root;
 
     bcos::Address const addr = makeAddress(0xab);
     Account account;
     account.nonce = 5;
     account.balance = 777;
     account.storageRoot = storageRoot;
-    auto const stateRoot = buildStateTrie(storage, {{addr, account}});
+    auto const stateRoot = seedStateTrieFlushed(storage, {{addr, account}});
 
     std::vector<bcos::h256> const slots{slotA, slotB, slotMissing};
     auto result = bcos::task::syncWait(generateProof(storage, stateRoot, addr, slots));
@@ -318,7 +306,7 @@ BOOST_AUTO_TEST_CASE(AccountNotInMPTErrors)
     bcos::Address const known = makeAddress(0xab);
     Account account;
     account.nonce = 1;
-    auto const stateRoot = buildStateTrie(storage, {{known, account}});
+    auto const stateRoot = seedStateTrieFlushed(storage, {{known, account}});
 
     bcos::Address const unknown = makeAddress(0xcd);
     auto missing = bcos::task::syncWait(
@@ -375,7 +363,7 @@ BOOST_AUTO_TEST_CASE(DeterministicOutput)
         }
         accounts.emplace_back(makeAddress(i), account);
     }
-    auto const stateRoot = buildStateTrie(storage, accounts);
+    auto const stateRoot = seedStateTrieFlushed(storage, accounts);
 
     bcos::Address const addr = makeAddress(3);
     std::vector<bcos::h256> const slots{slot, makeHash(0x02)};
