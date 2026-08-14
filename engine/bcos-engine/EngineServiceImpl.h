@@ -138,13 +138,11 @@ std::optional<std::string> validateOpNewPayloadRequest(
 /// Compute expected baseFeePerGas from the parent header.
 /// Mirrors op-geth consensus/misc/eip1559/eip1559.go:CalcBaseFee, including Holocene extraData
 /// elasticity/denominator, Jovian blobGasUsed substitution, and Jovian minBaseFee floor.
-/// `parentIsJovian`/`parentIsIsthmus` derive from the parent's own timestamp — matching op-geth's
-/// `config.IsJovian(parent.Time)` / `config.IsOptimismHolocene(parent.Time)`. Reads the parent
-/// header's accessors: `extraData()` (Holocene/Jovian params), `gasLimit()`, `gasUsed()`,
-/// `blobGasUsed()`, `baseFee()` (review fix: does not read timestamp; optional fields must use
-/// `.value()`).
-bcos::u256 calcOpBaseFee(
-    const bcos::protocol::BlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus);
+/// `parentIsJovian` is feature-driven (feature_op_jovian, constant across blocks); the minimal
+/// loop is Isthmus+-only, so the Holocene+ extraData decode always applies (no isthmus flag).
+/// Reads the parent header's accessors: `extraData()` (Holocene/Jovian params), `gasLimit()`,
+/// `gasUsed()`, `blobGasUsed()`, `baseFee()` (optional fields must use `.value()`).
+bcos::u256 calcOpBaseFee(const bcos::protocol::BlockHeader& parent, bool parentIsJovian);
 
 /// The OP header's 3 post-merge constants (ommersHash/difficulty/nonce) — the values live in
 /// EngineServiceImpl.cpp's anonymous namespace; this accessor lets the engine's step-2 blockHash
@@ -199,8 +197,8 @@ public:
     /// OP block execution is always the delegate's path (`m_delegate->executeBlock` →
     /// OpScheduler's preBlockOpSteps + SchedulerSerialImpl + finalizeOpBlockResult). `c_opMode` now
     /// only means "this is an
-    /// OP scheduler": the engine reaches `computeTxRoot` / `isIsthmusActiveAt` / `isJovianActiveAt`
-    /// as dependent names inside `if constexpr (c_opMode)`.
+    /// OP scheduler": the engine reaches `computeTxRoot` / `isJovianActive` as dependent names
+    /// inside `if constexpr (c_opMode)`.
     static constexpr bool c_opMode =
         requires { &SchedulerType::template computeTxRoot<std::vector<bcos::bytes>>; };
 
@@ -815,32 +813,15 @@ private:
     {
         auto const& payload = request.executionPayload;
 
-        // ---- Step 1: timestamp x version gate (-38005) ----
-        // The OP engine branch is scoped to Isthmus/Jovian only: a pre-Isthmus timestamp is
-        // answered -38005 *unconditionally*, on any version. Isthmus+ payloads must then arrive
-        // on V4 (Isthmus+ payloads are not allowed on V3).
-        // `isIsthmusActiveAt` lives on the scheduler so the threshold comparison stays on the OP
-        // side next to `configAt` (do not re-implement the threshold comparison). It is
-        // deliberately not `configAt` itself: that function resolves sub-`isthmusTime` timestamps
-        // to the Isthmus config too (see OpForkSchedule.h's own note), so it cannot answer "is
-        // this payload pre-Isthmus?" -- the exact question this gate asks.
+        // ---- Step 1: version gate (-38005) ----
+        // The OP engine branch is scoped to Isthmus/Jovian: the minimal loop is Isthmus+-only, and
+        // fork selection is feature-driven (feature_op_jovian — Jovian vs Isthmus, both Isthmus+),
+        // NOT timestamp-based — so there is no "pre-Isthmus" timestamp to reject. Both Isthmus and
+        // Jovian payloads require V4 (Isthmus+ payloads are not allowed on V3).
         //
         // Deliberately OUTSIDE the barrier below: `UnsupportedFork` (-38005) is itself a
         // classified outcome and must reach the caller unchanged, not be re-labelled.
-        // ExecutionPayload.timestamp is internal milliseconds (Types.h contract, RPC boundary
-        // converts); the fork schedule's thresholds (isthmusTime/jovianTime) are in Unix seconds,
-        // so convert here — the payload seconds->millis conversion that the pre-merge branch did
-        // in the RPC boundary now happens once, here.
-        const bool isthmusActive =
-            m_scheduler.get().isIsthmusActiveAt(static_cast<uint64_t>(payload.timestamp) / 1000);
         constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;
-        if (!isthmusActive)
-        {
-            BOOST_THROW_EXCEPTION(
-                UnsupportedFork{} << bcos::errinfo_comment{
-                    "pre-Isthmus payloads are not supported by the OP engine branch (JSON-RPC "
-                    "-38005)"});
-        }
         if (version != c_opIsthmusPayloadVersion)
         {
             BOOST_THROW_EXCEPTION(
@@ -906,9 +887,8 @@ private:
         // null). Note the status is `Invalid`, never `InvalidBlockHash` -- that Engine API status
         // has been deprecated since Shanghai and the OP branch does not use it (the enumerator
         // stays in Types.h for the generic path).
-        if (auto validationError = detail::validateOpNewPayloadRequest(
-                request, m_scheduler.get().isJovianActiveAt(
-                             static_cast<uint64_t>(payload.timestamp) / 1000));
+        if (auto validationError =
+                detail::validateOpNewPayloadRequest(request, m_scheduler.get().isJovianActive());
             validationError.has_value())
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
@@ -976,10 +956,10 @@ private:
         // (`block.Time() <= parent.Time()` -> invalid, latestValidHash = parent) and
         // `consensus/beacon/consensus.go:253-256` (`errInvalidTimestamp`).
         //
-        // Here the timestamp is also the FORK SELECTOR: `OpSchedulerSeam` picks its
-        // `OpForkConfig` with `configAt(fiscoHeader.timestamp(), ...)` and step 1's -38005 gate
-        // reads the same field, so without monotonicity a payload could roll the active fork
-        // backwards (Jovian -> Isthmus), changing DA accounting and baseFee semantics mid-chain.
+        // The timestamp is NO LONGER the fork selector (fork selection is feature-driven —
+        // feature_op_jovian — since the feature-flag refactor), but monotonicity is still required
+        // by op-geth consensus itself (api.go:891-894, consensus.go:253-256); it also keeps
+        // timestamp-ordered history for the header chain.
         //
         // Keyed by NUMBER (op-geth keys by HASH, `api.go:887`); equivalent only while
         // number -> header is injective, which step 3c guarantees today (at most one block per
@@ -1044,17 +1024,12 @@ private:
             // Step 3a-2: baseFee consistency (Holocene+ EIP-1559 with Optimism
             // extensions). op-geth checks this in consensus/misc/eip1559/eip1559.go's
             // VerifyEIP1559Header → CalcBaseFee. The parent header is already in hand
-            // from the timestamp check above, and fork membership is determined from
-            // the parent's own timestamp — matching op-geth's
-            // config.IsJovian(parent.Time) / config.IsOptimismHolocene(parent.Time).
-            // Fork determination switches back to seconds (consistent with the payload seconds and
-            // the config thresholds; the reverse direction of the milliseconds comparison above).
+            // from the timestamp check above; fork membership is feature-driven — feature_op_jovian
+            // (the chain's Jovian flag), constant across blocks — matching op-geth's
+            // config.IsJovian(parent.Time) for the feature-flag-era chain.
             {
-                auto expectedBaseFee = detail::calcOpBaseFee(*parentHeader,
-                    m_scheduler.get().isJovianActiveAt(
-                        static_cast<uint64_t>(parentHeader->timestamp()) / 1000),
-                    m_scheduler.get().isIsthmusActiveAt(
-                        static_cast<uint64_t>(parentHeader->timestamp()) / 1000));
+                auto expectedBaseFee =
+                    detail::calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
                 if (payload.baseFeePerGas != expectedBaseFee)
                 {
                     co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,

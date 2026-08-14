@@ -549,14 +549,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // SFINAE probe (EngineServiceImpl.h:200-201, on computeTxRoot) activates the OP branch
     // (block execution via the delegate). engineApiForV1Only (<2) and opStackMode (>=3)
     // are mutually exclusive;
-    // version 2 (pure EthereumExecutor) still has no Engine API. PBFT double-execution is gated
-    // separately (W3); MultiVersionScheduler is untouched.
+    // version 2 (pure EthereumExecutor) still has no Engine API. OP mode runs on
+    // SingleNodeConsensus (enable_single_node_consensus), so PBFT/RPBFT are never initialized
+    // here (see initConsensus); MultiVersionScheduler is untouched.
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
     if (opStackMode)
     {
-        auto forkTimestamps = bcos::evm::opstack::OpForkTimestamps{
-            .isthmusTime = m_nodeConfig->isthmusTime(),
-            .jovianTime = m_nodeConfig->jovianTime(),
+        // OP fork selection is feature-driven (feature_op_jovian in genesis [features]), NOT
+        // timestamp-based — FISCO has no timestamp fork-activation mechanism. Isthmus is the
+        // OP-mode baseline; jovianActive selects Jovian semantics.
+        auto forkFlags = bcos::evm::opstack::OpForkFlags{
+            .jovianActive = m_nodeConfig->opJovianActive(),
         };
         // chainId: NodeConfig::chainId() 返回经 isalNumStr 校验的数字串，按 base-0 解析
         // （0x 前缀→hex，否则 decimal）；OP 模式下应为数字字符串。默认 genesis 值是 "chain"，
@@ -580,15 +583,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
-                forkTimestamps);
+                forkFlags);
         // Wiring Task 5a/5c: engine block-execution delegate = OpScheduler (slot-3, same instance).
         // A single OpSchedulerSeam serves the engine's SchedulerType seam surface (c_opMode probe /
-        // isIsthmusActiveAt / isJovianActiveAt / computeTxRoot); OpScheduler itself owns the block
+        // isJovianActive / computeTxRoot); OpScheduler itself owns the block
         // execution path (preBlockOpSteps → SchedulerSerialImpl per-tx → finalizeOpBlockResult).
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),
-                m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkTimestamps,
+                m_protocolInitializer->cryptoSuite()->hashImpl(), opChainId, forkFlags,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
                 // Task 2: wire the OP delegate's ledger (same LedgerInterface::Ptr as the ethereum
                 // root) so Task 3's commit hook can call prewriteBlockToBuffer. The engine service
@@ -750,10 +753,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // build and init the pbft related modules
     if (_nodeArchType == protocol::NodeArchitectureType::AIR)
     {
-        m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
-            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
-            m_ioServicePool, opStackMode);
+        m_pbftInitializer =
+            std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
+                m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
+                m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
         auto groupID = m_nodeConfig->groupId();
@@ -777,10 +780,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else
     {
-        m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
-            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
-            m_ioServicePool, opStackMode);
+        m_pbftInitializer =
+            std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
+                m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
+                m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
     }
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {

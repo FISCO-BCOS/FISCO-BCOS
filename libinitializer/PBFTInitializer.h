@@ -21,7 +21,6 @@
 #pragma once
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/election/LeaderElectionInterface.h>
@@ -34,6 +33,7 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcos
 {
@@ -71,7 +71,7 @@ public:
         bcos::storage::StorageInterface::Ptr _storage,
         bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-        bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode = false);
+        bcos::IOServicePool::Ptr _ioServicePool);
 
     virtual ~PBFTInitializer() { stop(); }
 
@@ -132,8 +132,6 @@ protected:
     bcos::election::LeaderElectionInterface::Ptr m_leaderElection;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
     bcos::IOServicePool::Ptr m_ioServicePool;
-    /// OP 模式（executor_version>=3）：PBFT 不得执行区块（Engine API executeOpBlock 是唯一驱动）。
-    bool m_opStackMode = false;
 };
 }  // namespace initializer
 }  // namespace bcos

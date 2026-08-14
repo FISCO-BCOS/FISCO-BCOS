@@ -92,10 +92,11 @@ public:
     std::string const& groupId() const;
     size_t blockLimit() const;
 
-    /// OP-Stack fork activation timestamps (seconds, UTC epoch), from [chain] section.
-    /// Default 0 = both forks active at genesis (dev default); spec D3.
-    uint64_t isthmusTime() const { return m_isthmusTime; }
-    uint64_t jovianTime() const { return m_jovianTime; }
+    /// OP-Stack Jovian fork selection: enabled iff `feature_op_jovian` is set in the genesis
+    /// [features] section (the FISCO-native feature-flag mechanism — replaces the former
+    /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
+    /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
+    bool opJovianActive() const;
 
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
@@ -351,8 +352,11 @@ protected:
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
-private:
+    // [features] section loader — exposed to the LoaderProbe test harness like the other
+    // per-section loaders (feature_op_jovian drives OP-Stack fork selection).
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
+
+private:
     void loadAlloc(boost::property_tree::ptree const& ptree);
 
     // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
@@ -424,10 +428,6 @@ private:
 
     // Genesis config
     ledger::GenesisConfig m_genesisConfig;
-
-    // OP-Stack fork activation timestamps (seconds, UTC epoch); 0 = active at genesis.
-    uint64_t m_isthmusTime = 0;
-    uint64_t m_jovianTime = 0;
 
     // storage configuration
     std::string m_storagePath;

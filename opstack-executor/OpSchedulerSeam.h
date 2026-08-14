@@ -33,16 +33,14 @@ namespace bcos::evm::engine
 namespace detail
 {
 }  // namespace detail
-/// OP scheduler component: a pure engine-facing seam shim, constructed once per fork-timestamps
+/// OP scheduler component: a pure engine-facing seam shim, constructed once per OpForkFlags
 /// combination (composition-root-owned). It only re-publishes the seam surface the engine reaches
 /// as dependent names on `SchedulerType`.
 template <class Storage>
 class OpSchedulerSeam
 {
 public:
-    explicit OpSchedulerSeam(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
-      : m_forkTimestamps(forkTimestamps)
-    {}
+    explicit OpSchedulerSeam(bcos::evm::opstack::OpForkFlags forkFlags) : m_forkFlags(forkFlags) {}
 
     // ---- engine-facing seam surface ----
     //
@@ -93,21 +91,12 @@ public:
         return computeOpTxRoot(rawTxBytes);
     }
 
-    /// Isthmus activation predicate for the engine's -38005 gate. Separate from configAt on
-    /// purpose: configAt resolves sub-isthmus timestamps to the Isthmus config too, whereas the
-    /// gate must reject them outright. Both read the same m_forkTimestamps.isthmusTime.
-    [[nodiscard]] bool isIsthmusActiveAt(uint64_t timestamp) const noexcept
-    {
-        return timestamp >= m_forkTimestamps.isthmusTime;
-    }
-
-    /// Jovian activation predicate. The engine needs it for one fork-dependent static check: the
-    /// header's blobGasUsed slot must be 0 under Isthmus, but from Jovian on it is the DA
-    /// footprint, validated by seal comparison instead.
-    [[nodiscard]] bool isJovianActiveAt(uint64_t timestamp) const noexcept
-    {
-        return timestamp >= m_forkTimestamps.jovianTime;
-    }
+    /// Jovian activation predicate (feature-op_jovian). The engine needs it for fork-dependent
+    /// static checks: the header's blobGasUsed slot must be 0 under Isthmus, but under Jovian it is
+    /// the DA footprint (validated by seal comparison instead); base-fee derivation branches on it.
+    /// There is no isIsthmusActiveAt anymore — OP mode itself IS the Isthmus+ admission check
+    /// (executor_version>=3), and the -38005 gate no longer re-derives the fork from a timestamp.
+    [[nodiscard]] bool isJovianActive() const noexcept { return m_forkFlags.jovianActive; }
 
     OpSchedulerSeam(const OpSchedulerSeam&) = delete;
     OpSchedulerSeam(OpSchedulerSeam&&) = delete;
@@ -128,7 +117,7 @@ public:
     }
 
 private:
-    bcos::evm::opstack::OpForkTimestamps m_forkTimestamps;
+    bcos::evm::opstack::OpForkFlags m_forkFlags;
 };
 
 }  // namespace bcos::evm::engine

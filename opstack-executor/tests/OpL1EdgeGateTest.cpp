@@ -153,12 +153,9 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
 
 constexpr uint64_t kChainId = 0x2105;
 
-bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
+bcos::evm::opstack::OpForkFlags forkFlagsFor(bool jovian)
 {
-    return bcos::evm::opstack::OpForkTimestamps{
-        .isthmusTime = 0,
-        .jovianTime = jovian ? 0 : std::numeric_limits<uint64_t>::max(),
-    };
+    return bcos::evm::opstack::OpForkFlags{.jovianActive = jovian};
 }
 
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
@@ -177,8 +174,8 @@ struct OpE2eFixture
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
     OpEngineService service;
 
-    explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
-      : scheduler(forkTimestamps),
+    explicit OpE2eFixture(bcos::evm::opstack::OpForkFlags forkFlags)
+      : scheduler(forkFlags),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             /*delegate=*/nullptr)
@@ -203,7 +200,7 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
     // (GoldenSample.h:85-90 warns); quantityOf is correct.
     params[0u]["blobGasUsed"] = w6test::quantityOf(gasLimit + 1);
 
-    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(true));
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(true));
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
     // PayloadValidationStatus is an enum class without operator<<; must compare via

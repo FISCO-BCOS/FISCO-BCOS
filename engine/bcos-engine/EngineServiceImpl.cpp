@@ -273,42 +273,40 @@ bcos::h2048 bcos::engine::detail::toEthLogsBloom(const Bloom& logsBloom)
 }
 
 bcos::u256 bcos::engine::detail::calcOpBaseFee(
-    const bcos::protocol::BlockHeader& parent, bool parentIsJovian, bool parentIsIsthmus)
+    const bcos::protocol::BlockHeader& parent, bool parentIsJovian)
 {
-    // Default EIP-1559 parameters (pre-Holocene / pre-London).
+    // The minimal loop is Isthmus+-only (feature-driven fork selection), so the Holocene+
+    // extraData decode below always applies — there is no pre-Isthmus base to fall back to;
+    // `parentIsJovian` only gates the Jovian 8-byte minBaseFee tail.
     uint64_t elasticity = 2;
     uint64_t denominator = 8;
     std::optional<uint64_t> minBaseFee;
 
-    if (parentIsIsthmus)
-    {
-        // Holocene+ extraData: version byte + denominator (uint32 BE) + elasticity (uint32 BE).
-        // Zero-value rejection is guaranteed by the parent's own validateOpNewPayloadRequest.
-        const auto extra = parent.extraData();  // bytesConstRef; operator[] like bytes
-        auto readU32BE = [&extra](std::size_t off) -> uint64_t {
-            return (static_cast<uint64_t>(extra[off]) << 24) |
-                   (static_cast<uint64_t>(extra[off + 1]) << 16) |
-                   (static_cast<uint64_t>(extra[off + 2]) << 8) |
-                   static_cast<uint64_t>(extra[off + 3]);
-        };
-        denominator = readU32BE(1);
-        elasticity = readU32BE(5);
+    // Holocene+ extraData: version byte + denominator (uint32 BE) + elasticity (uint32 BE).
+    // Zero-value rejection is guaranteed by the parent's own validateOpNewPayloadRequest.
+    const auto extra = parent.extraData();  // bytesConstRef; operator[] like bytes
+    auto readU32BE = [&extra](std::size_t off) -> uint64_t {
+        return (static_cast<uint64_t>(extra[off]) << 24) |
+               (static_cast<uint64_t>(extra[off + 1]) << 16) |
+               (static_cast<uint64_t>(extra[off + 2]) << 8) | static_cast<uint64_t>(extra[off + 3]);
+    };
+    denominator = readU32BE(1);
+    elasticity = readU32BE(5);
 
-        if (parentIsJovian)
-        {
-            // Jovian extraData extends Holocene with 8-byte minBaseFee (uint64 BE).
-            auto readU64BE = [&extra](std::size_t off) -> uint64_t {
-                return (static_cast<uint64_t>(extra[off]) << 56) |
-                       (static_cast<uint64_t>(extra[off + 1]) << 48) |
-                       (static_cast<uint64_t>(extra[off + 2]) << 40) |
-                       (static_cast<uint64_t>(extra[off + 3]) << 32) |
-                       (static_cast<uint64_t>(extra[off + 4]) << 24) |
-                       (static_cast<uint64_t>(extra[off + 5]) << 16) |
-                       (static_cast<uint64_t>(extra[off + 6]) << 8) |
-                       static_cast<uint64_t>(extra[off + 7]);
-            };
-            minBaseFee = readU64BE(9);
-        }
+    if (parentIsJovian)
+    {
+        // Jovian extraData extends Holocene with 8-byte minBaseFee (uint64 BE).
+        auto readU64BE = [&extra](std::size_t off) -> uint64_t {
+            return (static_cast<uint64_t>(extra[off]) << 56) |
+                   (static_cast<uint64_t>(extra[off + 1]) << 48) |
+                   (static_cast<uint64_t>(extra[off + 2]) << 40) |
+                   (static_cast<uint64_t>(extra[off + 3]) << 32) |
+                   (static_cast<uint64_t>(extra[off + 4]) << 24) |
+                   (static_cast<uint64_t>(extra[off + 5]) << 16) |
+                   (static_cast<uint64_t>(extra[off + 6]) << 8) |
+                   static_cast<uint64_t>(extra[off + 7]);
+        };
+        minBaseFee = readU64BE(9);
     }
 
     const uint64_t parentGasTarget =

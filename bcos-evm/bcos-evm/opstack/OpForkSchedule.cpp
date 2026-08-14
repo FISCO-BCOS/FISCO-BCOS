@@ -100,12 +100,11 @@ const OpForkConfig& karstConfig() noexcept
     return cfg;
 }
 
-const OpForkConfig& configAt(uint64_t timestamp, const OpForkTimestamps& thresholds) noexcept
+const OpForkConfig& configAt(const OpForkFlags& flags) noexcept
 {
-    // decision A5: [isthmusTime, jovianTime) -> Isthmus, [jovianTime, +inf) -> Jovian; timestamps
-    // below isthmusTime also fall through to Isthmus (see header comment — no pre-Isthmus config
-    // exists in this minimal loop).
-    if (timestamp >= thresholds.jovianTime)
+    // decision A5 (feature-flag variant): feature_op_jovian enabled -> Jovian, else Isthmus.
+    // Isthmus is the OP-mode baseline; there is no pre-Isthmus config in this minimal loop.
+    if (flags.jovianActive)
         return jovianConfig();
     return isthmusConfig();
 }

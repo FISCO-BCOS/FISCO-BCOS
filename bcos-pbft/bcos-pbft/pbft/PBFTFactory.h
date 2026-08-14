@@ -20,11 +20,11 @@
  */
 #pragma once
 #include "PBFTImpl.h"
-#include <boost/asio/io_context.hpp>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <boost/asio/io_context.hpp>
 #include <functional>
 
 namespace bcos::consensus
@@ -33,8 +33,7 @@ class PBFTFactory : public std::enable_shared_from_this<PBFTFactory>
 {
 public:
     using Ptr = std::shared_ptr<PBFTFactory>;
-    PBFTFactory(boost::asio::io_context& _ioService,
-        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    PBFTFactory(boost::asio::io_context& _ioService, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
@@ -42,7 +41,7 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-        bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode = false);
+        bcos::IOServicePool::Ptr _ioServicePool);
 
     virtual ~PBFTFactory() = default;
     virtual PBFTImpl::Ptr createPBFT();
@@ -59,7 +58,5 @@ protected:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
     bcos::IOServicePool::Ptr m_ioServicePool;
-    /// OP mode (executor_version>=3): PBFT must not execute blocks (Engine API executeOpBlock is the sole driver).
-    bool m_opStackMode = false;
 };
 }  // namespace bcos::consensus

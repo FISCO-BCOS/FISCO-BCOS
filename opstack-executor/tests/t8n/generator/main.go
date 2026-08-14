@@ -1386,7 +1386,7 @@ func processChainPair(fork string) (outputVector, outputVector, *goldenRecord, *
 	beaconRoot := common.HexToHash("0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c")
 	senderAddr := addrOfKey(1)
 	genesisPre := types.GenesisAlloc{
-		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(fork)},
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Code: l1BlockRuntimeCode, Storage: fp.l1BlockStorage(fork)},
 		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
 		senderAddr:        {Balance: eth(100)},
 	}
@@ -1676,7 +1676,7 @@ func generateChainN(fork string, n int) (*chainOutput, *chainContext, error) {
 	beaconRoot := common.HexToHash("0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c")
 	senderAddr := addrOfKey(1)
 	genesisPre := types.GenesisAlloc{
-		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(fork)},
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Code: l1BlockRuntimeCode, Storage: fp.l1BlockStorage(fork)},
 		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
 		senderAddr:        {Balance: eth(100)},
 	}

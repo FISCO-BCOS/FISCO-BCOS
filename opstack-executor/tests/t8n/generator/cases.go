@@ -28,6 +28,18 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// l1BlockRuntimeCode is the real L1Block predeploy runtime bytecode
+// (gen_l1block.py, tools/op-e2e, op-alignment branch) implementing
+// setL1BlockValues{Ecotone,Isthmus,Jovian}: selector-dispatches, writes slots
+// 1/3/7/8 from the L1-attributes calldata offsets that unpackOpFeeParams reads,
+// reverts on calldatasize<4 or unknown selector. Injecting it into the vector
+// genesis makes the C++ differential replayer execute the real predeploy path
+// on EVERY deposit -- the same bytecode that carried the historical
+// LT-direction / PUSH28-mask / JUMPDEST bugs is now under the op-geth-anchored
+// gate, so a reintroduced bug diverges from op-geth's execution of the same
+// code.
+var l1BlockRuntimeCode = common.FromHex("0x6004361060255760003560e01c63098999be14602b5760003560e01c633db6be2b14602b575b60006000fd5b6000358060c01c63ffffffff1660601b60003560a01c63ffffffff1660401b176003555060243560015560443560075560a03560c01c63ffffffff1660401b60a03560801c67ffffffffffffffff161760b03560f01c61ffff1660601b1760085560006000f3")
+
 // ---------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------
@@ -460,14 +472,18 @@ func caseFrame(fork, name, desc string, fp feeParams, gasLimit uint64) inputCase
 	if jovianCfg {
 		knobs.MinBaseFee = hd64(0)
 	}
-	// Nonce 1 keeps both predeploys non-empty under EIP-158: the attributes
-	// deposit value-0 CALL touches the code-less L1Block account, and an
-	// empty-but-storage-bearing account would be touch-deleted at commit
-	// ("unexpected storage wiping" in chain_makers). Real predeploys are
-	// non-empty (they carry code); nonce 1 models that without giving
-	// L1Block code, keeping "no tx writes L1Block slots" structurally true.
+	// L1Block carries the REAL predeploy runtime code (l1BlockRuntimeCode), so
+	// the attributes deposit actually executes setL1BlockValues* and writes
+	// slots 1/3/7/8 from the calldata -- mirroring the real chain. Because the
+	// calldata and the pre-seeded slots are built from ONE feeParams source
+	// (iron rule below), the code writes exactly the seeded values; the C++
+	// replayer then sees the genuine deposit→predeploy execution path against
+	// op-geth's execution of the same bytecode (the LT-direction / PUSH28-mask
+	// / JUMPDEST regressions of the historical handwritten bytecode are now
+	// under the op-geth-anchored differential gate). Nonce 1 + code keeps the
+	// account non-empty under EIP-158.
 	pre := types.GenesisAlloc{
-		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(fork)},
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Code: l1BlockRuntimeCode, Storage: fp.l1BlockStorage(fork)},
 		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
 	}
 	return inputCase{
@@ -500,7 +516,7 @@ var opForkOrder = []string{"ecotone", "fjord", "granite", "holocene", "isthmus",
 // layout -- still from the same feeParams (iron rule: slot <-> calldata).
 func upgradeFrame(baseFork, name, desc string, fp feeParams, gasLimit uint64, activationFork string, activationT uint64) inputCase {
 	c := caseFrame(baseFork, name, desc, fp, gasLimit)
-	c.Pre[l1BlockAddr] = types.Account{Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(activationFork)}
+	c.Pre[l1BlockAddr] = types.Account{Balance: big.NewInt(0), Nonce: 1, Code: l1BlockRuntimeCode, Storage: fp.l1BlockStorage(activationFork)}
 	c.Transactions[0] = fp.attributesTx(baseFork+"_"+name, activationFork)
 	c.Info.Activations = map[string]uint64{}
 	started := false

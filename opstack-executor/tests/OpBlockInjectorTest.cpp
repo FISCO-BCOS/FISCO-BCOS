@@ -236,9 +236,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     namespace detail = bcos::evm::engine::detail;
 
     // Isthmus-active fork config.
-    constexpr uint64_t kIsthmusTime = 0;
-    constexpr uint64_t kJovianTime = std::numeric_limits<uint64_t>::max();
-    const auto& cfg = op::configAt(1000, op::OpForkTimestamps{kIsthmusTime, kJovianTime});
+    // Isthmus-active fork config (feature_op_jovian OFF).
+    const auto& cfg = op::configAt(op::OpForkFlags{});
 
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();
@@ -296,9 +295,8 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
     namespace engine = bcos::evm::engine;
     namespace detail = bcos::evm::engine::detail;
 
-    constexpr uint64_t kIsthmusTime = 0;
-    constexpr uint64_t kJovianTime = std::numeric_limits<uint64_t>::max();
-    const auto& cfg = op::configAt(1000, op::OpForkTimestamps{kIsthmusTime, kJovianTime});
+    // Isthmus-active fork config (feature_op_jovian OFF).
+    const auto& cfg = op::configAt(op::OpForkFlags{});
 
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();

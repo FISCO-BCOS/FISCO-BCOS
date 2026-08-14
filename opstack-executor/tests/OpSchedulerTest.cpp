@@ -275,8 +275,7 @@ struct Fixture
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{makeReceiptFactory()};
     bcos::crypto::Hash::Ptr hashImpl{makeCryptoSuite()->hashImpl()};
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
-    bcos::evm::opstack::OpForkTimestamps forkTimestamps{.isthmusTime = 0,
-        .jovianTime = std::numeric_limits<uint64_t>::max()};
+    bcos::evm::opstack::OpForkFlags forkFlags{.jovianActive = false};
     // A real Ledger wired into the scheduler's m_ledger (the commit hook now calls
     // prewriteBlockToBuffer). prewriteBlockToBuffer writes through the commit hook's MutableStorage
     // (wrapped into a fresh LegacyStorageWrapper by prewriteBlock), so the Ledger's own
@@ -293,9 +292,8 @@ struct Fixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        scheduler(
-            std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger, ioServicePool))
+        scheduler(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
+            hashImpl, kChainId, forkFlags, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -416,8 +414,7 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
 {
     namespace op = bcos::evm::opstack;
     namespace detail = bcos::evm::engine::detail;
-    const auto& cfg =
-        op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, f.forkTimestamps);
+    const auto& cfg = op::configAt(f.forkFlags);
     // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full
     // envelope overwrite).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;

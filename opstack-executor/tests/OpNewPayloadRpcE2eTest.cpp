@@ -132,12 +132,9 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
 
 constexpr uint64_t kChainId = 0x2105;
 
-bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
+bcos::evm::opstack::OpForkFlags forkFlagsFor(bool jovian)
 {
-    return bcos::evm::opstack::OpForkTimestamps{
-        .isthmusTime = 0,
-        .jovianTime = jovian ? 0 : std::numeric_limits<uint64_t>::max(),
-    };
+    return bcos::evm::opstack::OpForkFlags{.jovianActive = jovian};
 }
 
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
@@ -204,17 +201,16 @@ struct OpE2eFixture
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngineService service;
 
-    explicit OpE2eFixture(bcos::evm::opstack::OpForkTimestamps forkTimestamps)
+    explicit OpE2eFixture(bcos::evm::opstack::OpForkFlags forkFlags)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
-        scheduler(forkTimestamps),
+        scheduler(forkFlags),
         legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        opDelegate(
-            std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger, ioServicePool)),
+        opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
+            hashImpl, kChainId, forkFlags, blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, executor, scheduler, blockFactory,
             /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4,
             opDelegate)
@@ -295,7 +291,7 @@ void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr c
 void runGoldenVector(std::string const& id)
 {
     auto sample = w6test::loadVectorSample(id);
-    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
     w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     // Warning: parent pre-registration (gap A): without it -> SYNCING instead of VALID. parentHash
     // is decoded from the golden header
@@ -382,7 +378,7 @@ void runChainedPair(std::string const& aId, std::string const& bId)
     auto sampleB = w6test::loadChainedSample(bId);
     BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // chained pair shares one fork (isthmus or
                                                       // jovian)
-    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sampleA.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sampleA.jovian));
 
     // Seed only A's pre (B's pre is A's postState; never re-seed)
     w6test::seedPreState(fixture->multiLayerStorage, sampleA.vector["pre"]);
@@ -453,7 +449,7 @@ std::tuple<std::unique_ptr<OpE2eFixture>, bcos::h256, bcos::protocol::BlockNumbe
 runVectorAndGetBlockHash(std::string const& id)
 {
     auto sample = w6test::loadVectorSample(id);
-    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
     w6test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
@@ -649,7 +645,7 @@ void runInvalidVector(std::string const& id)
 {
     auto sample =
         (id.rfind("inline_", 0) == 0) ? makeInlineInvalidSample(id) : w6test::loadInvalidSample(id);
-    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
     const auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
     const auto classification = fisco["classification"].asString();
     // Consumer gate: for executor-consumer vectors (non-decode class), the
@@ -1283,7 +1279,7 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
 // :253-262)
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
 {
-    auto fixture = std::make_unique<OpE2eFixture>(forkTimestampsFor(/*jovian=*/false));
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(/*jovian=*/false));
     bcos::h256 unknownHash(0xdeadbeef);  // no block registered
     auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
         bcos::engine::ForkchoiceState{unknownHash, unknownHash, unknownHash}, nullptr,

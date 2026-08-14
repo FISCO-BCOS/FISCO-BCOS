@@ -29,17 +29,14 @@ namespace bcos
 {
 namespace consensus
 {
-/// OP-mode short-circuit callback error code; distinct from -1 for an invalid proposal.
-constexpr int64_t c_opModeExecutionDisabled = -2;
-
 class StateMachine : public StateMachineInterface, public std::enable_shared_from_this<StateMachine>
 {
 public:
     StateMachine(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
-        bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode = false)
-      : m_scheduler(std::move(_scheduler)), m_blockFactory(std::move(_blockFactory)),
-        m_strand(std::move(_ioServicePool)), m_opStackMode(opStackMode)
+        bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::IOServicePool::Ptr _ioServicePool)
+      : m_scheduler(std::move(_scheduler)),
+        m_blockFactory(std::move(_blockFactory)),
+        m_strand(std::move(_ioServicePool))
     {}
 
     void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
@@ -60,8 +57,6 @@ protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::Strand m_strand;
-    /// OP mode (executor_version>=3): PBFT must not execute blocks (Engine API executeOpBlock is the sole driver).
-    bool m_opStackMode = false;
 };
 }  // namespace consensus
 }  // namespace bcos

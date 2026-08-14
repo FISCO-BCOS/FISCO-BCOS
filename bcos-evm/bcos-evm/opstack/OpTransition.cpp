@@ -13,6 +13,7 @@
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/errors.hpp>
 #include <bcos-evm/eth/state/hash_utils.hpp>
+#include <bcos-evm/eth/state/host.hpp>
 #include <cassert>
 // TODO(eth-utils-removal): several sections of this file are copied verbatim from
 // evmone test/state/state.cpp (official v0.21.0); replacing them means rewriting the copied
@@ -112,7 +113,8 @@ inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(const OpReceiptMeta& met
     if (meta.l1_blob_base_fee)
         out.l1_blob_base_fee = intxToBcosU256(*meta.l1_blob_base_fee);
     if (meta.l1_base_fee_scalar)
-        out.l1_base_fee_scalar = *meta.l1_base_fee_scalar;  // uint32 -> uint64 scalar, direct assignment
+        out.l1_base_fee_scalar =
+            *meta.l1_base_fee_scalar;  // uint32 -> uint64 scalar, direct assignment
     if (meta.l1_blob_base_fee_scalar)
         out.l1_blob_base_fee_scalar = *meta.l1_blob_base_fee_scalar;
     if (meta.operator_fee_scalar)
@@ -138,19 +140,36 @@ inline int32_t toFiscoStatus(evmc_status_code status) noexcept
     return status == EVMC_SUCCESS ? 0 : 1;
 }
 
+/// Contract-creation address for a top-level transaction, in the FISCO receipt's string form
+/// (40-char lowercase hex, NO "0x" — the RPC layer adds "0x" + checksum). Mirrors op-geth
+/// state_processor.go MakeReceipt: a creation tx (to == nil) records
+/// `CreateAddress(from, nonce)` where nonce is the sender's pre-execution account nonce —
+/// tx.Nonce() for a normal tx, statedb.GetNonce(from) (i.e. preNonce) for a Regolith+ deposit.
+/// contractAddress is an RPC-only field: it is NOT part of the OP consensus receipt RLP (status /
+/// cumGas / bloom / logs / deposit nonce+version), so filling it never affects receiptsRoot or
+/// stateRoot.
+inline std::string toFiscoContractAddress(const evmc::address& sender, uint64_t nonce)
+{
+    const auto addr = evmone::state::compute_create_address(sender, nonce);
+    // evmc::address::bytes is a plain uint8_t[20]; brace-init a bytes_view (same as
+    // TestPrinters.h).
+    return std::string(evmc::hex({addr.bytes, sizeof(addr.bytes)}));
+}
+
 /// Project one executed transaction onto a bcos::protocol::TransactionReceipt: gasUsed/status/logs
 /// come from the evmone receipt, blockNumber from the executing block info, and the 256-byte
 /// logsBloom is copied onto the FISCO receipt's own logsBloom field (sealOpBlock's block-level
-/// bloom and encodeReceiptForRoot's leaf both read it back).
+/// bloom and encodeReceiptForRoot's leaf both read it back). contractAddress is derived by the
+/// caller (toFiscoContractAddress) for creation txs, else empty.
 inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const evmone::state::TransactionReceipt& evmoneReceipt, const evmone::state::BlockInfo& block,
-    bcos::bytesConstRef output)
+    bcos::bytesConstRef output, std::string contractAddress = {})
 {
-    auto out =
-        receiptFactory->createReceipt(bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)},
-            std::string{}, mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status),
-            output, static_cast<bcos::protocol::BlockNumber>(block.number));
+    auto out = receiptFactory->createReceipt(
+        bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)}, std::move(contractAddress),
+        mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status), output,
+        static_cast<bcos::protocol::BlockNumber>(block.number));
     out->setLogsBloom(bcos::bytesConstRef{
         evmoneReceipt.logs_bloom_filter.bytes, sizeof(evmoneReceipt.logs_bloom_filter.bytes)});
     return out;
@@ -329,7 +348,8 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
 
     outStateDiff = receipt.state_diff;
     auto out = makeFiscoReceipt(receiptFactory, receipt, block,
-        bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size});
+        bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size},
+        !tx.to.has_value() ? toFiscoContractAddress(tx.sender, tx.nonce) : std::string{});
     out->setOpStackMeta(toOpStackMeta(meta));
     // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (api.go:1775, RPC top-level).
     out->setEffectiveGasPrice("0x" + intx::to_string(effective_gas_price, 16));
@@ -544,7 +564,8 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
 
     outStateDiff = receipt.state_diff;
     auto out = makeFiscoReceipt(receiptFactory, receipt, block,
-        bcos::bytesConstRef{outputBytes.data(), outputBytes.size()});
+        bcos::bytesConstRef{outputBytes.data(), outputBytes.size()},
+        !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{});
 
     // Deposit nonce/version are carried on the receipt's opStackMeta (op-geth's deposit receipt
     // has no L1/operator/DA fields, so nothing else to project).

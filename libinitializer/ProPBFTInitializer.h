@@ -43,7 +43,7 @@ public:
         bcos::storage::StorageInterface::Ptr _storage,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-        bcos::IOServicePool::Ptr _ioServicePool, bool opStackMode = false);
+        bcos::IOServicePool::Ptr _ioServicePool);
 
     virtual ~ProPBFTInitializer() { stop(); }
 

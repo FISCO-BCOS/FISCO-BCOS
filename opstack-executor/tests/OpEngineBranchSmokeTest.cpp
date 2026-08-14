@@ -106,9 +106,7 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
     CheckpointBackend checkpointBackend(backendStorage);
     MLS storage(checkpointBackend);
 
-    constexpr uint64_t kIsthmusTime = 1000;
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(bcos::evm::opstack::OpForkTimestamps{
-        .isthmusTime = kIsthmusTime, .jovianTime = kIsthmusTime + 1});
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(bcos::evm::opstack::OpForkFlags{});
     StubMemPool memPool;
     StubExecutor executor;
     static auto blockFactory =
@@ -120,10 +118,12 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
         /*ledger=*/nullptr, bcos::engine::c_defaultBlockTxCountLimit,
         static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), /*delegate=*/nullptr);
 
-    // A V4 newPayload with a pre-Isthmus timestamp hits the -38005 version gate (which lives
-    // outside the classification barrier), proving the OP branch is wired end-to-end.
+    // A V3 newPayload hits the -38005 version gate (Isthmus+ payloads require V4; the gate lives
+    // outside the classification barrier), proving the OP branch is wired end-to-end. Fork
+    // selection is feature-driven (feature_op_jovian) since the feature-flag refactor — there is
+    // no pre-Isthmus TIMESTAMP rejection anymore; OP mode itself is the Isthmus+ admission.
     bcos::engine::NewPayloadRequest request;
-    request.executionPayload.timestamp = kIsthmusTime - 1;  // pre-Isthmus
+    request.executionPayload.timestamp = 1000;  // any timestamp — not a fork selector
     request.executionPayload.blockNumber = 1;
     request.executionPayload.rawTransactions = std::vector<bcos::bytes>{};
     request.executionPayload.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
     request.parentBeaconBlockRoot = bcos::h256{};
 
     BOOST_CHECK_THROW(
-        bcos::task::syncWait(engine.newPayload(request, 4)), bcos::engine::UnsupportedFork);
+        bcos::task::syncWait(engine.newPayload(request, 3)), bcos::engine::UnsupportedFork);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

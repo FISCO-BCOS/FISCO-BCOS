@@ -325,6 +325,18 @@ void NodeConfig::validateL2Invariants()
     }
 }
 
+bool NodeConfig::opJovianActive() const
+{
+    // OP-Stack Jovian fork semantics are selected by feature_op_jovian in [features] (the
+    // FISCO-native mechanism), replacing the former chain.isthmus_time/chain.jovian_time
+    // timestamp thresholds. OFF → Isthmus semantics (the OP-mode baseline).
+    return std::any_of(m_genesisConfig.m_features.begin(), m_genesisConfig.m_features.end(),
+        [](ledger::FeatureSet const& featureSet) {
+            return featureSet.flag == ledger::Features::Flag::feature_op_jovian &&
+                   featureSet.enable > 0;
+        });
+}
+
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
     std::string const& _configSection, std::string const& _objName,
     std::string const& _defaultValue, bool _require)
@@ -923,26 +935,6 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                                   "Please set chain.block_limit to positive and less than " +
                                   std::to_string(MAX_BLOCK_LIMIT) + " !"));
     }
-    // OP-Stack fork activation timestamps (spec D3). get_optional: a missing key in the genesis
-    // pass must NOT reset a value already loaded from config.ini (loadChainConfig is called from
-    // both loadConfig and loadGenesisConfig).
-    if (auto t = _pt.get_optional<uint64_t>("chain.isthmus_time"))
-    {
-        m_isthmusTime = *t;
-    }
-    if (auto t = _pt.get_optional<uint64_t>("chain.jovian_time"))
-    {
-        m_jovianTime = *t;
-    }
-    if (m_isthmusTime > m_jovianTime)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "chain.isthmus_time must be <= chain.jovian_time (OP-Stack fork order)"));
-    }
-    NodeConfig_LOG(INFO) << LOG_DESC("loadChainConfig op-fork")
-                         << LOG_KV("isthmusTime", m_isthmusTime)
-                         << LOG_KV("jovianTime", m_jovianTime);
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadChainConfig")
                          << LOG_KV("smCrypto", m_genesisConfig.m_smCrypto)
                          << LOG_KV("chainId", m_genesisConfig.m_chainID)

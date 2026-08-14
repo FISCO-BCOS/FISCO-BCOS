@@ -19,7 +19,8 @@
 //     fork's, so route A is expected to be rejected at the six-way verify → soft REPORT (never
 //     hard). Any OTHER failure (shape/validation) is a real bug → BOOST_ERROR.
 //
-// Fork model: `forkTimestampsFor(bool jovian)` + `configAt` (isthmus/jovian). Fork parity is
+// Fork model: `forkFlagsFor(bool jovian)` + `configAt` (feature-op_jovian: isthmus/jovian). Fork
+// parity is
 // asserted by resolving cfg from the same source as the scheduler's internal configAt.
 // Exception handling: per-vector catches use catch(std::exception)/catch(...) (libevmone -fno-rtti
 // makes typed catch unreliable) — catch → BOOST_ERROR + continue.
@@ -162,12 +163,9 @@ bcos::protocol::BlockFactory::Ptr makeBlockFactory()
 
 constexpr uint64_t kChainId = 0x2105;
 
-bcos::evm::opstack::OpForkTimestamps forkTimestampsFor(bool jovian)
+bcos::evm::opstack::OpForkFlags forkFlagsFor(bool jovian)
 {
-    return bcos::evm::opstack::OpForkTimestamps{
-        .isthmusTime = 0,
-        .jovianTime = jovian ? 0 : std::numeric_limits<uint64_t>::max(),
-    };
+    return bcos::evm::opstack::OpForkFlags{.jovianActive = jovian};
 }
 
 struct Fixture
@@ -447,11 +445,9 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     const JsonValue& vec, bool jovian, const bcos::evm::opstack::OpForkConfig& vectorCfg,
     bool greenGuard, GoldenStats& stats)
 {
-    // Fork parity: cfg = configAt(timestamp/1000, forkTimestampsFor(jovian)), resolved
-    // from the same source as the scheduler's internal configAt (same forkTimestampsFor, same
-    // static singleton object).
-    const auto& cfg =
-        op::configAt(static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
+    // Fork parity: cfg = configAt(forkFlagsFor(jovian)), resolved from the same source as the
+    // scheduler's internal configAt (same forkFlagsFor, same static singleton object).
+    const auto& cfg = op::configAt(forkFlagsFor(jovian));
     BOOST_CHECK_MESSAGE(&cfg == &vectorCfg, id << ": fork parity broken: block cfg != vector cfg");
 
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
@@ -502,7 +498,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         }
 
         auto opScheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
-            fixture.receiptFactory, fixture.hashImpl, kChainId, forkTimestampsFor(jovian),
+            fixture.receiptFactory, fixture.hashImpl, kChainId, forkFlagsFor(jovian),
             fixture.blockFactory, fixture.multiLayerStorage, /*ledger=*/nullptr,
             fixture.ioServicePool);
 
@@ -643,8 +639,7 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     // The announced header carries the golden commitments (route A's six-way verify = the
     // FISCO-vs-op-geth gate).
     fillAnnouncedHeaderFromGolden(header, vec, rawTxBytes);
-    const auto& vectorCfg =
-        op::configAt(static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
+    const auto& vectorCfg = op::configAt(forkFlagsFor(jovian));
     runBlockEquivalence(id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, greenGuard, stats);
 }
 
@@ -666,8 +661,7 @@ void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixtur
         const auto rawTxBytes = buildRawTxBytes(blk, bid);
         fillAnnouncedHeaderFromGolden(header, blk, rawTxBytes);
         const bool jovian = (jAt(jAt(blk, "_info"), "hardfork").asString() == "jovian");
-        const auto& vectorCfg = op::configAt(
-            static_cast<uint64_t>(header->timestamp()) / 1000, forkTimestampsFor(jovian));
+        const auto& vectorCfg = op::configAt(forkFlagsFor(jovian));
         runBlockEquivalence(bid, fixture, header, rawTxBytes, blk, jovian, vectorCfg,
             /*greenGuard=*/false, stats);
         ++stats.chainBlocks;

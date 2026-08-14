@@ -264,13 +264,13 @@ public:
     /// first deferred collect). ledger may still be nullptr explicitly (execute tolerates it).
     OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
-        bcos::evm::opstack::OpForkTimestamps forkTimestamps,
-        bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
-        bcos::ledger::LedgerInterface::Ptr ledger, bcos::IOServicePool::Ptr ioServicePool)
+        bcos::evm::opstack::OpForkFlags forkFlags, bcos::protocol::BlockFactory::Ptr blockFactory,
+        MultiLayerStorage& multiLayerStorage, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::IOServicePool::Ptr ioServicePool)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
-        m_forkTimestamps(forkTimestamps),
+        m_forkFlags(forkFlags),
         m_multiLayerStorage(&multiLayerStorage),
         m_blockFactory(blockFactory.get()),
         m_ioServicePool(std::move(ioServicePool))
@@ -534,7 +534,8 @@ private:
     /// ② Execution kernel: three-phase — ① pre-block (system_call + deposit-first + Jovian shape +
     /// DA scalar) → ② SchedulerSerialImpl(serial=true) per-tx → ③ finalizeOpBlockResult. rawTxBytes
     /// = each tx's extraTransactionBytes; deposits = decoded 0x7E envelopes; cfg =
-    /// configAt(timestamp/1000); executor = a per-block OpstackExecutor (one evmc::VM);
+    /// configAt(m_forkFlags) (feature_op_jovian); executor = a per-block OpstackExecutor (one
+    /// evmc::VM);
     /// ledgerConfig only needs evmcRevision.
     task::Task<ExecuteOutcome> execute(ViewType& view, protocol::BlockHeader const& header,
         std::vector<protocol::Transaction::ConstPtr> const& transactions,
@@ -557,8 +558,7 @@ private:
         bcos::evm::engine::OpExecuteBlockResult result;
         try
         {
-            const auto& cfg =
-                op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, m_forkTimestamps);
+            const auto& cfg = op::configAt(m_forkFlags);
 
             // Classify by type byte: deposits come from the block's Transaction objects
             // (depositFromTransaction); deposit canonicality is backed by its width checks +
@@ -898,8 +898,7 @@ private:
         auto blockHeader = block->blockHeader();
         auto const& header = *blockHeader;
 
-        const auto& cfg =
-            op::configAt(static_cast<uint64_t>(header.timestamp()) / 1000, m_forkTimestamps);
+        const auto& cfg = op::configAt(m_forkFlags);
 
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
@@ -937,7 +936,7 @@ private:
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     uint64_t m_chainId;
-    bcos::evm::opstack::OpForkTimestamps m_forkTimestamps;
+    bcos::evm::opstack::OpForkFlags m_forkFlags;
 
     // Orchestration state (was the skeleton's protected block).
     MultiLayerStorage* m_multiLayerStorage = nullptr;

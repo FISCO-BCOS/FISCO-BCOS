@@ -165,7 +165,16 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
 {
     evmone::state::BlockInfo blk;
     blk.number = static_cast<int64_t>(env.number());
-    // FISCO tars store milliseconds; evmone wants seconds.
+    // TIMESTAMP UNIT CONVENTION (do not "fix" — see below):
+    // FISCO tars store MILLISECONDS; evmone wants SECONDS, so this /1000 is REQUIRED and correct.
+    // The RPC boundary converts seconds→milliseconds on the way in (EngineHelper.cpp
+    // engineSecondsToInternalMillis / EngineTimestampBoundaryTest), so a header built by the
+    // engine already carries ms; feeding it to the EVM un-divided would make every timestamp
+    // 1000× too large and diverge from op-geth (which stores seconds). Fork SELECTION is
+    // feature-driven (feature_op_jovian) since the feature-flag refactor — the timestamp is no
+    // longer a fork selector — but the EVM still receives seconds (op-geth semantics), so the
+    // division stays. If a future header source writes seconds directly, convert at THAT boundary
+    // — never remove this division.
     blk.timestamp = static_cast<uint64_t>(env.timestamp()) / 1000;
     blk.gas_limit = gasLimitOverride.has_value() ?
                         static_cast<int64_t>(*gasLimitOverride) :

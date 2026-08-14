@@ -6,7 +6,7 @@
 // that its engine-facing seam surface works. Exercises only:
 //   1. construction over a real MultiLayerStorage ViewType;
 //   2. the static seam surface the engine reaches as dependent names
-//      (computeTxRoot / commitmentsOf / isIsthmusActiveAt / isJovianActiveAt);
+//      (computeTxRoot / commitmentsOf / isJovianActive);
 //   3. executeOpBlock's empty-block rejection (processOpBlock throws -> classified escape).
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
@@ -71,18 +71,16 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    constexpr uint64_t kIsthmusTime = 1000;
-    constexpr uint64_t kJovianTime = 2000;
-    // The ctor now takes only fork timestamps (the execution kernel was retired; this is a pure
-    // seam shim — no receipt factory / chain id / VM).
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(bcos::evm::opstack::OpForkTimestamps{
-        .isthmusTime = kIsthmusTime, .jovianTime = kJovianTime});
+    // The ctor takes only fork flags (feature-driven fork selection; this is a pure seam shim —
+    // no receipt factory / chain id / VM).
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        bcos::evm::opstack::OpForkFlags{.jovianActive = false});
 
-    // Fork predicates: threshold comparison stays on the OP side of the seam.
-    BOOST_CHECK(scheduler.isIsthmusActiveAt(kIsthmusTime));
-    BOOST_CHECK(!scheduler.isIsthmusActiveAt(kIsthmusTime - 1));
-    BOOST_CHECK(scheduler.isJovianActiveAt(kJovianTime));
-    BOOST_CHECK(!scheduler.isJovianActiveAt(kJovianTime - 1));
+    // Fork predicate: feature-driven (feature_op_jovian), constant across blocks — no timestamps.
+    BOOST_CHECK(!scheduler.isJovianActive());
+    bcos::evm::engine::OpSchedulerSeam<ViewType> jovianScheduler(
+        bcos::evm::opstack::OpForkFlags{.jovianActive = true});
+    BOOST_CHECK(jovianScheduler.isJovianActive());
 
     // computeTxRoot over the empty range: the standard empty-trie root (0x56e81f...), which
     // proves the trie built and hashed end-to-end.
