@@ -1,12 +1,4 @@
 {
-  "geth": {
-    "path": "/Users/octopus/octo/code/blockchain-impl/go-ethereum",
-    "tag": "v1.17.3"
-  },
-  "op_geth": {
-    "path": "/Users/octopus/octo/code/blockchain-impl/op-geth",
-    "tag": "v1.101702.2"
-  },
   "ethereum_tests": {
     "repo": "https://github.com/ethereum/tests",
     "commit": "c67e485ff8b5be9abc8ad15345ec21aa22e290d9",
