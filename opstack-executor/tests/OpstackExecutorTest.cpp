@@ -5,9 +5,12 @@
 // produce the final FISCO receipt directly (OP metadata + effective gas price already projected),
 // and the state diff is returned via an out-param. Storage is a plain MutableStorage.
 
-#include "opstack-executor/OpstackExecutor.h"
+#define BOOST_TEST_MODULE BcosOpstackExecutorTests
+#include <boost/test/unit_test.hpp>
+
 #include "bcos-evm/opstack/OpForkSchedule.h"
 #include "bcos-evm/opstack/OpPredeploys.h"
+#include "opstack-executor/OpstackExecutor.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -22,7 +25,6 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <evmc/evmc.h>
-#include <gtest/gtest.h>
 #include <evmc/evmc.hpp>
 #include <memory>
 
@@ -45,7 +47,7 @@ bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
         std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
 }
 
-struct Fixture : public ::testing::Test
+struct Fixture
 {
     std::shared_ptr<crypto::CryptoSuite> cryptoSuite = std::make_shared<crypto::CryptoSuite>(
         std::make_shared<crypto::Keccak256>(), nullptr, nullptr);
@@ -119,15 +121,17 @@ struct Fixture : public ::testing::Test
 };
 }  // namespace
 
-TEST(OpstackExecutor, ConstructsWithJovianFork)
+BOOST_AUTO_TEST_SUITE(OpstackExecutorTestSuite)
+
+BOOST_AUTO_TEST_CASE(ConstructsWithJovianFork)
 {
     auto rf =
         std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
     OpstackExecutor executor(rf, makeCryptoSuite()->hashImpl());
-    EXPECT_NE(&executor.vm(), nullptr);
+    BOOST_CHECK_NE(&executor.vm(), nullptr);
 }
 
-TEST(OpstackExecutor, BuildOpBlockInfoMirrorsBlockPath)
+BOOST_AUTO_TEST_CASE(BuildOpBlockInfoMirrorsBlockPath)
 {
     // buildBlockInfo must mirror toBlockInfo's field mapping (OpCommon.h:106-121) so eth_call
     // sees the same block context as block execution: seconds timestamp, header baseFee (via
@@ -145,17 +149,19 @@ TEST(OpstackExecutor, BuildOpBlockInfoMirrorsBlockPath)
     h->setBlobGasUsed(bcos::u256(0x1234));
 
     const auto blk = bcos::executor_v1::opstack::OpstackExecutor::buildBlockInfo(*h, 30'000'000);
-    EXPECT_EQ(blk.number, 7);
-    EXPECT_EQ(blk.timestamp, 1'234'567ULL);                 // ms -> s
-    EXPECT_EQ(blk.gas_limit, 30'000'000);                   // injected gasLimit
-    EXPECT_EQ(blk.base_fee, intx::uint256(1'000'000'000));  // header baseFee, NOT 0
-    EXPECT_EQ(blk.prev_randao.bytes[0], 0xab);              // full field set
-    EXPECT_EQ(blk.parent_beacon_block_root.bytes[0], 0xcd);
-    EXPECT_EQ(blk.extra_data, (evmc::bytes{0xde, 0xad}));
-    EXPECT_EQ(blk.blob_gas_used, 0x1234ULL);
+    BOOST_CHECK_EQUAL(blk.number, 7);
+    BOOST_CHECK_EQUAL(blk.timestamp, 1'234'567ULL);  // ms -> s
+    BOOST_CHECK_EQUAL(blk.gas_limit, 30'000'000);    // injected gasLimit
+    // intx::uint256 / evmc::bytes / optional<uint64_t> have no operator<< — use plain BOOST_CHECK
+    // (same predicate as EXPECT_EQ, just without value printing on failure).
+    BOOST_CHECK(blk.base_fee == intx::uint256(1'000'000'000));  // header baseFee, NOT 0
+    BOOST_CHECK_EQUAL(blk.prev_randao.bytes[0], 0xab);          // full field set
+    BOOST_CHECK_EQUAL(blk.parent_beacon_block_root.bytes[0], 0xcd);
+    BOOST_CHECK(blk.extra_data == (evmc::bytes{0xde, 0xad}));
+    BOOST_CHECK(blk.blob_gas_used == 0x1234ULL);
 }
 
-TEST_F(Fixture, ExecutesNormalTransferEndToEnd)
+BOOST_FIXTURE_TEST_CASE(ExecutesNormalTransferEndToEnd, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
 
@@ -189,15 +195,15 @@ TEST_F(Fixture, ExecutesNormalTransferEndToEnd)
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
         /*chainId=*/10));
-    ASSERT_NE(receipt, nullptr);
+    BOOST_REQUIRE_NE(receipt, nullptr);
     // FISCO internal convention: 0 = success (the Ethereum RPC 0<->1 flip happens later).
-    EXPECT_EQ(receipt->status(), 0);
-    EXPECT_GE(receipt->gasUsed(), 21000u);
-    EXPECT_EQ(receipt->blockNumber(), 1);
-    EXPECT_TRUE(receipt->opStackMeta().has_value());
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
+    BOOST_CHECK_GE(receipt->gasUsed(), 21000u);
+    BOOST_CHECK_EQUAL(receipt->blockNumber(), 1);
+    BOOST_CHECK(receipt->opStackMeta().has_value());
 }
 
-TEST_F(Fixture, RejectsForkRevisionMismatch)
+BOOST_FIXTURE_TEST_CASE(RejectsForkRevisionMismatch, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     ledgerConfig.setEVMCRevision(EVMC_FRONTIER);  // deliberately != fork.rev
@@ -205,12 +211,12 @@ TEST_F(Fixture, RejectsForkRevisionMismatch)
     blockHeader.setNumber(1);
     auto tx = buildWeb3Tx();
     bcos::evm::opstack::OpFeeParams fee{};
-    EXPECT_THROW(task::syncWait(executor.executeTransaction(
-                     storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
+    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(
+                          storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
         bcos::executor_v1::opstack::OpForkRevisionMismatch);
 }
 
-TEST_F(Fixture, RejectsInvalidTx)
+BOOST_FIXTURE_TEST_CASE(RejectsInvalidTx, Fixture)
 {
     // Balance 0 sender + value transfer -> insufficient balance -> OpTxValidationFailed.
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
@@ -222,12 +228,12 @@ TEST_F(Fixture, RejectsInvalidTx)
     tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
     // No account created -> balance 0 -> validation fails.
     bcos::evm::opstack::OpFeeParams fee{};
-    EXPECT_THROW(task::syncWait(executor.executeTransaction(
-                     storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
+    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(
+                          storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
         bcos::executor_v1::opstack::OpTxValidationFailed);
 }
 
-TEST_F(Fixture, ChargesL1AndOperatorFees)
+BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
 {
     // Non-zero L1 + operator fee params route through opValidate (pre-charge) -> opTransition
     // (deriveOpReceiptMeta) and surface in the receipt's opStackMeta.
@@ -265,20 +271,20 @@ TEST_F(Fixture, ChargesL1AndOperatorFees)
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
         /*chainId=*/10));
-    ASSERT_NE(receipt, nullptr);
-    EXPECT_EQ(receipt->status(), 0);
+    BOOST_REQUIRE_NE(receipt, nullptr);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
 
     auto meta = receipt->opStackMeta();
-    ASSERT_TRUE(meta.has_value());
+    BOOST_REQUIRE(meta.has_value());
     // Jovian derives these unconditionally.
-    EXPECT_TRUE(meta->l1_fee.has_value());
-    EXPECT_TRUE(meta->l1_gas_price.has_value());
+    BOOST_CHECK(meta->l1_fee.has_value());
+    BOOST_CHECK(meta->l1_gas_price.has_value());
     // operator_fee_scalar filled when has_operator_fee && (scalar != 0 || constant != 0).
-    EXPECT_TRUE(meta->operator_fee_scalar.has_value());
-    EXPECT_EQ(*meta->operator_fee_scalar, 11u);
+    BOOST_CHECK(meta->operator_fee_scalar.has_value());
+    BOOST_CHECK_EQUAL(*meta->operator_fee_scalar, 11u);
 }
 
-TEST_F(Fixture, ReceiptMetaSurvives)
+BOOST_FIXTURE_TEST_CASE(ReceiptMetaSurvives, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
@@ -309,24 +315,24 @@ TEST_F(Fixture, ReceiptMetaSurvives)
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
         /*chainId=*/10));
-    ASSERT_NE(receipt, nullptr);
+    BOOST_REQUIRE_NE(receipt, nullptr);
     auto meta = receipt->opStackMeta();
-    ASSERT_TRUE(meta.has_value());
-    ASSERT_TRUE(meta->l1_gas_price.has_value());
-    EXPECT_EQ(*meta->l1_gas_price, bcos::u256(1000));
+    BOOST_REQUIRE(meta.has_value());
+    BOOST_REQUIRE(meta->l1_gas_price.has_value());
+    BOOST_CHECK(*meta->l1_gas_price == bcos::u256(1000));
     // v2 deriveOpReceiptMeta derives l1_base_fee_scalar from props.fee (not l1_gas_used, which the
     // v2 implementation no longer fills); the fee below set base_fee_scalar=7.
-    ASSERT_TRUE(meta->l1_base_fee_scalar.has_value());
-    EXPECT_EQ(*meta->l1_base_fee_scalar, 7u);
+    BOOST_REQUIRE(meta->l1_base_fee_scalar.has_value());
+    BOOST_CHECK_EQUAL(*meta->l1_base_fee_scalar, 7u);
     // effective_gas_price = base_fee(0) + min(maxPriority, maxFee-0); for this EIP-2930 tx
     // BCOS2Evmone.h maps max_gas_price = max_priority_gas_price = gasPrice, so effective =
     // gasPrice = 0x6fc23ac00.
-    EXPECT_EQ(receipt->effectiveGasPrice(), "0x6fc23ac00");
+    BOOST_CHECK_EQUAL(receipt->effectiveGasPrice(), "0x6fc23ac00");
 }
 
 // ---- executeDeposit + finalizeBlock (reuse bcos-evm/opstack runDeposit / finalizeOpBlock) ----
 
-TEST_F(Fixture, ExecutesDepositMint)
+BOOST_FIXTURE_TEST_CASE(ExecutesDepositMint, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
@@ -354,22 +360,22 @@ TEST_F(Fixture, ExecutesDepositMint)
 
     auto receipt = task::syncWait(executor.executeDeposit(
         storage, blockHeader, dep, /*chainId=*/10, /*blockGasLeft=*/30000000, ledgerConfig));
-    ASSERT_NE(receipt, nullptr);
-    EXPECT_EQ(receipt->status(), 0);
+    BOOST_REQUIRE_NE(receipt, nullptr);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
     // mint(5) added to the from balance.
     ledger::account::EVMAccount<MutableStorage> acc(storage, kFrom, false);
     auto bal = task::syncWait(acc.balance());
-    EXPECT_EQ(bal, 5u);
+    BOOST_CHECK(bal == 5u);
     // deposit_nonce == 0, version == 1 (Canyon+).
     auto meta = receipt->opStackMeta();
-    ASSERT_TRUE(meta.has_value());
-    ASSERT_TRUE(meta->deposit_nonce.has_value());
-    EXPECT_EQ(*meta->deposit_nonce, 0u);
-    ASSERT_TRUE(meta->deposit_receipt_version.has_value());
-    EXPECT_EQ(*meta->deposit_receipt_version, 1u);
+    BOOST_REQUIRE(meta.has_value());
+    BOOST_REQUIRE(meta->deposit_nonce.has_value());
+    BOOST_CHECK_EQUAL(*meta->deposit_nonce, 0u);
+    BOOST_REQUIRE(meta->deposit_receipt_version.has_value());
+    BOOST_CHECK_EQUAL(*meta->deposit_receipt_version, 1u);
 }
 
-TEST_F(Fixture, ExecutesDepositThroughExecuteTransaction)
+BOOST_FIXTURE_TEST_CASE(ExecutesDepositThroughExecuteTransaction, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
@@ -390,25 +396,25 @@ TEST_F(Fixture, ExecutesDepositThroughExecuteTransaction)
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, /*fee=*/{}, /*blockGasLeft=*/30000000,
         /*chainId=*/10));
-    ASSERT_NE(receipt, nullptr);
-    EXPECT_EQ(receipt->status(), 0);
+    BOOST_REQUIRE_NE(receipt, nullptr);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
 
     // mint(5) added to from balance (distinguishes deposit from a normal-path run, which mints
     // nothing).
     ledger::account::EVMAccount<MutableStorage> acc(storage, from, false);
     auto bal = task::syncWait(acc.balance());
-    EXPECT_EQ(bal, 5u);
+    BOOST_CHECK(bal == 5u);
 
     // deposit_nonce == 0, version == 1 (Canyon+).
     auto meta = receipt->opStackMeta();
-    ASSERT_TRUE(meta.has_value());
-    ASSERT_TRUE(meta->deposit_nonce.has_value());
-    EXPECT_EQ(*meta->deposit_nonce, 0u);
-    ASSERT_TRUE(meta->deposit_receipt_version.has_value());
-    EXPECT_EQ(*meta->deposit_receipt_version, 1u);
+    BOOST_REQUIRE(meta.has_value());
+    BOOST_REQUIRE(meta->deposit_nonce.has_value());
+    BOOST_CHECK_EQUAL(*meta->deposit_nonce, 0u);
+    BOOST_REQUIRE(meta->deposit_receipt_version.has_value());
+    BOOST_CHECK_EQUAL(*meta->deposit_receipt_version, 1u);
 }
 
-TEST_F(Fixture, DepositLifecycleThroughExecuteContext)
+BOOST_FIXTURE_TEST_CASE(DepositLifecycleThroughExecuteContext, Fixture)
 {
     // Concept lifecycle (createExecuteContext -> prepare -> execute -> finish) on a deposit tx:
     // the deposit branch must short-circuit opValidate and run executeDeposit, and finish() must
@@ -439,25 +445,25 @@ TEST_F(Fixture, DepositLifecycleThroughExecuteContext)
     task::syncWait(context.execute());
     auto receipt = task::syncWait(context.finish());
 
-    ASSERT_NE(receipt, nullptr);
-    EXPECT_EQ(receipt->status(), 0);
+    BOOST_REQUIRE_NE(receipt, nullptr);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
     // mint(5) applied to the from balance (distinguishes the deposit path from a no-op).
     ledger::account::EVMAccount<MutableStorage> acc(storage, from, false);
     auto bal = task::syncWait(acc.balance());
-    EXPECT_EQ(bal, 5u);
+    BOOST_CHECK(bal == 5u);
     // blockGasLeft decremented by the deposit's gasUsed; cumulative gas backfilled on the receipt.
     auto const gasUsed = bcos::evm::opstack::narrowGasUsed(receipt->gasUsed());
-    EXPECT_LT(ctx.blockGasLeft, kInitialGasLeft);
-    EXPECT_EQ(ctx.blockGasLeft, kInitialGasLeft - gasUsed);
-    EXPECT_EQ(ctx.cumulativeGasUsed, gasUsed);
-    EXPECT_EQ(
+    BOOST_CHECK_LT(ctx.blockGasLeft, kInitialGasLeft);
+    BOOST_CHECK_EQUAL(ctx.blockGasLeft, kInitialGasLeft - gasUsed);
+    BOOST_CHECK(ctx.cumulativeGasUsed == gasUsed);
+    BOOST_CHECK_EQUAL(
         std::string(receipt->cumulativeGasUsed()), bcos::evm::opstack::hexCumulative(gasUsed));
 }
 
 // 6-arg createExecuteContext (generic scheduler / concept form) has no BlockContext: the old
 // default-arg footgun left m_ctx pointing at a destroyed temporary. It must now build a null-ctx
 // context whose prepare() throws a clear OpConsensusError instead of UB.
-TEST_F(Fixture, NullContextSixArgFormThrows)
+BOOST_FIXTURE_TEST_CASE(NullContextSixArgFormThrows, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
@@ -467,12 +473,12 @@ TEST_F(Fixture, NullContextSixArgFormThrows)
     auto tx = buildDepositTx();
     auto context = task::syncWait(executor.createExecuteContext(
         storage, blockHeader, tx, /*contextID=*/0, ledgerConfig, /*call=*/false));
-    EXPECT_THROW(task::syncWait(context.prepare()), bcos::evm::engine::OpConsensusError);
-    EXPECT_THROW(task::syncWait(context.execute()), bcos::evm::engine::OpConsensusError);
-    EXPECT_THROW(task::syncWait(context.finish()), bcos::evm::engine::OpConsensusError);
+    BOOST_CHECK_THROW(task::syncWait(context.prepare()), bcos::evm::engine::OpConsensusError);
+    BOOST_CHECK_THROW(task::syncWait(context.execute()), bcos::evm::engine::OpConsensusError);
+    BOOST_CHECK_THROW(task::syncWait(context.finish()), bcos::evm::engine::OpConsensusError);
 }
 
-TEST_F(Fixture, DepositGasLimitReachedIsBlockError)
+BOOST_FIXTURE_TEST_CASE(DepositGasLimitReachedIsBlockError, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
@@ -488,12 +494,12 @@ TEST_F(Fixture, DepositGasLimitReachedIsBlockError)
         .data = {},
     };
     // gas_limit(100000) > blockGasLeft(100) -> runDeposit throws std::runtime_error.
-    EXPECT_THROW(task::syncWait(executor.executeDeposit(storage, blockHeader, dep, /*chainId=*/10,
-                     /*blockGasLeft=*/100, ledgerConfig)),
+    BOOST_CHECK_THROW(task::syncWait(executor.executeDeposit(storage, blockHeader, dep,
+                          /*chainId=*/10, /*blockGasLeft=*/100, ledgerConfig)),
         std::runtime_error);
 }
 
-TEST_F(Fixture, FinalizeOpBlockNoReward)
+BOOST_FIXTURE_TEST_CASE(FinalizeOpBlockNoReward, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
@@ -514,10 +520,10 @@ TEST_F(Fixture, FinalizeOpBlockNoReward)
     // OP has no block reward: coinbase balance unchanged.
     ledger::account::EVMAccount<MutableStorage> acc(storage, kCoinbase, false);
     auto bal = task::syncWait(acc.balance());
-    EXPECT_EQ(bal, 100u);
+    BOOST_CHECK(bal == 100u);
 }
 
-TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
+BOOST_FIXTURE_TEST_CASE(BlockInfoGasLimitUsesHeaderGasLimit, Fixture)
 {
     // buildBlockInfo's gasLimit takes header.gasLimit (not blockGasLeft). Behavior assertion:
     // executing a minimal GASLIMIT-reading contract, slot0 must store == header.gasLimit().
@@ -586,8 +592,8 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/250000,
         /*chainId=*/10));
-    ASSERT_NE(receipt, nullptr);
-    EXPECT_EQ(receipt->status(), 0);
+    BOOST_REQUIRE_NE(receipt, nullptr);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
 
     // Read observer slot0: must == header.gasLimit (1000000), not the injected blockGasLeft.
     // The storage key is raw 32 bytes (evmc_bytes32{}=32 0x00 bytes); neither
@@ -596,16 +602,18 @@ TEST_F(Fixture, BlockInfoGasLimitUsesHeaderGasLimit)
     // (32-byte big-endian), not storageEntry's has_value()/operator->.
     ledger::account::EVMAccount<MutableStorage> obs(storage, kObserver, false);
     auto slot = task::syncWait(obs.storage(evmc_bytes32{}));  // EVMAccount.h:210
-    EXPECT_EQ(intx::be::load<intx::uint256>(slot.bytes), intx::uint256(1000000));
+    BOOST_CHECK(intx::be::load<intx::uint256>(slot.bytes) == intx::uint256(1000000));
 }
 
-TEST_F(Fixture, DepositIsSystemTransactionGetter)
+BOOST_FIXTURE_TEST_CASE(DepositIsSystemTransactionGetter, Fixture)
 {
     auto tx = buildDepositTx(/*isSystemTx=*/true);
-    EXPECT_TRUE(tx.isDepositTx());                 // web3TypedTxKind == 0x7e
-    EXPECT_TRUE(tx.depositIsSystemTransaction());  // tars field 15 == 1
+    BOOST_CHECK(tx.isDepositTx());                 // web3TypedTxKind == 0x7e
+    BOOST_CHECK(tx.depositIsSystemTransaction());  // tars field 15 == 1
 
     auto tx2 = buildDepositTx(/*isSystemTx=*/false);
-    EXPECT_TRUE(tx2.isDepositTx());
-    EXPECT_FALSE(tx2.depositIsSystemTransaction());  // tars field 15 == 0
+    BOOST_CHECK(tx2.isDepositTx());
+    BOOST_CHECK(!tx2.depositIsSystemTransaction());  // tars field 15 == 0
 }
+
+BOOST_AUTO_TEST_SUITE_END()
