@@ -103,9 +103,18 @@ public:
     //    base-class header via setRLPHash.
     static bcos::Error::UniquePtr toTarsHeader(
         bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
+    /// Like toTarsHeader but WITHOUT validateHeader — usable for FISCO-native/OP (NON_ETH)
+    /// headers that validateHeader rejects. For NON_ETH the RLP timestamp is SECONDS and the
+    /// FISCO header stores MILLISECONDS, so ×1000 is applied (ETH-version headers carry seconds).
+    static bcos::Error::UniquePtr decodeTarsHeader(
+        bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
     static bcos::Error::UniquePtr toEthBlockHeader(
         EthBlockHeader& ethHeader, bcos::bytesConstRef _data);
     static bcos::Error::UniquePtr calculateRLPHash(bcos::protocol::BlockHeader& header);
+    /// Compute keccak256(rlp(header)) WITHOUT validation or state mutation — usable for
+    /// FISCO-native/OP headers (EthBlockVersion::NON_ETH, timestamp ms → rlpEncode /1000) that
+    /// calculateRLPHash's validateHeader rejects. Returns the 32-byte Ethereum block hash.
+    static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header);
 
     const EthBlockHeaderData& data() const { return m_data; }
 

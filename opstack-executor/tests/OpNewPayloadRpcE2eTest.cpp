@@ -222,8 +222,9 @@ struct OpE2eFixture
 /// Produced header: production-mapping reconstruction (val-loop GateFixture's
 /// productionHeaderOf pattern). `bcos::engine::detail::rebuildOpEthHeader`
 /// (EngineServiceImpl.cpp:470 or so: 17 fields verbatim from payload + txRoot + 3
-/// constants). OP block hash uses `opHeaderHash(c)` = keccak256(encodeOpHeader()), NOT
-/// BlockHeader::hash() (empty dataHash / factory TARS-order backfill).
+/// constants via applyOpHeaderConstants). OP block hash uses `opHeaderHash()` =
+/// keccak256(encodeOpHeader()), NOT BlockHeader::hash() (empty dataHash / factory
+/// TARS-order backfill).
 bcos::protocol::BlockHeader::Ptr productionHeaderOf(
     bcos::protocol::BlockFactory::Ptr const& blockFactory,
     bcos::engine::NewPayloadRequest const& request)
@@ -259,12 +260,13 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
 void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr const& produced,
     bcostars::protocol::BlockHeaderImpl::Ptr const& goldenHeader, bcos::h256 const& goldenBlockHash)
 {
-    const auto c = bcos::engine::detail::opHeaderConst();
-    // 1. blockHash: produced opHeaderHash = keccak256(encodeOpHeader()) must equal
-    //    golden.blockHash (op-geth's block.Hash() = keccak(RLP(21 fields)) definition).
+    // 1. blockHash: EthBlockHeader::computeHash = keccak256(rlpEncode) must equal
+    //    golden.blockHash (op-geth's block.Hash() = keccak(RLP(21 fields)) definition). The
+    //    3 post-merge constants are in the header (producer populates them).
     // Warning: this repo's Boost.Test macros do not support `<< id << msg` chaining;
     // uniformly use BOOST_CHECK_MESSAGE(id << msg).
-    BOOST_CHECK_MESSAGE(produced->opHeaderHash(c) == goldenBlockHash, id << ": blockHash");
+    BOOST_CHECK_MESSAGE(bcos::protocol::EthBlockHeader::computeHash(*produced) == goldenBlockHash,
+        id << ": blockHash");
     BOOST_CHECK_MESSAGE(produced->stateRoot() == goldenHeader->stateRoot(), id << ": stateRoot");
     BOOST_CHECK_MESSAGE(
         produced->receiptsRoot() == goldenHeader->receiptsRoot(), id << ": receiptsRoot");
@@ -280,10 +282,12 @@ void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr c
     BOOST_CHECK_MESSAGE(std::equal(produced->logsBloom().begin(), produced->logsBloom().end(),
                             goldenHeader->logsBloom().begin(), goldenHeader->logsBloom().end()),
         id << ": logsBloom");
-    // Main assertion: byte-exact equality of encodeOpHeader (covers the full RLP encoding of all
-    // fields)
-    BOOST_CHECK_MESSAGE(
-        produced->encodeOpHeader(c) == goldenHeader->encodeOpHeader(c), id << ": encodeOpHeader");
+    // Main assertion: byte-exact equality of EthBlockHeader::rlpEncode (covers the full RLP
+    // encoding of all fields)
+    bcos::bytes producedEncoded, goldenEncoded;
+    bcos::protocol::EthBlockHeader(*produced).rlpEncode(producedEncoded);
+    bcos::protocol::EthBlockHeader(*goldenHeader).rlpEncode(goldenEncoded);
+    BOOST_CHECK_MESSAGE(producedEncoded == goldenEncoded, id << ": encodeOpHeader");
 }
 
 /// One vector end-to-end: seed pre -> register parent -> makeParamsJson ->
@@ -528,8 +532,7 @@ w6test::InvalidSample buildInlineInvalidSample(std::string const& id, InlineInva
     // opHeaderHash)
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto header = productionHeaderOf(blockFactory, request);
-    ep["blockHash"] =
-        w6test::hexPrefixedH256(header->opHeaderHash(bcos::engine::detail::opHeaderConst()));
+    ep["blockHash"] = w6test::hexPrefixedH256(bcos::protocol::EthBlockHeader::computeHash(*header));
 
     w6test::InvalidSample sample;
     sample.hardfork = base.jovian ? "jovian" : "isthmus";

@@ -76,12 +76,11 @@ inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample 
 {
     auto bytes = bcos::fromHex(sample.golden["encodedHeaderHex"].asString());
     auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
-    auto c = bcos::engine::detail::opHeaderConst();
-    // bcos::bytesRef's vector constructor takes a vector pointer and cannot implicitly
-    // convert; use bcos::ref(bytes) (DataConvertUtility repo convention, see
-    // OpReceiptEncodeTest/BlockImplTest).
-    bcos::bytesRef in = bcos::ref(bytes);
-    if (auto err = header->decodeOpHeader(in, c); err != nullptr)
+    // Non-validating OP/ETH header RLP decode (EthBlockHeader::decodeTarsHeader — toTarsHeader's
+    // validateHeader rejects NON_ETH headers). Writes the 3 post-merge constants + all fields,
+    // RLP seconds → ms timestamp.
+    if (auto err = bcos::protocol::EthBlockHeader::decodeTarsHeader(header, bcos::ref(bytes));
+        err != nullptr)
         throw std::runtime_error("decodeGoldenHeader: " + err->errorMessage());
     return header;
 }

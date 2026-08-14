@@ -134,13 +134,6 @@ public:
     // calculateHash() keeps this value instead of recomputing the FISCO Tars hash.
     void setRLPHash(bcos::crypto::HashType _hash) override;
 
-    // ---- OP Stack header capability ----
-    bcos::bytes encodeOpHeader(const bcos::protocol::BlockHeader::OpHeaderConst& c) const override;
-    bcos::crypto::HashType opHeaderHash(
-        const bcos::protocol::BlockHeader::OpHeaderConst& c) const override;
-    bcos::Error::UniquePtr decodeOpHeader(
-        bcos::bytesRef in, bcos::protocol::BlockHeader::OpHeaderConst& c) override;
-
     const bcostars::BlockHeader& inner() const;
     bcostars::BlockHeader& inner();
     void setInner(bcostars::BlockHeader blockHeader);

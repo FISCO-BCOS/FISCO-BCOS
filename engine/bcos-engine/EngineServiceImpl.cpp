@@ -69,8 +69,8 @@ constexpr std::size_t c_payloadIdBytes = 8;
 //
 // These three header fields have no carrier in `ExecutionPayload` because they are fixed by the
 // protocol on post-merge OP chains; the header reconstruction below must still emit them (they
-// are real RLP fields, see `protocol::BlockHeader::OpHeaderConst` -- the OP capability never
-// hardcodes a value, the caller supplies the constant).
+// are real RLP fields — the header carries them via uncleHash()/difficulty()/nonce(),
+// populated by applyOpHeaderConstants).
 //
 // Values are byte-identical to the two other places in this repo that pin them:
 // `bcos-evm/test/opstack/EthBlockHeaderTest.cpp`'s `kEmptyOmmersHash`/`kPosNonce` (golden-
@@ -87,10 +87,12 @@ const bcos::h256 c_opEmptyRequestsHash{
     std::string{"0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}};
 }  // namespace
 
-bcos::protocol::BlockHeader::OpHeaderConst bcos::engine::detail::opHeaderConst()
+void bcos::engine::detail::applyOpHeaderConstants(bcos::protocol::BlockHeader& header)
 {
-    return bcos::protocol::BlockHeader::OpHeaderConst{
-        .ommersHash = c_emptyOmmersHash, .difficulty = bcos::u256(0), .nonce = c_posNonce};
+    // Post-merge OP chain constants: ommersHash = keccak256(rlp([])), difficulty = 0, nonce = 0.
+    header.setUncleHash(c_emptyOmmersHash);
+    header.setDifficulty(bcos::u256(0));
+    header.setNonce(c_posNonce);
 }
 
 std::string bcos::engine::detail::encodePayloadSequence(std::uint64_t value)
@@ -561,9 +563,9 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot)
 {
-    // 21 fields, 18 of which land in the FISCO BlockHeader (tars, PR #5385); the 3 post-merge
-    // constants (ommersHash/difficulty/nonce) are injected via protocol::BlockHeader's
-    // OpHeaderConst (see opHeaderConst). Field sources: 17 verbatim from the payload (extraData
+    // 21 fields, all of which land in the FISCO BlockHeader (tars, PR #5385); the 3 post-merge
+    // constants (ommersHash/difficulty/nonce) via applyOpHeaderConstants (read back by
+    // encodeOpHeader/opHeaderHash). Field sources: 17 verbatim from the payload (extraData
     // kept "as-is", never re-derived), 1 caller-derived transactionsRoot (the payload has no such
     // field), constants at the top of this file. timestamp is stored in milliseconds per FISCO
     // convention (blockHash/RLP/execution always use seconds; tars storage uses milliseconds).
@@ -595,5 +597,8 @@ bcos::protocol::BlockHeader::Ptr bcos::engine::detail::rebuildOpEthHeader(
     header->setExcessBlobGas(bcos::u256(0));
     header->setParentBeaconBlockRoot(parentBeaconBlockRoot);
     header->setRequestsHash(c_opEmptyRequestsHash);
+    // The 3 post-merge constants (uncleHash/difficulty/nonce) — read back by
+    // encodeOpHeader/opHeaderHash.
+    applyOpHeaderConstants(*header);
     return header;
 }

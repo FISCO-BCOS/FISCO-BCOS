@@ -12,7 +12,7 @@ target_include_directories(opstack-executor PUBLIC
     $<INSTALL_INTERFACE:include/opstack-executor>)
 target_link_libraries(opstack-executor PUBLIC
     bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol
-    ledger evmone::evmone intx::intx TBB::tbb)
+    ledger evmone::evmone intx::intx TBB::tbb rlp-protocol)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 
 if (TESTS)

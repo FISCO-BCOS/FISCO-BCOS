@@ -537,7 +537,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     auto const blockNumberStr = boost::lexical_cast<std::string>(header->number());
     auto& hashImpl = *f.blockFactory->cryptoSuite()->hashImpl();
     auto view = f.multiLayerStorage.fork();
-    const auto expectedBlockHash = header->opHeaderHash(bcos::engine::detail::opHeaderConst());
+    const auto expectedBlockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
 
     // 1. SYS_NUMBER_2_HASH[number] = blockHash (announced header opHeaderHash, commit hook key).
     auto number2Hash = bcos::task::syncWait(

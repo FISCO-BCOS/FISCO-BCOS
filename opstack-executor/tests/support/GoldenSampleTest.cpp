@@ -31,12 +31,14 @@ BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
     auto header = w6test::decodeGoldenHeader(sample);
     BOOST_REQUIRE(header != nullptr);
-    // decodeOpHeader is encodeOpHeader's strict inverse; the roundtrip must be byte-identical
-    auto c = bcos::engine::detail::opHeaderConst();
-    BOOST_CHECK(
-        header->encodeOpHeader(c) == bcos::fromHex(sample.golden["encodedHeaderHex"].asString()));
-    // opHeaderHash = keccak256(encodeOpHeader()) == golden.blockHash
-    BOOST_CHECK_EQUAL(header->opHeaderHash(c).hex(),
+    // Byte-equivalence gate: EthBlockHeader::rlpEncode must reproduce the golden encodedHeaderHex
+    // (the golden was pinned against the former BlockHeader::encodeOpHeader — same 21-field order
+    // + NON_ETH ms→s /1000). decodeTarsHeader is the strict inverse; the roundtrip must match.
+    bcos::bytes encoded;
+    bcos::protocol::EthBlockHeader(*header).rlpEncode(encoded);
+    BOOST_CHECK(encoded == bcos::fromHex(sample.golden["encodedHeaderHex"].asString()));
+    // computeHash = keccak256(rlpEncode) == golden.blockHash
+    BOOST_CHECK_EQUAL(bcos::protocol::EthBlockHeader::computeHash(*header).hex(),
         std::string(sample.golden["blockHash"].asString()).substr(2));
 }
 
@@ -60,7 +62,8 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
     BOOST_CHECK(ep["withdrawals"].isArray());
     BOOST_CHECK_EQUAL(ep["withdrawals"].size(), 0);
     BOOST_CHECK(ep["timestamp"].asString().size() >= 3);  // "0x..."
-    // rawTransactions go into transactions verbatim (parse-layer decode is fault-tolerant; raw is always retained)
+    // rawTransactions go into transactions verbatim (parse-layer decode is fault-tolerant; raw is
+    // always retained)
     BOOST_CHECK_EQUAL(ep["transactions"].size(), 1);  // jovian_deposit_only has 1 deposit
 }
 
@@ -121,8 +124,8 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
     }
     auto golden = basenameSet(OP_T8N_GOLDEN_ENGINE_DIR, ".golden.json");
 
-    BOOST_CHECK_MESSAGE(
-        manifest == vectors, "manifest.txt vs vectors/ basename sets mismatch (missing/orphan/drifted)");
+    BOOST_CHECK_MESSAGE(manifest == vectors,
+        "manifest.txt vs vectors/ basename sets mismatch (missing/orphan/drifted)");
     // golden/engine is a subset of the engine-gate golden ritual: the line-B
     // (precompile-matrix) golden extension is a recorded deferred obligation (the
     // differential gate does not consume golden/, does not block acceptance), so vectors

@@ -51,6 +51,7 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>  // TransactionSubmitResults(Ptr)
 #include <bcos-ledger/LedgerMethods.h>  // getCurrentBlockNumber / getBlockData CPO tag_invoke
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>  // serial per-tx scheduler (Task 4)
@@ -495,10 +496,10 @@ private:
     }
 
     /// Fast-path cache: a pending block at the same height whose announced hash equals the
-    /// incoming header's opHeaderHash is a resend (e.g. after a failed commit) — serve the cached
-    /// executedHeader without re-executing. Block number alone is not unique for an OP block: a
-    /// resend carrying a DIFFERENT block at the same height must not hit the stale header, or the
-    /// new payload would be reported VALID without execution — forking the chain.
+    /// incoming header's EthBlockHeader hash is a resend (e.g. after a failed commit) — serve the
+    /// cached executedHeader without re-executing. Block number alone is not unique for an OP
+    /// block: a resend carrying a DIFFERENT block at the same height must not hit the stale
+    /// header, or the new payload would be reported VALID without execution — forking the chain.
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
         protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
     {
@@ -508,8 +509,7 @@ private:
             return std::nullopt;
         }
         if (m_pending->announcedBlockHash !=
-            announcedHeader.opHeaderHash(bcos::protocol::BlockHeader::OpHeaderConst{
-                .ommersHash = c_emptyOmmersHash, .difficulty = bcos::u256(0), .nonce = c_posNonce}))
+            bcos::protocol::EthBlockHeader::computeHash(announcedHeader))
         {
             OP_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height " << number
                                    << "; ignoring cache and re-executing";
@@ -658,11 +658,11 @@ private:
                 "raw tx decode or block-level consensus fault");
         }
 
-        // Announced block hash stashed for the commit hook (opHeaderHash on the executed header
-        // would throw std::bad_optional_access — its optional fields are incomplete).
+        // Announced block hash stashed for the commit hook (EthBlockHeader::computeHash on the
+        // executed header would throw std::bad_optional_access — its optional fields are
+        // incomplete).
         bcos::crypto::HashType announcedBlockHash =
-            header.opHeaderHash(bcos::protocol::BlockHeader::OpHeaderConst{
-                .ommersHash = c_emptyOmmersHash, .difficulty = bcos::u256(0), .nonce = c_posNonce});
+            bcos::protocol::EthBlockHeader::computeHash(header);
         co_return ExecuteOutcome{std::move(result), announcedBlockHash};
     }
 
@@ -928,11 +928,6 @@ private:
         co_return receipt;
     }
 
-    // 3 post-merge OP header constants for the commit's opHeaderHash (the engine injects them via
-    // detail::opHeaderConst(); opstack-executor does not link engine).
-    static const bcos::h256 c_emptyOmmersHash;
-    static const bcos::h64 c_posNonce;
-
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     uint64_t m_chainId;
@@ -955,10 +950,5 @@ private:
     std::optional<PendingBlock> m_pending;
 };
 
-template <class MultiLayerStorage>
-const bcos::h256 OpScheduler<MultiLayerStorage>::c_emptyOmmersHash{
-    std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}};
-template <class MultiLayerStorage>
-const bcos::h64 OpScheduler<MultiLayerStorage>::c_posNonce{std::string{"0x0000000000000000"}};
 
 }  // namespace bcos::executor_v1::opstack

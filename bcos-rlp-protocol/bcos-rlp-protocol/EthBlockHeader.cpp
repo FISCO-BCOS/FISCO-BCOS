@@ -43,6 +43,14 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
     return nullptr;
 }
 
+bcos::crypto::HashType EthBlockHeader::computeHash(const bcos::protocol::BlockHeader& header)
+{
+    EthBlockHeader ethHeader(header);
+    bcos::bytes encoded;
+    ethHeader.rlpEncode(encoded);
+    return bcos::crypto::keccak256Hash(bcos::ref(encoded));
+}
+
 bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
 {
@@ -131,6 +139,68 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     bcos::bytes reencoded;
     ethHeader.rlpEncode(reencoded);
     header->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(reencoded)));
+    return nullptr;
+}
+
+bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
+    bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
+{
+    if (header == nullptr)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeaderType),
+            "EthBlockHeader: header is null");
+    }
+    header->clear();
+
+    EthBlockHeader ethHeader;
+    if (auto err = ethHeader.rlpDecode(_data))
+    {
+        return err;
+    }
+
+    // Same field writes as toTarsHeader but WITHOUT validateHeader — usable for FISCO-native/OP
+    // (NON_ETH) headers that validateHeader rejects. For NON_ETH the RLP timestamp is SECONDS and
+    // the FISCO header stores MILLISECONDS, so ×1000 (ETH-version headers already carry seconds).
+    header->setParentInfo(ethHeader.data().parentInfo);
+    header->setCoinbase(ethHeader.data().coinbase);
+    header->setUncleHash(ethHeader.data().uncleHash);
+    header->setStateRoot(ethHeader.data().stateRoot);
+    header->setTxsRoot(ethHeader.data().txsRoot);
+    header->setReceiptsRoot(ethHeader.data().receiptsRoot);
+    header->setDifficulty(ethHeader.data().difficulty);
+    header->setGasLimit(ethHeader.data().gasLimit);
+    header->setGasUsed(ethHeader.data().gasUsed);
+    header->setNumber(ethHeader.data().number);
+    header->setTimestamp(ethHeader.data().timestamp * 1000);  // NON_ETH RLP seconds -> ms
+    header->setPrevRandao(ethHeader.data().prevRandao);
+    header->setNonce(ethHeader.data().nonce);
+    header->setExtraData(ethHeader.data().extraData);
+    header->setLogsBloom(
+        bcos::bytesConstRef(ethHeader.data().logsBloom.data(), ethHeader.data().logsBloom.size()));
+    if (ethHeader.data().baseFee.has_value())
+    {
+        header->setBaseFee(*ethHeader.data().baseFee);
+    }
+    if (ethHeader.data().withdrawalsHash.has_value())
+    {
+        header->setWithdrawalsRoot(*ethHeader.data().withdrawalsHash);
+    }
+    if (ethHeader.data().blobGasUsed.has_value())
+    {
+        header->setBlobGasUsed(*ethHeader.data().blobGasUsed);
+    }
+    if (ethHeader.data().excessBlobGas.has_value())
+    {
+        header->setExcessBlobGas(*ethHeader.data().excessBlobGas);
+    }
+    if (ethHeader.data().parentBeaconRoot.has_value())
+    {
+        header->setParentBeaconBlockRoot(*ethHeader.data().parentBeaconRoot);
+    }
+    if (ethHeader.data().requestsHash.has_value())
+    {
+        header->setRequestsHash(*ethHeader.data().requestsHash);
+    }
     return nullptr;
 }
 
@@ -368,11 +438,16 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
 
 void EthBlockHeader::rlpEncode(bcos::bytes& out) const
 {
+    // FISCO-native / OP headers (EthBlockVersion::NON_ETH) store the timestamp in MILLISECONDS;
+    // the Ethereum RLP field is SECONDS — /1000 applies only to those (ETH-version headers
+    // already carry seconds, e.g. via EthBlockHeader::toTarsHeader's passthrough).
+    const auto rlpTimestamp =
+        m_version == EthBlockVersion::NON_ETH ? m_data.timestamp / 1000 : m_data.timestamp;
     codec::rlp::encode(out, m_data.parentInfo.blockHash, m_data.uncleHash, m_data.coinbase,
         m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot,
         bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()), m_data.difficulty,
         static_cast<uint64_t>(m_data.number), m_data.gasLimit, m_data.gasUsed,
-        static_cast<uint64_t>(m_data.timestamp), m_data.extraData, m_data.prevRandao, m_data.nonce,
+        static_cast<uint64_t>(rlpTimestamp), m_data.extraData, m_data.prevRandao, m_data.nonce,
         m_data.baseFee, m_data.withdrawalsHash, m_data.blobGasUsed, m_data.excessBlobGas,
         m_data.parentBeaconRoot, m_data.requestsHash);
 }

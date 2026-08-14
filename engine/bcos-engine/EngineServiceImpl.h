@@ -46,6 +46,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
@@ -144,17 +145,18 @@ std::optional<std::string> validateOpNewPayloadRequest(
 /// `gasUsed()`, `blobGasUsed()`, `baseFee()` (optional fields must use `.value()`).
 bcos::u256 calcOpBaseFee(const bcos::protocol::BlockHeader& parent, bool parentIsJovian);
 
-/// The OP header's 3 post-merge constants (ommersHash/difficulty/nonce) — the values live in
-/// EngineServiceImpl.cpp's anonymous namespace; this accessor lets the engine's step-2 blockHash
-/// check and the test seal helpers share one source. `BlockHeader::OpHeaderConst` is the carrier
-/// the protocol::BlockHeader OP capability takes.
-bcos::protocol::BlockHeader::OpHeaderConst opHeaderConst();
+/// Populate the OP header's 3 post-merge constants (ommersHash/difficulty/nonce) into a header —
+/// the values live in EngineServiceImpl.cpp's anonymous namespace. The header's own
+/// uncleHash()/difficulty()/nonce() accessors then feed the rlp-protocol EthBlockHeader bridge
+/// (EthBlockHeader::computeHash / rlpEncode). Called by rebuildOpEthHeader; test seal helpers
+/// share the same source.
+void applyOpHeaderConstants(bcos::protocol::BlockHeader& header);
 
 /// Reconstructs the 21-field ETH/OP header from the payload as a FISCO `protocol::BlockHeader`
-/// (tars) with 18 fields filled; the 3 post-merge constants are
-/// supplied separately via `opHeaderConst()` when encoding/hashing. `opHeaderHash` (codec) is what
-/// the payload's `blockHash` is checked against, and `header->encode()` (tars) is what the block
-/// registration stores. Precondition: `validateOpNewPayloadRequest` accepted the request.
+/// (tars) with all 21 fields filled (the 3 post-merge constants via applyOpHeaderConstants).
+/// `opHeaderHash` (codec) is what the payload's `blockHash` is checked against, and
+/// `header->encode()` (tars) is what the block registration stores. Precondition:
+/// `validateOpNewPayloadRequest` accepted the request.
 bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
@@ -900,11 +902,13 @@ private:
         const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
         const auto ethHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
             payload, transactionsRoot, *request.parentBeaconBlockRoot);
-        // OP hash = keccak(RLP(21 fields)), via the protocol::BlockHeader OP capability
-        // (opHeaderConst injects the 3 post-merge constants). Must not use BlockHeader::hash() --
-        // an empty tars dataHash throws EmptyBlockHeaderHash, and if the factory back-fills it the
-        // result would be the tars-order hash (a known pitfall).
-        if (ethHeader->opHeaderHash(detail::opHeaderConst()) != payload.blockHash)
+        // OP hash = keccak(RLP(21 fields)), via the rlp-protocol EthBlockHeader bridge (the 3
+        // post-merge constants are populated into the header by rebuildOpEthHeader /
+        // applyOpHeaderConstants; EthBlockHeader::rlpEncode applies the ms→s /1000 for NON_ETH).
+        // Must not use BlockHeader::hash() -- an empty tars dataHash throws EmptyBlockHeaderHash,
+        // and if the factory back-fills it the result would be the tars-order hash (a known
+        // pitfall).
+        if (bcos::protocol::EthBlockHeader::computeHash(*ethHeader) != payload.blockHash)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("blockHash does not match the reconstructed block header"));
