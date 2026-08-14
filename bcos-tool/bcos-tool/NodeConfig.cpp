@@ -32,8 +32,6 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <json/forwards.h>
 #include <json/reader.h>
 #include <json/value.h>
@@ -49,7 +47,6 @@
 #include <cctype>
 #include <charconv>
 #include <cstdint>
-#include <limits>
 #include <set>
 #include <string_view>
 #include <thread>
@@ -207,8 +204,6 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
 
     // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
     loadAllocs(_genesisConfig);
-    // === A3: B0 full Ethereum genesis header from the merged genesis artifact ===
-    loadEthGenesisHeader(_genesisConfig);
     validateL2Invariants();
 }
 
@@ -306,103 +301,6 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
     }
 }
 
-void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig)
-{
-    m_genesisConfig.m_ethGenesisHeader.reset();
-    auto section = _genesisConfig.get_child_optional("eth_genesis_header");
-    if (!section)
-    {
-        return;  // legacy / non-L2 chain: no Ethereum genesis header
-    }
-
-    constexpr std::string_view sectionName = "eth_genesis_header";
-    // Every field of the artifact header is REQUIRED — a missing key means the
-    // artifact-to-config conversion is broken, and a defaulted field would
-    // silently change the genesis hash. Fail on the first missing key.
-    auto requireField = [&](std::string const& key) -> std::string {
-        auto value = section->get_optional<std::string>(key);
-        if (!value || value->empty())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("[" + std::string(sectionName) + "]." + key +
-                                                   " is required (all 22 eth genesis header "
-                                                   "fields must come from the genesis artifact)"));
-        }
-        return *value;
-    };
-    auto hashField = [&](std::string const& key) -> crypto::HashType {
-        auto value = requireField(key);
-        requireHexField(std::string(sectionName), key, value, 64, false);
-        return crypto::HashType(value);
-    };
-    auto quantityField = [&](std::string const& key) -> u256 {
-        auto value = requireField(key);
-        requireHexField(std::string(sectionName), key, value, 0, false);
-        // u256's fixed-width backend silently truncates over-wide input; cap
-        // the hex body at 64 chars (32 bytes) so an oversized quantity is
-        // named here instead of surfacing as a baffling hash mismatch.
-        if (value.size() > 2 + 64)
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment(
-                    "[" + std::string(sectionName) + "]." + key + " exceeds 32 bytes: " + value));
-        }
-        return u256(value);
-    };
-
-    ledger::EthGenesisHeader header;
-    header.m_parentHash = hashField("parent_hash");
-    header.m_sha3Uncles = hashField("sha3_uncles");
-    auto miner = requireField("miner");
-    requireHexField(std::string(sectionName), "miner", miner, 40, false);
-    header.m_miner = Address(miner);
-    header.m_stateRoot = hashField("state_root");
-    header.m_transactionsRoot = hashField("transactions_root");
-    header.m_receiptsRoot = hashField("receipts_root");
-    auto logsBloom = requireField("logs_bloom");
-    requireHexField(std::string(sectionName), "logs_bloom", logsBloom, 512, false);
-    header.m_logsBloom = fromHex(logsBloom);
-    header.m_difficulty = quantityField("difficulty");
-    auto number = quantityField("number");
-    if (number != 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[eth_genesis_header].number must be 0x0 (genesis block)"));
-    }
-    header.m_number = 0;
-    header.m_gasLimit = quantityField("gas_limit");
-    header.m_gasUsed = quantityField("gas_used");
-    auto timestamp = quantityField("timestamp");
-    if (timestamp > u256(std::numeric_limits<int64_t>::max()))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("[eth_genesis_header].timestamp exceeds int64"));
-    }
-    header.m_timestamp = static_cast<int64_t>(timestamp);
-    auto extraData = requireField("extra_data");
-    requireHexField(std::string(sectionName), "extra_data", extraData, 0, true);
-    header.m_extraData = fromHex(extraData);
-    header.m_mixHash = hashField("mix_hash");
-    auto nonce = requireField("nonce");
-    requireHexField(std::string(sectionName), "nonce", nonce, 16, false);
-    header.m_nonce = h64(nonce);
-    header.m_baseFeePerGas = quantityField("base_fee_per_gas");
-    header.m_withdrawalsRoot = hashField("withdrawals_root");
-    header.m_blobGasUsed = quantityField("blob_gas_used");
-    header.m_excessBlobGas = quantityField("excess_blob_gas");
-    header.m_parentBeaconBlockRoot = hashField("parent_beacon_block_root");
-    header.m_requestsHash = hashField("requests_hash");
-    // The artifact's own hash claim. Ledger recomputes keccak256(rlp(header))
-    // from the 21 fields above and refuses to build genesis on mismatch, so a
-    // stale or hand-edited section cannot silently mint a different B0.
-    header.m_hash = hashField("hash");
-
-    m_genesisConfig.m_ethGenesisHeader = std::move(header);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadEthGenesisHeader")
-                         << LOG_KV("hash", m_genesisConfig.m_ethGenesisHeader->m_hash.hex())
-                         << LOG_KV("timestamp", m_genesisConfig.m_ethGenesisHeader->m_timestamp);
-}
-
 void NodeConfig::validateL2Invariants()
 {
     auto const& genesis = m_genesisConfig;
@@ -424,24 +322,6 @@ void NodeConfig::validateL2Invariants()
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[alloc.*] section requires feature_l2_ethereum_compat enabled "
                                   "in [features]"));
-    }
-    // The Ethereum B0 header and L2 mode are bound both ways: a pbft chain
-    // with an [eth_genesis_header] section is a mis-assembled config, and an
-    // L2 chain WITHOUT the section would mint a Tars-hashed B0 that no
-    // op-node/op-reth can ever match — fail fast in both directions.
-    if (!l2Enabled && genesis.m_ethGenesisHeader.has_value())
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("[eth_genesis_header] section requires "
-                                               "feature_l2_ethereum_compat enabled in [features]"));
-    }
-    if (l2Enabled && !genesis.m_ethGenesisHeader.has_value())
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "feature_l2_ethereum_compat requires an [eth_genesis_header] section in "
-                "config.genesis (all 22 fields from the merged genesis artifact); an L2 chain "
-                "without it would build a non-Ethereum genesis block"));
     }
 }
 
@@ -839,27 +719,14 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     const std::string jwtSecretFile =
         _pt.get<std::string>("op_engine_rpc.jwt_secret_file", "conf/op-engine/jwt.hex");
     const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
-    // test-only escape hatch, see Initializer's executor-version guard
-    const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
 
     m_enableOpEngineRpc = enableOpEngineRpc;
-    // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
-    // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
-    // order and also when a loader is invoked on its own.
-    if (m_enableOpEngineRpc && m_enableSingleNodeConsensus)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
-                "exclusive: both drive the same EngineService; enable at most one"));
-    }
     m_opEngineRpcListenIP = listenIP;
     m_opEngineRpcListenPort = listenPort;
     m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
     m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
     m_opEngineJwtSecretFile = jwtSecretFile;
     m_opEngineClockSkewSecs = clockSkewSecs;
-    m_opEngineAllowV1Executor = allowV1Executor;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
                          << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
@@ -867,8 +734,7 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
                          << LOG_KV("jwtSecretFile", jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", clockSkewSecs)
-                         << LOG_KV("unsafeAllowV1Executor", allowV1Executor);
+                         << LOG_KV("clockSkewSecs", clockSkewSecs);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -1057,6 +923,26 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                                   "Please set chain.block_limit to positive and less than " +
                                   std::to_string(MAX_BLOCK_LIMIT) + " !"));
     }
+    // OP-Stack fork activation timestamps (spec D3). get_optional: a missing key in the genesis
+    // pass must NOT reset a value already loaded from config.ini (loadChainConfig is called from
+    // both loadConfig and loadGenesisConfig).
+    if (auto t = _pt.get_optional<uint64_t>("chain.isthmus_time"))
+    {
+        m_isthmusTime = *t;
+    }
+    if (auto t = _pt.get_optional<uint64_t>("chain.jovian_time"))
+    {
+        m_jovianTime = *t;
+    }
+    if (m_isthmusTime > m_jovianTime)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "chain.isthmus_time must be <= chain.jovian_time (OP-Stack fork order)"));
+    }
+    NodeConfig_LOG(INFO) << LOG_DESC("loadChainConfig op-fork")
+                         << LOG_KV("isthmusTime", m_isthmusTime)
+                         << LOG_KV("jovianTime", m_jovianTime);
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadChainConfig")
                          << LOG_KV("smCrypto", m_genesisConfig.m_smCrypto)
                          << LOG_KV("chainId", m_genesisConfig.m_chainID)
@@ -2313,14 +2199,19 @@ bool NodeConfig::enableOpEngineRpc() const
     return m_enableOpEngineRpc;
 }
 
-bool NodeConfig::enableSingleNodeConsensus() const
+bool NodeConfig::opEngineAllowV1Executor() const
 {
-    return m_enableSingleNodeConsensus;
+    return m_opEngineAllowV1Executor;
 }
 
 bool NodeConfig::engineDrivenBlockProduction() const
 {
     return m_enableSingleNodeConsensus || m_enableOpEngineRpc;
+}
+
+bool NodeConfig::enableSingleNodeConsensus() const
+{
+    return m_enableSingleNodeConsensus;
 }
 
 uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
@@ -2371,11 +2262,6 @@ uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
 const std::string& NodeConfig::opEngineJwtSecretFile() const
 {
     return m_opEngineJwtSecretFile;
-}
-
-bool NodeConfig::opEngineAllowV1Executor() const
-{
-    return m_opEngineAllowV1Executor;
 }
 
 int32_t NodeConfig::opEngineClockSkewSecs() const
@@ -2719,37 +2605,6 @@ std::string bcos::tool::generateGenesisData(
             {
                 ss << feature.flag << ":" << feature.enable << '\n';
             }
-        }
-        // A3: the eth genesis header is part of the genesis pin. Emitted only
-        // when present, so every legacy chain's genesis string stays
-        // byte-identical to before this change (node-admission compatibility).
-        if (genesisConfig.m_ethGenesisHeader.has_value())
-        {
-            auto const& ethHeader = *genesisConfig.m_ethGenesisHeader;
-            ss << "[ethGenesisHeader]" << '\n'
-               << "parent_hash:" << ethHeader.m_parentHash.hexPrefixed() << '\n'
-               << "sha3_uncles:" << ethHeader.m_sha3Uncles.hexPrefixed() << '\n'
-               << "miner:" << ethHeader.m_miner.hexPrefixed() << '\n'
-               << "state_root:" << ethHeader.m_stateRoot.hexPrefixed() << '\n'
-               << "transactions_root:" << ethHeader.m_transactionsRoot.hexPrefixed() << '\n'
-               << "receipts_root:" << ethHeader.m_receiptsRoot.hexPrefixed() << '\n'
-               << "logs_bloom:" << toHexStringWithPrefix(ethHeader.m_logsBloom) << '\n'
-               << "difficulty:" << ethHeader.m_difficulty << '\n'
-               << "number:" << ethHeader.m_number << '\n'
-               << "gas_limit:" << ethHeader.m_gasLimit << '\n'
-               << "gas_used:" << ethHeader.m_gasUsed << '\n'
-               << "timestamp:" << ethHeader.m_timestamp << '\n'
-               << "extra_data:" << toHexStringWithPrefix(ethHeader.m_extraData) << '\n'
-               << "mix_hash:" << ethHeader.m_mixHash.hexPrefixed() << '\n'
-               << "nonce:" << ethHeader.m_nonce.hexPrefixed() << '\n'
-               << "base_fee_per_gas:" << ethHeader.m_baseFeePerGas << '\n'
-               << "withdrawals_root:" << ethHeader.m_withdrawalsRoot.hexPrefixed() << '\n'
-               << "blob_gas_used:" << ethHeader.m_blobGasUsed << '\n'
-               << "excess_blob_gas:" << ethHeader.m_excessBlobGas << '\n'
-               << "parent_beacon_block_root:" << ethHeader.m_parentBeaconBlockRoot.hexPrefixed()
-               << '\n'
-               << "requests_hash:" << ethHeader.m_requestsHash.hexPrefixed() << '\n'
-               << "hash:" << ethHeader.m_hash.hexPrefixed() << '\n';
         }
 
         size_t j = 0;
