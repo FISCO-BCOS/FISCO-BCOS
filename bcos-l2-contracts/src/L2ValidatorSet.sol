@@ -7,10 +7,13 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 
 /// @title L2ValidatorSet
 /// @notice On-chain validator set predeploy for FISCO-BCOS L2 mode at
-///         0x42000000000000000000000000000000000000C1.
+///         0x43000000000000000000000000000000000000C1.
 /// @dev    Access control / upgradeability use OZ `OwnableUpgradeable` behind an
 ///         ERC-1967 proxy administered by ProxyAdmin, consistent with SystemConfig
-///         and the vendored OP predeploys.
+///         and the vendored OP predeploys. Two independent roles in two
+///         independent slots: the ERC-1967 admin slot holds ProxyAdmin (upgrade
+///         authority only), `Ownable.owner` (slot 51) holds the L2 governance
+///         entity that may mutate the validator set.
 ///
 ///         Membership + enumeration use OZ `EnumerableSet.AddressSet` (O(1)
 ///         add/remove/contains, swap-pop removal); the per-validator record hangs
@@ -31,7 +34,8 @@ contract L2ValidatorSet is IL2ValidatorSet, OwnableUpgradeable {
     EnumerableSet.AddressSet private _validatorSet;
     mapping(address => Validator) private _validatorByAddr;
 
-    /// @notice Set the owner (ProxyAdmin in production) and install the initial
+    /// @notice Set the owner (the L2 governance entity — NOT the ProxyAdmin,
+    ///         which only holds the ERC-1967 admin slot) and install the initial
     ///         validator set. Not run at genesis — see contract @dev note.
     function initialize(address[] memory addrs, Validator[] memory vals, address owner_)
         external

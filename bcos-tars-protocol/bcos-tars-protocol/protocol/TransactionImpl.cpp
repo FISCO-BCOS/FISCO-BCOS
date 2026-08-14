@@ -23,6 +23,9 @@
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
 #include <bcos-codec/rlp/Web3Transaction.h>
+#include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -81,7 +84,7 @@ bcos::crypto::HashType bcostars::protocol::TransactionImpl::hash() const
     return hashResult;
 }
 
-static bcos::crypto::HashType recomputeWeb3CanonicalHash(
+bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
     bcos::bytesConstRef payload, bcos::bytesConstRef signature)
 {
     // Use the shared codec encoder (same path as RPC ingress txHash()) so typed /
@@ -91,6 +94,26 @@ static bcos::crypto::HashType recomputeWeb3CanonicalHash(
         BOOST_THROW_EXCEPTION(std::invalid_argument(
             "invalid Web3 signature length, expect 65, got " + std::to_string(signature.size())));
     }
+    // RLP encodes integers with no leading zeros, so trim r/s before re-emitting them (this is
+    // exactly what Web3Transaction::encode() does via getSignatureRef()).
+    auto trimLeadingZeros = [](bcos::bytesConstRef in) {
+        size_t offset = 0;
+        while (offset < in.size() && in[offset] == 0)
+        {
+            ++offset;
+        }
+        return in.getCroppedData(offset);
+    };
+    auto const r = trimLeadingZeros(signature.getCroppedData(0, 32));
+    auto const s = trimLeadingZeros(signature.getCroppedData(32, 32));
+    auto const yParity = static_cast<uint64_t>(signature[64]);
+
+    auto throwDecode = [](std::string_view stage) {
+        BCOS_LOG(INFO) << LOG_DESC("reassemble raw Web3 transaction: decode failed")
+                       << LOG_KV("stage", stage);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            std::string("reassemble raw Web3 transaction: decode failed at ").append(stage)));
+    };
     if (payload.empty()) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(std::invalid_argument("recompute canonical Web3 txHash: empty payload"));
@@ -126,8 +149,8 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // The recompute uses the shared codec (decodeFromPayload + txHash), cheap enough to always run.
     if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
-        auto const canonicalTxHash =
-            recomputeWeb3CanonicalHash(extraTransactionBytes(), signatureData());
+        auto const canonicalTxHash = bcos::crypto::keccak256Hash(
+            bcos::ref(reassembleWeb3RawTransaction(extraTransactionBytes(), signatureData())));
         m_inner()->extraTransactionHash.assign(canonicalTxHash.begin(), canonicalTxHash.end());
         return;
     }

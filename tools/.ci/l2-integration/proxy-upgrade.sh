@@ -17,8 +17,9 @@ set -euo pipefail
 # shellcheck source=tools/.ci/l2-integration/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# Expected ProxyAdmin owner. Default 0x0 matches the chain-config template's
-# system_config_owner placeholder; override per devnet genesis.
+# Expected ProxyAdmin owner. Default 0x0: the OP ProxyAdmin predeploy ships
+# with empty storage (owner slot 0 = zero address) until the op-deployer
+# alloc merge seeds it; override per devnet genesis.
 L2_PROXY_ADMIN_OWNER="${L2_PROXY_ADMIN_OWNER:-0x0000000000000000000000000000000000000000}"
 
 require_devnet

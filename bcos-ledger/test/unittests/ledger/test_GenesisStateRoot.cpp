@@ -42,7 +42,7 @@ GenesisConfig gsrBaseConfig()
     genesis.m_features.push_back(FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
     genesis.m_chainID = "901";
     genesis.m_groupID = "group0";
-    genesis.m_allocs.push_back(Alloc{.address = "0x42000000000000000000000000000000000000c0",
+    genesis.m_allocs.push_back(Alloc{.address = "0x43000000000000000000000000000000000000c0",
         .balance = u256(1000),
         .nonce = "1",
         .code = "0x6080604052",
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(ZeroStorageSlotIgnored)
 BOOST_AUTO_TEST_CASE(GoldenVector)
 {
     GenesisConfig genesis;
-    genesis.m_allocs.push_back(Alloc{.address = "0x42000000000000000000000000000000000000c0",
+    genesis.m_allocs.push_back(Alloc{.address = "0x43000000000000000000000000000000000000c0",
         .balance = u256(0),
         .nonce = "0",
         .code = "0x6080604052",

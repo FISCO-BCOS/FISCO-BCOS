@@ -158,6 +158,21 @@ static void setNonce(MapStateStorage& s, std::string_view sender, std::string no
 
 BOOST_AUTO_TEST_SUITE(MemPoolImplTest)
 
+BOOST_AUTO_TEST_CASE(add_rejects_blob_web3_transaction)
+{
+    // Second type-3 gate behind the RPC entry: a Web3 transaction whose signing payload
+    // carries the EIP-4844 type byte is rejected by the mempool itself.
+    MemPoolImpl pool;
+    auto tx = std::make_shared<TestTransactionImpl>();
+    tx->mutableInner().type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
+    bcos::bytes const blobPayload{0x03, 0x01, 0x02};
+    tx->mutableInner().extraTransactionBytes.assign(blobPayload.begin(), blobPayload.end());
+    tx->markClean();
+
+    BOOST_CHECK_THROW(
+        pool.add(std::vector{protocol::Transaction::Ptr(tx)}), InvalidBlobTransaction);
+}
+
 BOOST_AUTO_TEST_CASE(seal_single_sender_contiguous)
 {
     MemPoolImpl pool;

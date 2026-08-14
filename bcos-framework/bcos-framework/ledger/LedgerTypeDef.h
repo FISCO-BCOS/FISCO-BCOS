@@ -67,6 +67,9 @@ constexpr static std::string_view ENABLE_BALANCE_TRANSFER = magic_enum::enum_nam
 constexpr static std::string_view SYSTEM_KEY_EVMC_REVISION = magic_enum::enum_name(SystemConfig::evmc_revision);
 // system configuration for ethereum-executor excess blob gas (EIP-4844 blob base fee)
 constexpr static std::string_view SYSTEM_KEY_EXCESS_BLOB_GAS = magic_enum::enum_name(SystemConfig::excess_blob_gas);
+// A3: eth-genesis (L2) chains store the FISCO genesis pin here instead of in B0's
+// extraData — B0's extraData carries the genesis artifact bytes and enters the RLP hash.
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA = "eth_genesis_data";
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";

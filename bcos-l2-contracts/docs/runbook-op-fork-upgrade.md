@@ -39,9 +39,10 @@ writing:
   - `openzeppelin-contracts-upgradeable` `0a2cb9a445c365870ed7a8ab461b12acf3e27d63`
   - `solady` `502cc1ea718e6fa73b380635ee0868b0740595f0`
   - `solmate` `8f9b23f8838670afda0fd8983f2c41e8037ae6bc`
-- 11 entry-point predeploys (transitive closure built by `forge build` in
-  upstream's `packages/contracts-bedrock` root) are listed under
-  `[predeploys]` in `op-fork-pin.toml`.
+- The runtime OP predeploy set is asserted by the `expected_predeploys`
+  checklist in `tools/opstack-genesis/chain-config.template.yaml` (existence
+  + non-empty code against the op-deployer base allocs); `op-fork-pin.toml`
+  no longer enumerates source paths.
 
 CI step `Build pinned OP fork tree` runs `cd /tmp/op-fork/packages/contracts-bedrock && forge build`,
 so the OP fork is compiled by **its own** `foundry.toml` + remappings + solc
@@ -69,10 +70,10 @@ Update four blocks:
 
   Copy each `<path> <SHA>` pair into the corresponding `[deps]` entry.
 
-- `[predeploys]` list: only update if upstream added/removed/renamed an
-  entry-point predeploy at the new tag. The 11 we materialize at genesis is a
-  policy choice tied to FISCO-BCOS L2 spec §A6; check upstream's
-  `genesis.json` / predeploy address table before changing this list.
+- `expected_predeploys` checklist (chain-config template): only update if
+  upstream added/removed/renamed an entry-point predeploy at the new tag.
+  The set we rely on at genesis is a policy choice tied to FISCO-BCOS L2
+  spec §A6; check upstream's predeploy address table before changing it.
 
 ### 2. Trigger CI and read the drift gate
 
@@ -117,8 +118,8 @@ not diff stably.
 
 - [ ] `op-fork-pin.toml` updated: `tag`, `commit`, `date_pinned`, all 4
       `[deps]` SHAs
-- [ ] `[predeploys]` list reviewed against upstream's predeploy address table
-      at the new tag (no surprise additions/renames)
+- [ ] `expected_predeploys` checklist reviewed against upstream's predeploy
+      address table at the new tag (no surprise additions/renames)
 - [ ] `forge build` (both src/ and pinned OP fork) and `forge test` pass in CI
 - [ ] Storage-layout drift gate is green, or — if drift is real — a migration
       design doc and regenerated fixtures are included in this PR
