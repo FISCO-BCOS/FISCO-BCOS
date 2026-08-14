@@ -25,18 +25,18 @@ echo "$OUT"
 KNOWN=$(echo "$OUT" | grep -c 'KNOWN-DIVERGE' || true)
 SUMMARY=$(echo "$OUT" | grep 'single-path summary:' || echo "single-path summary: <absent>")
 
-if [ "$rc" -eq 0 ]; then
+if [ "${rc}" -eq 0 ]; then
   echo "PASS 全绿 exempt=$KNOWN | $SUMMARY"
   exit 0
 fi
-# 失败/崩溃区分（rc 免疫输出格式漂移）
-if [ "$rc" -ge 128 ]; then
-  echo "FAIL 测试二进制崩溃 signal=$((rc-128))；exempt=$KNOWN | $SUMMARY" >&2
+# 失败/崩溃区分（rc 免疫输出格式漂移）；先判 200（setup 错误），再判 >=128（信号崩溃）
+if [ "${rc}" -eq 200 ]; then
+  echo "FAIL 测试 setup 错误（filter 无匹配等）rc=200; $SUMMARY" >&2
+elif [ "${rc}" -ge 128 ]; then
+  echo "FAIL 测试二进制崩溃 signal=$((rc-128)); exempt=$KNOWN | $SUMMARY" >&2
   echo "$OUT" | grep -E 'Segmentation fault|Abort|Signal' | head -5 >&2 || true
-elif [ "$rc" -eq 200 ]; then
-  echo "FAIL 测试 setup 错误（filter 无匹配等）rc=200；$SUMMARY" >&2
 else
-  echo "FAIL 有测试失败 rc=$rc；exempt=$KNOWN | $SUMMARY" >&2
+  echo "FAIL 有测试失败 rc=${rc}; exempt=$KNOWN | $SUMMARY" >&2
   echo "$OUT" | grep -E 'error: in|failures are detected' | head -20 >&2 || true
 fi
 exit 1
