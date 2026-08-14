@@ -1319,6 +1319,9 @@ private:
             .withdrawals = std::nullopt,
             .blobGasUsed = std::nullopt,
             .excessBlobGas = std::nullopt,
+            .blockAccessList = std::nullopt,
+            .slotNumber = std::nullopt,
+            .rawTransactions = std::nullopt,
             .withdrawalsRoot = std::nullopt,
         };
 

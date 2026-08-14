@@ -29,9 +29,9 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
-#include <engine/bcos-engine/EngineServiceImpl.h>  // detail::opEnvelopeToTars (tests link engine)
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>  // per-tx loop (Task 5)
 #include <bcos-utilities/IOServicePool.h>
+#include <engine/bcos-engine/EngineServiceImpl.h>  // detail::opEnvelopeToTars (tests link engine)
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
 #include <limits>
@@ -197,8 +197,8 @@ bcos::evm::engine::OpExecuteBlockResult runSharedPath(MutableStorage& storage,
     std::vector<bcos::protocol::Transaction::ConstPtr> const& transactions,
     std::vector<bcos::evm::opstack::DepositTx> const& deposits,
     bcos::evm::opstack::OpForkConfig const& cfg,
-    bcos::executor_v1::opstack::OpstackExecutor& executor,
-    bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
+    bcos::executor_v1::opstack::OpstackExecutor& executor, bcos::crypto::Hash::Ptr const& hashImpl,
+    bcos::IOServicePool::Ptr const& ioServicePool)
 {
     namespace detail = bcos::evm::engine::detail;
     bcos::ledger::LedgerConfig execLedgerConfig;
@@ -207,23 +207,23 @@ bcos::evm::engine::OpExecuteBlockResult runSharedPath(MutableStorage& storage,
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<detail::RecentBlockHashes<MutableStorage>> hashes;
-    bcos::evm::engine::preBlockOpSteps(storage, header, cfg, rawTxBytes, deposits, executor, hashImpl,
-        hashes, hashErr, daFootprintGasScalar);
-    bcos::executor_v1::opstack::OpBlockExecutionContext ctx{
+    bcos::evm::engine::preBlockOpSteps(storage, header, cfg, rawTxBytes, deposits, executor,
+        hashImpl, hashes, hashErr, daFootprintGasScalar);
+    bcos::executor_v1::opstack::OpBlockExecutionContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
-        .blockHashes = &*hashes, .chainId = kChainId,
+        .blockHashes = &*hashes,
+        .chainId = kChainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         ioServicePool, /*chunkSize=*/1, /*serial=*/true);
-    auto transactionsRefs = transactions |
-        ::ranges::views::transform(
-            [](bcos::protocol::Transaction::ConstPtr const& ptr) -> bcos::protocol::Transaction const& {
-                return *ptr;
-            });
+    auto transactionsRefs =
+        transactions |
+        ::ranges::views::transform([](bcos::protocol::Transaction::ConstPtr const& ptr)
+                                       -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         storage, executor, header, transactionsRefs, execLedgerConfig, ctx));
-    return bcos::evm::engine::finalizeOpBlockResult(executor, storage, header, execLedgerConfig, cfg,
-        receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr);
+    return bcos::evm::engine::finalizeOpBlockResult(executor, storage, header, execLedgerConfig,
+        cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr);
 }
 }  // namespace
 
@@ -267,8 +267,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{
         depFiscoTx, buildEip1559FiscoTx()};
 
-    auto result = runSharedPath(
-        storage, *header, rawTxBytes, transactions, deposits, cfg, executor, hashImpl, ioServicePool);
+    auto result = runSharedPath(storage, *header, rawTxBytes, transactions, deposits, cfg, executor,
+        hashImpl, ioServicePool);
 
     // System-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
     const auto sysBlk = detail::toBlockInfo(*header);
@@ -288,7 +288,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
 }
 
 /// Empty-block rejection: preBlockOpSteps with empty rawTxBytes → OpConsensusError (a
-/// std::runtime_error subclass). The retired runOpBlockInjection's empty-block guard lives here now.
+/// std::runtime_error subclass). The retired runOpBlockInjection's empty-block guard lives here
+/// now.
 BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
 {
     namespace op = bcos::evm::opstack;

@@ -608,7 +608,7 @@ private:
 
             // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
             // blockGasLeft via narrowU256ToU64 (silent-truncation guard, same as coCallLatest).
-            OpBlockExecutionContext ctx{
+            OpBlockExecutionContext ctx{.fee = {},
                 .blockGasLeft = static_cast<int64_t>(
                     detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft")),
                 .blockHashes = &*hashes,

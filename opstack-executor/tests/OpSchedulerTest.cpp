@@ -293,9 +293,9 @@ struct Fixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        scheduler(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger,
-            ioServicePool))
+        scheduler(
+            std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
+                kChainId, forkTimestamps, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -407,9 +407,9 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
 
 /// Direct execution probe (replaces the retired runOpBlockInjection, Task 5): assemble deposits +
 /// block-order transactions + OpstackExecutor, then drive the SAME shared path OpScheduler::execute
-/// uses — preBlockOpSteps → SchedulerSerialImpl(serial=true) → finalizeOpBlockResult — returning the
-/// OpExecuteBlockResult. The announced header is back-filled from this probe's commitments so the
-/// full executeBlock's six-way verify passes (equal by construction). preBlockOpSteps throws on
+/// uses — preBlockOpSteps → SchedulerSerialImpl(serial=true) → finalizeOpBlockResult — returning
+/// the OpExecuteBlockResult. The announced header is back-filled from this probe's commitments so
+/// the full executeBlock's six-way verify passes (equal by construction). preBlockOpSteps throws on
 /// block-level faults — the caller wraps the probe accordingly.
 bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
     bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxBytes)
@@ -451,20 +451,19 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<detail::RecentBlockHashes<ViewType>> hashes;
-    bcos::evm::engine::preBlockOpSteps(
-        view, header, cfg, rawTxBytes, deposits, executor, f.hashImpl, hashes, hashErr,
-        daFootprintGasScalar);
-    bcos::executor_v1::opstack::OpBlockExecutionContext ctx{
+    bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor,
+        f.hashImpl, hashes, hashErr, daFootprintGasScalar);
+    bcos::executor_v1::opstack::OpBlockExecutionContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
-        .blockHashes = &*hashes, .chainId = kChainId,
+        .blockHashes = &*hashes,
+        .chainId = kChainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
-    auto transactionsRefs = transactions |
-        ::ranges::views::transform(
-            [](bcos::protocol::Transaction::ConstPtr const& ptr) -> bcos::protocol::Transaction const& {
-                return *ptr;
-            });
+    auto transactionsRefs =
+        transactions |
+        ::ranges::views::transform([](bcos::protocol::Transaction::ConstPtr const& ptr)
+                                       -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, header, transactionsRefs, execLedgerConfig, ctx));
     return bcos::evm::engine::finalizeOpBlockResult(executor, view, header, execLedgerConfig, cfg,
