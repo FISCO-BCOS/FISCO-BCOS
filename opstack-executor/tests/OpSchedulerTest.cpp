@@ -19,6 +19,7 @@
 #include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
+#include <opstack-executor/Storage2StateHelpers.h>  // accountTableName (corrupt-slot seeding)
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -403,6 +404,28 @@ void fundCallAccount(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Pt
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
+/// Seed an account whose table carries a wrong-length storage slot row (32-byte key, 4-byte
+/// value). Storage2State::fetchAllStorage validates the slot value length (Storage2State.h:496-500)
+/// and throws std::length_error — the finalize bridge's visitAccounts (OpBlockExecute.h:170-177)
+/// hits it, so the block-level poison check (OpBlockExecute.h:178-183) rejects the block.
+void seedCorruptAccount(
+    MLS& mls, evmc::address const& addr, bcos::crypto::Hash::Ptr const& hashImpl)
+{
+    auto view = mls.fork();
+    view.newMutable();
+    bcos::ledger::account::EVMAccount account(view, addr, /*binaryAddress=*/false);
+    bcos::task::syncWait(account.create());
+    bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
+    bcos::task::syncWait(account.setNonce("0"));
+    bcos::task::syncWait(account.setBalance(bcos::u256(0)));
+    bcos::storage::Entry e;
+    e.set(std::string("abcd"));  // 4 bytes — not a valid 32-byte slot value
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::evm::evmstate::accountTableName(addr), std::string(32, '\x01')},
+        std::move(e)));
+    bcos::task::syncWait(mls.mergeView(std::move(view)));
+}
+
 /// Direct execution probe (replaces the retired runOpBlockInjection, Task 5): assemble deposits +
 /// block-order transactions + OpstackExecutor, then drive the SAME shared path OpScheduler::execute
 /// uses — preBlockOpSteps → SchedulerSerialImpl(serial=true) → finalizeOpBlockResult — returning
@@ -722,6 +745,55 @@ BOOST_AUTO_TEST_CASE(ClassifyExceptionThreeWayMapping)
     auto unknown = f.scheduler->classifyException(
         std::make_exception_ptr(std::runtime_error{"generic ethereum-mode fault"}));
     BOOST_CHECK_EQUAL(unknown, bcos::scheduler::SchedulerError::UnknownError);
+}
+
+/// A storage-read fault during block execution rejects the whole block as OpStorageFault: the
+/// per-tx Storage2State instances share the block error slot with the finalize bridge (Part 2 of
+/// the StorageStateView→Storage2State merge), so a corrupt row discovered at finalize
+/// (visitAccounts → fetchAllStorage length check) poisons the shared sink and
+/// finalizeOpBlockResult throws OpStorageError — classified OpStorageFault, never a consensus
+/// INVALID or an UnknownError.
+BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
+{
+    Fixture f;
+    constexpr evmc::address kPoisonAddr = 0x00000000000000000000000000000000deadc0de_address;
+    seedCorruptAccount(f.multiLayerStorage, kPoisonAddr, f.hashImpl);
+
+    // The minimal OP block from CommitPersistsSevenLedgerTables: L1 attributes deposit + one
+    // eip1559 transfer. Neither tx touches the corrupt account — it is only reached by the
+    // finalize bridge's visitAccounts.
+    auto depTx = makeDeposit();
+    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
+    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
+
+    auto header = makeHeader();
+    auto block = f.blockFactory->createBlock();
+    block->setBlockHeader(header);
+    auto depFiscoTx = buildFiscoTx(depEnv, f.hashImpl);
+    auto eipFiscoTx = buildFiscoTx(eipEnvBytes, f.hashImpl);
+    BOOST_REQUIRE(depFiscoTx != nullptr);
+    BOOST_REQUIRE(eipFiscoTx != nullptr);
+    block->appendTransaction(depFiscoTx);
+    block->appendTransaction(eipFiscoTx);
+
+    bcos::Error::Ptr err;
+    bcos::protocol::BlockHeader::Ptr executedHeader;
+    bool called = false;
+    f.scheduler->executeBlock(
+        block, /*verify=*/true, [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr h, bool) {
+            called = true;
+            err = std::move(e);
+            executedHeader = std::move(h);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE(err != nullptr);
+    // Corrupt row → fetchAllStorage length_error → poisoned shared sink → OpStorageError,
+    // classified OpStorageFault (not a consensus INVALID, not an UnknownError).
+    BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
+    BOOST_CHECK(executedHeader == nullptr);
+    // The message names the poison cause (diagnostic_information preserves what()).
+    BOOST_CHECK(err->errorMessage().find("poisoned") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -58,7 +58,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/IOServicePool.h>  // IOServicePool::Ptr (Task 4 ctor param)
-#include <ethereum-executor/StorageStateView.h>
 #include <fmt/format.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -593,7 +592,8 @@ private:
             bcos::ledger::LedgerConfig execLedgerConfig;
             execLedgerConfig.setEVMCRevision(cfg.rev);
 
-            OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
+            auto sharedError = std::make_shared<std::string>();
+        OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
             // ① Block-pre steps (preBlockOpSteps, OpBlockExecute.h — the single home shared with
             // the retired runOpBlockInjection): recent-block-hashes construction,
@@ -908,7 +908,7 @@ private:
         ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(cfg.rev);
 
-        eth::StorageStateView<ViewType> stateView(view);
+        bcos::evm::evmstate::Storage2State<ViewType> stateView(view);
         auto fee = op::loadOpFeeParams(stateView);
         const auto blockGasLeft = static_cast<int64_t>(
             detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft"));
@@ -918,7 +918,8 @@ private:
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
         // Construct the executor per call (one evmc::VM).
-        OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg);
+        auto sharedError = std::make_shared<std::string>();
+        OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
         auto receipt = co_await executor.executeTransaction(view, header, *transaction,
             /*contextID=*/0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);

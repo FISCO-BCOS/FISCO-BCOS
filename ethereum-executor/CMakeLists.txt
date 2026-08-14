@@ -7,8 +7,6 @@ find_package(TBB CONFIG REQUIRED)
 add_library(ethereum-executor
     EthereumExecutor.cpp
     EVMPrecompiles.cpp
-    BCOS2Evmone.cpp
-    StorageStateView.cpp
 )
 target_include_directories(ethereum-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

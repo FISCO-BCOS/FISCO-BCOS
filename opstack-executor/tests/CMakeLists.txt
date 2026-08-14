@@ -35,6 +35,7 @@ add_executable(opstack-executor-block-tests
     OpSchedulerTest.cpp
     OpBlockInjectorTest.cpp
     OpDualPathEquivalenceTest.cpp
+    Storage2StatePoisonTest.cpp
     support/SeedPreStateTest.cpp
     support/GoldenSampleTest.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp

@@ -17,8 +17,6 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
-#include <ethereum-executor/BCOS2Evmone.h>
-#include <ethereum-executor/StorageStateView.h>
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048 / toBcosH256
 #include <opstack-executor/OpCommon.h>  // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
 #include <opstack-executor/OpstackExecutor.h>
@@ -168,7 +166,7 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
 
     // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot.
     std::map<evmc::bytes32, evmc::bytes32> mpStorage;
-    bcos::evm::evmstate::Storage2State<Storage> bridge(view);
+    bcos::evm::evmstate::Storage2State<Storage> bridge(view, executor.sharedError());
     bridge.visitAccounts([&](auto const& acc) {
         if (acc.addr == op::OP_L2_TO_L1_MESSAGE_PASSER)
         {
@@ -216,7 +214,7 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     auto blk = detail::toBlockInfo(header);
     hashes.emplace(
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
-    eth::StorageStateView<Storage> stateView(view);
+    bcos::evm::evmstate::Storage2State<Storage> stateView(view, executor.sharedError());
 
     // (1) Pre-block system call.
     auto sysDiff =

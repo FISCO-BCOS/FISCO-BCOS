@@ -25,6 +25,7 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <ethereum-executor/EthereumState.h>  // clearAccountStorage (applyStateDiff)
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -53,7 +54,13 @@ class Storage2State final : public evmone::state::StateView
 {
 public:
     /// One instance per block; no reset().
-    explicit Storage2State(Storage& storage) noexcept : m_storage(storage) {}
+    /// @param sharedError optional block-wide error slot (op-geth's dbErr analogue): every
+    /// Storage2State constructed with the same shared slot reports poison to it, so a read error
+    /// in ANY per-tx execution instance is visible to the block-level check that owns the slot.
+    explicit Storage2State(Storage& storage,
+        std::shared_ptr<std::string> sharedError = {}) noexcept
+      : m_storage(storage), m_sharedError(std::move(sharedError))
+    {}
 
     Storage2State(const Storage2State&) = delete;
     Storage2State(Storage2State&&) = delete;
@@ -162,9 +169,19 @@ public:
     }
 
     /// Consumer contract: check after block execution; once set the whole block must fail.
-    [[nodiscard]] bool poisoned() const noexcept { return m_poisoned; }
-    /// Records only the first error; per-instance (a fresh instance is unaffected).
-    [[nodiscard]] std::string_view firstError() const noexcept { return m_firstError; }
+    /// Also true when the shared block error slot (if any) has been poisoned by ANOTHER instance
+    /// over the same view — op-geth's dbErr accumulating across the block.
+    [[nodiscard]] bool poisoned() const noexcept
+    {
+        return m_poisoned || (m_sharedError && !m_sharedError->empty());
+    }
+    /// Records only the first error; per-instance unless a shared slot is present (then the
+    /// block-wide first error is returned).
+    [[nodiscard]] std::string_view firstError() const noexcept
+    {
+        return (m_sharedError && !m_sharedError->empty()) ? std::string_view(*m_sharedError) :
+                                                            m_firstError;
+    }
 
     /// Write-back (single strict form): every modified entry is unconditionally ensure-existed
     /// and serialized through ledger::account::EVMAccount (zero-value slot deletion and account
@@ -569,6 +586,8 @@ private:
         try
         {
             m_firstError.assign(reason);
+            if (m_sharedError)
+                m_sharedError->assign(m_firstError);
         }
         catch (...)
         {
@@ -747,6 +766,110 @@ private:
 
     mutable bool m_poisoned{false};
     mutable std::string m_firstError;
+    std::shared_ptr<std::string> m_sharedError;  // optional block-wide error slot (op-geth dbErr)
 };
 
 }  // namespace bcos::evm::evmstate
+
+namespace bcos::executor_v1::eth
+{
+/// intx::uint256 → bcos::u256 (applyStateDiff's balance write-back). Moved from the removed
+/// BCOS2Evmone module.
+inline bcos::u256 toBcosU256(intx::uint256 const& val)
+{
+    return bcos::u256(intx::to_string(val));
+}
+
+/// Write an evmone `StateDiff` back into FISCO storage2 (EVMAccount-based) — the reverse of
+/// StorageStateView's read bridge. Moved from the removed BCOS2Evmone module; kept in the eth
+/// namespace so call sites (`eth::applyStateDiff`) and `clearAccountStorage` (EthereumState.h)
+/// resolve unchanged.
+template <class Storage>
+task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const& diff,
+    evmc_revision, crypto::Hash const& hashImpl)
+{
+    using namespace bcos::ledger::account;
+
+    // Phase 1: Process modified_accounts FIRST.
+    // This ensures created accounts exist before we potentially delete them.
+    for (auto const& m : diff.modified_accounts)
+    {
+        EVMAccount<Storage> acc(storage, m.addr, false);
+        if (!co_await acc.exists())
+            co_await acc.create();
+        co_await acc.setNonce(std::to_string(m.nonce));
+        co_await acc.setBalance(toBcosU256(m.balance));
+        if (m.code.has_value())
+        {
+            auto const& c = *m.code;
+            if (c.empty())
+            {
+                co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
+            }
+            else
+            {
+                bcos::bytes code(c.begin(), c.end());
+                auto ch = hashImpl.hash(bcos::bytesConstRef(code.data(), code.size()));
+                co_await acc.setCode(std::move(code), std::string{}, ch);
+            }
+        }
+        for (auto const& [key, value] : m.modified_storage)
+        {
+            // NOTE: EVMAccount::setStorage always writes the entry (a zero
+            // value leaves a zero-valued row; there is no delete-storage API).
+            // Known limitation: such zero rows are only cleaned on self-destruct
+            // via clearAccountStorage(). This matches evmone's state semantics
+            // (a zero slot reads back as zero).
+            co_await acc.setStorage(key, value);
+        }
+    }
+
+    // Phase 2: Process deleted_accounts, but skip addresses that were just
+    // created/modified in Phase 1 (recreated accounts).
+    for (auto const& addr : diff.deleted_accounts)
+    {
+        bool inModified = false;
+        for (auto const& m : diff.modified_accounts)
+        {
+            if (memcmp(m.addr.bytes, addr.bytes, sizeof(evmc_address)) == 0)
+            {
+                inModified = true;
+                break;
+            }
+        }
+        if (inModified)
+            continue;  // Already handled by modified_accounts processing
+
+        // Genuine deletion: clear account state (including storage, so that a
+        // later CREATE/CREATE2 at this address is not an EIP-7610 collision).
+        EVMAccount<Storage> acc(storage, addr, false);
+        if (co_await acc.exists())
+        {
+            co_await acc.setBalance(0);
+            co_await acc.setNonce("0");
+            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
+            co_await clearAccountStorage(storage, acc);
+            // B4 (Task 6.1): drop the SYS_TABLES marker too, so the touch-deleted
+            // account is fully gone — not a lingering EIP-161 ghost empty account
+            // (marker row survives while every field reads zero). acc.path() is the
+            // same tableName key space Storage2State::applyDeletedEntry removes
+            // (Storage2State.h:427-428); the exists() guard above keeps this shared
+            // function quiet when the account is already missing.
+            co_await storage2::removeOne(
+                storage, bcos::executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, co_await acc.path()));
+        }
+    }
+
+    // NOTE: evmone's State::build_diff() may not include recreated accounts
+    // (destructed + recreated via CREATE2 in the same tx) in modified_accounts.
+    // This is a known limitation — without modifying bcos-evm, we cannot
+    // recover the lost nonce/balance/code for these accounts.
+}
+
+/// All-zero BLOCKHASH provider (Ethereum "unknown block" semantics) — used by the OP executor's
+/// execution when no historical hashes are reachable. Moved from the removed BCOS2Evmone module.
+struct ZeroBlockHashes : evmone::state::BlockHashes
+{
+    evmc::bytes32 get_block_hash(int64_t) const noexcept override { return {}; }
+};
+}  // namespace bcos::executor_v1::eth

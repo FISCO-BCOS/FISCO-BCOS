@@ -19,8 +19,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
-#include "ethereum-executor/BCOS2Evmone.h"
-#include "ethereum-executor/StorageStateView.h"
+#include "opstack-executor/Storage2State.h"  // eth::applyStateDiff / ZeroBlockHashes
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
@@ -37,6 +36,170 @@ namespace bcos::evm::opstack
 evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
 }  // namespace bcos::evm::opstack
+
+namespace bcos::executor_v1::eth
+{
+// toIntxU256 lives in bcos::executor_v1::eth::evm (EVMSupport.h); re-import so
+// toEvmoneTransaction's unqualified calls resolve (the deleted StorageStateView.h previously
+// carried a bcos::executor_v1::eth copy).
+using evm::toIntxU256;
+
+/// Convert a FISCO `protocol::Transaction` into the evmone `state::Transaction` the OP executor
+/// feeds to the VM. Moved from BCOS2Evmone (the only consumer is OpstackExecutor's transaction
+/// execution); kept in the eth namespace so `toIntxU256` / the state helpers resolve unchanged.
+inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transaction const& tx)
+{
+    evmone::state::Transaction evmTx{};
+    switch (tx.web3TypedTxKind())
+    {
+    case 0:
+        evmTx.type = evmone::state::Transaction::Type::legacy;
+        break;
+    case 1:
+        evmTx.type = evmone::state::Transaction::Type::access_list;
+        break;
+    case 2:
+        evmTx.type = evmone::state::Transaction::Type::eip1559;
+        break;
+    case 3:
+        evmTx.type = evmone::state::Transaction::Type::blob;
+        break;
+    case 4:
+        evmTx.type = evmone::state::Transaction::Type::set_code;
+        break;
+    default:
+        break;
+    }
+    auto const& input = tx.input();
+    evmTx.data = evmc::bytes(input.begin(), input.end());
+    evmTx.gas_limit = tx.gasLimit();
+    if (auto gp = tx.gasPrice(); gp.has_value())
+        evmTx.max_gas_price = toIntxU256(*gp);
+    if (auto mf = tx.maxFeePerGas(); mf.has_value())
+        evmTx.max_gas_price = toIntxU256(*mf);
+    if (auto mp = tx.maxPriorityFeePerGas(); mp.has_value())
+        evmTx.max_priority_gas_price = toIntxU256(*mp);
+    if (auto mb = tx.maxFeePerBlobGas(); mb.has_value())
+        evmTx.max_blob_gas_price = toIntxU256(*mb);
+
+    // For legacy/access_list txs (no explicit maxPriorityFeePerGas),
+    // set it = max_gas_price so coinbase gets the gas tip when base_fee=0.
+    // Reference: evmone test/statetest/statetest_runner.cpp
+    if ((evmTx.type == evmone::state::Transaction::Type::legacy ||
+            evmTx.type == evmone::state::Transaction::Type::access_list) &&
+        evmTx.max_priority_gas_price == 0)
+        evmTx.max_priority_gas_price = evmTx.max_gas_price;
+    auto const& sb = tx.sender();
+    if (sb.size() >= sizeof(evmc_address))
+        std::copy_n(sb.begin(), sizeof(evmc_address), evmTx.sender.bytes);
+    auto const& tb = tx.to();
+    if (!tb.empty())
+    {
+        // `to` is uniformly an ASCII hex address string ("0x..." / 40 hex chars)
+        // on every tx path: Web3Transaction::takeToTarsTransaction() writes
+        // hexPrefixed(), RPC/txpool treat it as hex (TxValidator::isValidToField
+        // requires exactly 40 hex chars), and the test helpers use the same
+        // "0x..." encoding. The raw 20-byte branch below is kept only as a
+        // defensive fallback.
+        const bool has0x = tb.size() >= 2 && tb[0] == '0' && (tb[1] == 'x' || tb[1] == 'X');
+        const bool is40Hex =
+            tb.size() == sizeof(evmc_address) * 2 && std::all_of(tb.begin(), tb.end(), [](char c) {
+                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            });
+        if (has0x || is40Hex)
+        {
+            // Hex-string form. Only a well-formed 20-byte address decodes to a
+            // valid recipient: a short decode (e.g. "0x1234" -> 2 bytes) or a
+            // malformed one (e.g. "0x" or "0xzz") must NOT be left-aligned into
+            // a 20-byte address — Ethereum addresses are big-endian and
+            // right-aligned, and copying a short value to the front would
+            // produce a wrong (or all-zero) address. Such input leaves `to`
+            // unset, i.e. contract creation, matching base behaviour for
+            // anything that is not a well-formed address.
+            if (auto decoded = bcos::safeFromHex(tb);
+                decoded && decoded->size() == sizeof(evmc_address))
+            {
+                evmc_address ta{};
+                std::copy(decoded->begin(), decoded->end(), ta.bytes);
+                evmTx.to = ta;
+            }
+        }
+        else if (tb.size() == sizeof(evmc_address))
+        {
+            // Defensive fallback for raw 20-byte addresses. No production tx path uses this
+            // encoding today (EEMakeTransferTx and every RPC/txpool path write hex), but if it
+            // ever appears it must be a full 20-byte value — a shorter copy would silently
+            // fabricate an address out of the first bytes. Log a warning so an unexpected
+            // input encoding that reaches this branch surfaces instead of passing silently.
+            BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK")
+                              << "to field uses raw 20-byte encoding (fallback branch); not "
+                                 "expected from any production tx path";
+            evmc_address ta{};
+            std::copy_n(tb.begin(), sizeof(evmc_address), ta.bytes);
+            evmTx.to = ta;
+        }
+        // Anything else (short raw bytes, malformed hex) leaves `to` unset —
+        // contract creation, never a transfer to address(0).
+    }
+    evmTx.value = toIntxU256(tx.value());
+    for (auto const& entry : tx.web3AccessList())
+    {
+        evmc_address addr{};
+        std::copy_n(entry.account.begin(), sizeof(evmc_address), addr.bytes);
+        std::vector<evmc::bytes32> keys;
+        for (auto const& sk : entry.storageKeys)
+        {
+            evmc_bytes32 key{};
+            std::copy_n(sk.begin(), sizeof(evmc_bytes32), key.bytes);
+            keys.push_back(key);
+        }
+        evmTx.access_list.emplace_back(addr, std::move(keys));
+    }
+    for (auto const& h : tx.blobVersionedHashes())
+    {
+        evmc_bytes32 hash{};
+        std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
+        evmTx.blob_hashes.push_back(hash);
+    }
+    // chainId and nonce from BCOS tx may or may not have 0x prefix.
+    // RPC/Web3 decoding stores values with 0x prefix (toQuantity). Parse strictly and
+    // non-throwing via the shared helper (fromQuantity / safeFromQuantity), so a
+    // double 0x (e.g. "0x0x1a"), a non-numeric value (e.g. a FISCO chain_id like
+    // "chain0"), a sign, trailing garbage, or a value above uint64 all fall through to 0.
+    // A value that cannot be parsed is left at 0. Note that 0 is NOT a
+    // guaranteed rejection:
+    //   * chain_id 0 never matches a real chain id (and evmone's
+    //     validate_transaction does not check chain_id — the signature binds it
+    //     upstream, so a malformed chain_id implies an invalid signature that
+    //     admission rejects before this executor sees it);
+    //   * nonce 0 IS a valid nonce for a fresh account, so a malformed nonce
+    //     can only be accepted when the sender's nonce is 0. Like chain_id, the
+    //     nonce is part of the signed payload, so a malformed nonce means the
+    //     signature check failed upstream — this fallback only ever matters for
+    //     byzantine/unsigned inputs.
+    evmTx.chain_id = bcos::safeFromQuantity(tx.chainId()).value_or(0);
+    evmTx.nonce = bcos::safeFromQuantity(tx.nonce()).value_or(0);
+    for (auto const& auth : tx.authorizationList())
+    {
+        evmone::state::Authorization ea{};
+        // AuthorizationEntry: all fields are numeric (uint64_t, u256, Address, uint8_t)
+        ea.chain_id = toIntxU256(bcos::u256(auth.chainId));
+        std::copy_n(auth.address.begin(), sizeof(evmc_address), ea.addr.bytes);
+        ea.nonce = auth.nonce;
+        if (auth.signer.size() == sizeof(evmc_address))
+        {
+            evmc_address sa{};
+            std::copy_n(auth.signer.begin(), sizeof(evmc_address), sa.bytes);
+            ea.signer = sa;
+        }
+        ea.r = toIntxU256(auth.r);
+        ea.s = toIntxU256(auth.s);
+        ea.v = toIntxU256(bcos::u256(auth.v));
+        evmTx.authorization_list.push_back(std::move(ea));
+    }
+    return evmTx;
+}
+}  // namespace bcos::executor_v1::eth
 
 namespace bcos::executor_v1::opstack
 {
@@ -70,12 +233,22 @@ class OpstackExecutor
 public:
     OpstackExecutor(protocol::TransactionReceiptFactory::Ptr receiptFactory,
         crypto::Hash::Ptr hashImpl,
-        bcos::evm::opstack::OpForkConfig forkConfig = bcos::evm::opstack::jovianConfig())
+        bcos::evm::opstack::OpForkConfig forkConfig = bcos::evm::opstack::jovianConfig(),
+        std::shared_ptr<std::string> sharedError = {})
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_forkConfig(std::move(forkConfig)),
+        m_sharedError(std::move(sharedError)),
         m_vm(evmc_create_evmone())
     {}
+
+    /// The block-wide storage-error slot shared by every Storage2State this executor builds
+    /// (op-geth's dbErr analogue): a read error in ANY per-tx execution instance poisons the
+    /// shared slot, which the block-level stateRoot check then rejects.
+    [[nodiscard]] const std::shared_ptr<std::string>& sharedError() const noexcept
+    {
+        return m_sharedError;
+    }
 
     /// Access the EVM instance (needed for system_call functions).
     evmc::VM& vm() { return m_vm; }
@@ -163,7 +336,7 @@ public:
             {  // H1 fee lazy load (after the L1 attributes deposit has executed)
                 namespace eth = bcos::executor_v1::eth;
                 namespace op = bcos::evm::opstack;
-                eth::StorageStateView<Storage> stateView(storage);
+                bcos::evm::evmstate::Storage2State<Storage> stateView(storage, executor.sharedError());
                 m_ctx->fee = op::loadOpFeeParams(stateView);
                 if (m_ctx->daFootprintGasScalar)  // H1c DA scalar override
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
@@ -306,7 +479,7 @@ public:
 
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
-        eth::StorageStateView<Storage> stateView(storage);
+        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         eth::ZeroBlockHashes zeroBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : zeroBlockHashes;
 
@@ -334,7 +507,7 @@ public:
             BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
                                       "OP fork revision does not match ledger evmcRevision"));
 
-        eth::StorageStateView<Storage> stateView(storage);
+        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         evmc_address coinbase{};
         auto const& cb = blockHeader.coinbase();
         if (cb.size() == sizeof(evmc_address))
@@ -368,8 +541,8 @@ private:
 
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
-        auto evmTx = eth::bcosTransactionToEvmone(transaction);
-        eth::StorageStateView<Storage> stateView(storage);
+        auto evmTx = eth::toEvmoneTransaction(transaction);
+        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
@@ -395,8 +568,8 @@ private:
         (void)ledgerConfig;
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
-        auto evmTx = eth::bcosTransactionToEvmone(transaction);
-        eth::StorageStateView<Storage> stateView(storage);
+        auto evmTx = eth::toEvmoneTransaction(transaction);
+        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
 
         eth::ZeroBlockHashes zeroBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : zeroBlockHashes;
@@ -475,6 +648,9 @@ private:
     // Value copy, not a reference: OpForkConfig is small (~32B, once per block) and a reference
     // member to a caller's config is the same lifetime footgun class that m_ctx had.
     bcos::evm::opstack::OpForkConfig m_forkConfig;
+    /// Block-wide storage-error slot (op-geth dbErr): shared by every Storage2State this
+    /// executor constructs so per-tx read errors surface at the block-level check.
+    std::shared_ptr<std::string> m_sharedError;
     evmc::VM m_vm;
 };
 
