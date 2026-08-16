@@ -148,6 +148,21 @@ public:
         {
             m_frontService->stop();
         }
+        // Break the reference cycle this fixture creates:
+        //   FakeGateWay --(m_nodeId2Sync)--> BlockSync --(BlockSyncConfig)-->
+        //   FakeFrontService --(m_fakeGateWay)--> FakeGateWay
+        // Both edges are strong shared_ptrs, so without explicit teardown the
+        // whole node graph (ledger, blocks, txs, io_context) stays alive until
+        // process exit and trips LeakSanitizer. Mirror the stop()/unregister
+        // behaviour of the real components by severing both cross-references.
+        if (m_frontService)
+        {
+            m_frontService->setGateWay(nullptr);
+        }
+        if (m_gateWay)
+        {
+            m_gateWay->removeSync(m_keyPair->publicKey());
+        }
     }
 
     FakeFrontService::Ptr frontService() { return m_frontService; }

@@ -103,6 +103,8 @@ public:
         m_nodeId2Sync[_nodeId] = std::move(_sync);
     }
 
+    void removeSync(NodeIDPtr _nodeId) { m_nodeId2Sync.erase(_nodeId); }
+
     void addConsensusInterface(NodeIDPtr _nodeId, ConsensusInterface::Ptr _consensusInterface)
     {
         m_nodeId2Consensus[_nodeId] = std::move(_consensusInterface);
