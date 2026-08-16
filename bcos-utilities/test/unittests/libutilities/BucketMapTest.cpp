@@ -20,8 +20,6 @@
 
 #include "bcos-utilities/BucketMap.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <tbb/parallel_for.h>
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace std;

@@ -19,9 +19,7 @@
  */
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/extension/AccountManagerPrecompiled.h"
 
 using namespace bcos;
 using namespace bcos::precompiled;

@@ -20,13 +20,10 @@
  */
 
 #include "bcos-rpc/amop/AirAMOPClient.h"
-#include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/RawWsMessage.h>
-#include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/AMOPRequest.h>
 #include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
@@ -38,13 +35,9 @@
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/NewTimer.h>
-#include <boost/core/ignore_unused.hpp>
-#include <boost/property_tree/ini_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <string>
 #include <string_view>

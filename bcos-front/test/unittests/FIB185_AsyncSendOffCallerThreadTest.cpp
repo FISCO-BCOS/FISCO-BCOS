@@ -22,9 +22,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <chrono>
 #include <future>
 #include <thread>
 

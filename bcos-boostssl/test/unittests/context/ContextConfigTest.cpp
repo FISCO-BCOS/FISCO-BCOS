@@ -9,7 +9,6 @@
  */
 
 #include <bcos-boostssl/context/ContextConfig.h>
-#include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <cstdio>
 #include <fstream>

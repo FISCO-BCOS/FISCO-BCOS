@@ -1,11 +1,6 @@
 #include "../../../src/executive/BlockContext.h"
-#include "../../../src/executive/ExecutiveFactory.h"
-#include "../../../src/executive/ExecutiveFlowInterface.h"
 #include "../mock/MockExecutiveFlow.h"
 #include "../mock/MockLedger.h"
-#include "bcos-table/src/StateStorage.h"
-#include <tbb/concurrent_unordered_map.h>
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::executor;

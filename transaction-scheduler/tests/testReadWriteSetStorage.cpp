@@ -2,7 +2,6 @@
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
-#include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <optional>
 

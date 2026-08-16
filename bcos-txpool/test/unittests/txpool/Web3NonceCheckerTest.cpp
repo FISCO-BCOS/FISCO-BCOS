@@ -22,13 +22,8 @@
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
 #include <boost/multiprecision/cpp_int.hpp>
-#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
-#include <range/v3/all.hpp>
-#include <range/v3/view/enumerate.hpp>
-#include <range/v3/view/transform.hpp>
-#include <ranges>
 #include <set>
 #include <thread>
 #include <unordered_map>

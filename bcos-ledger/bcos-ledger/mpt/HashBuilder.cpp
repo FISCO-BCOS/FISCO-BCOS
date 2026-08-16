@@ -19,7 +19,6 @@
 
 #include "HashBuilder.h"
 #include "Constants.h"
-#include "Errors.h"
 #include "Nibble.h"
 #include "NodeEncoder.h"
 #include <bcos-crypto/hasher/AnyHasher.h>

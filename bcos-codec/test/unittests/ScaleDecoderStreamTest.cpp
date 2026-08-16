@@ -11,7 +11,6 @@
 #include "bcos-codec/scale/ScaleDecoderStream.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::codec::scale;

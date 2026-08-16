@@ -8,7 +8,6 @@
 #include "CompatHostContextHarness.h"
 #include "CompatTestFixture.h"
 #include "bcos-executor/src/Common.h"
-#include <boost/test/unit_test.hpp>
 #include <cstring>
 
 namespace bcos::test

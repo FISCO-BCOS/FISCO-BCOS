@@ -29,7 +29,6 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/test/unit_test.hpp>
 #include <future>
 #include <map>
 #include <optional>

@@ -27,12 +27,10 @@
 #include <bcos-task/Wait.h>
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
 #include <boost/multiprecision/cpp_int.hpp>
-#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <set>
 #include <thread>
 #include <unordered_map>
-#include <vector>
 
 using namespace bcos;
 using namespace bcos::txpool;

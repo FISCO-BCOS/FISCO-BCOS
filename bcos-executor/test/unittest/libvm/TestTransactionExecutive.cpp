@@ -2,7 +2,6 @@
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/ledger/Account.h"
 #include "bcos-framework/ledger/EVMAccount.h"
-#include <boost/test/unit_test.hpp>
 #include <utility>
 
 namespace bcos::test

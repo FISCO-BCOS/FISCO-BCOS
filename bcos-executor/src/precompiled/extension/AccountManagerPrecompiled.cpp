@@ -19,12 +19,10 @@
  */
 
 #include "AccountManagerPrecompiled.h"
-#include "../../vm/HostContext.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Exceptions.h"
-#include <boost/algorithm/string/classification.hpp>
 #include <boost/throw_exception.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/find_if.hpp>

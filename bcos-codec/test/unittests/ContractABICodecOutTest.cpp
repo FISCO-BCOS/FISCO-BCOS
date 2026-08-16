@@ -12,7 +12,6 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 #include <stdexcept>
 
 using namespace bcos;

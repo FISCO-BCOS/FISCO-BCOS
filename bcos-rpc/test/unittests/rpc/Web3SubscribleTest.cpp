@@ -19,11 +19,7 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-boostssl/websocket/WsMessage.h>
-#include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-framework/gateway/GatewayInterface.h>
-#include <bcos-rpc/filter/FilterSystem.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/Web3Subscribe.h>

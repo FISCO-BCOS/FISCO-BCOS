@@ -23,7 +23,6 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::rpc;

@@ -18,9 +18,7 @@
  * @date 2022-04-13
  */
 
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/TableManagerPrecompiled.h"
 #include <algorithm>
 #include <map>
 #include <random>

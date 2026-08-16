@@ -20,7 +20,6 @@
  */
 #include "LedgerStorage.h"
 #include "../utilities/Common.h"
-#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
 

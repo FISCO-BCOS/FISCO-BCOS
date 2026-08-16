@@ -9,7 +9,6 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

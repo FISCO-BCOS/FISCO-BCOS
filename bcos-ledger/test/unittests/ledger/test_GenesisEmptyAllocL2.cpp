@@ -32,7 +32,6 @@
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
-#include <boost/test/unit_test.hpp>
 #include <map>
 #include <memory>
 #include <optional>

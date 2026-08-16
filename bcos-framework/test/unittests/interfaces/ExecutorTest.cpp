@@ -19,7 +19,6 @@
 
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include <boost/test/unit_test.hpp>
-#include <string>
 
 using namespace std;
 using namespace bcos;

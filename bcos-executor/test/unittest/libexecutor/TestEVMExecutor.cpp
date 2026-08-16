@@ -42,11 +42,9 @@
 #include "executor/TransactionExecutorFactory.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
-#include <boost/test/unit_test.hpp>
 #include <boost/thread/latch.hpp>
 #include <iostream>
 #include <iterator>

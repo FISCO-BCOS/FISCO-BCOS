@@ -20,7 +20,6 @@
 #include "bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::crypto;

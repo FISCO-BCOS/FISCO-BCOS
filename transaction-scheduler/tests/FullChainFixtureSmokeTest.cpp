@@ -19,7 +19,6 @@
  *        BaselineSchedulerMPTGenesisTest / EthGetProofIntegrationTest build on it.
  */
 #include "FullChainFixture.h"
-#include <boost/test/unit_test.hpp>
 
 namespace
 {

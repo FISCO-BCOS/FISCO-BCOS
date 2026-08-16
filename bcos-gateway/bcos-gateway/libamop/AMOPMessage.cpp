@@ -21,7 +21,6 @@
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <boost/asio.hpp>
 
 using namespace bcos;
 using namespace bcos::amop;

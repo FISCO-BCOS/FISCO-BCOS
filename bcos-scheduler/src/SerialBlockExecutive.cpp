@@ -1,5 +1,4 @@
 #include "SerialBlockExecutive.h"
-#include "DmcExecutor.h"
 #include "SchedulerImpl.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecuteError.h"

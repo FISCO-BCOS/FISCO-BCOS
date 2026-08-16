@@ -20,10 +20,6 @@
 
 #include "bcos-table/src/ContractShardUtils.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-tool/VersionConverter.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <json/json.h>
 
 
 using namespace bcos;

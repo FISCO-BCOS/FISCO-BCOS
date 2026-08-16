@@ -7,8 +7,6 @@
 #include "../dag/ClockCache.h"
 #include "../vm/Precompiled.h"
 #include "TransactionExecutive.h"
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
 
 
 using namespace bcos;

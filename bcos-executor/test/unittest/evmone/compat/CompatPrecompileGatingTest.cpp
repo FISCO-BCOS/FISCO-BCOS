@@ -11,7 +11,6 @@
 #include "bcos-executor/src/vm/EvmPrecompiledAddress.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <evmc/evmc.h>
-#include <boost/test/unit_test.hpp>
 #include <cstring>
 
 namespace bcos::test

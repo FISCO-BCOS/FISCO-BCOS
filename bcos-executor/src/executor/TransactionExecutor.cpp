@@ -25,7 +25,6 @@
 #include "../dag/ClockCache.h"
 #include "../dag/CriticalFields.h"
 #include "../dag/TxDAG2.h"
-#include "../executive/BlockContext.h"
 #include "../executive/ExecutiveFactory.h"
 #include "../executive/ExecutiveSerialFlow.h"
 #include "../executive/ExecutiveStackFlow.h"
@@ -77,25 +76,17 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-#include "tbb/flow_graph.h"
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
-#include <boost/algorithm/hex.hpp>
-#include <boost/exception/detail/exception_ptr.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cassert>
 #include <exception>
 #include <functional>
-#include <gsl/util>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 

@@ -22,7 +22,6 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <chrono>
 #include <future>
 #include <memory>
 #include <thread>

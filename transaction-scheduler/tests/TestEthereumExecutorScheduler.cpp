@@ -39,7 +39,6 @@
 #include "bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -52,7 +51,6 @@
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
 #include "EthereumBlockHashLookup.h"
-#include <boost/test/unit_test.hpp>
 #include <cstring>
 #include <evmone/evmone.h>
 #include <magic_enum/magic_enum.hpp>

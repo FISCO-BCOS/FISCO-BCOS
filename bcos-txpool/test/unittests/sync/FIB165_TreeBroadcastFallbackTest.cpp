@@ -23,7 +23,6 @@
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-task/Wait.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;

@@ -20,10 +20,6 @@
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <json/json.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

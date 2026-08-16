@@ -24,13 +24,11 @@
  * @file FIB150_SyncingHighestNumberAtomicTest.cpp
  */
 
-#include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "test/unittests/pbft/PBFTFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <thread>
 

@@ -22,7 +22,6 @@
 #include "bcos-utilities/ratelimiter/TokenBucketRateLimiter.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/tools/old/interface.hpp>
-#include <boost/test/unit_test.hpp>
 #include <thread>
 
 using namespace bcos;

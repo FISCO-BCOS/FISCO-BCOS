@@ -20,7 +20,6 @@
  */
 
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
-#include <json/json.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

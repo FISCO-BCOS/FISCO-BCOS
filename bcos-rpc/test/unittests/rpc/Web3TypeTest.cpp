@@ -19,11 +19,7 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-codec/rlp/Common.h>
-#include <bcos-codec/rlp/RLPDecode.h>
-#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::rpc;

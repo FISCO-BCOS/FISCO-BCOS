@@ -35,7 +35,6 @@
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <shared_mutex>
 #include <thread>

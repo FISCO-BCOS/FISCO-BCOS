@@ -4,7 +4,6 @@
 #include "ShardingGraphKeyLocks.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-table/src/KeyPageStorage.h>
-#include <tbb/parallel_for_each.h>
 
 using namespace bcos::scheduler;
 using namespace bcos::storage;

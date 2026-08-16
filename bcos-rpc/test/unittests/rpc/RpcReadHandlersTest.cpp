@@ -9,7 +9,6 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

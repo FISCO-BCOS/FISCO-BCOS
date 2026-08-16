@@ -19,8 +19,6 @@
  */
 #include "EthBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <boost/throw_exception.hpp>
 #include <cstring>
 
 using namespace bcos;

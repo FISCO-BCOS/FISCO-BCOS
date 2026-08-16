@@ -30,14 +30,9 @@
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
-#include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/thread.hpp>
-#include <boost/throw_exception.hpp>
 #include <exception>
 #include <iterator>
 #include <memory>

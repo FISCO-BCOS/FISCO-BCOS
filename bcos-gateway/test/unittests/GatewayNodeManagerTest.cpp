@@ -26,7 +26,6 @@
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;

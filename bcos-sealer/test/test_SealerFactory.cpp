@@ -7,18 +7,10 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/Worker.h>
-#include <boost/exception/diagnostic_information.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <future>
 #include <memory>
-#include <optional>
 
 using namespace bcos::storage;
 using namespace std;

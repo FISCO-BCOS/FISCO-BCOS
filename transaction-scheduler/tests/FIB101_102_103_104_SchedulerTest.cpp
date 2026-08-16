@@ -20,7 +20,6 @@
 
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -34,14 +33,11 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
-#include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
-#include <future>
 
 // Wrap the entire fixture / mock surface in an anonymous namespace so the
 // `using namespace bcos::*` directives below do not leak into other unity-build

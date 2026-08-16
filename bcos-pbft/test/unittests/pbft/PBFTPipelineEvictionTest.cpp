@@ -23,7 +23,6 @@
 #include "bcos-pbft/pbft/utilities/PBFTPipeline.h"
 #include <bcos-crypto/signature/key/KeyImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 #include <memory>
 
 using namespace bcos;

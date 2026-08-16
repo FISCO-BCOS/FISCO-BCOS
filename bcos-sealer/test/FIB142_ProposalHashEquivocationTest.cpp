@@ -30,7 +30,6 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/Worker.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <string>

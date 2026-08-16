@@ -2,14 +2,10 @@
 #include "Common.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/detail/adjacency_list.hpp>
-#include <boost/graph/edge_list.hpp>
-#include <boost/graph/graph_selectors.hpp>
 #include <boost/graph/properties.hpp>
-#include <boost/graph/visitors.hpp>
 #include <boost/throw_exception.hpp>
 #include <fmt/format.h>
 

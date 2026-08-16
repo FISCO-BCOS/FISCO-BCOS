@@ -24,8 +24,6 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/unit_test.hpp>
-#include <chrono>
 #include <thread>
 
 namespace bcos

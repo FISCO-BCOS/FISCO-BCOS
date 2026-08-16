@@ -12,8 +12,6 @@
 #include <bcos-task/Task.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/ITTAPI.h>
-#include <bcos-utilities/Overloaded.h>
 #include <ittnotify.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>

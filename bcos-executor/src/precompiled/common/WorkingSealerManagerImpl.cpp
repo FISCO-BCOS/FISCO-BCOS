@@ -1,6 +1,4 @@
 #include <range/v3/range_fwd.hpp>
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/algorithm/result_types.hpp>
 /**
  *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -28,7 +26,6 @@
 #include "bcos-framework/sealer/VrfCurveType.h"
 #include "fmt/ranges.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
-#include <fmt/compile.h>
 #include <fmt/format.h>
 #include <boost/endian/conversion.hpp>
 #include <algorithm>

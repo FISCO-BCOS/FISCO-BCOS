@@ -33,7 +33,6 @@
 #include <bcos-storage/KeyPrefixes.h>
 #include <bcos-storage/MPTNodeReadStorage.h>
 #include <bcos-task/Wait.h>
-#include <boost/test/unit_test.hpp>
 #include <future>
 #include <map>
 #include <optional>

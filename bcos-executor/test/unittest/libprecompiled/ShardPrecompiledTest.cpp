@@ -19,10 +19,7 @@
  */
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-tool/VersionConverter.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include <json/json.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

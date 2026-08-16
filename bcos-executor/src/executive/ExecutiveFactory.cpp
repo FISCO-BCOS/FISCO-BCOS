@@ -23,14 +23,8 @@
 #include "../vm/Precompiled.h"
 #include "BillingTransactionExecutive.h"
 #include "CoroutineTransactionExecutive.h"
-#include "PromiseTransactionExecutive.h"
 #include "ShardingTransactionExecutive.h"
 #include "TransactionExecutive.h"
-#include "bcos-executor/src/precompiled/CastPrecompiled.h"
-#include "bcos-executor/src/precompiled/extension/AccountManagerPrecompiled.h"
-#include "bcos-executor/src/precompiled/extension/AccountPrecompiled.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/protocol/Protocol.h"
 
 using namespace bcos::executor;
 using namespace bcos::precompiled;
