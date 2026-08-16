@@ -16,7 +16,7 @@ target_include_directories(transaction-executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-transaction-executor>)
 target_link_libraries(transaction-executor PUBLIC executor jsoncpp_static codec bcos-crypto table bcos-protocol
-    evmone::evmone blst fmt::fmt-header-only)
+    evmone::evmone blst fmt::fmt)
 set_target_properties(transaction-executor PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)

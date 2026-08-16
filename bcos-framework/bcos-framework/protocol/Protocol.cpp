@@ -34,7 +34,7 @@ std::ostream& operator<<(std::ostream& out, bcos::protocol::BlockVersion version
     auto num2 = (versionNumber >> 16) & (0xff);
     auto num3 = (versionNumber >> 8) & (0xff);
 
-    out << fmt::format(FMT_COMPILE("{}.{}.{}"), num1, num2, num3);
+    out << fmt::format("{}.{}.{}", num1, num2, num3);
     return out;
 }
 

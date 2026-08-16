@@ -24,7 +24,7 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
         {
             if (!web3Tx)
             {
-                auto address = fmt::format(FMT_COMPILE("{}_{}_{}"), blockNumber, contextID, seq);
+                auto address = fmt::format("{}_{}_{}", blockNumber, contextID, seq);
                 auto hash = hashImpl.hash(address);
                 std::copy_n(
                     hash.data(), sizeof(message.code_address.bytes), message.code_address.bytes);

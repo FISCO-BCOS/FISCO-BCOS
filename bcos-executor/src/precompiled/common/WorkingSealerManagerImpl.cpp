@@ -124,7 +124,7 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
         PRECOMPILED_LOG(INFO)
             << LOG_DESC("rotateWorkingSealer: rotate workingSealers into sealers")
             << LOG_KV("rotatedCount", removedWorkingSealerNum)
-            << LOG_KV("rmNodes", fmt::format(FMT_COMPILE("{}"),
+            << LOG_KV("rmNodes", fmt::format("{}",
                                      fmt::join(::ranges::views::transform(workingSealersToRemove,
                                                    [](const consensus::ConsensusNode& node) {
                                                        return node.nodeID->hex();
@@ -146,7 +146,7 @@ task::Task<void> WorkingSealerManagerImpl::rotateWorkingSealer(
         PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer: rotate sealers into workingSealers")
                               << LOG_KV("rotatedCount", insertedWorkingSealerNum)
                               << LOG_KV("insertNodes",
-                                     fmt::format(FMT_COMPILE("{}"),
+                                     fmt::format("{}",
                                          fmt::join(
                                              ::ranges::views::transform(workingSealersToInsert,
                                                  [](const consensus::ConsensusNode& node) {
@@ -568,8 +568,8 @@ void bcos::precompiled::WorkingSealerManagerImpl::rotateWorkingSealerByWeight(
     std::sort(workingSealers.begin(), workingSealers.end());
 
     PRECOMPILED_LOG(INFO) << fmt::format(
-        FMT_COMPILE("rotateWorkingSealer: rotate workingSealers into sealers by "
-                    "weight, rotatedCount: {}, insertNodes: {}"),
+        "rotateWorkingSealer: rotate workingSealers into sealers by "
+        "weight, rotatedCount: {}, insertNodes: {}",
         workingSealers.size(),
         fmt::join(::ranges::views::transform(workingSealers,
                       [](const consensus::ConsensusNode& node) { return node.nodeID->hex(); }),
