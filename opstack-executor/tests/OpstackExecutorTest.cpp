@@ -66,7 +66,8 @@ struct Fixture
         ledgerConfig.setGasPrice({"0x0", 0});
     }
 
-    bcostars::protocol::TransactionImpl buildWeb3Tx(uint64_t chainId = 10)
+    bcostars::protocol::TransactionImpl buildWeb3Tx(uint64_t chainId = 10,
+        bcos::Address to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7"))
     {
         // Construct a minimal EIP-2930 Web3 tx directly (nonce=7, gasPrice, gasLimit, to, value,
         // empty data/accessList, yParity=0, 32-byte r/s) — the v1 raw-RLP fixture no longer
@@ -80,7 +81,7 @@ struct Fixture
         w3.maxFeePerGas = bcos::u256(30000000000);  // gasPrice (EIP-2930)
         w3.maxPriorityFeePerGas = w3.maxFeePerGas;
         w3.gasLimit = 5000000;
-        w3.to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
+        w3.to = to;
         w3.value = bcos::u256(2000000000000000000);  // 2 ETH
         w3.signatureV = 0;                           // yParity
         w3.signatureR = bcos::bytes(32, 0x01);       // dummy r/s (unused: evmone skips sig verify)
@@ -844,6 +845,52 @@ BOOST_FIXTURE_TEST_CASE(LegacyUnprotectedChainIdExempt, Fixture)
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
         /*chainId=*/10));
     BOOST_REQUIRE_NE(receipt, nullptr);  // chainId exempt: executes instead of throwing
+}
+
+// CRITICAL-A regression (independent review): a transfer to a c_systemTxsAddress (0x...1000)
+// must credit /apps/<1000> — the table the read side and the state root use — not /sys/<1000>.
+// Before the fix the production write path used the address-taking EVMAccount ctor, which routes
+// these 8 addresses to /sys/, so the credit was invisible to the state root (state-root
+// divergence vs op-geth). Read back via the same Storage2State /apps/ path the root uses.
+BOOST_FIXTURE_TEST_CASE(TransferToSystemAddressCreditsAppsBalance, Fixture)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    constexpr auto sysAddr = 0x0000000000000000000000000000000000001000_address;  // SYS_CONFIG
+    auto tx =
+        buildWeb3Tx(/*chainId=*/10, bcos::Address("0x0000000000000000000000000000000000001000"));
+    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+    tx.clearSenderAndHash();
+    tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256("100000000000000000000"));
+        co_await acc.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        std::string nonceStr(tx.nonce());
+        if (nonceStr.empty())
+            nonceStr = "0";
+        co_await acc.setNonce(nonceStr);
+        co_return;
+    }());
+
+    bcos::evm::opstack::OpFeeParams fee{};  // zero fee
+    auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
+        /*chainId=*/10));
+    BOOST_REQUIRE_NE(receipt, nullptr);
+
+    // The state root reads /apps/ (accountTableName); the credit must be visible there.
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage, {});
+    auto acc = view.get_account(sysAddr);
+    BOOST_REQUIRE(acc.has_value());
+    BOOST_CHECK(acc->balance == intx::uint256(2000000000000000000));  // the 2 ETH transfer value
 }
 
 BOOST_AUTO_TEST_SUITE_END()

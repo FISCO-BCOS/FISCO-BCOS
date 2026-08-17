@@ -795,7 +795,8 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
     // This ensures created accounts exist before we potentially delete them.
     for (auto const& m : diff.modified_accounts)
     {
-        EVMAccount<Storage> acc(storage, m.addr, false);
+        EVMAccount<Storage> acc(
+            storage, FromTableName{}, bcos::evm::evmstate::accountTableName(m.addr));
         const bool createdNew = !co_await acc.exists();
         const std::string_view tableName = co_await acc.path();
         // EIP-161 guard (ported from Storage2State::applyDiff): creating a NEW EIP-161-empty
@@ -865,7 +866,8 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
 
         // Genuine deletion: clear account state (including storage, so that a
         // later CREATE/CREATE2 at this address is not an EIP-7610 collision).
-        EVMAccount<Storage> acc(storage, addr, false);
+        EVMAccount<Storage> acc(
+            storage, FromTableName{}, bcos::evm::evmstate::accountTableName(addr));
         if (co_await acc.exists())
         {
             co_await acc.setBalance(0);
