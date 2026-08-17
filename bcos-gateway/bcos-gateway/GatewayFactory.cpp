@@ -156,8 +156,7 @@ void GatewayFactory::initSSLContextPubHexHandler()
             return false;
         }
 
-        auto hex = bcos::toHexString(pubKey->data, pubKey->data + pubKey->length, "");
-        _pubHex = *hex.get();
+        _pubHex = bcos::toHex(bytesConstRef((const byte*)pubKey->data, pubKey->length));
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("[NEW]SSLContext pubHex: " + _pubHex);
         return true;
@@ -614,7 +613,27 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     // init ASIOInterface
     auto asioInterface = std::make_shared<ASIOInterface>();
-    auto ioServicePool = std::make_shared<IOServicePool>();
+    // FIB-186: size the P2P I/O pool from p2p.thread_count (previously ignored: IOServicePool() was
+    // built with no args, always defaulting to hardware_concurrency()+1). A single shared pool
+    // carries the acceptor, inbound + outbound sessions, TLS handshakes and timers.
+    //
+    // We deliberately do NOT add a second, acceptor-only pool to isolate inbound churn. A
+    // boost::asio SSL stream is welded to its io_context for life, so a connection's handshake and
+    // the reads of the session that follows run on the same pool; and an inbound churn connection
+    // is indistinguishable from an inbound validator connection at accept time (identity is known
+    // only after the handshake). So no pool assignment can separate attacker handshakes from
+    // validator consensus reads -- both always land on the same pool. A pool split would only move
+    // which thread the handshake CPU lands on, not off a thread that also carries consensus reads:
+    // thread isolation is not CPU isolation, and once that thread saturates consensus halts anyway
+    // (a split merely delays the onset). What actually prevents the halt is keeping the expensive
+    // handshake from running at all -- rejecting churn cheaply BEFORE the handshake via the
+    // accept-rate limit and the in-flight-handshake cap (Host), tuned small enough that admitted
+    // handshake CPU cannot saturate the pool. This was validated on a 3-node churn harness: with
+    // those caps on, a dedicated acceptor pool made no measurable difference; with them off, both
+    // the single-pool and the split-pool builds halted. See
+    // Host::DEFAULT_MAX_CONNECTIONS_PER_SECOND.
+    auto ioServicePool =
+        std::make_shared<IOServicePool>(std::max<uint32_t>(1U, _config->threadPoolSize()));
     asioInterface->setIOServicePool(ioServicePool);
     asioInterface->setSrvContext(srvCtx);
     asioInterface->setClientContext(clientCtx);
@@ -650,6 +669,13 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setPeerWhitelist(peerWhitelist);
     host->setSessionCallbackManager(sessionCallbackManager);
     host->setEnableSslVerify(_config->enableSSLVerify());
+    // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
+    host->setMaxConcurrentSessions(_config->maxConcurrentSessions());
+    host->setMaxSessionsPerIP(_config->maxSessionsPerIP());
+    // FIB-186: bound in-flight TLS handshakes so connection churn cannot starve consensus reads.
+    host->setMaxPendingHandshakes(_config->maxPendingHandshakes());
+    host->setHandshakeTimeout(_config->handshakeTimeout());
+    host->setMaxConnectionsPerSecond(_config->maxConnectionsPerSecond());
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;
@@ -762,17 +788,35 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto gatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
-            [gatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
+            [gatewayNodeManagerWeakPtr, serviceWeakPtr = std::weak_ptr<Service>(service)](
+                NetworkException e, P2PSession::Ptr p2pSession) {
                 if (e.errorCode() == P2PExceptionType::DuplicateSession ||
                     e.errorCode() == P2PExceptionType::Success)
                 {
                     return;
                 }
                 auto gatewayNodeManager = gatewayNodeManagerWeakPtr.lock();
-                if (gatewayNodeManager && p2pSession)
+                if (!gatewayNodeManager || !p2pSession)
                 {
-                    gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
+                    return;
                 }
+                // FIB-186 (vector D): the teardown notification that drives this handler can be
+                // delayed on the dedicated teardown executor while the SAME peer reconnects -- a
+                // new session for the same p2pID is inserted and its status re-populates the
+                // routing table. removeP2PID keys only on p2pID, so a stale teardown would erase
+                // the new session's routing entries and blank the unicast route until the next
+                // status broadcast. Only remove when this dropped session is still the session of
+                // record for its p2pID (or none is): if a different, current session already owns
+                // the p2pID the peer has reconnected and its entries must be kept.
+                if (auto service = serviceWeakPtr.lock())
+                {
+                    auto current = service->getP2PSessionByNodeId(p2pSession->p2pID());
+                    if (current && current != p2pSession)
+                    {
+                        return;
+                    }
+                }
+                gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
             });
 
         service->registerUnreachableHandler(

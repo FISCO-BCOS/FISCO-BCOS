@@ -64,6 +64,12 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
     auto proposalIndex = ledgerConfig->blockNumber() + 1;
     auto parent = (faker->ledger()->ledgerData())[ledgerConfig->blockNumber()];
     auto block = faker->ledger()->init(parent->blockHeader(), true, proposalIndex, 0, 0);
+    // FIB-142: bind body's Merkle root into header.txsRoot before encoding —
+    // PBFTEngine's receiver-side defence rejects proposals whose decoded body
+    // root disagrees with the carried header.txsRoot. FakeLedger seeds the
+    // header with a fake hash(_blockNumber) that does not match an empty body.
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*hashImpl));
+    block->blockHeader()->calculateHash(*hashImpl);
     auto blockData = std::make_shared<bytes>();
     block->encode(*blockData);
 

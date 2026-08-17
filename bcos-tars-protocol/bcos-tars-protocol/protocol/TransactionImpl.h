@@ -47,13 +47,13 @@ public:
 
     friend class TransactionFactoryImpl;
 
-    bool operator==(const Transaction& rhs) const { return this->hash() == rhs.hash(); }
+    bool operator==(const Transaction& rhs) const;
 
     void decode(bcos::bytesConstRef _txData) override;
     void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash() const override;
-    void calculateHash(const bcos::crypto::Hash& hashImpl);
+    void calculateHash(const bcos::crypto::Hash& hashImpl) override;
 
     int32_t version() const override;
     std::string_view chainId() const override;
@@ -77,7 +77,8 @@ public:
     void setImportTime(int64_t _importTime) override;
     bcos::bytesConstRef signatureData() const override;
     std::string_view sender() const override;
-    void forceSender(const bcos::bytes& _sender) const override;
+    void forceSender(const bcos::bytes& _sender) override;
+    void clearSenderAndHash() override;
 
     void setSignatureData(bcos::bytes& signature);
 
@@ -96,6 +97,11 @@ public:
     size_t size() const override;
 
 private:
+    // FIB-New1: recompute the canonical Web3 txHash = keccak256(rlp(signed tx)) directly from the
+    // signing preimage (extraTransactionBytes) + signature, without rebuilding a Web3Transaction.
+    static bcos::crypto::HashType recomputeWeb3CanonicalHash(
+        bcos::bytesConstRef payload, bcos::bytesConstRef signature);
+
     std::function<bcostars::Transaction*()> m_inner;
 };
 }  // namespace bcostars::protocol

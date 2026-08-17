@@ -108,6 +108,31 @@ void ABIInType::clear()
     extents.clear();
 }
 
+std::size_t ABIInType::rank()
+{
+    return extents.size();
+}
+
+std::size_t ABIInType::extent(std::size_t index)
+{
+    return index > rank() ? 0 : extents[index - 1];
+}
+
+bool ABIInType::valid()
+{
+    return aet != ABI_ELEMENTARY_TYPE::INVALID;
+}
+
+std::string ABIInType::getType() const
+{
+    return strType;
+}
+
+std::string ABIInType::getEleType() const
+{
+    return strEleType;
+}
+
 bool ABIInType::reset(const std::string& _s)
 {
     clear();
@@ -220,6 +245,16 @@ std::vector<std::string> ABIFunc::getParamsType() const
     }
 
     return r;
+}
+
+std::string ABIFunc::getSignature() const
+{
+    return strFuncSignature;
+}
+
+std::string ABIFunc::getFuncName() const
+{
+    return strFuncName;
 }
 
 // parser contract abi function signature, eg: transfer(string,string,uint256)

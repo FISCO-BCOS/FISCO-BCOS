@@ -74,3 +74,9 @@ test/*
 .trae
 .codex
 openspec
+
+# Claude Code
+CLAUDE.local.md
+.worktrees/
+.claude/worktrees
+.claude/agents

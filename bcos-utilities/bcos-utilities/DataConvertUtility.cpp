@@ -67,35 +67,6 @@ bool bcos::isHexStringV2(string const& _string)
     return boost::regex_match(_string, pattern);
 }
 
-std::shared_ptr<bytes> bcos::fromHexString(std::string const& _hexedString)
-{
-    unsigned startIndex =
-        (_hexedString.size() >= 2 && _hexedString[0] == '0' && _hexedString[1] == 'x') ? 2 : 0;
-    std::shared_ptr<bytes> bytesData = std::make_shared<bytes>();
-    bytesData->reserve((_hexedString.size() - startIndex + 1) / 2);
-
-    if (_hexedString.size() % 2)
-    {
-        int h = convertCharToHexNumber(_hexedString[startIndex++]);
-        if (h == -1)
-        {
-            BOOST_THROW_EXCEPTION(BadHexCharacter());
-        }
-        bytesData->push_back(h);
-    }
-    for (unsigned i = startIndex; i < _hexedString.size(); i += 2)
-    {
-        int highValue = convertCharToHexNumber(_hexedString[i]);
-        int lowValue = convertCharToHexNumber(_hexedString[i + 1]);
-        if (highValue == -1 || lowValue == -1)
-        {
-            BOOST_THROW_EXCEPTION(BadHexCharacter());
-        }
-        bytesData->push_back((bcos::byte)(highValue << 4) + lowValue);
-    }
-    return bytesData;
-}
-
 std::string bcos::toString(string32 const& _s)
 {
     std::string ret;

@@ -11,6 +11,8 @@
 #include <oneapi/tbb/partitioner.h>
 #include <oneapi/tbb/task_arena.h>
 #include <tbb/task_arena.h>
+#include <range/v3/view/chunk.hpp>
+#include <range/v3/view/iota.hpp>
 
 namespace bcos::scheduler_v1
 {

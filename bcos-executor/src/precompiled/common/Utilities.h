@@ -25,6 +25,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
 #include <boost/archive/text_iarchive.hpp>
@@ -98,9 +99,18 @@ inline bool isDynamicPrecompiledAccountCode(const std::string_view& _code)
     return getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "") == _code;
 }
 
-inline std::string trimHexPrefix(const std::string& _hex)
+inline std::string& trimHexPrefix(std::string& _hex)
 {
-    if (_hex.size() >= 2 && _hex[1] == 'x' && _hex[0] == '0')
+    if (_hex.size() >= 2 && (_hex.starts_with("0x") || _hex.starts_with("0X")))
+    {
+        return _hex.erase(0, 2);
+    }
+    return _hex;
+}
+
+inline std::string_view trimHexPrefix(const std::string_view _hex)
+{
+    if (_hex.size() >= 2 && (_hex.starts_with("0x") || _hex.starts_with("0X")))
     {
         return _hex.substr(2);
     }
@@ -132,8 +142,9 @@ inline bytesConstRef getParamData(bytesConstRef _param)
 }
 
 
-bool checkPathValid(
-    std::string_view _absolutePath, std::variant<uint32_t, protocol::BlockVersion> version);
+bool checkPathValid(std::string_view _absolutePath,
+    std::variant<uint32_t, protocol::BlockVersion> version,
+    const ledger::Features* features = nullptr);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 

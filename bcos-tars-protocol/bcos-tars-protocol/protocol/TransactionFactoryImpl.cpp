@@ -8,7 +8,9 @@ bcostars::protocol::TransactionFactoryImpl::TransactionFactoryImpl(
 
 bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::createTransaction()
 {
-    return std::make_shared<TransactionImpl>();
+    auto transaction = std::make_shared<TransactionImpl>();
+    transaction->setTainted(true);
+    return transaction;
 }
 
 bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::createTransaction(
@@ -23,6 +25,7 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
     transaction->setSystemTx(input.systemTx());
     transaction->setBatchId(input.batchId());
     transaction->setBatchHash(input.batchHash());
+    transaction->setTainted(input.tainted());
     transaction->setStoreToBackend(input.storeToBackend());
     transaction->setSubmitCallback(input.takeSubmitCallback());
 
@@ -30,10 +33,11 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
 }
 
 bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::createTransaction(
-    bcos::bytesConstRef txData, bool checkSig, bool checkHash)
+    bcos::bytesConstRef txData, bool checkSig, bool checkHash, bool tainted)
 {
     auto transaction = std::make_shared<TransactionImpl>(
         [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
+    transaction->setTainted(tainted);
 
     transaction->decode(txData);
     // check value or gasPrice or maxFeePerGas or maxPriorityFeePerGas is hex string
@@ -93,6 +97,39 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
     return transaction;
 }
 
+bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::decodeTransaction(
+    bcos::bytesConstRef txData, bool tainted)
+{
+    auto transaction = std::make_shared<TransactionImpl>(
+        [m_transaction = bcostars::Transaction()]() mutable { return &m_transaction; });
+    transaction->setTainted(tainted);
+
+    transaction->decode(txData);
+    // check value or gasPrice or maxFeePerGas or maxPriorityFeePerGas is hex string
+    if (transaction->version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
+    {
+        if (!bcos::isHexStringV2(transaction->mutableInner().data.value) ||
+            !bcos::isHexStringV2(transaction->mutableInner().data.gasPrice) ||
+            !bcos::isHexStringV2(transaction->mutableInner().data.maxFeePerGas) ||
+            !bcos::isHexStringV2(transaction->mutableInner().data.maxPriorityFeePerGas))
+        {
+            BCOS_LOG(INFO) << LOG_DESC(
+                                  "the transaction value or gasPrice or maxFeePerGas or "
+                                  "maxPriorityFeePerGas is not hex string")
+                           << LOG_KV("value", transaction->mutableInner().data.value)
+                           << LOG_KV("gasPrice", transaction->mutableInner().data.gasPrice)
+                           << LOG_KV("maxFeePerGas", transaction->mutableInner().data.maxFeePerGas)
+                           << LOG_KV("maxPriorityFeePerGas",
+                                  transaction->mutableInner().data.maxPriorityFeePerGas);
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument("transaction value or gasPrice or maxFeePerGas or "
+                                      "maxPriorityFeePerGas is not hex string"));
+        }
+    }
+
+    return transaction;
+}
+
 std::shared_ptr<bcos::protocol::Transaction>
 bcostars::protocol::TransactionFactoryImpl::createTransaction(int32_t _version, std::string _to,
     bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit, std::string _chainId,
@@ -145,6 +182,7 @@ bcostars::protocol::TransactionFactoryImpl::createTransaction(int32_t _version, 
         }
     }
     inner.importTime = _importTime;
+    transaction->setTainted(true);
 
     // Update the hash field
     bcos::concepts::hash::calculate(inner, m_cryptoSuite->hashImpl()->hasher(), inner.dataHash);
@@ -177,6 +215,7 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
     auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
     auto& inner = tarsTx->mutableInner();
     inner.signature.assign(sign->begin(), sign->end());
+    tx->setTainted(true);
 
     return tx;
 }

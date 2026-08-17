@@ -1672,7 +1672,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_SolTypes)
             "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
             "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
             "00",
-            *toHexString(buffer));
+            toHex(buffer));
         auto decodeParams = codec.decodeMethodInput(*method[0], buffer);
         BOOST_CHECK_EQUAL(decodeParams, params);
     }

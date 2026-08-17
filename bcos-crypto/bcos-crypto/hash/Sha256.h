@@ -19,31 +19,19 @@
  * @author yujiechen
  */
 #pragma once
-#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 
 namespace bcos::crypto
 {
-HashType inline sha256Hash(bytesConstRef _data)
-{
-    hasher::openssl::OpenSSL_SHA2_256_Hasher hasher;
-    hasher.update(_data);
+HashType sha256Hash(bytesConstRef _data);
 
-    HashType out;
-    hasher.final(out);
-    return out;
-}
 class Sha256 : public Hash
 {
 public:
     using Ptr = std::shared_ptr<Sha256>;
-    Sha256() { setHashImplType(HashImplType::Sha3); }
+    Sha256();
     ~Sha256() override = default;
-    HashType hash(bytesConstRef _data) const override { return sha256Hash(_data); }
-    bcos::crypto::hasher::AnyHasher hasher() const override
-    {
-        return bcos::crypto::hasher::AnyHasher{
-            bcos::crypto::hasher::openssl::OpenSSL_SHA3_256_Hasher{}};
-    };
+    HashType hash(bytesConstRef _data) const override;
+    bcos::crypto::hasher::AnyHasher hasher() const override;
 };
 }  // namespace bcos::crypto

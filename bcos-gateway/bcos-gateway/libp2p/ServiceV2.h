@@ -73,6 +73,9 @@ protected:
     virtual void onReceiveRouterTableRequest(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void broadcastRouterSeq();
+    // FIB-186 (vector B): advance is done by the caller; this broadcasts the seq on the leading
+    // edge of a membership/route-change burst and coalesces the rest (see m_routerSeqDirty).
+    void markRouterSeqChanged();
     virtual void onReceiveRouterSeq(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
 
@@ -96,6 +99,12 @@ private:
     // Note: must use ptr here, for the timer uses enable_shared_from_this
     std::shared_ptr<bcos::Timer> m_routerTimer;
     std::atomic<uint32_t> m_statusSeq{1};
+    // FIB-186 (vector B): coalesce router-seq broadcasts. The first membership/route change of a
+    // burst broadcasts immediately (leading edge) and sets this flag; further changes within the
+    // window only advance m_statusSeq, and the m_routerTimer flush resets the flag. This bounds the
+    // broadcast fan-out so connection churn cannot cascade a full-mesh gossip storm on the PBFT
+    // delivery pool. See markRouterSeqChanged().
+    std::atomic_bool m_routerSeqDirty{false};
 
     RouterTableFactory::Ptr m_routerTableFactory;
     RouterTableInterface::Ptr m_routerTable;

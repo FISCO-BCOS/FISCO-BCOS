@@ -111,9 +111,9 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
     u256 lastRandomValue;
     bool verifySucc;
     u256 randomValue;
-    std::cout << "### inputBytes: " << *toHexString(inputBytes) << std::endl;
-    std::cout << "### vrfPublicKey: " << *toHexString(vrfPublicKey) << std::endl;
-    std::cout << "### vrfProof: " << *toHexString(vrfProof) << std::endl;
+    std::cout << "### inputBytes: " << toHex(inputBytes) << std::endl;
+    std::cout << "### vrfPublicKey: " << toHex(vrfPublicKey) << std::endl;
+    std::cout << "### vrfProof: " << toHex(vrfProof) << std::endl;
     for (int i = 0; i < 10; i++)
     {
         bytes in =

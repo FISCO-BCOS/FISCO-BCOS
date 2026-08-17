@@ -29,6 +29,9 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <atomic>
+#include <mutex>
+#include <unordered_set>
 namespace bcos::txpool
 {
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
@@ -114,6 +117,11 @@ public:
     void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) override;
 
+    // FIB-167: live update of the chain blockTxCountLimit. Wired from
+    // PBFTInitializer::registerNewBlockNotifier so fillBlock's bound check follows
+    // consensus-governance changes; init() sets the same value at startup.
+    void notifyBlockTxCountLimit(uint64_t _blockTxCountLimit) override;
+
     void tryToSyncTxsFromPeers() override;
 
     task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
@@ -130,6 +138,9 @@ public:
     tool::TreeTopology::Ptr treeRouter() const;
 
     void setCheckBlockLimit(bool _checkBlockLimit);
+    // pre-store backpressure controls (NodeConfig-driven)
+    void setPreStoreBackpressureEnabled(bool _enabled);
+    void setPreStoreMaxInflight(std::size_t _max);
 
     void registerTxsNotifier(
         std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override;
@@ -146,6 +157,30 @@ protected:
     void initSendResponseHandler();
 
     virtual void storeVerifiedBlock(bcos::protocol::Block::ConstPtr _block);
+
+    // FIB-154 pre-store admission gate. Protected so an Inspectable subclass in
+    // unit tests can drive the same code path the production lambda uses (no
+    // parallel implementation in tests).
+    enum class PreStoreAdmission
+    {
+        Accepted,          // slot acquired; caller must releasePreStoreSlot when done
+        DuplicateSkipped,  // hash already in-flight
+        Disabled,          // backpressure turned off via config
+        CapDropped         // cap reached
+    };
+    PreStoreAdmission tryAcquirePreStoreSlot(bcos::crypto::HashType const& _blockHash);
+    void releasePreStoreSlot(bcos::crypto::HashType const& _blockHash);
+
+    // Pre-store backlog control. Runtime-configurable via NodeConfig. The two
+    // scalar knobs are atomic because setters may be called concurrently with
+    // tryAcquirePreStoreSlot readers (no shared lock); `relaxed` ordering is
+    // sufficient since they are policy values, not synchronization primitives.
+    // The set+mutex are kept protected so the Inspectable subclass in the UT
+    // can re-export them via `using` declarations.
+    std::atomic<bool> m_preStoreBackpressureEnabled{true};
+    std::atomic<std::size_t> m_preStoreMaxInflight{1024};
+    std::unordered_set<bcos::crypto::HashType> m_preStoreInFlight;
+    mutable std::mutex x_preStoreInFlight;
 
 private:
     TxPoolConfig::Ptr m_config;

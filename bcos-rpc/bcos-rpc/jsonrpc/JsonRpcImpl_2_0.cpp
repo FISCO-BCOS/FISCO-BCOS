@@ -302,7 +302,16 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     }
 
     jResp["gasUsed"] = transactionReceipt.gasUsed().str(16);
-    jResp["status"] = transactionReceipt.status();
+    // For sendTransaction the `status` argument carries the txpool submit result. When the
+    // tx expires in the pool before being sealed, removeInvalidTxs() notifies the submit
+    // callback with a TransactionSubmitResult whose status is TransactionPoolTimeout but
+    // whose embedded receipt is an empty default receipt (status/blockNumber/gasUsed all 0).
+    // Preferring the submit status here surfaces the timeout to the client instead of a
+    // misleading "status=0, blockNumber=0" that looks like a successful execution.
+    // getTransactionReceipt passes TransactionStatus::None, so the real execution status
+    // from the receipt is used there.
+    jResp["status"] = (status == protocol::TransactionStatus::None) ? transactionReceipt.status() :
+                                                                      static_cast<int32_t>(status);
     jResp["blockNumber"] = transactionReceipt.blockNumber();
     jResp["output"] = toHexStringWithPrefix(transactionReceipt.output());
     jResp["message"] = transactionReceipt.message();
@@ -492,15 +501,15 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         {
             auto isWasm = groupInfo->wasm();
             auto transactionData = decodeData(data);
-            auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-                bcos::ref(transactionData), false, true);
+            auto transaction = nodeService->blockFactory()->transactionFactory()->decodeTransaction(
+                bcos::ref(transactionData));
             if (!self->m_forceSender.empty())
             {
                 transaction->forceSender(self->m_forceSender);
             }
             else
             {
-                transaction->forceSender({});  // must clear sender here for future verify
+                transaction->forceSender({});  // clear sender for future verify
             }
 
             if (c_fileLogLevel <= TRACE)

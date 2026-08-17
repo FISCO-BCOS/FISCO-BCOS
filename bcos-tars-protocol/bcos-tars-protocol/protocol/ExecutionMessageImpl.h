@@ -40,165 +40,97 @@ public:
     using Ptr = std::shared_ptr<ExecutionMessageImpl>;
     using UniquePtr = std::unique_ptr<ExecutionMessageImpl>;
     using UniqueConstPtr = std::unique_ptr<const ExecutionMessageImpl>;
-    ExecutionMessageImpl()
-      : m_inner([m_executionMessage = bcostars::ExecutionMessage()]() mutable {
-            return &m_executionMessage;
-        })
-    {
-        decodeLogEntries();
-        decodeKeyLocks();
-    }
-    ExecutionMessageImpl(std::function<bcostars::ExecutionMessage*()> _inner) : m_inner(_inner)
-    {
-        decodeLogEntries();
-        decodeKeyLocks();
-    }
+    ExecutionMessageImpl();
+    ExecutionMessageImpl(std::function<bcostars::ExecutionMessage*()> _inner);
 
-    ~ExecutionMessageImpl() override {}
+    ~ExecutionMessageImpl() override;
 
-    Type type() const override { return (Type)m_inner()->type; }
-    void setType(Type _type) override { m_inner()->type = _type; }
+    Type type() const override;
+    void setType(Type _type) override;
 
-    bcos::crypto::HashType transactionHash() const override
-    {
-        if (m_inner()->transactionHash.size() < bcos::crypto::HashType::SIZE)
-        {
-            return bcos::crypto::HashType();
-        }
-        return *(reinterpret_cast<bcos::crypto::HashType*>(m_inner()->transactionHash.data()));
-    }
-    void setTransactionHash(bcos::crypto::HashType hash) override
-    {
-        m_inner()->transactionHash.assign(hash.begin(), hash.end());
-    }
+    bcos::crypto::HashType transactionHash() const override;
+    void setTransactionHash(bcos::crypto::HashType hash) override;
 
-    int64_t contextID() const override { return m_inner()->contextID; }
-    void setContextID(int64_t contextID) override { m_inner()->contextID = contextID; }
+    int64_t contextID() const override;
+    void setContextID(int64_t contextID) override;
 
-    int64_t seq() const override { return m_inner()->seq; }
-    void setSeq(int64_t seq) override { m_inner()->seq = seq; }
+    int64_t seq() const override;
+    void setSeq(int64_t seq) override;
 
-    std::string_view origin() const override { return m_inner()->origin; }
-    void setOrigin(std::string origin) override { m_inner()->origin = origin; }
+    std::string_view origin() const override;
+    void setOrigin(std::string origin) override;
 
-    std::string_view from() const override { return m_inner()->from; }
-    void setFrom(std::string from) override { m_inner()->from = from; }
+    std::string_view from() const override;
+    void setFrom(std::string from) override;
 
-    std::string_view to() const override { return m_inner()->to; }
-    void setTo(std::string to) override { m_inner()->to = to; }
+    std::string_view to() const override;
+    void setTo(std::string _to) override;
 
-    std::string_view abi() const override { return m_inner()->abi; }
-    void setABI(std::string abi) override { m_inner()->abi = abi; }
+    std::string_view abi() const override;
+    void setABI(std::string abi) override;
 
     // balance transfer
-    std::string_view value() const override { return m_inner()->value; }
-    void setValue(std::string value) override { m_inner()->value = value; }
+    std::string_view value() const override;
+    void setValue(std::string value) override;
 
-    std::string_view gasPrice() const override { return m_inner()->gasPrice; }
-    void setGasPrice(std::string gasPrice) override { m_inner()->gasPrice = gasPrice; }
+    std::string_view gasPrice() const override;
+    void setGasPrice(std::string gasPrice) override;
 
-    int64_t gasLimit() const override { return m_inner()->gasLimit; }
-    void setGasLimit(int64_t gasLimit) override { m_inner()->gasLimit = gasLimit; }
+    int64_t gasLimit() const override;
+    void setGasLimit(int64_t gasLimit) override;
 
-    std::string_view maxFeePerGas() const override { return m_inner()->maxFeePerGas; }
-    void setMaxFeePerGas(std::string maxFeePerGas) override
-    {
-        m_inner()->maxFeePerGas = maxFeePerGas;
-    }
+    std::string_view maxFeePerGas() const override;
+    void setMaxFeePerGas(std::string maxFeePerGas) override;
 
-    std::string_view maxPriorityFeePerGas() const override
-    {
-        return m_inner()->maxPriorityFeePerGas;
-    }
-    void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) override
-    {
-        m_inner()->maxPriorityFeePerGas = maxPriorityFeePerGas;
-    }
+    std::string_view maxPriorityFeePerGas() const override;
+    void setMaxPriorityFeePerGas(std::string maxPriorityFeePerGas) override;
 
-    std::string_view effectiveGasPrice() const override { return m_inner()->effectiveGasPrice; }
-    void setEffectiveGasPrice(std::string effectiveGasPrice) override
-    {
-        m_inner()->effectiveGasPrice = effectiveGasPrice;
-    }
+    std::string_view effectiveGasPrice() const override;
+    void setEffectiveGasPrice(std::string effectiveGasPrice) override;
 
-    int32_t depth() const override { return m_inner()->depth; }
-    void setDepth(int32_t depth) override { m_inner()->depth = depth; }
+    int32_t depth() const override;
+    void setDepth(int32_t depth) override;
 
-    bool create() const override { return m_inner()->create; }
-    void setCreate(bool create) override { m_inner()->create = create; }
+    bool create() const override;
+    void setCreate(bool create) override;
 
-    bool internalCreate() const override { return m_inner()->internalCreate; }
-    void setInternalCreate(bool internalCreate) override
-    {
-        m_inner()->internalCreate = internalCreate;
-    }
+    bool internalCreate() const override;
+    void setInternalCreate(bool internalCreate) override;
 
-    bool internalCall() const override { return m_inner()->internalCall; }
-    void setInternalCall(bool internalCall) override { m_inner()->internalCall = internalCall; }
+    bool internalCall() const override;
+    void setInternalCall(bool internalCall) override;
 
 
-    int64_t gasAvailable() const override { return m_inner()->gasAvailable; }
-    void setGasAvailable(int64_t gasAvailable) override { m_inner()->gasAvailable = gasAvailable; }
+    int64_t gasAvailable() const override;
+    void setGasAvailable(int64_t gasAvailable) override;
 
-    bcos::bytesConstRef data() const override
-    {
-        return bcos::bytesConstRef(
-            reinterpret_cast<const bcos::byte*>(m_inner()->data.data()), m_inner()->data.size());
-    }
+    bcos::bytesConstRef data() const override;
 
-    bcos::bytes takeData() override
-    {
-        return bcos::bytes(m_inner()->data.begin(), m_inner()->data.end());
-    }
-    void setData(bcos::bytes data) override { m_inner()->data.assign(data.begin(), data.end()); }
+    bcos::bytes takeData() override;
+    void setData(bcos::bytes data) override;
 
-    bool staticCall() const override { return m_inner()->staticCall; }
-    void setStaticCall(bool staticCall) override { m_inner()->staticCall = staticCall; }
+    bool staticCall() const override;
+    void setStaticCall(bool staticCall) override;
 
     // for evm
-    std::optional<bcos::u256> createSalt() const override
-    {
-        std::optional<bcos::u256> emptySalt;
-        if (m_inner()->salt.size() == 0)
-        {
-            return emptySalt;
-        }
-        try
-        {
-            return std::optional<bcos::u256>(boost::lexical_cast<bcos::u256>(m_inner()->salt));
-        }
-        catch (std::exception const& e)
-        {
-            return emptySalt;
-        }
-    }
+    std::optional<bcos::u256> createSalt() const override;
 
-    void setCreateSalt(bcos::u256 createSalt) override
-    {
-        auto salt = boost::lexical_cast<std::string>(createSalt);
-        m_inner()->salt = salt;
-    }
+    void setCreateSalt(bcos::u256 createSalt) override;
 
-    int32_t status() const override { return m_inner()->status; }
-    void setStatus(int32_t status) override { m_inner()->status = status; }
+    int32_t status() const override;
+    void setStatus(int32_t status) override;
 
-    int32_t evmStatus() const override { return m_inner()->evmStatus; }
-    void setEvmStatus(int32_t evmStatus) override { m_inner()->evmStatus = evmStatus; }
+    int32_t evmStatus() const override;
+    void setEvmStatus(int32_t evmStatus) override;
 
-    std::string_view message() const override { return m_inner()->message; }
-    void setMessage(std::string message) override { m_inner()->message = message; }
+    std::string_view message() const override;
+    void setMessage(std::string message) override;
 
     // for evm
-    std::string_view newEVMContractAddress() const override
-    {
-        return m_inner()->newEVMContractAddress;
-    }
-    void setNewEVMContractAddress(std::string newEVMContractAddress) override
-    {
-        m_inner()->newEVMContractAddress = newEVMContractAddress;
-    }
-    std::string_view keyLockAcquired() const override { return m_inner()->keyLockAcquired; }
-    void setKeyLockAcquired(std::string keyLock) override { m_inner()->keyLockAcquired = keyLock; }
+    std::string_view newEVMContractAddress() const override;
+    void setNewEVMContractAddress(std::string newEVMContractAddress) override;
+    std::string_view keyLockAcquired() const override;
+    void setKeyLockAcquired(std::string keyLock) override;
 
     gsl::span<std::string const> keyLocks() const override;
     std::vector<std::string> takeKeyLocks() override;
@@ -207,54 +139,33 @@ public:
     std::vector<bcos::protocol::LogEntry> takeLogEntries() override;
     void setLogEntries(std::vector<bcos::protocol::LogEntry> logEntries) override;
 
-    bool delegateCall() const override { return m_inner()->delegateCall; }
-    void setDelegateCall(bool delegateCall) override { m_inner()->delegateCall = delegateCall; }
+    bool delegateCall() const override;
+    void setDelegateCall(bool delegateCall) override;
 
-    std::string_view delegateCallAddress() const override { return m_inner()->delegateCallAddress; }
-    void setDelegateCallAddress(std::string delegateCallAddress) override
-    {
-        m_inner()->delegateCallAddress = delegateCallAddress;
-    }
+    std::string_view delegateCallAddress() const override;
+    void setDelegateCallAddress(std::string delegateCallAddress) override;
 
 
-    bcos::bytesConstRef delegateCallCode() const override
-    {
-        return bcos::bytesConstRef(
-            reinterpret_cast<const bcos::byte*>(m_inner()->delegateCallCode.data()),
-            m_inner()->delegateCallCode.size());
-    }
+    bcos::bytesConstRef delegateCallCode() const override;
 
-    bcos::bytes takeDelegateCallCode() override
-    {
-        return bcos::bytes(m_inner()->delegateCallCode.begin(), m_inner()->delegateCallCode.end());
-    }
-    void setDelegateCallCode(bcos::bytes delegateCallCode) override
-    {
-        m_inner()->delegateCallCode.assign(delegateCallCode.begin(), delegateCallCode.end());
-    }
+    bcos::bytes takeDelegateCallCode() override;
+    void setDelegateCallCode(bcos::bytes delegateCallCode) override;
 
+    std::string_view delegateCallSender() const override;
+    void setDelegateCallSender(std::string delegateCallSender) override;
 
-    std::string_view delegateCallSender() const override { return m_inner()->delegateCallSender; }
-    void setDelegateCallSender(std::string delegateCallSender) override
-    {
-        m_inner()->delegateCallSender = delegateCallSender;
-    }
-
-    bool hasContractTableChanged() const override { return m_inner()->hasContractTableChanged; }
-    void setHasContractTableChanged(bool hasChanged) override
-    {
-        m_inner()->hasContractTableChanged = hasChanged;
-    }
+    bool hasContractTableChanged() const override;
+    void setHasContractTableChanged(bool hasChanged) override;
 
     // TODO)): should implement web3 nonce logic in max?
-    std::string_view nonceView() const override { throw std::runtime_error("not implemented"); }
-    void setNonce(std::string nonce) override { throw std::runtime_error("not implemented"); }
-    std::string nonce() const override { throw std::runtime_error("not implemented"); }
+    std::string_view nonceView() const override;
+    void setNonce(std::string nonce) override;
+    std::string nonce() const override;
 
-    uint8_t txType() const override { throw std::runtime_error("not implemented"); }
-    void setTxType(uint8_t txType) override { throw std::runtime_error("not implemented"); }
+    uint8_t txType() const override;
+    void setTxType(uint8_t txType) override;
 
-    bcostars::ExecutionMessage inner() const { return *(m_inner()); }
+    bcostars::ExecutionMessage inner() const;
 
 protected:
     virtual void decodeLogEntries();
@@ -272,12 +183,9 @@ public:
     using Ptr = std::shared_ptr<ExecutionMessageFactoryImpl>;
     using ConstPtr = std::shared_ptr<const ExecutionMessageFactoryImpl>;
     ExecutionMessageFactoryImpl() = default;
-    ~ExecutionMessageFactoryImpl() override {}
+    ~ExecutionMessageFactoryImpl() override;
 
-    bcos::protocol::ExecutionMessage::UniquePtr createExecutionMessage() override
-    {
-        return std::make_unique<ExecutionMessageImpl>();
-    }
+    bcos::protocol::ExecutionMessage::UniquePtr createExecutionMessage() override;
 };
 }  // namespace protocol
 }  // namespace bcostars

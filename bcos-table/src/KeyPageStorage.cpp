@@ -26,6 +26,34 @@
 
 namespace bcos::storage
 {
+KeyPageStorage::KeyPageStorage(std::shared_ptr<StorageInterface> _prev, bool setRowWithDirtyFlag,
+    size_t _pageSize, uint32_t _blockVersion,
+    std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables,
+    bool _ignoreNotExist)
+  : storage::StateStorageInterface(std::move(_prev)),
+    m_blockVersion(_blockVersion),
+    m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
+    m_splitSize(m_pageSize / 3 * 2),
+    m_mergeSize(m_pageSize / 4),
+    m_buckets(std::max(1u, std::thread::hardware_concurrency())),
+    m_ignoreTables(std::move(_ignoreTables)),
+    m_ignoreNotExist(_ignoreNotExist),
+    m_setRowWithDirtyFlag(setRowWithDirtyFlag)
+{
+    if (!m_ignoreTables)
+    {
+        auto ignore = std::make_shared<std::set<std::string, std::less<>>>();
+        ignore->insert(std::string(SYS_TABLES));
+        m_ignoreTables = ignore;
+    }
+}
+
+KeyPageStorage::~KeyPageStorage()
+{
+    m_recoder.clear();
+    m_buckets.clear();
+}
+
 void KeyPageStorage::asyncGetPrimaryKeys(std::string_view tableView,
     const std::optional<storage::Condition const>& _condition,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback)
@@ -131,8 +159,8 @@ void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view ke
 }
 
 void KeyPageStorage::asyncGetRows(std::string_view tableView,
-    RANGES::any_view<std::string_view,
-        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
         keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
 {

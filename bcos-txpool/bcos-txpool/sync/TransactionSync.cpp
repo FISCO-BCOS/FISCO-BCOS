@@ -23,6 +23,8 @@
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/zip.hpp>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -51,7 +53,7 @@ void TransactionSync::onRecvSyncMessage(
         }
         auto txsSyncMsg = m_config->msgFactory()->createTxsSyncMsg(_data);
         // receive txs request, and response the transactions
-        if (txsSyncMsg->type() == TxsSyncPacketType::TxsRequestPacket)
+        if (txsSyncMsg->type() == static_cast<int32_t>(TxsSyncPacketType::TxsRequestPacket))
         {
             try
             {
@@ -64,7 +66,7 @@ void TransactionSync::onRecvSyncMessage(
                                   << LOG_KV("peer", _nodeID->shortHex());
             }
         }
-        if (txsSyncMsg->type() == TxsSyncPacketType::TxsStatusPacket)
+        if (txsSyncMsg->type() == static_cast<int32_t>(TxsSyncPacketType::TxsStatusPacket))
         {
             try
             {
@@ -121,7 +123,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     bytes txsData;
     block->encode(txsData);
     auto txsResponse = m_config->msgFactory()->createTxsSyncMsg(
-        TxsSyncPacketType::TxsResponsePacket, std::move(txsData));
+        static_cast<uint32_t>(TxsSyncPacketType::TxsResponsePacket), std::move(txsData));
     auto packetData = txsResponse->encode();
     _sendResponse(ref(*packetData));
     SYNC_LOG(INFO) << LOG_DESC("onReceiveTxsRequest: response txs")
@@ -132,6 +134,20 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
 void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _missedTxs,
     Block::ConstPtr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
+    // FIB-114: short-circuit when the caller has nothing to fetch. The pre-fix path
+    // dispatched an empty hash list through asyncGetBatchTxsByHashList -> peer-fetch
+    // chain, wasting CPU on pointless ledger I/O and adding latency / lock contention
+    // to every "all transactions hit locally" verification. An empty input also has a
+    // trivially correct answer ("verified, no missing txs"), so signal completion
+    // directly.
+    if (!_missedTxs || _missedTxs->empty())
+    {
+        if (_onVerifyFinished)
+        {
+            _onVerifyFinished(nullptr, true);
+        }
+        return;
+    }
     auto missedTxsSet =
         std::make_shared<std::set<HashType>>(_missedTxs->begin(), _missedTxs->end());
     auto startT = utcTime();
@@ -235,8 +251,8 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     }
     auto protocolID = _verifiedProposal ? ModuleID::ConsTxsSync : ModuleID::TxsSync;
 
-    auto txsRequest =
-        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsRequestPacket, *_missedTxs);
+    auto txsRequest = m_config->msgFactory()->createTxsSyncMsg(
+        static_cast<uint32_t>(TxsSyncPacketType::TxsRequestPacket), *_missedTxs);
     auto encodedData = txsRequest->encode();
     auto startT = utcTime();
     auto self = weak_from_this();
@@ -283,6 +299,13 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                            "requestMissedTxs: verifyFetchedTxs when recv txs response exception")
                     << LOG_KV("message", boost::diagnostic_information(e))
                     << LOG_KV("_peer", _nodeID->shortHex());
+                if (_onVerifyFinished)
+                {
+                    _onVerifyFinished(
+                        BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                            "verifyFetchedTxs exception: " + boost::diagnostic_information(e)),
+                        false);
+                }
             }
         });
 }
@@ -311,11 +334,12 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     }
     auto txsResponse = m_config->msgFactory()->createTxsSyncMsg(_data);
     auto error = nullptr;
-    if (txsResponse->type() != TxsSyncPacketType::TxsResponsePacket)
+    if (txsResponse->type() != static_cast<int32_t>(TxsSyncPacketType::TxsResponsePacket))
     {
         SYNC_LOG(WARNING) << LOG_DESC("requestMissedTxs: receive invalid txsResponse")
                           << LOG_KV("peer", _nodeID->shortHex())
-                          << LOG_KV("expectedType", TxsSyncPacketType::TxsResponsePacket)
+                          << LOG_KV("expectedType",
+                                 static_cast<int32_t>(TxsSyncPacketType::TxsResponsePacket))
                           << LOG_KV("recvType", txsResponse->type());
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"), false);
@@ -327,7 +351,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     startT = utcTime();
     if (_missedTxs->size() != transactions->transactionsSize())
     {
-        SYNC_LOG(INFO) << LOG_DESC("verifyFetchedTxs failed")
+        SYNC_LOG(INFO) << LOG_DESC("verifyFetchedTxs failed: transaction count mismatch")
                        << LOG_KV("expectedTxs", _missedTxs->size())
                        << LOG_KV("fetchedTxs", transactions->transactionsSize())
                        << LOG_KV("peer", _nodeID->shortHex())
@@ -337,13 +361,30 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("consNum", (_verifiedProposal) ?
                                                 _verifiedProposal->blockHeader()->number() :
                                                 -1);
-        // response to verify result
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
-        // try to import the transactions even when verify failed
-        importDownloadedTxsByBlock(transactions);
         return;
     }
+    // Verify transaction hashes match requested hashes BEFORE import
+    const auto hashMismatch = ::ranges::any_of(
+        ::ranges::views::zip(*_missedTxs, transactions->transactions()), [](auto const& pair) {
+            auto& [expectedHash, tx] = pair;
+            return expectedHash != tx->hash();
+        });
+    if (hashMismatch)
+    {
+        SYNC_LOG(WARNING) << LOG_DESC("verifyFetchedTxs: transaction hash mismatch")
+                          << LOG_KV("peer", _nodeID->shortHex())
+                          << LOG_KV(
+                                 "hash", (_verifiedProposal) ?
+                                             _verifiedProposal->blockHeader()->hash().abridged() :
+                                             "unknown");
+        _onVerifyFinished(
+            BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
+            false);
+        return;
+    }
+    // Hashes verified, now safe to import
     auto [result, txs] = importDownloadedTxsByBlock(transactions, _verifiedProposal);
     if (!result)
     {
@@ -351,17 +392,6 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                               "invalid transaction for invalid signature or nonce or blockLimit"),
             false);
         return;
-    }
-    // check the transaction hash
-    for (size_t i = 0; i < _missedTxs->size(); i++)
-    {
-        if ((*_missedTxs)[i] != (*txs)[i]->hash())
-        {
-            _onVerifyFinished(
-                BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
-                false);
-            return;
-        }
     }
     _onVerifyFinished(error, true);
     SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")
@@ -376,12 +406,12 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
 
 std::tuple<bool, std::shared_ptr<protocol::Transactions>>
 TransactionSync::importDownloadedTxsByBlock(
-    Block::Ptr _txsBuffer, Block::ConstPtr _verifiedProposal)
+    Block::Ptr const& _txsBuffer, Block::ConstPtr _verifiedProposal)
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
     auto txFactory = m_config->blockFactory()->transactionFactory();
-    for (auto tx : _txsBuffer->transactions())
+    for (auto&& tx : _txsBuffer->transactions())
     {
         txs->emplace_back(txFactory->createTransaction(*tx));
     }
@@ -414,32 +444,34 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                 {
                     continue;
                 }
-                if (_verifiedProposal)
+                try
                 {
-                    tx->setBatchId(_verifiedProposal->blockHeader()->number());
-                    tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
-                }
-                if (m_config->txpoolStorage()->exists(tx->hash()))
-                {
-                    continue;
-                }
-                if (m_checkTransactionSignature)
-                {
-                    try
+                    if (_verifiedProposal)
                     {
-                        // force sender to empty for the txs verification
-                        tx->forceSender({});
+                        tx->setBatchId(_verifiedProposal->blockHeader()->number());
+                        tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
+                    }
+                    if (m_config->txpoolStorage()->exists(tx->hash()))
+                    {
+                        continue;
+                    }
+                    if (m_checkTransactionSignature)
+                    {
+                        // clear sender and hash so that verify() will recompute them. For Web3 tx
+                        // this also drops the untrusted wire-supplied canonical txHash, forcing
+                        // verify() to recompute it from the signed payload (FIB-New1).
+                        tx->clearSenderAndHash();
                         // verify failed, it will throw exception
                         tx->verify(*m_hashImpl, *m_signatureImpl);
                     }
-                    catch (std::exception const& e)
-                    {
-                        tx->setInvalid(true);
-                        SYNC_LOG(WARNING) << LOG_DESC("verify sender for tx failed")
-                                          << LOG_KV("reason", boost::diagnostic_information(e))
-                                          << LOG_KV("hash", tx->hash().abridged());
-                        verifySuccess = false;
-                    }
+                }
+                catch (std::exception const& e)
+                {
+                    tx->setInvalid(true);
+                    SYNC_LOG(WARNING)
+                        << LOG_DESC("importDownloadedTxs: verify tx failed")
+                        << LOG_KV("reason", boost::diagnostic_information(e)) << LOG_KV("index", i);
+                    verifySuccess = false;
                 }
             }
         });
@@ -507,8 +539,8 @@ void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
     // TODO: get tx directly, not get txHash and request tx indirectly
     auto txsHash =
         m_config->txpoolStorage()->getTxsHash(m_config->getMaxResponseTxsToNodesWithEmptyTxs());
-    auto txsStatus =
-        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, *txsHash);
+    auto txsStatus = m_config->msgFactory()->createTxsSyncMsg(
+        static_cast<uint32_t>(TxsSyncPacketType::TxsStatusPacket), *txsHash);
     auto packetData = txsStatus->encode();
     m_config->frontService()->asyncSendMessageByNodeID(
         ModuleID::TxsSync, _fromNode, ref(*packetData), 0, nullptr);
@@ -524,8 +556,8 @@ void TransactionSync::onEmptyTxs()
         return;
     }
     SYNC_LOG(DEBUG) << LOG_DESC("onEmptyTxs: broadcast txs status to all consensus node list");
-    auto txsStatus =
-        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
+    auto txsStatus = m_config->msgFactory()->createTxsSyncMsg(
+        static_cast<uint32_t>(TxsSyncPacketType::TxsStatusPacket), HashList());
     auto packetData = txsStatus->encode();
     task::wait([](decltype(packetData) packetData,
                    bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {

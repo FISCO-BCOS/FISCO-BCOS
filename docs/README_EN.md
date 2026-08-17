@@ -6,17 +6,21 @@
 [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS)
 [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
-FISCO BCOS (pronounced /ˈfɪskl bi:ˈkɒz/) is an enterprise-level financial blockchain platform developed and open-sourced by the Financial Services Blockchain Consortium (Shenzhen) "FISCO" led by WeBank. Its usability has been extensively tested through practical applications. So far, more than 300 digital benchmark applications have emerged, covering fields such as finance, healthcare, education, culture, and social governance, such as the Pearl River Delta Credit Chain, the Blockchain Service Network BSN, the People's Chain, the National Health and Medical Big Data Innovation Platform, the Guangdong-Hong Kong Health Code Cross-border Recognition System, and so on.
+FISCO BCOS (pronounced /ˈfɪskl bi:ˈkɒz/) is a domestically secure and controllable open-source blockchain platform launched in 2017 by the open-source working group of the Financial Blockchain Shenzhen Consortium (FISCO). It is committed to providing trusted infrastructure for the digital economy, unlocking the value of data elements, and empowering industrial digitalization and the Web3.0 economy. To date, more than 600 benchmark applications have been deployed in fields such as finance, government affairs, and public welfare, including the Blockchain-based Service Network (BSN), the Pearl River Delta Credit Chain, the Guangdong-Macao / Shenzhen-Hong Kong / Shenzhen-Singapore cross-border data verification platforms, and the China UnionPay blockchain trusted deposit service.
 
-In a single-chain configuration, the performance TPS can reach 100k. It fully supports national encryption algorithms, domestic operating systems, and domestic CPU architecture. FISCO BCOS provides rich features includingcomprehensive parallel computing, blockchain file system, governance framework, and distributed storage.
+Core features:
+
+- **Financial-grade performance**: Single-chain performance exceeds 200,000 TPS, with horizontal scaling to meet the needs of large-scale applications. Regulator nodes can be connected for real-time, penetrating supervision. All-around security safeguards are established across cryptographic algorithms, consensus protocols, P2P networking, key management, and privacy protection.
+- **Domestic security and controllability**: Developed under the leadership of domestic financial institutions and technology companies, fully self-developed with a series of key technology patents. Chinese national cryptography algorithms are adopted across computing, networking, and storage, with full adaptation to domestic servers, operating systems, databases, and other software and hardware platforms.
+- **Openness and open source**: The code and core technologies are fully open source and compatible with mainstream software and hardware platforms at home and abroad. Three node types — consensus node, observer node, and light node — are defined, supporting public access.
 
 ## Version Information:
 
-- Stable Version (for production environment): v3.2.3, version details can be found
-  in [FISCO-BCOS v3.2.3 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.2.3).
+- Stable Version (for production environment): v3.7.3, version details can be found
+  in [FISCO-BCOS v3.7.3 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.3).
 
-- Latest Version (for experiencing new features): v3.7.1, version details can be found
-  in [FISCO-BCOS v3.7.1 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.7.1).
+- Latest Version (for experiencing new features): v3.17.0, version details can be found
+  in [FISCO-BCOS v3.17.0 Release Notes](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v3.17.0).
 
 ## System Overview
 The architecture of FISCO BCOS system consists of the basic layer, core layer, service layer, user layer, and access layer on the left-hand side, providing stable and secure blockchain underlying services. The middleware layer simplifies the process of managing the blockchain system through a visual interface. On the right-hand side, there are supporting components for development, operation, and security control, meeting the needs of different roles during the application implementation process. Meanwhile, privacy protection and cross-chain-related technology components are also provided to satisfy the application requirements in different scenarios.
@@ -28,7 +32,6 @@ The architecture of FISCO BCOS system consists of the basic layer, core layer, s
 - Comprehensive Parallel Computing: Multi-group, intra-block sharding, DMC, DAG, and other parallel mechanisms that achieve powerful processing performance.
 - Blockchain File System: A contract data management system that provides a "what you see is what you get" interface.
 - Permission Governance Framework: A built-in permission governance framework that allows for multi-party voting to govern the blockchain.
-- Distributed Storage TiKV: Distributed transactional submission that supports massive storage.
 - SDK Basic Library: Multi-language SDK that provides easier access to national encryption on all platforms.
 
 ### Component Services:
@@ -41,7 +44,7 @@ The architecture of FISCO BCOS system consists of the basic layer, core layer, s
 - Chain Building Tool: A one-click chain building script that automates blockchain deployment.
 - Visualization Tool: A visualization management tool that reduces operational procedures.
 - Monitoring and Alerting Tool: A monitoring tool that tracks the operational status of the blockchain system in real-time and alerts users.
-- Data Archiving Tool: A cold data archiving tool that supports RocksDB and TiKV to release storage pressure.
+- Data Archiving Tool: A cold data archiving tool that supports RocksDB to release storage pressure.
 ## Documentation
 
 [《The FISCO BCOS Official Technical Documentation》](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/index.html) provides chain development guidelines, tool introductions, and design principle explanations. Users can quickly learn and use FISCO BCOS by reading the official technical documentation.
@@ -61,21 +64,34 @@ If you need to refer to the relevant information of FISCO BCOS 2.x version, you 
 
 ## Featured application
 
-**FISCO BCOS** has been adopted in over hundreds of applications in areas like government affairs, finances, charity, health care, education, transport, copyright, product tracing, supply chain, recruitment, agriculture, social communication, and entertainment.
+**FISCO BCOS** has landed more than 600 benchmark applications in fields such as finance, government affairs, and public welfare, effectively supporting industrial digitalization and trusted data circulation. Typical applications include:
 
-- **Finance**: inter-institutional reconciliation, supply chain finance, tourism finance, etc.
-- **Judicial Deposit**: arbitration chain, digital IOUs, etc.
-- **Cultural Copyright**: copyright registration and trading, etc.
-- **Social Management**: real-estate registration, community governance etc.
-- **Rural Revitalization**: Construction of smart agriculture and animal husbandry big data cloud platforms, digital platforms, etc.
-- **Smart Governance**: City brain, provident fund blockchain platform, digital certification projects, etc.
+- Blockchain-based Service Network (BSN)
+- Guangdong-Macao / Shenzhen-Hong Kong / Shenzhen-Singapore cross-border data verification platforms
+- Shuxin Chain, the blockchain service infrastructure of Sichuan Province
+- National marine science data sharing and circulation privacy-computing platform
+- Pearl River Delta Credit Chain
+- China UnionPay blockchain trusted deposit service
 
+For more cases, please refer to the [2025 FISCO BCOS Industry Application Development Report](https://mp.weixin.qq.com/s/A2vdLtJhhyg9_BBkIwByNA) (in Chinese).
 
 ## Join our community
 
-The FISCO BCOS open source community is a thriving and expansive community in China. Since its inception, the open source community built around FISCO BCOS has united more than 4,000 enterprises and institutions, along with over 90,000 individual members, to collaborate and share resources. The community has successfully supported hundreds of blockchain application scenarios across key industries such as government affairs, finance, agriculture, public welfare, entertainment, supply chain, and the Internet of Things. With over 300 benchmark applications collected, the community has formed a large and active open source alliance chain ecosystem.
+By the end of 2025, the FISCO BCOS open source community had gathered more than 5,000 enterprises and institutions and over 100,000 individual members in co-construction and co-governance, growing into one of the most vibrant blockchain open source communities in China.
+
+Community honors:
+
+- First prize of the 2018 Shenzhen FinTech Special Award
+- The first domestic consortium blockchain platform adapted by the Blockchain-based Service Network (BSN) of the State Information Center
+- Among the first to pass the national certification for blockchain technology products by the Beijing National Financial Technology Certification Center
+- 2 of the 4 Chinese use cases in the ISO standard "Blockchain and distributed ledger technologies — Use cases" are built on FISCO BCOS
+- A core technology paper was accepted by SC23, the top international academic conference on supercomputing — the first academic paper on blockchain performance optimization in the history of SC
 
 If you have an interest in FISCO BCOS open source technology and applications, we invite you to join the community and take advantage of the support and resources available.
+
+- [2025 MVP list](https://mp.weixin.qq.com/s/g1ZJZ8LXxgk9rexUg2a0Uw) (in Chinese)
+- [FISCO BCOS certified partner list](https://mp.weixin.qq.com/s/IJ87PYxuDPpQzOoXD-XeVQ) (in Chinese)
+- [2025 FISCO BCOS Industry Application Development Report](https://mp.weixin.qq.com/s/A2vdLtJhhyg9_BBkIwByNA) (in Chinese)
 
 ![](https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/images/QR_image_en.png)
 

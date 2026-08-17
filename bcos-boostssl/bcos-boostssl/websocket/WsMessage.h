@@ -30,14 +30,7 @@
 #include <string>
 #include <utility>
 
-inline void CHECK_OFFSET(uint64_t offset, uint64_t length)
-{
-    if (std::cmp_greater(offset, length))
-    {
-        throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
-                                " ,length: " + std::to_string(length));
-    }
-}
+void CHECK_OFFSET(uint64_t offset, uint64_t length);
 
 namespace bcos::boostssl::ws
 {
@@ -49,54 +42,35 @@ public:
     const static size_t MESSAGE_MIN_LENGTH;
 
     using Ptr = std::shared_ptr<WsMessage>;
-    WsMessage()
-    {
-        m_payload = std::make_shared<bcos::bytes>();
-        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-        {
-            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][WsMessage]", this);
-        }
-    }
+    WsMessage();
     WsMessage(const WsMessage&) = delete;
     WsMessage& operator=(const WsMessage&) = delete;
     WsMessage(WsMessage&&) = delete;
     WsMessage& operator=(WsMessage&&) = delete;
-    ~WsMessage() override
-    {
-        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-        {
-            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[DELOBJ][WsMessage]", this);
-        }
-    }
+    ~WsMessage() override;
 
 
-    uint16_t version() const override { return m_version; }
-    void setVersion(uint16_t /*unused*/) override {}
-    uint16_t packetType() const override { return m_packetType; }
-    void setPacketType(uint16_t _packetType) override { m_packetType = _packetType; }
-    int16_t status() const { return m_status; }
-    void setStatus(int16_t _status) { m_status = _status; }
-    std::string const& seq() const override { return m_seq; }
-    void setSeq(std::string _seq) override { m_seq = _seq; }
-    std::shared_ptr<bcos::bytes> payload() const override { return m_payload; }
-    void setPayload(std::shared_ptr<bcos::bytes> _payload) override
-    {
-        m_payload = std::move(_payload);
-    }
-    uint16_t ext() const override { return m_ext; }
-    void setExt(uint16_t _ext) override { m_ext = _ext; }
+    uint16_t version() const override;
+    void setVersion(uint16_t /*unused*/) override;
+    uint16_t packetType() const override;
+    void setPacketType(uint16_t _packetType) override;
+    int16_t status() const;
+    void setStatus(int16_t _status);
+    std::string const& seq() const override;
+    void setSeq(std::string _seq) override;
+    std::shared_ptr<bcos::bytes> payload() const override;
+    void setPayload(std::shared_ptr<bcos::bytes> _payload) override;
+    uint16_t ext() const override;
+    void setExt(uint16_t _ext) override;
 
 
     bool encode(bcos::bytes& _buffer) override;
     int64_t decode(bytesConstRef _buffer) override;
 
-    bool isRespPacket() const override
-    {
-        return (m_ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
-    }
-    void setRespPacket() override { m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE; }
+    bool isRespPacket() const override;
+    void setRespPacket() override;
 
-    uint32_t length() const override { return m_length; }
+    uint32_t length() const override;
 
 private:
     uint16_t m_version = 0;
@@ -120,11 +94,7 @@ public:
     WsMessageFactory& operator=(WsMessageFactory&&) = delete;
     ~WsMessageFactory() override = default;
 
-    boostssl::MessageFace::Ptr buildMessage() override
-    {
-        auto msg = std::make_shared<WsMessage>();
-        return msg;
-    }
+    boostssl::MessageFace::Ptr buildMessage() override;
 };
 
 }  // namespace bcos::boostssl::ws

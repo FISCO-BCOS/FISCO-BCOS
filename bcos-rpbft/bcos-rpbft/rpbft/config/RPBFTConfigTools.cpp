@@ -62,25 +62,18 @@ void RPBFTConfigTools::updateWorkingSealerNodeList(
     m_workingSealerNodeNum = m_consensusNodeList.size();
     m_workingSealerNodeListUpdated = true;
 
-    RPBFT_LOG(INFO) << METRIC << LOG_DESC("updateWorkingConsensusNodeList")
+    // FIB-146 follow-up: notify subscribers (e.g. PBFTPipeline) that the
+    // sealer set rotated. Fires only when the list actually changed.
+    if (m_onSealerListChanged)
+    {
+        m_onSealerListChanged();
+    }
+
+    // FIB-119: match function name; was "updateWorkingConsensusNodeList".
+    RPBFT_LOG(INFO) << METRIC << LOG_DESC("updateWorkingSealerNodeList")
                     << LOG_KV("workingNodeNum", m_workingSealerNodeNum)
                     << LOG_KV("nodeIndexInWorkingSealer", m_nodeIndexInWorkingSealer)
                     << decsConsensusNodeList(workingSealerNodeList);
-    //
-    //    if (!compareConsensusNode(*m_workingSealerNodeList, *m_consensusNodeList))
-    //    {
-    //        bcos::consensus::ConsensusNodeList pendingConsensusNodeList;
-    //        for (const auto& node : _ledgerConfig->mutableConsensusNodeList())
-    //        {
-    //            if (!ConsensusConfig::isNodeExist(node, *m_workingSealerNodeList))
-    //            {
-    //                pendingConsensusNodeList.emplace_back(node);
-    //            }
-    //        }
-    //
-    //        *_ledgerConfig->mutableConsensusList() = *m_workingSealerNodeList;
-    //        *_ledgerConfig->mutableObserverList() += pendingConsensusNodeList;
-    //    }
 }
 
 void RPBFTConfigTools::updateShouldRotateSealers(
@@ -167,18 +160,23 @@ void RPBFTConfigTools::updateNotifyRotateFlag(const bcos::ledger::LedgerConfig::
 
 bool RPBFTConfigTools::shouldRotateSealers(protocol::BlockNumber _number) const
 {
-    if (!m_shouldRotateWorkingSealer && _number != -1)
+    // Always rotate if rotation is forced
+    if (m_shouldRotateWorkingSealer)
     {
-        if (m_epochBlockNum == 0)
-        {
-            return false;
-        }
-        if ((_number - m_epochBlockNumEnableNumber) % m_epochBlockNum == 0)
-        {
-            return true;
-        }
+        return true;
     }
-    return m_shouldRotateWorkingSealer;
+    // Early exit for invalid block numbers
+    if (_number == -1)
+    {
+        return false;
+    }
+    // Cannot rotate if epoch configuration is invalid
+    if (m_epochBlockNum == 0)
+    {
+        return false;
+    }
+    // Check if current block is at rotation boundary
+    return (_number - m_epochBlockNumEnableNumber) % m_epochBlockNum == 0;
 }
 
 void RPBFTConfigTools::setShouldRotateSealers(bool _shouldRotateSealers)

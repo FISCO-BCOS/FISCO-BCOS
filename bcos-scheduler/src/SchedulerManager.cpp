@@ -2,6 +2,89 @@
 
 using namespace bcos::scheduler;
 
+SchedulerManager::SchedulerManager(
+    int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager)
+  : m_factory(std::move(factory)),
+    m_schedulerTerm(schedulerSeq),
+    m_executorManager(std::move(executorManager)),
+    m_pool("SchedulerManager", 1),
+    m_status(INITIALING)
+{
+    m_executorManager->setExecutorChangeHandler([this]() {
+        asyncSelfSwitchTerm();
+    });
+}
+
+SchedulerFactory::Ptr SchedulerManager::getFactory()
+{
+    return m_factory;
+}
+
+SchedulerManager::SchedulerTerm::SchedulerTerm(int64_t schedulerSeq)
+  : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime() / 1000)
+{}
+
+SchedulerManager::SchedulerTerm SchedulerManager::SchedulerTerm::next()
+{
+    return SchedulerTerm(m_schedulerSeq);
+}
+
+int64_t SchedulerManager::SchedulerTerm::getSchedulerTermID()
+{
+    int64_t id = (m_schedulerSeq << 32) + m_executorSeq;
+    if (id <= 0)
+    {
+        BCOS_LOG(FATAL) << "SchedulerTermID overflow!" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
+                        << LOG_KV("m_executorSeq", m_executorSeq)
+                        << LOG_KV("SchedulerTermID", id);
+    }
+    BCOS_LOG(DEBUG) << "Build SchedulerTermID" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
+                    << LOG_KV("m_executorSeq", m_executorSeq)
+                    << LOG_KV("SchedulerTermID", id);
+
+    return id;
+}
+
+void SchedulerManager::stop()
+{
+    if (m_status == STOPPED)
+    {
+        SCHEDULER_LOG(INFO) << "scheduler has just stopped." << std::endl;
+        return;
+    }
+
+    SCHEDULER_LOG(INFO) << "Try to stop SchedulerManager";
+
+    m_status.store(STOPPED);
+
+    if (m_scheduler)
+    {
+        m_scheduler->stop();
+    }
+
+    if (m_executorManager)
+    {
+        m_executorManager->stop();
+    }
+
+    int32_t waitCount = 20;
+    while (m_scheduler.use_count() > 1 && waitCount-- > 0)
+    {
+        SCHEDULER_LOG(DEBUG) << "Scheduler is stopping.. "
+                             << LOG_KV("unfinishedTaskNum", m_scheduler.use_count() - 1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    m_factory->stop();
+    SCHEDULER_LOG(INFO) << "scheduler has stopped.";
+    m_scheduler = nullptr;
+}
+
+void SchedulerManager::triggerSwitch()
+{
+    asyncSelfSwitchTerm();
+}
+
 // by pbft & sync
 void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>

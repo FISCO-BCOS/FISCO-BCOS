@@ -4,6 +4,10 @@
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
@@ -21,12 +25,12 @@ struct Fixture
         task::syncWait([this](int64_t count) -> task::Task<void> {
             auto view = multiLayerStorage.fork();
             view.newMutable();
-            allKeys = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
+            allKeys = ::ranges::views::iota(0, count) | ::ranges::views::transform([](int num) {
                 auto key = fmt::format("key: {}", num);
                 return executor_v1::StateKey{"test_table"sv, std::string_view(key)};
-            }) | RANGES::to<decltype(allKeys)>();
+            }) | ::ranges::to<decltype(allKeys)>();
 
-            auto allValues = RANGES::views::iota(0, count) | RANGES::views::transform([](int num) {
+            auto allValues = ::ranges::views::iota(0, count) | ::ranges::views::transform([](int num) {
                 storage::Entry entry;
                 entry.set(fmt::format("value: {}", num));
 

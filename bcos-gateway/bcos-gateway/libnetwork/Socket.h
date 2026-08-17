@@ -21,59 +21,26 @@ class Socket : public SocketFace, public std::enable_shared_from_this<Socket>
 {
 public:
     Socket(std::shared_ptr<ba::io_context> _ioService, ba::ssl::context& _sslContext,
-        NodeIPEndpoint _nodeIPEndpoint)
-      : m_nodeIPEndpoint(_nodeIPEndpoint), m_ioService(_ioService)
-    {
-        try
-        {
-            m_sslSocket =
-                std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*_ioService, _sslContext);
-        }
-        catch (const std::exception& _e)
-        {
-            SESSION_LOG(ERROR) << "ERROR: " << boost::diagnostic_information(_e);
-            SESSION_LOG(ERROR) << "Ssl Socket Init Fail! Please Check CERTIFICATE!";
-        }
-    }
-    ~Socket() { close(); }
+        NodeIPEndpoint _nodeIPEndpoint);
+    ~Socket();
 
-    bool isConnected() const override { return m_sslSocket->lowest_layer().is_open(); }
+    bool isConnected() const override;
 
-    void close() override
-    {
-        try
-        {
-            boost::system::error_code ec;
-            m_sslSocket->lowest_layer().shutdown(bi::tcp::socket::shutdown_both, ec);
-            if (m_sslSocket->lowest_layer().is_open())
-                m_sslSocket->lowest_layer().close();
-        }
-        catch (...)
-        {}
-    }
+    void close() override;
 
     bi::tcp::endpoint remoteEndpoint(
-        boost::system::error_code ec = boost::system::error_code()) override
-    {
-        return m_sslSocket->lowest_layer().remote_endpoint(ec);
-    }
+        boost::system::error_code ec = boost::system::error_code()) override;
 
     bi::tcp::endpoint localEndpoint(
-        boost::system::error_code ec = boost::system::error_code()) override
-    {
-        return m_sslSocket->lowest_layer().local_endpoint(ec);
-    }
+        boost::system::error_code ec = boost::system::error_code()) override;
 
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
+    bi::tcp::socket& ref() override;
+    ba::ssl::stream<bi::tcp::socket>& sslref() override;
 
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
-    {
-        m_nodeIPEndpoint = _nodeIPEndpoint;
-    }
+    const NodeIPEndpoint& nodeIPEndpoint() const override;
+    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override;
 
-    ba::io_context& ioService() override { return *m_ioService; }
+    ba::io_context& ioService() override;
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;

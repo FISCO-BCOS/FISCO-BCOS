@@ -7,6 +7,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -72,6 +73,87 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInter
 
 task::Task<void> tag_invoke(ledger::tag_t<storeTransactionsAndReceipts>, LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr blockTxs, bcos::protocol::Block::ConstPtr block);
+
+// FIB-104: Unified prewrite — routes block, transaction, and receipt data into
+// the caller-provided storage buffer. Phase 1 reuses the existing prewriteBlock
+// path (with txs/receipts disabled) to write metadata; phase 2 writes
+// SYS_HASH_2_RECEIPT and SYS_HASH_2_TX rows directly into the same storage,
+// bypassing m_blockStorage so the caller can mergeBack everything atomically.
+task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
+    LedgerInterface& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
+    bcos::protocol::Block::ConstPtr block, auto& storage)
+{
+    if (!block)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::ErrorArgument, "empty block"));
+    }
+
+    // Phase 1: header / hash mappings / nonce / current-number / tx-meta via the
+    // existing prewriteBlock path. withTransactionsAndReceipts=false intentionally
+    // skips the tx/receipt writes that would otherwise go to m_blockStorage; we
+    // route them through the same `storage` below to keep the commit atomic.
+    co_await prewriteBlock(ledger, blockTxs, block, /*withTransactionsAndReceipts=*/false, storage);
+
+    auto txSize = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
+    if (txSize == 0)
+    {
+        co_return;
+    }
+
+    auto inlineTxs = block->transactions();
+    auto blockReceipts = block->receipts();
+
+    // SYS_HASH_2_RECEIPT — encoded receipts keyed by tx hash.
+    for (size_t i = 0; i < block->receiptsSize(); ++i)
+    {
+        bytes encodedReceipt;
+        blockReceipts[i]->encode(encodedReceipt);
+
+        auto txHash = blockTxs ? blockTxs->at(i)->hash() : inlineTxs[i]->hash();
+
+        storage::Entry receiptEntry;
+        receiptEntry.importFields({std::move(encodedReceipt)});
+        co_await storage2::writeOne(storage,
+            executor_v1::StateKey{SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
+            std::move(receiptEntry));
+    }
+
+    // SYS_HASH_2_TX — encoded transactions keyed by tx hash. Skip txs already
+    // persisted (storeToBackend flag) to match existing dedup semantics.
+    for (size_t i = 0; i < txSize; ++i)
+    {
+        const protocol::Transaction* tx = nullptr;
+        std::optional<protocol::AnyTransaction> anyTx;
+        if (blockTxs)
+        {
+            tx = blockTxs->at(i).get();
+        }
+        else
+        {
+            anyTx = inlineTxs[i];
+            tx = anyTx->get();
+        }
+        if (blockTxs && tx->storeToBackend())
+        {
+            continue;
+        }
+
+        bytes encodedTx;
+        tx->encode(encodedTx);
+        auto txHash = tx->hash();
+
+        storage::Entry txEntry;
+        txEntry.importFields({std::move(encodedTx)});
+        co_await storage2::writeOne(storage,
+            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)},
+            std::move(txEntry));
+
+        if (blockTxs)
+        {
+            tx->setStoreToBackend(true);
+        }
+    }
+}
 
 void tag_invoke(ledger::tag_t<removeExpiredNonce>, LedgerInterface& ledger,
     protocol::BlockNumber expiredNumber);
@@ -152,7 +234,8 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                 {
                     auto field = txEntry->getField(0);
                     auto transaction = blockFactory.transactionFactory()->createTransaction(
-                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false);
+                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
+                        false);
                     block->appendTransaction(std::move(transaction));
                 }
             }

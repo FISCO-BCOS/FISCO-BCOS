@@ -18,19 +18,22 @@
  */
 #pragma once
 #include "TransactionSubmitResult.h"
-#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include <range/v3/view/any_view.hpp>
-#if !ONLY_CPP_SDK
-#include <bcos-utilities/ITTAPI.h>
-#endif
-#include "bcos-utilities/AnyHolder.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <boost/throw_exception.hpp>
+#include <atomic>
+#include <concepts>
+#include <functional>
+#include <iosfwd>
 #include <utility>
+
+namespace bcostars::protocol
+{
+class TransactionImpl;
+class TransactionFactoryImpl;
+}  // namespace bcostars::protocol
 
 namespace bcos::protocol
 {
@@ -72,10 +75,10 @@ public:
     using ConstPtr = std::shared_ptr<const Transaction>;
 
     Transaction() = default;
-    Transaction(const Transaction&) = default;
-    Transaction(Transaction&&) = default;
-    Transaction& operator=(const Transaction&) = default;
-    Transaction& operator=(Transaction&&) = default;
+    Transaction(const Transaction& other);
+    Transaction(Transaction&& other) noexcept;
+    Transaction& operator=(const Transaction& other);
+    Transaction& operator=(Transaction&& other) noexcept;
     virtual ~Transaction() noexcept = default;
 
     virtual void decode(bytesConstRef _txData) = 0;
@@ -83,33 +86,7 @@ public:
     virtual bcos::crypto::HashType hash() const = 0;
     virtual bcos::bytesConstRef extraTransactionBytes() const = 0;
 
-    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
-    {
-#if !ONLY_CPP_SDK
-        ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION,
-            ittapi::ITT_DOMAINS::instance().VERIFY_TRANSACTION);
-#endif
-        // The tx has already been verified
-        if (!sender().empty())
-        {
-            return;
-        }
-        // based on type to switch recover sender
-        crypto::HashType hashResult;
-        if (type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
-        {
-            hashResult = hash();
-        }
-        else if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
-        {
-            auto bytesRef = extraTransactionBytes();
-            hashResult = bcos::crypto::keccak256Hash(bytesRef);
-        }
-        // check the signatures
-        auto signature = signatureData();
-        auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
-        forceSender(ret.second);
-    }
+    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl);
 
     virtual int32_t version() const = 0;
     virtual std::string_view chainId() const = 0;
@@ -139,7 +116,13 @@ public:
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual uint8_t type() const = 0;
 
-    virtual void forceSender(const bcos::bytes& _sender) const = 0;
+    virtual void forceSender(const bcos::bytes& _sender) = 0;
+    // Clear sender and all cached/derived hashes (dataHash and, for Web3 tx, the wire-supplied
+    // canonical extraTransactionHash) and mark the transaction tainted for re-verification, so
+    // verify() recomputes them from the signed payload rather than trusting stale/wire values.
+    virtual void clearSenderAndHash() = 0;
+    // Recompute hash from transaction data fields
+    virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
     virtual bcos::bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;
@@ -160,8 +143,11 @@ public:
     bool invalid() const { return m_invalid; }
     void setInvalid(bool _invalid) const { m_invalid = _invalid; }
 
-    void setSystemTx(bool _systemTx) const { m_systemTx = _systemTx; }
-    bool systemTx() const { return m_systemTx; }
+    void setSystemTx(bool _systemTx) const
+    {
+        m_systemTx.store(_systemTx, std::memory_order_release);
+    }
+    bool systemTx() const { return m_systemTx.load(std::memory_order_acquire); }
 
     void setBatchId(bcos::protocol::BlockNumber _batchId) const { m_batchId = _batchId; }
     bcos::protocol::BlockNumber batchId() const { return m_batchId; }
@@ -169,12 +155,20 @@ public:
     void setBatchHash(bcos::crypto::HashType const& _hash) const { m_batchHash = _hash; }
     bcos::crypto::HashType const& batchHash() const { return m_batchHash; }
 
+    bool tainted() const { return m_tainted; }
+
     bool storeToBackend() const { return m_storeToBackend; }
     void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
 
     virtual size_t size() const { return 0; }
 
+protected:
+    void setTainted(bool _tainted) const { m_tainted = _tainted; }
+
 private:
+    friend class bcostars::protocol::TransactionImpl;
+    friend class bcostars::protocol::TransactionFactoryImpl;
+
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not
 
@@ -190,10 +184,39 @@ private:
     // the tx is invalid for verify failed
     mutable bool m_invalid = {false};
     // the transaction is the system transaction or not
-    mutable bool m_systemTx = {false};
+    mutable std::atomic<bool> m_systemTx = {false};
+    // tainted transactions come from external input and must be verified before trusted use
+    mutable bool m_tainted = {true};
     // the transaction has been stored to the storage or not
     mutable bool m_storeToBackend = {false};
 };
+
+// FIB-75: Return the effective gas price for a transaction.
+// - Legacy / EIP-2930 web3 txs: value is written into the gasPrice field
+//   (see Web3Transaction::takeToTarsTransaction: gasPrice = maxPriorityFeePerGas for
+//   pre-EIP-1559 types)
+// - EIP-1559+ web3 txs: gasPrice field is empty, value is in maxFeePerGas
+// Returns 0 when no parseable price is available.
+inline u256 effectiveGasPrice(Transaction const& tx)
+{
+    try
+    {
+        if (const auto price = tx.gasPrice(); !price.empty())
+        {
+            if (auto value = u256(price); value > 0)
+            {
+                return value;
+            }
+        }
+        if (const auto mfg = tx.maxFeePerGas(); !mfg.empty())
+        {
+            return u256(mfg);
+        }
+    }
+    catch (...)
+    {}
+    return u256{0};
+}
 
 using Transactions = std::vector<Transaction::Ptr>;
 using TransactionsPtr = std::shared_ptr<Transactions>;
@@ -204,30 +227,6 @@ using AnyTransaction =
     AnyHolder<bcos::protocol::Transaction, 184>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
                                                   // TransactinImpl across platforms)
 
-inline std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
-{
-    stream << "Transaction{" << "hash=" << transaction.hash() << ", "
-           << "version=" << transaction.version() << ", " << "chainId=" << transaction.chainId()
-           << ", " << "groupId=" << transaction.groupId() << ", "
-           << "blockLimit=" << transaction.blockLimit() << ", " << "nonce=" << transaction.nonce()
-           << ", " << "to=" << transaction.to() << ", " << "abi=" << transaction.abi() << ", "
-           << "value=" << transaction.value() << ", " << "gasPrice=" << transaction.gasPrice()
-           << ", " << "gasLimit=" << transaction.gasLimit() << ", "
-           << "maxFeePerGas=" << transaction.maxFeePerGas() << ", "
-           << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas() << ", "
-           << "extension=" << toHex(transaction.extension()) << ", "
-           << "extraData=" << transaction.extraData() << ", "
-           << "sender=" <<
-        [&]() {
-            auto view = transaction.sender();
-            return bcos::bytesConstRef{(const bcos::byte*)view.data(), view.size()};
-        }() << ", "
-           << "input=" << toHex(transaction.input()) << ", "
-           << "importTime=" << transaction.importTime() << ", "
-           << "type=" << static_cast<int>(transaction.type()) << ", "
-           << "attribute=" << transaction.attribute() << ", "
-           << "size=" << transaction.size() << "}";
-    return stream;
-}
+std::ostream& operator<<(std::ostream& stream, const Transaction& transaction);
 
 }  // namespace bcos::protocol

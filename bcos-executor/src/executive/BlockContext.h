@@ -97,43 +97,12 @@ public:
     void setVMSchedule();
     void setVMFactory(std::shared_ptr<VMFactory> factory) { m_vmFactory = factory; }
 
-    void stop()
-    {
-        std::vector<ExecutiveFlowInterface::Ptr> executiveFlow2Stop;
-        {
-            bcos::ReadGuard l(x_executiveFlows);
-            for (auto it : m_executiveFlows)
-            {
-                EXECUTOR_LOG(INFO) << "Try to stop flow: " << it.first;
-                executiveFlow2Stop.push_back(it.second);
-            }
-        }
+    void stop();
+    void clear();
 
-        if (executiveFlow2Stop.empty())
-        {
-            return;
-        }
+    void registerNeedSwitchEvent(std::function<void()> event);
 
-        for (auto executiveFlow : executiveFlow2Stop)
-        {
-            executiveFlow->stop();
-        }
-    }
-    void clear()
-    {
-        bcos::WriteGuard l(x_executiveFlows);
-        m_executiveFlows.clear();
-    }
-
-    void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
-
-    void triggerSwitch()
-    {
-        if (f_onNeedSwitchEvent)
-        {
-            f_onNeedSwitchEvent();
-        }
-    }
+    void triggerSwitch();
 
     auto keyPageIgnoreTables() const { return m_keyPageIgnoreTables; }
 

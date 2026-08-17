@@ -33,15 +33,10 @@ PublicPtr ed25519PriToPub(SecretPtr _secretKey);
 class Ed25519KeyPair : public KeyPair
 {
 public:
-    Ed25519KeyPair() : KeyPair(ED25519_PUBLIC_LEN, ED25519_PRIVATE_LEN, KeyPairType::Ed25519) {}
-    explicit Ed25519KeyPair(SecretPtr _secretKey) : Ed25519KeyPair()
-    {
-        m_secretKey = _secretKey;
-        m_publicKey = priToPub(_secretKey);
-        m_type = KeyPairType::Ed25519;
-    }
+    Ed25519KeyPair();
+    explicit Ed25519KeyPair(SecretPtr _secretKey);
     ~Ed25519KeyPair() override {}
-    virtual PublicPtr priToPub(SecretPtr _secretKey) { return ed25519PriToPub(_secretKey); }
+    virtual PublicPtr priToPub(SecretPtr _secretKey);
 };
 }  // namespace crypto
 }  // namespace bcos

@@ -21,6 +21,7 @@
 
 #pragma once
 #include "VMInstance.h"
+#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmone/evmone.h>
@@ -45,9 +46,18 @@ public:
         {
         case VMKind::evmone:
         {
-            return VMInstance{
-                std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
-                    mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
+            // FIB-95: wrap analyze() in try/catch to prevent unhandled exceptions
+            try
+            {
+                return VMInstance{
+                    std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
+                        mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
+            }
+            catch (const std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("VM") << "Failed to analyze bytecode: " << e.what();
+                BOOST_THROW_EXCEPTION(UnknownVMError{});
+            }
         }
         default:
             BOOST_THROW_EXCEPTION(UnknownVMError{});

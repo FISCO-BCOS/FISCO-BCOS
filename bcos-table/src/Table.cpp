@@ -26,10 +26,10 @@
 #include <boost/throw_exception.hpp>
 #include <sstream>
 
-using namespace std;
-
 namespace bcos::storage
 {
+using namespace std;
+
 std::optional<Entry> Table::getRow(std::string_view _key)
 {
     std::promise<std::tuple<Error::UniquePtr, std::optional<Entry>>> promise;
@@ -48,8 +48,8 @@ std::optional<Entry> Table::getRow(std::string_view _key)
     return std::get<1>(result);
 }
 
-std::vector<std::optional<Entry>> Table::getRows(RANGES::any_view<std::string_view,
-    RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+std::vector<std::optional<Entry>> Table::getRows(::ranges::any_view<std::string_view,
+    ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
         keys)
 {
     std::promise<std::tuple<Error::UniquePtr, std::vector<std::optional<Entry>>>> promise;
@@ -112,8 +112,8 @@ void Table::asyncGetRow(std::string_view _key,
 }
 
 void Table::asyncGetRows(
-    RANGES::any_view<std::string_view,
-        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
         keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
 {

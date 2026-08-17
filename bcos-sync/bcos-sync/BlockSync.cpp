@@ -28,6 +28,8 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/algorithm/sort.hpp>
 #include <string>
 
 using namespace bcos;
@@ -335,6 +337,10 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
 {
     if (!m_masterNode)
     {
+        if (_onRecv)
+        {
+            _onRecv(nullptr);
+        }
         return;
     }
     auto self = weak_from_this();
@@ -373,6 +379,14 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
         BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage error")
                              << LOG_KV("code", _error->errorCode())
                              << LOG_KV("msg", _error->errorMessage());
+        return;
+    }
+    // Early authorization check: reject all packet types from non-group peers
+    // when free node sync is not allowed
+    if (!m_allowFreeNode && !m_config->existsInGroup(_nodeID))
+    {
+        BLKSYNC_LOG(DEBUG) << LOG_DESC("asyncNotifyBlockSyncMessage: reject non-group peer")
+                           << LOG_KV("peer", _nodeID->shortHex());
         return;
     }
     try
@@ -494,6 +508,14 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
                                  << LOG_KV("receivedBlockNumber", number)
                                  << LOG_KV("topArchivedQueue", topNumber)
                                  << LOG_KV("archivedBlockNumber", archivedNumber);
+            return;
+        }
+        if (blockMsg->blocksSize() == 0)
+        {
+            BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                 << LOG_DESC("Empty blocksData in BlockResponsePacket")
+                                 << LOG_KV("receivedBlockNumber", number)
+                                 << LOG_KV("peer", _nodeID->shortHex());
             return;
         }
         auto block = m_config->blockFactory()->createBlock(blockMsg->blockData(0), true, true);
@@ -1006,16 +1028,16 @@ void BlockSync::updateTreeTopologyNodeInfo()
     bcos::crypto::NodeIDs allNodeIDs;
 
     // extract NodeIDs
-    RANGES::for_each(m_config->consensusNodeList(), [&consensusNodeIDs, &allNodeIDs](auto& node) {
+    ::ranges::for_each(m_config->consensusNodeList(), [&consensusNodeIDs, &allNodeIDs](auto& node) {
         consensusNodeIDs.emplace_back(node.nodeID);
         allNodeIDs.emplace_back(node.nodeID);
     });
-    RANGES::for_each(m_config->observerNodeList(),
+    ::ranges::for_each(m_config->observerNodeList(),
         [&allNodeIDs](auto& node) { allNodeIDs.emplace_back(node.nodeID); });
 
-    RANGES::sort(consensusNodeIDs.begin(), consensusNodeIDs.end(),
+    ::ranges::sort(consensusNodeIDs.begin(), consensusNodeIDs.end(),
         [](auto& a, auto& b) { return a->data() < b->data(); });
-    RANGES::sort(allNodeIDs.begin(), allNodeIDs.end(),
+    ::ranges::sort(allNodeIDs.begin(), allNodeIDs.end(),
         [](auto& a, auto& b) { return a->data() < b->data(); });
 
     m_syncTreeTopology->updateAllNodeInfo(consensusNodeIDs, allNodeIDs);
@@ -1036,15 +1058,15 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
 {
     Json::Value syncInfo;
     syncInfo["isSyncing"] = isSyncing();
-    syncInfo["genesisHash"] = *toHexString(m_config->genesisHash());
-    syncInfo["nodeID"] = *toHexString(m_config->nodeID()->data());
+    syncInfo["genesisHash"] = toHex(m_config->genesisHash());
+    syncInfo["nodeID"] = toHex(m_config->nodeID()->data());
 
     int64_t currentNumber = m_config->blockNumber();
     syncInfo["blockNumber"] = currentNumber;
     syncInfo["archivedBlockNumber"] = m_config->archiveBlockNumber();
-    syncInfo["latestHash"] = *toHexString(m_config->hash());
+    syncInfo["latestHash"] = toHex(m_config->hash());
     syncInfo["knownHighestNumber"] = m_config->knownHighestNumber();
-    syncInfo["knownLatestHash"] = *toHexString(m_config->knownLatestHash());
+    syncInfo["knownLatestHash"] = toHex(m_config->knownLatestHash());
 
     Json::Value peersInfo(Json::arrayValue);
     m_syncStatus->foreachPeer([&](PeerStatus::Ptr _p) {
@@ -1054,10 +1076,10 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
             return true;
         }
         Json::Value info;
-        info["nodeID"] = *toHexString(_p->nodeId()->data());
-        info["genesisHash"] = *toHexString(_p->genesisHash());
+        info["nodeID"] = toHex(_p->nodeId()->data());
+        info["genesisHash"] = toHex(_p->genesisHash());
         info["blockNumber"] = Json::UInt64(_p->number());
-        info["latestHash"] = *toHexString(_p->hash());
+        info["latestHash"] = toHex(_p->hash());
         info["archivedBlockNumber"] = Json::UInt64(_p->archivedBlockNumber());
         peersInfo.append(info);
         return true;
@@ -1177,12 +1199,12 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
     {
         BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync verify archived block failed")
                            << LOG_KV("number", topBlockNumber)
-                           << LOG_KV("transactionRoot", *toHexString(transactionRoot))
+                           << LOG_KV("transactionRoot", toHex(transactionRoot))
                            << LOG_KV(
-                                  "localTransactionRoot", *toHexString(localBlockHeader->txsRoot()))
-                           << LOG_KV("receiptRoot", *toHexString(receiptRoot))
+                                  "localTransactionRoot", toHex(localBlockHeader->txsRoot()))
+                           << LOG_KV("receiptRoot", toHex(receiptRoot))
                            << LOG_KV("localReceiptRoot",
-                                  *toHexString(localBlockHeader->receiptsRoot()))
+                                  toHex(localBlockHeader->receiptsRoot()))
                            << LOG_KV("reason", "transactionRoot or receiptRoot not match");
         WriteGuard lock(x_archivedBlockQueue);
         m_archivedBlockQueue.pop();

@@ -5,12 +5,29 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/primitives.hpp>
 
 namespace bcos::storage
 {
 
-inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    StorageInterface& storage, executor_v1::StateKeyView stateKey)
+namespace detail
+{
+inline executor_v1::StateKeyView toStateKeyView(auto&& stateKey)
+{
+    if constexpr (requires { stateKey.get(); })
+    {
+        return stateKey;
+    }
+    else
+    {
+        return executor_v1::StateKeyView{stateKey};
+    }
+}
+}  // namespace detail
+
+inline task::Task<std::optional<Entry>> tag_invoke(
+    storage2::tag_t<storage2::readOne> /*unused*/, StorageInterface& storage, auto stateKey)
 {
     struct Awaitable
     {
@@ -45,24 +62,16 @@ inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::rea
         }
     };
 
-    auto [table, key] = stateKey.get();
+    auto keyView = detail::toStateKeyView(std::forward<decltype(stateKey)>(stateKey));
+    auto [table, key] = keyView.get();
     Awaitable awaitable{.m_storage = storage, .m_table = table, .m_key = key, .m_result = {}};
     co_return co_await awaitable;
 }
-// inline task::Task<std::optional<Entry>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-//     StorageInterface& storage, const executor_v1::StateKey& stateKey)
-// {
-//     co_return co_await storage2::readOne(storage, executor_v1::StateKeyView{stateKey});
-// }
 
 task::Task<std::vector<std::optional<Entry>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, StorageInterface& storage,
     ::ranges::input_range auto keys)
 {
-    // 这里调用StorageInterface的asyncGetRows接口效率更高,但是keys可能包含不同的table,asyncGetRows每次只能传一个table,因此留给未来优化
-    // The asyncGetRows interface of StorageInterface is more efficient, but keys may contain
-    // different tables, and aysncGetRows can only be used by one table at a time, so it is left to
-    // future optimization
     std::vector<std::optional<Entry>> values;
     if constexpr (::ranges::sized_range<decltype(keys)>)
     {
@@ -87,7 +96,7 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused
 }
 
 inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
-    StorageInterface& storage, executor_v1::StateKey stateKey, Entry entry)
+    StorageInterface& storage, auto stateKey, Entry entry)
 {
     struct Awaitable
     {
@@ -118,8 +127,8 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
         }
     };
 
-    auto view = executor_v1::StateKeyView(stateKey);
-    auto [table, key] = view.get();
+    auto keyView = detail::toStateKeyView(std::forward<decltype(stateKey)>(stateKey));
+    auto [table, key] = keyView.get();
     Awaitable awaitable{.m_storage = storage,
         .m_table = table,
         .m_key = key,

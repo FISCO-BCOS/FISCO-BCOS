@@ -36,11 +36,9 @@ class ExecutiveSerialFlow : public virtual ExecutiveFlowInterface,
                             public std::enable_shared_from_this<ExecutiveSerialFlow>
 {
 public:
-    ExecutiveSerialFlow(ExecutiveFactory::Ptr executiveFactory)
-      : m_executiveFactory(executiveFactory)
-    {}
+        ExecutiveSerialFlow(ExecutiveFactory::Ptr executiveFactory);
 
-    virtual ~ExecutiveSerialFlow() {}
+        virtual ~ExecutiveSerialFlow();
 
     void submit(CallParameters::UniquePtr txInput) override;
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
@@ -52,18 +50,7 @@ public:
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;
 
-    void stop() override
-    {
-        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveSerialFlow";
-        if (!m_isRunning)
-        {
-            EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
-            return;
-        }
-
-        m_isRunning = false;
-        ExecutiveFlowInterface::stop();
-    };
+    void stop() override;
 
 protected:
     virtual std::shared_ptr<TransactionExecutive> buildExecutive(CallParameters::UniquePtr& input);

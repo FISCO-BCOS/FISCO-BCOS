@@ -173,12 +173,12 @@ public:
             if (lastBlockToDeleteNonces != 1)
             {
                 auto numberRange =
-                    RANGES::iota_view<uint64_t, uint64_t>(1, lastBlockToDeleteNonces);
+                    ::ranges::iota_view<uint64_t, uint64_t>(1, lastBlockToDeleteNonces);
                 auto numberList = numberRange |
-                                  RANGES::views::transform([](protocol::BlockNumber blockNumber) {
+                                  ::ranges::views::transform([](protocol::BlockNumber blockNumber) {
                                       return boost::lexical_cast<std::string>(blockNumber);
                                   }) |
-                                  RANGES::to<std::vector<std::string>>();
+                                  ::ranges::to<std::vector<std::string>>();
                 auto err = m_storage->deleteRows(ledger::SYS_BLOCK_NUMBER_2_NONCES, numberList);
                 if (err)
                 {

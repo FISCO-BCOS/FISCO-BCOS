@@ -28,6 +28,7 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
+#include "bcos-pbft/pbft/utilities/PBFTMsgVersion.h"
 #include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -89,6 +90,16 @@ public:
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock = false);
 
     uint64_t minRequiredQuorum() const override;
+
+    // FIB-127: verify a committed proposal's signature proofs carry quorum weight from
+    // distinct consensus nodes. Used by both log-sync recovery (untrusted peer data) and
+    // precommit weight checks. Returns false if:
+    //   * proposal is null or carries no proofs
+    //   * any (sealerIdx, signature) pair fails the cryptoSuite verify against proposal->hash()
+    //   * the same sealerIdx appears more than once (byzantine inflation signal — honest
+    //     paths build the proof list from a deduplicated map so duplicates never occur)
+    //   * accumulated vote weight is below minRequiredQuorum()
+    virtual bool verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const& _proposal);
 
     virtual ViewType view() const { return m_view; }
     virtual void setView(ViewType _view) { m_view.store(_view); }
@@ -396,6 +407,19 @@ public:
     void setMinSealTime(int64_t _minSealTime) noexcept { this->m_minSealTime = _minSealTime; }
     void setPipeLineSize(int64_t _pipeSize) noexcept { this->m_waterMarkLimit = _pipeSize; }
 
+    void setPipelineAdmissionEnabled(bool _enabled) noexcept
+    {
+        m_pipelineAdmissionEnabled = _enabled;
+    }
+    void setPipelinePerPeerCapacity(size_t _cap) noexcept { m_pipelinePerPeerCapacity = _cap; }
+    void setPipelineLruCapacity(size_t _cap) noexcept { m_pipelineLruCapacity = _cap; }
+    void setPipelineMaxPeers(size_t _cap) noexcept { m_pipelineMaxPeers = _cap; }
+
+    bool pipelineAdmissionEnabled() const noexcept { return m_pipelineAdmissionEnabled; }
+    size_t pipelinePerPeerCapacity() const noexcept { return m_pipelinePerPeerCapacity; }
+    size_t pipelineLruCapacity() const noexcept { return m_pipelineLruCapacity; }
+    size_t pipelineMaxPeers() const noexcept { return m_pipelineMaxPeers; }
+
     void registerTxsStatusSyncHandler(std::function<void()> const& _txsStatusSyncHandler)
     {
         m_txsStatusSyncHandler = _txsStatusSyncHandler;
@@ -457,11 +481,18 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_sealEndIndex = {0};
 
     int64_t m_waterMarkLimit = 50;
+    bool m_pipelineAdmissionEnabled = true;
+    size_t m_pipelinePerPeerCapacity = 64;
+    size_t m_pipelineLruCapacity = 256;
+    size_t m_pipelineMaxPeers = 1024;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
     std::atomic<int64_t> m_minSealTime = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
-    const unsigned c_pbftMsgDefaultVersion = 0;
+    // FIB-134: sender default, sourced from the single protocol-version knob so the
+    // sender default and the digest threshold can never drift apart.
+    const unsigned c_pbftMsgDefaultVersion =
+        static_cast<unsigned>(toWireVersion(c_currentPBFTMsgVersion));
     const unsigned c_networkTimeoutInterval = 1000;
     // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};

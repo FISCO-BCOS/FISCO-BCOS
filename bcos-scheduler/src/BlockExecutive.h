@@ -40,22 +40,14 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
-        bool _syncBlock)
-      : BlockExecutive(std::move(block), scheduler, startContextID,
-            std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
-            std::move(_txPool))
-    {
-        m_syncBlock = _syncBlock;
-        m_gasLimit = _gasLimit;
-        m_gasPrice = _gasPrice;
-    }
+        bool _syncBlock);
 
     BlockExecutive(const BlockExecutive&) = delete;
     BlockExecutive(BlockExecutive&&) = delete;
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    virtual ~BlockExecutive() { stop(); };
+    virtual ~BlockExecutive();
 
     virtual void prepare();
     virtual void asyncExecute(
@@ -72,32 +64,23 @@ public:
     virtual void saveMessage(
         std::string address, protocol::ExecutionMessage::UniquePtr message, bool withDAG);
 
-    inline bcos::protocol::BlockNumber number() { return m_blockHeader->number(); }
+    bcos::protocol::BlockNumber number();
 
-    inline bcos::protocol::Block::Ptr block() { return m_block; }
-    inline auto blockHeader() const noexcept { return m_blockHeader; }
-    inline bcos::protocol::BlockHeader::Ptr result() { return m_result; }
+    bcos::protocol::Block::Ptr block();
+    bcos::protocol::BlockHeader::ConstPtr blockHeader() const noexcept;
+    bcos::protocol::BlockHeader::Ptr result();
 
-    bool isCall() { return m_staticCall; }
-    bool sysBlock() const { return m_isSysBlock; }
+    bool isCall();
+    bool sysBlock() const;
 
-    void start() { m_isRunning = true; }
-    void stop() { m_isRunning = false; }
+    void start();
+    void stop();
 
-    void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
-    {
-        f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
-    }
+    void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent);
 
-    void triggerSwitch()
-    {
-        if (f_onNeedSwitchEvent)
-        {
-            f_onNeedSwitchEvent();
-        }
-    }
+    void triggerSwitch();
 
-    bool isSysBlock() { return m_isSysBlock; }
+    bool isSysBlock();
 
     virtual size_t getExecutorSize();
 
@@ -120,7 +103,7 @@ protected:
     void batchBlockCommit(uint64_t rollbackVersion, std::function<void(Error::UniquePtr)> callback);
     void batchBlockRollback(uint64_t version, std::function<void(Error::UniquePtr)> callback);
 
-    virtual bool needPrepareExecutor() { return !m_hasDAG; }
+    virtual bool needPrepareExecutor();
 
     struct BatchStatus  // Batch state per batch
     {

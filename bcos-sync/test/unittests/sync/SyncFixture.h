@@ -56,6 +56,8 @@ public:
     void executeWorker() override { BlockSync::executeWorker(); }
     void maintainPeersConnection() override { BlockSync::maintainPeersConnection(); }
     SyncPeerStatus::Ptr syncStatus() { return m_syncStatus; }
+    // FIB-158: expose downloading queue for race regression test
+    DownloadingQueue::Ptr downloadingQueue() { return m_downloadingQueue; }
 };
 
 class FakeTxPoolForSync : public FakeTxPool

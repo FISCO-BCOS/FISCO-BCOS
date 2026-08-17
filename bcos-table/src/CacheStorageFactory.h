@@ -28,10 +28,8 @@ class CacheStorageFactory
 {
 public:
     using Ptr = std::shared_ptr<CacheStorageFactory>;
-    CacheStorageFactory(
-        bcos::storage::TransactionalStorageInterface::Ptr backendStorage, ssize_t cacheSize)
-      : m_cacheSize(cacheSize), m_backendStorage(backendStorage)
-    {}
+        CacheStorageFactory(
+                bcos::storage::TransactionalStorageInterface::Ptr backendStorage, ssize_t cacheSize);
 
     virtual ~CacheStorageFactory() = default;
     storage::MergeableStorageInterface::Ptr build();

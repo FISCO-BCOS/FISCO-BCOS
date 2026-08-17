@@ -20,11 +20,32 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
+#include "bcos-framework/protocol/CommonError.h"
+#include <limits>
+#include <range/v3/view/concat.hpp>
 
 using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
+
+std::tuple<size_t, size_t> bcos::sealer::detail::computeAssemblyPlan(size_t maxTxsPerBlock,
+    size_t pendingNormalSize, size_t pendingSysSize, bool hookInsertedTx, size_t maxSysTxsPerBlock)
+{
+    auto txsSize = std::min(maxTxsPerBlock, pendingNormalSize + pendingSysSize);
+    auto systemTxsSize = std::min({txsSize, pendingSysSize, maxSysTxsPerBlock});
+    if (hookInsertedTx && txsSize == maxTxsPerBlock)
+    {
+        --txsSize;
+        // FIB-161: keep the invariant systemTxsSize <= txsSize once the hook
+        // has consumed a slot. Without this collapse, when systemTxsSize was
+        // originally equal to txsSize (e.g. maxTxsPerBlock <= maxSysTxsPerBlock
+        // and the sys queue is full), the drain loops in generateProposal would
+        // over-append and produce a block of size maxTxsPerBlock + 1.
+        systemTxsSize = std::min(systemTxsSize, txsSize);
+    }
+    return {txsSize, systemTxsSize};
+}
 
 void SealingManager::resetSealing()
 {
@@ -44,61 +65,147 @@ void SealingManager::appendTransactions(
     {
         _txsQueue.emplace_back(std::const_pointer_cast<TransactionMetaData>(metaData));
     }
-    m_onReady();
+    if (m_onReady)
+    {
+        m_onReady();
+    }
+}
+
+bool SealingManager::meetsProposalPreconditions() const
+{
+    if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
+    {
+        return false;
+    }
+    if (m_latestNumber < m_waitUntil)
+    {
+        return false;
+    }
+    auto txsSize = m_pendingTxs.size() + m_pendingSysTxs.size();
+    if (txsSize == 0)
+    {
+        return false;
+    }
+    if (txsSize < m_maxTxsPerBlock && (utcSteadyTime() - m_lastSealTime) < m_config->minSealTime())
+    {
+        return false;
+    }
+    return true;
 }
 
 bool SealingManager::shouldGenerateProposal()
 {
+    // Out-of-range sealing number triggers queue cleanup, which itself takes
+    // an UpgradableGuard; handle this side effect before acquiring our own
+    // read lock to avoid lock-mode escalation.
     if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
     {
         clearPendingTxs();
         return false;
     }
-    // should wait the given block submit to the ledger
-    if (m_latestNumber < m_waitUntil)
+    ReadGuard lock(x_pendingTxs);
+    return meetsProposalPreconditions();
+}
+
+void SealingManager::testOnlySeedPendingTxs(
+    const std::vector<bcos::protocol::TransactionMetaData::Ptr>& _txs)
+{
+    WriteGuard lock(x_pendingTxs);
+    for (const auto& tx : _txs)
     {
-        return false;
+        m_pendingTxs.emplace_back(tx);
     }
-    // check the txs size
-    auto txsSize = pendingTxsSize();
-    return (txsSize >= m_maxTxsPerBlock) || reachMinSealTimeCondition();
+}
+
+void SealingManager::testOnlyDrainPendingTxs()
+{
+    WriteGuard lock(x_pendingTxs);
+    m_pendingTxs.clear();
+    m_pendingSysTxs.clear();
+}
+
+void SealingManager::testOnlySeedSysPendingTxs(
+    const std::vector<bcos::protocol::TransactionMetaData::Ptr>& _txs)
+{
+    WriteGuard lock(x_pendingTxs);
+    for (const auto& tx : _txs)
+    {
+        m_pendingSysTxs.emplace_back(tx);
+    }
+}
+
+size_t SealingManager::testOnlyPendingTxsSize()
+{
+    ReadGuard lock(x_pendingTxs);
+    return m_pendingTxs.size() + m_pendingSysTxs.size();
+}
+
+bool SealingManager::testOnlyPendingWriteLockFree()
+{
+    WriteGuard tryLock(x_pendingTxs, boost::try_to_lock);
+    return tryLock.owns_lock();
 }
 
 void SealingManager::clearPendingTxs()
 {
-    UpgradableGuard lock(x_pendingTxs);
-    auto pendingTxsSize = m_pendingTxs.size() + m_pendingSysTxs.size();
-    if (pendingTxsSize == 0)
+    // FIB-162: take WriteGuard in a narrow scope. The previous implementation
+    // held an UpgradableGuard across notifyResetTxsFlag(), which inline-invokes
+    // TxPool::asyncMarkTxs (the callback is synchronous despite the name) and
+    // may recursively retry under the same lock. Snapshot the hashes, drop the
+    // lock, then call out to txpool.
+    bcos::crypto::HashList snapshot;
     {
-        return;
+        bcos::WriteGuard lock(x_pendingTxs);
+        auto pendingTxsSize = m_pendingTxs.size() + m_pendingSysTxs.size();
+        if (pendingTxsSize == 0)
+        {
+            return;
+        }
+        SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
+                       << LOG_KV("size", pendingTxsSize);
+        snapshot =
+            ::ranges::views::concat(m_pendingTxs, m_pendingSysTxs) |
+            ::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
+            ::ranges::to<bcos::crypto::HashList>();
+        m_pendingTxs.clear();
+        m_pendingSysTxs.clear();
     }
-    // return the txs back to the txpool
-    SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
-                   << LOG_KV("size", pendingTxsSize);
-    auto unHandledTxs =
-        ::ranges::views::concat(m_pendingTxs, m_pendingSysTxs) |
-        ::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
-        ::ranges::to<std::vector>();
     try
     {
-        notifyResetTxsFlag(unHandledTxs, false);
+        notifyResetTxsFlag(snapshot, false);
     }
     catch (std::exception const& e)
     {
         SEAL_LOG(WARNING) << LOG_DESC("clearPendingTxs: return back the unhandled txs exception")
                           << LOG_KV("message", boost::diagnostic_information(e));
     }
-    UpgradeGuard ul(lock);
-    m_pendingTxs.clear();
-    m_pendingSysTxs.clear();
 }
 
 void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag, size_t _retryTime)
 {
+    // FIB-155: capture weak_ptr instead of raw `this`. The async callback may
+    // outlive this SealingManager during shutdown/reconfiguration, which would
+    // dereference freed memory if `this` were captured directly.
+    auto self = weak_from_this();
     m_config->txpool()->asyncMarkTxs(_txsHashList, _flag, -1, HashType(),
-        [this, _txsHashList, _flag, _retryTime](Error::Ptr _error) {
+        [self, _txsHashList, _flag, _retryTime](Error::Ptr _error) {
+            auto sm = self.lock();
+            if (!sm)
+            {
+                // owning SealingManager has been destroyed; drop the callback
+                return;
+            }
             if (_error == nullptr)
             {
+                return;
+            }
+            // FIB-162: TransactionsMissing is deterministic (the txpool simply
+            // has no record of these hashes). Immediate retry cannot change
+            // that, so skip the retry chain to avoid wasted work and noisy logs.
+            if (_error->errorCode() == bcos::protocol::CommonError::TransactionsMissing)
+            {
+                SEAL_LOG(DEBUG) << LOG_DESC("notifyResetTxsFlag: txs missing, skip retry")
+                                << LOG_KV("size", _txsHashList.size());
                 return;
             }
             SEAL_LOG(WARNING) << LOG_DESC("asyncMarkTxs failed, retry now");
@@ -106,7 +213,7 @@ void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag
             {
                 return;
             }
-            this->notifyResetTxsFlag(_txsHashList, _flag, _retryTime + 1);
+            sm->notifyResetTxsFlag(_txsHashList, _flag, _retryTime + 1);
         });
 }
 
@@ -122,27 +229,38 @@ void SealingManager::notifyResetProposal(
 std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     std::function<uint16_t(bcos::protocol::Block::Ptr)> _handleBlockHook)
 {
-    if (!shouldGenerateProposal())
+    // FIB-117: take the write lock first, then evaluate preconditions under
+    // the same lock that serialises every queue mutator. This structurally
+    // eliminates the prior race shape (predicate-true → another thread
+    // drained the queue → lock acquired on stale state → empty proposal):
+    // the predicate and the action that consumes its result now share the
+    // same critical section.
+    WriteGuard writeLock(x_pendingTxs);
+    if (!meetsProposalPreconditions())
     {
         return {false, nullptr};
     }
-    WriteGuard writeLock(x_pendingTxs);
     m_sealingNumber = std::max(m_sealingNumber.load(), m_latestNumber.load() + 1);
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
     auto timestamp = m_config->nodeTimeMaintenance()->getAlignedTime();
     if (timestamp <= m_latestTimestamp)
-    {  // make sure the timestamp is larger than the latestTimestamp in milliseconds
-        timestamp = m_latestTimestamp + 1;
+    {
+        // FIB-163: saturate at INT64_MAX. m_latestTimestamp is signed int64;
+        // poisoned timestamps (e.g. via resetLatestTimestamp from peer state)
+        // could push the stored value to INT64_MAX, in which case the naive
+        // m_latestTimestamp + 1 wraps to INT64_MIN — undefined behaviour for
+        // signed overflow and an instantly-rejected timestamp downstream.
+        // Practically unreachable (~2.92e8 years from epoch in ms) but
+        // UB-correctness matters for static analysis and audit posture.
+        timestamp = (m_latestTimestamp == std::numeric_limits<int64_t>::max()) ?
+                        m_latestTimestamp :
+                        m_latestTimestamp + 1;
     }
     blockHeader->setTimestamp(timestamp);
     blockHeader->calculateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
-    auto txsSize =
-        std::min(m_maxTxsPerBlock.load(), (m_pendingTxs.size() + m_pendingSysTxs.size()));
-    // prioritize seal from the system txs list
-    auto systemTxsSize = std::min(txsSize, m_pendingSysTxs.size());
     if (!m_pendingSysTxs.empty())
     {
         m_waitUntil.store(m_sealingNumber);
@@ -151,6 +269,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
                        << LOG_KV("curNum", m_latestNumber);
     }
     bool containSysTxs = false;
+    bool hookInsertedTx = false;
     if (_handleBlockHook)
     {
         // put the generated transaction into the 0th position of the block transactions
@@ -163,9 +282,19 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
             if (block->transactionsMetaDataSize() > 0 || block->transactionsSize() > 0)
             {
                 containSysTxs = true;
-                if (txsSize == m_maxTxsPerBlock)
+                // FIB-161 is handled below by computeAssemblyPlan(hookInsertedTx):
+                // the txsSize-- and systemTxsSize collapse moved into that
+                // pure function, so here we only record that the hook consumed
+                // a slot.
+                hookInsertedTx = true;
+                // FIB-153: when the hook synthesises a sys-tx into the block
+                // (e.g. VRF rotation), advance m_waitUntil so the next proposal
+                // waits for this block to commit. Guarded by `<` so this is a
+                // no-op when the pre-hook branch above already advanced
+                // m_waitUntil for a non-empty m_pendingSysTxs.
+                if (m_waitUntil < m_sealingNumber)
                 {
-                    txsSize--;
+                    m_waitUntil.store(m_sealingNumber);
                 }
             }
         }
@@ -178,6 +307,11 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
             return {false, nullptr};
         }
     }
+    // Compute drain bounds AFTER the hook so a hook-injected tx collapses both
+    // bounds correctly (FIB-161). The hook is contractually forbidden from
+    // touching the pending queues, so their sizes are identical pre/post hook.
+    auto [txsSize, systemTxsSize] = detail::computeAssemblyPlan(
+        m_maxTxsPerBlock.load(), m_pendingTxs.size(), m_pendingSysTxs.size(), hookInsertedTx);
     for (size_t i = 0; i < systemTxsSize; i++)
     {
         block->appendTransactionMetaData(std::move(m_pendingSysTxs.front()));
@@ -189,7 +323,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
         block->appendTransactionMetaData(std::move(m_pendingTxs.front()));
         m_pendingTxs.pop_front();
     }
-    m_sealingNumber++;
+    ++m_sealingNumber;
 
     m_lastSealTime = utcSteadyTime();
     // Note: When the last block(N) sealed by this node contains system transactions,
@@ -211,20 +345,6 @@ size_t SealingManager::pendingTxsSize()
 {
     ReadGuard l(x_pendingTxs);
     return m_pendingSysTxs.size() + m_pendingTxs.size();
-}
-
-bool SealingManager::reachMinSealTimeCondition()
-{
-    auto txsSize = pendingTxsSize();
-    if (txsSize == 0)
-    {
-        return false;
-    }
-    if ((utcSteadyTime() - m_lastSealTime) < m_config->minSealTime())
-    {
-        return false;
-    }
-    return true;
 }
 
 int64_t SealingManager::txsSizeExpectedToFetch()
@@ -286,7 +406,10 @@ bcos::sealer::SealingManager::FetchResult SealingManager::fetchTransactions()
             notifyResetProposal(_sysTxsList);
         }
 
-        m_onReady();
+        if (m_onReady)
+        {
+            m_onReady();
+        }
         SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                         << LOG_KV("txsSize", _txsHashList.size())
                         << LOG_KV("sysTxsSize", _sysTxsList.size())
@@ -331,7 +454,10 @@ void bcos::sealer::SealingManager::resetSealingInfo(
     }
     m_endSealingNumber = _endSealingNumber;
     m_maxTxsPerBlock = _maxTxsPerBlock;
-    m_onReady();
+    if (m_onReady)
+    {
+        m_onReady();
+    }
     SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo") << LOG_KV("start", m_startSealingNumber)
                    << LOG_KV("end", m_endSealingNumber) << LOG_KV("sealingNumber", m_sealingNumber)
                    << LOG_KV("waitUntil", m_waitUntil);

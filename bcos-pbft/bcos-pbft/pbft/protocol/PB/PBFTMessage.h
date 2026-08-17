@@ -50,20 +50,10 @@ public:
         decodeAndSetSignature(std::move(_cryptoSuite), _data);
     }
 
-    ~PBFTMessage() override
-    {
-        // return back the ownership to m_consensusProposal
-        if (m_pbftRawMessage->has_consensusproposal())
-        {
-            m_pbftRawMessage->unsafe_arena_release_consensusproposal();
-        }
-        // return the ownership of rawProposal to the passed-in proposal
-        auto allocatedProposalSize = m_pbftRawMessage->proposals_size();
-        for (int i = 0; i < allocatedProposalSize; i++)
-        {
-            m_pbftRawMessage->mutable_proposals()->UnsafeArenaReleaseLast();
-        }
-    }
+    // FIB-121: consensusProposal / proposals wrappers hold aliasing shared_ptrs that
+    // share this message's control block; they never own the submessages, so there is
+    // no ownership to release here (was a fragile unsafe_arena_release dance).
+    ~PBFTMessage() override = default;
 
     std::shared_ptr<PBFTRawMessage> pbftRawMessage() { return m_pbftRawMessage; }
     bytesPointer encode(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
@@ -107,6 +97,16 @@ public:
 
     void encodeHashFields() const;
     void deserializeToObject() override;
+
+    // FIB-134: re-derive the inner signature digest using the current packetType.
+    // Required after PBFTCodec::decode sets the wire packetType, because the digest
+    // formula under wire-version >= 1 binds packetType into the hash.
+    // Takes CryptoSuite by const& because the codec keeps ownership of m_cryptoSuite;
+    // a by-value param would copy the shared_ptr at every call without enabling a move.
+    virtual void refreshSignatureDataHash(bcos::crypto::CryptoSuite::Ptr const& _cryptoSuite)
+    {
+        m_signatureDataHash = getHashFieldsDataHash(_cryptoSuite);
+    }
 
     std::string toDebugString() const override
     {

@@ -192,7 +192,7 @@ inline std::string printShortP2pID(std::string const& data)
         {
             endIt = startIt + 4 * sizeof(byte);
         }
-        return *toHexString(startIt, endIt, "hash-");
+        return toHex(std::string_view(startIt, endIt), "hash-");
     }
     return data.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
 }

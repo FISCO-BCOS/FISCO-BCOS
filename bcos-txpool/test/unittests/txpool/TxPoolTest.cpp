@@ -32,6 +32,8 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/filter.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -516,7 +518,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     auto txpool = faker->txpool();
     auto txpoolStorage = txpool->txpoolStorage();
     auto ledger = faker->ledger();
-
+    ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
     auto const eoaKey = _cryptoSuite->signatureImpl()->generateKeyPair();
     // case3: transaction with invalid nonce(conflict with the ledger nonce)
     auto const& blockData = ledger->ledgerData();

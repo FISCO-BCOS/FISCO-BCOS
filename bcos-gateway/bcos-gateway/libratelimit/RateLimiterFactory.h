@@ -43,33 +43,19 @@ public:
 
 public:
     RateLimiterFactory() = default;
-    RateLimiterFactory(std::shared_ptr<sw::redis::Redis> _redis) : m_redis(_redis) {}
-    std::shared_ptr<sw::redis::Redis> redis() const { return m_redis; }
+    RateLimiterFactory(std::shared_ptr<sw::redis::Redis> _redis);
+    std::shared_ptr<sw::redis::Redis> redis() const;
 
-    static std::string toTokenKey(const std::string& _baseKey)
-    {
-        return "FISCO-BCOS 3.0 Gateway RateLimiter: " + _baseKey;
-    }
+    static std::string toTokenKey(const std::string& _baseKey);
 
     // time window rate limiter
     bcos::ratelimiter::RateLimiterInterface::Ptr buildTimeWindowRateLimiter(
-        int64_t _maxPermits, int32_t _timeWindowMS = 1000, bool _allowExceedMaxPermitSize = false)
-    {
-        auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
-            _maxPermits, _timeWindowMS, _allowExceedMaxPermitSize);
-        return rateLimiter;
-    }
+        int64_t _maxPermits, int32_t _timeWindowMS = 1000, bool _allowExceedMaxPermitSize = false);
 
     // redis distributed rate limiter
     bcos::ratelimiter::RateLimiterInterface::Ptr buildDistributedRateLimiter(
         const std::string& _distributedKey, int64_t _maxPermitsSize, int32_t _intervalSec,
-        bool _allowExceedMaxPermitSize, bool _enableLocalCache, int32_t _localCachePercent)
-    {
-        auto rateLimiter = std::make_shared<bcos::ratelimiter::DistributedRateLimiter>(m_redis,
-            _distributedKey, _maxPermitsSize, _allowExceedMaxPermitSize, _intervalSec,
-            _enableLocalCache, _localCachePercent);
-        return rateLimiter;
-    }
+        bool _allowExceedMaxPermitSize, bool _enableLocalCache, int32_t _localCachePercent);
 
 private:
     std::shared_ptr<sw::redis::Redis> m_redis = nullptr;

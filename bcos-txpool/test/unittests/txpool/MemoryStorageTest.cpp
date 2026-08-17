@@ -8,8 +8,14 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/txpool/Constant.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
+#include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
@@ -21,10 +27,15 @@
 #include "bcos-utilities/DataConvertUtility.h"
 
 #include <sw/redis++/cxx_utils.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_invoke.h>
 
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <atomic>
 #include <fakeit.hpp>
+#include <future>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -38,8 +49,10 @@ struct MemoryStorageFixture
         txPoolNonceChecker(&mockNonceChecker.get(), [](bcos::txpool::NonceCheckerInterface*) {}),
         ledgerNonceChecker(&mockLedgerNonceChecker.get(), [](bcos::txpool::LedgerNonceChecker*) {}),
         ledger(&mockLedger.get(), [](bcos::ledger::LedgerInterface*) {}),
-        config(std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
-            txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024, /*checkSig*/ false)),
+        config(std::make_shared<TxPoolConfig>(txValidator,
+            std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), nullptr,
+            nullptr, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024,
+            /*checkSig*/ false)),
         storage(config)
     {
         fakeit::When(Method(mockValidator, checkTransaction))
@@ -67,7 +80,7 @@ struct MemoryStorageFixture
                          void(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
                              std::hash<bcos::protocol::NonceType>> const&)))
             .AlwaysDo([](auto const&) {});
-        fakeit::When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) {});
+        fakeit::When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) { return true; });
         fakeit::When(Method(mockNonceChecker, remove)).AlwaysDo([](auto const&) {});
     }
 
@@ -96,8 +109,9 @@ struct MemoryStorageFixture
         HashType txHash = HashType::generateRandomFixedBytes();
         tx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
         tx->setSealed(sealed);
-        Keccak256 keccak;
-        tx->calculateHash(keccak);
+        // No calculateHash() here: this fabricated tx has no signing preimage/signature, and
+        // since FIB-New1 the Web3 branch of calculateHash() unconditionally recomputes the
+        // canonical hash from them (throwing on absence). hash() reads the value set above.
         return tx;
     }
 
@@ -443,7 +457,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
 
     fakeit::Mock<bcos::txpool::Web3NonceChecker> mockWeb3NonceChecker;
     fakeit::When(Method(mockWeb3NonceChecker, insertMemoryNonce))
-        .AlwaysDo([](auto, auto) -> task::Task<void> { co_return; });
+        .AlwaysDo([](auto, auto) -> task::Task<bool> { co_return true; });
 
     std::shared_ptr<bcos::txpool::Web3NonceChecker> web3NonceChecker(
         &mockWeb3NonceChecker.get(), [](bcos::txpool::Web3NonceChecker*) {});
@@ -515,28 +529,32 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     }
 
     // // Test 6: Step 4 - InsufficientFunds
-    // {
-    //     storageNoSig.clear();
-    //     const std::string senderHex = "0x1234567890123456789012345678901234567890";
-    //     auto tx6 = makeWeb3Tx("0x2", senderHex, false);
-    //     // Set a large value - need to cast to TransactionImpl
-    //     auto tx6Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx6);
-    //     if (tx6Impl)
-    //     {
-    //         std::string largeValue = "0x1000000000000000000000000";  // Very large value
-    //         tx6Impl->mutableInner().data.value.assign(largeValue.begin(), largeValue.end());
-    //     }
-    //
-    //     fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey)).AlwaysDo(
-    //         [](auto, auto) -> task::Task<std::optional<std::string>> {
-    //             co_return std::nullopt;
-    //         });
-    //
-    //     auto result = storageNoSig.verifyAndSubmitTransaction(tx6, nullptr, false, false);
-    //     // Note: This depends on the balance validation logic
-    //     // If balance is 0 or insufficient, should return InsufficientFunds
-    //     // The actual result depends on how validateBalance handles empty/null storage
-    // }
+    {
+        storageNoSig.clear();
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        auto tx6 = makeWeb3Tx("0x2", senderHex, false);
+        // Set a large value - need to cast to TransactionImpl
+        auto tx6Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx6);
+        if (tx6Impl)
+        {
+            std::string largeValue = "0x1000000000000000000000000";  // Very large value
+            tx6Impl->mutableInner().data.value.assign(largeValue.begin(), largeValue.end());
+        }
+
+        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
+            .AlwaysDo(
+                [](auto const&,
+                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
+                    callback(nullptr, "0x1234", 0);
+                });
+
+        fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {
+            return 0;
+        });
+
+        auto result = storageNoSig.verifyAndSubmitTransaction(tx6, nullptr, false, false);
+        BOOST_CHECK(result == TransactionStatus::InsufficientFunds);
+    }
 
     // Test 7: Step 5 - InvalidChainId (for Web3Transaction)
     {
@@ -553,12 +571,19 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
 
         fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
             .AlwaysDo(
-                [](auto const&,
+                [](auto const& key,
                     std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    callback(nullptr, "321", 0);
+                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+                    {
+                        callback(nullptr, "321", 0);
+                    }
+                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+                    {
+                        callback(nullptr, "0", 0);
+                    }
                 });
         auto result = storageNoSig.verifyAndSubmitTransaction(tx7, nullptr, false, false);
-        // The result depends on how validateChainId is implemented
+        BOOST_CHECK(result == TransactionStatus::InvalidChainId);
     }
 
     // Test 8: Success case - All validations pass
@@ -585,6 +610,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         txValidator->setLedgerNonceChecker(ledgerNonceChecker);
 
         auto result = storageNoSig.verifyAndSubmitTransaction(tx8, nullptr, false, false);
+        BOOST_CHECK(result == TransactionStatus::None);
         // Note: Result may vary depending on balance validation and other checks
         // The test verifies the validation chain executes without crashing
     }
@@ -626,6 +652,526 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         auto result = storageNoSig.verifyAndSubmitTransaction(tx10, nullptr, false, false);
         // Result depends on other validation steps
     }
+}
+
+BOOST_AUTO_TEST_CASE(FIB61_NegativeImportTimeTreatedAsExpired)
+{
+    // FIB-61: A tx with negative importTime caused unsigned overflow when computing
+    // importTime + m_txsExpirationTime, potentially treating an expired tx as valid.
+    // The fix adds an explicit `importTime < 0` guard in batchSealTransactions.
+
+    // Set up a real BlockFactory required by batchSealTransactions
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
+    config->setBlockFactory(blockFactory);
+
+    // tx1: negative import time — must be treated as expired
+    auto tx1 = makeTx("fib61_expired", false);
+    tx1->setImportTime(-1);
+    storage.insert(tx1);
+
+    // tx2: current time — must be included in sealed output
+    auto tx2 = makeTx("fib61_valid", false);
+    tx2->setImportTime(static_cast<int64_t>(utcTime()));
+    storage.insert(tx2);
+
+    std::vector<protocol::TransactionMetaData::Ptr> txsList;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxsList;
+    storage.batchSealTransactions(txsList, sysTxsList, 100);
+
+    bool foundTx1 = false;
+    bool foundTx2 = false;
+    for (auto& meta : txsList)
+    {
+        if (meta->hash() == tx1->hash())
+            foundTx1 = true;
+        if (meta->hash() == tx2->hash())
+            foundTx2 = true;
+    }
+    // tx1 must be excluded (treated as expired due to negative importTime)
+    BOOST_CHECK(!foundTx1);
+    // tx2 must be included
+    BOOST_CHECK(foundTx2);
+}
+
+BOOST_AUTO_TEST_CASE(FIB51_TxPoolNonceCheckerInsertReturnsBool)
+{
+    // FIB-51: TxPoolNonceChecker::insert() now returns bool (true = newly inserted,
+    // false = already existed). This makes the check-and-reserve atomic per bucket,
+    // eliminating the TOCTOU window between separate checkNonce() + insert() calls.
+
+    TxPoolNonceChecker checker;
+
+    // First insert: nonce is new -> must return true
+    const std::string nonce1 = "fib51_nonce_unique";
+    BOOST_CHECK(checker.insert(nonce1) == true);
+
+    // Second insert of the same nonce: already exists -> must return false
+    BOOST_CHECK(checker.insert(nonce1) == false);
+
+    // Different nonce: returns true again
+    const std::string nonce2 = "fib51_nonce_other";
+    BOOST_CHECK(checker.insert(nonce2) == true);
+
+    // Concurrent test: 50 threads all insert the same nonce; exactly one must succeed
+    const std::string raceNonce = "fib51_race_nonce";
+    std::atomic<int> successCount{0};
+    tbb::parallel_for(tbb::blocked_range<int>(0, 50), [&](const tbb::blocked_range<int>& range) {
+        for (int i = range.begin(); i < range.end(); ++i)
+        {
+            if (checker.insert(raceNonce))
+            {
+                successCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    });
+    BOOST_CHECK_EQUAL(successCount.load(), 1);
+}
+
+BOOST_AUTO_TEST_CASE(FIB55_PoolLimitEnforced)
+{
+    // FIB-55: Pool limit was bypassed because the check happened after expensive validation.
+    // The fix moves the pool limit check (Step 1.5) before signature verification and nonce
+    // checks so that TxPoolIsFull is returned early.
+    constexpr size_t kLimit = 3;
+    auto limitedConfig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
+        txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ kLimit, /*checkSig*/ false);
+    MemoryStorage limitedStorage(limitedConfig);
+
+    // Insert kLimit txs directly (bypasses validator, fills the pool)
+    for (size_t i = 0; i < kLimit; ++i)
+    {
+        auto tx = makeTx("fib55_n" + std::to_string(i), false);
+        BOOST_CHECK_EQUAL(limitedStorage.insert(tx), TransactionStatus::None);
+    }
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
+
+    // Submitting a new tx with checkPoolLimit=true must be rejected before reaching validation
+    auto tx4 = makeTx("fib55_n3", false);
+    auto result =
+        limitedStorage.verifyAndSubmitTransaction(tx4, nullptr, /*checkPoolLimit*/ true, false);
+    BOOST_CHECK_EQUAL(result, TransactionStatus::TxPoolIsFull);
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
+}
+
+BOOST_AUTO_TEST_CASE(FIB60_UnsealWithWrongBatchIdPreservesResealed)
+{
+    // FIB-60: When unsealing, the code moved txs to unsealTransactions regardless of whether
+    // they had been re-sealed by a newer batch. The fix adds a re-seal guard: if a tx is sealed
+    // and its batchId/batchHash doesn't match the unseal request, it is left sealed.
+    auto tx0 = makeTx("fib60_n0", false);
+    auto tx1 = makeTx("fib60_n1", false);
+    auto tx2 = makeTx("fib60_n2", false);
+    storage.insert(tx0);
+    storage.insert(tx1);
+    storage.insert(tx2);
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+
+    // Seal all 3 txs with batch 1
+    HashType batchHash1 = HashType::generateRandomFixedBytes();
+    HashList batch1All{tx0->hash(), tx1->hash(), tx2->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, true));
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    BOOST_CHECK(tx2->sealed());
+
+    // Re-seal tx0 and tx1 with batch 2 (simulates a competing proposer)
+    HashType batchHash2 = HashType::generateRandomFixedBytes();
+    HashList batch2Partial{tx0->hash(), tx1->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch2Partial, 2, batchHash2, true));
+    BOOST_CHECK_EQUAL(tx0->batchId(), 2);
+    BOOST_CHECK_EQUAL(tx1->batchId(), 2);
+
+    // Now unseal with the old batch 1 — tx0 and tx1 must be protected by the re-seal guard
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, false));
+    // tx0, tx1 were re-sealed to batch 2: must remain sealed
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    // tx2 belonged to batch 1 and was not re-sealed: must be unsealed
+    BOOST_CHECK(!tx2->sealed());
+    // All 3 txs must still be present in the pool
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+    BOOST_CHECK(storage.exists(tx0->hash()));
+    BOOST_CHECK(storage.exists(tx1->hash()));
+    BOOST_CHECK(storage.exists(tx2->hash()));
+}
+
+BOOST_AUTO_TEST_CASE(FIB48_AlreadyInTxPoolAndAcceptReturnsNone)
+{
+    // FIB-48: When a transaction without a callback is re-submitted with a callback,
+    // txpoolStorageCheck() returns AlreadyInTxPoolAndAccept and sets the callback.
+    // The old code continued through the lambda chain into insert(), causing a
+    // use-after-free and potential double-resume of the coroutine handle.
+    // The fix returns TransactionStatus::None immediately after registering the callback.
+
+    auto tx1 = makeTx("fib48_n1", false);
+    storage.insert(tx1);  // Insert without callback
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+
+    // Re-submit with a callback: tx exists, no prior callback → AlreadyInTxPoolAndAccept
+    // Fix: returns None immediately (callback accepted) without re-entering insert()
+    bool callbackCalled = false;
+    auto result = storage.verifyAndSubmitTransaction(
+        tx1,
+        [&callbackCalled](
+            Error::Ptr, protocol::TransactionSubmitResult::Ptr) { callbackCalled = true; },
+        false, false);
+    BOOST_CHECK(result == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);  // No duplicate insert
+
+    // Re-submit again: tx now has a callback → AlreadyInTxPool (rejected outright)
+    auto result2 = storage.verifyAndSubmitTransaction(tx1, nullptr, false, false);
+    BOOST_CHECK(result2 == TransactionStatus::AlreadyInTxPool);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
+{
+    // Regression for double-resume risk in submitTransaction(waitForReceipt=true).
+    // Scenario:
+    // 1) tx already exists in pool without callback.
+    // 2) submitTransaction(waitForReceipt=true) registers callback on existing tx
+    //    through AlreadyInTxPoolAndAccept path.
+    // 3) batchRemoveSealedTxs notifies result and resumes awaiting coroutine.
+    // Expectation: coroutine continuation runs exactly once.
+
+    // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
+    auto sharedStorage = std::make_shared<MemoryStorage>(config);
+
+    auto tx = makeTx("fib48_submit_once", false);
+    BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
+
+    std::atomic<int> resumeCount{0};
+    std::promise<void> donePromise;
+    auto doneFuture = donePromise.get_future();
+
+    std::thread waitThread([&]() {
+        try
+        {
+            auto submitResult = task::syncWait(sharedStorage->submitTransaction(tx, true));
+            BOOST_REQUIRE(submitResult);
+            resumeCount.fetch_add(1, std::memory_order_relaxed);
+            donePromise.set_value();
+        }
+        catch (...)
+        {
+            donePromise.set_exception(std::current_exception());
+        }
+    });
+
+    // Wait until callback is attached, or submit coroutine has already completed.
+    bool callbackAttached = false;
+    for (size_t i = 0; i < 10000; ++i)
+    {
+        if (tx->submitCallback())
+        {
+            callbackAttached = true;
+            break;
+        }
+        if (doneFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        {
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    TransactionSubmitResults txsResult;
+    if (callbackAttached)
+    {
+        // Seal tx then notify execution result to trigger callback resume path.
+        HashType batchHash = HashType::generateRandomFixedBytes();
+        HashList txHashes{tx->hash()};
+        BOOST_CHECK(
+            sharedStorage->batchMarkTxs(txHashes, /*batchId*/ 1, batchHash, /*sealFlag*/ true));
+
+        auto txResult = std::make_shared<TransactionSubmitResultImpl>();
+        txResult->setTxHash(tx->hash());
+        txResult->setStatus(static_cast<uint32_t>(TransactionStatus::None));
+        txsResult.push_back(txResult);
+        sharedStorage->batchRemoveSealedTxs(/*batchId*/ 1, txsResult);
+    }
+
+    BOOST_CHECK(doneFuture.wait_for(std::chrono::seconds(1)) == std::future_status::ready);
+    if (waitThread.joinable())
+    {
+        waitThread.join();
+    }
+    BOOST_REQUIRE_NO_THROW(doneFuture.get());
+    BOOST_REQUIRE(callbackAttached);
+
+    // Triggering removal notification again should not re-run continuation.
+    sharedStorage->batchRemoveSealedTxs(/*batchId*/ 1, txsResult);
+    BOOST_CHECK_EQUAL(resumeCount.load(std::memory_order_relaxed), 1);
+}
+
+BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
+{
+    // FIB-50: nonce must only be inserted AFTER all validation steps pass.
+    // Old code called txPoolNonceChecker->insert() inside TxValidator::verify() — before
+    // validateTransaction(). If validateTransaction later failed (e.g. OverFlowValue), the
+    // nonce was already stuck in the pool, preventing valid re-submission.
+    // Fix: nonce insertion is deferred to verifyAndSubmitTransaction(), after all steps pass.
+
+    // Use a real TxPoolNonceChecker so we can query exists()
+    auto realNC = std::make_shared<TxPoolNonceChecker>();
+    std::shared_ptr<NonceCheckerInterface> nc = realNC;
+
+    // Fresh validator mock with all required methods set up
+    fakeit::Mock<bcos::txpool::TxValidatorInterface> localValidator;
+    fakeit::Mock<bcos::txpool::LedgerNonceChecker> localLNC;
+    auto web3Checker = std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr);
+    fakeit::When(Method(localValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
+    auto lnc = std::shared_ptr<bcos::txpool::LedgerNonceChecker>(&localLNC.get(), [](auto*) {});
+    fakeit::When(Method(localValidator, ledgerNonceChecker)).AlwaysReturn(lnc);
+    fakeit::When(Method(localLNC, batchInsert)).AlwaysDo([](auto, auto const&) {});
+
+    // verify() always passes — bypasses real signature verification for test simplicity
+    fakeit::When(Method(localValidator, verify)).AlwaysReturn(TransactionStatus::None);
+
+    // validateTransaction(): reject the bad nonce, accept all others
+    const std::string badNonce = "fib50_bad_nonce";
+    fakeit::When(Method(localValidator, validateTransaction))
+        .AlwaysDo([badNonce](const bcos::protocol::Transaction& tx) -> TransactionStatus {
+            return std::string(tx.nonce()) == badNonce ? TransactionStatus::OverFlowValue :
+                                                         TransactionStatus::None;
+        });
+
+    // validateChainId() always passes
+    fakeit::When(Method(localValidator, validateChainId))
+        .AlwaysDo([](const auto&, auto) -> task::Task<TransactionStatus> {
+            co_return TransactionStatus::None;
+        });
+
+    std::shared_ptr<TxValidatorInterface> v(&localValidator.get(), [](auto*) {});
+    auto cfg = std::make_shared<TxPoolConfig>(
+        v, nullptr, nullptr, nullptr, nc, 1000, 1024, /*checkSig=*/true);
+    MemoryStorage stor(cfg);
+
+    // 1. Bad tx: validateTransaction returns OverFlowValue → chain stops → nonce NOT inserted
+    auto badTx = makeTx(badNonce, false);
+    auto r1 = stor.verifyAndSubmitTransaction(badTx, nullptr, false, false);
+    BOOST_CHECK_EQUAL(r1, TransactionStatus::OverFlowValue);
+    // FIB-50 fix: nonce was not inserted because validation failed before the insertion point
+    BOOST_CHECK(!realNC->exists(badNonce));
+
+    // 2. Good tx: all steps pass → nonce IS inserted and tx enters pool
+    const std::string goodNonce = "fib50_good_nonce";
+    auto goodTx = makeTx(goodNonce, false);
+    auto r2 = stor.verifyAndSubmitTransaction(goodTx, nullptr, false, false);
+    BOOST_CHECK_EQUAL(r2, TransactionStatus::None);
+    BOOST_CHECK(realNC->exists(goodNonce));
+    BOOST_CHECK_EQUAL(stor.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(FIB65_SealAtIndex0UpdatesKnownHash)
+{
+    // FIB-65: batchMarkTxs must update m_knownLatestSealedTxHash even when the sealed
+    // transaction is at index 0 of the hash list. The old code used `> 0` which skipped
+    // index 0, leaving m_knownLatestSealedTxHash stale and causing batchSealTransactions
+    // to start from the wrong position on subsequent calls.
+
+    // Provide a real BlockFactory so batchSealTransactions can create TransactionMetaData
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
+    config->setBlockFactory(blockFactory);
+
+    // Step 1: Insert tx1 (unsealed) and seal it via batchMarkTxs at index 0
+    auto tx1 = makeTx("fib65_nonce1", false);
+    tx1->setImportTime(static_cast<int64_t>(utcTime()));
+    storage.insert(tx1);
+    HashType batchHash = HashType::generateRandomFixedBytes();
+    HashList toSeal{tx1->hash()};  // tx1 is at index 0 — this is the bug trigger
+    bool ok = storage.batchMarkTxs(toSeal, /*batchId*/ 1, batchHash, /*sealFlag*/ true);
+    BOOST_CHECK(ok);
+    BOOST_CHECK(tx1->sealed());
+
+    // Step 2: Insert tx2 (unsealed) — should be found by the next batchSealTransactions
+    auto tx2 = makeTx("fib65_nonce2", false);
+    tx2->setImportTime(static_cast<int64_t>(utcTime()));
+    storage.insert(tx2);
+    BOOST_CHECK(!tx2->sealed());
+
+    // Step 3: batchSealTransactions must find tx2 regardless of m_knownLatestSealedTxHash
+    std::vector<protocol::TransactionMetaData::Ptr> txsList;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxsList;
+    bool result = storage.batchSealTransactions(txsList, sysTxsList, /*limit*/ 100);
+    BOOST_CHECK(result);
+
+    // tx2 must be in the output (the fix ensures rangeByKey starts from the correct position)
+    bool foundTx2 = false;
+    for (auto& meta : txsList)
+    {
+        if (meta->hash() == tx2->hash())
+        {
+            foundTx2 = true;
+            break;
+        }
+    }
+    BOOST_CHECK(foundTx2);
+    // Total: tx1 (sealed) + tx2 (now sealed after batchSealTransactions) = 2
+    BOOST_CHECK_EQUAL(storage.size(), 2U);
+}
+BOOST_AUTO_TEST_CASE(FIB54_ConcurrentBatchMarkTxs)
+{
+    // FIB-54: batchMarkTxs used ReadAccessor inside the traverse callback but then
+    // called bucket.remove() and batchInsert() which need write access, causing a data
+    // race under concurrent sealing. The fix promotes to WriteAccessor for all mutations.
+    // This test inserts 50 txs and concurrently seals two non-overlapping batches to
+    // exercise the concurrent-write path.
+
+    constexpr int kTotal = 50;
+    constexpr int kBatch1End = 25;  // batch 1: indices 0..24, batch 2: indices 25..49
+
+    std::vector<bcostars::protocol::TransactionImpl::Ptr> txs;
+    txs.reserve(kTotal);
+    for (int i = 0; i < kTotal; ++i)
+    {
+        auto tx = makeTx("fib54_n" + std::to_string(i), false);
+        storage.insert(tx);
+        txs.push_back(tx);
+    }
+    BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
+
+    HashType bh1 = HashType::generateRandomFixedBytes();
+    HashType bh2 = HashType::generateRandomFixedBytes();
+
+    HashList batch1;
+    HashList batch2;
+    for (int i = 0; i < kBatch1End; ++i)
+    {
+        batch1.push_back(txs[i]->hash());
+    }
+    for (int i = kBatch1End; i < kTotal; ++i)
+    {
+        batch2.push_back(txs[i]->hash());
+    }
+
+    // Seal both batches concurrently — must not crash or corrupt state (FIB-54)
+    tbb::parallel_invoke([&] { storage.batchMarkTxs(batch1, /*batchId=*/10, bh1, /*seal=*/true); },
+        [&] { storage.batchMarkTxs(batch2, /*batchId=*/11, bh2, /*seal=*/true); });
+
+    // All 50 txs must now be sealed
+    for (auto& tx : txs)
+    {
+        BOOST_CHECK(tx->sealed());
+    }
+    BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
+
+    // Unseal both batches concurrently
+    tbb::parallel_invoke([&] { storage.batchMarkTxs(batch1, /*batchId=*/10, bh1, /*seal=*/false); },
+        [&] { storage.batchMarkTxs(batch2, /*batchId=*/11, bh2, /*seal=*/false); });
+
+    // All 50 txs must now be unsealed and still present
+    for (auto& tx : txs)
+    {
+        BOOST_CHECK(!tx->sealed());
+        BOOST_CHECK(storage.exists(tx->hash()));
+    }
+    BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
+}
+
+BOOST_AUTO_TEST_CASE(TimeoutCleanupNotifiesResultWithEmptyReceipt)
+{
+    // Reproduces the production issue reported as "sendTransaction returns status=0,
+    // blockNumber=0": a tx that sits in the pool past the expiry window without being
+    // sealed into a block is cleaned up by the seal-time expiry check inside
+    // batchSealTransactions(). removeInvalidTxs() then fires the submit callback with a
+    // TransactionSubmitResult whose status is TransactionPoolTimeout but whose embedded
+    // receipt is a default-constructed empty receipt (status=0, blockNumber=0, gasUsed=0).
+    // JsonRpcImpl_2_0::sendTransaction serializes status/blockNumber/gasUsed from the
+    // RECEIPT rather than from the result, so the client sees a bogus "status=0,
+    // blockNumber=0" success indistinguishable from a real execution.
+
+    // Production nodes (both AIR and MAX) wire ProtocolInitializer's
+    // bcostars::protocol::TransactionSubmitResultFactoryImpl, whose transactionReceipt()
+    // returns a non-null default receipt even when none was set. Reproduce that here —
+    // the bcos-protocol factory would return nullptr and mask the symptom.
+    auto tarsResultFactory =
+        std::make_shared<bcostars::protocol::TransactionSubmitResultFactoryImpl>();
+    auto timeoutConfig = std::make_shared<TxPoolConfig>(txValidator, tarsResultFactory, nullptr,
+        ledger, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024, /*checkSig*/ false);
+
+    // batchSealTransactions() needs a real BlockFactory
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
+    timeoutConfig->setBlockFactory(blockFactory);
+
+    // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
+    auto sharedStorage = std::make_shared<MemoryStorage>(timeoutConfig);
+
+    auto tx = makeTx("timeout_empty_receipt", false);
+    BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
+    BOOST_CHECK_EQUAL(sharedStorage->size(), 1U);
+
+    // Attach the submit callback through the AlreadyInTxPoolAndAccept shortcut: the tx is
+    // already in the pool without a callback, so verifyAndSubmitTransaction() registers the
+    // callback and returns immediately without running the validation chain (the mock
+    // validator needs no validateTransaction() stub).
+    bcos::protocol::TransactionSubmitResult::Ptr captured;
+    bool callbackFired = false;
+    auto attachResult = sharedStorage->verifyAndSubmitTransaction(
+        tx,
+        [&](bcos::Error::Ptr error, bcos::protocol::TransactionSubmitResult::Ptr result) {
+            BOOST_CHECK(error == nullptr);
+            callbackFired = true;
+            captured = std::move(result);
+        },
+        /*checkPoolLimit*/ false, /*lock*/ false);
+    BOOST_CHECK(attachResult == TransactionStatus::None);
+    BOOST_CHECK(tx->submitCallback());
+
+    // Age the tx past the default 10-minute expiry window, then run the seal-time expiry
+    // cleanup that a consensus node performs inside batchSealTransactions().
+    tx->setImportTime(
+        static_cast<int64_t>(utcTime()) - static_cast<int64_t>(TX_DEFAULT_EXPIRATION_TIME) - 1);
+
+    std::vector<protocol::TransactionMetaData::Ptr> txsList;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxsList;
+    sharedStorage->batchSealTransactions(txsList, sysTxsList, 100);
+
+    // The expired tx must not be sealed and must be dropped from the pool.
+    BOOST_CHECK(txsList.empty());
+    BOOST_CHECK_EQUAL(sharedStorage->size(), 0U);
+
+    // The callback fires exactly once with the timeout result.
+    BOOST_REQUIRE(callbackFired);
+    BOOST_REQUIRE(captured);
+    BOOST_CHECK_EQUAL(
+        captured->status(), static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
+
+    // The bug: the embedded receipt is an empty default receipt — a client serializing
+    // receipt.status()/blockNumber()/gasUsed() sees 0/0/0, indistinguishable from success.
+    auto receipt = captured->transactionReceipt();
+    BOOST_REQUIRE(receipt);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
+    BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
+    BOOST_CHECK(receipt->gasUsed() == 0);
+    BOOST_CHECK(receipt->logEntries().empty());
+    BOOST_CHECK(receipt->output().empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

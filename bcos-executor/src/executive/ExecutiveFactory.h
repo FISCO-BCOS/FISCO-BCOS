@@ -41,27 +41,14 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
         std::shared_ptr<PrecompiledMap> precompiled,
         std::shared_ptr<const std::set<std::string>> staticPrecompiled,
-        const wasm::GasInjector& gasInjector)
-      : m_evmPrecompiled(std::move(evmPrecompiled)),
-        m_precompiled(std::move(precompiled)),
-        m_staticPrecompiled(std::move(staticPrecompiled)),
-        m_blockContext(blockContext),
-        m_gasInjector(gasInjector),
-        m_isTiKVStorage(boost::iequals("tikv", protocol::g_BCOSConfig.storageType()))
-    {
-        if (m_isTiKVStorage)
-        {
-            m_poolForPromiseWait = std::make_shared<bcos::ThreadPool>(
-                "promiseWait", 128);  // should max enough for promise wait
-        }
-    }
+        const wasm::GasInjector& gasInjector);
 
     virtual ~ExecutiveFactory() = default;
     //    virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
     //        int64_t contextID, int64_t seq, bool useCoroutine = true);
     virtual std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,
         int64_t contextID, int64_t seq, ExecutiveType execType = ExecutiveType::coroutine);
-    const BlockContext& getBlockContext() { return m_blockContext; };
+    const BlockContext& getBlockContext();
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& address) const;
 
@@ -91,10 +78,7 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
         std::shared_ptr<PrecompiledMap> precompiled,
         std::shared_ptr<const std::set<std::string>> staticPrecompiled,
-        const wasm::GasInjector& gasInjector)
-      : ExecutiveFactory(blockContext, std::move(evmPrecompiled), std::move(precompiled),
-            std::move(staticPrecompiled), gasInjector)
-    {}
+                const wasm::GasInjector& gasInjector);
     ~ShardingExecutiveFactory() override = default;
 
     std::shared_ptr<TransactionExecutive> build(const std::string& _contractAddress,

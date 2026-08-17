@@ -22,6 +22,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <json/json.h>
+#include <range/v3/view/drop.hpp>
+#include <range/v3/view/take.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -661,14 +663,14 @@ BOOST_AUTO_TEST_CASE(lsTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == 4);
         std::set<std::string> lsSet;
-        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
              }))
         {
             lsSet.insert(item);
         }
 
-        for (auto const& rootSub : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
+        for (auto const& rootSub : tool::FS_ROOT_SUBS | ::ranges::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(rootSub.substr(1))));
         }
@@ -694,7 +696,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
         }
         std::set<std::string> lsSet;
-        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
              }))
         {
@@ -713,7 +715,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
             take--;
         }
         for (auto const& sysSub :
-            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
+            precompiled::BFS_SYS_SUBS | ::ranges::views::take(take) | ::ranges::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
@@ -785,14 +787,14 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == 4);
         std::set<std::string> lsSet;
-        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
              }))
         {
             lsSet.insert(item);
         }
 
-        for (auto const& rootSub : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
+        for (auto const& rootSub : tool::FS_ROOT_SUBS | ::ranges::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(rootSub.substr(1))));
         }
@@ -818,7 +820,7 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
         }
         std::set<std::string> lsSet;
-        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
              }))
         {
@@ -837,7 +839,7 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
             take--;
         }
         for (auto const& sysSub :
-            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
+            precompiled::BFS_SYS_SUBS | ::ranges::views::take(take) | ::ranges::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }
@@ -909,14 +911,14 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
         BOOST_CHECK(code == (int)CODE_SUCCESS);
         BOOST_CHECK(ls.size() == 4);
         std::set<std::string> lsSet;
-        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
              }))
         {
             lsSet.insert(item);
         }
 
-        for (auto const& rootSub : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
+        for (auto const& rootSub : tool::FS_ROOT_SUBS | ::ranges::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(rootSub.substr(1))));
         }
@@ -942,7 +944,7 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
             BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
         }
         std::set<std::string> lsSet;
-        for (const auto& item : ls | RANGES::views::transform([](auto&& bfs) -> std::string {
+        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
                  return std::get<0>(bfs);
              }))
         {
@@ -961,7 +963,7 @@ BOOST_AUTO_TEST_CASE(lsPagWasmTest)
             take--;
         }
         for (auto const& sysSub :
-            precompiled::BFS_SYS_SUBS | RANGES::views::take(take) | RANGES::views::drop(1))
+            precompiled::BFS_SYS_SUBS | ::ranges::views::take(take) | ::ranges::views::drop(1))
         {
             BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
         }

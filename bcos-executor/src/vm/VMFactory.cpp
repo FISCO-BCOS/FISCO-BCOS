@@ -32,6 +32,8 @@ namespace po = boost::program_options;
 namespace bcos::executor
 {
 
+VMFactory::VMFactory(size_t cache_size) : m_cache(cache_size) {}
+
 /// The pointer to VMInstance create function in DLL VMInstance VM.
 ///
 /// This variable is only written once when processing command line arguments,

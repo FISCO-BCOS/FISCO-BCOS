@@ -2,6 +2,8 @@
 #include "Hasher.h"
 #include "bcos-crypto/TrivialObject.h"
 #include <memory>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/primitives.hpp>
 #include <span>
 
 namespace bcos::crypto::hasher
@@ -73,9 +75,9 @@ public:
 
     void final(auto& output)
     {
-        if constexpr (
-            requires { output.resize(size_t{}); }) {
-                output.resize(hashSize());
+        if constexpr (requires { output.resize(size_t{}); })
+        {
+            output.resize(hashSize());
         }
 
         m_anyHasher->final(

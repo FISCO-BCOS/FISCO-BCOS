@@ -223,6 +223,12 @@ bcostars::SchedulerServiceClient::SchedulerServiceClient(
   : m_prx(_prx), m_cryptoSuite(_cryptoSuite)
 {}
 bcostars::SchedulerServiceClient::~SchedulerServiceClient() {}
+bcos::task::Task<std::optional<bcos::storage::Entry>>
+bcostars::SchedulerServiceClient::getPendingStorageAt(
+    std::string_view, std::string_view, bcos::protocol::BlockNumber)
+{
+    co_return std::nullopt;
+}
 void bcostars::SchedulerServiceClient::status(
     std::function<void(bcos::Error::Ptr, bcos::protocol::Session::ConstPtr)>)
 {

@@ -40,14 +40,8 @@ enum WsError
     MessageEncodeError = -4013
 };
 
-inline bool notRetryAgain(int _wsError)
-{
-    return (_wsError == boostssl::ws::WsError::MessageOverflow);
-}
+bool notRetryAgain(int _wsError);
 
-inline std::string wsErrorToString(WsError _wsError)
-{
-    return std::to_string(_wsError);
-}
+std::string wsErrorToString(WsError _wsError);
 
 }  // namespace bcos::boostssl::ws

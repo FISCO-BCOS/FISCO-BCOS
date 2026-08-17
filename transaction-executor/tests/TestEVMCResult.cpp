@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(testMakeErrorEVMCResult)
         BOOST_CHECK_EQUAL(result.status, TransactionStatus::Unknown);
         BOOST_CHECK_EQUAL(result.output_size, 0);
         BOOST_CHECK_EQUAL(result.output_data, nullptr);
-        BOOST_CHECK_NE(result.release, nullptr);  // Release function is still set
+        BOOST_CHECK_EQUAL(result.release, nullptr);
     }
 }
 
@@ -446,6 +446,52 @@ BOOST_AUTO_TEST_CASE(testResourceManagement)
 
         // Only result2 should clean up the data when destructed
     }
+}
+
+// FIB-78: gas_left clamping is gated by bugfix_v1_error_handling.
+BOOST_AUTO_TEST_CASE(makeErrorEVMCResult_clampDisabled_preservesGas)
+{
+    auto result =
+        makeErrorEVMCResult(*hashImpl, TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 100000, "",
+            /*clampGasLeft=*/false);
+
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_OUT_OF_GAS);
+    BOOST_CHECK_EQUAL(result.gas_left, 100000);
+}
+
+BOOST_AUTO_TEST_CASE(makeErrorEVMCResult_clampEnabled_zerosGasForFatalStatuses)
+{
+    constexpr int64_t callerGas = 100000;
+
+    const evmc_status_code fatalStatuses[] = {EVMC_OUT_OF_GAS, EVMC_INTERNAL_ERROR,
+        EVMC_STACK_OVERFLOW, EVMC_STACK_UNDERFLOW, EVMC_INVALID_INSTRUCTION,
+        EVMC_UNDEFINED_INSTRUCTION, EVMC_BAD_JUMP_DESTINATION, EVMC_INVALID_MEMORY_ACCESS};
+
+    for (auto status : fatalStatuses)
+    {
+        auto result = makeErrorEVMCResult(
+            *hashImpl, TransactionStatus::Unknown, status, callerGas, "", /*clampGasLeft=*/true);
+        BOOST_CHECK_EQUAL(result.status_code, status);
+        BOOST_CHECK_EQUAL(result.gas_left, 0);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(makeErrorEVMCResult_clampEnabled_revertPreservesGas)
+{
+    auto result = makeErrorEVMCResult(*hashImpl, TransactionStatus::RevertInstruction, EVMC_REVERT,
+        50000, "", /*clampGasLeft=*/true);
+
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(result.gas_left, 50000);
+}
+
+BOOST_AUTO_TEST_CASE(makeErrorEVMCResult_clampEnabled_negativeGasClampedToZero)
+{
+    auto result = makeErrorEVMCResult(*hashImpl, TransactionStatus::RevertInstruction, EVMC_REVERT,
+        -100, "", /*clampGasLeft=*/true);
+
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(result.gas_left, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

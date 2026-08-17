@@ -19,11 +19,17 @@
  * @date 2021-05-23
  */
 #include "BlockSyncStatusImpl.h"
+#include "bcos-sync/utilities/Common.h"
+#include <bcos-protocol/Common.h>
+#include <bcos-utilities/Common.h>
 
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
+
+// maximum allowed time drift from local UTC: 24 hours in milliseconds
+static constexpr std::int64_t MAX_TIME_DRIFT_MS = 24 * 60 * 60 * 1000LL;
 
 void BlockSyncStatusImpl::decode(bytesConstRef _data)
 {
@@ -34,16 +40,42 @@ void BlockSyncStatusImpl::decode(bytesConstRef _data)
 void BlockSyncStatusImpl::deserializeObject()
 {
     auto const& hashData = m_syncMessage->hash();
-    if (hashData.size() >= HashType::SIZE)
+    if (hashData.size() != HashType::SIZE)
     {
-        m_hash = HashType((byte const*)hashData.data(), HashType::SIZE);
+        BOOST_THROW_EXCEPTION(PBObjectDecodeException()
+                              << errinfo_comment("BlockSyncStatus: invalid hash size, expected " +
+                                                 std::to_string(HashType::SIZE) + " got " +
+                                                 std::to_string(hashData.size())));
     }
+    m_hash = HashType((byte const*)hashData.data(), HashType::SIZE);
+    // swap with empty string to reliably release protobuf's underlying allocation
+    std::string().swap(*m_syncMessage->mutable_hash());
+
     auto const& genesisHashData = m_syncMessage->genesishash();
-    if (genesisHashData.size() >= HashType::SIZE)
+    if (genesisHashData.size() != HashType::SIZE)
     {
-        m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
+        BOOST_THROW_EXCEPTION(
+            PBObjectDecodeException() << errinfo_comment(
+                "BlockSyncStatus: invalid genesis hash size, expected " +
+                std::to_string(HashType::SIZE) + " got " + std::to_string(genesisHashData.size())));
     }
-    m_time = m_syncMessage->time();
+    m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
+    std::string().swap(*m_syncMessage->mutable_genesishash());
+
+    auto rawTime = m_syncMessage->time();
+    auto localTime = static_cast<std::int64_t>(utcTime());
+    // Validate peer time: must be within ±24h of local UTC time
+    if (rawTime >= localTime - MAX_TIME_DRIFT_MS && rawTime <= localTime + MAX_TIME_DRIFT_MS)
+    {
+        m_time = rawTime;
+    }
+    else
+    {
+        BLKSYNC_LOG(WARNING) << LOG_DESC("deserializeObject: peer time out of valid range")
+                             << LOG_KV("peerTime", rawTime) << LOG_KV("localTime", localTime)
+                             << LOG_KV("maxDriftMs", MAX_TIME_DRIFT_MS);
+        m_time = 0;
+    }
 }
 void BlockSyncStatusImpl::setHash(HashType const& _hash)
 {

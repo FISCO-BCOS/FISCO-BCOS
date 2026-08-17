@@ -21,16 +21,47 @@
 
 #include "WatcherConfig.h"
 #include "bcos-utilities/BoostLog.h"
+#include <algorithm>
+#include <cstddef>
+#include <set>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::election;
+
+// FIB-168: produce a short, log-safe hex prefix of the watched etcd value so
+// failure-path logs do not echo the full attacker-controlled payload.
+std::string WatcherConfig::truncateValueForLog(std::string_view _value)
+{
+    static constexpr char kHex[] = "0123456789abcdef";
+    auto const limit = std::min(_value.size(), static_cast<std::size_t>(c_logValuePrefixBytes));
+    std::string out;
+    out.reserve(limit * 2);
+    for (std::size_t i = 0; i < limit; ++i)
+    {
+        unsigned char b = static_cast<unsigned char>(_value[i]);
+        out.push_back(kHex[(b >> 4) & 0x0f]);
+        out.push_back(kHex[b & 0x0f]);
+    }
+    return out;
+}
 
 void WatcherConfig::reCreateWatcher()
 {
     ELECTION_LOG(INFO) << LOG_DESC("reCreateWatcher");
     // Note: set recursive to watch subdirectory change
-    m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_watchDir,
-        boost::bind(&WatcherConfig::onWatcherKeyChanged, this, boost::placeholders::_1), true);
+    auto weak = std::weak_ptr<ElectionConfig>(shared_from_this());
+    m_watcher = std::make_shared<etcd::Watcher>(
+        *m_etcdClient, m_watchDir,
+        [weak](etcd::Response response) {
+            auto self = std::dynamic_pointer_cast<WatcherConfig>(weak.lock());
+            if (!self)
+            {
+                return;
+            }
+            self->onWatcherKeyChanged(std::move(response));
+        },
+        true);
     // fetchLeadersInfo when reCreateWatcher
     fetchLeadersInfo();
 }
@@ -46,12 +77,42 @@ void WatcherConfig::fetchLeadersInfo()
         return;
     }
     auto const& values = response.values();
+    // FIB-182: this is a full snapshot of m_watchDir. A delete event that
+    // arrives while the watcher is disconnected is never delivered, so the old
+    // logic (add/update only) leaves a stale leader entry in m_keyToLeader
+    // forever. Track every key present in the snapshot and prune any tracked
+    // key that is absent from it.
+    std::set<std::string> snapshotKeys;
     for (auto const& value : values)
     {
+        snapshotKeys.insert(value.key());
         updateLeaderInfo(value);
     }
+    std::vector<std::pair<std::string, bcos::protocol::MemberInterface::Ptr>> prunedMembers;
+    {
+        WriteGuard l(x_keyToLeader);
+        for (auto it = m_keyToLeader.begin(); it != m_keyToLeader.end();)
+        {
+            if (snapshotKeys.count(it->first) != 0)
+            {
+                ++it;
+                continue;
+            }
+            prunedMembers.emplace_back(it->first, it->second);
+            m_keyToLeaderSeq.erase(it->first);
+            it = m_keyToLeader.erase(it);
+        }
+    }
+    // invoke delete callbacks outside the lock to prevent self-deadlock
+    for (auto const& pruned : prunedMembers)
+    {
+        ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo: prune missed-delete leader key")
+                           << LOG_KV("watchDir", m_watchDir) << LOG_KV("leaderKey", pruned.first);
+        onMemberDeleted(pruned.first, pruned.second);
+    }
     ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir)
-                       << LOG_KV("nodesSize", values.size());
+                       << LOG_KV("nodesSize", values.size())
+                       << LOG_KV("prunedSize", prunedMembers.size());
 }
 
 void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
@@ -63,39 +124,72 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         {
             ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: the leaderKey has been released")
                                << LOG_KV("leaderKey", _value.key());
+            auto const& leaderKey = _value.key();
+            bcos::protocol::MemberInterface::Ptr deletedMember;
             {
-                auto const& leaderKey = _value.key();
                 UpgradableGuard l(x_keyToLeader);
                 auto it = m_keyToLeader.find(leaderKey);
                 if (it == m_keyToLeader.end())
                 {
                     return;
                 }
-                auto member = it->second;
+                deletedMember = it->second;
                 UpgradeGuard ul(l);
                 m_keyToLeader.erase(leaderKey);
-                onMemberDeleted(leaderKey, member);
+                m_keyToLeaderSeq.erase(leaderKey);
             }
+            // invoke callback outside lock to prevent self-deadlock
+            onMemberDeleted(leaderKey, deletedMember);
             return;
         }
         auto const& leaderKey = _value.key();
-        auto member = m_memberFactory->createMember(_value.as_string());
+        // FIB-168: enforce a hard size cap on the watched payload BEFORE
+        // decode. An attacker (or compromised) writer to the watched etcd
+        // prefix could otherwise force expensive Tars decoding plus an
+        // amplified failure-path log of the full value on every update.
+        auto const& rawValue = _value.as_string();
+        if (isOversizeEtcdValue(rawValue.size()))
+        {
+            ELECTION_LOG(WARNING) << LOG_DESC(
+                                         "FIB-168: updateLeaderInfo reject oversize etcd value")
+                                  << LOG_KV("watchDir", m_watchDir)
+                                  << LOG_KV("leaderKey", leaderKey)
+                                  << LOG_KV("size", rawValue.size())
+                                  << LOG_KV("max", c_maxEtcdValueSize);
+            return;
+        }
+        auto member = m_memberFactory->createMember(rawValue);
         auto seq = _value.modified_index();
         member->setSeq(seq);
+        {
+            WriteGuard l(x_keyToLeader);
+            auto seqIt = m_keyToLeaderSeq.find(leaderKey);
+            if (seqIt != m_keyToLeaderSeq.end() && seq <= seqIt->second)
+            {
+                ELECTION_LOG(DEBUG) << LOG_DESC("updateLeaderInfo: ignore stale update")
+                                    << LOG_KV("leaderKey", leaderKey) << LOG_KV("incomingSeq", seq)
+                                    << LOG_KV("currentSeq", seqIt->second);
+                return;
+            }
+            m_keyToLeaderSeq[leaderKey] = seq;
+            m_keyToLeader[leaderKey] = member;
+        }
         ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: update leader")
                            << LOG_KV("leaderKey", leaderKey) << LOG_KV("member", member->memberID())
                            << LOG_KV("modifiedIndex", seq);
-        {
-            WriteGuard l(x_keyToLeader);
-            m_keyToLeader[leaderKey] = member;
-        }
         callNotificationHandlers(leaderKey, member);
     }
     catch (std::exception const& e)
     {
+        // FIB-168: do NOT echo the full attacker-controlled payload here.
+        // Logging the full value on failure provides a log-volume amplification
+        // primitive (especially when paired with an attacker repeatedly writing
+        // values that fail decode). Log only the size and a short hex prefix.
+        auto const& rawValue = _value.as_string();
         ELECTION_LOG(WARNING) << LOG_DESC("updateLeaderInfo exception")
                               << LOG_KV("watchDir", m_watchDir) << LOG_KV("key", _value.key())
-                              << LOG_KV("value", _value.as_string())
+                              << LOG_KV("size", rawValue.size())
+                              << LOG_KV("prefix", truncateValueForLog(rawValue))
                               << LOG_KV("message", boost::diagnostic_information(e));
     }
 }

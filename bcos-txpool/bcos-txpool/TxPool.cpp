@@ -85,6 +85,10 @@ void TxPool::stop()
     if (m_txsPreStore)
     {
         m_txsPreStore->stop();
+        // Abandoned lambdas in the stopped thread pool never run their cleanup; clear
+        // stale entries so a restart doesn't see phantom in-flight blocks.
+        std::scoped_lock lock(x_preStoreInFlight);
+        m_preStoreInFlight.clear();
     }
     if (m_verifier)
     {
@@ -138,19 +142,52 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
 {
     if (m_treeRouter != nullptr)
     {
-        auto protocolList =
-            m_transactionSync->config()->frontService()->groupNodeInfo()->nodeProtocolList();
+        // FIB-166: defensively validate group / protocol metadata before dereferencing it.
+        // Pre-handshake invocations (or test paths) can leave groupNodeInfo() null and the
+        // protocol list empty; previously this code dereferenced both unconditionally and
+        // would crash or take the empty-list 'no lower-version peer' path and route via the
+        // tree even when no protocol information was available. Fall back to the flood
+        // broadcast when metadata is missing.
+        auto groupNodeInfo = m_transactionSync->config()->frontService()->groupNodeInfo();
+        if (!groupNodeInfo)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC(
+                "broadcastTransactionBufferByTree: groupNodeInfo unavailable, falling back to "
+                "flood broadcast");
+            co_await m_transactionSync->config()->frontService()->broadcastMessage(
+                protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
+                ::ranges::views::single(_data));
+            co_return;
+        }
+        auto const& protocolList = groupNodeInfo->nodeProtocolList();
+        if (protocolList.empty())
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC(
+                "broadcastTransactionBufferByTree: nodeProtocolList empty, falling back to "
+                "flood broadcast");
+            co_await m_transactionSync->config()->frontService()->broadcastMessage(
+                protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
+                ::ranges::views::single(_data));
+            co_return;
+        }
         // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
         // for filter whether send new protocol or not. So one-size-fits-all approach, if
         // protocolList have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default.
         auto index = ::ranges::find_if(protocolList, [](auto const& protocol) {
-            return protocol->version() < protocol::ProtocolVersion::V2;
+            // FIB-166: skip null entries in the sorted list rather than dereferencing them.
+            // A null protocol entry is treated as "lower version" so we err on the side of
+            // the safer SYNC_PUSH_TRANSACTION fanout, matching the existing pessimistic
+            // behaviour for any pre-V2 peer.
+            return !protocol || protocol->version() < protocol::ProtocolVersion::V2;
         });
         if (index != protocolList.end()) [[unlikely]]
         {
+            // FIB-166: the matched entry may be null when the protocol list contains null
+            // pointers; report -1 in that case rather than dereferencing.
+            auto matchedVersion = (*index) ? static_cast<int>((*index)->version()) : -1;
             TXPOOL_LOG(TRACE) << LOG_DESC(
                                      "broadcastTransactionBufferByTree but have lower version node")
-                              << LOG_KV("index", index->get()->version());
+                              << LOG_KV("index", matchedVersion);
             // have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default
             co_await m_transactionSync->config()->frontService()->broadcastMessage(
                 protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
@@ -178,6 +215,20 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
                     protocol::TREE_PUSH_TRANSACTION, node, _data, 0, front::CallbackFunc());
             }
         }
+    }
+    else
+    {
+        // FIB-165: tree topology is unavailable (e.g. observer node, or the router was
+        // never installed). Previously the function silently returned, so callers that
+        // chose the tree path on capability had no signal that the broadcast was a no-op
+        // and transactions could be silently dropped. Fall back to the standard flood
+        // broadcast and log the substitution for diagnostics.
+        TXPOOL_LOG(INFO) << LOG_DESC(
+            "broadcastTransactionBufferByTree: tree router unavailable, falling back to "
+            "flood broadcast");
+        co_await m_transactionSync->config()->frontService()->broadcastMessage(
+            protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
+            ::ranges::views::single(_data));
     }
 }
 
@@ -282,8 +333,39 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                 // m_txsPreStore
                 if (!verifyError && verifyRet && block)
                 {
-                    txpool->m_txsPreStore->enqueue(
-                        [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    auto const& blockHash = block->blockHeader()->hash();
+                    if (const auto admission = txpool->tryAcquirePreStoreSlot(blockHash);
+                        admission == TxPool::PreStoreAdmission::Accepted)
+                    {
+                        txpool->m_txsPreStore->enqueue([txpool, block, blockHash]() {
+                            try
+                            {
+                                txpool->storeVerifiedBlock(block);
+                            }
+                            catch (std::exception const& e)
+                            {
+                                TXPOOL_LOG(WARNING)
+                                    << LOG_DESC("pre-store storeVerifiedBlock threw")
+                                    << LOG_KV("blockHash", blockHash.abridged())
+                                    << LOG_KV("error", boost::diagnostic_information(e));
+                            }
+                            catch (...)
+                            {
+                                TXPOOL_LOG(WARNING) << LOG_DESC(
+                                                           "pre-store storeVerifiedBlock threw "
+                                                           "unknown exception")
+                                                    << LOG_KV("blockHash", blockHash.abridged());
+                            }
+                            txpool->releasePreStoreSlot(blockHash);
+                        });
+                    }
+                    else if (admission == TxPool::PreStoreAdmission::Disabled)
+                    {
+                        // backpressure off: legacy unbounded behavior (operator escape hatch)
+                        txpool->m_txsPreStore->enqueue(
+                            [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    }
+                    // DuplicateSkipped / CapDropped: nothing to do; logged inside the gate.
                 }
             };
 
@@ -375,13 +457,34 @@ void TxPool::notifyObserverNodeList(
     _onRecvResponse(nullptr);
 }
 
+void TxPool::notifyBlockTxCountLimit(uint64_t _blockTxCountLimit)
+{
+    // FIB-167: keep both the live fillBlock cap and the legacy sync-response cap on
+    // m_maxResponseTxsToNodesWithEmptyTxs in sync with consensus governance. The latter
+    // was also originally derived from blockTxCountLimit at init time, so propagating
+    // here prevents it from going stale after a setSystemConfigPrecompile bump.
+    auto config = m_transactionSync->config();
+    config->setBlockTxCountLimit(_blockTxCountLimit);
+    config->setMaxResponseTxsToNodesWithEmptyTxs(_blockTxCountLimit);
+}
+
 void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
     std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled)
 {
+    // FIB-155: capture weak_ptr instead of raw `this`. The async callback can
+    // outlive the TxPool during shutdown/reconfiguration, which would
+    // dereference freed memory if `this` were captured directly.
+    auto self = weak_from_this();
     // fetch from the local ledger
     m_transactionSync->requestMissedTxs(nullptr, std::move(_missedTxs), nullptr,
-        [this, _txsHash = std::move(_txsHash), _onBlockFilled = std::move(_onBlockFilled)](
+        [self, _txsHash = std::move(_txsHash), _onBlockFilled = std::move(_onBlockFilled)](
             const Error::Ptr& _error, bool _verifyResult) {
+            auto txpool = self.lock();
+            if (!txpool)
+            {
+                // owning TxPool has been destroyed; drop the callback
+                return;
+            }
             if (_error || !_verifyResult)
             {
                 TXPOOL_LOG(WARNING) << LOG_DESC("getTxsFromLocalLedger failed")
@@ -395,7 +498,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
             }
             TXPOOL_LOG(INFO) << LOG_DESC(
                 "asyncFillBlock miss and try to get the transaction from the ledger success");
-            fillBlock(_txsHash, _onBlockFilled, false);
+            txpool->fillBlock(_txsHash, _onBlockFilled, false);
         });
 }
 
@@ -412,6 +515,28 @@ void TxPool::fillBlock(HashListPtr _txsHash,
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().FILL_BLOCK);
 
+    // FIB-167: enforce an upper bound on caller-controlled txsHash size. Without this
+    // cap, a peer (or a forwarded p2p message) can request fillBlock with millions of
+    // hashes; the function would zip the full input against pool lookups and amplify into
+    // an unbounded ledger-fetch, creating a CPU/memory DoS vector. Reject anything larger
+    // than the chain's current per-block transaction limit. The cap is refreshed on every
+    // committed block via notifyBlockTxCountLimit so consensus-governance changes take
+    // effect immediately instead of using the init-time snapshot.
+    auto const blockTxLimit = m_transactionSync->config()->blockTxCountLimit();
+    if (_txsHash && blockTxLimit > 0 && _txsHash->size() > blockTxLimit)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("fillBlock: txsHash size exceeds blockTxCountLimit, reject")
+                            << LOG_KV("size", _txsHash->size()) << LOG_KV("limit", blockTxLimit);
+        if (_onBlockFilled)
+        {
+            _onBlockFilled(BCOS_ERROR_PTR(CommonError::TransactionsMissing,
+                               "fillBlock: txsHash size exceeds blockTxCountLimit"),
+                nullptr);
+        }
+        return;
+    }
+
+    // getTransactions guarantees that txs and *_txsHash have the same size and order
     auto txs = m_txpoolStorage->getTransactions(*_txsHash);
     auto missedTxs = ::ranges::views::zip(*_txsHash, txs) |
                      ::ranges::views::filter([](const auto& pair) {
@@ -524,6 +649,9 @@ void TxPool::init()
     txsSyncConfig->setObserverList(ledgerConfig->observerNodeList());
     m_transactionSync->config()->setMaxResponseTxsToNodesWithEmptyTxs(
         ledgerConfig->blockTxCountLimit());
+    // FIB-167: seed the live fillBlock cap with the same value; subsequent updates
+    // arrive via notifyBlockTxCountLimit from PBFT's new-block notifier.
+    m_transactionSync->config()->setBlockTxCountLimit(ledgerConfig->blockTxCountLimit());
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");
 }
 
@@ -708,4 +836,56 @@ void bcos::txpool::TxPool::registerTxsNotifier(
     std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
 {
     m_txpoolStorage->registerTxsNotifier(_txsNotifier);
+}
+
+void bcos::txpool::TxPool::setPreStoreBackpressureEnabled(bool _enabled)
+{
+    m_preStoreBackpressureEnabled = _enabled;
+}
+
+void bcos::txpool::TxPool::setPreStoreMaxInflight(std::size_t _max)
+{
+    if (_max == 0)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC(
+            "setPreStoreMaxInflight ignored: 0 is invalid (would block all pre-store work)");
+        return;
+    }
+    m_preStoreMaxInflight = _max;
+}
+
+bcos::txpool::TxPool::PreStoreAdmission bcos::txpool::TxPool::tryAcquirePreStoreSlot(
+    bcos::crypto::HashType const& _blockHash)
+{
+    if (!m_preStoreBackpressureEnabled)
+    {
+        return PreStoreAdmission::Disabled;
+    }
+    std::scoped_lock lock(x_preStoreInFlight);
+    if (m_preStoreInFlight.contains(_blockHash))
+    {
+        TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: skip duplicate block")
+                          << LOG_KV("hash", _blockHash.abridged());
+        return PreStoreAdmission::DuplicateSkipped;
+    }
+    if (m_preStoreInFlight.size() < m_preStoreMaxInflight)
+    {
+        m_preStoreInFlight.insert(_blockHash);
+        return PreStoreAdmission::Accepted;
+    }
+    // Cap reached. With cap=1024 (NodeConfig default) and typical PBFT pipeline depth,
+    // this branch is not expected to fire in normal operation; under DoS the DEBUG
+    // level keeps log I/O out of the picture by default. Ops can enable DEBUG (or
+    // monitor the drop side-channel via metrics) to observe cap hits.
+    TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: backlog cap reached, dropping")
+                      << LOG_KV("hash", _blockHash.abridged())
+                      << LOG_KV("inflight", m_preStoreInFlight.size())
+                      << LOG_KV("cap", m_preStoreMaxInflight.load());
+    return PreStoreAdmission::CapDropped;
+}
+
+void bcos::txpool::TxPool::releasePreStoreSlot(bcos::crypto::HashType const& _blockHash)
+{
+    std::lock_guard lock(x_preStoreInFlight);
+    m_preStoreInFlight.erase(_blockHash);
 }

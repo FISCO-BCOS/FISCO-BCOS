@@ -28,6 +28,18 @@ using namespace bcos::gateway;
 using namespace bcos::front;
 using namespace bcos::crypto;
 
+LocalRouterTable::LocalRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory)
+    : m_keyFactory(_keyFactory)
+{}
+
+LocalRouterTable::~LocalRouterTable() = default;
+
+LocalRouterTable::GroupNodeListType LocalRouterTable::nodeList() const
+{
+        ReadGuard guard(x_nodeList);
+        return m_nodeList;
+}
+
 FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
     const std::string& _groupID, NodeIDPtr _nodeID) const
 {

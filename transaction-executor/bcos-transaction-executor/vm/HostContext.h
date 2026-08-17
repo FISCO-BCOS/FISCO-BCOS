@@ -59,6 +59,9 @@
 #include <intx/intx.hpp>
 #include <iterator>
 #include <memory>
+#include <range/v3/algorithm/equal.hpp>
+#include <range/v3/algorithm/fill.hpp>
+#include <range/v3/algorithm/move.hpp>
 #include <string_view>
 
 namespace bcos::executor_v1::hostcontext
@@ -161,7 +164,8 @@ private:
             HOST_CONTEXT_LOG(DEBUG) << m_blockHeader.get().number() << " "
                                     << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                     << LOG_DESC("account balance not enough");
-            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
+            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{}
+                                  << errinfo_comment("Account balance is not enough!"));
         }
 
         if (!co_await m_recipientAccount.exists())
@@ -227,6 +231,7 @@ public:
 
     constexpr evmc_message const& message() const& { return m_message; }
     constexpr evmc_message& mutableMessage() & { return m_message; }
+    constexpr ledger::LedgerConfig const& ledgerConfig() const& { return m_ledgerConfig.get(); }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
@@ -238,6 +243,14 @@ public:
     task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto&&... /*unused*/)
     {
         co_return co_await m_recipientAccount.storage(*key);
+    }
+
+    // DIRECT-tagged variant: reads the underlying slot without populating the
+    // ReadWriteSetStorage read set. Use only for internal metadata reads (e.g.
+    // SSTORE status determination) that must not influence DAG conflict edges.
+    task::Task<evmc_bytes32> get(const evmc_bytes32* key, storage2::DIRECT_TYPE direct)
+    {
+        co_return co_await m_recipientAccount.storage(*key, direct);
     }
 
     task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value, auto&&... /*unused*/)
@@ -299,7 +312,8 @@ public:
 
     task::Task<size_t> codeSizeAt(const evmc_address& address, auto&&... /*unused*/)
     {
-        if (auto const* precompiled = m_precompiledManager.get().getPrecompiled(address))
+        if (auto const* precompiled =
+                m_precompiledManager.get().getPrecompiled(address, m_ledgerConfig.get().features()))
         {
             co_return executor_v1::size(*precompiled);
         }
@@ -393,25 +407,31 @@ public:
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
         std::optional<EVMCResult> evmResult;
-        if (m_ledgerConfig.get().authCheckStatus() != 0U)
+        // FIB-76~92 (bugfix_v1_error_handling): read once, gates all receipt-affecting
+        // error paths below for hard-fork compat
+        const bool fixErrorHandling =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_v1_error_handling);
+        try
         {
-            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
-                                    << " gas: " << ref->gas;
-
-            if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
-                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                    m_hashImpl))
+            // FIB-91: checkAuth() moved inside try block so exceptions
+            // trigger rollback/cleanup instead of bypassing it
+            if (m_ledgerConfig.get().authCheckStatus() != 0U)
             {
-                HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
-                evmResult = std::move(result);
-            };
-        }
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
+                    << " gas: " << ref->gas;
 
-        if (!evmResult)
-        {
-            try
+                if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref,
+                        m_origin, buildLegacyExternalCaller(), m_precompiledManager.get(),
+                        m_contextID, m_seq, m_hashImpl, m_ledgerConfig.get().features()))
+                {
+                    HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
+                    evmResult = std::move(result);
+                };
+            }
+
+            if (!evmResult)
             {
-                // 先转账，再执行
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
@@ -433,7 +453,6 @@ public:
                     }
                 }
 
-
                 if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
                 {
                     evmResult.emplace(co_await executeCreate());
@@ -443,58 +462,60 @@ public:
                     evmResult.emplace(co_await executeCall());
                 }
             }
-            catch (protocol::OutOfGas& e)
+        }
+        catch (protocol::OutOfGas& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "OutOfGas exception: " << boost::diagnostic_information(e);
+            // FIB-89: use 0 instead of potentially uninitialized evmResult->gas_left
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                EVMC_OUT_OF_GAS, 0, e.what(), fixErrorHandling));
+        }
+        catch (protocol::NotEnoughCashError& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG)
+                << "NotEnoughCash exception: " << boost::diagnostic_information(e);
+            // FIB-88: fatal error consumes all gas when bugfix flag enabled
+            evmResult.emplace(
+                makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
+                    EVMC_INSUFFICIENT_BALANCE, fixErrorHandling ? 0 : ref->gas, e.what()));
+        }
+        catch (NotFoundCodeError& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG)
+                << "Not found code exception: " << boost::diagnostic_information(e);
+            // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does
+            // not exist
+            using namespace std::string_literals;
+            if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
             {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "OutOfGas exception: " << boost::diagnostic_information(e);
+                evmResult.emplace(makeErrorEVMCResult(
+                    m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, {}));
+            }
+            else
+            {
+                // FIB-88: EVMC_REVERT preserves ref->gas per EVM spec
                 evmResult.emplace(
-                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                        EVMC_OUT_OF_GAS, evmResult->gas_left, e.what()));
+                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::RevertInstruction,
+                        EVMC_REVERT, ref->gas, "Call address error."s, fixErrorHandling));
             }
-            catch (protocol::NotEnoughCashError& e)
-
-            {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "NotEnoughCash exception: " << boost::diagnostic_information(e);
-                evmResult.emplace(
-                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
-                        EVMC_INSUFFICIENT_BALANCE, ref->gas, e.what()));
-            }
-            catch (NotFoundCodeError& e)
-            {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "Not found code exception: " << boost::diagnostic_information(e);
-
-                // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
-                // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does
-                // not exist
-                using namespace std::string_literals;
-                if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
-                {
-                    evmResult.emplace(makeErrorEVMCResult(
-                        m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, {}));
-                }
-                else
-                {
-                    evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                        protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref->gas,
-                        "Call address error."s));
-                }
-            }
-            catch (std::exception& e)
-            {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "Execute exception: " << boost::diagnostic_information(e);
-                evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                    protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref->gas, ""));
-            }
+        }
+        catch (std::exception& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
+            // FIB-88: fatal error consumes all gas
+            // FIB-92: use Unknown instead of OutOfGas for EVMC_INTERNAL_ERROR
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                fixErrorHandling ? protocol::TransactionStatus::Unknown :
+                                   protocol::TransactionStatus::OutOfGas,
+                EVMC_INTERNAL_ERROR, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
         }
 
         if (evmResult->gas_left < 0)
         {
             HOST_CONTEXT_LOG(DEBUG) << "Execute gas < 0: " << evmResult->gas_left;
-            evmResult.emplace(makeErrorEVMCResult(
-                m_hashImpl, protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, ref->gas, ""));
+            // FIB-88: fatal error consumes all gas when bugfix flag enabled
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
         }
 
         if (evmResult->status_code != EVMC_SUCCESS)
@@ -548,9 +569,23 @@ private:
         auto& ref = message();
         if (m_blockHeader.get().number() != 0)
         {
+            std::string authTablePath;
+            // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a binary
+            // path, but ContractAuthMgrPrecompiled always looks up auth tables using hex paths.
+            // Force hex to match the lookup path.
+            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_auth_check) &&
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address))
+            {
+                authTablePath =
+                    std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
+            }
+            else
+            {
+                authTablePath = std::string(co_await m_recipientAccount.path());
+            }
             co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                co_await m_recipientAccount.path(), buildLegacyExternalCaller(),
-                m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
+                authTablePath, buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID,
+                m_seq, m_ledgerConfig);
         }
 
         if (m_web3Tx && m_level != 0)
@@ -636,8 +671,8 @@ private:
                 << LOG_DESC("callDynamicPrecompiled") << LOG_KV("codeAddr", message.code_address)
                 << LOG_KV("recvAddr", message.recipient) << LOG_KV("code", code);
 
-            if (m_preparedPrecompiled =
-                    m_precompiledManager.get().getPrecompiled(message.recipient);
+            if (m_preparedPrecompiled = m_precompiledManager.get().getPrecompiled(
+                    message.recipient, m_ledgerConfig.get().features());
                 m_preparedPrecompiled == nullptr)
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
@@ -651,11 +686,19 @@ private:
         // delegatecall static precompiled is not allowed
         if (ref.kind != EVMC_DELEGATECALL)
         {
+            auto const& features = m_ledgerConfig.get().features();
             if (auto const* precompiled =
-                    m_precompiledManager.get().getPrecompiled(ref.code_address))
+                    m_precompiledManager.get().getPrecompiled(ref.code_address, features))
             {
+                // FIB-84: preserve pre-fix manual feature check when bugfix flag is off,
+                // since getPrecompiled(...) in that mode skips enforcement.
+                if (features.get(ledger::Features::Flag::bugfix_precompiled_feature_gate))
+                {
+                    m_preparedPrecompiled = precompiled;
+                    co_return;
+                }
                 if (auto flag = executor_v1::featureFlag(*precompiled);
-                    !flag || m_ledgerConfig.get().features().get(*flag))
+                    !flag || features.get(*flag))
                 {
                     m_preparedPrecompiled = precompiled;
                     co_return;
@@ -676,7 +719,7 @@ private:
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
@@ -706,7 +749,7 @@ private:
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,

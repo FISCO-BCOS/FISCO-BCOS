@@ -23,17 +23,19 @@
 #include <tbb/parallel_for.h>
 
 #define SYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SYNC")
-namespace bcos
+namespace bcos::sync
 {
-namespace sync
-{
-enum TxsSyncPacketType : int32_t
+enum class TxsSyncPacketType : int32_t
 {
     TxsPacket = 0x00,
     TxsStatusPacket = 0x01,
     TxsRequestPacket = 0x02,
     TxsResponsePacket = 0x03,
-    PacketCount
+    PacketCount = 0x04,
 };
-}
-}  // namespace bcos
+
+// Maximum number of transaction hashes allowed in a single sync message.
+// No block can exceed the pool limit, so this is a safe upper bound.
+static constexpr const size_t MAX_SYNC_TXSHASH_COUNT = 100000;
+
+}  // namespace bcos::sync

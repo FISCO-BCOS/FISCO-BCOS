@@ -26,6 +26,8 @@
 #include "bcos-framework/protocol/Exceptions.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/find_if.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -130,7 +132,7 @@ void AccountManagerPrecompiled::setAccountStatus(
 
     // check is governor
     auto governors = getGovernorList(_executive, _callParameters, codec);
-    if (RANGES::find_if(governors, [&_callParameters](const Address& address) {
+    if (::ranges::find_if(governors, [&_callParameters](const Address& address) {
             return address.hex() == _callParameters->m_sender;
         }) == governors.end())
     {
@@ -138,7 +140,7 @@ void AccountManagerPrecompiled::setAccountStatus(
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
         return;
     }
-    if (RANGES::find(governors, account) != governors.end())
+    if (::ranges::find(governors, account) != governors.end())
     {
         // set governor's status
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())

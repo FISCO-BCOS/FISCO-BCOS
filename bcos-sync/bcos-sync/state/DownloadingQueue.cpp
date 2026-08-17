@@ -31,6 +31,18 @@ using namespace bcos::protocol;
 using namespace bcos::sync;
 using namespace bcos::ledger;
 
+bool DownloadingQueue::isRetryableError(int64_t _errorCode)
+{
+    switch (_errorCode)
+    {
+    case bcos::scheduler::SchedulerError::InvalidStatus:
+    case bcos::scheduler::SchedulerError::UnknownError:
+    case bcos::scheduler::SchedulerError::fetchGasLimitError:
+        return true;
+    default:
+        return false;
+    }
+}
 void DownloadingQueue::push(BlocksMsgInterface::Ptr _blocksData)
 {
     // push to the blockBuffer firstly
@@ -127,6 +139,12 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
                        << LOG_DESC("Decoding block buffer")
                        << LOG_KV("blocksShardSize", _blocksData->blocksSize());
     size_t blocksSize = _blocksData->blocksSize();
+    if (blocksSize == 0)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                             << LOG_DESC("Empty blocksData in BlockResponsePacket");
+        return true;
+    }
     std::vector<protocol::Block::Ptr> blocks;
     blocks.reserve(blocksSize);
     // prepare block
@@ -261,14 +279,14 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) 
         sealerListStr << ", sealer list: ";
         for (auto const& sealer : sealerList)
         {
-            sealerListStr << *toHexString(sealer) << ", ";
+            sealerListStr << toHex(sealer) << ", ";
         }
         auto signatureList = _header->signatureList();
         signatureListStr << ", sign list: ";
         for (auto const& signatureData : signatureList)
         {
-            signatureListStr << (*toHexString(signatureData.signature)) << ":"
-                             << signatureData.index << ", ";
+            signatureListStr << (toHex(signatureData.signature)) << ":" << signatureData.index
+                             << ", ";
         }
     }
     auto weightList = _header->consensusWeights();
@@ -290,7 +308,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) 
         << LOG_KV("sealer", _header->sealer()) << LOG_KV("sealerList", sealerListStr.str())
         << LOG_KV("signatureList", signatureListStr.str())
         << LOG_KV("consensusWeights", weightsStr.str()) << LOG_KV("parents", parentInfoStr.str())
-        << LOG_KV("extraData", *toHexString(_header->extraData()));
+        << LOG_KV("extraData", toHex(_header->extraData()));
     return oss.str();
 }
 
@@ -342,9 +360,9 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                         << LOG_KV("message", _error->errorMessage());
                     if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
                     {
-                        BLKSYNC_LOG(INFO)
-                            << LOG_DESC("fetchAndUpdateLedgerConfig for InvalidBlocks");
-                        downloadQueue->fetchAndUpdateLedgerConfig();
+                        BLKSYNC_LOG(INFO) << LOG_DESC("applyBlock: InvalidBlocks, drop the block")
+                                          << LOG_KV("number", orgBlockHeader->number())
+                                          << LOG_KV("hash", orgBlockHeader->hash().abridged());
                         return;
                     }
                     if (!config->masterNode())
@@ -354,19 +372,26 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                             "node");
                         return;
                     }
+                    auto errorCode = _error->errorCode();
+                    if (isRetryableError(errorCode) &&
+                        _block->blockHeader()->number() > config->blockNumber())
                     {
-                        // re-push the block into blockQueue to retry later
-                        if (_block->blockHeader()->number() > config->blockNumber())
-                        {
-                            BLKSYNC_LOG(INFO)
-                                << LOG_DESC(
-                                       "applyBlock: executing the downloaded block failed, re-push "
-                                       "the block into executing queue")
-                                << LOG_KV("number", orgBlockHeader->number())
-                                << LOG_KV("hash", orgBlockHeader->hash().abridged());
-                            WriteGuard l(downloadQueue->x_blocks);
-                            downloadQueue->m_blocks.push(_block);
-                        }
+                        BLKSYNC_LOG(INFO) << LOG_DESC(
+                                                 "applyBlock: transient error, re-push the block "
+                                                 "into executing queue")
+                                          << LOG_KV("number", orgBlockHeader->number())
+                                          << LOG_KV("hash", orgBlockHeader->hash().abridged())
+                                          << LOG_KV("code", errorCode);
+                        WriteGuard l(downloadQueue->x_blocks);
+                        downloadQueue->m_blocks.push(_block);
+                    }
+                    else
+                    {
+                        BLKSYNC_LOG(WARNING)
+                            << LOG_DESC("applyBlock: non-retryable error, dropping block")
+                            << LOG_KV("number", orgBlockHeader->number())
+                            << LOG_KV("hash", orgBlockHeader->hash().abridged())
+                            << LOG_KV("code", errorCode);
                     }
                     return;
                 }
@@ -717,6 +742,15 @@ void DownloadingQueue::onCommitFailed(
         topNumber = topBlock->blockHeader()->number();
     }
     size_t rePushedBlockCount = 0;
+    // FIB-158: snapshot the diagnostic values used in the trailing log message
+    // while still holding x_blocks / x_commitQueue. The previous code released
+    // both locks at the closing brace of the inner block and then read
+    // m_blocks.top(), m_blocks.size(), and m_commitQueue.size() unprotected,
+    // which is a data race because both queues are mutated by other threads
+    // immediately after the locks drop.
+    size_t commitQueueSize = 0;
+    size_t blocksQueueSize = 0;
+    bcos::protocol::BlockNumber blocksTopNumber = -1;
     {
         // re-push un-committed block into m_blocks
         // Note: this operation is low performance and low frequency
@@ -739,13 +773,22 @@ void DownloadingQueue::onCommitFailed(
             m_blocks.push(topCommitBlock);
             m_commitQueue.pop();
         }
+        // FIB-158: capture under-lock diagnostics
+        commitQueueSize = m_commitQueue.size();
+        blocksQueueSize = m_blocks.size();
+        if (!m_blocks.empty())
+        {
+            auto blocksTop = m_blocks.top();
+            if (blocksTop)
+            {
+                blocksTopNumber = blocksTop->blockHeader()->number();
+            }
+        }
     }
-    auto blocksTop = m_blocks.top();
     BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: update commitQueue and executingQueue")
-                      << LOG_KV("commitQueueSize", m_commitQueue.size())
-                      << LOG_KV("blocksQueueSize", m_blocks.size())
-                      << LOG_KV("topNumber", topNumber)
-                      << LOG_KV("topBlock", blocksTop ? (blocksTop->blockHeader()->number()) : -1)
+                      << LOG_KV("commitQueueSize", commitQueueSize)
+                      << LOG_KV("blocksQueueSize", blocksQueueSize)
+                      << LOG_KV("topNumber", topNumber) << LOG_KV("topBlock", blocksTopNumber)
                       << LOG_KV("rePushedBlockCount", rePushedBlockCount)
                       << LOG_KV("executedBlock", m_config->executedBlock());
 }

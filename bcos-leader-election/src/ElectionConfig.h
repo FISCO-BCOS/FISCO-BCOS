@@ -55,6 +55,7 @@ public:
     virtual void start();
     virtual void stop()
     {
+        m_stopped.store(true);
         if (m_watcherTimer)
         {
             m_watcherTimer->stop();
@@ -100,6 +101,7 @@ protected:
     std::shared_ptr<Timer> m_watcherTimer;
 
     std::atomic_bool m_electionClusterOk = {true};
+    std::atomic_bool m_stopped = {false};
 
     // called when the election-cluster down
     std::function<void()> m_onElectionClusterException;

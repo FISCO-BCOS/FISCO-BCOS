@@ -21,6 +21,7 @@
 #pragma once
 
 #include "StateStorageInterface.h"
+#include <fmt/format.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -89,24 +90,7 @@ public:
         size_t _pageSize = 10240,
         uint32_t _blockVersion = (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION,
         std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr,
-        bool _ignoreNotExist = false)
-      : storage::StateStorageInterface(std::move(_prev)),
-        m_blockVersion(_blockVersion),
-        m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
-        m_splitSize(m_pageSize / 3 * 2),
-        m_mergeSize(m_pageSize / 4),
-        m_buckets(std::thread::hardware_concurrency()),
-        m_ignoreTables(std::move(_ignoreTables)),
-        m_ignoreNotExist(_ignoreNotExist),
-        m_setRowWithDirtyFlag(setRowWithDirtyFlag)
-    {
-        if (!m_ignoreTables)
-        {
-            auto ignore = std::make_shared<std::set<std::string, std::less<>>>();
-            ignore->insert(std::string(SYS_TABLES));
-            m_ignoreTables = ignore;
-        }
-    }
+        bool _ignoreNotExist = false);
 
     KeyPageStorage(const KeyPageStorage&) = delete;
     KeyPageStorage& operator=(const KeyPageStorage&) = delete;
@@ -114,11 +98,7 @@ public:
     KeyPageStorage(KeyPageStorage&&) = delete;
     KeyPageStorage& operator=(KeyPageStorage&&) = delete;
 
-    ~KeyPageStorage() override
-    {
-        m_recoder.clear();
-        m_buckets.clear();
-    }
+    ~KeyPageStorage() override;
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,
@@ -128,8 +108,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
     void asyncGetRows(std::string_view tableView,
-        RANGES::any_view<std::string_view,
-            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::input | ::ranges::category::random_access |
+                ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;

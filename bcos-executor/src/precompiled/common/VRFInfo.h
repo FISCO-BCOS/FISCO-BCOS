@@ -33,22 +33,18 @@ public:
     VRFInfo(VRFInfo&&) = default;
     VRFInfo& operator=(const VRFInfo&) = default;
     VRFInfo& operator=(VRFInfo&&) = default;
-    VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput, bcos::sealer::VrfCurveType vrfCurveType = bcos::sealer::VrfCurveType::CURVE25519)
-      : m_vrfProof(std::move(_vrfProof)),
-        m_vrfPublicKey(std::move(_vrfPk)),
-        m_vrfInput(std::move(_vrfInput)),
-        m_vrfCurveType(vrfCurveType)
-    {}
+        VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput,
+                bcos::sealer::VrfCurveType vrfCurveType = bcos::sealer::VrfCurveType::CURVE25519);
 
     virtual ~VRFInfo() = default;
     virtual bool verifyProof();
     virtual bcos::crypto::HashType getHashFromProof();
     virtual bool isValidVRFPublicKey();
 
-    bcos::bytes const& vrfProof() const { return m_vrfProof; }
-    bcos::bytes const& vrfPublicKey() const { return m_vrfPublicKey; }
-    bcos::bytes const& vrfInput() const { return m_vrfInput; }
-    bcos::sealer::VrfCurveType vrfCurveType() const { return m_vrfCurveType; }
+    bcos::bytes const& vrfProof() const;
+    bcos::bytes const& vrfPublicKey() const;
+    bcos::bytes const& vrfInput() const;
+    bcos::sealer::VrfCurveType vrfCurveType() const;
 
 private:
     bcos::bytes m_vrfProof;

@@ -47,13 +47,15 @@ BOOST_AUTO_TEST_CASE(testHex)
         {
             hexVec[j] = std::rand() % 16;
         }
-        hexStr = *toHexString(hexVec);
-        hexStrWithPrefix = *toHexString(hexVec);
-        BOOST_CHECK(*fromHexString(hexStr) == hexVec);
-        BOOST_CHECK(*fromHexString(hexStrWithPrefix) == hexVec);
+        hexStr = toHex(hexVec);
+        hexStrWithPrefix = toHex(hexVec, "0x");
+        BOOST_CHECK(fromHex(hexStr) == hexVec);
+        BOOST_CHECK(fromHex(hexStrWithPrefix) == hexVec);
     }
     // fromHexString Exception
-    BOOST_CHECK_THROW(fromHexString("0934xyz"), BadHexCharacter);
+    BOOST_CHECK_THROW(fromHex("0934xyza"), BadHexCharacter);
+    BOOST_CHECK(fromHex("093") == fromHex("0093"));
+    BOOST_CHECK(fromHex("0xabc") == fromHex("0abc"));
     BOOST_CHECK(isHexString("0934xyz") == false);
 
     BOOST_CHECK(isHexString("0x000abc") == true);

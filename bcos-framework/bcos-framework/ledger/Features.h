@@ -1,15 +1,36 @@
 #pragma once
-#include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
-#include "../storage/Entry.h"
 #include "../storage2/Storage.h"
-#include "../transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
-#include "bcos-tool/Exceptions.h"
-#include <boost/throw_exception.hpp>
+#include <bcos-utilities/Exceptions.h>
 #include <array>
 #include <bitset>
 #include <magic_enum/magic_enum.hpp>
+#include <ostream>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
+#include <set>
+#include <string_view>
+
+// Forward declarations only — the storage-I/O member templates below take these
+// types as concept arguments / parameter types, which need name visibility but
+// not full definitions at declaration time. Full definitions are pulled in by
+// FeaturesStorage.h, where the implementations and concrete call sites live.
+// Breaking the include of storage/Entry.h / StateKey.h here is what lets
+// storage/Entry.h include Features.h without forming a cycle through
+// StateKey.h's `using StateValue = storage::Entry`.
+namespace bcos::storage
+{
+class Entry;
+}
+namespace bcos::executor_v1
+{
+class StateKey;
+class StateKeyView;
+}  // namespace bcos::executor_v1
+
 namespace bcos::ledger
 {
 DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
@@ -53,6 +74,17 @@ public:
         bugfix_nonce_initialize,
         bugfix_v1_timestamp,
         bugfix_revert_logs,
+        bugfix_auth_check,         // FIB-77/81/82/83: CREATE2 deploy auth check, auth failure
+                                   // revert status, auth table raw-address path, auth table
+                                   // squatting (merged, all activate at V3_17_0)
+        bugfix_v1_error_handling,  // FIB-76/78/79/80/85~92: v1 executor error-path gas
+                                   // accounting, gas_left clamp on fatal error, executive
+                                   // wrapper status/message marshaling (merged)
+        bugfix_gas_payment_balance_precheck,  // FIB-75
+        bugfix_precompiled_feature_gate,      // FIB-84
+        bugfix_evm_storage_status,            // FIB-94
+        bugfix_statestorage_hash_v3_17,       // FIB-99/105
+        bugfix_nonce_ordering,  // web3 EOA nonce must be independent of intra-block tx order
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -74,245 +106,30 @@ private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
 
 public:
-    static Flag string2Flag(std::string_view str)
-    {
-        auto value = magic_enum::enum_cast<Flag>(str);
-        if (!value)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-        return *value;
-    }
+    static Flag string2Flag(std::string_view str);
 
-    static bool contains(std::string_view flag)
-    {
-        return magic_enum::enum_cast<Flag>(flag).has_value();
-    }
+    static bool contains(std::string_view flag);
 
-    void validate(std::string_view flag) const
-    {
-        auto value = magic_enum::enum_cast<Flag>(flag);
-        if (!value)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
+    void validate(std::string_view flag) const;
 
-        validate(*value);
-    }
+    void validate(Flag flag) const;
 
-    void validate(Flag flag) const
-    {
-        if (flag == Flag::feature_balance_precompiled && !get(Flag::feature_balance))
-        {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
-                                  << errinfo_comment("must set feature_balance first"));
-        }
-        if (flag == Flag::feature_balance_policy1 && !get(Flag::feature_balance_precompiled))
-        {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
-                                  << errinfo_comment("must set feature_balance_precompiled first"));
-        }
-    }
-
-    bool get(Flag flag) const
-    {
-        auto index = magic_enum::enum_index(flag);
-        if (!index)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-
-        return m_flags[*index];
-    }
+    bool get(Flag flag) const;
     bool get(std::string_view flag) const { return get(string2Flag(flag)); }
 
     // DO NOT use now, there is some action after set feature in systemPrecompiled
-    static auto getFeatureDependencies(Flag flag)
-    {
-        /// NOTE：请不要在此处添加旧版本feature依赖！否则会出现数据不一致!
-        /// Do NOT add old version feature dependencies here! Otherwise, data inconsistency will
-        /// occur!
-        // const auto mainSwitchDependence = std::unordered_map<Flag, std::set<Flag>>(
-        //     {{Flag::feature_ethereum_compatible, {
-        //                                              Flag::feature_balance,
-        //                                              Flag::feature_balance_precompiled,
-        //                                              Flag::feature_calculate_gasPrice,
-        //                                              Flag::feature_evm_timestamp,
-        //                                              Flag::feature_evm_address,
-        //                                              Flag::feature_evm_cancun,
-        //                                          }}});
-        // if (mainSwitchDependence.contains(flag))
-        // {
-        //     return mainSwitchDependence.at(flag);
-        // }
-        return std::set<Flag>();
-    }
-    void enableDependencyFeatures(Flag flag)
-    {
-        for (const auto& dependence : getFeatureDependencies(flag))
-        {
-            set(dependence);
-        }
-    }
+    static std::set<Flag> getFeatureDependencies(Flag flag);
+    void enableDependencyFeatures(Flag flag);
 
-    void set(Flag flag)
-    {
-        auto index = magic_enum::enum_index(flag);
-        if (!index)
-        {
-            BOOST_THROW_EXCEPTION(NoSuchFeatureError{});
-        }
-
-        m_flags[*index] = true;
-        // enableDependencyFeatures(flag);
-    }
+    void set(Flag flag);
 
     void set(std::string_view flag) { set(string2Flag(flag)); }
 
-    void setToShardingDefault(protocol::BlockVersion version)
-    {
-        if (version >= protocol::BlockVersion::V3_3_VERSION &&
-            version <= protocol::BlockVersion::V3_4_VERSION)
-        {
-            set(Flag::feature_sharding);
-        }
-    }
+    void setToShardingDefault(protocol::BlockVersion version);
 
-    void setUpgradeFeatures(protocol::BlockVersion fromVersion, protocol::BlockVersion toVersion)
-    {
-        struct UpgradeFeatures
-        {
-            protocol::BlockVersion to;
-            std::vector<Flag> flags;
-        };
-        const static auto upgradeRoadmap =
-            std::to_array<UpgradeFeatures>({{.to = protocol::BlockVersion::V3_2_3_VERSION,
-                                                .flags =
-                                                    {
-                                                        Flag::bugfix_revert,
-                                                    }},
-                {.to = protocol::BlockVersion::V3_2_4_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_statestorage_hash,
-                            Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
-                        }},
-                {.to = protocol::BlockVersion::V3_2_7_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_event_log_order,
-                            Flag::bugfix_call_noaddr_return,
-                            Flag::bugfix_precompiled_codehash,
-                            Flag::bugfix_dmc_revert,
-                        }},
-                {.to = protocol::BlockVersion::V3_5_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_revert,
-                            Flag::bugfix_statestorage_hash,
-                        }},
-                {.to = protocol::BlockVersion::V3_6_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_statestorage_hash,
-                            Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
-                            Flag::bugfix_event_log_order,
-                            Flag::bugfix_call_noaddr_return,
-                            Flag::bugfix_precompiled_codehash,
-                            Flag::bugfix_dmc_revert,
-                        }},
-                {.to = protocol::BlockVersion::V3_6_1_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_keypage_system_entry_hash,
-                            Flag::bugfix_internal_create_redundant_storage,
-                        }},
-                {.to = protocol::BlockVersion::V3_7_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_empty_abi_reset,
-                            Flag::bugfix_eip55_addr,
-                            Flag::bugfix_sharding_call_in_child_executive,
-                            Flag::bugfix_internal_create_permission_denied,
-                        }},
-                {.to = protocol::BlockVersion::V3_8_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_eoa_as_contract,
-                            Flag::bugfix_dmc_deploy_gas_used,
-                            Flag::bugfix_evm_exception_gas_used,
-                            Flag::bugfix_set_row_with_dirty_flag,
-                        }},
-                {.to = protocol::BlockVersion::V3_9_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_staticcall_noaddr_return,
-                            Flag::bugfix_support_transfer_receive_fallback,
-                            Flag::bugfix_eoa_match_failed,
-                        }},
-                {.to = protocol::BlockVersion::V3_12_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_rpbft_vrf_blocknumber_input,
-                        }},
-                {.to = protocol::BlockVersion::V3_13_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_delete_account_code,
-                            Flag::bugfix_policy1_empty_code_address,
-                            Flag::bugfix_precompiled_gasused,
-                        }},
-                {.to = protocol::BlockVersion::V3_14_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_nonce_not_increase_when_revert,
-                            Flag::bugfix_set_contract_nonce_when_create,
-                        }},
-                {.to = protocol::BlockVersion::V3_15_1_VERSION,
-                    .flags = {Flag::bugfix_precompiled_gascalc}},
-                {.to = protocol::BlockVersion::V3_15_2_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_method_auth_sender,
-                            Flag::bugfix_precompiled_evm_status,
-                        }},
-                {.to = protocol::BlockVersion::V3_16_0_VERSION,
-                    .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize,
-                        Flag::bugfix_v1_timestamp}},
-                {.to = protocol::BlockVersion::V3_16_4_VERSION,
-                    .flags = {Flag::bugfix_revert_logs}}});
-        for (const auto& upgradeFeatures : upgradeRoadmap)
-        {
-            if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
-                    (toVersion >= upgradeFeatures.to)) ||
-                (fromVersion < upgradeFeatures.to && toVersion >= upgradeFeatures.to))
-            {
-                for (auto flag : upgradeFeatures.flags)
-                {
-                    set(flag);
-                }
-            }
-        }
-    }
+    void setUpgradeFeatures(protocol::BlockVersion fromVersion, protocol::BlockVersion toVersion);
 
-    void setGenesisFeatures(protocol::BlockVersion toVersion)
-    {
-        setToShardingDefault(toVersion);
-        if (toVersion == protocol::BlockVersion::V3_3_VERSION ||
-            toVersion == protocol::BlockVersion::V3_4_VERSION)
-        {
-            return;
-        }
-
-        if (toVersion == protocol::BlockVersion::V3_5_VERSION)
-        {
-            setUpgradeFeatures(protocol::BlockVersion::V3_4_VERSION, toVersion);
-        }
-        else
-        {
-            setUpgradeFeatures(protocol::BlockVersion::MIN_VERSION, toVersion);
-        }
-    }
+    void setGenesisFeatures(protocol::BlockVersion toVersion);
 
     auto flags() const
     {
@@ -332,85 +149,20 @@ public:
                });
     }
 
+    // Storage I/O member templates. Definitions live in FeaturesStorage.h,
+    // which is included at the end of this header so existing call sites
+    // (e.g. features.readFromStorage(storage, n)) keep working unchanged.
     task::Task<void> readFromStorage(
-        storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage, long blockNumber)
-    {
-        for (auto key : bcos::ledger::Features::featureKeys())
-        {
-            auto entry = co_await storage2::readOne(
-                storage, executor_v1::StateKeyView(ledger::SYS_CONFIG, key));
-            if (entry)
-            {
-                auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
-                if (blockNumber >= enableNumber)
-                {
-                    set(key);
-                }
-            }
-        }
-    }
+        storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage, long blockNumber);
 
+    // NOTE: second concept arg used to be executor_v1::StateValue (alias of storage::Entry).
+    // Aliases cannot be forward-declared, so we use storage::Entry directly here so the
+    // declaration parses with just a forward declaration of storage::Entry.
     task::Task<void> writeToStorage(
-        storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
-        long blockNumber, bool ignoreDuplicate = true) const
-    {
-        for (auto [flag, name, value] : flags())
-        {
-            if (value &&
-                !(ignoreDuplicate && co_await storage2::existsOne(storage,
-                                         executor_v1::StateKeyView(ledger::SYS_CONFIG, name))))
-            {
-                storage::Entry entry;
-                entry.setObject(
-                    SystemConfigEntry{boost::lexical_cast<std::string>((int)value), blockNumber});
-                co_await storage2::writeOne(
-                    storage, executor_v1::StateKey(ledger::SYS_CONFIG, name), std::move(entry));
-            }
-        }
-    }
+        storage2::WritableStorage<executor_v1::StateKey, storage::Entry> auto& storage,
+        long blockNumber, bool ignoreDuplicate = true) const;
 };
 
-inline task::Task<void> readFromStorage(Features& features,
-    storage2::ReadableStorage<executor_v1::StateKey> auto& storage, long blockNumber)
-{
-    decltype(auto) keys = bcos::ledger::Features::featureKeys();
-    auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-        keys | ::ranges::views::transform([](std::string_view key) {
-            return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
-        }));
-    for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
-    {
-        if (entry)
-        {
-            auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
-            if (blockNumber >= enableNumber)
-            {
-                features.set(key);
-            }
-        }
-    }
-}
-
-inline task::Task<void> writeToStorage(Features const& features,
-    storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
-    long blockNumber)
-{
-    decltype(auto) flags =
-        features.flags() | ::ranges::views::filter([](auto&& tuple) { return std::get<2>(tuple); });
-    co_await storage2::writeSome(std::forward<decltype(storage)>(storage),
-        ::ranges::views::transform(flags, [&](auto&& tuple) {
-            storage::Entry entry;
-            entry.setObject(SystemConfigEntry{
-                boost::lexical_cast<std::string>((int)std::get<2>(tuple)), blockNumber});
-            return std::make_tuple(
-                executor_v1::StateKey(ledger::SYS_CONFIG, std::get<1>(tuple)), std::move(entry));
-        }));
-}
-
-inline std::ostream& operator<<(std::ostream& stream, Features::Flag flag)
-{
-    stream << magic_enum::enum_name(flag);
-    return stream;
-}
+std::ostream& operator<<(std::ostream& stream, Features::Flag flag);
 
 }  // namespace bcos::ledger

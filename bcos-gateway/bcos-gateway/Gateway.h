@@ -31,6 +31,7 @@
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-utilities/BoostLog.h"
 #include "filter/ReadOnlyFilter.h"
+#include <range/v3/range/concepts.hpp>
 
 
 namespace bcos::gateway
@@ -177,7 +178,7 @@ public:
     }
 
     // insert p2pIDs
-    void insertP2pIDs(RANGES::range auto const& _p2pIDs)
+    void insertP2pIDs(::ranges::range auto const& _p2pIDs)
     {
         std::lock_guard<std::mutex> lock(x_mutex);
         m_p2pIDs.insert(m_p2pIDs.end(), _p2pIDs.begin(), _p2pIDs.end());

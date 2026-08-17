@@ -29,18 +29,45 @@ namespace bcos::txpool
 {
 constexpr static uint16_t DefaultBucketSize = 256;
 struct PairHash
-
 {
-    template <std::convertible_to<std::string_view> StringView>
-    std::size_t operator()(const std::pair<StringView, StringView>& pair) const
+    // Hash both pair.first (sender) and pair.second (nonce) so that different nonces from the
+    // same sender land in different buckets and can be independently looked up (FIB-52).
+    // Uses std::string_view for consistent hashing regardless of the concrete string type.
+    template <std::convertible_to<std::string_view> First,
+        std::convertible_to<std::string_view> Second>
+    std::size_t operator()(const std::pair<First, Second>& pair) const
     {
-        return std::hash<StringView>()(pair.first);
+        std::size_t seed = 0;
+        boost::hash_combine(seed, std::string_view{pair.first});
+        boost::hash_combine(seed, std::string_view{pair.second});
+        return seed;
     }
-    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
-    bool operator()(const std::pair<Lhs, Lhs>& lhs, const std::pair<Rhs, Rhs>& rhs) const
+    template <std::convertible_to<std::string_view> LFirst,
+        std::convertible_to<std::string_view> LSecond, std::convertible_to<std::string_view> RFirst,
+        std::convertible_to<std::string_view> RSecond>
+    bool operator()(
+        const std::pair<LFirst, LSecond>& lhs, const std::pair<RFirst, RSecond>& rhs) const
     {
         return std::string_view{lhs.first} == std::string_view{rhs.first} &&
                std::string_view{lhs.second} == std::string_view{rhs.second};
+    }
+};
+struct NonceKeyHash
+{
+    using is_transparent = void;
+    template <std::convertible_to<std::string_view> S>
+    std::size_t operator()(const std::pair<S, u256>& pair) const
+    {
+        std::size_t seed = 0;
+        boost::hash_combine(seed, std::string_view{pair.first});
+        boost::hash_combine(seed, static_cast<uint64_t>(pair.second));
+        return seed;
+    }
+    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
+    bool operator()(const std::pair<Lhs, u256>& lhs, const std::pair<Rhs, u256>& rhs) const
+    {
+        return std::string_view{lhs.first} == std::string_view{rhs.first} &&
+               lhs.second == rhs.second;
     }
 };
 struct StateNonceHash
@@ -51,7 +78,7 @@ struct StateNonceHash
         return std::hash<std::string_view>{}(std::string_view{sender});
     }
     template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
-    std::size_t operator()(const Lhs& lhs, const Rhs& rhs) const
+    bool operator()(const Lhs& lhs, const Rhs& rhs) const
     {
         return std::string_view{lhs} == std::string_view{rhs};
     }
@@ -91,8 +118,7 @@ public:
     /**
      * batch insert sender and nonce into ledger state nonce and memory nonce, call when block is
      * committed
-     * @param senders sender string list
-     * @param noncesSet nonce u256 set
+     * @param senderNonces sender and nonce set list
      */
     task::Task<void> updateNonceCache(::ranges::input_range auto senderNonces)
     {
@@ -112,17 +138,22 @@ public:
                         << LOG_DESC("Web3Nonce: update ledger nonce cache")
                         << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
                 }
-                co_await storage2::writeOne(m_ledgerStateNonces, sender, maxNonce);
-                if (auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
-                    maxMemNonce.has_value() && maxNonce >= maxMemNonce.value())
+                co_await storage2::writeOneIf(m_ledgerStateNonces, sender, maxNonce,
+                    [&](u256 const& existing) { return maxNonce > existing; });
+                // FIB-157: atomic predicate-guarded delete of m_maxNonces. The previous
+                // read-then-remove sequence had a TOCTOU window: a concurrent
+                // insertMemoryNonce() could publish a higher m_maxNonces value after the
+                // read but before the remove, and the unconditional remove would then drop
+                // the fresher value, causing getPendingNonce() to regress to the ledger
+                // nonce. removeOneIf evaluates the predicate and performs the remove under
+                // the same bucket lock so the value cannot change between the two.
+                bool removed = co_await storage2::removeOneIf(m_maxNonces, sender,
+                    [&](u256 const& existing) { return maxNonce >= existing; });
+                if (removed && c_fileLogLevel == TRACE) [[unlikely]]
                 {
-                    if (c_fileLogLevel == TRACE) [[unlikely]]
-                    {
-                        TXPOOL_LOG(TRACE)
-                            << LOG_DESC("Web3Nonce: rm max nonce cache")
-                            << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
-                    }
-                    co_await storage2::removeOne(m_maxNonces, sender);
+                    TXPOOL_LOG(TRACE)
+                        << LOG_DESC("Web3Nonce: rm max nonce cache")
+                        << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
                 }
             }
             for (auto&& nonce : nonceSet)
@@ -132,8 +163,7 @@ public:
                     TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: rm mem nonce cache")
                                       << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce);
                 }
-                co_await storage2::removeOne(
-                    m_memoryNonces, std::make_pair(sender, toQuantity(nonce)));
+                co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, nonce));
             }
         }
     }
@@ -160,8 +190,11 @@ public:
             {
                 ss << toHex(sender) << ":" << nonce << ", ";
             }
-            co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, nonce));
+            co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, u256(nonce)));
         }
+        // Clear stale m_maxNonces for affected senders so getPendingNonce()
+        // falls through to the ledger nonce instead of returning inflated values
+        co_await storage2::removeSome(m_maxNonces, senders);
         TXPOOL_LOG(DEBUG) << LOG_DESC("Web3Nonce: rm mem nonce cache for invalid txs.") << ss.str();
     }
 
@@ -172,7 +205,7 @@ public:
      * @param nonce transaction nonce, number string
      * @return coroutine void
      */
-    virtual task::Task<void> insertMemoryNonce(std::string sender, std::string nonce);
+    virtual task::Task<bool> insertMemoryNonce(std::string sender, std::string nonce);
 
     virtual task::Task<std::optional<u256>> getPendingNonce(std::string_view sender);
 
@@ -192,9 +225,9 @@ private:
     // memory nonce cache the nonce of the sender in memory
     // every tx send by the sender, should bigger than the nonce in ledger state and unique in
     // memory
-    bcos::storage2::memory_storage::MemoryStorage<std::pair<std::string, std::string>,
-        std::monostate, storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT,
-        PairHash, PairHash>
+    bcos::storage2::memory_storage::MemoryStorage<std::pair<std::string, u256>, std::monostate,
+        storage2::memory_storage::LRU | storage2::memory_storage::CONCURRENT, NonceKeyHash,
+        NonceKeyHash>
         m_memoryNonces;
 
     // <sender address(bytes string) => nonce>

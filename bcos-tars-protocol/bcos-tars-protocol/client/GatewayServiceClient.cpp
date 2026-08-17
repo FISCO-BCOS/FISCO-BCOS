@@ -24,6 +24,8 @@
 #include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include "bcos-tars-protocol/protocol/GroupNodeInfoImpl.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/join.hpp>
 
 std::atomic<int64_t> bcostars::GatewayServiceClient::s_tarsTimeoutCount = {0};
 const int64_t bcostars::GatewayServiceClient::c_maxTarsTimeoutCount = 500;
@@ -37,6 +39,7 @@ bcostars::GatewayServiceClient::GatewayServiceClient(
     bcostars::GatewayServicePrx _prx, std::string const& _serviceName)
   : m_prx(_prx), m_gatewayServiceName(_serviceName)
 {}
+bcostars::GatewayServiceClient::~GatewayServiceClient() = default;
 void bcostars::GatewayServiceClient::setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory)
 {
     m_keyFactory = std::move(keyFactory);

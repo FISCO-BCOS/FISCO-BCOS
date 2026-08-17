@@ -29,24 +29,10 @@ class ProGatewayNodeManager : public GatewayNodeManager
 public:
     using Ptr = std::shared_ptr<ProGatewayNodeManager>;
     ProGatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : GatewayNodeManager(_uuid, _nodeID, _keyFactory, _p2pInterface)
-    {
-        m_nodeAliveDetector =
-            std::make_shared<Timer>(c_tarsAdminRefreshTimeInterval, "nodeUpdater");
-        m_nodeAliveDetector->registerTimeoutHandler([this]() { detectNodeAlive(); });
-    }
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
 
-    void start() override
-    {
-        GatewayNodeManager::start();
-        m_nodeAliveDetector->start();
-    }
-    void stop() override
-    {
-        GatewayNodeManager::stop();
-        m_nodeAliveDetector->stop();
-    }
+    void start() override;
+    void stop() override;
     bool updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
 private:

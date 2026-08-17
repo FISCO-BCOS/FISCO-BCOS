@@ -29,6 +29,7 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <range/v3/view/zip.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
@@ -45,7 +46,7 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
     auto decodedParent = decodedBlockHeader->parentInfo();
     BOOST_CHECK_EQUAL(originParent.size(), decodedParent.size());
     for (auto [originParentInfo, decodedParentInfo] :
-        RANGES::views::zip(originParent, decodedParent))
+        ::ranges::views::zip(originParent, decodedParent))
     {
         BOOST_CHECK_EQUAL(originParentInfo.blockHash, decodedParentInfo.blockHash);
         BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodedParentInfo.blockNumber);
@@ -88,7 +89,7 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
     std::cout << "### PBBlockHeaderTest: timestamp:" << decodedBlockHeader->timestamp()
               << std::endl;
     std::cout << "### PBBlockHeaderTest: sealer:" << decodedBlockHeader->sealer() << std::endl;
-    std::cout << "### PBBlockHeaderTest: sealer:" << *toHexString(decodedBlockHeader->extraData())
+    std::cout << "### PBBlockHeaderTest: sealer:" << toHex(decodedBlockHeader->extraData())
               << std::endl;
     std::cout << "#### hash:" << decodedBlockHeader->hash().hex() << std::endl;
     if (blockHeader->parentInfo().size() >= 1)
@@ -152,7 +153,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
         BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
         decodedBlockHeader->calculateHash(*_cryptoSuite->hashImpl());
 #if 0
-    std::cout << "### PBBlockHeaderTest: encodedData:" << *toHexString(*encodedData) << std::endl;
+    std::cout << "### PBBlockHeaderTest: encodedData:" << toHex(*encodedData) << std::endl;
 #endif
         // update the hash data field
         blockHeader->setNumber(_number + 1);

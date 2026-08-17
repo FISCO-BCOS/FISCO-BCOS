@@ -28,6 +28,7 @@
 #include "Common.h"
 #include "Entry.h"
 #include <bcos-utilities/Error.h>
+#include <range/v3/view/any_view.hpp>
 #include <memory>
 #include <optional>
 #include <string>
@@ -57,8 +58,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) = 0;
 
     virtual void asyncGetRows(std::string_view table,
-        RANGES::any_view<std::string_view,
-            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::input | ::ranges::category::random_access |
+                ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) = 0;
 
@@ -74,11 +76,11 @@ public:
     virtual void asyncGetTableInfo(std::string_view tableName,
         std::function<void(Error::UniquePtr, TableInfo::ConstPtr)> callback);
     virtual Error::Ptr setRows(std::string_view tableName,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             keys,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             values)
     {
         throw std::invalid_argument("unimplemented method");

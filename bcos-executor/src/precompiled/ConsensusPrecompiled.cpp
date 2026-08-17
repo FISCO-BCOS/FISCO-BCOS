@@ -68,7 +68,7 @@ static bool checkAuthByGovernors(const std::shared_ptr<executor::TransactionExec
                            << LOG_BADGE("BalancePrecompiled") << LOG_DESC("checkOriginAuth")
                            << LOG_KV("governors size", governors.size())
                            << LOG_KV("origin address", origin);
-    if (RANGES::find(governors, Address(origin)) == governors.end())
+    if (::ranges::find(governors, Address(origin)) == governors.end())
     {
         PRECOMPILED_LOG(TRACE)
             << BLOCK_NUMBER(_executive->blockContext().number()) << LOG_BADGE("BalancePrecompiled")

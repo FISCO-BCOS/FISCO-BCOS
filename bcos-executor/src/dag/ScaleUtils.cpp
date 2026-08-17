@@ -25,15 +25,15 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <string>
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
-optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes, size_t startPos)
+std::optional<std::size_t> bcos::executor::decodeCompactInteger(
+    const bytes& encodedBytes, std::size_t startPos)
 {
     if (encodedBytes.size() - startPos < 1)
     {
-        return nullopt;
+        return std::nullopt;
     }
 
     auto _1stByte = encodedBytes[startPos];
@@ -46,7 +46,7 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
     {
         // single-byte mode:
         // upper six bits are the LE encoding of the value (valid only for values of 0-63).
-        number = static_cast<size_t>(_1stByte >> 2u);
+        number = static_cast<std::size_t>(_1stByte >> 2u);
         break;
     }
     case 0b01u:
@@ -58,11 +58,11 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         {
             BCOS_LOG(TRACE) << LOG_BADGE("decodeCompactInteger")
                             << LOG_DESC("not enough data to decode compact integer");
-            return nullopt;
+            return std::nullopt;
         }
         auto _2ndByte = encodedBytes[startPos + 1];
-        number = (static_cast<size_t>((_1stByte) & 0b11111100u) +
-                     static_cast<size_t>(_2ndByte) * 256u) >>
+        number = (static_cast<std::size_t>((_1stByte) & 0b11111100u) +
+                     static_cast<std::size_t>(_2ndByte) * 256u) >>
                  2u;
         break;
     }
@@ -72,12 +72,12 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         // upper six bits and the following three bytes are the LE encoding of the value
         // (valid only for values (2**14)-(2**30-1))
         number = _1stByte;
-        size_t multiplier = 256u;
+        std::size_t multiplier = 256u;
         if (encodedBytes.size() - startPos < 4)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("decodeCompactInteger")
                             << LOG_DESC("not enough data to decode compact integer");
-            return nullopt;
+            return std::nullopt;
         }
 
         for (auto i = 1u; i < 4u; ++i)
@@ -99,7 +99,7 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         {
             BCOS_LOG(TRACE) << LOG_BADGE("decodeCompactInteger")
                             << LOG_DESC("not enough data to decode compact integer");
-            return nullopt;
+            return std::nullopt;
         }
 
         auto multiplier = 1u;
@@ -111,13 +111,13 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         break;
     }
     default:
-        return nullopt;
+        return std::nullopt;
     }
     return number;
 }
 
-optional<size_t> bcos::executor::scaleEncodingLength(
-    const ParameterAbi& param, const bytes& encodedBytes, size_t startPos)
+std::optional<std::size_t> bcos::executor::scaleEncodingLength(
+    const ParameterAbi& param, const bytes& encodedBytes, std::size_t startPos)
 {
     auto& type = param.type;
     if (boost::ends_with(type, "]"))
@@ -127,7 +127,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
                             << LOG_DESC("unable to parse array type") << LOG_KV("type", type);
-            return nullopt;
+            return std::nullopt;
         }
 
         auto size = 0u;
@@ -145,7 +145,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             {
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
                                 << LOG_DESC("unable to parse length of dynamic array");
-                return nullopt;
+                return std::nullopt;
             }
         }
         else
@@ -153,14 +153,14 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             auto dimension = type.substr(leftBracketPos + 1, type.length() - leftBracketPos - 1);
             try
             {
-                size = stoul(dimension);
+                size = std::stoul(dimension);
             }
             catch (...)
             {
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
                                 << LOG_DESC("unable to parse dimension")
                                 << LOG_KV("dimension", dimension);
-                return nullopt;
+                return std::nullopt;
             }
         }
 
@@ -178,7 +178,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             {
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
                                 << LOG_DESC("unable to calculate length of element");
-                return nullopt;
+                return std::nullopt;
             }
         }
         return {length};
@@ -190,13 +190,13 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         auto digitsNum = 0u;
         try
         {
-            digitsNum = stoul(type.substr(digitStartPos + 1));
+            digitsNum = std::stoul(type.substr(digitStartPos + 1));
         }
         catch (...)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
                             << LOG_KV("type", type);
-            return nullopt;
+            return std::nullopt;
         }
         return digitsNum >> 3;
     }
@@ -213,7 +213,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
                             << LOG_DESC("unable to parse string or bytes");
-            return nullopt;
+            return std::nullopt;
         }
     }
 
@@ -228,13 +228,13 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         auto digitsNum = 0u;
         try
         {
-            digitsNum = stoul(type.substr(digitStartPos + 1));
+            digitsNum = std::stoul(type.substr(digitStartPos + 1));
         }
         catch (...)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
                             << LOG_KV("type", type);
-            return nullopt;
+            return std::nullopt;
         }
         return digitsNum;
     }
@@ -256,7 +256,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
                                 << LOG_DESC("unable to parse component")
                                 << LOG_KV("type", component);
-                return nullopt;
+                return std::nullopt;
             }
         }
         return {length};
@@ -264,5 +264,5 @@ optional<size_t> bcos::executor::scaleEncodingLength(
 
     BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
                     << LOG_KV("type", type);
-    return nullopt;
+    return std::nullopt;
 }

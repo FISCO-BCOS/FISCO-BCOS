@@ -30,6 +30,13 @@ using namespace hsm;
 
 #define SDR_OK 0x0
 
+HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath)
+    : KeyPair(HSM_SM2_PUBLIC_KEY_LEN, HSM_SM2_PRIVATE_KEY_LEN, KeyPairType::HsmSM2)
+{
+        m_hsmLibPath = std::move(_libPath);
+        m_publicKeyDeriver = wedpr_sm2_derive_public_key;
+}
+
 HsmSM2KeyPair::HsmSM2KeyPair(std::string _libPath, SecretPtr _secretKey) : HsmSM2KeyPair(_libPath)
 {
     if (_secretKey->size() != HSM_SM2_PRIVATE_KEY_LEN)
@@ -73,4 +80,16 @@ PublicPtr HsmSM2KeyPair::priToPub(SecretPtr _secretKey)
             PriToPublicKeyException() << errinfo_comment("HsmSM2PriToPub exception"));
     }
     return pubKey;
+}
+
+void HsmSM2KeyPair::setKeyIndex(unsigned int _keyIndex)
+{
+    m_keyIndex = _keyIndex;
+    m_isInternalKey = true;
+}
+
+void HsmSM2KeyPair::setPassword(std::string _password)
+{
+    m_password = std::move(_password);
+    m_isInternalKey = true;
 }

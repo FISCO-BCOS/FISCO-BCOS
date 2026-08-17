@@ -174,11 +174,22 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     auto ledgerConfig = leaderFaker->ledger()->ledgerConfig();
     auto parent = (leaderFaker->ledger()->ledgerData())[ledgerConfig->blockNumber()];
     auto block = leaderFaker->ledger()->init(parent->blockHeader(), true, expectedIndex, 0, 0);
+    // FIB-142: mimic the honest sealer flow — bind body->txsRoot into the
+    // header before hashing, so case6 (success path) survives the receiver-side
+    // body txsRoot check. Cases 1-5 are expected to reject for unrelated reasons
+    // and are unaffected by the binding.
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*hashImpl));
+    block->blockHeader()->calculateHash(*hashImpl);
     auto blockData = std::make_shared<bytes>();
     block->encode(*blockData);
 
     // case1: invalid block number
-    auto hash = hashImpl->hash(bytesConstRef("invalidCase"));
+    // Use the real decoded block-header hash so the FIB-130 hash-binding check in
+    // handlePrePrepareMsg passes for the valid pre-prepare (case6). A synthetic hash that
+    // does not bind the block body is exactly the equivocation FIB-130 rejects; cases 1-5
+    // are rejected earlier for reasons unrelated to the proposal hash.
+    block->blockHeader()->calculateHash(*hashImpl);
+    auto hash = block->blockHeader()->hash();
     auto leaderMsgFixture =
         std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
     auto index = (expectedIndex - 1);
@@ -250,6 +261,17 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     // case6: valid pre-prepare
+    // FIB-142: receiver now recomputes the decoded block hash and rejects any
+    // (proposal hash, body) mismatch. To keep this test exercising the success
+    // path, build a proposal whose hash matches the encoded block's actual hash.
+    auto validBlockHash = block->blockHeader()->hash();
+    auto validFakedProposal =
+        leaderMsgFixture->fakePBFTProposal(leaderFaker->ledger()->blockNumber() + 1, validBlockHash,
+            *blockData, std::vector<int64_t>(), std::vector<bytes>());
+    pbftMsg = fakePBFTMessage(utcTime(), 1, (leaderFaker->pbftConfig()->view()), expectedLeader,
+        validBlockHash, index, bytes(), 0, leaderMsgFixture, PacketType::PrePreparePacket);
+    pbftMsg->setConsensusProposal(validFakedProposal);
+    data = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->txpool()->setVerifyResult(true);
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
         nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*data), nullptr);

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "bcos-utilities/Error.h"
+#include <bcos-framework/Common.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <set>
 #include <string>
@@ -79,14 +80,13 @@ class NetworkException : public std::exception
 {
 public:
     NetworkException() = default;
-    NetworkException(int _errorCode, std::string _msg)
-      : m_errorCode(_errorCode), m_msg(std::move(_msg)) {};
+    NetworkException(int _errorCode, std::string _msg);
 
-    virtual int errorCode() const { return m_errorCode; };
-    const char* what() const noexcept override { return m_msg.c_str(); };
-    bool operator!() const { return m_errorCode == 0; }
+    virtual int errorCode() const;
+    const char* what() const noexcept override;
+    bool operator!() const;
 
-    virtual Error::Ptr toError() { return BCOS_ERROR_PTR(errorCode(), m_msg); }
+    virtual Error::Ptr toError();
 
 private:
     int m_errorCode = 0;
@@ -94,42 +94,6 @@ private:
 };
 
 /// @returns the string form of the given disconnection reason.
-inline std::string reasonOf(DisconnectReason _reason)
-{
-    switch (_reason)
-    {
-    case DisconnectRequested:
-        return "Disconnect was requested.";
-    case TCPError:
-        return "Low-level TCP communication error.";
-    case BadProtocol:
-        return "Data format error.";
-    case UselessPeer:
-        return "Peer had no use for this node.";
-    case TooManyPeers:
-        return "Peer had too many connections.";
-    case DuplicatePeer:
-        return "Peer was already connected.";
-    case IncompatibleProtocol:
-        return "Peer protocol versions are incompatible.";
-    case NullIdentity:
-        return "Null identity given.";
-    case ClientQuit:
-        return "Peer is exiting.";
-    case UnexpectedIdentity:
-        return "Unexpected identity given.";
-    case LocalIdentity:
-        return "Connected to ourselves.";
-    case UserReason:
-        return "Subprotocol reason.";
-    case NoDisconnect:
-        return "(No disconnect has happened.)";
-    case IdleWaitTimeout:
-        return "(Idle connection for no network io happens during 60s time "
-               "intervals.)";
-    default:
-        return "Unknown reason.";
-    }
-}
+std::string reasonOf(DisconnectReason _reason);
 }  // namespace gateway
 }  // namespace bcos

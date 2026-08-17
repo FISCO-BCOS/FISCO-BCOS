@@ -34,7 +34,6 @@
 #include <random>
 #include <string>
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::crypto;
@@ -46,6 +45,8 @@ namespace bcos
 {
 namespace test
 {
+using namespace std;
+
 struct TableFactoryFixture
 {
     TableFactoryFixture()

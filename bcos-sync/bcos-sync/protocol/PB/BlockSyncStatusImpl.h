@@ -30,16 +30,19 @@ public:
     using Ptr = std::shared_ptr<BlockSyncStatusImpl>;
     BlockSyncStatusImpl() : BlockSyncMsgImpl()
     {
-        setPacketType(BlockSyncPacketType::BlockStatusPacket);
+        BlockSyncMsgImpl::setPacketType(BlockSyncPacketType::BlockStatusPacket);
     }
     explicit BlockSyncStatusImpl(BlockSyncMsgImpl::Ptr _blockSyncMsg)
     {
-        setPacketType(BlockSyncPacketType::BlockStatusPacket);
+        BlockSyncMsgImpl::setPacketType(BlockSyncPacketType::BlockStatusPacket);
         m_syncMessage = _blockSyncMsg->syncMessage();
-        deserializeObject();
+        BlockSyncStatusImpl::deserializeObject();
     }
 
-    explicit BlockSyncStatusImpl(bytesConstRef _data) : BlockSyncStatusImpl() { decode(_data); }
+    explicit BlockSyncStatusImpl(bytesConstRef _data) : BlockSyncStatusImpl()
+    {
+        BlockSyncStatusImpl::decode(_data);
+    }
 
     ~BlockSyncStatusImpl() override = default;
 
@@ -58,6 +61,6 @@ protected:
 private:
     bcos::crypto::HashType m_hash;
     bcos::crypto::HashType m_genesisHash;
-    std::int64_t m_time;
+    std::int64_t m_time = 0;
 };
 }  // namespace bcos::sync

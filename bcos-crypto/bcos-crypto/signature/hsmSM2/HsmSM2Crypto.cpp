@@ -35,6 +35,12 @@ using namespace hsm;
 #define SDR_BASE 0x01000000
 #define SDR_VERIFYERR (SDR_BASE + 0x0000000E)
 
+HsmSM2Crypto::HsmSM2Crypto(std::string _libPath)
+{
+    m_hsmLibPath = std::move(_libPath);
+    m_keyPairFactory = std::make_shared<HsmSM2KeyPairFactory>(m_hsmLibPath);
+}
+
 std::shared_ptr<bytes> HsmSM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {
@@ -156,7 +162,7 @@ PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) 
     }
     BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
                               "invalid signature: hsm sm2 recover public key failed, msgHash : " +
-                              _hash.hex() + ", signature:" + *toHexString(_signData)));
+                              _hash.hex() + ", signature:" + toHex(_signData)));
 }
 
 std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const

@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.17)
 
+find_package(Boost REQUIRED COMPONENTS atomic)
+
 add_library(bcos-task bcos-task/pmr/MemoryResourceBase.cpp)
 target_include_directories(bcos-task PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
-target_link_libraries(bcos-task PUBLIC bcos-concepts)
+target_link_libraries(bcos-task PUBLIC Boost::atomic)
 
 include(GNUInstallDirs)
 install(TARGETS bcos-task EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

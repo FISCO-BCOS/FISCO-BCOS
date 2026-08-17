@@ -23,6 +23,27 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
 
+ProGatewayNodeManager::ProGatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+  : GatewayNodeManager(_uuid, _nodeID, _keyFactory, _p2pInterface)
+{
+    m_nodeAliveDetector =
+        std::make_shared<Timer>(c_tarsAdminRefreshTimeInterval, "nodeUpdater");
+    m_nodeAliveDetector->registerTimeoutHandler([this]() { detectNodeAlive(); });
+}
+
+void ProGatewayNodeManager::start()
+{
+    GatewayNodeManager::start();
+    m_nodeAliveDetector->start();
+}
+
+void ProGatewayNodeManager::stop()
+{
+    GatewayNodeManager::stop();
+    m_nodeAliveDetector->stop();
+}
+
 void ProGatewayNodeManager::detectNodeAlive()
 {
     m_nodeAliveDetector->restart();

@@ -19,4 +19,6 @@
  */
 #pragma once
 
+#include <bcos-framework/Common.h>
+
 #define FRONT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[FrontService]"

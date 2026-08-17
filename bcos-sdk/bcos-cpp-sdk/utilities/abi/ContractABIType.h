@@ -349,7 +349,7 @@ public:
     virtual Json::Value toJson() const
     {
         Json::Value jRet(Json::stringValue);
-        jRet = "hex://" + *toHexString(m_value);
+        jRet = "hex://" + toHex(m_value);
         return jRet;
     }
 
@@ -441,7 +441,7 @@ public:
     virtual Json::Value toJson() const
     {
         Json::Value jRet(Json::stringValue);
-        jRet = "hex://" + *toHexString(m_value);
+        jRet = "hex://" + toHex(m_value);
         return jRet;
     }
 

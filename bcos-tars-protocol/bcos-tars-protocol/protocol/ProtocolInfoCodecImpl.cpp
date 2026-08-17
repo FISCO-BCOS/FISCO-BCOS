@@ -21,10 +21,7 @@
 #include "ProtocolInfoCodecImpl.h"
 #include "../Common.h"
 
-using namespace bcostars;
-using namespace bcostars::protocol;
-
-void ProtocolInfoCodecImpl::encode(
+void bcostars::protocol::ProtocolInfoCodecImpl::encode(
     bcos::protocol::ProtocolInfo::ConstPtr _protocol, bcos::bytes& _encodeData) const
 {
     bcostars::ProtocolInfo tarsProtocolInfo;
@@ -36,7 +33,8 @@ void ProtocolInfoCodecImpl::encode(
     output.getByteBuffer().swap(_encodeData);
 }
 
-bcos::protocol::ProtocolInfo::Ptr ProtocolInfoCodecImpl::decode(bcos::bytesConstRef _data) const
+bcos::protocol::ProtocolInfo::Ptr bcostars::protocol::ProtocolInfoCodecImpl::decode(
+    bcos::bytesConstRef _data) const
 {
     tars::TarsInputStream<tars::BufferReader> input;
     input.setBuffer((const char*)_data.data(), _data.size());
