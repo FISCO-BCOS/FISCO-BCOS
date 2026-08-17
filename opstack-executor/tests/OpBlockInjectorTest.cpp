@@ -237,7 +237,11 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
 
     // Isthmus-active fork config.
     // Isthmus-active fork config (feature_op_jovian OFF).
-    const auto& cfg = op::configAt(op::OpForkFlags{});
+    // Named-lvalue first: configAt takes const OpForkFlags&, and GCC-14's -Wdangling-reference
+    // flags passing a prvalue `op::OpForkFlags{}` here even though the returned reference
+    // aliases the static config, never the flags (false positive).
+    const auto forkFlags = op::OpForkFlags{};
+    const auto& cfg = op::configAt(forkFlags);
 
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();
@@ -296,7 +300,11 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
     namespace detail = bcos::evm::engine::detail;
 
     // Isthmus-active fork config (feature_op_jovian OFF).
-    const auto& cfg = op::configAt(op::OpForkFlags{});
+    // Named-lvalue first: configAt takes const OpForkFlags&, and GCC-14's -Wdangling-reference
+    // flags passing a prvalue `op::OpForkFlags{}` here even though the returned reference
+    // aliases the static config, never the flags (false positive).
+    const auto forkFlags = op::OpForkFlags{};
+    const auto& cfg = op::configAt(forkFlags);
 
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();

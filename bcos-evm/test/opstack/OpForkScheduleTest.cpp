@@ -47,12 +47,16 @@ BOOST_AUTO_TEST_CASE(IsthmusDisablesJovianFlags)
 // OFF → Isthmus baseline, ON → Jovian semantics.
 BOOST_AUTO_TEST_CASE(ConfigAtSelectsForkByFeatureFlag)
 {
-    const auto& ist = configAt(OpForkFlags{.jovianActive = false});
+    // Value copies, not references: configAt returns a reference to a static config, but the
+    // OpForkFlags{...} argument is a prvalue temporary — GCC-14 -Wdangling-reference flags the
+    // reference binding as potentially dangling (false positive; the returned ref never aliases
+    // the flags argument). Copy the ~32B config instead.
+    const auto ist = configAt(OpForkFlags{.jovianActive = false});
     BOOST_CHECK_EQUAL(ist.fork, OpFork::Isthmus);
     BOOST_CHECK(!ist.has_jovian_operator_formula);
     BOOST_CHECK(!ist.has_da_footprint);
 
-    const auto& jov = configAt(OpForkFlags{.jovianActive = true});
+    const auto jov = configAt(OpForkFlags{.jovianActive = true});
     BOOST_CHECK_EQUAL(jov.fork, OpFork::Jovian);
     BOOST_CHECK(jov.has_jovian_operator_formula);
     BOOST_CHECK(jov.has_da_footprint);

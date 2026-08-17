@@ -87,10 +87,15 @@ namespace eth = bcos::executor_v1::eth;
 namespace detail = bcos::evm::engine::detail;
 
 // ── jsoncpp .at() equivalent (shared with OpT8nReplayTest.cpp:60-84) ─────────────────
-inline const Json::Value& jAt(const Json::Value& v, const std::string& key)
+// key is `const char*` (not `const std::string&`) deliberately: a string literal argument
+// would materialize a temporary std::string, and GCC-14's -Wdangling-reference flags any
+// reference-returning call that receives a class-type temporary — even though the returned
+// reference aliases `v`, never `key` (false positive). A `const char*` argument creates no
+// temporary, so the warning cannot fire.
+inline const Json::Value& jAt(const Json::Value& v, const char* key)
 {
     if (!v.isMember(key))
-        throw std::invalid_argument("missing required field: " + key);
+        throw std::invalid_argument(std::string("missing required field: ") + key);
     return v[key];
 }
 
@@ -447,7 +452,12 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
 {
     // Fork parity: cfg = configAt(forkFlagsFor(jovian)), resolved from the same source as the
     // scheduler's internal configAt (same forkFlagsFor, same static singleton object).
-    const auto& cfg = op::configAt(forkFlagsFor(jovian));
+    // Bind forkFlagsFor(jovian) to a named lvalue first: configAt takes const OpForkFlags&, and
+    // GCC-14's -Wdangling-reference flags passing a prvalue temporary here even though the
+    // returned reference aliases the static config, never the flags (false positive). The named
+    // lvalue preserves the reference + its address identity (the &cfg == &vectorCfg check below).
+    const auto forkFlags = forkFlagsFor(jovian);
+    const auto& cfg = op::configAt(forkFlags);
     BOOST_CHECK_MESSAGE(&cfg == &vectorCfg, id << ": fork parity broken: block cfg != vector cfg");
 
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
@@ -639,7 +649,10 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     // The announced header carries the golden commitments (route A's six-way verify = the
     // FISCO-vs-op-geth gate).
     fillAnnouncedHeaderFromGolden(header, vec, rawTxBytes);
-    const auto& vectorCfg = op::configAt(forkFlagsFor(jovian));
+    // Named-lvalue first (see runBlockEquivalence's fork-parity comment): GCC-14
+    // -Wdangling-reference false positive on a prvalue OpForkFlags argument.
+    const auto forkFlags = forkFlagsFor(jovian);
+    const auto& vectorCfg = op::configAt(forkFlags);
     runBlockEquivalence(id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, greenGuard, stats);
 }
 
@@ -661,7 +674,8 @@ void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixtur
         const auto rawTxBytes = buildRawTxBytes(blk, bid);
         fillAnnouncedHeaderFromGolden(header, blk, rawTxBytes);
         const bool jovian = (jAt(jAt(blk, "_info"), "hardfork").asString() == "jovian");
-        const auto& vectorCfg = op::configAt(forkFlagsFor(jovian));
+        const auto forkFlags = forkFlagsFor(jovian);  // named-lvalue first (GCC-14 dangling false positive)
+        const auto& vectorCfg = op::configAt(forkFlags);
         runBlockEquivalence(bid, fixture, header, rawTxBytes, blk, jovian, vectorCfg,
             /*greenGuard=*/false, stats);
         ++stats.chainBlocks;

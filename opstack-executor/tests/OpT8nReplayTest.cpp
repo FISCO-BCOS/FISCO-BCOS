@@ -57,10 +57,17 @@ using JsonValue = Json::Value;
 // nlohmann's .at(key) throws on a missing member; jsoncpp's operator[] silently
 // fabricates a null. Every required-field access in this replayer goes through
 // jAt so a missing field is a named failure, never a silent null read.
-inline const Json::Value& jAt(const Json::Value& v, const std::string& key)
+//
+// key is `const char*` (not `const std::string&`) deliberately: a string literal
+// argument would materialize a temporary std::string, and GCC-14's -Wdangling-reference
+// flags any reference-returning call that receives a class-type temporary — even though
+// the returned reference aliases `v`, never `key` (false positive). A `const char*`
+// argument creates no temporary, so the warning cannot fire. Callers with a std::string
+// key pass .c_str() (jAt(post, authAddr)).
+inline const Json::Value& jAt(const Json::Value& v, const char* key)
 {
     if (!v.isMember(key))
-        throw std::invalid_argument("missing required field: " + key);
+        throw std::invalid_argument(std::string("missing required field: ") + key);
     return v[key];
 }
 
@@ -181,6 +188,7 @@ evmone::test::TestState from_json<evmone::test::TestState>(const Json::Value& j)
         auto& acc = o[from_json<evmc::address>(Json::Value(j_addr))] = {
             .nonce = from_json<uint64_t>(jAt(j_acc, "nonce")),
             .balance = from_json<intx::uint256>(jAt(j_acc, "balance")),
+            .storage = {},
             .code = from_json<evmone::bytes>(jAt(j_acc, "code"))};
         if (j_acc.isMember("storage"))
         {
@@ -691,8 +699,9 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                             {
                                 const std::string wantCode =
                                     "0xef0100" + hexAddr(auth.addr).substr(2);
-                                if (jAt(post, authAddr).get("code", Json::Value("")).asString() ==
-                                    wantCode)
+                                if (jAt(post, authAddr.c_str())
+                                        .get("code", Json::Value(""))
+                                        .asString() == wantCode)
                                     anchorOk = true;
                             }
                         }
