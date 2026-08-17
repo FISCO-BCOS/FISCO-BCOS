@@ -217,4 +217,61 @@ BOOST_AUTO_TEST_CASE(FromFlzVariantsMatchEnvelopeVariants)
     BOOST_CHECK_EQUAL(computeL1CostFromFlz(fee, 0, fjordConfig()), intx::uint256{0});
 }
 
+// —— DA 矩阵 A 层锚定（Task 7）——字面值逐字来自 task-7-brief.md，禁运行时自算 ——
+
+BOOST_AUTO_TEST_CASE(OperatorFeeMissingParamsZero)
+{
+    // slot8 全零 → scalar=0/const=0 → 门开(isthmus/jovian)下公式仍为 0
+    const auto p0 = feeParams(0, 0, 0, 0, 0, 0);
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(p0, 1000, isthmusConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(p0, 1000, jovianConfig()), intx::uint256{0});
+}
+
+BOOST_AUTO_TEST_CASE(OperatorFeeMaxValuesNoWrap)
+{
+    // gas=u64max, opScalar=u32max, opConst=u64max：uint256 求值不回绕（77/103 bits）
+    const auto pm = feeParams(0, 0, 0, 0, 0xffffffffu, ~0ull);
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pm, ~0ull, isthmusConfig()),
+        79246609239891303067154_u256);  // 77 bits,无回绕
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pm, ~0ull, jovianConfig()),
+        7922816249600206095627652694115_u256);  // 103 bits,无回绕
+}
+
+BOOST_AUTO_TEST_CASE(TotalRollupCostFjordIsthmusJovian)
+{
+    // 钉死参数组(gas=1618) + kEmptyTx(flz31)：L1 锚 3203000
+    const auto pp = feeParams(1000000000, 10000000, 2, 3, 1439103868, 1256417826609331460ull);
+    BOOST_CHECK_EQUAL(computeL1Cost(pp, kEmptyTx, fjordConfig()), 3203000_u256);
+    // total = l1 + chargedOperator
+    BOOST_CHECK_EQUAL(computeL1Cost(pp, kEmptyTx, isthmusConfig()) +
+                          computeChargedOperatorCost(pp, 1618, isthmusConfig()),
+        intx::uint256{1256417826614862930ull});  // 3203000 + isthmusOperatorFee
+    BOOST_CHECK_EQUAL(computeL1Cost(pp, kEmptyTx, jovianConfig()) +
+                          computeChargedOperatorCost(pp, 1618, jovianConfig()),
+        intx::uint256{1256650673618376860ull});  // 3203000 + jovianOperatorFee
+}
+
+BOOST_AUTO_TEST_CASE(OperatorFeeForkSwitchSameInput)
+{
+    const auto pp = feeParams(0, 0, 0, 0, 1439103868, 1256417826609331460ull);
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pp, 1618, ecotoneConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pp, 1618, fjordConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pp, 1618, graniteConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pp, 1618, holoceneConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pp, 1618, isthmusConfig()),
+        intx::uint256{1256417826611659930ull});  // isthmusOperatorFee
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pp, 1618, jovianConfig()),
+        intx::uint256{1256650673615173860ull});  // jovianOperatorFee
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(pp, 1618, karstConfig()),
+        computeChargedOperatorCost(pp, 1618, jovianConfig()));  // karst == jovian 别名
+}
+
+BOOST_AUTO_TEST_CASE(JovianL1CostBlobScalarAnchor)
+{
+    // blobBaseFeeScalar=1000, blobBaseFee=10e6, baseFee=0, baseScalar=0, kEmptyTx(flz31→scaled 地板
+    // 1e8)
+    const auto pj = feeParams(0, 10000000, 0, 1000);
+    BOOST_CHECK_EQUAL(computeL1Cost(pj, kEmptyTx, jovianConfig()), 1000000_u256);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

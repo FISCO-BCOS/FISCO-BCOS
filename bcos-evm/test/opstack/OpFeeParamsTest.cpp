@@ -23,6 +23,13 @@ evmc::bytes32 fullWord(uint64_t low)  // 整槽放一个小数值（低 8 字节
 {
     return wordWith(24, low, 8);
 }
+evmc::bytes32 maxWord()  // 全 0xFF（槽内每个字节都是最大值）
+{
+    evmc::bytes32 w{};
+    for (auto& b : w.bytes)
+        b = 0xFF;
+    return w;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpFeeParamsSuite)
@@ -107,6 +114,67 @@ BOOST_AUTO_TEST_CASE(UnpacksDaFootprintGasScalarFromSlot8)
     BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, 0x1234u);
     BOOST_CHECK_EQUAL(p.operator_fee_scalar, 11u);
     BOOST_CHECK_EQUAL(p.operator_fee_constant, 13u);
+}
+
+// 全 max 槽解包：整槽(slot1/slot7)取 2^256-1，打包槽(slot3/slot8)各字段取其类型上限。
+BOOST_AUTO_TEST_CASE(UnpacksMaxValueScalars)
+{
+    const auto slot1 = maxWord();  // l1_base_fee = 2^256-1
+    const auto slot3 = maxWord();  // baseFeeScalar=[16,20), blobBaseFeeScalar=[20,24) 均 0xffffffff
+    const auto slot7 = maxWord();  // blob_base_fee = 2^256-1
+    const auto slot8 = maxWord();  // da=[18,20)=0xffff, opScalar=[20,24)=0xffffffff,
+                                   // opConst=[24,32)=0xffffffffffffffff
+
+    const auto p = unpackOpFeeParams(slot1, slot3, slot7, slot8);
+    BOOST_CHECK_EQUAL(p.l1_base_fee, ~intx::uint256{0});
+    BOOST_CHECK_EQUAL(p.base_fee_scalar, 0xffffffffu);
+    BOOST_CHECK_EQUAL(p.blob_base_fee_scalar, 0xffffffffu);
+    BOOST_CHECK_EQUAL(p.blob_base_fee, ~intx::uint256{0});
+    BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, 0xffffu);
+    BOOST_CHECK_EQUAL(p.operator_fee_scalar, 0xffffffffu);
+    BOOST_CHECK_EQUAL(p.operator_fee_constant, ~0ull);
+}
+
+// slot8 打包三区 [18,20)/[20,24)/[24,32) 相邻，互不串扰；区外字节置 0xFF 证明读取不越界泄漏。
+BOOST_AUTO_TEST_CASE(PackedByteBleedIsolation)
+{
+    evmc::bytes32 slot8{};
+    for (size_t i = 0; i < 18; ++i)
+        slot8.bytes[i] = 0xFF;  // 区外垃圾，不得影响任何字段
+    slot8.bytes[18] = 0xab;     // da = 0xabcd
+    slot8.bytes[19] = 0xcd;
+    slot8.bytes[20] = 0x11;  // opScalar = 0x11223344
+    slot8.bytes[21] = 0x22;
+    slot8.bytes[22] = 0x33;
+    slot8.bytes[23] = 0x44;
+    const uint64_t opConst = 0x8877665544332211ull;
+    for (size_t i = 0; i < 8; ++i)
+        slot8.bytes[24 + i] =
+            static_cast<uint8_t>(opConst >> (8 * (7 - i)));  // opConst = 0x8877665544332211
+
+    const auto p = unpackOpFeeParams(fullWord(0), fullWord(0), fullWord(0), slot8);
+    BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, 0xabcdu);
+    BOOST_CHECK_EQUAL(p.operator_fee_scalar, 0x11223344u);
+    BOOST_CHECK_EQUAL(p.operator_fee_constant, 0x8877665544332211ull);
+    // 区外 0xFF 与未打包槽的零值不得泄漏
+    BOOST_CHECK_EQUAL(p.l1_base_fee, intx::uint256{0});
+    BOOST_CHECK_EQUAL(p.base_fee_scalar, 0u);
+    BOOST_CHECK_EQUAL(p.blob_base_fee_scalar, 0u);
+    BOOST_CHECK_EQUAL(p.blob_base_fee, intx::uint256{0});
+}
+
+// 4 槽全零 → 全参 0（缺失槽按零 word 处理）。
+BOOST_AUTO_TEST_CASE(MissingAllSlotsZero)
+{
+    const evmc::bytes32 zero{};
+    const auto p = unpackOpFeeParams(zero, zero, zero, zero);
+    BOOST_CHECK_EQUAL(p.l1_base_fee, intx::uint256{0});
+    BOOST_CHECK_EQUAL(p.base_fee_scalar, 0u);
+    BOOST_CHECK_EQUAL(p.blob_base_fee_scalar, 0u);
+    BOOST_CHECK_EQUAL(p.blob_base_fee, intx::uint256{0});
+    BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, 0u);
+    BOOST_CHECK_EQUAL(p.operator_fee_scalar, 0u);
+    BOOST_CHECK_EQUAL(p.operator_fee_constant, 0u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
