@@ -757,6 +757,12 @@ private:
         // ErrInvalidChainId; a malicious proposer can craft a 0x02 envelope with chain_id 0).
         // chainId == 0 here means the caller did not supply a node chainId (fail-open); the block
         // path always passes m_ctx->chainId.
+        // Known residual (review #5429 finding K, DIVERGENCES.md phase-3): chain_id==0 also arises
+        // from a v=35/36 EIP-155-protected legacy tx (chain id 0), which the tars layer collapses
+        // onto the same "0" as v=27/28 — so a protected-chain-0 legacy tx is exempted here where
+        // op-geth's Protected() rejects it (ErrInvalidChainId on any real chain). Nil security
+        // impact (the signature is re-encodable as v=27/28, which both clients accept); full parity
+        // needs a protected flag in the tars Transaction.
         if (chainId != 0)
         {
             if (evmTx.type == evmone::state::Transaction::Type::legacy)

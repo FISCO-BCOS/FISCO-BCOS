@@ -77,6 +77,8 @@
 | fee 路由至 vaults | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:295-300` | `core/state_transition.go:711-734` | 等价 | C-5 校正后 | 已确认 |
 | deposit 执行 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:441` runDeposit | `core/state_transition.go:473-511` | 等价 | D-1 | 已确认 |
 | 差异点#1 快照契约 | `opValidate/opTransition 共享快照（OpTransition.cpp:328/:237）` | `buyGas/innerExecute 即时读（state_transition.go:282/:515）` | 已知分叉 | D-4 契约已固化（TransitionUsesValidateSnapshot：opValidate 写 F → slot1 写 F' → opTransition 用 props=F 非 F'） | 已确认 |
+| tx chainId 校验 | `opstack-executor/OpstackExecutor.h:749-775` m_prepare chainId gate | `core/types/transaction_signing.go` EIP155Signer.Sender / modernSigner.Sender（`tx.ChainId()==chainID`，ErrInvalidChainId） | 等价 | morebtcg #5429：protected legacy mismatch + typed chain_id==0 → OpConsensusError；仅 legacy 未保护 v=27/28 豁免；eth_call 跳过 | 已确认 |
+| 残余：legacy v=35/36 chain_id==0 | `opstack-executor/OpstackExecutor.h:764`（`chain_id!=0` 守卫豁免） | `transaction_signing.go` `tx.Protected()`（V≠27/28 → EIP155Signer）→ chainId 0 ≠ 节点 chainId → ErrInvalidChainId | 已知分叉 | review K：tars 层把 v=35/36（chain id 0）折叠成与 v=27/28 相同的 "0"，executor 无法区分 → 接受；nil 安全影响（v=35 签名可重编码为 v=27/28，两客户端均收）；完整 parity 需 tars Transaction 携带 protected 标志 | 已确认 |
 
 ---
 
