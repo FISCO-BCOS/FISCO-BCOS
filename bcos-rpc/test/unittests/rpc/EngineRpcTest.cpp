@@ -397,6 +397,79 @@ BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)
     expectInvalidParams(badRootParams);
 }
 
+BOOST_AUTO_TEST_CASE(newPayloadV4RejectsMalformedQuantities)
+{
+    // Quantity fields must fail CLOSED. bcos::fromBigQuantity (hex2u) returns 0 for
+    // anything it cannot parse, so before the strict parse these payloads were accepted
+    // with the malformed field silently read as zero — a forged value on a field the CL
+    // believes it set, and the opposite of the -32602 op-geth answers for them.
+    auto expectInvalidParams = [&](Json::Value const& ep) {
+        Json::Value params(Json::arrayValue);
+        params.append(ep);
+        params.append(Json::Value(Json::arrayValue));
+        params.append(c_beaconRootHex);
+        params.append(Json::Value(Json::arrayValue));
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    };
+
+    for (auto const* field :
+        {"blobGasUsed", "excessBlobGas", "gasLimit", "gasUsed", "baseFeePerGas"})
+    {
+        auto badHex = makeV4ExecutionPayloadJson();
+        badHex[field] = "0xnothex";
+        expectInvalidParams(badHex);
+
+        // A bare "0x" carries no digits; hex2u also read this as 0.
+        auto empty = makeV4ExecutionPayloadJson();
+        empty[field] = "0x";
+        expectInvalidParams(empty);
+
+        // 65 hex digits exceeds the 32-byte width of u256, which hex2u truncates silently.
+        auto tooWide = makeV4ExecutionPayloadJson();
+        tooWide[field] = "0x1" + std::string(64, 'f');
+        expectInvalidParams(tooWide);
+
+        // A JSON number is the worse half of this: jsoncpp's asString() stringifies it
+        // rather than throwing, so gasLimit/gasUsed/baseFeePerGas read decimal 10 as hex
+        // 0x10 = 16. (blobGasUsed/excessBlobGas were already caught one layer up by the
+        // V4 field gate; the isString() check in parseBigQuantity now covers all five.)
+        auto notString = makeV4ExecutionPayloadJson();
+        notString[field] = 1;
+        expectInvalidParams(notString);
+    }
+
+    // The uint64-typed fields share the classification: bcos::fromQuantity throws
+    // std::invalid_argument, which the RPC entry point used to funnel into -32603.
+    for (auto const* field : {"timestamp", "blockNumber"})
+    {
+        auto badHex = makeV4ExecutionPayloadJson();
+        badHex[field] = "0xnothex";
+        expectInvalidParams(badHex);
+
+        auto notString = makeV4ExecutionPayloadJson();
+        notString[field] = 1;
+        expectInvalidParams(notString);
+    }
+
+    // Withdrawal amounts go through the same strict parse.
+    auto badWithdrawal = makeV4ExecutionPayloadJson();
+    Json::Value withdrawal;
+    withdrawal["index"] = "0x0";
+    withdrawal["validatorIndex"] = "0x0";
+    withdrawal["address"] = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    withdrawal["amount"] = "0xnothex";
+    badWithdrawal["withdrawals"].append(withdrawal);
+    expectInvalidParams(badWithdrawal);
+
+    // A non-object list element: jsoncpp's operator[](char const*) throws LogicError on
+    // it, which used to leave the call as -32603 rather than naming the bad input.
+    auto scalarWithdrawal = makeV4ExecutionPayloadJson();
+    scalarWithdrawal["withdrawals"].append("not-an-object");
+    expectInvalidParams(scalarWithdrawal);
+}
+
 // Only the last case here is new behavior; the four before it were already rejected by the
 // pre-existing tail gate and are kept as regression guards for the gate's move to the top
 // of parseNewPayloadRequest.

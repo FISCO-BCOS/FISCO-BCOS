@@ -56,7 +56,8 @@ KARST_CAPABILITIES = {
 def _rlp_bytes(payload: bytes) -> bytes:
     if len(payload) == 1 and payload[0] < 0x80:
         return payload
-    assert len(payload) <= 55
+    if len(payload) > 55:
+        raise ValueError(f"RLP payload too long: {len(payload)} > 55")
     return bytes([0x80 + len(payload)]) + payload
 
 

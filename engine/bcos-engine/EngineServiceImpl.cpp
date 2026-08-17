@@ -73,7 +73,17 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     }
     if (requestVersion == ApiVersion::V4)
     {
-        return payloadVersion <= 4;
+        // Same window as V5 below, and for the same reason: op-geth's GetPayloadV4 also
+        // passes []engine.PayloadVersion{engine.PayloadV3} to its getPayload helper
+        // (eth/catalyst/api.go GetPayloadV4/GetPayloadV5 differ only in the accepted fork
+        // list). No BUILD is ever tagged above V3 — isForkchoiceVersionSupported tops out
+        // there — so the two kinds of entry `<= 4` used to let through were both wrong:
+        // a V1/V2 build, which serializeExecutionPayload cannot render in the V4 shape
+        // (no withdrawalsRoot -> -32603, no blobGasUsed / excessBlobGas), and the V4-tagged
+        // entry handleNewPayload leaves behind after a commit (PayloadEntry::version is
+        // rewritten with the newPayload version), which would replay an already-committed
+        // payload. V5 rejects both; V4 now behaves the same.
+        return payloadVersion == 3;
     }
     if (requestVersion == ApiVersion::V5)
     {

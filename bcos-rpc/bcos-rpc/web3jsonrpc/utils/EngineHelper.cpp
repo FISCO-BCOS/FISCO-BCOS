@@ -62,6 +62,71 @@ bcos::bytes parseRawTransactionElement(
     }
 }
 
+/// Strict read of a u256-typed hex quantity out of a JSON object, reported the way
+/// parseH256 reports a malformed hash. `bcos::fromBigQuantity` cannot be used directly on
+/// wire input: it delegates to hex2u, which catches every parse failure and returns 0, so
+/// `blobGasUsed: "0xnothex"` would be accepted as the value 0 rather than answered with
+/// -32602 — a silently forged value on a field the CL believes it set.
+///
+/// The isString() gate is what makes the check complete. jsoncpp's asString() does NOT
+/// reject a number or a bool: it stringifies them (json_value.cpp Value::asString), so
+/// `"gasLimit": 10` used to arrive as "10" and then be read as HEX 0x10 = 16 — a value
+/// forgery worse than the malformed-hex case. Only an array/object throws
+/// Json::LogicError there, which would surface as -32603.
+bcos::u256 parseBigQuantity(Json::Value const& value, std::string_view field)
+{
+    if (value.isString())
+    {
+        if (auto parsed = bcos::safeFromBigQuantity(value.asString()))
+        {
+            return *parsed;
+        }
+    }
+    BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+        std::string(field) + " must be a hex quantity string of at most 32 bytes"));
+}
+
+/// The uint64-typed counterpart, over the strict bcos::safeFromQuantity. Same reason the
+/// payloadAttributes gasLimit / minBaseFee paths below wrap their fromQuantity calls:
+/// fromQuantity throws std::invalid_argument, which the RPC entry point funnels into
+/// -32603 InternalError, and malformed client input has to be -32602 instead.
+uint64_t parseQuantity(Json::Value const& value, std::string_view field)
+{
+    if (value.isString())
+    {
+        if (auto parsed = bcos::safeFromQuantity(value.asString()))
+        {
+            return *parsed;
+        }
+    }
+    BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(
+        bcos::rpc::InvalidParams, std::string(field) + " must be a uint64 hex quantity string"));
+}
+
+/// One element of a `withdrawals` array. The isObject() gate comes first because jsoncpp's
+/// operator[](char const*) throws Json::LogicError on a non-object element (a bare string
+/// in the list, say) — -32603 for what is plainly malformed client input.
+bcos::engine::WithdrawalV1 parseWithdrawal(Json::Value const& withdrawal, std::string_view owner)
+{
+    auto field = [&](char const* name) { return std::string(owner) + ".withdrawals[]." + name; };
+    if (!withdrawal.isObject())
+    {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(
+            bcos::rpc::InvalidParams, std::string(owner) + ".withdrawals[] must be an object"));
+    }
+    if (!withdrawal["address"].isString())
+    {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(
+            bcos::rpc::InvalidParams, field("address") + " must be a hex string"));
+    }
+    return bcos::engine::WithdrawalV1{
+        .index = parseBigQuantity(withdrawal["index"], field("index")),
+        .validatorIndex = parseBigQuantity(withdrawal["validatorIndex"], field("validatorIndex")),
+        .amount = parseBigQuantity(withdrawal["amount"], field("amount")),
+        .address = bcos::rpc::parseAddress(withdrawal["address"].asString()),
+    };
+}
+
 /// engine_newPayloadV4 param shape, enforced before anything is read out of `params`.
 /// op-geth's NewPayloadV4 (eth/catalyst/api.go:743-761) takes all four arguments and
 /// answers InvalidParams for a nil beacon root or a nil executionRequests list; a
@@ -167,17 +232,17 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .stateRoot = parseH256(ep["stateRoot"].asString()),
         .receiptsRoot = parseH256(ep["receiptsRoot"].asString()),
         .prevRandao = parseH256(ep["prevRandao"].asString()),
-        .gasLimit = fromBigQuantity(ep["gasLimit"].asString()),
-        .gasUsed = fromBigQuantity(ep["gasUsed"].asString()),
-        .baseFeePerGas = fromBigQuantity(ep["baseFeePerGas"].asString()),
+        .gasLimit = parseBigQuantity(ep["gasLimit"], "executionPayload.gasLimit"),
+        .gasUsed = parseBigQuantity(ep["gasUsed"], "executionPayload.gasUsed"),
+        .baseFeePerGas = parseBigQuantity(ep["baseFeePerGas"], "executionPayload.baseFeePerGas"),
         .blockHash = parseH256(ep["blockHash"].asString()),
         .transactions = {},
         .extraData = {},
         .feeRecipient = parseAddress(ep["feeRecipient"].asString()),
-        .timestamp =
-            engineSecondsToInternalMillis(fromQuantity(std::string(ep["timestamp"].asString()))),
-        .blockNumber =
-            static_cast<bcos::protocol::BlockNumber>(fromQuantity(ep["blockNumber"].asString())),
+        .timestamp = engineSecondsToInternalMillis(
+            parseQuantity(ep["timestamp"], "executionPayload.timestamp")),
+        .blockNumber = static_cast<bcos::protocol::BlockNumber>(
+            parseQuantity(ep["blockNumber"], "executionPayload.blockNumber")),
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
@@ -221,22 +286,18 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         std::vector<bcos::engine::WithdrawalV1> withdrawals;
         for (auto const& w : ep["withdrawals"])
         {
-            withdrawals.push_back(bcos::engine::WithdrawalV1{
-                .index = fromBigQuantity(w["index"].asString()),
-                .validatorIndex = fromBigQuantity(w["validatorIndex"].asString()),
-                .amount = fromBigQuantity(w["amount"].asString()),
-                .address = parseAddress(w["address"].asString()),
-            });
+            withdrawals.push_back(parseWithdrawal(w, "executionPayload"));
         }
         payload.withdrawals = std::move(withdrawals);
     }
     if (ep.isMember("blobGasUsed"))
     {
-        payload.blobGasUsed = fromBigQuantity(ep["blobGasUsed"].asString());
+        payload.blobGasUsed = parseBigQuantity(ep["blobGasUsed"], "executionPayload.blobGasUsed");
     }
     if (ep.isMember("excessBlobGas"))
     {
-        payload.excessBlobGas = fromBigQuantity(ep["excessBlobGas"].asString());
+        payload.excessBlobGas =
+            parseBigQuantity(ep["excessBlobGas"], "executionPayload.excessBlobGas");
     }
     // withdrawalsRoot is an ExecutionPayloadV4+ field (Isthmus), required there. For
     // V1-V3 requests it is ignored rather than rejected: the Isthmus spec leaves pre-V4
@@ -352,12 +413,7 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
         std::vector<bcos::engine::WithdrawalV1> withdrawals;
         for (auto const& w : pa["withdrawals"])
         {
-            withdrawals.push_back(bcos::engine::WithdrawalV1{
-                .index = fromBigQuantity(w["index"].asString()),
-                .validatorIndex = fromBigQuantity(w["validatorIndex"].asString()),
-                .amount = fromBigQuantity(w["amount"].asString()),
-                .address = parseAddress(w["address"].asString()),
-            });
+            withdrawals.push_back(parseWithdrawal(w, "payloadAttributes"));
         }
         attrs.withdrawals = std::move(withdrawals);
     }

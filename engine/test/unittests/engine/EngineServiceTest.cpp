@@ -1028,6 +1028,11 @@ BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
     BOOST_REQUIRE(result.payloadId.has_value());
     BOOST_CHECK_THROW(
         task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion);
+    // getPayloadV4 has the same window: op-geth's GetPayloadV4 also admits only
+    // PayloadV3 builds, and the V4 response shape needs the same three fields a V2 build
+    // does not have.
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload(*result.payloadId, 4)), IncompatiblePayloadVersion);
     // The same build is still retrievable through its own method version.
     BOOST_CHECK_NO_THROW(task::syncWait(engineService.getPayload(*result.payloadId, 2)));
 }

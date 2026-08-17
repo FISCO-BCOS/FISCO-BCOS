@@ -716,13 +716,21 @@ private:
             // the real header wiring lands, validateExecutionPayload can only check that
             // the field is present — never that its value is right, and a malicious CL
             // submitting a zero root is indistinguishable from this node's own builds.
-            // Two things keep that from being an exploitable production gap today:
-            // [op_engine_rpc] refuses to start unless executor_version >= 2 (see the
-            // guard in libinitializer/Initializer.cpp, escape hatch
-            // unsafe_allow_v1_executor for the test harness only), and this v1 build path
-            // is only reachable behind that hatch or through the in-process single-node
-            // CL. Exposing the Karst surface on a real chain must wait for real values
-            // here.
+            //
+            // This is a KNOWN UNCONTAINED gap, not a test-harness-only one. The
+            // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
+            // executor_version >= 2 (it throws for executor_version < 2 unless the
+            // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
+            // this code off a production endpoint. EngineServiceInitializer::build
+            // instantiates this same template for the v2 EthereumExecutor, so the
+            // intended production configuration — executor_version >= 2 with
+            // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
+            // here, getPayloadV5 serializes it, and newPayloadV4 accepts it on presence
+            // alone. Until C4 computes and verifies the real L2ToL1MessagePasser storage
+            // root, no L1 withdrawal proof may be taken against a root produced by this
+            // node. The v2 instantiation serving the zero root is pinned by
+            // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
+            // which has to be updated when the real value lands.
             executionPayload.withdrawalsRoot = h256{};
         }
 
