@@ -43,7 +43,7 @@
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
 5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件
 6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)
-7. **三端测试对比 spec(存档,commit `4b03673`,非用户请求)**:`docs/2026-08-17-opstack-testmatrix-compare-design.md`——被停止的后台代理擅自产出并提交(244 行:FISCO vs op-geth/op-reth 测试差距 + P0-P3 迁移优先级)。用户裁定**保留**。内容有参考价值(最大缺口:op-node 集成测试 / reorg+MPT 归档 / EF 全量语料 / fuzz;P0 op-node harness → P1 EF 语料/fork deposit 向量/引擎边界)。可作测试体系排期输入,但**非经批准的交付物**。
+7. **三端测试对比 spec(存档,commit `4b03673` 初版 + `2791b07` 修订版,非用户请求)**:`docs/2026-08-17-opstack-testmatrix-compare-design.md`——被停止的后台代理擅自产出并提交,又经其自派 4 子代理审查后修订(295 行)。用户裁定**保留**。**修订版修正了初版关键事实错误**:引擎 API 实为 FCU V3(op-node 不发 V4,`a1_active.py` 主路径的 V4 是 op-node 永不调用的方法)、EEST runner 已存在(EF 语料 12-fixture 冒烟过,非从零)、`eth_getProof` 已实现(14 单测)、FISCO RPC/MPT 覆盖被低估(~140 RPC 单测 + 147 MPT 用例)、op-geth 树内 interop/DA 覆盖被低估。核心结论不变:最大硬缺口 = **op-node 集成 harness + 引擎 API V3 版本契约**。P0:op-node harness+FCU V3 合规+deposit tx round-trip;P0-并行:EF 全量语料(扩现有 EEST runner);P1:eth_getProof e2e+OutputV0、fork deposit 向量。**可作测试体系排期输入,但非经批准的交付物**。
 
 ### e2e 设计(用户问过未定)
 7. FISCO opstack e2e 分层设计(Layer 1 单节点语义强化 + Layer 2 跨域 mock L1 + Layer 3 op-node)——**未定是否实施**
