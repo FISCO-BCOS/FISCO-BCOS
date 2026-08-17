@@ -167,6 +167,22 @@ BOOST_AUTO_TEST_CASE(OperatorCostJovianUsesTimes100)
         computeOperatorCost(p, 1000, karstConfig()), computeOperatorCost(p, 1000, jovianConfig()));
 }
 
+// 门封装:has_operator_fee=false(fjord/granite/holocene)→ 恒 0,即使 opScalar/opConst 非零
+BOOST_AUTO_TEST_CASE(OperatorFeeGateOffReturnsZero)
+{
+    const auto p = feeParams(0, 0, 0, 0, /*opScalar=*/2000000, /*opConst=*/500);
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(p, 1000, fjordConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(p, 1000, graniteConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(p, 1000, holoceneConfig()), intx::uint256{0});
+    // 门开(isthmus/jovian)→ 透传 computeOperatorCost 公式
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(p, 1000, isthmusConfig()), intx::uint256{2500});
+    BOOST_CHECK_EQUAL(
+        computeChargedOperatorCost(p, 1000, jovianConfig()), intx::uint256{200000000500ull});
+    // karst 别名 == jovian
+    BOOST_CHECK_EQUAL(computeChargedOperatorCost(p, 1000, karstConfig()),
+        computeChargedOperatorCost(p, 1000, jovianConfig()));
+}
+
 BOOST_AUTO_TEST_CASE(EstimatedDaSizeDividesScaledBy1e6)
 {
     BOOST_CHECK_EQUAL(estimatedDaSize({}), 0u);
