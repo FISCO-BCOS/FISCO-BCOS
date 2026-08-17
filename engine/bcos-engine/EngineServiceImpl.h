@@ -1185,12 +1185,15 @@ private:
             {
                 // A conversion failure means the envelope is malformed or un-enumerated
                 // (Web3Transaction RLP decode returned an error) -- a consensus-level rejection
-                // of the block, classified INVALID by the execution layer's decodeOneRawTx
-                // (OpTxDecode.h), never -32603. Step 2 (validateOpNewPayloadRequest) does NOT
-                // decode envelopes, so reaching assembly does not imply every envelope is
-                // canonical and enumerated. Carry the raw envelope in a minimal tars tx (only the
-                // hash and wire bytes populated) so the delegate's execute hook re-derives it and
-                // decodeOneRawTx issues the verdict (OpConsensusError -> INVALID).
+                // of the block, classified INVALID (OpConsensusError -> INVALID), never -32603.
+                // The verdict is issued by the delegate's execute hook: the type-byte gate
+                // (OpScheduler.h:586-590, unsupported type byte -> OpConsensusError), or for a
+                // malformed-but-supported 0x01/0x02/0x04 envelope, opValidate's type whitelist
+                // with the all-zero fallback tars tx failing validate_transaction. Step 2
+                // (validateOpNewPayloadRequest) does NOT decode envelopes, so reaching assembly
+                // does not imply every envelope is canonical and enumerated. Carry the raw
+                // envelope in a minimal tars tx (only the hash and wire bytes populated) so the
+                // delegate's execute hook re-derives it and issues the verdict.
                 bcostars::Transaction fallback;
                 fallback.extraTransactionHash.assign(txHash.begin(), txHash.end());
                 tarsTx = std::move(fallback);
