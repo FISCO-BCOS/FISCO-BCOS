@@ -496,9 +496,11 @@ public:
             m_receipt{},
             m_diff{},
             m_deposit{},
-            m_ctx(blockCtx),
+            // Initializer order must match declaration order: stateView is declared before m_ctx,
+            // so it must be initialized first (GCC -Werror=reorder).
             stateView(std::make_unique<bcos::evm::evmstate::Storage2State<Storage>>(
-                st, exec.sharedError()))
+                st, exec.sharedError())),
+            m_ctx(blockCtx)
         {}
 
         // concept lifecycle: prepare (validate) -> execute (transition) -> finish (writeback).
