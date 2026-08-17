@@ -214,6 +214,17 @@ public:
         co_return bcos::ledger::Features{};  // Return an empty SystemConfigs object
     }
 
+    /// Read ONE feature flag's enabled state at @p _blockNumber. The default implementation
+    /// derives it from fetchAllFeatures (correct but reads every feature key); production
+    /// Ledger overrides with a single SYS_CONFIG read (round-2 Finding E: the historical
+    /// state-read path needs exactly feature_l2_ethereum_compat, not a ~61-key scan).
+    virtual task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
+    {
+        auto features = co_await fetchAllFeatures(_blockNumber);
+        co_return features.get(_flag);
+    }
+
     virtual bcos::storage::StorageInterface::Ptr getStateStorage()
     {
         return nullptr;  // Default implementation, can be overridden

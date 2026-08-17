@@ -95,12 +95,22 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // destroyed after them.
     nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
 
+    // eth_getStorageAt latest-state path: a provider that forks a fresh latest view of
+    // GlobalStateStorage per request (see Initializer::stateStorageProvider for the lifetime
+    // contract — the provider captures the GlobalStateStorageInitializer shared_ptr).
+    nodeService->setStateStorageProvider(m_nodeInitializer->stateStorageProvider());
+
+    // blockTag semantics ([web3_rpc] safe_block_depth / finalized_block_depth): how many
+    // blocks behind "latest" the safe/finalized tags point to.
+    nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
+    nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
+
     // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
     // route sendRawTransaction to the in-process mempool instead of txpool — the
     // EngineService seals these txs into blocks (driven by the built-in single-node timer
     // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
     // in these modes.
-    if (nodeConfig->engineDrivenBlockProduction())
+    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus())
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
     }
