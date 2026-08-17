@@ -472,6 +472,12 @@ public:
         evmone::state::StateDiff m_diff;              // writeback deferred to finish()
         bcos::evm::opstack::DepositTx m_deposit;      // set by prepare() for deposit txs
 
+        // Shared state view built ONCE per tx and threaded across prepare/execute (review #5429 Q):
+        // m_prepare and m_execute used to construct their own Storage2State, discarding the
+        // validate-phase read cache (m_accountCache/m_codeCache) and re-reading sender/L1Block cold
+        // in the transition stage. Non-movable by design, hence held by unique_ptr.
+        std::unique_ptr<bcos::evm::evmstate::Storage2State<Storage>> stateView;
+
         // Shared per-block context; the mutable fields above are written through this const
         // pointer. The caller owns the BlockContext and must keep it alive across the lifecycle.
         BlockContext const* m_ctx;
@@ -490,7 +496,9 @@ public:
             m_receipt{},
             m_diff{},
             m_deposit{},
-            m_ctx(blockCtx)
+            m_ctx(blockCtx),
+            stateView(std::make_unique<bcos::evm::evmstate::Storage2State<Storage>>(
+                st, exec.sharedError()))
         {}
 
         // concept lifecycle: prepare (validate) -> execute (transition) -> finish (writeback).
@@ -534,18 +542,15 @@ public:
             m_ctx->seenNonDeposit = true;
             if (!m_ctx->feeLoaded)
             {  // H1 fee lazy load (after the L1 attributes deposit has executed)
-                namespace eth = bcos::executor_v1::eth;
                 namespace op = bcos::evm::opstack;
-                bcos::evm::evmstate::Storage2State<Storage> stateView(
-                    storage, executor.sharedError());
-                m_ctx->fee = op::loadOpFeeParams(stateView);
+                m_ctx->fee = op::loadOpFeeParams(*stateView);
                 if (m_ctx->daFootprintGasScalar)  // H1c DA scalar override
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
                 m_ctx->feeLoaded = true;
             }
             try
             {  // M1 normalization: validation failure -> consensus rejection
-                m_props = co_await executor.m_prepare(storage, blockHeader, transaction,
+                m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
                     ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft, m_ctx->chainId);
             }
             catch (const OpTxValidationFailed& e)
@@ -571,7 +576,7 @@ public:
             }
             else
             {
-                m_receipt = co_await executor.m_execute(storage, blockHeader, transaction,
+                m_receipt = co_await executor.m_execute(*stateView, blockHeader, transaction,
                     ledgerConfig, m_props, m_diff, m_ctx->chainId, m_ctx->blockGasLeft,
                     m_ctx->blockHashes);  // H3
             }
@@ -654,10 +659,13 @@ public:
         // eth_call (call=true) simulates without chain binding — op-geth eth_call is lenient about
         // chainId; block execution (call=false) enforces tx.chainId == node chainId (the op-geth
         // EIP155Signer/modernSigner ErrInvalidChainId check).
-        auto props = co_await m_prepare(
-            storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft, call ? 0 : chainId);
+        // One shared state view for prepare+execute (review #5429 Q): validates and transitions on
+        // the same instance so the validate-phase account/fee reads cache-hit in the transition.
+        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
+        auto props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
+            blockGasLeft, call ? 0 : chainId);
         evmone::state::StateDiff diff;
-        auto receipt = co_await m_execute(storage, blockHeader, transaction, ledgerConfig, props,
+        auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes);
         co_return co_await m_finish(storage, blockHeader, ledgerConfig, receipt, diff);
     }
@@ -726,7 +734,8 @@ private:
     // Stage 1 — validate: fork/evmc revision check, block info + evmone tx + signed envelope, then
     // injection-style opValidate (props.fee snapshotted for the transition stage).
     template <class Storage>
-    task::Task<bcos::evm::opstack::OpTxProperties> m_prepare(Storage& storage,
+    task::Task<bcos::evm::opstack::OpTxProperties> m_prepare(
+        bcos::evm::evmstate::Storage2State<Storage>& stateView,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee = {},
         int64_t blockGasLeft = 0, uint64_t chainId = 0)
@@ -779,7 +788,6 @@ private:
                     " does not match node chainId " + std::to_string(chainId));
             }
         }
-        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
@@ -795,7 +803,8 @@ private:
     // Stage 2 — execute: injection-style opTransition reusing props.fee (the validate-time
     // snapshot), so the pair can never be fed different OpFeeParams.
     template <class Storage>
-    task::Task<protocol::TransactionReceipt::Ptr> m_execute(Storage& storage,
+    task::Task<protocol::TransactionReceipt::Ptr> m_execute(
+        bcos::evm::evmstate::Storage2State<Storage>& stateView,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpTxProperties const& props,
         evmone::state::StateDiff& diff, uint64_t chainId = 0, int64_t blockGasLeft = 0,
@@ -808,7 +817,6 @@ private:
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto const& evmTx = props.evm_tx;  // reuse the prepare-built tx (review finding F)
-        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
 
         eth::ZeroBlockHashes zeroBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : zeroBlockHashes;
