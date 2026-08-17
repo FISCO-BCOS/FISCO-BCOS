@@ -53,8 +53,19 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
     // (:121); the sender.empty() guard skips it.
     if (tarsTx.sender.empty())
     {
-        auto sender = bcos::fromHex(web3Tx.sender());  // DataConvertUtility.h:119-166, 0x-aware
-        tarsTx.sender.assign(sender.begin(), sender.end());
+        try
+        {
+            auto sender = bcos::fromHex(web3Tx.sender());  // DataConvertUtility.h:119-166, 0x-aware
+            tarsTx.sender.assign(sender.begin(), sender.end());
+        }
+        catch (std::exception const&)
+        {
+            // web3Tx.sender() → Secp256k1Crypto::recoverAddress throws InvalidSignature on a bad
+            // signature. Without this, the exception escapes to the RPC layer and is misclassified
+            // as -32603; the caller's nullopt fallback (EngineServiceImpl.h:1184-1197) instead
+            // carries the raw envelope to decodeOneRawTx, which issues the INVALID verdict.
+            return std::nullopt;
+        }
     }
     return tarsTx;
 }

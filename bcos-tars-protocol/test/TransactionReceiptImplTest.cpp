@@ -330,5 +330,35 @@ BOOST_AUTO_TEST_CASE(opStackMetaLegacyNoTag8DecodesToNullopt)
     BOOST_CHECK(!receipt.opStackMeta().has_value());
 }
 
+// hex-quantity rejection paths (I6): a corrupt hex string, an over-wide u256 (>32 bytes) and
+// an over-wide u64 (>8 bytes) must each decode to nullopt -- never a silently truncated value
+// -- while the 32-byte / 8-byte boundaries must still parse. Injected straight into the tars
+// struct (inner-constructor) so the read-side getter's strict paths are exercised directly.
+BOOST_AUTO_TEST_CASE(opStackMetaRejectsCorruptAndOverwideHex)
+{
+    auto tars = std::make_shared<bcostars::TransactionReceipt>();
+    bcostars::OpStackReceiptMeta m;
+    m.l1_fee = "0x1a";  // one valid field: keeps opStackMeta() from short-circuiting to nullopt
+    m.l1_gas_price = "0xZZ";                           // invalid hex -> nullopt
+    m.l1_blob_base_fee = "0x" + std::string(66, 'f');  // 33 bytes > 32 -> nullopt
+    m.operator_fee = "0x" + std::string(64, 'f');      // 32 bytes == 32 boundary -> parses
+    m.da_footprint = "0x" + std::string(18, 'f');      // 9 bytes > 8 -> nullopt
+    m.deposit_nonce = "0x" + std::string(16, 'f');     // 8 bytes == 8 boundary -> parses
+    tars->opStackMeta = m;
+    TransactionReceiptImpl impl([tars]() { return tars.get(); });
+
+    auto got = impl.opStackMeta();
+    BOOST_REQUIRE(got.has_value());
+    BOOST_REQUIRE(got->l1_fee.has_value());
+    BOOST_CHECK_EQUAL(*got->l1_fee, bcos::u256(0x1a));
+    BOOST_CHECK(!got->l1_gas_price.has_value());      // corrupt hex rejected
+    BOOST_CHECK(!got->l1_blob_base_fee.has_value());  // 33-byte u256 rejected
+    BOOST_REQUIRE(got->operator_fee.has_value());     // 32-byte u256 boundary accepted
+    BOOST_CHECK_EQUAL(*got->operator_fee, ~bcos::u256(0));
+    BOOST_CHECK(!got->da_footprint.has_value());    // 9-byte u64 rejected
+    BOOST_REQUIRE(got->deposit_nonce.has_value());  // 8-byte u64 boundary accepted
+    BOOST_CHECK_EQUAL(*got->deposit_nonce, std::numeric_limits<uint64_t>::max());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

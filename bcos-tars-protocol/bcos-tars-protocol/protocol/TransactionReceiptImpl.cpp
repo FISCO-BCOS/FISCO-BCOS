@@ -23,9 +23,9 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::toQuantity (hex-quantity serialization)
 #include <algorithm>
 #include <cassert>
-#include <charconv>
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
@@ -39,29 +39,16 @@ namespace
 
 std::string u256ToHex(bcos::u256 const& v)
 {
-    // 0 encodes as "0x0" (non-empty), preserving field presence
-    return "0x" + v.str(0, std::ios_base::hex);
+    // bcos::toQuantity(BigNumber) = "0x" + minimal lowercase hex (DataConvertUtility.h:468-476);
+    // 0 encodes as "0x0" (non-empty, preserving field presence).
+    return bcos::toQuantity(v);
 }
 std::string u64ToHex(uint64_t v)
 {
-    // Hand-written hex: avoids constructing boost::multiprecision::uint256_t (a big-integer
-    // intermediate conversion on every getter across the 10 u64 fields). 0 encodes as "0x0"
-    // (non-empty, preserving field presence) — consistent with u256ToHex. std::to_chars is
-    // allocation-free; note it does NOT NUL-terminate (we construct the string from the
-    // returned length ptr - buf, not from a strlen), unlike a hand-rolled buffer would.
-    if (v == 0)
-    {
-        return "0x0";
-    }
-    char buf[2 + 16 + 1];
-    auto const [ptr, ec] = std::to_chars(buf + 2, std::end(buf), v, 16);
-    (void)ec;
-    // buf is 19 bytes; uint64_t max needs 16 hex digits, so to_chars cannot fail here.
-    // This assert documents that invariant — it is not a guard (it vanishes under NDEBUG).
-    assert(ec == std::errc{});
-    buf[0] = '0';
-    buf[1] = 'x';
-    return std::string(buf, static_cast<std::size_t>(ptr - buf));
+    // bcos::toQuantity(Number) = "0x" + minimal lowercase hex via store_big_u64 — no big-integer
+    // intermediate, so the 10 u64 getters stay allocation-light (DataConvertUtility.h:106-113);
+    // 0 encodes as "0x0" (non-empty, preserving field presence).
+    return bcos::toQuantity(v);
 }
 
 /// True when opStackMeta is entirely empty (a legacy receipt never wrote field 8). A tars
