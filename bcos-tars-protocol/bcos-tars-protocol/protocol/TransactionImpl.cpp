@@ -40,6 +40,12 @@
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
+// EIP-2718 deposit transaction type byte (OP Stack). Canonical source:
+// bcos-evm/bcos-evm/opstack/OpTransition.h kDepositTxType (0x7e). Defined
+// here as a local literal because bcos-tars-protocol must not depend on
+// bcos-evm's opstack module.
+constexpr uint8_t kDepositTxType = 0x7e;
+
 #define WEB3_ACCESS_LIST_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
 bcostars::protocol::TransactionImpl::TransactionImpl(std::function<bcostars::Transaction*()> inner)
@@ -411,6 +417,74 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
 }
 
+std::string_view bcostars::protocol::TransactionImpl::sourceHash() const
+{
+    // sourceHash is deposit-only metadata (Transaction.h: "Empty/false when not a deposit").
+    // Guard against non-deposit txs with a populated tars field (corrupt/wire data).
+    if (!isDepositTx())
+    {
+        return {};
+    }
+    // Unprefixed hex (the asymmetry with mint()'s "0x"+hex is by design: sourceHash is a hash
+    // string, mint is a numeric value). Consumers output it directly or parse with fromHex; do
+    // not assume a prefix.
+    return m_inner()->sourceHash;
+}
+
+bcos::u256 bcostars::protocol::TransactionImpl::mint() const
+{
+    // mint is deposit-only metadata (Transaction.h: "Empty/false when not a deposit").
+    // Guard against non-deposit txs with a populated tars field (corrupt/wire data).
+    if (!isDepositTx())
+    {
+        return 0;
+    }
+    if (m_inner()->mint.empty())
+    {
+        return 0;
+    }
+    // Written as "0x"+hex by takeToTarsTransaction, but corrupted data or external writes
+    // may lack the prefix. bcos::u256("100") without 0x-parses as decimal 100, not 0x100=256
+    // (a silent value error for a value-bearing field). Always force a 0x prefix so the
+    // identity "mint stored = mint parsed" holds regardless of input form.
+    // Invalid hex from corrupt data must not throw through the const getter — try/catch falls
+    // back to 0, consistent with the empty-string case.
+    // IMPORTANT: the tars mirror is display-only and unauthenticated — the signature binds
+    // only extraTransactionBytes; execution MUST re-derive mint from the envelope, never
+    // trust this value from an untrusted peer (see Transaction.tars field 14).
+    try
+    {
+        auto const& s = m_inner()->mint;
+        return bcos::u256(s.starts_with("0x") || s.starts_with("0X") ? s : ("0x" + s));
+    }
+    catch (std::exception const&)
+    {
+        return 0;
+    }
+}
+
+bool bcostars::protocol::TransactionImpl::isDepositTx() const
+{
+    // Use web3TypedTxKind() == 0x7e, NOT isSystemTransaction: isSystemTransaction is a
+    // per-transaction flag, so a non-system deposit (isSystemTx=false, the vast majority) would
+    // be misclassified.
+    // Also use the accessor (not the raw tars field): it returns 0 unless type()==Web3Transaction,
+    // so a forged BCOS tx (type=0, web3TypedTxKind=0x7e) is never treated as a deposit.
+    return web3TypedTxKind() == kDepositTxType;
+}
+
+bool bcostars::protocol::TransactionImpl::isDepositSystemTx() const
+{
+    // The flag is deposit-only metadata (Transaction.h: "Empty/false when not a deposit").
+    // Guard against non-deposit txs with a populated tars field (corrupt/wire data), matching
+    // sourceHash()/mint().
+    if (!isDepositTx())
+    {
+        return false;
+    }
+    return m_inner()->isSystemTransaction == 1;
+}
+
 bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
@@ -556,5 +630,9 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraData.size();
     size += m_inner()->extraTransactionBytes.size();
     size += m_inner()->extraTransactionHash.size();
+    size += m_inner()->sourceHash.size();
+    size += m_inner()->mint.size();
+    // isSystemTransaction (optional byte) is a fixed-length scalar — excluded from
+    // size() like other fixed scalars (type, version, blockLimit).
     return size;
 }
