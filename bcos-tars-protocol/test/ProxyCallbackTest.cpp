@@ -20,6 +20,7 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <util/tc_clientsocket.h>
+#include <boost/test/unit_test.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <thread>
 

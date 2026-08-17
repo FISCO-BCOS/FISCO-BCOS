@@ -3,6 +3,7 @@
 #include <bcos-rpc/filter/FilterSystem.h>
 #include <bcos-utilities/Common.h>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::rpc::filter;

@@ -25,6 +25,7 @@
 #include "bcos-txpool/test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::front;
 using namespace bcos::protocol;

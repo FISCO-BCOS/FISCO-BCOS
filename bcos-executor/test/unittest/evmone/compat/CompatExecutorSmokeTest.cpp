@@ -9,6 +9,7 @@
 #include "CompatTestFixture.h"
 #include <boost/algorithm/hex.hpp>
 
+#include <boost/test/unit_test.hpp>
 namespace bcos::test
 {
 

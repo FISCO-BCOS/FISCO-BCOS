@@ -20,6 +20,7 @@
  */
 
 #include "test/unittests/txpool/TxPoolFixture.h"
+#include <boost/test/unit_test.hpp>
 #include <future>
 
 namespace bcos::test

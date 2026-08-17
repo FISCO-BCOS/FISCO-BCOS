@@ -25,6 +25,7 @@
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <future>
+#include <boost/test/unit_test.hpp>
 
 
 using namespace std;

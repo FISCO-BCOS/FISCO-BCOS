@@ -23,6 +23,7 @@
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-tool/TreeTopology.h>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::crypto;

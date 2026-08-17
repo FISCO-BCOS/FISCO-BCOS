@@ -24,6 +24,7 @@
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
+#include <boost/test/unit_test.hpp>
 
 
 using namespace std;

@@ -2,6 +2,7 @@
 #include "../mock/MockExecutiveFlow.h"
 #include "../mock/MockLedger.h"
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::executor;
 

@@ -53,6 +53,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/tools/old/interface.hpp>
+#include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
 

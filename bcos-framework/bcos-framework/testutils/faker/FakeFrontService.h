@@ -352,15 +352,21 @@ public:
     void asyncSendResponse(const std::string& _id, int _moduleId, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _responseData, ReceiveMsgFunc _responseCallback) override
     {
-        return m_fakeGateWay->asyncSendResponse(
-            _id, _moduleId, _nodeID, _responseData, _responseCallback);
+        if (m_fakeGateWay)
+        {
+            return m_fakeGateWay->asyncSendResponse(
+                _id, _moduleId, _nodeID, _responseData, _responseCallback);
+        }
     }
 
     void asyncSendMessageByNodeID(int _moduleId, NodeIDPtr _nodeId, bytesConstRef _data,
         uint32_t _timeout, CallbackFunc _responseCallback) override
     {
-        m_fakeGateWay->asyncSendMessageByNodeID(
-            _moduleId, m_nodeId, _nodeId, _data, _timeout, _responseCallback);
+        if (m_fakeGateWay)
+        {
+            m_fakeGateWay->asyncSendMessageByNodeID(
+                _moduleId, m_nodeId, _nodeId, _data, _timeout, _responseCallback);
+        }
 
         if (m_nodeId2AsyncSendSize.contains(_nodeId))
         {

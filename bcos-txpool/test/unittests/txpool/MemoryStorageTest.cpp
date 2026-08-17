@@ -27,6 +27,7 @@
 
 #include <tbb/parallel_invoke.h>
 
+#include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
 #include <fakeit.hpp>

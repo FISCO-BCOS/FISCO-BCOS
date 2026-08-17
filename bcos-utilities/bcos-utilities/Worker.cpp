@@ -21,6 +21,7 @@
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <chrono>
 #include <exception>
 #include <future>
 

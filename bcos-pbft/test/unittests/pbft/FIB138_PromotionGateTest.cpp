@@ -27,6 +27,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <stdexcept>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::consensus;

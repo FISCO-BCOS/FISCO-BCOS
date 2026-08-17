@@ -3,6 +3,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "unittests/common/RPCFixture.h"
+#include <boost/test/unit_test.hpp>
 #include <memory>
 
 

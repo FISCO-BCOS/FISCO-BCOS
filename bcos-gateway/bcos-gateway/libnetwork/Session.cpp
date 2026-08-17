@@ -20,6 +20,7 @@
 #include <boost/asio/post.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <iterator>

@@ -20,6 +20,7 @@
 
 #include "bcos-table/src/ContractShardUtils.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 
 using namespace bcos;

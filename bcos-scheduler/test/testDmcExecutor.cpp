@@ -11,6 +11,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-utilities/Common.h>
+#include <boost/test/unit_test.hpp>
 #include <string>
 
 using namespace std;

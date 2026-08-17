@@ -19,6 +19,7 @@
 #include "bcos-utilities/Base64.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/test/unit_test.hpp>
 #include <iostream>
 #include <string>
 

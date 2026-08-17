@@ -20,6 +20,7 @@
 
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

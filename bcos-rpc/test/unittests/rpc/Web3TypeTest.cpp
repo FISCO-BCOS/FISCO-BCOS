@@ -20,6 +20,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

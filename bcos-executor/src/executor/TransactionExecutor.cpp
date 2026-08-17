@@ -83,10 +83,13 @@
 #include <cassert>
 #include <exception>
 #include <functional>
+#include <gsl/span>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <utility>
 #include <vector>
 
@@ -102,7 +105,6 @@ using namespace bcos::executor::critical;
 using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
-using namespace tbb::flow;
 
 
 crypto::Hash::Ptr GlobalHashImpl::g_hashImpl;

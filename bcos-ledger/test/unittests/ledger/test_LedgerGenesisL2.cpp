@@ -32,6 +32,7 @@
 #include "bcos-task/Wait.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/test/unit_test.hpp>
 #include <memory>
 
 using namespace bcos;

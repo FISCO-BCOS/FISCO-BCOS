@@ -31,6 +31,7 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/unit_test.hpp>
 #include <string>
 #if SM2_OPTIMIZE
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>

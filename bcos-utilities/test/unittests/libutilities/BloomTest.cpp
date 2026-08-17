@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <string_view>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace std::literals;

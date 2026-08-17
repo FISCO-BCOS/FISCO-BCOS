@@ -23,6 +23,7 @@
 #include "libprecompiled/PreCompiledFixture.h"
 #include <range/v3/view/drop.hpp>
 #include <range/v3/view/take.hpp>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

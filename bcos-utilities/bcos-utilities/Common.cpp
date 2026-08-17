@@ -32,7 +32,9 @@
 #endif
 #include "Common.h"
 #include "Exceptions.h"
+#include <chrono>
 #include <csignal>
+#include <ctime>
 #ifdef __APPLE__
 #include <pthread.h>
 #endif

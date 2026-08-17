@@ -38,6 +38,7 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <exception>
 #include <iterator>
 #include <stdexcept>

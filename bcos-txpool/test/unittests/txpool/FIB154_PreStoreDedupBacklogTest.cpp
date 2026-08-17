@@ -20,6 +20,7 @@
  * @file FIB154_PreStoreDedupBacklogTest.cpp
  */
 #include "TxPoolFixture.h"
+#include <boost/test/unit_test.hpp>
 #include <cstring>
 
 namespace bcos::test

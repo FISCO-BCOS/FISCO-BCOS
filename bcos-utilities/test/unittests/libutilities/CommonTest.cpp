@@ -25,6 +25,7 @@
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <thread>
+#include <boost/test/unit_test.hpp>
 
 namespace bcos
 {

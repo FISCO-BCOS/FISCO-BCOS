@@ -20,6 +20,7 @@
  */
 #include "FullChainFixture.h"
 
+#include <boost/test/unit_test.hpp>
 namespace
 {
 using namespace bcos;

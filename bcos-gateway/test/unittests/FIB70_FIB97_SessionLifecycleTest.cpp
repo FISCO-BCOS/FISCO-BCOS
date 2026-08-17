@@ -26,6 +26,7 @@
 #include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <queue>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace gateway;

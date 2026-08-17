@@ -22,6 +22,7 @@
 #include "bcos-rpc/bcos-rpc/RpcFactory.h"
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-utilities/Exceptions.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

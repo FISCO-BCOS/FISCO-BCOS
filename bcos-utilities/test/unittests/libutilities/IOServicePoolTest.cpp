@@ -20,6 +20,7 @@
 
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
 #include <thread>

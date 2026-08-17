@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <memory>
 #include <string_view>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

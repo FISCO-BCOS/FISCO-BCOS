@@ -47,6 +47,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <map>
 #include <optional>

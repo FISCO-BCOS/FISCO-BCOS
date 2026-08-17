@@ -23,6 +23,7 @@
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockLedger.h"
 #include <bcos-utilities/IOServicePool.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::executor;

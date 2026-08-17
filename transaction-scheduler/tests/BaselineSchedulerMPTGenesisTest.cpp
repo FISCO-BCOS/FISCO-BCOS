@@ -32,6 +32,7 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/algorithm/hex.hpp>
 
+#include <boost/test/unit_test.hpp>
 namespace
 {
 using namespace bcos;

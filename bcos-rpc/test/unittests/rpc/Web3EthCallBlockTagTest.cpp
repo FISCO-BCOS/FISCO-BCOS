@@ -18,6 +18,7 @@
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
+#include <boost/test/unit_test.hpp>
 #include <future>
 #include <string>
 #include <string_view>

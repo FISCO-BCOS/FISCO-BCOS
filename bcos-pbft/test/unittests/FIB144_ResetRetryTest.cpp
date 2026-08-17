@@ -30,6 +30,7 @@
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <thread>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::consensus;

@@ -1,4 +1,5 @@
 #include <bcos-crypto/hash/Keccak256.h>
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::crypto;
 

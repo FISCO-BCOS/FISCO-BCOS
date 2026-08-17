@@ -7,6 +7,7 @@
  */
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "Socket.h"
+#include <chrono>
 
 namespace ba = boost::asio;
 namespace bi = ba::ip;

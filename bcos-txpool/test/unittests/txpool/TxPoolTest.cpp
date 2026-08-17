@@ -30,6 +30,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/unit_test.hpp>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/filter.hpp>
 

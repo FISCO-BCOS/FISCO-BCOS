@@ -24,6 +24,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <memory>
 #include <thread>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos::crypto;
 

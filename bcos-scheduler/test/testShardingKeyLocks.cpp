@@ -1,5 +1,6 @@
 #include "ShardingGraphKeyLocks.h"
 #include "mock/MockExecutor.h"
+#include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
 
 namespace bcos::test

@@ -25,6 +25,7 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace std;
 using namespace bcos;
 using namespace bcos::codec::abi;

@@ -11,6 +11,7 @@
 #include "../common/RPCFixture.h"
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
+#include <boost/test/unit_test.hpp>
 #include <future>
 
 using namespace bcos;

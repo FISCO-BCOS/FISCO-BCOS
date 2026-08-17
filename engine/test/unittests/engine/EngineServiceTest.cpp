@@ -22,6 +22,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
 #include <boost/lexical_cast.hpp>
+#include <boost/test/unit_test.hpp>
 #include <algorithm>
 
 using namespace bcos;

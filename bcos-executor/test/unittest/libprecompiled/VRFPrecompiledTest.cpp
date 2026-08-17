@@ -26,6 +26,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <wedpr-crypto/WedprCrypto.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::crypto;

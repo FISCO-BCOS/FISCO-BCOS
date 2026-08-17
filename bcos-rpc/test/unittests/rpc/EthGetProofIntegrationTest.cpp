@@ -38,6 +38,7 @@
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
 #include <optional>
 #include <string>

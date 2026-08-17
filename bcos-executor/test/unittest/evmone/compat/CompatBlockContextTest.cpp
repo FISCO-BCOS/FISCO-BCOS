@@ -11,6 +11,7 @@
 #include "bcos-task/Wait.h"
 #include "executive/BlockContext.h"
 
+#include <boost/test/unit_test.hpp>
 namespace bcos::test
 {
 

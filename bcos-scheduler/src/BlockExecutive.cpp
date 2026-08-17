@@ -18,6 +18,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <utility>

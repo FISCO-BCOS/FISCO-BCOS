@@ -30,6 +30,7 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;

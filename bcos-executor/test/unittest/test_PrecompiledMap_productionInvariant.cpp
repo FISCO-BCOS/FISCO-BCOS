@@ -27,6 +27,7 @@
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/protocol/Protocol.h>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::ledger;

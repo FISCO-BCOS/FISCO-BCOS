@@ -27,6 +27,7 @@
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <memory>
 

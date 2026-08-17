@@ -16,6 +16,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string_view>

@@ -27,6 +27,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <chrono>
 #include <future>
 #include <random>
 #include <range/v3/view/concat.hpp>

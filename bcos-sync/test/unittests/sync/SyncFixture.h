@@ -153,13 +153,15 @@ public:
         //   FakeFrontService --(m_fakeGateWay)--> FakeGateWay
         // Both edges are strong shared_ptrs, so without explicit teardown the
         // whole node graph (ledger, blocks, txs, io_context) stays alive until
-        // process exit and trips LeakSanitizer. Mirror the stop()/unregister
-        // behaviour of the real components by severing both cross-references.
+        // process exit and trips LeakSanitizer. Sever both cross-references
+        // here so the object graph can actually release; the same
+        // FrontService <-> BlockSync cycle exists in production components
+        // and is tracked separately in #5433.
         if (m_frontService)
         {
             m_frontService->setGateWay(nullptr);
         }
-        if (m_gateWay)
+        if (m_gateWay && m_keyPair)
         {
             m_gateWay->removeSync(m_keyPair->publicKey());
         }

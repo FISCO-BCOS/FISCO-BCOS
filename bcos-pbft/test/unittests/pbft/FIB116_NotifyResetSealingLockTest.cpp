@@ -23,6 +23,7 @@
 #include "test/unittests/pbft/PBFTFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <thread>
 

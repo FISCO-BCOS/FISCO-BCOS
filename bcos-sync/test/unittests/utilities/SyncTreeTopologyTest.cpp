@@ -21,6 +21,7 @@
 #include <bcos-sync/utilities/SyncTreeTopology.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos::sync;
 
 namespace bcos

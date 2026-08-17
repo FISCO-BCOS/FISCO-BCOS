@@ -23,6 +23,7 @@
  */
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/unit_test.hpp>
 #include <cmath>
 
 using namespace bcos;

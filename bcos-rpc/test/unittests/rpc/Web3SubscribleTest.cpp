@@ -24,6 +24,7 @@
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/Web3Subscribe.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;
