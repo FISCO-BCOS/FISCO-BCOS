@@ -114,30 +114,36 @@ l1BlockCode = hexutil.MustDecode(
     // "storage slot outside the declared slot set"。真实 initiateWithdrawal 写:
     //   slot 1 = msgNonce(自增)
     //   动态槽 keccak256(withdrawalHash ‖ be32(0)) = sentMessages[hash]=true(映射在 slot 0)
+    // withdrawalHash = keccak256(abi.encode(versionedNonce, sender, target, value, gasLimit, data)),
+    //   versionedNonce = (1<<240) | msgNonce(MESSAGE_VERSION=1),不含 chainid。
+    withdrawalHash := crypto.Keccak256(abiEncodeWithdrawal(1, addrOfKey(1), target, 0, 100000, []byte{0xbe, 0xef}))
+    sentMessagesSlot := common.BytesToHash(crypto.Keccak256(withdrawalHash, make([]byte, 32)...))
     c.ExtraStorage = map[common.Address][]common.Hash{
         messagePasserAddr: {
-            common.BigToHash(big.NewInt(1)),                        // msgNonce
-            common.BytesToHash(append(withdrawalHash[:], make([]byte, 31)...)), // sentMessages 动态槽(占位,实现时算精确值)
+            common.BigToHash(big.NewInt(1)),   // msgNonce(slot1,首笔后=1)
+            sentMessagesSlot,                  // sentMessages 动态槽(slot keccak256(hash‖0))
         },
     }
     return c
 }},
 ```
-> **ExtraStorage 精确值**:实现时必须算 `keccak256(withdrawalHash ‖ 32-byte-zero-index)`(映射基址 0,key 是 withdrawalHash)。withdrawalHash 由 tx 参数确定性生成(可先跑一遍拿事件值或按合约内 formula 复算)。若动态槽声明太复杂,先用 `message_passer_write` 的最小码(只写 slot1,`ExtraStorage={messagePasserAddr:{slot1}}`)兜底,并在 Task 1 报告注明「真实码路径延后」。`realMessagePasserCode` 取自 `deployedBytecode.object`,不得留空。
+> **ExtraStorage 精确值(已实测可算,供 golden 参考)**:首次 withdraw(msgNonce=0,sender=`addrOfKey(1)`=`0x7E5F…5Bdf`,target=`0xdead…0001`,value=0,gasLimit=100000,data=0xbeef)→ `withdrawalHash=0xb04a2eb0e7da26b21a64bb8b6b7dea89761c83ce80e0f44730bb09f1d80b476e`、`sentMessages 动态槽=0xb63d6eebf093aa809e59d6f3b0ba693d0094b5ba7d67b7cef17ebeec66c1b20b`。`abiEncodeWithdrawal` 是 generator 内的 ABI 编码辅助(实现时补,或按上述字段手拼)。**勿用 `append(hash[:], make([]byte,31)...)` 拼 63B**(会截断成错值)。若动态槽声明太复杂,先用 `message_passer_write` 的最小码(只写 slot1,`ExtraStorage={messagePasserAddr:{slot1}}`)兜底,并在 Task 1 报告注明「真实码路径延后」。`realMessagePasserCode` 取自 `deployedBytecode.object`,不得留空。
 
-- [ ] **Step 4: 先 add 新文件,再跑 `regen.sh`(regen 终步 `git diff --exit-code` 需工作树==入库字节)**
+- [ ] **Step 4: 先跑 `regen.sh` 生成全部产物(首次退出非 0 是预期)**
 
-⚠️ **顺序关键**:regen.sh 末段对 `cases/ vectors/ golden/` 跑 `git diff --exit-code`——若新 case 文件尚未入库,首次跑必红(新文件未跟踪即 diff 非空)。因此**先 `git add` 新 case 源文件,再跑 regen**;regen 会重写/新增向量,第二次 add 后再验证 diff 干净。
+⚠️ **regen 门机制(实测确认)**:regen.sh 末段 `git diff --exit-code` 覆盖 `$T8N_DIR/cases/ vectors/ golden/engine/`。关键事实:
+1. `git diff` **不显示未跟踪文件**——新向量首次生成后是 untracked,diff 为空,不会因此红。
+2. **`manifest.txt` 是已跟踪文件**,`append_if_absent` 会向它追加 4 行新向量名 → **首次 regen 必然退出非 0**(tracked 文件被修改)。
+3. `cases.go` 在 `generator/` 下,**不在终步 diff 覆盖域**——`git add cases.go` 对 gate 无影响。
+
+因此正确序列(Step 6 已含幂等闭环):首次 regen 生成全部产物 → `git add opstack-executor/tests/t8n/`(manifest+新向量+golden)→ **二次 regen 退出 0**(幂等验证)。本 Step 只做首次生成:
 
 ```bash
-cd /Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment
-git add opstack-executor/tests/t8n/generator/cases.go   # 先入库新 caseSpec 源
-cd opstack-executor/tests/t8n/generator
+cd /Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/opstack-executor/tests/t8n/generator
 bash regen.sh
 ```
-Expected: 退出 0;新向量 `l1block_deposit_slots.{isthmus,jovian}.json` 与 `message_passer_withdraw.{isthmus,jovian}.json` 出现;manifest 追加 4 行;golden/engine 对应 4 个新 golden。**若退出非 0**:
+Expected: **退出非 0**(manifest.txt 被追加 → 终步 git-diff 红),这是预期;**关键是产物已生成**:新向量 `isthmus_l1block_deposit_slots.json`、`jovian_l1block_deposit_slots.json`、`isthmus_message_passer_withdraw.json`、`jovian_message_passer_withdraw.json`(各含 `.in.json` + 对应 `vectors/*.json` + `golden/engine/*.golden.json`)出现;manifest 追加 4 行。**若退出非 0 但产物缺失**:
 - stderr 显示 cases∪modes 集合不匹配 → 检查 case 注册名与派生名
-- stderr 显示 `git diff` 非空 → 新生成文件未入库,`git add` 后重跑 regen 验证字节等同
 - 其它 → 读 stderr 定位
 
 - [ ] **Step 5: 编译并跑 OpT8nReplayTest 门**
@@ -296,7 +302,7 @@ Expected: 1 断言,`l1block_number_callable` PASS(前提:Step 1b 签名链已实
 ```
 > **Divergence 登记(已在 Global Constraints)**:`l1block_deposit_reverts_ecotone_vs_jovian`——B3 的 L1Block deposit 每块 revert,getter 返回 0。**测试不写死 0 为期望**(若节点修复了 deposit 对齐,非零即 PASS),只要求「可读 + 格式正确」。
 
-- [ ] **Step 4: 跨块 sequenceNumber 递增(2 条,受 DIVERGENCE 约束)**
+- [ ] **Step 4: 跨块 sequenceNumber 探测(1 条,受 DIVERGENCE 约束)**
 
 B3 的 deposit 每块 revert → sequenceNumber 恒 0,**跨块 +1 断言在 B3 上必红**(与 Global Constraints 的 `l1block_deposit_reverts_ecotone_vs_jovian` 一致)。此断言的**语义由 t8n 差分覆盖**(Task 1 的 146B 码 + postState 跨块);真实节点侧改为「探测」:读两块 seq,若不为 0 才断言 +1,否则登记 DIVERGENCE 并 PASS 探测:
 ```python
@@ -316,7 +322,7 @@ B3 的 deposit 每块 revert → sequenceNumber 恒 0,**跨块 +1 断言在 B3 �
 ```
 > **历史块 tag 坑(已确认)**:节点 eth_call 对历史 tag 静默服务 latest(memory `op-ethcall-historical-tag-deferred`),历史 tag 读不到旧块值。**注意**:由于两次都以 `latest` tag 读,即使未来节点修复 deposit 对齐、seq 每块 +1,两次 latest 也返回同一块同值(`seq1==seq0`),`l1block_seq_increments` 的 `+1` 断言仍不成立——**本步在 B3 现实下只能走 DIVERGENCE 分支,「自动转真断言」不可达**。跨块 seq 递增的真实语义由 t8n 差分(146B 码 postState)覆盖;若未来要在真实节点测,需改为「读块 A 的 seq(封块前 latest)→ 等新块 → 读 latest seq」的单块内双读,且依赖封块机制,本计划不承诺。
 
-- [ ] **Step 5: 拒绝路径 — 非 deposit 调用方 setL1BlockValues 被拒(1 条)**
+- [ ] **Step 5: 拒绝路径 — 非 deposit 调用方 + 错误 calldata 长度(2 条)**
 
 spec 表「拒绝路径:错误 calldata 长度、非 deposit 调用方」。节点 L1Block 是真实 Solidity 合约,`setL1BlockValues` 有 `require(msg.sender == DEPOSITOR_ACCOUNT)`(genesis 码内 `0xdead…0001` 检查)。用普通签名 tx(SENDER)带 setL1BlockValues calldata 调 L1Block,断言回执 status=0x0:
 ```python
