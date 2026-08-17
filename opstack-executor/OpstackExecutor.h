@@ -506,9 +506,16 @@ public:
             }
             if (transaction.isDepositTx())
             {
-                if (m_ctx->seenNonDeposit)  // M2 order gate
-                    throw bcos::evm::engine::OpConsensusError(
-                        "op block: deposit after non-deposit");
+                if (m_ctx->seenNonDeposit)
+                    // M2 order gate — demoted from a hard reject to an observable log (finding D
+                    // #5429): op-geth/op-reth enforce deposit-first only at the sequencer
+                    // (construction), not at validation, so a block with a deposit after a
+                    // non-deposit is accepted by both reference clients. FISCO keeps the
+                    // invariant observable (WARNING) without diverging on acceptance.
+                    BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK")
+                                      << "deposit after non-deposit in block — accepted "
+                                         "(deliberate demotion, op-geth/op-reth accept at "
+                                         "validation)";
                 try
                 {
                     m_deposit = OpstackExecutor::depositFromTransaction(transaction);

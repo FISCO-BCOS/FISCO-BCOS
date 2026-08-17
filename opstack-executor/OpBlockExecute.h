@@ -16,6 +16,7 @@
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Task.h>
+#include <bcos-utilities/BoostLog.h>  // BCOS_LOG (finding-D demoted-deposit-check observability)
 #include <bcos-utilities/Common.h>
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048 / toBcosH256
 #include <opstack-executor/OpCommon.h>  // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
@@ -227,10 +228,20 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     if (rawTxBytes.empty())
         throw OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     // Empty-envelope guard: the first envelope must be non-empty before its type byte is read
-    // (and before raw.back()[0] below).
-    if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty() ||
-        !op::isL1AttributesTx(deposits[0]))
-        throw OpConsensusError("op block: first tx is not the L1 attributes deposit");
+    // (and before raw.back()[0] below). A block with NO deposit at all stays a hard reject: the
+    // L1-attributes deposit seeds the block's fee/DA context and deposits[0] is read below.
+    if (rawTxBytes[0].empty() || rawTxBytes[0][0] != kDepositTypeByte || deposits.empty())
+        throw OpConsensusError("op block: no deposit transaction to seed the block");
+    // L1-attributes content check — demoted from a hard reject to an observable log (finding D
+    // #5429): op-geth/op-reth parse the first tx as the L1 info (extract_l1_info) without
+    // validating it is the L1-attributes tx, so a block whose first deposit is not the canonical
+    // L1-attributes one is accepted by both reference clients. FISCO keeps it observable
+    // (WARNING) without diverging on acceptance.
+    if (!op::isL1AttributesTx(deposits[0]))
+        BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
+                          << "op block: first tx is a deposit but not the L1 attributes tx — "
+                             "accepted (deliberate demotion, op-geth/op-reth accept at "
+                             "validation)";
     if (cfg.has_da_footprint)
     {
         auto const& data = deposits[0].data;

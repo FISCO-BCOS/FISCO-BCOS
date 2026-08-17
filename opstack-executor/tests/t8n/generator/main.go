@@ -2407,8 +2407,9 @@ func buildGenesisForCase(in *inputCase, cfg *params.ChainConfig) (*core.Genesis,
 // "invalid baseFee" before the tx), withdrawalsRoot = EmptyWithdrawalsHash
 // (Isthmus+), requestsHash = EmptyRequestsHash, blobGasUsed/excessBlobGas = 0,
 // parentBeaconRoot set. The invalid tx is inserted AFTER the L1 attributes
-// deposit (position 0 would reject with "first tx is not the L1 attributes
-// deposit" — wrong anchor).
+// deposit: the first-tx-is-L1-attributes gate was demoted to a WARNING log
+// (finding D #5429 — FISCO accepts like op-geth/op-reth), so the anchor for
+// this vector is the invalid tx's execution failure, not the position-0 gate.
 func buildInvalidTxBlock(in *inputCase, cfg *params.ChainConfig, genesis *core.Genesis,
 	signer types.Signer, deposit, invalid *types.Transaction) (*types.Block, error) {
 	if in == nil || cfg == nil || genesis == nil {
