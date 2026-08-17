@@ -96,6 +96,30 @@ struct Fixture
         return bcostars::protocol::TransactionImpl([tarsHolder]() { return tarsHolder.get(); });
     }
 
+    // Legacy UNPROTECTED tx mirror (type=Legacy, v=27, chain_id==0) — drives the chainId
+    // EXEMPTION branch of m_prepare's EIP-155 check (legacy chain_id==0 has no chainId concept).
+    bcostars::protocol::TransactionImpl buildLegacyWeb3Tx()
+    {
+        bcos::rpc::Web3Transaction w3{};
+        w3.type = bcos::rpc::TransactionType::Legacy;
+        w3.chainId = 0;  // unprotected (v=27/28)
+        w3.nonce = 7;
+        w3.maxFeePerGas = bcos::u256(30000000000);  // gasPrice (legacy single-price)
+        w3.maxPriorityFeePerGas = w3.maxFeePerGas;
+        w3.gasLimit = 5000000;
+        w3.to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
+        w3.value = bcos::u256(2000000000000000000);
+        w3.signatureV = 27;  // unprotected legacy
+        w3.signatureR = bcos::bytes(32, 0x01);
+        w3.signatureS = bcos::bytes(32, 0x02);
+        auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+        auto const txHash = w3.txHash();
+        tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
+        auto const envelope = w3.encode();
+        tarsHolder->extraTransactionBytes.assign(envelope.begin(), envelope.end());
+        return bcostars::protocol::TransactionImpl([tarsHolder]() { return tarsHolder.get(); });
+    }
+
     // Deposit tx mirror for single-tx deposit dispatch. isSystemTx mirrors the
     // deposit RLP field (tars field 15), NOT Transaction::systemTx().
     bcostars::protocol::TransactionImpl buildDepositTx(bool isSystemTx = false)
@@ -746,6 +770,80 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
             [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
             OpTxValidationFailed);
     }
+}
+
+// chainId-mismatch enforcement (morebtcg/kyonRay review #5429, review finding E): op-geth
+// EIP155Signer/modernSigner reject txs whose chainId differs from the node's (ErrInvalidChainId).
+// Before this test the rejection had ZERO negative coverage — every test fed a self-consistent
+// chainId. Cases (1)(2) need no sender funding: the check runs before opValidate's gates.
+BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+    bcos::evm::opstack::OpFeeParams fee{};  // zero fee
+
+    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+
+    // (1) protected tx chainId(9) != node chainId(10) -> OpConsensusError.
+    {
+        auto tx = buildWeb3Tx(/*chainId=*/9);
+        tx.clearSenderAndHash();
+        tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+        BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+                              /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
+                              /*blockGasLeft=*/30000000, /*chainId=*/10)),
+            bcos::evm::engine::OpConsensusError);
+    }
+    // (2) typed tx chain_id==0 is NOT exempt (modernSigner rejects 0 != node chainId; a
+    // malicious proposer can craft a 0x02 envelope with chain_id 0). Pinned so a future
+    // "chain_id==0 means unprotected" regression fails.
+    {
+        auto tx = buildWeb3Tx(/*chainId=*/0);
+        tx.clearSenderAndHash();
+        tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+        BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+                              /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
+                              /*blockGasLeft=*/30000000, /*chainId=*/10)),
+            bcos::evm::engine::OpConsensusError);
+    }
+}
+
+// legacy v=27/28 unprotected (chain_id==0) IS exempt: no chainId concept, accepted regardless of
+// the node chainId. Runs the FULL path (funded sender) to prove it executes rather than being
+// caught and reclassified.
+BOOST_FIXTURE_TEST_CASE(LegacyUnprotectedChainIdExempt, Fixture)
+{
+    OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
+    blockHeader.setNumber(1);
+    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    auto tx = buildLegacyWeb3Tx();
+    constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
+    tx.clearSenderAndHash();
+    tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
+
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(storage, sender, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256("100000000000000000000"));
+        co_await acc.setCode({}, "",
+            bcos::crypto::HashType(
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+        std::string nonceStr(tx.nonce());
+        if (nonceStr.empty())
+            nonceStr = "0";
+        co_await acc.setNonce(nonceStr);
+        co_return;
+    }());
+
+    bcos::evm::opstack::OpFeeParams fee{};  // zero fee
+    auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
+        /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
+        /*chainId=*/10));
+    BOOST_REQUIRE_NE(receipt, nullptr);  // chainId exempt: executes instead of throwing
 }
 
 BOOST_AUTO_TEST_SUITE_END()
