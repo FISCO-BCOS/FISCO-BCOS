@@ -326,4 +326,120 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
         std::runtime_error);
 }
 
+/// Finding J (round-2 review #5429): pin the M2 accept path — a deposit AFTER a non-deposit is
+/// ACCEPTED (D demoted it from OpConsensusError to BCOS_LOG(WARNING) + continue in f974bb1a9).
+/// op-geth/op-reth enforce deposit-first only at the sequencer (construction), never at
+/// validation, so this block must execute with all three txs. Without this anchor, a regression
+/// to the old hard reject (which would re-divergence from the reference clients by rejecting a
+/// block they accept) has no CI signal.
+BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
+{
+    namespace op = bcos::evm::opstack;
+
+    // Isthmus-active fork config (feature_op_jovian OFF).
+    // Named-lvalue first: configAt takes const OpForkFlags&, and GCC-14's -Wdangling-reference
+    // flags passing a prvalue `op::OpForkFlags{}` here (false positive, see
+    // InjectsDepositAndEip1559Block).
+    const auto forkFlags = op::OpForkFlags{};
+    const auto& cfg = op::configAt(forkFlags);
+
+    MutableStorage storage;
+    auto cryptoSuite = makeCryptoSuite();
+    auto hashImpl = cryptoSuite->hashImpl();
+    auto receiptFactory = makeReceiptFactory();
+    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
+
+    auto header = makeHeader(1'000'000);
+    fundSender(storage, hashImpl);
+
+    // Block: [L1 attributes deposit, normal tx, deposit] — the third tx is a deposit after a
+    // non-deposit, the M2 order-gate case that was demoted to an observable WARNING.
+    auto attrDep = makeAttributesDeposit();
+    auto normTx = makeEip1559OpBlockTx();
+    auto lateDep = makeAttributesDeposit();
+    std::vector<op::DepositTx> deposits{std::get<op::DepositTx>(attrDep.tx)};
+    bcos::bytes attrEnv = encodeDepositEnvelope(std::get<op::DepositTx>(attrDep.tx));
+    bcos::bytes normEnv(normTx.signedEnvelope.begin(), normTx.signedEnvelope.end());
+    bcos::bytes lateEnv = encodeDepositEnvelope(std::get<op::DepositTx>(lateDep.tx));
+    std::vector<bcos::bytes> rawTxBytes{attrEnv, normEnv, lateEnv};
+
+    auto attrFiscoTx = buildFiscoTxFromEnvelope(attrEnv, hashImpl);
+    auto lateFiscoTx = buildFiscoTxFromEnvelope(lateEnv, hashImpl);
+    BOOST_REQUIRE(attrFiscoTx != nullptr);
+    BOOST_REQUIRE(lateFiscoTx != nullptr);
+    std::vector<bcos::protocol::Transaction::ConstPtr> transactions{
+        attrFiscoTx, buildEip1559FiscoTx(), lateFiscoTx};
+
+    auto result = runSharedPath(storage, *header, rawTxBytes, transactions, deposits, cfg, executor,
+        hashImpl, ioServicePool);
+
+    // All three txs execute — the late deposit is accepted, not rejected.
+    BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());
+    BOOST_CHECK_EQUAL(result.receipts.size(), 3u);
+    int64_t manual = 0;
+    for (auto const& r : result.receipts)
+        manual += op::narrowGasUsed(r->gasUsed());
+    BOOST_CHECK_GT(manual, 0);  // all three txs actually consumed gas
+}
+
+/// Finding J (round-2 review #5429): pin the isL1AttributesTx accept path — a first deposit that
+/// is NOT the L1-attributes tx (to/from != OP_L1_BLOCK/OP_DEPOSITOR) is ACCEPTED (D demoted the
+/// content check from a hard reject to BCOS_LOG(WARNING) in f974bb1a9; op-geth's extract_l1_info
+/// and op-reth's validation do not validate L1-attributes identity). The block must execute with
+/// both txs. Isthmus config keeps the Jovian DA-footprint shape checks (which read
+/// deposits[0].data) out of the way.
+BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
+{
+    namespace op = bcos::evm::opstack;
+
+    // Isthmus-active fork config (feature_op_jovian OFF).
+    const auto forkFlags = op::OpForkFlags{};
+    const auto& cfg = op::configAt(forkFlags);
+
+    MutableStorage storage;
+    auto cryptoSuite = makeCryptoSuite();
+    auto hashImpl = cryptoSuite->hashImpl();
+    auto receiptFactory = makeReceiptFactory();
+    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
+
+    auto header = makeHeader(1'000'000);
+    fundSender(storage, hashImpl);
+
+    // First deposit deliberately NOT the L1-attributes tx: arbitrary from/to (the L1-attributes
+    // content check is demoted to a WARNING, so this does not reject the block).
+    bcos::evm::opstack::DepositTx nonAttrDep{
+        .source_hash = evmc::bytes32{},
+        .from = 0x811a752c8cd697e3cb27279c330ed1ada745a8d7_address,
+        .to = 0x811a752c8cd697e3cb27279c330ed1ada745a8d7_address,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {},
+    };
+    auto normTx = makeEip1559OpBlockTx();
+    std::vector<op::DepositTx> deposits{nonAttrDep};
+    bcos::bytes depEnv = encodeDepositEnvelope(nonAttrDep);
+    bcos::bytes normEnv(normTx.signedEnvelope.begin(), normTx.signedEnvelope.end());
+    std::vector<bcos::bytes> rawTxBytes{depEnv, normEnv};
+
+    auto depFiscoTx = buildFiscoTxFromEnvelope(depEnv, hashImpl);
+    BOOST_REQUIRE(depFiscoTx != nullptr);
+    std::vector<bcos::protocol::Transaction::ConstPtr> transactions{
+        depFiscoTx, buildEip1559FiscoTx()};
+
+    auto result = runSharedPath(storage, *header, rawTxBytes, transactions, deposits, cfg, executor,
+        hashImpl, ioServicePool);
+
+    // Both txs execute — the non-L1-attributes first deposit is accepted, not rejected.
+    BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());
+    BOOST_CHECK_EQUAL(result.receipts.size(), 2u);
+    int64_t manual = 0;
+    for (auto const& r : result.receipts)
+        manual += op::narrowGasUsed(r->gasUsed());
+    BOOST_CHECK_GT(manual, 0);  // both txs actually consumed gas
+}
+
 BOOST_AUTO_TEST_SUITE_END()
