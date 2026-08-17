@@ -25,12 +25,14 @@
 #include <bcos-codec/rlp/RLPDecode.h>        // decodeHeader / decode / decodeItems
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
+#include <algorithm>
 #include <evmc/evmc.hpp>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace bcos::evm::opstack
 {
@@ -772,7 +774,9 @@ private:
             op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft);
         if (auto const* err = std::get_if<std::error_code>(&validated))
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));
-        co_return std::get<op::OpTxProperties>(validated);
+        auto props = std::move(std::get<op::OpTxProperties>(validated));
+        props.evm_tx = std::move(evmTx);  // carry the built tx to m_execute (build once, not twice)
+        co_return props;
     }
 
     // Stage 2 — execute: injection-style opTransition reusing props.fee (the validate-time
@@ -790,7 +794,7 @@ private:
         (void)ledgerConfig;
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
-        auto evmTx = eth::toEvmoneTransaction(transaction);
+        auto const& evmTx = props.evm_tx;  // reuse the prepare-built tx (review finding F)
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
 
         eth::ZeroBlockHashes zeroBlockHashes;

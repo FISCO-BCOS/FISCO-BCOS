@@ -2,9 +2,9 @@
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/eth/state/state.hpp>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
+#include <bcos-evm/eth/state/state.hpp>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
@@ -45,6 +45,12 @@ struct OpTxProperties
     // (flz_len drives the Fjord formula). Snapshot at validate time (the envelope is available
     // here); read by deriveOpReceiptMeta at transition -- preserving the no-cfg invariant.
     std::optional<uint64_t> ecotone_calldata_gas_used = std::nullopt;
+    // The fully-built evmone state::Transaction, carried from m_prepare (validate) to m_execute
+    // (transition) so the hot path builds it once per tx instead of twice (calldata copy +
+    // to-address hex decode + access_list/blob/auth allocation each time). Filled by
+    // OpstackExecutor::m_prepare after opValidate returns; read (const&) by m_execute.
+    evmone::state::Transaction evm_tx{};  // default member init: keeps the positional aggregate
+                                          // init in opValidate (OpTransition.cpp) warning-free
 };
 
 /// Reuses evmone validate_transaction then applies OP checks: reject blob tx; balance cap
