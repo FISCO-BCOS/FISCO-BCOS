@@ -32,7 +32,7 @@
 | 锚点 | FISCO 锚点 | op-geth 锚点 | 判定 | 证据 | 状态 |
 |---|---|---|---|---|---|
 | ExecutionPayload | `bcos-framework/bcos-framework/engine/Types.h:89-130` | `beacon/engine/types.go:252` DecodeTransactions | 等价 | 结构一致 | 已确认 |
-| typed tx 解码 | `bcos-evm/bcos-evm/engine/OpSchedulerImpl.h:855` decodeOneRawTx | `core/types/transaction.go:212` decodeTyped | 等价 | 分派覆盖 0x7E/0x01/0x02/0x04 | 已确认 |
+| typed tx 解码 | `opstack-executor/OpScheduler.h:586` type-byte 门 | `core/types/transaction.go:218` decodeTyped | 已知分叉 | FISCO 白名单 {0x7E/0x01/0x02/0x04}；op-geth 另接受 0x03(blob)/0x7d(post-exec)——FISCO 刻意拒（非等价，见 OpScheduler.h 门注释） | 已确认 |
 | deposit 转换 | `bcos-evm/bcos-evm/opstack/OpTransition.cpp:456-457` | `core/types/deposit_tx.go:27-46` | 等价 | 字段映射一致 | 已确认 |
 | 差异点：三次类型翻译 | — | — | 结构性差异 | FISCO 双端三次翻译 vs op-geth 一次 | 已确认 |
 

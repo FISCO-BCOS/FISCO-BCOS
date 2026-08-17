@@ -426,9 +426,11 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
-    // Authoritative first-byte dispatch (RawTransactionDispatch.h). L2 never admits blob
-    // (type-3) transactions, and deposits (0x7e) can only be injected by the consensus
-    // layer through the Engine API, never through the public transaction pool.
+    // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
+    // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
+    // acceptance divergence, not a reference check (see the OpScheduler.h type-byte gate note).
+    // Deposits (0x7e) can only be injected by the consensus layer through the Engine API, never
+    // through the public transaction pool.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:

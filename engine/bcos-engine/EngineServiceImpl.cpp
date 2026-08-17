@@ -164,7 +164,8 @@ namespace
 {
 /// Shared over the two transaction carriers (attributes hex strings and payload raw
 /// bytes): a blob (type-3) or unsupported/unknown-type transaction invalidates the whole
-/// carrier — it is never dropped individually (L2 forbids blob transactions entirely).
+/// carrier — it is never dropped individually. Blob rejection is FISCO's OP policy, not an
+/// op-geth check (decodeTyped accepts 0x03; see the OpScheduler.h type-byte gate note).
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index)
 {

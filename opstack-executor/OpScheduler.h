@@ -583,6 +583,15 @@ private:
                             std::string("OpScheduler: malformed deposit: ") + e.what());
                     }
                 }
+                // NOTE (independent review #5429, finding C): this whitelist {0x7e, 0x01, 0x02,
+                // 0x04, >=0xc0} is deliberately STRICTER than op-geth: decodeTyped
+                // (transaction.go:218-228) also accepts 0x03 (blob) and 0x7d (post-exec) and the
+                // state processor would execute them. A payload carrying either is accepted by
+                // op-geth but rejected INVALID here — an intentional acceptance divergence (OP L2
+                // has no blob/post-exec txs), NOT parity. op-geth has no "blob ban" check (the
+                // only related gate, Jovian CalcDAFootprint, requires txs[0] to be *a* deposit);
+                // the "L2 forbids blob" wording elsewhere is FISCO's own policy. DIVERGENCES.md
+                // row corrected from "等价" to match.
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
                     throw bcos::evm::engine::OpConsensusError(
