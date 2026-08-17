@@ -144,11 +144,21 @@ def a2_exec(rpc, sender):
     check("eth_call EOA->EOA returns 0x", out == "0x", str(out))
     gas = rpc.call("eth_estimateGas", [tx])
     check("eth_estimateGas == 21000", int(gas, 16) == 21000, str(gas))
-    # predeploy L1Block is unseeded on B3 (getCode == 0x): a call to an empty-code address is a
-    # no-op returning empty output, not an error or crash.
-    out2 = rpc.call("eth_call",
-        [{"to": "0x4200000000000000000000000000000000000015", "data": "0x9a2ac6d5"}, "latest"])
-    check("eth_call empty-code contract returns 0x", out2 == "0x", str(out2))
+    # A call to an empty-code address is a no-op returning empty output, not an error or crash.
+    empty_out = rpc.call("eth_call",
+        [{"to": "0x000000000000000000000000000000000000c0de", "data": "0x9a2ac6d5"}, "latest"])
+    check("eth_call empty-code address returns 0x", empty_out == "0x", str(empty_out))
+    # The rebuilt genesis seeds the L1Block predeploy (getCode != 0x); its runtime rejects every
+    # selector except setL1BlockValues with a clean revert. Assert the predeploy is present and
+    # that eth_call on it returns an RPC error (revert), never a crash.
+    l1_code = rpc.call("eth_getCode", ["0x4200000000000000000000000000000000000015", "latest"])
+    check("L1Block predeploy seeded (getCode != 0x)", l1_code != "0x", l1_code[:16] + "...")
+    try:
+        rpc.call("eth_call",
+            [{"to": "0x4200000000000000000000000000000000000015", "data": "0x9a2ac6d5"}, "latest"])
+        check("eth_call L1Block unknown selector reverts", False, "unexpectedly returned")
+    except AssertionError as e:
+        check("eth_call L1Block unknown selector reverts", "error" in str(e), str(e))
     # historical blockTag: OP mode has no historical-state snapshot, so SchedulerInterface's
     # callAtBlock default routes to call() == latest. Assert the RPC is reachable and does not
     # crash; honoring block-N state is a documented gap (spec A.2 partial).
