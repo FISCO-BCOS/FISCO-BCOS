@@ -45,13 +45,19 @@ BOOST_AUTO_TEST_CASE(web3RpcConfigDefaultsAndPopulated)
     LoaderProbe a;
     a.loadWeb3RpcConfig({});
     BOOST_CHECK(!a.enableWeb3Rpc());
+    // blockTag depth defaults: 0 (= "latest") — PBFT has no finalization window.
+    BOOST_CHECK_EQUAL(a.web3SafeBlockDepth(), 0U);
+    BOOST_CHECK_EQUAL(a.web3FinalizedBlockDepth(), 0U);
 
     LoaderProbe b;
     auto pt = fromIni(
         "[web3_rpc]\nenable=true\nlisten_port=8545\nthread_count=2\nenable_cors=false\n"
-        "cors_allowed_origins=http://x\nsync_transaction=true\n");
+        "cors_allowed_origins=http://x\nsync_transaction=true\n"
+        "safe_block_depth=3\nfinalized_block_depth=5\n");
     b.loadWeb3RpcConfig(pt);
     BOOST_CHECK(b.enableWeb3Rpc());
+    BOOST_CHECK_EQUAL(b.web3SafeBlockDepth(), 3U);
+    BOOST_CHECK_EQUAL(b.web3FinalizedBlockDepth(), 5U);
 }
 
 

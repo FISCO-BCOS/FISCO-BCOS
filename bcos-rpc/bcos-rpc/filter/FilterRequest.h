@@ -78,7 +78,13 @@ public:
         m_topics[_index].insert(std::move(_topic));
     }
     void setBlockHash(const std::string& _hash) { m_blockHash = _hash; }
-    void fromJson(const Json::Value& jParams, protocol::BlockNumber latest = 0);
+    // No default arguments on purpose: the caller must resolve "latest"/"safe"/"finalized"
+    // against the real head + configured depths (the Web3 entry and the legacy entry both
+    // thread them explicitly). A bare fromJson(jParams) would silently resolve "latest" to
+    // block 0 and ignore configured safe/finalized depths — the divergence this signature
+    // exists to prevent.
+    void fromJson(const Json::Value& jParams, protocol::BlockNumber latest,
+        protocol::BlockNumber safeDepth, protocol::BlockNumber finalizedDepth);
     bool checkBlockRange();
 
     virtual int32_t InvalidParamsCode() = 0;

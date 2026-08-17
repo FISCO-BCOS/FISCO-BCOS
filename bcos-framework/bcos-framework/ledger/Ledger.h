@@ -223,6 +223,18 @@ inline constexpr struct GetFeatures
     }
 } getFeatures{};
 
+inline constexpr struct GetFeature
+{
+    /// Read ONE feature flag's enabled state at @p blockNumber (single SYS_CONFIG read,
+    /// vs getFeatures' read of every flag). Degrades to false on any read failure, the
+    /// same honest scenario-A default as getFeatures' empty-set fallback.
+    task::Task<bool> operator()(auto& ledger, Features::Flag flag,
+        protocol::BlockNumber blockNumber) const
+    {
+        co_return co_await tag_invoke(*this, ledger, flag, blockNumber);
+    }
+} getFeature{};
+
 inline constexpr struct GetReceipt
 {
     task::Task<protocol::TransactionReceipt::Ptr> operator()(

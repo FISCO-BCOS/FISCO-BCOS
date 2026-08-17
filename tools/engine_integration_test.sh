@@ -584,51 +584,85 @@ if [ "${RUN_LODESTAR:-0}" = "1" ]; then
         log_test "Lodestar dev mode (60s timeout)"
 
         LODESTAR_OUT="${WORK_DIR}/lodestar_out.log"
-        timeout 60 pnpm dlx @chainsafe/lodestar dev \
-            --execution.urls "${RPC_URL}" \
-            --execution.engineMock false \
-            --jwtSecret "${JWT_FILE}" \
-            --genesisValidators 4 \
-            --startValidators 0..3 \
-            --reset \
-            --rest \
-            --rest.port 19596 \
-            > "${LODESTAR_OUT}" 2>&1 &
-        LODESTAR_PID=$!
-
-        # Wait for Lodestar to show signs of connecting to EL
-        LODESTAR_OK=0
-        for i in $(seq 1 30); do
-            sleep 2
-            if ! kill -0 "${LODESTAR_PID}" 2>/dev/null; then
-                break
-            fi
-            if grep -q "Execution client urls" "${LODESTAR_OUT}" 2>/dev/null; then
-                LODESTAR_OK=1
-                break
-            fi
-        done
-
-        # Kill Lodestar and check results
-        kill "${LODESTAR_PID}" 2>/dev/null || true
-        wait "${LODESTAR_PID}" 2>/dev/null || true
-
-        if [ "${LODESTAR_OK}" -eq 1 ]; then
-            log_info "Lodestar connected to execution client successfully"
-            # Check for engine API calls in Lodestar output
-            if grep -q "forkchoiceUpdated\|newPayload\|getPayload\|exchangeCapabilities" "${LODESTAR_OUT}" 2>/dev/null; then
-                log_info "Lodestar made Engine API calls to FISCO-BCOS"
-            fi
-            log_pass
+        # Install Lodestar into a local project so its transitive snappy
+        # dependency can be pinned via a pnpm-workspace.yaml override.
+        # snappy@7.4.0 ships a broken index.js — it unconditionally imports
+        # @napi-rs/snappy-wasm32-wasi, which is absent from its
+        # optionalDependencies — crashing Node at startup with
+        # ERR_MODULE_NOT_FOUND on every platform. lodestar 1.46.0 pulls
+        # snappy@7.4.0; pin lodestar to 1.45.0 (last release on 7.3.x) AND
+        # override snappy to 7.3.3 (last good release) as defense in depth.
+        # NOTE: pnpm >= 10 no longer reads the "pnpm" field in package.json
+        # (ignored with a warning) — overrides must live in pnpm-workspace.yaml.
+        LODESTAR_DIR="${WORK_DIR}/lodestar"
+        rm -rf "${LODESTAR_DIR}"
+        mkdir -p "${LODESTAR_DIR}"
+        cat > "${LODESTAR_DIR}/package.json" << 'PKG_EOF'
+{
+  "private": true,
+  "dependencies": {
+    "@chainsafe/lodestar": "1.45.0"
+  }
+}
+PKG_EOF
+        cat > "${LODESTAR_DIR}/pnpm-workspace.yaml" << 'WS_EOF'
+packages:
+  - "."
+overrides:
+  snappy: 7.3.3
+WS_EOF
+        if ! (cd "${LODESTAR_DIR}" && pnpm install --reporter=append-only) > "${LODESTAR_OUT}" 2>&1; then
+            log_info "Lodestar install output (last 20 lines):"
+            tail -20 "${LODESTAR_OUT}" 2>/dev/null || true
+            log_fail "Lodestar install failed"
         else
-            # Check if Lodestar at least started
-            if grep -q "Lodestar network=dev" "${LODESTAR_OUT}" 2>/dev/null; then
-                log_info "Lodestar started but may not have connected (expected for mismatched genesis)"
+            : > "${LODESTAR_OUT}"
+            timeout 60 "${LODESTAR_DIR}/node_modules/.bin/lodestar" dev \
+                --execution.urls "${RPC_URL}" \
+                --execution.engineMock false \
+                --jwtSecret "${JWT_FILE}" \
+                --genesisValidators 4 \
+                --startValidators 0..3 \
+                --reset \
+                --rest \
+                --rest.port 19596 \
+                > "${LODESTAR_OUT}" 2>&1 &
+            LODESTAR_PID=$!
+
+            # Wait for Lodestar to show signs of connecting to EL
+            LODESTAR_OK=0
+            for i in $(seq 1 30); do
+                sleep 2
+                if ! kill -0 "${LODESTAR_PID}" 2>/dev/null; then
+                    break
+                fi
+                if grep -q "Execution client urls" "${LODESTAR_OUT}" 2>/dev/null; then
+                    LODESTAR_OK=1
+                    break
+                fi
+            done
+
+            # Kill Lodestar and check results
+            kill "${LODESTAR_PID}" 2>/dev/null || true
+            wait "${LODESTAR_PID}" 2>/dev/null || true
+
+            if [ "${LODESTAR_OK}" -eq 1 ]; then
+                log_info "Lodestar connected to execution client successfully"
+                # Check for engine API calls in Lodestar output
+                if grep -q "forkchoiceUpdated\|newPayload\|getPayload\|exchangeCapabilities" "${LODESTAR_OUT}" 2>/dev/null; then
+                    log_info "Lodestar made Engine API calls to FISCO-BCOS"
+                fi
                 log_pass
             else
-                log_info "Lodestar output (last 20 lines):"
-                tail -20 "${LODESTAR_OUT}" 2>/dev/null || true
-                log_fail "Lodestar failed to start"
+                # Check if Lodestar at least started
+                if grep -q "Lodestar network=dev" "${LODESTAR_OUT}" 2>/dev/null; then
+                    log_info "Lodestar started but may not have connected (expected for mismatched genesis)"
+                    log_pass
+                else
+                    log_info "Lodestar output (last 20 lines):"
+                    tail -20 "${LODESTAR_OUT}" 2>/dev/null || true
+                    log_fail "Lodestar failed to start"
+                fi
             fi
         fi
     else

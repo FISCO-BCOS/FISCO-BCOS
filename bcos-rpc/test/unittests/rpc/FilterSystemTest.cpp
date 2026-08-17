@@ -174,5 +174,57 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
         task::syncWait(filterSystem->getFilterChanges(id)), bcos::rpc::JsonRpcException);
 }
 
+// Finding F (round-2): FilterRequest::fromJson must resolve "latest"/"safe"/"finalized"
+// against the REAL head and the configured depths — never the silent latest=0 / depth=0
+// defaults — and both the Web3 and legacy entries thread them explicitly.
+BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
+{
+    protocol::BlockNumber latest = -1;
+    m_ledger->asyncGetBlockNumber(
+        [&latest](Error::Ptr, protocol::BlockNumber number) { latest = number; });
+    BOOST_REQUIRE_GE(latest, 0);
+
+    Json::Reader reader;
+    auto parse = [&reader](std::string const& s) {
+        Json::Value value;
+        BOOST_REQUIRE(reader.parse(s, value));
+        return value;
+    };
+
+    // "latest" -> the real head, isLatest stays true (flat path).
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"latest","toBlock":"latest",
+            "address":"0x1234","topics":[]})"),
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+        BOOST_CHECK_EQUAL(request->fromBlock(), latest);
+        BOOST_CHECK(request->fromIsLatest());
+        BOOST_CHECK_EQUAL(request->toBlock(), latest);
+        BOOST_CHECK(request->toIsLatest());
+    }
+
+    // "safe" (depth 1) -> latest - 1, "finalized" (depth 2) -> latest - 2 (historical).
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"safe","toBlock":"finalized",
+            "address":"0x1234","topics":[]})"),
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+        BOOST_CHECK_EQUAL(request->fromBlock(), latest - 1);
+        BOOST_CHECK(!request->fromIsLatest());
+        BOOST_CHECK_EQUAL(request->toBlock(), (std::max)(latest - 2, protocol::BlockNumber{0}));
+        BOOST_CHECK(!request->toIsLatest());
+    }
+
+    // An explicit hex number resolves to that exact height.
+    {
+        auto request = std::make_shared<Web3FilterRequest>();
+        request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5",
+            "address":"0x1234","topics":[]})"),
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+        BOOST_CHECK_EQUAL(request->fromBlock(), 0);
+        BOOST_CHECK_EQUAL(request->toBlock(), 5);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
