@@ -616,4 +616,48 @@ BOOST_FIXTURE_TEST_CASE(DepositIsSystemTransactionGetter, Fixture)
     BOOST_CHECK(!tx2.depositIsSystemTransaction());  // tars field 15 == 0
 }
 
+/// kyonRay review #5429 K3: consensus deposit fields MUST come from the signed 0x7E envelope
+/// (decodeDepositEnvelope), never from the unauthenticated tars mirrors. Happy path decodes a
+/// legit buildDepositTx envelope; rejection paths cover a non-0x7e type byte and trailing bytes.
+BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
+{
+    Fixture f;
+    auto tx = f.buildDepositTx(/*isSystemTx=*/false);
+    auto env = tx.extraTransactionBytes();
+    BOOST_REQUIRE(!env.empty());
+    BOOST_CHECK_EQUAL(env[0], 0x7e);
+
+    auto dep = decodeDepositEnvelope(env);
+    // sourceHash matches the builder's fixed h256.
+    bcos::crypto::HashType sh("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    BOOST_CHECK(std::equal(
+        dep.source_hash.bytes, dep.source_hash.bytes + sizeof(dep.source_hash.bytes), sh.begin()));
+    // from == the builder's dead...0001 address.
+    BOOST_CHECK_EQUAL(bcos::toHexStringWithPrefix(
+                          bcos::bytes(dep.from.bytes, dep.from.bytes + sizeof(dep.from.bytes))),
+        "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001");
+    BOOST_REQUIRE(dep.to.has_value());
+    BOOST_CHECK_EQUAL(bcos::toHexStringWithPrefix(
+                          bcos::bytes(dep.to->bytes, dep.to->bytes + sizeof(dep.to->bytes))),
+        "0x4200000000000000000000000000000000000015");
+    BOOST_REQUIRE(dep.mint.has_value());
+    BOOST_CHECK(dep.mint.value() == intx::uint256{5});  // intx::uint256 has no ostream<<
+    BOOST_CHECK(dep.value == intx::uint256{0});
+    BOOST_CHECK_EQUAL(dep.gas_limit, 100000);
+    BOOST_CHECK(!dep.is_system_tx);
+    BOOST_CHECK(dep.data.empty());
+
+    // Rejection: a non-0x7e type byte (the 0x02-envelope + 0x7e-mirror attack) must fail loud.
+    bcos::bytes bad(env.begin(), env.end());
+    bad[0] = 0x02;
+    BOOST_CHECK_THROW(
+        [&]() { (void)decodeDepositEnvelope(bcos::ref(bad)); }(), OpTxValidationFailed);
+
+    // Rejection: trailing bytes after the RLP list must be refused (strict, consensus-grade).
+    bcos::bytes trailing(env.begin(), env.end());
+    trailing.push_back(0x00);
+    BOOST_CHECK_THROW(
+        [&]() { (void)decodeDepositEnvelope(bcos::ref(trailing)); }(), OpTxValidationFailed);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
