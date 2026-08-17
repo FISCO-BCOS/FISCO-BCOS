@@ -306,6 +306,16 @@ PayloadAttributes makePayloadAttributesV3()
     return payloadAttributes;
 }
 
+/// Attributes op-node actually sends on a Karst chain: same as V3 except the withdrawals
+/// operation list is empty, which Isthmus requires of the resulting ExecutionPayloadV4
+/// (op-geth beacon/engine/types.go:324-326).
+PayloadAttributes makeKarstPayloadAttributes()
+{
+    auto payloadAttributes = makePayloadAttributesV3();
+    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
+    return payloadAttributes;
+}
+
 NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPayload)
 {
     NewPayloadRequest request;
@@ -968,7 +978,7 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
-    auto payloadAttributes = makePayloadAttributesV3();
+    auto payloadAttributes = makeKarstPayloadAttributes();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto result =
@@ -1000,6 +1010,28 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 }
 
+BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV2();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // A V2 build carries neither blobGasUsed/excessBlobGas nor withdrawalsRoot, so
+    // serializing it in the V5 response shape would fabricate them. op-geth's GetPayloadV5
+    // allows only PayloadV3 builds and answers UnsupportedFork otherwise; so does this.
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion);
+    // The same build is still retrievable through its own method version.
+    BOOST_CHECK_NO_THROW(task::syncWait(engineService.getPayload(*result.payloadId, 2)));
+}
+
 BOOST_AUTO_TEST_CASE(new_payload_v4_rejects_nonempty_lists_and_missing_fields)
 {
     MemPoolImpl memPool;
@@ -1007,7 +1039,7 @@ BOOST_AUTO_TEST_CASE(new_payload_v4_rejects_nonempty_lists_and_missing_fields)
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_validationBlockNumber,
         c_validationBlockNumber, c_validationBlockNumber);
-    auto payloadAttributes = makePayloadAttributesV3();
+    auto payloadAttributes = makeKarstPayloadAttributes();
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
@@ -1039,6 +1071,19 @@ BOOST_AUTO_TEST_CASE(new_payload_v4_rejects_nonempty_lists_and_missing_fields)
     auto executionRequestsRequest = makeRequest();
     executionRequestsRequest.executionRequests = std::vector<bytes>{bytes{0x01}};
     expectInvalid(executionRequestsRequest, "executionRequests");
+
+    // An absent executionRequests is rejected too, not silently accepted: the RPC layer
+    // makes the fourth parameter mandatory, so an in-process caller must not get a laxer
+    // contract than the wire (op-geth: "nil executionRequests post-prague").
+    auto absentRequestsRequest = makeRequest();
+    absentRequestsRequest.executionRequests = std::nullopt;
+    expectInvalid(absentRequestsRequest, "executionRequests");
+
+    // Isthmus requires a present-but-EMPTY withdrawals operation list at V4.
+    auto nonEmptyWithdrawalsRequest = makeRequest();
+    nonEmptyWithdrawalsRequest.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = Address{}}};
+    expectInvalid(nonEmptyWithdrawalsRequest, "withdrawals");
 
     // Isthmus payload shape: withdrawalsRoot is required at V4.
     auto missingRootRequest = makeRequest();

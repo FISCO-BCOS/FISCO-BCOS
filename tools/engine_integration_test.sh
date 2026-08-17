@@ -456,7 +456,8 @@ fi
 # Zero beacon root: this mock CL has no beacon chain.
 ZERO_ROOT="0x0000000000000000000000000000000000000000000000000000000000000000"
 # Engine wire timestamps are Unix seconds.
-TS_HEX=$(printf '0x%x' "$(date +%s)")
+TS_SECS=$(date +%s)
+TS_HEX=$(printf '0x%x' "${TS_SECS}")
 
 # 3.3 engine_forkchoiceUpdatedV3 (without payloadAttributes)
 log_test "engine_forkchoiceUpdatedV3 (no payload)"
@@ -534,6 +535,34 @@ print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV4','params'
             log_pass
         else
             log_fail "Unexpected newPayloadV4 status: ${NEW_RESP}"
+        fi
+
+        # The Engine boundary speaks Unix seconds; block headers store milliseconds. The
+        # committed block is what proves the conversion happened: a missing conversion is
+        # symmetric on the wire (parse and serialize cancel out) but lands the seconds in
+        # the header as milliseconds, so eth_getBlockByNumber — which divides the header
+        # timestamp by 1000 — reports a 1970 timestamp.
+        log_test "committed block carries the Unix-seconds timestamp we sent"
+        BLOCK_NUM_HEX=$(echo "${GET_RESP}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)['result']
+p=d['executionPayload'] if 'executionPayload' in d else d
+print(p['blockNumber'])
+" 2>/dev/null || echo "")
+        BLOCK_TS=""
+        if [ -n "${BLOCK_NUM_HEX}" ]; then
+            BLOCK_RESP=$(rpc_call "eth_getBlockByNumber" "[\"${BLOCK_NUM_HEX}\",false]")
+            BLOCK_TS=$(echo "${BLOCK_RESP}" | python3 -c "
+import sys,json
+print(int(json.load(sys.stdin)['result']['timestamp'],16))
+" 2>/dev/null || echo "")
+        fi
+        if [ -n "${BLOCK_TS}" ] && \
+           [ "$((BLOCK_TS > TS_SECS ? BLOCK_TS - TS_SECS : TS_SECS - BLOCK_TS))" -le 1 ]; then
+            log_info "block ${BLOCK_NUM_HEX} timestamp = ${BLOCK_TS} (sent ${TS_SECS})"
+            log_pass
+        else
+            log_fail "block timestamp ${BLOCK_TS:-<none>} is not the ${TS_SECS} seconds we sent"
         fi
     else
         log_fail "getPayload failed: ${GET_RESP}"

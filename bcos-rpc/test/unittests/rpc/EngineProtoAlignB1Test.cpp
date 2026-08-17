@@ -275,6 +275,11 @@ BOOST_AUTO_TEST_CASE(executionPayloadWithdrawalsRootRoundTrip)
 
     auto ep = makeBaseExecutionPayload();
     ep["withdrawalsRoot"] = withdrawalsRootHex;
+    // An ExecutionPayloadV4 carries the V2/V3 fields too, all of them required
+    // (op-geth NewPayloadV4 answers -32602 for any nil among them).
+    ep["withdrawals"] = Json::Value(Json::arrayValue);
+    ep["blobGasUsed"] = "0x0";
+    ep["excessBlobGas"] = "0x0";
     Json::Value params(Json::arrayValue);
     params.append(ep);
     appendV4Tail(params);

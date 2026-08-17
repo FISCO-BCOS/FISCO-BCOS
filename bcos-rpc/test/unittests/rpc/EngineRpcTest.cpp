@@ -397,6 +397,128 @@ BOOST_AUTO_TEST_CASE(newPayloadV4MissingParams)
     expectInvalidParams(badRootParams);
 }
 
+// Only the last case here is new behavior; the four before it were already rejected by the
+// pre-existing tail gate and are kept as regression guards for the gate's move to the top
+// of parseNewPayloadRequest.
+BOOST_AUTO_TEST_CASE(newPayloadV4RejectsMalformedParamShapes)
+{
+    auto expectInvalidParams = [&](Json::Value params) {
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    };
+    auto makeParams = [](Json::Value blobHashes, Json::Value beaconRoot,
+                          Json::Value executionRequests) {
+        Json::Value params(Json::arrayValue);
+        params.append(makeV4ExecutionPayloadJson());
+        params.append(std::move(blobHashes));
+        params.append(std::move(beaconRoot));
+        params.append(std::move(executionRequests));
+        return params;
+    };
+    auto const emptyArray = Json::Value(Json::arrayValue);
+
+    // expectedBlobVersionedHashes must be an array, not a string.
+    expectInvalidParams(makeParams("notarray", c_beaconRootHex, emptyArray));
+    // executionRequests must be an array, not a string.
+    expectInvalidParams(makeParams(emptyArray, c_beaconRootHex, "notarray"));
+    // executionRequests entries must be hex strings, not numbers...
+    Json::Value numericRequests(Json::arrayValue);
+    numericRequests.append(123);
+    expectInvalidParams(makeParams(emptyArray, c_beaconRootHex, numericRequests));
+    // ...and not malformed hex.
+    Json::Value badHexRequests(Json::arrayValue);
+    badHexRequests.append("0xzz");
+    expectInvalidParams(makeParams(emptyArray, c_beaconRootHex, badHexRequests));
+    // A numeric parentBeaconBlockRoot is a shape error, and must be reported as one. The
+    // message matters here, not just the code: the V3 parse block consumes params[2] with
+    // parseH256, which turns 123 into the string "123" and fails on its length — so
+    // without the up-front shape gate this still answers InvalidParams, but blames the
+    // h256 length instead of naming the four-parameter shape.
+    {
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(
+            CALL_ENGINE(newPayloadV4, makeParams(emptyArray, 123, emptyArray), response),
+            JsonRpcException, [](JsonRpcException const& e) {
+                return e.code() == InvalidParams &&
+                       e.msg().find("engine_newPayloadV4 expects") != std::string::npos;
+            });
+    }
+
+    // None of the rejected calls may have reached the engine service.
+    BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4RequiresV2AndV3PayloadFields)
+{
+    auto expectInvalidParams = [&](Json::Value const& executionPayload) {
+        Json::Value params(Json::arrayValue);
+        params.append(executionPayload);
+        params.append(Json::Value(Json::arrayValue));
+        params.append(c_beaconRootHex);
+        params.append(Json::Value(Json::arrayValue));
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    };
+
+    // op-geth NewPayloadV4 answers -32602 for a nil withdrawals / blobGasUsed /
+    // excessBlobGas, not an INVALID payload status (eth/catalyst/api.go:745-750).
+    for (auto const* field : {"withdrawals", "blobGasUsed", "excessBlobGas"})
+    {
+        auto ep = makeV4ExecutionPayloadJson();
+        ep.removeMember(field);
+        expectInvalidParams(ep);
+        // Explicit JSON null is rejected the same way as an absent member.
+        auto nullEp = makeV4ExecutionPayloadJson();
+        nullEp[field] = Json::Value(Json::nullValue);
+        expectInvalidParams(nullEp);
+    }
+    BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV4RejectsWrongTypedPayloadFields)
+{
+    auto expectInvalidParams = [&](Json::Value const& executionPayload) {
+        Json::Value params(Json::arrayValue);
+        params.append(executionPayload);
+        params.append(Json::Value(Json::arrayValue));
+        params.append(c_beaconRootHex);
+        params.append(Json::Value(Json::arrayValue));
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    };
+
+    // Presence alone is not enough. jsoncpp iterates a non-array as an EMPTY range, so a
+    // string withdrawals would otherwise be silently accepted as a valid empty list —
+    // fail-open on exactly the field Isthmus cares about.
+    auto stringWithdrawals = makeV4ExecutionPayloadJson();
+    stringWithdrawals["withdrawals"] = "garbage";
+    expectInvalidParams(stringWithdrawals);
+
+    // And asString() on an array/object throws Json::LogicError, which would escape the
+    // parse as -32603 InternalError instead of naming the offending field.
+    for (auto const* field : {"blobGasUsed", "excessBlobGas", "withdrawalsRoot"})
+    {
+        auto arrayValued = makeV4ExecutionPayloadJson();
+        arrayValued[field] = Json::Value(Json::arrayValue);
+        expectInvalidParams(arrayValued);
+    }
+
+    // executionPayload itself must be an object; jsoncpp's isMember() asserts otherwise.
+    Json::Value scalarPayloadParams(Json::arrayValue);
+    scalarPayloadParams.append("not-an-object");
+    scalarPayloadParams.append(Json::Value(Json::arrayValue));
+    scalarPayloadParams.append(c_beaconRootHex);
+    scalarPayloadParams.append(Json::Value(Json::arrayValue));
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, scalarPayloadParams, response),
+        JsonRpcException, [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+
+    BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+}
+
 BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
 {
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,

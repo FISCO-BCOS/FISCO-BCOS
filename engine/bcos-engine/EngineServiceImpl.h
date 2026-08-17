@@ -338,6 +338,13 @@ private:
 
     struct PayloadEntry
     {
+        /// Engine API version of the call that last wrote this entry: the forkchoiceUpdated
+        /// version for a build, the newPayload version for a commit. getPayload's version
+        /// window (detail::isGetPayloadVersionCompatible) is checked against it, so
+        /// re-querying a payloadId AFTER committing it through newPayloadV4 answers -38005
+        /// rather than replaying the payload. op-node never does that — it fetches a build
+        /// exactly once — and op-geth's build cache is likewise not meant to outlive the
+        /// commit.
         std::uint32_t version = 0;
         ExecutionPayload executionPayload;
         u256 blockValue = 0;
@@ -472,10 +479,16 @@ private:
                     std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
                                 "transactions)"));
             }
-            if (request.executionRequests.has_value() && !request.executionRequests->empty())
+            // Present-but-empty, not "absent or empty": op-geth's NewPayloadV4 rejects a
+            // nil executionRequests outright ("nil executionRequests post-prague",
+            // eth/catalyst/api.go:755) and only then requires the list to be empty for
+            // Isthmus. The RPC layer already enforces the fourth parameter, so accepting
+            // nullopt here would give in-process callers a laxer contract than the wire.
+            if (!request.executionRequests.has_value() || !request.executionRequests->empty())
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                    std::string("executionRequests must be empty on this chain"));
+                    std::string("executionRequests must be a present-but-empty list on this "
+                                "chain"));
             }
         }
 
@@ -695,9 +708,21 @@ private:
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
             // Isthmus payload shape (V4/V5, fed by forkchoiceUpdatedV3 on Karst): the
-            // field must be present so getPayloadV5 -> newPayloadV4 round-trips. Zero
-            // placeholder until the real L2ToL1MessagePasser storage-root header wiring
-            // lands (see Types.h).
+            // field must be present so getPayloadV5 -> newPayloadV4 round-trips.
+            //
+            // TODO(C4 header fields): this is a zero PLACEHOLDER, not a computed value.
+            // On OP Stack withdrawalsRoot is the storage root of the L2ToL1MessagePasser
+            // predeploy and is what L1 withdrawal proofs are checked against, so until
+            // the real header wiring lands, validateExecutionPayload can only check that
+            // the field is present — never that its value is right, and a malicious CL
+            // submitting a zero root is indistinguishable from this node's own builds.
+            // Two things keep that from being an exploitable production gap today:
+            // [op_engine_rpc] refuses to start unless executor_version >= 2 (see the
+            // guard in libinitializer/Initializer.cpp, escape hatch
+            // unsafe_allow_v1_executor for the test harness only), and this v1 build path
+            // is only reachable behind that hatch or through the in-process single-node
+            // CL. Exposing the Karst surface on a real chain must wait for real values
+            // here.
             executionPayload.withdrawalsRoot = h256{};
         }
 

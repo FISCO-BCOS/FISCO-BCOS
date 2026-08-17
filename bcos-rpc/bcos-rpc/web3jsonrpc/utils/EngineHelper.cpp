@@ -56,9 +56,65 @@ bcos::bytes parseRawTransactionElement(
     {
         return bcos::fromHex(hex);
     }
-    catch (std::exception const&)
+    catch (bcos::BadHexCharacter const&)
     {
         return reject();
+    }
+}
+
+/// engine_newPayloadV4 param shape, enforced before anything is read out of `params`.
+/// op-geth's NewPayloadV4 (eth/catalyst/api.go:743-761) takes all four arguments and
+/// answers InvalidParams for a nil beacon root or a nil executionRequests list; a
+/// non-array/non-string argument never even reaches its handler because Go's JSON-RPC
+/// codec rejects it. Checking up front matters for `params[2]`: the V3 block below
+/// consumes it with parseH256, so a numeric beacon root would otherwise surface as
+/// parseH256's "Expected hex string" instead of the shape error.
+void requireNewPayloadV4ParamShape(Json::Value const& params)
+{
+    if (params.size() < 4 || !params[1].isArray() || !params[2].isString() || !params[3].isArray())
+    {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+            "engine_newPayloadV4 expects [executionPayload, expectedBlobVersionedHashes, "
+            "parentBeaconBlockRoot, executionRequests]"));
+    }
+}
+
+/// ExecutionPayloadV4 required fields. op-geth's NewPayloadV4 rejects a nil
+/// withdrawals / blobGasUsed / excessBlobGas with -32602 (eth/catalyst/api.go:745-750).
+/// withdrawalsRoot is required by Isthmus, where op-geth reports it as an INVALID payload
+/// status instead (beacon/engine/types.go:320-323, reached via ExecutableDataToBlock);
+/// this implementation is deliberately one notch stricter and answers -32602 for all four,
+/// because a V4 payload missing any of them is malformed rather than merely unacceptable.
+/// The engine service still carries its own INVALID-status withdrawalsRoot rule for
+/// in-process callers (EngineServiceImpl.cpp validateExecutionPayload).
+///
+/// Types are checked, not just presence. Both matter and neither is theoretical:
+/// jsoncpp iterates a non-array value as an EMPTY range, so a string `withdrawals` would
+/// parse into a valid-looking empty list (fail open on the one field Isthmus constrains);
+/// and asString() on an array/object throws Json::LogicError, which would leave the parse
+/// as -32603 InternalError rather than naming the offending field.
+void requireExecutionPayloadV4Fields(Json::Value const& ep)
+{
+    if (!ep.isObject())
+    {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(
+            bcos::rpc::InvalidParams, "executionPayload must be an object"));
+    }
+    if (!ep.isMember("withdrawals") || !ep["withdrawals"].isArray())
+    {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+            "executionPayload.withdrawals must be an array for ExecutionPayloadV4"));
+    }
+    // Emptiness of `withdrawals` is a payload-validity question judged by the engine
+    // service; only its presence and type are shape questions and belong here.
+    for (auto const* field : {"blobGasUsed", "excessBlobGas", "withdrawalsRoot"})
+    {
+        if (!ep.isMember(field) || !ep[field].isString())
+        {
+            BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(
+                bcos::rpc::InvalidParams, std::string("executionPayload.") + field +
+                                              " must be a hex string for ExecutionPayloadV4"));
+        }
     }
 }
 
@@ -96,6 +152,15 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     Json::Value const& params, engine::ApiVersion version)
 {
     auto const& ep = params[0u];
+    if (version >= engine::ApiVersion::V4)
+    {
+        // Both gates run first, so the blocks below may assume the V4-specific parameters
+        // and payload fields are present and correctly typed. Fields shared with V1-V3
+        // (parentHash, gasLimit, ...) are not covered here and keep their existing
+        // per-field handling.
+        requireNewPayloadV4ParamShape(params);
+        requireExecutionPayloadV4Fields(ep);
+    }
     bcos::engine::ExecutionPayload payload{
         .logsBloom = {},
         .parentHash = parseH256(ep["parentHash"].asString()),
@@ -179,11 +244,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     // withdrawalsRoot validation, so rejecting here would diverge from op-geth.
     if (version >= engine::ApiVersion::V4)
     {
-        if (!ep.isMember("withdrawalsRoot") || ep["withdrawalsRoot"].isNull())
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                InvalidParams, "withdrawalsRoot is required for ExecutionPayloadV4"));
-        }
+        // Presence was already enforced by requireExecutionPayloadV4Fields.
         payload.withdrawalsRoot = parseH256(ep["withdrawalsRoot"].asString());
     }
 
@@ -206,16 +267,8 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
     }
     if (version >= engine::ApiVersion::V4)
     {
-        // engine_newPayloadV4 takes all four params, none nullable — op-geth answers
-        // InvalidParams for a nil executionRequests ("nil executionRequests post-prague"),
-        // and a missing beacon root can never be defaulted. Emptiness of the two lists is
-        // a payload-validity question and is judged by the engine service, not here.
-        if (params.size() < 4 || !params[1].isArray() || params[2].isNull() || !params[3].isArray())
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
-                "engine_newPayloadV4 expects [executionPayload, expectedBlobVersionedHashes, "
-                "parentBeaconBlockRoot, executionRequests]"));
-        }
+        // Shape already validated at the top of this function; emptiness of the two lists
+        // is a payload-validity question and is judged by the engine service, not here.
         std::vector<bytes> executionRequests;
         executionRequests.reserve(params[3].size());
         for (auto const& item : params[3])
@@ -229,7 +282,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             {
                 executionRequests.push_back(fromHex(item.asString()));
             }
-            catch (std::exception const&)
+            catch (bcos::BadHexCharacter const&)
             {
                 BOOST_THROW_EXCEPTION(JsonRpcException(
                     InvalidParams, "executionRequests entries must be hex strings"));
@@ -520,10 +573,20 @@ Json::Value bcos::rpc::serializeExecutionPayload(
         ep["excessBlobGas"] = toQuantity(*payload.excessBlobGas);
     }
     // V4+ only (Isthmus): a required field of the payload shape, never emitted in V1-V3.
-    // Locally built payloads may still carry the documented zero placeholder (Types.h).
+    // Absence here is an internal invariant violation, not a client error: every payload
+    // that can reach a V4+ serialization was either built locally (buildPayload sets the
+    // field for V3+ builds, currently to the documented zero placeholder — see
+    // EngineServiceImpl.h) or parsed from a V4 request (where the field is mandatory).
+    // Fail loudly rather than emitting a zero root the CL would take for a real
+    // L2ToL1MessagePasser storage root.
     if (version >= engine::ApiVersion::V4)
     {
-        ep["withdrawalsRoot"] = payload.withdrawalsRoot.value_or(h256{}).hexPrefixed();
+        if (!payload.withdrawalsRoot.has_value())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "withdrawalsRoot missing on an ExecutionPayloadV4+ built by this node"));
+        }
+        ep["withdrawalsRoot"] = payload.withdrawalsRoot->hexPrefixed();
     }
     return ep;
 }

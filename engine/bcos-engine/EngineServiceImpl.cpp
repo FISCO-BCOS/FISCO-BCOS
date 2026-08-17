@@ -77,9 +77,15 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     }
     if (requestVersion == ApiVersion::V5)
     {
-        // Karst payloads are built via forkchoiceUpdatedV3 (payloadVersion 3) and
-        // retrieved via getPayloadV5, so V5 accepts every older build version.
-        return payloadVersion <= 5;
+        // Exactly V3 builds, matching op-geth's GetPayloadV5, which passes
+        // []engine.PayloadVersion{engine.PayloadV3} to its getPayload helper and answers
+        // engine.UnsupportedFork for anything else (eth/catalyst/api.go:498-511, 531-533).
+        // The invariant holds on this stack too: every wire-visible build goes through
+        // forkchoiceUpdatedV3 (the only FCU version the Karst surface serves), and the
+        // built-in single-node CL uses the same V3/V5/V4 triple. Accepting V1/V2 builds
+        // here would serialize them in the V5 response shape, fabricating a zero
+        // withdrawalsRoot and omitting the required blobGasUsed / excessBlobGas.
+        return payloadVersion == 3;
     }
     return false;
 }
@@ -169,7 +175,18 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     }
     if (version >= 2 && !executionPayload.withdrawals.has_value())
     {
-        return std::string("withdrawals are required for ExecutionPayloadV2 and V3");
+        return std::string("withdrawals are required for ExecutionPayloadV2 and later");
+    }
+    // Isthmus (ExecutionPayloadV4+): the withdrawals operation list must be present AND
+    // empty. op-geth enforces exactly this before building the block — "expected non-nil
+    // empty withdrawals operation list in Isthmus" (beacon/engine/types.go:324-326) — and
+    // an OP L2 has no withdrawal operations to carry, the L1 accounting lives in the
+    // L2ToL1MessagePasser storage root instead.
+    if (version >= 4 && executionPayload.withdrawals.has_value() &&
+        !executionPayload.withdrawals->empty())
+    {
+        return std::string(
+            "withdrawals must be an empty list for ExecutionPayloadV4 and later (Isthmus)");
     }
     if (version <= 2 &&
         (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
@@ -186,7 +203,7 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     // ignores it below V4 the way op-geth's NewPayloadV3 performs no withdrawalsRoot check).
     if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
     {
-        return std::string("withdrawalsRoot is required for ExecutionPayloadV4");
+        return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
     }
     return std::nullopt;
 }

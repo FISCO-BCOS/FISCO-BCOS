@@ -70,11 +70,6 @@ struct BlobsBundleV1
     std::vector<bytes> blobs;
 };
 
-/// Osaka BlobsBundleV2 (execution-apis osaka.md): same three-array field shape as V1,
-/// differing only in that `proofs` carries cell proofs. OP L2 forbids blob transactions
-/// entirely, so every array is always empty here — no separate struct is needed.
-using BlobsBundleV2 = BlobsBundleV1;
-
 struct ForkchoiceState
 {
     h256 headBlockHash;
@@ -208,7 +203,11 @@ struct GetPayloadData
     // Required by engine_getPayloadV2/V3/V4/V5.
     u256 blockValue = 0;
 
-    // Required by engine_getPayloadV3/V4/V5 (V5: BlobsBundleV2 shape, always empty on L2).
+    // Required by engine_getPayloadV3/V4/V5. getPayloadV5 answers the Osaka BlobsBundleV2
+    // (execution-apis osaka.md), which has the same three-array shape as V1 and differs
+    // only in that `proofs` carries cell proofs. OP L2 forbids blob transactions entirely,
+    // so all three arrays are always empty and BlobsBundleV1 covers both response shapes;
+    // a distinct V2 type would carry no distinct data.
     std::optional<BlobsBundleV1> blobsBundle;
 
     // Required by engine_getPayloadV3/V4/V5.

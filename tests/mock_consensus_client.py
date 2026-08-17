@@ -148,15 +148,21 @@ def rpc_result(method: str, params: List[Any], req_id: int = 1) -> Any:
 
 
 def expect_error_code(method: str, params: List[Any], expected_code: int) -> None:
-    """Assert a call fails with exactly the given JSON-RPC error code."""
+    """Assert a call fails with exactly the given JSON-RPC error code, id echoed."""
     _log_test(f"{method} -> error {expected_code}")
-    data = rpc_raw(method, params, req_id=99)
+    req_id = 99
+    data = rpc_raw(method, params, req_id=req_id)
     if "error" not in data:
         _log_fail(f"expected error {expected_code}, got success: {data.get('result')}")
         return
     code = data["error"]["code"]
     if code != expected_code:
         _log_fail(f"expected {expected_code}, got {code}: {data['error']}")
+        return
+    # JSON-RPC 2.0 requires the id to be echoed on error responses too; clients that
+    # correlate concurrent/batched calls by id depend on it.
+    if data.get("id") != req_id:
+        _log_fail(f"error response did not echo the request id: got {data.get('id')!r}")
         return
     _log_info(f"message = {data['error'].get('message', '')[:80]}")
     _log_pass()
@@ -227,8 +233,10 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         "safeBlockHash": head_hash,
         "finalizedBlockHash": head_hash,
     }
+    timestamp_hex = next_timestamp()
+    sent_seconds = int(timestamp_hex, 16)
     payload_attrs = {
-        "timestamp": next_timestamp(),
+        "timestamp": timestamp_hex,
         "prevRandao": PREV_RANDAO,
         "suggestedFeeRecipient": FEE_RECIPIENT,
         "withdrawals": [],
@@ -272,6 +280,19 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         _log_fail("executionPayload missing withdrawalsRoot (Isthmus V4 shape)")
         return False
 
+    # Unit check, wire side: the Engine boundary speaks Unix SECONDS in both directions.
+    # This catches a ONE-SIDED break only (parse or serialize, not both): removing the
+    # conversion from both cancels out on the wire and leaves this equality holding. The
+    # symmetric case is caught by the committed-block check further down, which reads the
+    # header through eth_getBlockByNumber.
+    got_seconds = int(payload["timestamp"], 16)
+    if abs(got_seconds - sent_seconds) > 1:
+        _log_fail(
+            f"getPayloadV5 timestamp is not the Unix seconds we sent: "
+            f"sent {sent_seconds}, got {got_seconds}"
+        )
+        return False
+
     # dep-1 byte fidelity: the injected deposit's raw bytes lead the transaction list.
     txs = payload["transactions"]
     if not txs or txs[0].lower() != DEPOSIT_RAW.lower():
@@ -299,6 +320,19 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
     else:
         _log_fail(f"committed block {committed_hash} never became the eth_* head")
         return False
+
+    # Unit check, storage side: eth_getBlockByNumber reports seconds too
+    # (BlockResponse.cpp divides the millisecond header timestamp by 1000), so the
+    # committed block header must carry the seconds the CL asked for.
+    committed_block = rpc_result("eth_getBlockByNumber", [payload["blockNumber"], False])
+    block_seconds = int(committed_block["timestamp"], 16)
+    if abs(block_seconds - sent_seconds) > 1:
+        _log_fail(
+            f"committed block timestamp is not the Unix seconds we sent: "
+            f"sent {sent_seconds}, block reports {block_seconds}"
+        )
+        return False
+    _log_info(f"block timestamp = {block_seconds} (sent {sent_seconds})")
 
     _log_pass()
     return True

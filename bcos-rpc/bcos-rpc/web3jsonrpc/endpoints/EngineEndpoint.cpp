@@ -77,12 +77,19 @@ void EngineEndpoint::buildPreKarstVersionError(std::string_view method, Json::Va
     // stays routable but answers -38005, matching op-geth where a versioned call outside
     // its fork window returns engine.UnsupportedFork (e.g. "fcuV1 called post-shanghai")
     // rather than method-not-found.
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        std::string(method) +
-            " is not supported on this chain; use engine_forkchoiceUpdatedV3 / "
-            "engine_getPayloadV5 / engine_newPayloadV4",
-        response);
+    //
+    // Built inline instead of through buildJsonError(request, ...) because a handler only
+    // ever receives the params array, never the request envelope: the JSON-RPC id is
+    // stamped onto the handler's response by the dispatcher
+    // (Web3JsonRpcImpl::handleRequest, `result["id"] = _request["id"]`), the same way it
+    // is for buildEngineNotAvailableError above and for every successful response.
+    Json::Value error(Json::objectValue);
+    error["code"] = EngineError::UnsupportedFork;
+    error["message"] = std::string(method) +
+                       " is not supported on this chain; use engine_forkchoiceUpdatedV3 / "
+                       "engine_getPayloadV5 / engine_newPayloadV4";
+    response["jsonrpc"] = "2.0";
+    response["error"] = std::move(error);
 }
 
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV1(const Json::Value&, Json::Value& response)
@@ -192,6 +199,16 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
     catch (engine::IncompatiblePayloadVersion const&)
     {
+        // Reachable in exactly one way over this RPC surface: re-querying a payloadId
+        // AFTER committing it through newPayloadV4. A commit rewrites the cache entry with
+        // the newPayload version (PayloadEntry::version, EngineServiceImpl.h), so the
+        // entry no longer matches getPayloadV5's V3-build window. op-node never does this
+        // — it fetches each build exactly once, before submitting it — and a fresh build
+        // always comes from forkchoiceUpdatedV3, the only FCU version this surface serves.
+        // The mapping stays -38005 to match op-geth, whose getPayload helper answers
+        // engine.UnsupportedFork when the payloadId's encoded build version is outside the
+        // method's allowed set (eth/catalyst/api.go:531-533, GetPayloadV5 allowing only
+        // PayloadV3).
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
             "Unsupported fork: payload was built by a different method version"));
     }
