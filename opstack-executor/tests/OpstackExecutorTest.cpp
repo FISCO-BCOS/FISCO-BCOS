@@ -771,6 +771,33 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
             [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
             OpTxValidationFailed);
     }
+    // (e) non-canonical short string (value = 0x81 0x05): a single-byte payload < 0x80 must be a
+    // bare Byte, not a short string — op-geth ErrCanonInt. This is the integerPayloadLength
+    // `pl==1 && ref[1] < 0x80` arm (decodeHeader's NonCanonicalSize is a second, consistent path).
+    {
+        auto items = canonicalItems();
+        items[4] = bcos::bytes{0x81, 0x05};  // value
+        BOOST_CHECK_THROW(
+            [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
+            OpTxValidationFailed);
+    }
+    // (f) RLP list as integer (value = 0xc1 0x05): integerPayloadLength returns nullopt for any
+    // list header — a list is never a well-formed integer (op-geth Stream rejects it).
+    {
+        auto items = canonicalItems();
+        items[4] = bcos::bytes{0xc1, 0x05};  // value
+        BOOST_CHECK_THROW(
+            [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
+            OpTxValidationFailed);
+    }
+    // (g) isSystemTx = bare Byte 1: end-to-end happy path for the true arm (op-geth decodeBool
+    // 0x01 → true) — the builder's isSystemTx=false default never exercises it.
+    {
+        auto items = canonicalItems();
+        items[6] = bcos::bytes{0x01};  // isSystemTx
+        auto dep = decodeDepositEnvelope(bcos::ref(envelopeFromItems(items)));
+        BOOST_CHECK(dep.is_system_tx);
+    }
 }
 
 // chainId-mismatch enforcement (morebtcg/kyonRay review #5429, review finding E): op-geth
@@ -844,7 +871,8 @@ BOOST_FIXTURE_TEST_CASE(LegacyUnprotectedChainIdExempt, Fixture)
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
         /*chainId=*/10));
-    BOOST_REQUIRE_NE(receipt, nullptr);  // chainId exempt: executes instead of throwing
+    BOOST_REQUIRE_NE(receipt, nullptr);       // chainId exempt: executes instead of throwing
+    BOOST_CHECK_EQUAL(receipt->status(), 0);  // and succeeds — not reverted-but-accepted
 }
 
 // CRITICAL-A regression (independent review): a transfer to a c_systemTxsAddress (0x...1000)
