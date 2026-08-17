@@ -72,6 +72,50 @@ var (
 	// (assembled below in logsCode()).
 	// SSTORE(1, CALLDATALOAD(0)); STOP
 	messagePasserCode = hexutil.MustDecode("0x5f3560015500")
+	// gen_l1block.py 生成的 146B L1Block 运行时码(selector 0x098999be/0x3db6be2b,
+	// 写 slots 1/3/7/8)。与 OpL1BlockDepositTest.cpp kL1BlockCodeHex 同源。
+	l1BlockCode = hexutil.MustDecode(
+		"0x6004361060255760003560e01c63098999be14602b5760003560e01c633d" +
+			"b6be2b14602b575b60006000fd5b6000358060c01c63ffffffff1660601b" +
+			"60003560a01c63ffffffff1660401b176003555060243560015560443560" +
+			"075560a03560c01c63ffffffff1660401b60a03560801c67ffffffffffff" +
+			"ffff161760b03560f01c61ffff1660601b1760085560006000f3")
+	// Real L2ToL1MessagePasser runtime code (solc 0.8.15), 1747B. Provenance:
+	// bcos-l2-contracts/out/L2ToL1MessagePasser.sol/L2ToL1MessagePasser.json
+	// deployedBytecode.object -- NOT bytecode.object (the 1780B creation code would
+	// make every CALL run init code and never reach initiateWithdrawal). Matches the
+	// OP contracts-bedrock L2ToL1MessagePasser layout (MESSAGE_VERSION=1,
+	// versionedNonce = (1<<240) | msgNonce, sentMessages mapping at slot 0,
+	// msgNonce at slot 1).
+	realMessagePasserCode = hexutil.MustDecode(
+		"0x6080604052600436106100695760003560e01c806382e3702d1161004357806382e3702d1461012a578063c2b3e5ac1461016a578063ecc704281461017d5760" +
+			"0080fd5b80633f827a5a1461009257806344df8e70146100bf57806354fd4d50146100d457600080fd5b3661008d5761008b33620186a0604051806020016040" +
+			"528060008152506101e2565b005b600080fd5b34801561009e57600080fd5b506100a7600181565b60405161ffff90911681526020015b60405180910390f35b" +
+			"3480156100cb57600080fd5b5061008b6103a6565b3480156100e057600080fd5b5061011d6040518060400160405280600581526020017f312e312e30000000" +
+			"00000000000000000000000000000000000000000000000081525081565b6040516100b691906104d1565b34801561013657600080fd5b5061015a6101453660" +
+			"046104eb565b60006020819052908152604090205460ff1681565b60405190151581526020016100b6565b61008b610178366004610533565b6101e2565b3480" +
+			"1561018957600080fd5b506101d46001547dffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff167e0100000000000000000000000000" +
+			"00000000000000000000000000000000001790565b6040519081526020016100b6565b60006102786040518060c0016040528061023c6001547dffffffffffff" +
+			"ffffffffffffffffffffffffffffffffffffffffffffffff167e010000000000000000000000000000000000000000000000000000000000001790565b815233" +
+			"602082015273ffffffffffffffffffffffffffffffffffffffff871660408201523460608201526080810186905260a0018490526103de565b60008181526020" +
+			"8190526040902080547fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00166001179055905073ffffffffffffffffffffffffff" +
+			"ffffffffffffff8416336103136001547dffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff167e010000000000000000000000000000" +
+			"000000000000000000000000000000001790565b7f02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a27449550543487878760405161034894" +
+			"93929190610637565b60405180910390a45050600180547dffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8082168301167fffff00" +
+			"00000000000000000000000000000000000000000000000000000000009091161790555050565b476103b08161042b565b60405181907f7967de617a5ac1cc7e" +
+			"ba2d6f37570a0135afa950d8bb77cdd35f0d0b4e85a16f90600090a250565b80516020808301516040808501516060860151608087015160a088015193516000" +
+			"9761040e979096959101610667565b604051602081830303815290604052805190602001209050919050565b806040516104389061045a565b60405180910390" +
+			"82f0905080158015610455573d6000803e3d6000fd5b505050565b6008806106bf83390190565b6000815180845260005b8181101561048c5760208185018101" +
+			"5186830182015201610470565b8181111561049e576000602083870101525b50601f017fffffffffffffffffffffffffffffffffffffffffffffffffffffffff" +
+			"ffffffe0169290920160200192915050565b6020815260006104e46020830184610466565b9392505050565b6000602082840312156104fd57600080fd5b5035" +
+			"919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b600080600060608486031215" +
+			"61054857600080fd5b833573ffffffffffffffffffffffffffffffffffffffff8116811461056c57600080fd5b925060208401359150604084013567ffffffff" +
+			"ffffffff8082111561059057600080fd5b818601915086601f8301126105a457600080fd5b8135818111156105b6576105b6610504565b604051601f82017fff" +
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0908116603f011681019083821181831017156105fc576105fc610504565b816040" +
+			"5282815289602084870101111561061557600080fd5b8260208601602083013760006020848301015280955050505050509250925092565b8481528360208201" +
+			"526080604082015260006106566080830185610466565b905082606083015295945050505050565b868152600073ffffffffffffffffffffffffffffffffffff" +
+			"ffff808816602084015280871660408401525084606083015283608083015260c060a08301526106b260c0830184610466565b9897505050505050505056fe60" +
+			"8060405230fffea164736f6c634300080f000a")
 	// SSTORE(1, 0x2a); STOP -- EIP-7702 delegate target
 	delegateCode = hexutil.MustDecode("0x602a60015500")
 	// SSTORE(0, GASPRICE); SSTORE(1, BASEFEE); SSTORE(2, SELFBALANCE); STOP
@@ -534,6 +578,40 @@ func fund(c *inputCase, key byte, amount *big.Int) {
 	c.Pre[addrOfKey(key)] = types.Account{Balance: amount}
 }
 
+// abiEncodeWithdrawal builds the abi.encode(versionedNonce, sender, target,
+// value, gasLimit, data) payload whose keccak256 is the L2ToL1MessagePasser
+// withdrawal hash (withdrawalHash). Addresses are left-padded to 32 bytes
+// (12 zero bytes then the 20-byte address in the LOW bytes of the word), the
+// dynamic bytes segment is offset-then-length-then-left-aligned-data. The
+// contract (bcos-l2-contracts solc 0.8.15, matching OP contracts-bedrock
+// Encoding.encodeVersionedNonce) computes versionedNonce = (1<<240) |
+// msgNonce; for the FIRST withdrawal (msgNonce=0) that is 1<<240 -- NOT 1
+// (the Task 1 brief's reference value was computed with versionedNonce=1 and
+// does not match this contract; see task-1-report.md).
+func abiEncodeWithdrawal(versionedNonce *big.Int, sender, target common.Address, value, gasLimit uint64, data []byte) []byte {
+	word := func() []byte { return make([]byte, 32) }
+	putUint64 := func(w []byte, v uint64) {
+		for i := range w {
+			w[i] = 0
+		}
+		binary.BigEndian.PutUint64(w[24:], v)
+	}
+	head := make([]byte, 6*32)
+	versionedNonce.FillBytes(head[0:32])
+	copy(head[44:64], sender[:])
+	copy(head[76:96], target[:])
+	putUint64(head[96:128], value)
+	putUint64(head[128:160], gasLimit)
+	putUint64(head[160:192], 6*32) // data offset
+	out := append([]byte{}, head...)
+	lenWord := word()
+	putUint64(lenWord, uint64(len(data)))
+	out = append(out, lenWord...)
+	out = append(out, data...)
+	out = append(out, make([]byte, 32-len(data))...)
+	return out
+}
+
 // precompileCallTx builds a direct EIP-1559 call to a precompile address
 // (To = the 20-byte precompile address, Data = the precompile input). Field
 // shape mirrors transferTx (cases.go) / buildTx's eip1559 arm (main.go):
@@ -757,6 +835,76 @@ var caseSpecs = []caseSpec{
 		c.Transactions = append(c.Transactions, transferTx(1, 0, messagePasserAddr, big.NewInt(0), 100_000, payload[:]))
 		c.ExtraStorage = map[common.Address][]common.Hash{
 			messagePasserAddr: {common.BigToHash(big.NewInt(1))},
+		}
+		return c
+	}},
+
+	{"l1block_deposit_slots", bothForks, func(fork string) inputCase {
+		// Replace the code-less L1Block (caseFrame) with the REAL 146B runtime
+		// code: the L1-attributes deposit now executes l1BlockCode and writes the
+		// 4 consensus slots (1/3/7/8) it actually touches. Non-default feeParams
+		// (opFeeScalar/opFeeConstant/daScalar non-zero) so slot8 carries a value.
+		// NOTE (scope erratum in the Task 1 brief): the 146B code writes ONLY
+		// slots 1/3/7/8 -- it does NOT write slot 0 (number/timestamp) or slot 2
+		// (blockhash); blockhash/sequenceNumber writes are covered at the real-node
+		// layer (Task 2), t8n locks the consensus slots + stateRoot/withdrawalsRoot.
+		fp := defaultFeeParams()
+		fp.opFeeScalar = 0x55c6fb7c
+		fp.opFeeConstant = 1256417826609331460
+		fp.daScalar = 0x1234
+		c := caseFrame(fork, "l1block_deposit_slots",
+			"L1 attributes deposit executes real L1Block code; slots 1/3/7/8 written",
+			fp, 10_000_000)
+		c.Pre[l1BlockAddr] = types.Account{Balance: big.NewInt(0), Nonce: 1,
+			Code: l1BlockCode, Storage: fp.l1BlockStorage(fork)}
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			l1BlockAddr: {
+				types.L1BaseFeeSlot, types.L1FeeScalarsSlot,
+				types.L1BlobBaseFeeSlot, types.OperatorFeeParamsSlot},
+		}
+		return c
+	}},
+
+	{"message_passer_withdraw", bothForks, func(fork string) inputCase {
+		// Real initiateWithdrawal flow: the L2ToL1MessagePasser predeploy carries
+		// its REAL deployed runtime code (1747B, see realMessagePasserCode), and a
+		// signed EIP-1559 tx calls initiateWithdrawal(target, gasLimit, data). The
+		// contract writes msgNonce (slot 1) and sentMessages[hash] (dynamic slot at
+		// keccak256(hash||0)); the withdrawal hash feeds the Isthmus withdrawalsRoot.
+		c := caseFrame(fork, "message_passer_withdraw",
+			"real initiateWithdrawal -> MessagePassed event + message hash storage; withdrawalsRoot non-empty",
+			defaultFeeParams(), 10_000_000)
+		c.Pre[messagePasserAddr] = types.Account{Balance: big.NewInt(0), Nonce: 1,
+			Code: realMessagePasserCode}
+		fund(&c, 1, eth(100))
+		// initiateWithdrawal(target=0xdead...0001, gasLimit=100000, data=0xbeef)
+		// selector 0xc2b3e5ac + ABI encoding (address,uint256,bytes), 4+160=164B:
+		target := common.HexToAddress("0xdead000000000000000000000000000000000001")
+		calldata := make([]byte, 4+32*5)
+		copy(calldata[0:4], []byte{0xc2, 0xb3, 0xe5, 0xac}) // selector
+		copy(calldata[16:36], target[:])                    // target (left-pad 12B)
+		binary.BigEndian.PutUint64(calldata[60:68], 100000) // gasLimit at [36:68]
+		binary.BigEndian.PutUint64(calldata[92:100], 0x60)  // dataOffset at [68:100]
+		binary.BigEndian.PutUint64(calldata[124:132], 2)    // dataLen at [100:132]
+		copy(calldata[132:134], []byte{0xbe, 0xef})         // data at [132:134]
+		c.Transactions = append(c.Transactions, transferTx(1, 0, messagePasserAddr,
+			big.NewInt(0), 200_000, calldata))
+		// ExtraStorage is mandatory: emitPostState hard-fails on undeclared written
+		// slots. Real initiateWithdrawal (first call, msgNonce 0) writes:
+		//   slot 1 = msgNonce (self-increment, becomes 1)
+		//   dynamic slot keccak256(withdrawalHash ‖ be32(0)) = sentMessages[hash]=true
+		// withdrawalHash = keccak256(abi.encode(versionedNonce, sender, target,
+		//   value, gasLimit, data)); versionedNonce = (1<<240)|0 for the first
+		//   withdrawal (this contract's encodeVersionedNonce, NOT the brief's 1).
+		versionedNonce := new(big.Int).Lsh(big.NewInt(1), 240)
+		withdrawalHash := crypto.Keccak256(
+			abiEncodeWithdrawal(versionedNonce, addrOfKey(1), target, 0, 100000, []byte{0xbe, 0xef}))
+		sentMessagesSlot := common.BytesToHash(crypto.Keccak256(withdrawalHash, make([]byte, 32)))
+		c.ExtraStorage = map[common.Address][]common.Hash{
+			messagePasserAddr: {
+				common.BigToHash(big.NewInt(1)), // msgNonce (slot1, after first = 1)
+				sentMessagesSlot,                // sentMessages dynamic slot
+			},
 		}
 		return c
 	}},
