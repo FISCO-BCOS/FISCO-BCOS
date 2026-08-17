@@ -23,6 +23,12 @@
 
 namespace bcos::rpc
 {
-std::tuple<protocol::BlockNumber, bool> getBlockNumberByTag(
-    protocol::BlockNumber latest, std::string_view blockTag);
+/// Resolve a default-block tag to (block number, isLatest). "safe"/"finalized" resolve to
+/// latest - safeDepth / latest - finalizedDepth (clamped at 0). With the default depth 0 they
+/// equal "latest" (PBFT commits are final); a positive depth makes them historical blocks,
+/// matching Ethereum semantics with configurable depths ([web3_rpc] safe_block_depth /
+/// finalized_block_depth).
+std::tuple<protocol::BlockNumber, bool> getBlockNumberByTag(protocol::BlockNumber latest,
+    std::string_view blockTag, protocol::BlockNumber safeDepth = 0,
+    protocol::BlockNumber finalizedDepth = 0);
 }  // namespace bcos::rpc

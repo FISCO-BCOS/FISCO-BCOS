@@ -44,6 +44,7 @@
 #include <bcos-table/src/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <memory>
 #include <set>
 #include <string>
@@ -117,7 +118,10 @@ Alloc eoaAlloc()
 // Count the persisted "/mpt/" rows in the test storage.
 size_t countMPTRows(storage::StateStorage& storage)
 {
-    size_t count = 0;
+    // parallelTraverse runs its callback from multiple TBB worker threads (one per bucket
+    // group); the counter MUST be atomic — a plain size_t loses increments under concurrent
+    // read-modify-write (intermittent undercounts, e.g. once the TBB pool is warm on CI).
+    std::atomic<size_t> count{0};
     storage.parallelTraverse(false, [&](std::string_view table, std::string_view, auto const&) {
         if (table == storage2::kMPTTable)
         {
@@ -125,7 +129,7 @@ size_t countMPTRows(storage::StateStorage& storage)
         }
         return true;
     });
-    return count;
+    return count.load();
 }
 
 // Read one persisted trie-node row; REQUIRE it exists and its content hashes back to @p hash.

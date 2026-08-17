@@ -1,11 +1,13 @@
 #pragma once
 
+#include "bcos-framework/storage2/AnyStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/StateKVResolver.h"
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace bcos::initializer
@@ -52,4 +54,38 @@ private:
     GlobalStateCheckpointStorage m_checkpointStorage;
     GlobalStateStorage m_storage;
 };
+
+/// Fork a fresh LATEST view of a GlobalStateStorage and type-erase it into an AnyStorage
+/// handle that OWNS the view: the AnyStorage's erased reference points into the view, so the
+/// view must outlive the handle — the aliasing shared_ptr ties both to the same owner.
+/// eth_getStorageAt's latest-state path (NodeService::StateStorageProvider) uses this to get
+/// a consistent point-in-time snapshot per request (pending layers -> cache -> backend).
+template <class ViewType>
+std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>
+forkLatestStateView(ViewType view)
+{
+    using AnyStateStorage =
+        bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>;
+    struct OwningView
+    {
+        ViewType view;
+        std::optional<AnyStateStorage> erased;
+
+        explicit OwningView(ViewType v) : view(std::move(v)) { erased.emplace(view); }
+    };
+    auto owner = std::make_shared<OwningView>(std::move(view));
+    return {owner, std::addressof(*owner->erased)};
+}
+
+/// Fork a fresh COMMITTED view of a GlobalStateStorage (cache -> committed backend, NO
+/// in-flight pending layers) and type-erase it into an owning AnyStorage handle. The
+/// "latest" plane Ethereum semantics require: a state read tagged "latest" must not observe
+/// uncommitted block state, and must agree with the committed plane the ledger / scheduler
+/// serve. Operators who want the pending window visible can wire a fork() view instead.
+template <class Storage>
+std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>
+forkCommittedStateView(Storage& storage)
+{
+    return forkLatestStateView(storage.forkCommitted());
+}
 }  // namespace bcos::initializer
