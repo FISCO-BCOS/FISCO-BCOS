@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **版本:** v4 —— 2026-08-17 经 **Round 1(4 代理)+ Round 2(4 代理)+ Round 3(4 代理)审查**修订。v3 采纳 R2-D 裁决(全 attrs 采纳)。v4 采纳 R3-A/B/C/D:**新增 3 个核心循环硬阻塞的修复(B1 getPayload 信封 PBBR / B2 Isthmus blobGasUsed 回环 / B3 BlockResponse PBBR 零值)+ baseFee 热切换排序 + newPayload 回放检查用子块 extraData + noTxPool 接线 + extraData 版本字节按 fork + a1_active 基础 attrs 补 gasLimit(防 Task 4 回归)+ util.cpp 路径修正 + -38003 确定为必交付**。
+> **版本:** v5 —— 2026-08-18 经 **Round 1-4(16 代理)审查**修订。v5 采纳 R4-A/B/C/D:**回退 v3/v4 的"baseFee 热切换 + newPayload 回放检查用子块 extraData"前提(R4-B 证实是反的 —— op-geth 的 baseFee 用父块 extraData,FISCO 已对齐;attrs 的 eip1559Params/minBaseFee 只写子块 extraData,从下一块才影响 baseFee)**;B1 的 GetPayloadData 构造点修正为 `handleGetPayload`(R4-A);a1_active 基础 attrs 补 gasLimit 归属到 Task 2 显式步骤(R4-C);newPayloadV4 4 参回环(R4-D R2);parseNewPayloadRequest 读 params[3](R4-D R3);maxEngineVersion=4 接线在 Task 0 确认(R4-D R5);EthEndpoint 经 m_nodeService->engineService()(R4-D R6);File Structure 去重+补 EthEndpoint 行(R4-C)。
 
-**Goal:** 让 FISCO opstack 满足 OP-node 作为执行客户端的硬契约 —— `buildOpPayload` 完整采纳 op-node 的 FCU V3 attrs(含 deposits/extraData/baseFee),**getPayload 信封携带 PBBR/blobGasUsed 使 FISCO 自建块能被自己 newPayload 接受**,`eth_getBlockBy*` 的 deposit tx round-trip 与 PBBR 正确,safe/finalized 标签正确。
+**Goal:** 让 FISCO opstack 满足 OP-node 作为执行客户端的硬契约 —— `buildOpPayload` 完整采纳 op-node 的 FCU V3 attrs(deposits 前置、PBBR 写头、**eip1559Params/minBaseFee 写子块 extraData(非 baseFee;baseFee 保持父块派生)**、gasLimit 写头),**getPayload 信封携带 PBBR/blobGasUsed 使 FISCO 自建块能被自己 newPayload 接受**,`eth_getBlockBy*` 的 deposit tx round-trip 与 PBBR 正确,safe/finalized 标签正确。
 
 **Architecture:** 三段推进 —— (A) **引擎 API 契约合规(核心)**:`buildOpPayload` 全 attrs 采纳 + attrs/newPayload 校验对拍 + `buildOpPayload` 构造对拍 + safe/finalized 标签;(B) deposit tx round-trip:JSON 字段下发 + RPC 单测 + op-e2e 断言;(C) op-node 集成 harness(外部,单独计划)。
 
@@ -20,6 +20,7 @@
 - op-node Isthmus+ FCU V3 attrs 字段(R2-D):`gasLimit`/`eip1559Params`/`minBaseFee`/`parentBeaconBlockRoot`/`transactions`(deposits)/`noTxPool`/`withdrawals` —— **全部必须被 `buildOpPayload` 采纳**。
 - deposit tx 类型 `0x7E`;C++ 字段 `isSystemTx`(非 isSystemTransaction);函数 `combineTxResponse`;`TransactionResponse.cpp:66-68` 现排除 deposit 字段输出。
 - op-node 消费 `engine_getPayload` 原始 RLP 字节(`PayloadToBlockRef` 走 `tx.UnmarshalBinary`);`eth_getBlockBy*` full-tx JSON 经 `RPCBlock` 重编码校验 tx-root/block-hash。
+- ⚠️ **baseFee 必须保持父块派生(R4-B,关键)**:op-geth `CalcBaseFee(config, parent, time)` 读 **parent.Extra**(`eip1559.go:64-94`,`VerifyEIP1559Header` = `CalcBaseFee(config, parent, header.Time)`,3 参无 header.Extra);FISCO `calcOpBaseFee(*parentHeader)`(`EngineServiceImpl.cpp:234-320`)已对齐。**`buildOpPayload:1589` 与 `newPayload:1078` 的 baseFee 校验都用父块参数,不得改为子块 extraData** —— 改子块会在任何参数热切换边界自拒合法块并偏离 op-geth 确定性哈希。**attrs 的 `eip1559Params`/`minBaseFee` 只写进子块 extraData(`extraData[1:9]`/`[9:17]`),从下一块才影响 baseFee**(op-geth `worker.go:356,377-385` 同)。
 - ⚠️ **三个核心循环硬阻塞(R3-D,Task 3/5 必须修复,否则第一块就断)**:
   - **B1** — getPayload V4 信封**必须携带 `parentBeaconBlockRoot`**:`GetPayloadData`(Types.h:167-183)现无 PBBR 字段、`combineGetPayloadResponse`(EngineHelper.cpp:304-352)不发射 → op-node `NewPayload(ctx, envelope, envelope.ParentBeaconBlockRoot)` 传 null → FISCO 自己的 `validateOpNewPayloadRequest` 拒。
   - **B2** — Isthmus(pre-Jovian)块 `blobGasUsed` 必须**存在且 ==0**:`buildOpPayload` 现置 nullopt(`EngineServiceImpl.h:1732-1734`),`validateOpNewPayloadRequest` 要求存在(`:366`)+==0(`:370`);op-geth 返回 0(`worker.go:398`)。当前 op-e2e 链是 Jovian,掩盖此问题。
@@ -34,14 +35,13 @@
 | 文件 | 责任 | 动作 |
 |---|---|---|
 | `bcos-rpc/test/unittests/rpc/EngineRpcTest.cpp` | 引擎 RPC 单测 | 改:Task 0 对齐 V4 用例;Task 1 FCU V3;Task 4 attrs 校验 |
-| `bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp` | `parsePayloadAttributes`/`serializeExecutionPayload` | 改:Task 3 全 attrs 解析(gasLimit/transactions/eip1559Params/minBaseFee);Task 4 校验 |
-| `bcos-framework/bcos-framework/engine/Types.h` | `PayloadAttributes` | 改:Task 3 增 `transactions`/`eip1559Params`/`minBaseFee`/`noTxPool` 字段 |
-| `engine/bcos-engine/EngineServiceImpl.h` | `buildOpPayload`/`updateForkchoice` | 改:Task 3 全 attrs 采纳 + B1/B2 + noTxPool + baseFee 热切换 + newPayload 回放检查;Task 4 `-38003` |
-| `bcos-framework/bcos-framework/engine/Types.h` | `PayloadAttributes`/`GetPayloadData` | 改:Task 3 增 `transactions`/`eip1559Params`/`minBaseFee`/`noTxPool` 字段 + `GetPayloadData` 增 `parentBeaconBlockRoot`(B1) |
-| `bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp` | `parsePayloadAttributes`/`combineGetPayloadResponse` | 改:Task 3 全 attrs 解析 + getPayload 信封 PBBR(B1) |
-| `bcos-rpc/bcos-rpc/web3jsonrpc/endpoints/EngineEndpoint.cpp` | `handleForkchoiceUpdated` | 改:Task 4 `-38003` 异常→error 翻译 |
-| `bcos-rpc/bcos-rpc/util.cpp` | `getBlockNumberByTag`(自由函数) | 改:Task 6 safe/finalized 正确路由(接线在 EthEndpoint.cpp:934-941) |
-| `bcos-rpc/bcos-rpc/web3jsonrpc/model/BlockResponse.cpp` | 块 JSON | 改:Task 3(B3)发射真实 `parentBeaconBlockRoot` |
+| `bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp` | `parsePayloadAttributes`/`combineGetPayloadResponse` | 改:Task 3 全 attrs 解析(gasLimit/transactions/eip1559Params/minBaseFee)+ getPayload 信封 PBBR(B1);Task 4 校验;Task 5 回环 |
+| `bcos-framework/bcos-framework/engine/Types.h` | `PayloadAttributes`/`GetPayloadData` | 改:Task 3 增 `transactions`/`eip1559Params`/`minBaseFee`/`gasLimit`/`noTxPool` 字段 + `GetPayloadData` 增 `parentBeaconBlockRoot`(B1) |
+| `engine/bcos-engine/EngineServiceImpl.h` | `buildOpPayload`/`updateForkchoice`/`handleGetPayload` | 改:Task 3 全 attrs 采纳 + B1(handleGetPayload 填 GetPayloadData PBBR)/B2 + noTxPool + extraData 版本字节;**baseFee 保持父块派生(不改)**;Task 4 `-38003` |
+| `bcos-rpc/bcos-rpc/web3jsonrpc/endpoints/EngineEndpoint.cpp` | `handleForkchoiceUpdated` | 改:Task 4 `-38003` 异常→error 翻译(必交付) |
+| `bcos-rpc/bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.cpp` | `getBlockNumberByTag` 包装 `:934-941` | 改:Task 6 safe/finalized 路由接线(经 `m_nodeService->engineService()`,R4-D R6) |
+| `bcos-rpc/bcos-rpc/util.cpp` | `getBlockNumberByTag`(自由函数) | 改:Task 6 safe/finalized 正确路由(可选:扩展签名带 safe/finalized) |
+| `bcos-rpc/bcos-rpc/web3jsonrpc/model/BlockResponse.cpp` | 块 JSON | 改:Task 3(B3)发射真实 `parentBeaconBlockRoot`(nullopt 回退零) |
 | `tools/op-e2e/a1_active.py` | 引擎 API e2e 驱动 | 改:Task 2 FCU V3 主路径 + caps(16→21 断言) |
 | `bcos-rpc/bcos-rpc/web3jsonrpc/model/TransactionResponse.cpp` | 交易 JSON | 改:Task 7 deposit 字段下发 |
 | `bcos-rpc/test/unittests/rpc/Web3ResponseTest.cpp` | RPC 单测 | 改:Task 7 deposit 断言 |
@@ -70,10 +70,13 @@ Expected:三个 V4 用例红(mock 返回 VALID,断言 error==UnsupportedFork)。
 - [ ] **Step 3: 改断言为 VALID(R2-A:仅此在作用域内可行)**
 `forkchoiceUpdatedV4`:`response["result"]["payloadStatus"]["status"]=="VALID"` 且 `!response["result"].isMember("payloadId")`(mock 默认 nullopt);`getPayloadV4`:`response["result"].isMember("executionPayload")`;`newPayloadV4`:`response["result"]["status"]=="VALID"`。**不要**让 mock 抛 UnsupportedFork(端点无 catch、`CALL_ENGINE` 用 `task::wait` 不捕获 → `std::terminate`)。
 > 若需保留 -38005 语义,须先加端点 catch-and-translate(把引擎异常映射为 `buildJsonError(..., EngineError::UnsupportedFork, ...)`),超出本任务范围,单独立案。
+- [ ] **Step 3b: 确认生产 `maxEngineVersion=4` 接线(R4-D R5)**
+
+`EngineServiceInitializer`(`libinitializer/EngineServiceInitializer.h:25`)默认 `maxEngineVersion=V3`;opstack-executor 测试显式传 4。**确认 op-e2e 生产二进制把 OP 组合根 `maxEngineVersion` 传 4**(`libinitializer/Initializer.cpp:495-499`)—— 否则 FCU V4/GP V4/NP V4 抛 `UnsupportedEngineApiVersion`,Task 2 的 a1_active 断言会抓。缺则补接线。
 - [ ] **Step 4: 运行全绿 + Commit**
 ```bash
 git add bcos-rpc/test/unittests/rpc/EngineRpcTest.cpp
-git commit -m "fix(rpc): align EngineRpcTest V4 cases with mock (VALID); rebuild baseline"
+git commit -m "fix(rpc): align EngineRpcTest V4 cases with mock (VALID); rebuild baseline; confirm maxEngineVersion=4"
 ```
 
 ### Task 1: EngineRpcTest — FCU V3 captured-version + payloadId
@@ -142,12 +145,15 @@ git commit -m "test(rpc): engine FCU V3 captures version 3 + payloadId (attrs wi
 - Consumes:`Rpc.call`/`check`/`eng`/`fcs`/`attrs`/`head_num`(作用域已确认,R2-C)。
 - Produces:断言 FCU V3 VALID+payloadId、getPayload V4 head+1、caps 含 FCU V3/GP V4/NP V4。
 
-- [ ] **Step 1: 在 `a1_active.py:92`(`pid = fc["payloadId"]`)与 `:94` 之间插入(R2-C:插入点与作用域确认安全)**
+- [ ] **Step 1: 给基础 `attrs` dict 补 `gasLimit`(R4-C:防 Task 4 回归,归属本任务)**
+
+在 `a1_active.py:80-84` 的基础 `attrs` 加 `"gasLimit": "0x7a1200"`(使既有 FCU V4 调用 `:88` 与新增 FCU V3 都继承;否则 Task 4 的 -38003 打破 check #3"FCU V4 VALID+payloadId",违反不可退步)。**此步骤是 Task 4 的前置依赖,必须在本任务合入。**
+
+- [ ] **Step 2: 在 `a1_active.py:92`(`pid = fc["payloadId"]`)与 `:94` 之间插入 FCU V3 主流程(R2-C:插入点与作用域确认安全)**
 
 ```python
 # ---- op-node actual version: FCU V3 (Isthmus+), not V4 ----
-attrs3 = dict(attrs)
-attrs3["gasLimit"] = "0x7a1200"   # op-geth 必需;Task 3 采纳后生效
+attrs3 = dict(attrs)             # 已含 gasLimit(Step 1)
 fc3 = eng.call("engine_forkchoiceUpdatedV3", [fcs, attrs3])
 check("FCU V3 VALID + payloadId (op-node primary)",
       fc3["payloadStatus"]["status"] == "VALID" and fc3.get("payloadId") is not None, str(fc3))
@@ -175,18 +181,18 @@ git add tools/op-e2e/a1_active.py tools/op-e2e/run_all.sh
 git commit -m "test(e2e): a1_active FCU V3 opnode-primary + caps assert (16->21); fix docstring"
 ```
 
-### Task 3: buildOpPayload 全 attrs 采纳 + getPayload 信封 PBBR/blobGasUsed(R2-D 核心 + R3-A/D B1/B2/B3)
+### Task 3: buildOpPayload 全 attrs 采纳 + getPayload 信封 PBBR/blobGasUsed(R2-D 核心 + R3-A/D B1/B2/B3 + R4-B 修正)
 
 **Files:**
 - Modify: `bcos-framework/bcos-framework/engine/Types.h`(`PayloadAttributes` 增字段 + `GetPayloadData` 增 `parentBeaconBlockRoot`)
 - Modify: `bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp`(`parsePayloadAttributes` 全字段解析 + `combineGetPayloadResponse` 发射 PBBR)
-- Modify: `engine/bcos-engine/EngineServiceImpl.h`(`buildOpPayload` 消费 attrs + baseFee 热切换 + newPayload 回放检查)
+- Modify: `engine/bcos-engine/EngineServiceImpl.h`(`buildOpPayload` 消费 attrs + `handleGetPayload` 填 GetPayloadData PBBR;**baseFee 保持父块派生,不改**)
 - Modify: `bcos-rpc/bcos-rpc/web3jsonrpc/model/BlockResponse.cpp`(B3:发射真实 PBBR)
-- Test: `opstack-executor/tests/`(引擎级构造对拍 + 完整 getPayload→newPayload 回环)
+- Test: `opstack-executor/tests/`(引擎级构造对拍 + 完整 getPayload→newPayloadV4 回环)
 
 **Interfaces:**
-- Consumes:op-node FCU V3 attrs 完整字段集(R2-D 表 + R3-A 修正)。
-- Produces:`buildOpPayload` 用 `attrs.transactions`(deposit 列表)**前置**到 mempool txs(honor `noTxPool`)、`attrs.parentBeaconBlockRoot` 写头、`attrs.eip1559Params`/`attrs.minBaseFee` 写 baseFee+extraData、`attrs.gasLimit` 写头 gasLimit;**getPayload 信封携带 `parentBeaconBlockRoot` 与 `blobGasUsed`(Isthmus==0)**,使 FISCO 自建块能被自己 `newPayload` 接受(B1/B2);`eth_getBlockByNumber` 发射真实 PBBR(B3);合成零 L1 deposit 仅作本地驱动(PBFT)回退。
+- Consumes:op-node FCU V3 attrs 完整字段集(R2-D 表 + R3-A 修正 + R4-B)。
+- Produces:`buildOpPayload` 用 `attrs.transactions`(deposit 列表)**前置**到 mempool txs(honor `noTxPool`)、`attrs.parentBeaconBlockRoot` 写头、`attrs.eip1559Params`/`attrs.minBaseFee` **写子块 extraData(非 baseFee;baseFee 保持父块派生,R4-B)**、`attrs.gasLimit` 写头 gasLimit;**getPayload 信封携带 `parentBeaconBlockRoot` 与 `blobGasUsed`(Isthmus==0)**,使 FISCO 自建块能被自己 `newPayload` 接受(B1/B2);`eth_getBlockByNumber` 发射真实 PBBR(B3);合成零 L1 deposit 仅作本地驱动(PBFT)回退。
 
 - [ ] **Step 1: 写失败测试(引擎级,真实 EngineServiceImpl)**
 
@@ -195,8 +201,9 @@ git commit -m "test(e2e): a1_active FCU V3 opnode-primary + caps assert (16->21)
 - `executionPayload.parentBeaconBlockRoot == attrs.parentBeaconBlockRoot`(当前 getPayload 信封无此字段 → 红,B1);
 - `executionPayload.gasLimit == attrs.gasLimit`(当前 ledger-config → 红);
 - Isthmus(非 Jovian):`executionPayload.blobGasUsed == "0x0"`(当前 nullopt → 红,B2);
-- `newPayload(executionPayload, [], executionPayload.parentBeaconBlockRoot)` 返回 **VALID**(当前因 B1 缺 PBBR 被拒 → 红);
-- Holocene/Jovian:`blockHeader.extraData[1:9]`/`[9:17]` 编码 eip1559Params/minBaseFee,且**版本字节按 fork**(Isthmus `0x00`/Jovian `0x01`,R3-D)。
+- `newPayloadV4(executionPayload, [], executionPayload.parentBeaconBlockRoot, [])` 返回 **VALID**(**V4 4 参**,R4-D R2;当前因 B1 缺 PBBR 被拒 → 红);
+- Holocene/Jovian:`blockHeader.extraData[1:9]`/`[9:17]` 编码 eip1559Params/minBaseFee,且**版本字节按 fork**(Isthmus `0x00`/Jovian `0x01`,R3-D);
+- **baseFee 保持父块派生**:本块 `baseFee` 不因 attrs.eip1559Params/minBaseFee 改变(只改 extraData,R4-B)。
 
 - [ ] **Step 2: 运行确认失败**
 Run:`./build/opstack-executor/tests/opstack-executor-tests --gtest_filter=*AttrsAdoption* 2>&1 | tail -10`
@@ -205,14 +212,15 @@ Run:`./build/opstack-executor/tests/opstack-executor-tests --gtest_filter=*Attrs
 (a) `Types.h` `PayloadAttributes` 增(R3-A 修正类型):`std::optional<std::vector<bcos::bytes>> transactions`(**vector**,每元素一条原始 EIP-2718 信封)、`std::optional<std::array<uint8_t,8>> eip1559Params`、`std::optional<uint64_t> minBaseFee`、`bool noTxPool{false}`、**`std::optional<uint64_t> gasLimit`**(新字段;`targetGasLimit` 是 V4 死字段,op-node V3 发 `gasLimit`,R3-A)。`GetPayloadData` 增 `std::optional<h256> parentBeaconBlockRoot`(B1)。
 (b) `EngineHelper.cpp::parsePayloadAttributes`:读 `gasLimit`(`fromQuantity`,非 lexical_cast)、`transactions`(hex 数组→`vector<bytes>`,模式抄 `parseNewPayloadRequest:68-88`)、`eip1559Params`(fromHex+size==8 校验)、`minBaseFee`、`noTxPool`、`parentBeaconBlockRoot`(已有)。
 (c) `EngineServiceImpl.h::buildOpPayload`:
-- **tx 列表(R3-D 修正:前置而非替换)**:`rawTransactions` 以 `attrs.transactions` 为前缀(第一个是 L1-info deposit),后接 mempool sealed txs;`noTxPool==true` 时**跳过 mempool seal**(`:402-405` 加门)。`attrs.transactions` 缺时回退 `makeL1AttributesDeposit`(本地驱动)。
-- PBBR:`:1658` 改为 `attrs.parentBeaconBlockRoot.value_or(h256{})`;并把它填进 `GetPayloadData.parentBeaconBlockRoot`(B1)。
-- **baseFee 热切换(R3-A)**:extraData 组装提前到 baseFee 计算之前,或参数化 `calcOpBaseFee`(elasticity/denominator/minBaseFee 由 attrs 覆盖);Holocene 用 `attrs.eip1559Params`、Jovian 用 `attrs.minBaseFee`(替换 `:1671-1675` 硬编码 8/2/0)。**extraData 版本字节按 fork**(Isthmus `0x00`/Jovian `0x01`,替换 `:1666` 硬编码 `0x01`)。
+- **tx 列表(R3-D 修正:前置而非替换)**:`rawTransactions` 以 `attrs.transactions` 为前缀(第一个是 L1-info deposit),后接 mempool sealed txs;`noTxPool==true` 时**跳过 mempool seal**(`:402-405` 加门,对齐 op-geth `payload_building.go:332-353`)。`attrs.transactions` 缺时回退 `makeL1AttributesDeposit`(本地驱动)。
+- PBBR:`:1658` 改为 `attrs.parentBeaconBlockRoot.value_or(h256{})`(真实值进缓存头)。
+- **extraData 组装(R4-B 修正)**:替换 `:1671-1675` 硬编码 8/2/0 —— Holocene 用 `attrs.eip1559Params`(8B BE:denominator `[0:4]`/elasticity `[4:8]`,双零回退 config 常量),Jovian 追加 `attrs.minBaseFee`(uint64 BE,offset 9,共 17B);**extraData 版本字节按 fork**(Isthmus `0x00`/Jovian `0x01`,替换 `:1666` 硬编码 `0x01`)。
 - gasLimit:`:1617-1624` 优先 `attrs.gasLimit`,回退 ledger-config(R2-A `effectiveGasLimit` 公式)。
-- **blobGasUsed(B2)**:非 Jovian 时 `ExecutionPayload.blobGasUsed` 置 `0`(非 nullopt,对齐 op-geth `worker.go:398`),Jovian 为 DA footprint。
-- **newPayload 回放检查(R3-A)**:`EngineServiceImpl.h:1078` 的 `expectedBaseFee` 改用**子块 extraData** 参数(而非父块)+ 父块 gas 字段,对齐 op-geth `CalcBaseFee(config, parent, time, header.Extra)`,否则 Holocene 参数热切换后被自己 `newPayload` 拒。
-(d) `combineGetPayloadResponse`(`EngineHelper.cpp:304-352`):发射 `parentBeaconBlockRoot`(从 `GetPayloadData`,B1)。
-(e) `BlockResponse.cpp:128`(B3):发射 `blockHeader->parentBeaconBlockRoot()` 真实值,替换硬编码零。
+- **blobGasUsed(B2)**:`EngineServiceImpl.h:1732-1734` 的 nullopt 分支改为 `std::optional<u256>(u256(0))`(非 Jovian;对齐 op-geth `worker.go:398`),Jovian 为 DA footprint。
+- **baseFee:不改(R4-B,关键)**:`:1589-1592` 保持 `calcOpBaseFee(**parentHeader, ...)`(父块参数)。attrs 的 eip1559Params/minBaseFee **不**进本块 baseFee,只进 extraData,从下一块才生效 —— 与 op-geth `worker.go:356,377-385` 一致。
+- **newPayload 回放检查:不改(R4-B,关键)**:`EngineServiceImpl.h:1078` 的 `expectedBaseFee` **保持** `calcOpBaseFee(*parentHeader, ...)`(父块参数),与 `buildOpPayload:1591` 一致;改子块 extraData 会在参数热切换边界自拒合法块。
+(d) B1 信封 PBBR(R4-A 修正):`GetPayloadData` 在 **`handleGetPayload`**(`EngineServiceImpl.h:548-554`)从缓存 `PayloadEntry` 构造 —— 新增的 `GetPayloadData.parentBeaconBlockRoot` 在该处从 `it->second.header->parentBeaconBlockRoot()` 读取(cache header 在 `:497` 已保留 buildOpPayload 设置的 PBBR);`combineGetPayloadResponse`(`EngineHelper.cpp:304-352`)发射该字段。
+(e) `BlockResponse.cpp:128`(B3):发射 `blockHeader->parentBeaconBlockRoot()` 真实值(isOpHeader 且 has_value 时),nullopt 回退零(仿 `:120-126` 的 withdrawalsRoot/blobGasUsed 门控)。
 
 - [ ] **Step 4: 运行确认通过 + 引擎层全量 + bcos-rpc 全量**
 Run:`./build/opstack-executor/tests/opstack-executor-tests 2>&1 | tail -5 && ./build/bcos-rpc/test/test-bcos-rpc --run_test=EngineRpcTest 2>&1 | tail -5`
@@ -244,12 +252,13 @@ git commit -m "feat(engine): adopt all OP FCU-V3 attrs + getPayload PBBR/blobGas
 - [ ] **Step 2: 运行确认失败 → Step 3: 实现**
 
 `updateForkchoice` OP 分支(head 推进后,R2-A `:372` 之后,`if constexpr (c_opMode)`):attrs 非空但 `gasLimit` nullopt(用 Task 3 新增的 `attrs.gasLimit`,**不是**死字段 `targetGasLimit`)、`eip1559Params` 非法、withdrawals 非空 → 抛 `UnsupportedOpPayloadAttributes`。
-**错误码输出(R2-A/R3-D)**:`CALL_ENGINE` 走 `task::wait` 不重抛 → 断言 `-38003` **在 `handleForkchoiceUpdated` 加 catch 把引擎异常翻译为 `buildJsonError(..., EngineError::InvalidPayloadAttributes, ...)`(确定为必交付,非可选)**,或引擎级测试捕获真实 `UnsupportedOpPayloadAttributes`。**不可用 `BOOST_CHECK_THROW(CALL_ENGINE(...), JsonRpcException)`**(task::wait + bcos::Exception 类型不匹配)。
-**⚠️ 防回归(R3-C)**:a1_active.py 的既有 FCU V4 调用(`:80-84` 基础 `attrs` 无 gasLimit,`:88` 期待 VALID)—— Task 4 落地后此检查会红。**须在 Task 2/4 依赖中给基础 `attrs` 加 `gasLimit="0x7a1200"`**(`:80-84` 基础 dict),使 FCU V4 与新 FCU V3 都继承;这对应 spec §7 P1"修 a1_active.py 主路径"。
+**错误码输出(R2-A/R3-D/R4-C)**:`CALL_ENGINE` 走 `task::wait` 不重抛 → **`handleForkchoiceUpdated` 加 catch 把引擎异常翻译为 `buildJsonError(..., EngineError::InvalidPayloadAttributes, ...)` 是必交付的代码改动**;引擎级测试仅是失败测试的**备选断言路径**(捕获真实 `UnsupportedOpPayloadAttributes`),**不是**省略 catch 的理由。**不可用 `BOOST_CHECK_THROW(CALL_ENGINE(...), JsonRpcException)`**(task::wait + bcos::Exception 类型不匹配)。
+**executionRequests(R4-D R3)**:`parseNewPayloadRequest` 现不读 `params[3]`(op-node V4 恒发 `[]`)——Task 4 的"executionRequests 空"钉须补 `parseNewPayloadRequest` 读 `params[3]`,否则 RPC 层无法测该钉(requestsHash 恒为 EmptyRequestsHash)。
+**⚠️ 防回归(R3-C,已归属 Task 2 Step 1)**:Task 2 Step 1 已给 `a1_active.py:80-84` 基础 `attrs` 加 `gasLimit="0x7a1200"`,本任务不重复改;若 Task 2 未合入,先回退执行 Task 2。
 
 - [ ] **Step 4: 运行通过 + 全量 → Step 5: Commit**
 ```bash
-git commit -m "feat(engine): enforce op-geth parity FCU attrs validation (-38003 via endpoint translation) + pin newPayload checks"
+git commit -m "feat(engine): enforce op-geth parity FCU attrs validation (-38003 via endpoint translation) + read newPayload executionRequests"
 ```
 
 ### Task 5: buildOpPayload 构造对拍(头字段逐项,Phase A/B 内,不等到 harness)
@@ -268,11 +277,12 @@ git commit -m "feat(engine): enforce op-geth parity FCU attrs validation (-38003
 - `extraData[1:9]` == eip1559Params 编码、`extraData[9:17]` == minBaseFee 编码(对照 op-geth `ValidateOptimismExtraData` 的 9B/17B 布局),**版本字节按 fork**(Isthmus `0x00`/Jovian `0x01`);
 - `header.parentBeaconBlockRoot == attrs.parentBeaconBlockRoot`;
 - `transactions == attrs.transactions`(逐条 hex 相等);
-- **完整 getPayload→newPayload 回环(R3-D)**:build→getPayload→`newPayload(envelope, [], envelope.ParentBeaconBlockRoot)` 返回 VALID —— 一次抓 B1(B2)(B3);
+- **完整 getPayload→newPayloadV4 回环(R3-D/R4-D R2)**:build→getPayload→**`newPayloadV4(envelope, [], envelope.ParentBeaconBlockRoot, [])`**(Isthmus+ 须 V4 4 参,FISCO OP 分支 `EngineServiceImpl.h:783` 要求 V4)返回 VALID —— 一次抓 B1/B2/B3;
+- `baseFee == calcOpBaseFee(parent)`(父块派生,不因 attrs 参数改变,R4-B);
 - 可加:`PayloadId` 与 op-geth `TestDeterministicPayloadId` 一致(需要时)。
 - [ ] **Step 2: 运行失败 → Step 3: 依赖 Task 3 已实现(本任务主要是断言固化)→ Step 4: 全绿 → Step 5: Commit**
 ```bash
-git commit -m "test(engine): buildOpPayload construction parity + getPayload->newPayload round-trip vs op-geth"
+git commit -m "test(engine): buildOpPayload construction parity + getPayload->newPayloadV4 round-trip vs op-geth"
 ```
 
 ### Task 6: safe/finalized block-tag 正确路由
@@ -290,9 +300,9 @@ git commit -m "test(engine): buildOpPayload construction parity + getPayload->ne
 
 RPC 单测:mock engine 的 `getSafeBlockNumber`/`getFinalizedBlockNumber` 返回具体值(注意现有 mock 默认 nullopt,R3-B),`eth_getBlockByNumber("safe")` 应返回该块;当前别名 latest → 红。op-e2e:`eth_getBlockByNumber("safe", true)` 拿到非零 PBBR 块后,用 op-node `RPCBlock.Verify` 语义(或等价重算)校验块哈希一致(B3 关联)。
 
-- [ ] **Step 2: 运行失败 → Step 3: 实现(R3-B)**
+- [ ] **Step 2: 运行失败 → Step 3: 实现(R3-B/R4-D R6)**
 
-在 `EthEndpoint::getBlockNumberByTag`(`:934-941`)分支:`safe` → `engineService->getSafeBlockNumber()` 有值用之、nullopt 回退 latest;`finalized` 同理;`latest`/`pending`/`earliest` 保持。**不改**自由函数 `getBlockNumberByTag`(无 engine 访问);如需覆盖 `eth_newFilter`/`eth_getLogs`(FilterRequest.cpp:58,61),扩展自由函数签名带 safe/finalized optional 并更新两处调用(可选)。
+在 `EthEndpoint::getBlockNumberByTag`(`:934-941`)分支:`safe` → `m_nodeService->engineService()->getSafeBlockNumber()`(R4-D R6:**EthEndpoint 无独立 engineService 成员,经 `m_nodeService->engineService()`**)有值用之、nullopt 回退 latest;`finalized` 同理;`latest`/`pending`/`earliest` 保持。**不改**自由函数 `getBlockNumberByTag`(无 engine 访问);如需覆盖 `eth_newFilter`/`eth_getLogs`(FilterRequest.cpp:58,61),扩展自由函数签名带 safe/finalized optional 并更新两处调用(可选)。
 
 - [ ] **Step 4: 运行通过 + 全量 → Step 5: Commit**
 ```bash
@@ -414,10 +424,12 @@ git commit -m "test(e2e): assert op-node block-ref deposit tx[0] round-trip (key
 
 ---
 
-## Self-Review(v4)
+## Self-Review(v5)
 
-- **Round 3 合入核对**:Task 3 增 B1(getPayload 信封 PBBR)/B2(Isthmus blobGasUsed==0)/B3(BlockResponse PBBR)(R3-D);Task 3 修 `transactions` 类型为 `vector<bytes>`、`gasLimit` 新字段替代死字段 `targetGasLimit`、baseFee 热切换排序 + newPayload 回放检查用子块 extraData、`noTxPool` 接 mempool seal、extraData 版本字节按 fork(R3-A);Task 4 -38003 定为必交付(端点翻译)+ a1_active 基础 attrs 补 gasLimit 防回归(R3-C/D);Task 5 扩为完整 getPayload→newPayload 回环(R3-D);Task 6 修 util.cpp 路径 + nullopt 回退 + e2e ref 测试(R3-B/D);File Structure 补 EngineEndpoint.cpp/BlockResponse.cpp、修 util.cpp 路径。
-- **Round 2 合入核对**:Task 3 升格为"全 attrs 采纳(核心)"(R2-D);新增 Task 5 构造对拍(R2-D)、Task 6 safe/finalized(R2-D);Task 0 改 VALID(R2-A);Task 1 修 optional + 协调 Task 4(R2-A/D);Task 2 16→21(R2-C);Task 7 全部 CONFIRMED(R2-B)。
-- **Spec 覆盖**:P0 引擎契约(A)→Task 0-6;P0 deposit round-trip(B)→Task 7-8;P0 harness(C)→Task 9。**EF 语料扩 EEST(spec P0-并行)不在本计划范围**,单独轨道,Self-Review 明示以免"P0 全覆盖"失真(R3-C)。
+- **Round 4 合入核对(R4-A/B/C/D)**:**回退 baseFee 热切换 + newPayload 回放检查改子块 extraData 的前提**(R4-B 用 op-geth `eip1559.go:64-94`/`worker.go:356,377-385` 证实是反的 —— baseFee 恒用父块 extraData,FISCO 已对齐;attrs 参数只写子块 extraData);B1 的 `GetPayloadData` 构造点修正为 `handleGetPayload:548-554`(从缓存头读 PBBR)(R4-A);a1_active 基础 attrs 补 gasLimit 归属 Task 2 Step 1 显式步骤(R4-C);Task 4 补 `parseNewPayloadRequest` 读 `params[3]` executionRequests(R4-D R3);Task 5 回环改 `newPayloadV4` 4 参(R4-D R2);Task 0 加 maxEngineVersion=4 接线确认(R4-D R5);Task 6 经 `m_nodeService->engineService()`(R4-D R6);File Structure 去重 Types.h/EngineHelper.cpp、补 EthEndpoint.cpp 行(R4-C)。
+- **Round 3 合入核对**:Task 3 增 B1/B2/B3(R3-D);`transactions` 类型 `vector<bytes>`、`gasLimit` 新字段、noTxPool 接 mempool seal、extraData 版本字节(R3-A);Task 4 -38003 必交付 + a1_active gasLimit 防回归(R3-C/D);Task 5 完整回环(R3-D);Task 6 修 util.cpp 路径(R3-B/D)。
+- **Round 2 合入核对**:全 attrs 采纳为核心(R2-D);Task 5 构造对拍、Task 6 safe/finalized(R2-D);Task 0 改 VALID(R2-A);Task 1 optional(R2-A);Task 2 16→21(R2-C);Task 7 全部 CONFIRMED(R2-B)。
+- **Spec 覆盖**:P0 引擎契约(A)→Task 0-6;P0 deposit round-trip(B)→Task 7-8;P0 harness(C)→Task 9。**EF 语料扩 EEST(spec P0-并行)不在本计划范围**,单独轨道(R3-C)。
 - **占位符**:无 TBD/TODO;Task 4 的具体校验以 op-geth `checkOptimismPayloadAttributes` 为逐字段清单。
-- **类型一致性**:`PayloadAttributes.transactions`(`vector<bytes>`)/`eip1559Params`/`minBaseFee`/`gasLimit`/`noTxPool`(新增)、`GetPayloadData.parentBeaconBlockRoot`(新增,B1)、`isSystemTx`/`combineTxResponse`/`fromQuantity`/`UnsupportedOpPayloadAttributes` 均与源码或 R3/R2 审查一致。
+- **类型一致性**:`PayloadAttributes.transactions`(`vector<bytes>`)/`eip1559Params`/`minBaseFee`/`gasLimit`/`noTxPool`、`GetPayloadData.parentBeaconBlockRoot`、`isSystemTx`/`combineTxResponse`/`fromQuantity`/`UnsupportedOpPayloadAttributes` 均与源码或 R4-R2 审查一致。
+- **最终裁决(R4-D)**:按 v5(含 R1 保持父块 baseFee)实施 Task 0-8 后,核心循环(FCU V3→buildOpPayload→getPayload→newPayloadV4→op-node 派生 block ref/SystemConfig→safe/finalized)闭合,**无剩余核心阻塞**;post-core(P1 eth_getProof/determinism 门、P2 状态同步/reorg、P3 SDM/interop)已跟踪。
