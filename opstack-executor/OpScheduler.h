@@ -586,7 +586,8 @@ private:
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
                     throw bcos::evm::engine::OpConsensusError(
-                        "OpScheduler: unsupported tx type byte 0x" + std::to_string(typeByte));
+                        fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
+                            static_cast<unsigned>(typeByte)));
             }
 
             bcos::ledger::LedgerConfig execLedgerConfig;

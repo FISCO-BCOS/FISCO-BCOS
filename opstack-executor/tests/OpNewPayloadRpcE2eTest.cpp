@@ -1244,7 +1244,7 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         "sender not an eoa",
         "set code transaction must not be a create transaction",
         "empty authorization list",
-        "unsupported tx type byte 0x3",
+        "unsupported tx type byte 0x03",
     };
     for (auto const* s : kRequiredErrors)
         BOOST_CHECK_MESSAGE(

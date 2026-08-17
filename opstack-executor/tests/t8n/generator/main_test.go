@@ -580,8 +580,8 @@ var invalidTxAnchorTable = []invalidTxAnchor{
 	{"setcode_create", "EIP-7702 transaction cannot be used to create contract", "set code transaction must not be a create transaction"},
 	{"empty_auth_list", "EIP-7702 transaction with empty auth list", "empty authorization list"},
 	// blob: op-geth rejects at block validation ("data blobs present in block
-	// body"); FISCO rejects at raw-tx DECODE ("unsupported tx type byte 0x3").
-	{"blob", "data blobs present in block body", "unsupported tx type byte 0x3"},
+	// body"); FISCO rejects at raw-tx DECODE ("unsupported tx type byte 0x03").
+	{"blob", "data blobs present in block body", "unsupported tx type byte 0x03"},
 }
 
 func TestInvalidTxCaseSpecsIndependentTable(t *testing.T) {
@@ -763,7 +763,7 @@ func TestInvalidTxBlobDecodeMessage(t *testing.T) {
 		t.Fatal("blob: missing reject")
 	}
 	// FISCO decode 消息（decode 级 kind）：validation_error_contains 必须是它。
-	if !strings.Contains(rej.Fisco.ValidationErrorContains, "unsupported tx type byte 0x3") {
+	if !strings.Contains(rej.Fisco.ValidationErrorContains, "unsupported tx type byte 0x03") {
 		t.Fatalf("blob: validation_error_contains %q missing decode anchor", rej.Fisco.ValidationErrorContains)
 	}
 	// 结构化交易对象（block.transactions）必须带 _op_type blob + _op_raw（真实签名 EIP-2718 信封）。
@@ -785,7 +785,7 @@ func TestInvalidTxBlobDecodeMessage(t *testing.T) {
 	if !ok || len(rawTxHex) != 2 {
 		t.Fatalf("blob: _op_payload.transactions must have 2 entries, got %#v", doc.OpPayload["transactions"])
 	}
-	// 第二笔（blob）必须是 type-0x03 信封（FISCO decode 拒 "unsupported tx type byte 0x3"）。
+	// 第二笔（blob）必须是 type-0x03 信封（FISCO decode 拒 "unsupported tx type byte 0x03"）。
 	if len(rawTxHex[1]) < 4 || rawTxHex[1][:4] != "0x03" {
 		t.Fatalf("blob: second envelope must be type 0x03, got %q", rawTxHex[1])
 	}

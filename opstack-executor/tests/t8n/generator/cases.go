@@ -1723,10 +1723,10 @@ var invalidTxCaseSpecs = []invalidTxCaseSpec{
 
 	// blob: type-3 blob tx. op-geth OP rejects at txpool ("transaction type
 	// not supported") and at block validation ("data blobs present in block
-	// body"); FISCO rejects at raw-tx DECODE ("unsupported tx type byte 0x3").
+	// body"); FISCO rejects at raw-tx DECODE ("unsupported tx type byte 0x03").
 	// consumer:"both" (review R16) — the decode message is a reliable engine
 	// validationError surface.
-	{"blob", bothForks, "both", "data blobs present in block body", "unsupported tx type byte 0x3", "unsupported tx type byte 0x3", func(fork string) (inputCase, invalidTxBuilder) {
+	{"blob", bothForks, "both", "data blobs present in block body", "unsupported tx type byte 0x03", "unsupported tx type byte 0x03", func(fork string) (inputCase, invalidTxBuilder) {
 		c := caseFrame(fork, "invalid_blob",
 			"deposit + type-3 blob tx (OP rejects blobs; FISCO decode fails)",
 			defaultFeeParams(), 10_000_000)

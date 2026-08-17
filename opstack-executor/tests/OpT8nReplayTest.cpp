@@ -28,6 +28,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <cxxabi.h>
 #include <evmone/evmone.h>
+#include <fmt/format.h>
 #include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpBlockExecute.h>  // seal (merged into the block-execution module)
@@ -767,7 +768,8 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                 if (typeByte < kRlpListBase && typeByte != 0x01 && typeByte != 0x02 &&
                     typeByte != 0x04)
                     throw bcos::evm::engine::OpConsensusError(
-                        "op block: unsupported tx type byte 0x" + std::to_string(typeByte));
+                        fmt::format("op block: unsupported tx type byte 0x{:02x}",
+                            static_cast<unsigned>(typeByte)));
                 BOOST_ERROR(
                     id << ": blob raw envelope must be rejected by type-byte classification");
                 return false;
@@ -1473,7 +1475,7 @@ BOOST_AUTO_TEST_CASE(RejectExecutorSurface)
 // ── blob decode-class reject (consumer:both) ─────────────────────────
 // The blob arm reproduces the real rejection via the type-byte classification
 // (processOpBlock never reaches raw-tx decode); the message is
-// "op block: unsupported tx type byte 0x3" (runOpBlockInjection / OpScheduler execute hook).
+// "op block: unsupported tx type byte 0x03" (runOpBlockInjection / OpScheduler execute hook).
 // _op_raw only needs the type-0x03 first byte to hit the classification branch (it checks the
 // type byte before parsing any field).
 BOOST_AUTO_TEST_CASE(RejectBlobDecode)
@@ -1526,7 +1528,7 @@ BOOST_AUTO_TEST_CASE(RejectBlobDecode)
                 "fisco": {
                     "consumer": "both", "classification": "INVALID",
                     "latest_valid_hash": "parent",
-                    "validation_error_contains": "unsupported tx type byte 0x3"
+                    "validation_error_contains": "unsupported tx type byte 0x03"
                 }
             }
         }
