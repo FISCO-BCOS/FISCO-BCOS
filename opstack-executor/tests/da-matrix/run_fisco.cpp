@@ -12,6 +12,12 @@
 // pre-Isthmus fork (fjord/granite/holocene) reports 0 even with a non-zero
 // scalar/constant packed in slot 8.
 //
+// Error paths are deliberately EXCEPTION-FREE (review fix round 1/5): with the
+// evmone/blst objects pulled in by this target's link configuration, an
+// exception thrown from this TU does not unwind and aborts the process
+// (SIGABRT / exit 134) instead of returning 1. Every failure is therefore an
+// explicit check + std::cerr + return 1, never a throw.
+//
 // --check mode is Task 6; this runner only implements --grid/--out.
 
 #include <bcos-evm/opstack/OpFeeParams.h>
@@ -39,6 +45,8 @@ namespace
 {
 // Fork -> config resolution, shared by the --check mode (Task 6). Every fork in
 // the da-matrix schema maps to exactly one of the seven OpForkSchedule configs.
+// Throws on an unknown fork; callers MUST pre-check with isKnownFork() so this
+// throw is unreachable from the (exception-free) runner path.
 const OpForkConfig& forkConfigFor(const std::string& fork)
 {
     if (fork == "ecotone")
@@ -58,12 +66,20 @@ const OpForkConfig& forkConfigFor(const std::string& fork)
     throw std::invalid_argument("unknown fork: " + fork);
 }
 
-evmc::bytes32 hexToBytes32(const std::string& s)
+bool isKnownFork(const std::string& fork)
+{
+    return fork == "ecotone" || fork == "fjord" || fork == "granite" || fork == "holocene" ||
+           fork == "isthmus" || fork == "jovian" || fork == "karst";
+}
+
+// Decodes exactly-32-byte hex into `out`; returns false (no throw) on malformed input.
+bool hexToBytes32(const std::string& s, evmc::bytes32& out)
 {
     const auto v = evmc::from_hex<evmc::bytes32>(s);
     if (!v.has_value())
-        throw std::invalid_argument("invalid 32-byte hex: " + s);
-    return *v;
+        return false;
+    out = *v;
+    return true;
 }
 
 // "0x" + lowercase hex, no leading zeros (op-geth hexutil.Big).
@@ -98,81 +114,123 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    try
+    // Load + parse the grid. No throw: a missing/unreadable file or a JSON
+    // syntax error is a plain cerr + return 1.
+    std::ifstream in(gridPath);
+    if (!in.good())
     {
-        Json::Value root;
-        {
-            std::ifstream in(gridPath);
-            if (!in.good())
-                throw std::runtime_error("cannot open grid: " + gridPath);
-            std::stringstream ss;
-            ss << in.rdbuf();
-            Json::Reader reader;
-            if (!reader.parse(ss.str(), root))
-                throw std::runtime_error(
-                    "JSON parse failed: " + reader.getFormattedErrorMessages());
-        }
-
-        const Json::Value& envelopes = root["envelopes"];
-        const Json::Value& cases = root["cases"];
-        if (!envelopes.isObject() || !cases.isArray())
-            throw std::runtime_error("grid must carry an 'envelopes' object and a 'cases' array");
-
-        Json::Value out(Json::arrayValue);
-        for (const auto& c : cases)
-        {
-            const std::string id = c.get("id", "").asString();
-            const std::string envRef = c.get("envelope_ref", "").asString();
-            if (!envelopes.isMember(envRef))
-                throw std::runtime_error("case '" + id + "' unknown envelope_ref: " + envRef);
-
-            // gas: jsoncpp asUInt64() — the overflow rows carry gas=2^64-1 and asDouble()
-            // would round it up to 2^64 (off-by-one).
-            const uint64_t gas = c["gas"].asUInt64();
-
-            const auto envBytes = evmc::from_hex(envelopes[envRef].asString());
-            if (!envBytes.has_value())
-                throw std::runtime_error("case '" + id + "' envelope is not valid hex");
-            const evmc::bytes_view env = envBytes->empty() ?
-                                             evmc::bytes_view{} :
-                                             evmc::bytes_view{envBytes->data(), envBytes->size()};
-
-            const Json::Value& slots = c["slots"];
-            const auto slot1 = hexToBytes32(slots["1"].asString());
-            const auto slot3 = hexToBytes32(slots["3"].asString());
-            const auto slot7 = hexToBytes32(slots["7"].asString());
-            const auto slot8 = hexToBytes32(slots["8"].asString());
-
-            const auto params = unpackOpFeeParams(slot1, slot3, slot7, slot8);
-            const OpForkConfig& cfg = forkConfigFor(c["fork"].asString());
-
-            const auto l1 = computeL1Cost(params, env, cfg);
-            const auto op = computeChargedOperatorCost(params, gas, cfg);
-
-            Json::Value item(Json::objectValue);
-            item["id"] = id;
-            item["l1_cost"] = toHex(l1);
-            item["operator_cost"] = toHex(op);
-            out.append(item);
-
-            std::cout << id << "\tl1=" << toHex(l1) << "\top=" << toHex(op) << "\n";
-        }
-
-        {
-            std::ofstream outFile(outPath);
-            if (!outFile.good())
-                throw std::runtime_error("cannot write output: " + outPath);
-            Json::StreamWriterBuilder builder;
-            builder["indentation"] = "  ";
-            std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-            writer->write(out, &outFile);
-            outFile << "\n";
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "run_fisco: " << e.what() << "\n";
+        std::cerr << "run_fisco: cannot open grid: " << gridPath << "\n";
         return 1;
     }
+    std::stringstream ss;
+    ss << in.rdbuf();
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(ss.str(), root))
+    {
+        std::cerr << "run_fisco: JSON parse failed: " << reader.getFormattedErrorMessages() << "\n";
+        return 1;
+    }
+
+    // Guard jsoncpp accessors: operator[] on a non-object Value throws Json::LogicError
+    // (which does not unwind in this target) — check types before indexing.
+    if (!root.isObject())
+    {
+        std::cerr << "run_fisco: grid must be a JSON object\n";
+        return 1;
+    }
+    const Json::Value& envelopes = root["envelopes"];
+    const Json::Value& cases = root["cases"];
+    if (!envelopes.isObject() || !cases.isArray())
+    {
+        std::cerr << "run_fisco: grid must carry an 'envelopes' object and a 'cases' array\n";
+        return 1;
+    }
+
+    Json::Value out(Json::arrayValue);
+    for (const auto& c : cases)
+    {
+        if (!c.isObject())
+        {
+            std::cerr << "run_fisco: each case must be a JSON object\n";
+            return 1;
+        }
+        const std::string id = c.get("id", "").asString();
+        const std::string envRef = c.get("envelope_ref", "").asString();
+        if (!envelopes.isMember(envRef))
+        {
+            std::cerr << "run_fisco: case '" << id << "' unknown envelope_ref: " << envRef << "\n";
+            return 1;
+        }
+
+        // gas: jsoncpp asUInt64() — the overflow rows carry gas=2^64-1 and asDouble()
+        // would round it up to 2^64 (off-by-one).
+        const uint64_t gas = c["gas"].asUInt64();
+
+        const auto envBytes = evmc::from_hex(envelopes[envRef].asString());
+        if (!envBytes.has_value())
+        {
+            std::cerr << "run_fisco: case '" << id << "' envelope is not valid hex\n";
+            return 1;
+        }
+        evmc::bytes_view env;
+        if (!envBytes->empty())
+            env = evmc::bytes_view{envBytes->data(), envBytes->size()};
+
+        const Json::Value& slots = c["slots"];
+        if (!slots.isObject())
+        {
+            std::cerr << "run_fisco: case '" << id << "' has no 'slots' object\n";
+            return 1;
+        }
+        evmc::bytes32 slot1, slot3, slot7, slot8;
+        if (!hexToBytes32(slots["1"].asString(), slot1) ||
+            !hexToBytes32(slots["3"].asString(), slot3) ||
+            !hexToBytes32(slots["7"].asString(), slot7) ||
+            !hexToBytes32(slots["8"].asString(), slot8))
+        {
+            std::cerr << "run_fisco: case '" << id
+                      << "' has an invalid slot (must be exactly 32-byte hex)\n";
+            return 1;
+        }
+
+        const auto params = unpackOpFeeParams(slot1, slot3, slot7, slot8);
+
+        const std::string fork = c["fork"].asString();
+        if (!isKnownFork(fork))
+        {
+            std::cerr << "run_fisco: case '" << id << "' unknown fork: " << fork << "\n";
+            return 1;
+        }
+        const OpForkConfig& cfg = forkConfigFor(fork);
+
+        const auto l1 = computeL1Cost(params, env, cfg);
+        const auto op = computeChargedOperatorCost(params, gas, cfg);
+
+        Json::Value item(Json::objectValue);
+        item["id"] = id;
+        item["l1_cost"] = toHex(l1);
+        item["operator_cost"] = toHex(op);
+        out.append(item);
+
+        std::cout << id << "\tl1=" << toHex(l1) << "\top=" << toHex(op) << "\n";
+    }
+
+    std::ofstream outFile(outPath);
+    if (!outFile.good())
+    {
+        std::cerr << "run_fisco: cannot write output: " << outPath << "\n";
+        return 1;
+    }
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "  ";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+    // StreamWriter::write returns int: 0 on success (jsoncpp writer.h:55).
+    if (writer->write(out, &outFile) != 0)
+    {
+        std::cerr << "run_fisco: failed to serialize output\n";
+        return 1;
+    }
+    outFile << "\n";
     return 0;
 }
