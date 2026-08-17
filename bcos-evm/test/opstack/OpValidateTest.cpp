@@ -142,13 +142,16 @@ BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
 }
 
-BOOST_AUTO_TEST_CASE(EmptyEnvelopeFails)
+BOOST_AUTO_TEST_CASE(EmptyEnvelopeAccepted)
 {
+    // 空 envelope 是 eth_call 路径(OpCallScheduler 构造的 unsigned call tx 无 envelope),
+    // OpTransition.cpp 有意接受:flzLen=0 / bedrockCalldataGasUsed=0 → L1 成本为 0。
+    // 拒绝它会让每个 eth_call 失败。断言:接受 + l1_cost=0(镜像 SufficientBalancePasses)。
     test::TestState ts;
     ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const auto r = opValidate(ts, blk(), baseTx(), {}, isthmusConfig(), OpFeeParams{}, 30000000);
-    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
-    BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::invalid_argument);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    BOOST_CHECK_EQUAL(std::get<OpTxProperties>(r).l1_cost, intx::uint256{0});
 }
 
 BOOST_AUTO_TEST_CASE(SufficientBalancePasses)

@@ -34,11 +34,11 @@
 
 ### 收尾决策(用户待选)
 1. **DA 计划收尾**:`worktree-op-alignment` 合并/推 PR/保持——**未定**
-2. **EmptyEnvelopeFails** pre-existing 红(`OpValidateTest.cpp:150`,PR #5367 遗留,OpTransition 有意接受空 envelope):需修(对齐语义)或豁免,否则 ctest 无法全绿——**单独立案,未做**
+2. ✅ **EmptyEnvelopeFails 已修**(2026-08-17):改名 `EmptyEnvelopeAccepted`,断言空 envelope 被接受且 l1_cost=0(对齐 OpTransition.cpp:376-379 有意语义);`bcos-evm-opstack-tests` 112 全绿,ctest 唯一红消除
 3. **计划文档 2 处笔误**:DA 计划 `contract_call_tx` 例 312B 截断(实现用权威 345B)、brief `...ull` 超 uint64——顺手修
 
 ### 预部署矩阵下一步
-4. `docs/2026-08-17-opstack-predeploy-matrix-design.md` 已获批 → **转 writing-plans 写实施计划**(按 spec 的 6 步顺序)
+4. ✅ `docs/2026-08-17-opstack-predeploy-matrix-design.md` 已获批 → **实施计划已写**(`docs/2026-08-17-opstack-predeploy-matrix-plan.md`,6 Task;selector/topic 全 keccak 重算并逐条对过节点字节码;发现 spec 勘误:MessagePasser 无 getSentMessage,用 sentMessages(bytes32))。**待 SDD 执行**(Task 1 t8n 差分向量 → Task 6 挂 run_all)
 
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
 5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件

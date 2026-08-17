@@ -457,13 +457,13 @@ python3 predeploy_matrix.py || fail=1
 ```
 > 断言总数随 Task 2-5 实付数量变化,注释用 `>=N` 并确保脚本退出码正确。
 
-- [ ] **Step 2: 全量回归 — ctest(唯一红 = 单独立案的 EmptyEnvelopeFails)**
+- [ ] **Step 2: 全量回归 — ctest(应为 1935/1935 全绿)**
 
 ```bash
 cd /Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/build
 ctest --output-on-failure 2>&1 | tail -30
 ```
-Expected: 1934/1935,唯一红为 `OpValidateSuite/EmptyEnvelopeFails`(pre-existing,单独立案,非本计划引入)。
+Expected: 1935/1935 全绿。注:`OpValidateSuite/EmptyEnvelopeFails` 已于 2026-08-17 修复为 `EmptyEnvelopeAccepted`(空 envelope 有意接受,l1_cost=0,对齐 OpTransition.cpp:376-379)——唯一红已消除。
 
 - [ ] **Step 3: 全量回归 — op-e2e run_all.sh**
 
