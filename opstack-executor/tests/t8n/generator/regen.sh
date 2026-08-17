@@ -142,9 +142,12 @@ for f in "$T8N_DIR"/vectors/*.json; do
   registerable+=("$base")
 done
 # 确定性顺序：排序后追加（与 diff 集合比较同序）。
-readarray -t sorted < <(printf '%s\n' "${registerable[@]}" | sort)
+# 不用 readarray/mapfile（bash 4+）：macOS runner 默认 bash 3.2 没有该命令（CI exit 127）。
+sorted=()
+while IFS= read -r line; do sorted+=("$line"); done < <(printf '%s\n' "${registerable[@]}" | sort)
 append_if_absent "$manifest" "Phase-3 enhanced corpus (Task 6): corrupt 12 + static 10 + invalid-tx 18 + chain 6 + legacy 2 = 48 vectors (idempotent; §4c item 3/12 excluded — loader 不可表达)" "${sorted[@]}"
-readarray -t sorted_obs < <(printf '%s\n' "${observer_vectors[@]}" | sort)
+sorted_obs=()
+while IFS= read -r line; do sorted_obs+=("$line"); done < <(printf '%s\n' "${observer_vectors[@]}" | sort)
 append_if_absent "$manifest" "Dual-path observer vectors (gaslimit/basefee, bothForks)" "${sorted_obs[@]}"
 
 # ── diff 源重定义（Task 7 Step 1，审查 R10）：cases ∪ 三模式产物 == manifest ──
