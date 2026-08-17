@@ -19,8 +19,8 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
-#include "opstack-executor/Storage2State.h"  // eth::applyStateDiff / ZeroBlockHashes
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
+#include "opstack-executor/Storage2State.h"  // eth::applyStateDiff / ZeroBlockHashes
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmc/evmc.hpp>
@@ -336,7 +336,8 @@ public:
             {  // H1 fee lazy load (after the L1 attributes deposit has executed)
                 namespace eth = bcos::executor_v1::eth;
                 namespace op = bcos::evm::opstack;
-                bcos::evm::evmstate::Storage2State<Storage> stateView(storage, executor.sharedError());
+                bcos::evm::evmstate::Storage2State<Storage> stateView(
+                    storage, executor.sharedError());
                 m_ctx->fee = op::loadOpFeeParams(stateView);
                 if (m_ctx->daFootprintGasScalar)  // H1c DA scalar override
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
@@ -345,7 +346,7 @@ public:
             try
             {  // M1 normalization: validation failure -> consensus rejection
                 m_props = co_await executor.m_prepare(storage, blockHeader, transaction,
-                    ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft);
+                    ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft, m_ctx->chainId);
             }
             catch (const OpTxValidationFailed& e)
             {
@@ -450,8 +451,11 @@ public:
                 storage, blockHeader, dep, chainId, blockGasLeft, ledgerConfig, blockHashes);
         }
 
-        auto props =
-            co_await m_prepare(storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft);
+        // eth_call (call=true) simulates without chain binding — op-geth eth_call is lenient about
+        // chainId; block execution (call=false) enforces tx.chainId == node chainId (the op-geth
+        // EIP155Signer/modernSigner ErrInvalidChainId check).
+        auto props = co_await m_prepare(
+            storage, blockHeader, transaction, ledgerConfig, fee, blockGasLeft, call ? 0 : chainId);
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(storage, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes);
@@ -525,7 +529,7 @@ private:
     task::Task<bcos::evm::opstack::OpTxProperties> m_prepare(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee = {},
-        int64_t blockGasLeft = 0)
+        int64_t blockGasLeft = 0, uint64_t chainId = 0)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
@@ -542,6 +546,19 @@ private:
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::toEvmoneTransaction(transaction);
+        // op-geth parity (morebtcg review #5429): reject protected txs whose chainId differs from
+        // the node's chainId. op-geth EIP155Signer.Sender / modernSigner.Sender check
+        // `tx.ChainId() == chainID` (ErrInvalidChainId) during block processing; FISCO previously
+        // accepted any self-consistent chainId (the signature binds the tx's own chainId, so
+        // sender recovery always succeeds). Legacy unprotected txs (chainId 0, v=27/28) are
+        // accepted per Homestead semantics. chainId == 0 here means the caller did not supply a
+        // node chainId (fail-open); the block path always passes m_ctx->chainId.
+        if (chainId != 0 && evmTx.chain_id != 0 && evmTx.chain_id != chainId)
+        {
+            throw bcos::evm::engine::OpConsensusError(
+                "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
+                " does not match node chainId " + std::to_string(chainId));
+        }
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};

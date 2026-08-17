@@ -586,14 +586,15 @@ private:
                 else if (typeByte < 0xc0 && typeByte != 0x01 && typeByte != 0x02 &&
                          typeByte != 0x04)
                     throw bcos::evm::engine::OpConsensusError(
-                        "OpScheduler: unsupported tx type byte 0x" + std::to_string(typeByte));
+                        fmt::format("OpScheduler: unsupported tx type byte 0x{:02x}",
+                            static_cast<unsigned>(typeByte)));
             }
 
             bcos::ledger::LedgerConfig execLedgerConfig;
             execLedgerConfig.setEVMCRevision(cfg.rev);
 
             auto sharedError = std::make_shared<std::string>();
-        OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
+            OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
             // ① Block-pre steps (preBlockOpSteps, OpBlockExecute.h — the single home shared with
             // the retired runOpBlockInjection): recent-block-hashes construction,

@@ -80,6 +80,12 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         // left to the `< 56` check below, exactly as op-geth's readUint `case 1` (which does not
         // check for a leading zero). Do not "complete" this to lenOfLen>=1 — that would diverge
         // from op-geth and change 0xb8 0x00's rejection reason.
+        // Note (morebtcg #5429): op-geth actually has TWO decode paths — the Stream path
+        // (decode.go readKind -> readUint, size==1 does not check a leading zero) and the raw path
+        // (raw.go readKind -> readSize, which checks b[0]==0 for EVERY slen including slen==1).
+        // Both reject 0xb8 0x00, but with different reasons (<56 vs leading-zero); since lenOfLen==1
+        // with from[0]==0 is exactly payloadLength==0 < 56, this implementation's `< 56` check
+        // covers both paths with identical observable behavior.
         if (lenOfLen >= 2 && from[0] == 0)
         {
             return {BCOS_ERROR_UNIQUE_PTR(
