@@ -35,6 +35,7 @@ add_executable(opstack-executor-block-tests
     OpEngineBranchSmokeTest.cpp
     OpTwoPhaseTest.cpp
     OpCallSchedulerTest.cpp
+    OpDaMatrixSchemaTest.cpp
     support/SeedPreStateTest.cpp
     support/GoldenSampleTest.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
@@ -53,7 +54,8 @@ target_include_directories(opstack-executor-block-tests PRIVATE
     ${CMAKE_SOURCE_DIR}/bcos-rpc)
 target_compile_definitions(opstack-executor-block-tests PRIVATE
     OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/vectors"
-    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/golden/engine")
+    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/golden/engine"
+    OP_DA_MATRIX_PATH="${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json")
 add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
 
 # Extracted pure-function layer (OpRlpDecode.h / Storage2StateHelpers.h): direct unit tests
