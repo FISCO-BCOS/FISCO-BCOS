@@ -426,6 +426,9 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
 
 task::Task<Features> tag_invoke(ledger::tag_t<getFeatures> /*unused*/, LedgerInterface& ledger);
 
+task::Task<bool> tag_invoke(ledger::tag_t<getFeature> /*unused*/, LedgerInterface& ledger,
+    ledger::Features::Flag flag, protocol::BlockNumber blockNumber);
+
 task::Task<protocol::TransactionReceipt::Ptr> tag_invoke(
     ledger::tag_t<getReceipt>, LedgerInterface& ledger, crypto::HashType const& txHash);
 

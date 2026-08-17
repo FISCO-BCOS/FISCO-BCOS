@@ -1653,10 +1653,13 @@ Initializer::stateStorageProvider()
     // GlobalStateStorageInitializer owns the storage the forked views borrow.
     auto storageInitializer = m_globalStateStorageInitializer;
     return [storageInitializer]() {
-        // Fresh fork per call: a consistent point-in-time latest snapshot. Reads ride the
-        // immutable pending layers (in-flight blocks), the LRU cache, then the committed
-        // backend.
-        return forkLatestStateView(storageInitializer->storage().fork());
+        // COMMITTED plane per request: a fresh view over cache -> committed backend, with
+        // NO in-flight pending layers. eth_getStorageAt("latest") must observe the same
+        // plane as getBalance / getTransactionCount / getCode (committed ledger /
+        // scheduler) — Ethereum's "latest = last committed block". A fork() view (which
+        // exposes in-flight uncommitted layers) stays available as an explicit opt-in for
+        // operators who want the pending window visible.
+        return forkCommittedStateView(storageInitializer->storage());
     };
 }
 

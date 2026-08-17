@@ -24,6 +24,8 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/regex.hpp>
+#include <limits>
+#include <string_view>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -62,8 +64,26 @@ std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     const static boost::regex hexRegex("^0x[0-9a-fA-F]+$");
     if (boost::regex_match(blockTag.begin(), blockTag.end(), hexRegex))
     {
-        auto blockNumber = fromQuantity(std::string(blockTag));
-        return std::make_tuple(blockNumber, false);
+        // Reject a quantity that overflows the signed block-number range: fromQuantity
+        // returns uint64, so a value above INT64_MAX would wrap to a negative height on
+        // conversion (and one above UINT64_MAX throws std::invalid_argument) — neither is
+        // a valid block tag; report InvalidParams, not a silent wrong number.
+        uint64_t raw = 0;
+        try
+        {
+            raw = fromQuantity(std::string(blockTag));
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Invalid Block Number: " + std::string(blockTag)));
+        }
+        if (raw > static_cast<uint64_t>(std::numeric_limits<protocol::BlockNumber>::max()))
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Invalid Block Number: " + std::string(blockTag)));
+        }
+        return std::make_tuple(static_cast<protocol::BlockNumber>(raw), false);
     }
     BOOST_THROW_EXCEPTION(
         JsonRpcException(InvalidParams, "Invalid Block Number: " + std::string(blockTag)));

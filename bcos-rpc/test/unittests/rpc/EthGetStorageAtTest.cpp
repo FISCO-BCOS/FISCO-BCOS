@@ -136,7 +136,7 @@ public:
     void wireReader() { nodeService->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows)); }
 
     /// The production wiring shape (AirNodeInitializer): a provider that hands back an
-    /// owning AnyStorage over the latest-state plane, forked per request.
+    /// owning AnyStorage over the latest COMMITTED-state plane, forked per request.
     void wireStateProvider()
     {
         nodeService->setStateStorageProvider(
@@ -243,8 +243,8 @@ static std::string paddedHex(bcos::u256 value)
     return "0x" + toHex(bcos::h256{value}.ref());
 }
 
-// Latest state, provider wired: the flat KV read must come from the forked view.
-BOOST_AUTO_TEST_CASE(LatestStateFromForkedView)
+// Latest state, provider wired: the flat KV read must come from the committed view.
+BOOST_AUTO_TEST_CASE(LatestStateFromCommittedView)
 {
     wireStateProvider();
     bcos::bytes value32(32, 0);
@@ -448,19 +448,47 @@ BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
                 std::string::npos);
 }
 
-// Historical state, empty root: like getProof (generateProof's BlockNotCommitted), the empty
-// trie root has no node row, so it is treated as "root not committed" — an explicit error,
-// never a silent zero.
-BOOST_AUTO_TEST_CASE(HistoricalEmptyRootReturns32004)
+// Historical state, empty root, scenario B (round-2 Finding K): the empty root is a legal
+// "no accounts" root — the empty trie has no node rows, so it is NOT a "root not in MPT
+// storage" error. With complete tries the absent account provably reads zero, matching
+// Ethereum semantics.
+BOOST_AUTO_TEST_CASE(HistoricalEmptyRootScenarioBReadsZero)
 {
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
     wireReader();
     m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(mpt::emptyRootHash());
 
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
-    BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    BOOST_CHECK(resp["error"]["message"].asString().find("not in MPT node storage") !=
-                std::string::npos);
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == paddedHex(0));
+}
+
+// Historical state, empty root, scenario A: the empty root is not a storage-missing error,
+// but the incomplete trie still cannot distinguish a dormant account from a non-existent
+// one — so every state-read endpoint errors honestly, exactly like the non-empty scenario-A
+// case, never a silent zero.
+BOOST_AUTO_TEST_CASE(HistoricalEmptyRootScenarioADormantAccountErrors)
+{
+    wireReader();
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(mpt::emptyRootHash());
+
+    std::string const dormant = "0x00000000000000000000000000000000000000cc";
+    for (auto const& [method, resp] :
+        {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
+            std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
+            std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
+            std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
+    {
+        BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
+        BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
+        BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("Account not in trie") !=
+                                std::string::npos,
+            method);
+    }
 }
 
 // Spec: the result is a fixed 32-byte DATA. The flat (latest) path must left-pad a narrower

@@ -2746,6 +2746,24 @@ task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumbe
     co_await features.readFromStorage(*m_stateStorage, _blockNumber);
     co_return features;
 }
+
+task::Task<bool> Ledger::fetchFeature(
+    bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
+{
+    // One SYS_CONFIG row instead of fetchAllFeatures' read of every feature key (~61 rows).
+    // A flag is active when its enableNumber <= _blockNumber; absent row / decode failure
+    // means "not enabled" (the honest scenario-A default). Used by the historical
+    // state-read path which needs exactly feature_l2_ethereum_compat.
+    auto const key = std::string(magic_enum::enum_name(_flag));
+    auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
+    if (error || !entry)
+    {
+        co_return false;
+    }
+    auto const [value, enableNumber] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+    co_return _blockNumber >= enableNumber;
+}
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
 {
     if (m_keyPageSize > 0)

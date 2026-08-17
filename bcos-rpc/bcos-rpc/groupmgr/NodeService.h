@@ -110,16 +110,18 @@ public:
     }
     std::shared_ptr<MPTNodeReader> mptNodeReader() const noexcept { return m_mptNodeReader; }
 
-    /// Type-erased read handle over the LATEST state plane of GlobalStateStorage
+    /// Type-erased read handle over the LATEST COMMITTED state plane of GlobalStateStorage
     /// (eth_getStorageAt's fork-a-view path): StateKey -> Entry, no MPT types.
     using StateStorage =
         bcos::storage2::AnyStorage<bcos::executor_v1::StateKey, bcos::executor_v1::StateValue>;
 
-    /// Forks a fresh latest view of GlobalStateStorage and returns a handle that OWNS the
-    /// forked view. Each call is a consistent point-in-time snapshot: the immutable pending
-    /// layers of in-flight blocks, then the cache, then the committed backend. The concrete
-    /// storage is borrowed from the Initializer, so the provider must not outlive it (AIR
-    /// wiring in AirNodeInitializer; a tars-built NodeService leaves it unset).
+    /// Forks a fresh COMMITTED view of GlobalStateStorage and returns a handle that OWNS the
+    /// forked view. Each call is a consistent point-in-time snapshot of the committed plane
+    /// (cache -> committed backend) — in-flight uncommitted pending layers stay invisible, so
+    /// "latest" means the last committed block, the same plane the ledger / scheduler serve
+    /// for getBalance / getTransactionCount / getCode. The concrete storage is borrowed from
+    /// the Initializer, so the provider must not outlive it (AIR wiring in
+    /// AirNodeInitializer; a tars-built NodeService leaves it unset).
     using StateStorageProvider = std::function<std::shared_ptr<StateStorage>()>;
 
     void setStateStorageProvider(StateStorageProvider _provider) noexcept

@@ -138,6 +138,11 @@ public:
 
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
 
+    // Single-flag read (round-2 Finding E): one SYS_CONFIG row instead of fetchAllFeatures'
+    // ~61-key scan; used by the historical state-read path for feature_l2_ethereum_compat.
+    task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag flag, protocol::BlockNumber blockNumber) override;
+
     storage::StorageInterface::Ptr getStateStorage() override;
 
     // L2 mode: inject the per-block SystemConfig loader. AIR/MAX wire this only

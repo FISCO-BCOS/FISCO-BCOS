@@ -540,6 +540,22 @@ public:
         }
     }
 
+    /// A fresh COMMITTED view (cache -> committed backend, NO in-flight pending layers).
+    /// Unlike fork(), the uncommitted layers of in-flight blocks stay invisible — the
+    /// "latest = last committed block" plane Ethereum state-read semantics require.
+    ViewType forkCommitted()
+    {
+        std::unique_lock lock(m_listMutex);
+        if constexpr (withCacheStorage)
+        {
+            return ViewType(&m_latestBackend, m_cacheStorage);
+        }
+        else
+        {
+            return ViewType(&m_latestBackend);
+        }
+    }
+
     void pushView(ViewType view)
     {
         if (!view.m_mutableStorage)

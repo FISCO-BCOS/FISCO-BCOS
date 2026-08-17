@@ -16,6 +16,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
@@ -172,6 +173,60 @@ BOOST_AUTO_TEST_CASE(defaultImplementationKeepsLegacySchedulersWorking)
 
     auto resp = request(web3, R"("0x1")");
     BOOST_CHECK(resp.isMember("result"));
+}
+
+// Direct unit coverage of bcos::rpc::getBlockNumberByTag (round-2 Finding G/Q): default
+// depths keep safe/finalized on latest (isLatest), configured depths subtract and clamp at
+// 0, and an overflowing hex tag is rejected with InvalidParams instead of wrapping to a
+// negative height.
+BOOST_AUTO_TEST_CASE(getBlockNumberByTagDirect)
+{
+    using bcos::rpc::getBlockNumberByTag;
+    auto const latest = protocol::BlockNumber{19};
+
+    // Default depth 0: safe/finalized == latest (isLatest = true).
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "safe", 0, 0);
+        BOOST_CHECK_EQUAL(number, latest);
+        BOOST_CHECK(isLatest);
+        auto [num2, isLatest2] = getBlockNumberByTag(latest, "finalized", 0, 0);
+        BOOST_CHECK_EQUAL(num2, latest);
+        BOOST_CHECK(isLatest2);
+    }
+    // Configured depths: historical blocks (isLatest = false).
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "safe", 1, 0);
+        BOOST_CHECK_EQUAL(number, 18);
+        BOOST_CHECK(!isLatest);
+        auto [num2, isLatest2] = getBlockNumberByTag(latest, "finalized", 0, 2);
+        BOOST_CHECK_EQUAL(num2, 17);
+        BOOST_CHECK(!isLatest2);
+    }
+    // Depth larger than latest clamps at 0.
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "safe", 100, 0);
+        BOOST_CHECK_EQUAL(number, 0);
+        BOOST_CHECK(!isLatest);
+    }
+    // Numeric tags resolve to the exact height; overflowing hex is rejected (Finding G).
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "0x5", 0, 0);
+        BOOST_CHECK_EQUAL(number, 5);
+        BOOST_CHECK(!isLatest);
+        // 0x8000000000000000 = 2^63 > INT64_MAX: would wrap to a negative height if
+        // unchecked.
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0x8000000000000000", 0, 0),
+            bcos::rpc::JsonRpcException);
+        // > UINT64_MAX: fromQuantity rejects it too.
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0xffffffffffffffffffff", 0, 0),
+            bcos::rpc::JsonRpcException);
+    }
+    // earliest is block 0, historical.
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "earliest", 0, 0);
+        BOOST_CHECK_EQUAL(number, 0);
+        BOOST_CHECK(!isLatest);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

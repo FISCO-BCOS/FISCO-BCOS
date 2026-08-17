@@ -179,8 +179,9 @@ struct HistoricalMptContext
 /// checks as getProof (generateProof's BlockNotCommitted): the block must exist, the node must
 /// have a local MPT node reader, and the state root must be present in MPT node storage.
 /// Throws a JsonRpcException on any failure — a historical query is never silently served from
-/// the latest state. The empty root has no node row, so it is treated as "root not committed"
-/// exactly like getProof.
+/// the latest state. The empty root is a legal "no accounts" root (genesis / pre-MPT / empty
+/// blocks): the empty trie has no node rows, so it is NOT a "root not committed" error — the
+/// scenario flag below still governs how absence at it reads.
 bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
     std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
@@ -195,15 +196,25 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
-    if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
+    // Round-2 Finding K: an empty state root (block 0 / empty blocks / pre-MPT blocks) is a
+    // legal "no accounts" root, not a missing node row — skip the root-presence check and let
+    // MPTReadView (which handles emptyRootHash as "no accounts") plus the scenario flag decide
+    // how absence reads: scenario B -> zero; scenario A -> honest dormant-account error.
+    if (stateRoot != bcos::ledger::mpt::emptyRootHash()) [[likely]]
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
+        if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
+        }
     }
     // The scenario flag decides how absence at this root is read (getProof's fullTrie).
-    auto const features = co_await ledger::getFeatures(ledger);
-    co_return HistoricalMptContext{
-        stateRoot, features.get(ledger::Features::Flag::feature_l2_ethereum_compat)};
+    // Single-flag read (feature_l2_ethereum_compat): one SYS_CONFIG row instead of
+    // fetchAllFeatures' ~60-key scan; degrades to false (scenario A) on read failure, the
+    // same honest default as getFeatures' empty-set fallback.
+    auto const fullTrie = co_await ledger::getFeature(
+        ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
+    co_return HistoricalMptContext{stateRoot, fullTrie};
 }
 
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
@@ -343,20 +354,16 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
 
     if (isLatest)
     {
-        // Latest state: fork a fresh view of GlobalStorageState and read the flat KV — a
-        // consistent point-in-time snapshot (in-flight pending layers -> cache -> committed
-        // backend).
-        //
-        // DELIBERATE PLANE DIFFERENCE from getBalance / getTransactionCount / getCode:
-        // MultiLayerStorage::fork() copies the in-flight pending layers (executed, not yet
-        // committed blocks) into the view, so eth_getStorageAt("latest") can observe state
-        // ahead of the committed plane those three endpoints read (ledger / scheduler).
-        // This is intentional - "latest" here means the node's most current state, per the
-        // original design requirement - not the last committed block. On a deployment where
-        // the pending window must stay invisible, point the provider at the committed
-        // backend (GlobalStateStorage::latestBackend()) instead of fork(). The provider is
-        // unset on nodes with no local state storage (tars-built NodeService); those fall
-        // back to the ledger, which serves the same committed plane.
+        // Latest state: fork a fresh view of GlobalStateStorage's COMMITTED plane and read
+        // the flat KV — a consistent point-in-time snapshot of the last committed block
+        // (cache -> committed backend, no in-flight pending layers). This is the same plane
+        // getBalance / getTransactionCount / getCode read (committed ledger / scheduler):
+        // "latest" means the last committed block, per Ethereum semantics. Operators who
+        // want the pending window (in-flight executed, not yet committed layers) visible
+        // can wire a provider that forks GlobalStateStorage::fork() instead — the default
+        // wiring (AirNodeInitializer) is committed-only. The provider is unset on nodes
+        // with no local state storage (tars-built NodeService); those fall back to the
+        // ledger, which serves the same committed plane.
         Json::Value result;
         auto const& stateStorageProvider = m_nodeService->stateStorageProvider();
         if (stateStorageProvider)
@@ -1320,10 +1327,11 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     // feature_l2_ethereum_compat (scenario B) are the storage tries complete, making an
     // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
     // written after MPT activation, and generateProof marks such slots inMPT=false instead
-    // of emitting a lying value-0 exclusion proof. getFeatures degrades to an empty set on
-    // fetch failure, i.e. to the honest scenario-A behavior.
-    auto const features = co_await ledger::getFeatures(*ledger);
-    bool const fullTrie = features.get(ledger::Features::Flag::feature_l2_ethereum_compat);
+    // of emitting a lying value-0 exclusion proof. Single-flag read (one SYS_CONFIG row,
+    // same helper as resolveHistoricalMptContext); degrades to false (honest scenario-A
+    // behavior) on fetch failure.
+    auto const fullTrie = co_await ledger::getFeature(
+        *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
 
     auto result = co_await ledger::mpt::generateProof(
         *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);

@@ -547,6 +547,14 @@ public:
         co_return m_features;
     }
 
+    // Single-flag read mirrors the injected feature set, so the historical state-read path
+    // (ledger::getFeature) agrees with the test's setFeatures() injection.
+    task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag _flag, protocol::BlockNumber) override
+    {
+        co_return m_features.get(_flag);
+    }
+
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
         std::string_view _key, protocol::BlockNumber _blockNumber) override
     {

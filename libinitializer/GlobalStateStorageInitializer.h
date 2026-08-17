@@ -76,4 +76,16 @@ forkLatestStateView(ViewType view)
     auto owner = std::make_shared<OwningView>(std::move(view));
     return {owner, std::addressof(*owner->erased)};
 }
+
+/// Fork a fresh COMMITTED view of a GlobalStateStorage (cache -> committed backend, NO
+/// in-flight pending layers) and type-erase it into an owning AnyStorage handle. The
+/// "latest" plane Ethereum semantics require: a state read tagged "latest" must not observe
+/// uncommitted block state, and must agree with the committed plane the ledger / scheduler
+/// serve. Operators who want the pending window visible can wire a fork() view instead.
+template <class Storage>
+std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>
+forkCommittedStateView(Storage& storage)
+{
+    return forkLatestStateView(storage.forkCommitted());
+}
 }  // namespace bcos::initializer
