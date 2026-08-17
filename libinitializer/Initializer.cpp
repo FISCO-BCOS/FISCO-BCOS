@@ -475,7 +475,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->enableSingleNodeConsensus());
+                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -500,7 +500,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->enableSingleNodeConsensus());
+                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         // Single-node consensus mode on the v2 EthereumExecutor: build the Engine API service
         // wired to the ethereum scheduler + EthereumExecutor so blocks are built with
         // Ethereum-compliant semantics. In this mode the EngineService is the sole block
@@ -519,7 +519,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                transactionExecutor, !m_nodeConfig->enableSingleNodeConsensus());
+                transactionExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         if (engineApiForV1Only)
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
@@ -534,7 +534,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
-                ethereumExecutor, !m_nodeConfig->enableSingleNodeConsensus());
+                ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         // Single-node consensus mode on the v2 EthereumExecutor (serial pipeline).
         if (!engineApiForV1Only && m_nodeConfig->enableSingleNodeConsensus())
         {
@@ -802,14 +802,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         });
     }
     // init the txpool / pbft.
-    // Single-node consensus mode ([consensus] enable_single_node_consensus) bypasses the legacy
-    // txpool/pbft/sealer lifecycle: PBFTInitializer is still constructed above so groupInfo /
-    // NodeService wiring stays intact, but txpool and pbft (and the sealer and block sync inside
-    // pbft) are never initialized or started — block production is driven instead by the
-    // single-node consensus module (EngineService + mempool), and sendRawTransaction routes to
-    // the mempool. The front service is still wired for gateway bookkeeping, but its dispatchers
-    // are inert with no peers.
-    if (!m_nodeConfig->enableSingleNodeConsensus())
+    // Engine-driven block production ([consensus] enable_single_node_consensus OR
+    // [op_engine_rpc] enable — engineDrivenBlockProduction) bypasses the legacy txpool/pbft/sealer
+    // lifecycle: PBFTInitializer is still constructed above so groupInfo / NodeService wiring stays
+    // intact, but txpool and pbft (and the sealer and block sync inside pbft) are never initialized
+    // or started — block production is driven instead by the EngineService (via the built-in
+    // single-node driver or an external op-node CL), and sendRawTransaction routes to the mempool.
+    // The front service is still wired for gateway bookkeeping, but its dispatchers are inert with
+    // no peers. Keeping txpool/PBFT dormant is what makes the EngineService the SOLE block producer
+    // — starting them next to an engine driver would let two producers write the same global
+    // storage concurrently (kyonRay review #5429 MUST-FIX).
+    if (!m_nodeConfig->engineDrivenBlockProduction())
     {
         // init the txpool
         m_txpoolInitializer->init();
@@ -821,8 +824,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     else
     {
         INITIALIZER_LOG(INFO) << LOG_DESC(
-            "SingleNodeConsensus: skip txpool/pbft/sealer init (block production via Engine "
-            "Service + mempool)");
+            "EngineDrivenBlockProduction: skip txpool/pbft/sealer init (block production via "
+            "EngineService + mempool / external op-node)");
     }
 
     // init the frontService
@@ -1050,9 +1053,9 @@ void Initializer::initSysContract()
 
 void Initializer::start()
 {
-    // Single-node consensus mode: txpool/pbft (and the sealer inside pbft) stay dormant —
-    // block production is driven by the single-node consensus module.
-    if (!m_nodeConfig->enableSingleNodeConsensus())
+    // Engine-driven block production mode: txpool/pbft (and the sealer inside pbft) stay dormant —
+    // block production is driven by the EngineService (single-node driver or external op-node).
+    if (!m_nodeConfig->engineDrivenBlockProduction())
     {
         if (m_txpoolInitializer)
         {

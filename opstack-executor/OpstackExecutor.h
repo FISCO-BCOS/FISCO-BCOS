@@ -21,6 +21,8 @@
 #include "bcos-task/TBBWait.h"
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include "opstack-executor/Storage2State.h"  // eth::applyStateDiff / ZeroBlockHashes
+#include <bcos-codec/rlp/Common.h>           // BYTES_HEAD_BASE (consensus deposit-envelope decode)
+#include <bcos-codec/rlp/RLPDecode.h>        // decodeHeader / decode / decodeItems
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmc/evmc.hpp>
@@ -207,6 +209,90 @@ namespace bcos::executor_v1::opstack
 DERIVE_BCOS_EXCEPTION(EvmcRevisionNotConfigured);
 DERIVE_BCOS_EXCEPTION(OpForkRevisionMismatch);
 DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
+
+/// Strict 0x7E deposit envelope decode (consensus-grade, kyonRay review #5429 K3).
+/// `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`. Deposit fields fed
+/// to execution are re-derived HERE from the signed envelope — never from the unauthenticated tars
+/// mirrors (Transaction.tars field 8+) — because a peer-controlled mirror can mint arbitrary value
+/// (deposits are unsigned by design; authenticity comes from the L1-derived envelope). Unlike the
+/// RPC display-grade decoder, this rejects a non-0x7e type byte, malformed RLP, trailing bytes
+/// after the list and over-wide fields. One RLP decode per deposit (blocks carry one or two).
+[[nodiscard]] inline bcos::evm::opstack::DepositTx decodeDepositEnvelope(bcos::bytesConstRef env)
+{
+    namespace op = bcos::evm::opstack;
+    namespace rlp = bcos::codec::rlp;
+    auto fail = [](std::string const& msg) {
+        BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
+    };
+    if (env.size() < 2 || env[0] != static_cast<uint8_t>(op::kDepositTxType))
+        fail("deposit envelope: not a 0x7e deposit");
+    bcos::bytesRef body{const_cast<bcos::byte*>(env.data() + 1), env.size() - 1};
+    auto [err, header] = rlp::decodeHeader(body);
+    if (err != nullptr || !header.isList)
+        fail("deposit envelope: body must be an RLP list");
+    if (header.payloadLength != body.size())
+        fail("deposit envelope: trailing bytes after the RLP list");
+    bcos::bytesRef items(body.data(), header.payloadLength);
+
+    bcos::crypto::HashType sourceHash;
+    bcos::Address from;
+    if (auto e = rlp::decodeItems(items, sourceHash, from); e != nullptr)
+        fail("deposit envelope: sourceHash/from decode failed: " + e->errorMessage());
+
+    op::DepositTx dep;
+    std::copy_n(sourceHash.begin(), sizeof(evmc::bytes32), dep.source_hash.bytes);
+    std::copy_n(from.begin(), sizeof(evmc::address), dep.from.bytes);
+
+    // to: empty RLP item = contract creation (same convention as every Ethereum tx type)
+    if (items.empty())
+        fail("deposit envelope: missing to field");
+    if (items[0] == rlp::BYTES_HEAD_BASE)
+    {
+        items = items.getCroppedData(1);
+    }
+    else
+    {
+        bcos::Address to{};
+        if (auto e = rlp::decode(items, to); e != nullptr)
+            fail("deposit envelope: to decode failed");
+        evmc::address ta{};
+        std::copy_n(to.begin(), sizeof(evmc::address), ta.bytes);
+        dep.to = ta;
+    }
+    // mint: empty RLP item = no mint (op-geth encodes nil *big.Int as the empty item; on the wire
+    // nil and zero are the same 0x80, so nullopt matches op-geth's decode-side behavior)
+    if (items.empty())
+        fail("deposit envelope: missing mint field");
+    std::optional<bcos::u256> mint;
+    if (items[0] == rlp::BYTES_HEAD_BASE)
+    {
+        items = items.getCroppedData(1);
+    }
+    else
+    {
+        bcos::u256 m{0};
+        if (auto e = rlp::decode(items, m); e != nullptr)
+            fail("deposit envelope: mint decode failed");
+        mint = m;
+    }
+    bcos::u256 value{0};
+    uint64_t gas = 0;
+    uint64_t isSystemTxValue = 0;
+    bcos::bytes data;
+    if (auto e = rlp::decodeItems(items, value, gas, isSystemTxValue, data); e != nullptr)
+        fail("deposit envelope: value/gas/isSystemTx/data decode failed");
+    if (!items.empty())
+        fail("deposit envelope: trailing bytes inside the RLP list");
+
+    dep.mint = mint.has_value() ?
+                   std::optional<intx::uint256>{bcos::executor_v1::eth::evm::toIntxU256(*mint)} :
+                   std::nullopt;
+    dep.value = bcos::executor_v1::eth::evm::toIntxU256(value);
+    dep.gas_limit = static_cast<int64_t>(gas);
+    dep.is_system_tx = isSystemTxValue != 0;
+    dep.data = evmc::bytes(data.begin(), data.end());
+    return dep;
+}
 
 /// Per-block execution state threaded through ExecuteContext (shared scheduler plan Task 3).
 /// fee is loaded lazily on the first NORMAL tx (after the L1 attributes deposit has run);
@@ -612,51 +698,18 @@ private:
         co_return std::move(receipt);
     }
 
-    /// Build a DepositTx from a protocol::Transaction whose isDepositTx() is true, reading the
-    /// deposit-only mirrors (sourceHash/mint/isSystemTransaction) from the object. No raw-envelope
-    /// RLP re-parse (buildOpBlock decoded it via opEnvelopeToTars); the width checks below
-    /// (sourceHash 32-byte / sender 20-byte / to 20-byte) reject malformed fields. mint is always
-    /// Some(value) (0 == no mint).
+    /// Build a DepositTx from a protocol::Transaction whose isDepositTx() is true, re-deriving the
+    /// deposit fields from the signed 0x7E envelope (tx.extraTransactionBytes) — NEVER from the
+    /// unauthenticated tars mirrors (kyonRay review #5429 K3). The tars mirrors are display-only:
+    /// a peer-controlled mirror can mint arbitrary value (deposits are unsigned by design;
+    /// authenticity comes from the L1-derived envelope). On the engine newPayload path the mirrors
+    /// happen to be self-consistent (opEnvelopeToTars derives them in-process), but with OP mode
+    /// behind MultiVersionScheduler slot 3 any future wiring that feeds wire-decoded tars into
+    /// OpScheduler must not be able to mint. The strict decode rejects envelope/mirror mismatch.
 public:
     static bcos::evm::opstack::DepositTx depositFromTransaction(protocol::Transaction const& tx)
     {
-        namespace op = bcos::evm::opstack;
-        op::DepositTx dep;
-
-        // source_hash: unprefixed hex string_view -> evmc::bytes32 (fail loud on malformed input)
-        auto sh = bcos::safeFromHex(tx.sourceHash());
-        if (!sh || sh->size() != sizeof(evmc::bytes32))
-            BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(
-                                      "deposit sourceHash is not a 32-byte hex string"));
-        std::copy(sh->begin(), sh->end(), dep.source_hash.bytes);
-
-        // from: 20-byte raw string_view -> evmc::address (deposit has no signature; from == sender)
-        auto const& sb = tx.sender();
-        if (sb.size() != sizeof(evmc::address))
-            BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(
-                                      "deposit sender is not a 20-byte address"));
-        std::copy_n(sb.begin(), sizeof(evmc::address), dep.from.bytes);
-
-        // to: hex string_view -> optional<evmc::address> (empty = contract creation)
-        auto const& tb = tx.to();
-        if (!tb.empty())
-        {
-            auto dec = bcos::safeFromHex(tb);
-            if (!dec || dec->size() != sizeof(evmc::address))
-                BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(
-                                          "deposit to is not a 20-byte address"));
-            evmc::address ta{};
-            std::copy(dec->begin(), dec->end(), ta.bytes);
-            dep.to = ta;
-        }
-
-        dep.mint = bcos::executor_v1::eth::evm::toIntxU256(tx.mint());
-        dep.value = bcos::executor_v1::eth::evm::toIntxU256(tx.value());
-        dep.gas_limit = tx.gasLimit();
-        dep.is_system_tx = tx.depositIsSystemTransaction();
-        auto const& input = tx.input();
-        dep.data = evmc::bytes(input.begin(), input.end());
-        return dep;
+        return decodeDepositEnvelope(tx.extraTransactionBytes());
     }
 
 private:

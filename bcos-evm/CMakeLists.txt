@@ -127,6 +127,13 @@ add_library(bcos-evm-opstack STATIC
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # kyonRay review #5429 K5: OP modules deliberately use skipped-field designated initializers
+    # and GCC-13 reference-returning helpers; downgrade only here, not repository-wide (the global
+    # -Wmissing-field-initializers detector stays active for all non-OP modules).
+    target_compile_options(bcos-evm-opstack PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
 
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；
 # 否则整树 TESTS=ON 构建/CI 也不会编译 bcos-evm-eth-tests，回归无从暴露。

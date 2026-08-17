@@ -114,12 +114,11 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-Wno-restrict)
         add_compile_options(-Wno-error=format-truncation)
         add_compile_options(-Wno-error=free-nonheap-object)
-        # C++20 designated initializers that skip fields (value-init'd, no bug) — the OP block
-        # code uses this style deliberately; GCC flags every skipped field.
-        add_compile_options(-Wno-error=missing-field-initializers)
-        # GCC 13+ heuristic false-positives on reference-returning helpers (e.g. jAt returning
-        # v[key] into a caller lvalue) — see gcc bugzilla PR107532.
-        add_compile_options(-Wno-error=dangling-reference)
+        # NOTE (kyonRay review #5429 K5): the two OP-specific downgrades below are NOT applied
+        # repository-wide — `add_compile_options` would silence a real defect detector
+        # (-Wmissing-field-initializers) for all 25+ modules on behalf of one feature. They are
+        # applied per-target in the OP modules that deliberately use skipped-field designated
+        # initializers (bcos-evm-opstack / opstack-executor / ethereum-executor CMakeLists).
 
         # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
         add_compile_options(-Wno-subobject-linkage)
