@@ -26,6 +26,7 @@
 #include <bcos-utilities/Exceptions.h>
 #include <evmone/evmone.h>
 #include <evmc/evmc.hpp>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -241,28 +242,51 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
     auto fail = [](std::string const& msg) {
         BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
     };
-    // Reject an over-wide integer RLP item (kyonRay review #5429 #1): rlp::decode(UnsignedIntegral)
-    // does not check the payload length against the target width — fromBigEndian folds excess high
-    // bytes, so a 33-byte mint would silently truncate to its low 32 bytes. Return the payload
-    // length of the integer at `ref`'s front, or nullopt if it is not a well-formed integer
-    // (RLP list / truncated length prefix).
+    // Gate an integer RLP item for width AND canonicality (kyonRay review #5429 round 3):
+    // rlp::decode(UnsignedIntegral) does not check the payload length against the target width —
+    // fromBigEndian folds excess high bytes, so a 33-byte mint would silently truncate to its low
+    // 32 bytes — and of the non-canonical forms it only rejects a single-byte payload < 0x80 (via
+    // decodeHeader). op-geth's Stream.uint / decodeBigInt additionally return ErrCanonInt /
+    // ErrCanonSize for the single Byte 0x00 (integer zero must be the empty item 0x80) and for any
+    // multi-byte payload with a leading zero byte. Return the payload length of the integer at
+    // `ref`'s front, or nullopt if it is not a canonical well-formed integer (RLP list / truncated
+    // length prefix / non-canonical). FISCO's own RLPEncode always writes minimal encodings, so
+    // only externally-supplied bytes are affected.
     auto integerPayloadLength = [&](bcos::bytesConstRef const& ref) -> std::optional<size_t> {
         if (ref.empty())
             return std::nullopt;
         uint8_t const b = ref[0];
         if (b < 0x80)
-            return 0;  // single byte value
+        {
+            // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80).
+            return b == 0 ? std::nullopt : std::optional<size_t>{0};
+        }
         if (b <= 0xb7)
-            return static_cast<size_t>(b - 0x80);  // short string
+        {  // short string
+            size_t const pl = static_cast<size_t>(b - 0x80);
+            if (ref.size() < 1 + pl)
+                return std::nullopt;  // truncated length prefix
+            if (pl == 1 && ref[1] < 0x80)
+                return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
+            if (pl >= 2 && ref[1] == 0)
+                return std::nullopt;  // leading zero byte
+            return pl;                // pl == 0: the empty item 0x80, canonical zero
+        }
         if (b <= 0xbf)
         {  // long string
             size_t const n = b - 0xb7;
             if (ref.size() < 1 + n)
-                return std::nullopt;
+                return std::nullopt;  // truncated length prefix
             size_t len = 0;
             for (size_t i = 0; i < n; ++i)
                 len = (len << 8) | ref[1 + i];
-            return len;
+            if (ref.size() < 1 + n + len)
+                return std::nullopt;  // truncated payload
+            if (len == 1 && ref[1 + n] < 0x80)
+                return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
+            if (len >= 2 && ref[1 + n] == 0)
+                return std::nullopt;  // leading zero byte
+            return len;               // decodeHeader rejects a long-string length < 56
         }
         return std::nullopt;  // list (not an integer)
     };
@@ -313,7 +337,7 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
     else
     {
         if (auto pl = integerPayloadLength(items); !pl || *pl > 32)
-            fail("deposit envelope: mint over-wide (>32 bytes)");
+            fail("deposit envelope: mint non-canonical or over-wide (>32 bytes)");
         bcos::u256 m{0};
         if (auto e = rlp::decode(items, m); e != nullptr)
             fail("deposit envelope: mint decode failed");
@@ -323,21 +347,31 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
     uint64_t gas = 0;
     uint64_t isSystemTxValue = 0;
     bcos::bytes data;
-    // value (u256): width check before decode — over-wide would truncate silently.
+    // value (u256): width + canonicality check before decode — over-wide would truncate silently.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 32)
-        fail("deposit envelope: value over-wide (>32 bytes)");
+        fail("deposit envelope: value non-canonical or over-wide (>32 bytes)");
     if (auto e = rlp::decode(items, value); e != nullptr)
         fail("deposit envelope: value decode failed");
-    // gas (uint64): width check.
+    // gas (uint64): width + canonicality check, then int64 range. A uint64 that exceeds
+    // INT64_MAX would silently wrap dep.gas_limit's static_cast<int64_t>(gas) to -1 — reject at
+    // the decoder, not downstream (kyonRay review #5429 round 3).
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
-        fail("deposit envelope: gas over-wide (>8 bytes)");
+        fail("deposit envelope: gas non-canonical or over-wide (>8 bytes)");
     if (auto e = rlp::decode(items, gas); e != nullptr)
         fail("deposit envelope: gas decode failed");
-    // isSystemTx (uint64): width check.
+    if (gas > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+        fail("deposit envelope: gas exceeds int64 range");
+    // isSystemTx (uint64): width + canonicality check, then a 0/1 value check. op-geth's
+    // decodeBool accepts only the empty item (false) and 0x01 (true) and errors on any other
+    // value ("rlp: invalid boolean"). Decoded as uint64 — the FISCO bool overload demands
+    // payloadLength == 1 and would reject the empty-item false — so the 0/1 check is explicit
+    // (kyonRay review #5429 round 3).
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
-        fail("deposit envelope: isSystemTx over-wide (>8 bytes)");
+        fail("deposit envelope: isSystemTx non-canonical or over-wide (>8 bytes)");
     if (auto e = rlp::decode(items, isSystemTxValue); e != nullptr)
         fail("deposit envelope: isSystemTx decode failed");
+    if (isSystemTxValue > 1)
+        fail("deposit envelope: isSystemTx must be 0 or 1");
     if (auto e = rlp::decode(items, data); e != nullptr)
         fail("deposit envelope: data decode failed");
     if (!items.empty())

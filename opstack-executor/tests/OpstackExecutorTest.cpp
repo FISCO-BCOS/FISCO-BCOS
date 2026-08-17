@@ -681,6 +681,71 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
         BOOST_CHECK_THROW(
             [&]() { (void)decodeDepositEnvelope(bcos::ref(overWideEnv)); }(), OpTxValidationFailed);
     }
+
+    // Rejection (#2 round 3, kyonRay): non-canonical integers / int64 range / bool — the width
+    // gate does not cover these, and rlp::decode only rejects one non-canonical form (single-byte
+    // payload < 0x80 via decodeHeader). Build an envelope from raw per-field items so we can feed
+    // encodings RLPEncode would never emit. Field order: sourceHash, from, to, mint, value, gas,
+    // isSystemTx, data.
+    auto canonicalItems = []() {
+        bcos::bytes sh, from, to, mint, value, gas, isSystem, data;
+        bcos::codec::rlp::encode(
+            sh, bcos::h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7"));
+        bcos::codec::rlp::encode(from, bcos::Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"));
+        bcos::codec::rlp::encode(to, bcos::Address("0x4200000000000000000000000000000000000015"));
+        bcos::codec::rlp::encode(mint, bcos::bytes{5});                // mint = 5 (bare Byte)
+        bcos::codec::rlp::encode(value, bcos::bytes{});                // value = 0 (empty item)
+        bcos::codec::rlp::encode(gas, bcos::bytes{0x01, 0x86, 0xa0});  // gas = 100000
+        bcos::codec::rlp::encode(isSystem, bcos::bytes{});             // isSystemTx = false
+        bcos::codec::rlp::encode(data, bcos::bytes{});                 // data = empty
+        return std::vector<bcos::bytes>{sh, from, to, mint, value, gas, isSystem, data};
+    };
+    auto envelopeFromItems = [](std::vector<bcos::bytes> const& items) {
+        bcos::bytes body;
+        for (auto const& it : items)
+            body.insert(body.end(), it.begin(), it.end());
+        bcos::bytes list;
+        bcos::codec::rlp::encodeHeader(list, bcos::codec::rlp::Header{true, body.size()});
+        bcos::bytes env{0x7e};
+        env.insert(env.end(), list.begin(), list.end());
+        return env;
+    };
+
+    // (a) leading-zero multi-byte integer (value = 0x82 0x00 0x05): would fold to 5, but op-geth
+    // rejects it as ErrCanonInt.
+    {
+        auto items = canonicalItems();
+        items[4] = bcos::bytes{0x82, 0x00, 0x05};  // value
+        BOOST_CHECK_THROW(
+            [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
+            OpTxValidationFailed);
+    }
+    // (b) single Byte 0x00 (value): integer zero must be the empty item 0x80 — op-geth ErrCanonInt.
+    {
+        auto items = canonicalItems();
+        items[4] = bcos::bytes{0x00};  // value
+        BOOST_CHECK_THROW(
+            [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
+            OpTxValidationFailed);
+    }
+    // (c) gas = uint64 max (0x88 FF..FF): static_cast<int64_t>(gas) would wrap to -1; the decoder
+    // rejects values that exceed int64 range.
+    {
+        auto items = canonicalItems();
+        items[5] = bcos::bytes{0x88, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};  // gas
+        BOOST_CHECK_THROW(
+            [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
+            OpTxValidationFailed);
+    }
+    // (d) isSystemTx = bare Byte 2: != 0 would read true, but op-geth decodeBool accepts only the
+    // empty item (false) and 0x01 (true).
+    {
+        auto items = canonicalItems();
+        items[6] = bcos::bytes{0x02};  // isSystemTx
+        BOOST_CHECK_THROW(
+            [&]() { (void)decodeDepositEnvelope(bcos::ref(envelopeFromItems(items))); }(),
+            OpTxValidationFailed);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
