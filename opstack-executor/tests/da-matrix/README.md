@@ -47,6 +47,16 @@ cd <contracts-bedrock> && forge test --match-contract OperatorFeeCheck --json
 
 Outputs are unified lowercase `"0x"` hex (op-geth `hexutil.Big` convention).
 
+> **Solidity end is deliberately NOT in ctest.** The `solidity/` end
+> (`OperatorFeeCheck.t.sol`) requires the external `contracts-bedrock` checkout
+> (see `PINNED REFERENCES`) and a `forge` toolchain, neither of which CI can
+> reach — so only the FISCO, op-geth and op-revm runners are wired into
+> `CMakeLists.txt`; the Solidity end is run manually against the pinned
+> checkout (step 4). Its `operator_cost` is the authoritative operator fee; its
+> `l1_cost` is a **cross-reference only** (`GasPriceOracle.getL1Fee` uses the
+> unsigned-tx **+68** convention, see `DIVERGENCES.md` and
+> `solidity_l1_uint32_overflow`).
+
 ## Current four-source status
 
 All 16 grid cases agree **exactly** on FISCO, op-geth and op-revm (verified
@@ -56,6 +66,30 @@ authoritative operator fee and matches the same 16 values; its `l1_cost` is a
 cross-reference only (see `DIVERGENCES.md` and
 `solidity/OperatorFeeCheck.t.sol` — `getL1Fee` uses the unsigned-tx +68
 convention and panics for scalars ≥ 2^28, see `solidity_l1_uint32_overflow`).
+
+## PINNED REFERENCES
+
+The reference sources are pinned to specific local checkouts so the committed
+`golden/` snapshots stay reproducible. **Before regenerating any snapshot,
+verify each local checkout has not drifted from the pinned commit** — a changed
+checkout silently changes the expected output.
+
+| Source | Local checkout | Pinned commit / version |
+|---|---|---|
+| op-revm | `/Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (version 20.0.0) |
+| contracts-bedrock | `/Users/octopus/octo/code/blockchain-impl/optimism/packages/contracts-bedrock` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (same optimism monorepo) |
+| op-geth | — (build-tagged) | v1.101702.2 (already recorded above) |
+
+op-revm and contracts-bedrock both live in the same optimism monorepo
+(`/Users/octopus/octo/code/blockchain-impl/optimism`), so they share one pinned
+commit. Verify with:
+
+```bash
+cd /Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm && git rev-parse HEAD
+cd /Users/octopus/octo/code/blockchain-impl/optimism/packages/contracts-bedrock && git rev-parse HEAD
+```
+
+Both must print `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd`.
 
 ## known_divergence
 

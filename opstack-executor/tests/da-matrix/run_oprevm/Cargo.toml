@@ -17,5 +17,5 @@ description = "op-revm DA/operator-fee grid runner for the FISCO opstack da-matr
 publish = false
 
 [dependencies]
-op-revm = { path = "/Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm" }
+op-revm = { path = "/Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm", version = "=20.0.0" }
 serde_json = "1"
