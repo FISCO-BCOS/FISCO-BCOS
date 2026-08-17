@@ -58,6 +58,19 @@ target_compile_definitions(opstack-executor-block-tests PRIVATE
     OP_DA_MATRIX_PATH="${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json")
 add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
 
+# Task 3: DA/operator-fee matrix runner. Consumes da-matrix/da_matrix.json, computes
+# L1 data fee + charged operator fee per case, writes out_fisco.json.
+# NOTE: no bare `bcos-evm` target (review A1) — opstack-executor pulls in
+# bcos-evm-opstack/bcos-evm-eth transitively. --check mode is Task 6; this target
+# only wires --grid/--out.
+add_executable(opstack-da-matrix-runner da-matrix/run_fisco.cpp)
+set_target_properties(opstack-da-matrix-runner PROPERTIES UNITY_BUILD OFF)
+target_link_libraries(opstack-da-matrix-runner PRIVATE
+    opstack-executor bcosevm::opstack jsoncpp_static evmone::evmone intx::intx bcos-utilities)
+add_test(NAME DaMatrixFiscoBaseline COMMAND opstack-da-matrix-runner
+    --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+    --out ${CMAKE_CURRENT_BINARY_DIR}/out_fisco.json)
+
 # Extracted pure-function layer (OpRlpDecode.h / Storage2StateHelpers.h): direct unit tests
 # over the decode primitives and state-bridge helpers, no class-template instantiation.
 add_executable(opstack-executor-detail-tests
