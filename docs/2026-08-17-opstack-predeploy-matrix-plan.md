@@ -16,7 +16,7 @@
 - 节点:B3 eth RPC **8553**(storage 保留,`restart_b3.sh`)、B3a 8563/8564。SENDER=`0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693`,PRIVKEY=`cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29`,CHAIN_ID=11155111,sign_secp=`/tmp/op-spike/sign_secp`。
 - 预部署地址(Python 脚本常量):`L1_BLOCK=0x4200…15`、`MESSAGE_PASSER=0x4200…16`、`MESSENGER=0x4200…07`、`BRIDGE=0x4200…10`、`SYSTEM_CONFIG=0x4200…c0`、`L2_VALIDATOR_SET=0x4200…c1`。
 - **波次边界(单 L2 节点不可测,登记 deferred 而非强制)**:L2CrossDomainMessenger 的 `relayMessage`(需真实 L1→L2 消息已过桥)、L2StandardBridge 的 `finalizeBridge*`(需真实 L1 桥)、SystemConfig 的 owner 转移(owner=0x0 无人可转移)。这三项本计划不建断言,在交付时登记为「单 L2 节点不可构造」的 deferred 项(spec 表保留,波次 2+ 需跨域 mock L1 才可测)。
-- **B3 节点现实(2026-08-17 实测,决定 Task 2 L1Block 组设计)**:genesis 部署的 L1Block 是 **Ecotone 版 1.4.1-beta.1**(dispatcher 仅 `0x440a5e20`,无 `0x3db6be2b`/`0x098999be`),但节点按 Jovian 注入 L1-attributes deposit(selector `0x3db6be2b`)→ **deposit 每块 revert(回执 status=0x0)**,L1Block 槽**永不被写**(全部 getter 实测返回 0)。这是 genesis allocs 与 fork 配置不匹配的 pre-existing 状态——按「测试不可退步 + 不碰 genesis/实现」登记 DIVERGENCE(`l1block_deposit_reverts_ecotone_vs_jovian`),L1Block 槽写入语义**由 t8n 差分覆盖**(Task 1 的 146B 码,selector 匹配),真实节点层只测「getter 可读 + 拒绝路径」。
+- **B3 节点现实(2026-08-17 实测,决定 Task 2 L1Block 组设计)**:genesis 部署的 L1Block 是 **Ecotone 版 1.4.1-beta.1**(L1-attributes setter 仅 `0x440a5e20`,另有全部 getter 与 legacy 8 参 `setL1BlockValues` `0x015d8eb9`;**无** `0x3db6be2b`/`0x098999be`),但节点按 Jovian 注入 L1-attributes deposit(selector `0x3db6be2b`)→ **deposit 每块 revert(回执 status=0x0)**,L1Block 槽**永不被写**(全部 getter 实测返回 0)。这是 genesis allocs 与 fork 配置不匹配的 pre-existing 状态——按「测试不可退步 + 不碰 genesis/实现」登记 DIVERGENCE(`l1block_deposit_reverts_ecotone_vs_jovian`),L1Block 槽写入语义**由 t8n 差分覆盖**(Task 1 的 146B 码,selector 匹配),真实节点层只测「getter 可读 + 拒绝路径」。
 - **已知分歧(实现时确认,写死为 DIVERGENCE 而非强制断言)**:①(已被上条取代)节点 L1Block 是 1.4.1-beta.1 且 deposit revert。② SystemConfig genesis **未播种 owner 槽**(OZ Ownable 全 0)→ setValueByKey onlyOwner 恒 revert(实测确认 revert 成立,`syscfg_get_default`/`syscfg_set_reverts_noowner` 可 PASS)。③ 部署 Bridge 的函数名是 `bridgeERC20*`(非 spec 的 `deposit*`,selector 对过字节码);deposit 是否 mint 取决于 L2 token 是否 OptimismMintableERC20(实现时试跑,不 mint 则 DIVERGENCE)。
 - t8n 机制:`cases.go` 的 `caseSpecs` 表(645 行起,`bothForks={"isthmus","jovian"}`)、`caseFrame`(L1Block 默认 code-less,slots 由 `feeParams.l1BlockStorage` 预播种)、`message_passer_write`(748 行,最小 SSTORE 码 `0x5f3560015500`);`regen.sh` 逐 case 生成向量 + `golden/engine/*.golden.json` + manifest 幂等追加 + cases∪modes==manifest 集合校验;`OpT8nReplayTest.cpp:878` 已断言 header.withdrawalsRoot。
 - Selector(keccak256 重算,逐条对过节点字节码 dispatcher,权威;注意 **SHA3≠keccak**,`hashlib.sha3_256` 是错的一律不用):initiateWithdrawal=`0xc2b3e5ac`、sendMessage=`0x3dbb202b`、**bridgeERC20=`0x87087623`、bridgeERC20To=`0x540abf73`(⚠️ 部署桥的函数名是 bridge*,不是 spec 的 deposit*;0x58a997f6/0x838b2520 在 dispatcher 不存在)**、withdraw=`0x32b7006d`、setValueByKey=`0x86ff19b9`、getValueByKey=`0x1258a93a`、messageNonce=`0xecc70428`、sentMessages(bytes32)=`0x82e3702d`、balanceOf=`0x70a08231`、transfer=`0xa9059cbb`。
@@ -219,12 +219,16 @@ def wait_receipt(rpc, tx_hash):
     raise AssertionError(f"no receipt for {tx_hash}")
 def abi_encode_call(sel, *args):
     # ABI 编码:selector + 每参 32B 头部词(动态参数在头部放 offset)+ 尾部 data 段。
-    # offset = 4(selector) + n*32(全部头部词) + 当前 tail 位置 —— 正确 ABI 语义。
+    # offset = n*32(全部头部词,相对参数区起点=selector 之后)+ 当前 tail 位置。
+    # ⚠️ 不加 4(selector 不计入 offset)—— Task 1 手写 calldata dataOffset=0x60=3*32 可反证。
+    # address 判据:str 以 "0x" 开头且长 42 → 32B 左 pad 字;其它 str → string 动态 bytes。
     n, head, tail = len(args), [], b""
     for a in args:
-        if isinstance(a, (bytes, str)):
+        if isinstance(a, str) and a.startswith("0x") and len(a) == 42:
+            head.append(int(a, 16).to_bytes(32, "big"))          # address → 32B 左 pad
+        elif isinstance(a, (bytes, str)):
             if isinstance(a, str): a = a.encode()
-            head.append((4 + n * 32 + len(tail)).to_bytes(32, "big"))
+            head.append((n * 32 + len(tail)).to_bytes(32, "big"))
             tail += len(a).to_bytes(32, "big") + a.ljust(32, b"\x00")
         elif isinstance(a, bool):
             head.append((1 if a else 0).to_bytes(32, "big"))
@@ -251,13 +255,24 @@ def main():
 if __name__ == "__main__": main()
 ```
 
+- [ ] **Step 1b: 实现签名链(keccak256/rlp_encode/to_bytes_min/sign_secp/make_eip1559_tx)——Step 5 起依赖**
+
+⚠️ `make_eip1559_tx` 当前是 `raise NotImplementedError` 桩,Step 5 拒绝路径即首次使用。**在 Step 2 冒烟前实现**:
+1. 从 `b3_contracts.py` **原样复制** `_RC/_ROT/_rotl64/_keccak_f/keccak256/rlp_encode/to_bytes_min`(该文件 29-96 行,纯 keccak+RLP 实现)。
+2. 实现 `make_eip1559_tx(privkey, nonce, to, data, gas)`:
+   - 字段 = `[chainId, nonce, maxFee=1gwei, maxPrio=0.1gwei, gas, to, value=0, data, []]`(EIP-1559 0x02)
+   - `msg_hash = keccak256(b"\x02" + rlp_encode(fields))`
+   - `subprocess.run([SIGN_SECP, privkey, msg_hash.hex()])` → 解析 `r/s/recid`(参考 b3_contracts 100-107 行),`y_parity = recid & 1`
+   - 返回 `"0x" + (b"\x02" + rlp_encode(full)).hex()`
+3. 冒烟断言本身(Sender 无需签名)不依赖它,但 Step 5 拒绝路径需要;**先实现再跑冒烟**,避免后续撞桩。
+
 - [ ] **Step 2: 冒烟运行**
 
 ```bash
 cd /Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/tools/op-e2e
 bash restart_b3.sh && python3 predeploy_matrix.py
 ```
-Expected: 1 断言,`l1block_number_callable` PASS。**若 number 调用报 RPC error**(非返回 0):才是真失败——0 是 DIVERGENCE 预期(L1Block deposit revert),非零也 OK(若后续节点修复了 deposit 对齐)。断言只要求「可读 + 32B hex」,与具体值无关。
+Expected: 1 断言,`l1block_number_callable` PASS(前提:Step 1b 签名链已实现,脚本可 import 无语法错)。**若 number 调用报 RPC error**(非返回 0):才是真失败——0 是 DIVERGENCE 预期(L1Block deposit revert),非零也 OK(若后续节点修复了 deposit 对齐)。断言只要求「可读 + 32B hex」,与具体值无关。
 
 - [ ] **Step 3: L1Block 组完整断言(9 条)**
 
@@ -299,7 +314,7 @@ B3 的 deposit 每块 revert → sequenceNumber 恒 0,**跨块 +1 断言在 B3 �
     else:
         check("l1block_seq_increments", int(seq1,16) == int(seq0,16)+1, f"{seq0}->{seq1}")
 ```
-> **历史块 tag 坑(已确认)**:节点 eth_call 对历史 tag 静默服务 latest(memory `op-ethcall-historical-tag-deferred`),所以 `seq0`@旧块 tag 会读到封块后的 latest 值——**必须用最新块的 `latest` tag 读两次**,不要传历史块号。由于 deposit 恒 revert,实际走的是 DIVERGENCE 分支;若未来节点对齐,此分支自动转真断言。
+> **历史块 tag 坑(已确认)**:节点 eth_call 对历史 tag 静默服务 latest(memory `op-ethcall-historical-tag-deferred`),历史 tag 读不到旧块值。**注意**:由于两次都以 `latest` tag 读,即使未来节点修复 deposit 对齐、seq 每块 +1,两次 latest 也返回同一块同值(`seq1==seq0`),`l1block_seq_increments` 的 `+1` 断言仍不成立——**本步在 B3 现实下只能走 DIVERGENCE 分支,「自动转真断言」不可达**。跨块 seq 递增的真实语义由 t8n 差分(146B 码 postState)覆盖;若未来要在真实节点测,需改为「读块 A 的 seq(封块前 latest)→ 等新块 → 读 latest seq」的单块内双读,且依赖封块机制,本计划不承诺。
 
 - [ ] **Step 5: 拒绝路径 — 非 deposit 调用方 setL1BlockValues 被拒(1 条)**
 
@@ -350,12 +365,12 @@ git commit -m "test(e2e): predeploy matrix skeleton + L1Block group (callable ge
 复制 `b3_contracts.py` 的 keccak256/rlp_encode/to_bytes_min 与 sign 逻辑,新增:
 ```python
 def make_withdraw_tx(privkey, nonce, target, gas_limit, data):
-    # abi_encode 返回 selector+参数(纯手写拼接,不引入库): target(32B) ‖ gasLimit(32B) ‖
-    # dataOffset=0x60 ‖ dataLen ‖ data(pad32)。参考 probe_l1block.py build_jovian_calldata 模式。
+    # abi_encode_call 返回 selector+参数(纯手写拼接,不引入库): target(32B) ‖ gasLimit(32B) ‖
+    # dataOffset ‖ dataLen ‖ data(pad32)。参考 probe_l1block.py build_jovian_calldata 模式。
     cd = abi_encode_call("c2b3e5ac", target, gas_limit, data)
     return make_eip1559_tx(privkey, nonce, MESSAGE_PASSER, cd, gas=200_000)
 ```
-> `abi_encode_call(selector_hex, *args)` 已在 **Task 2 骨架**定义(offset = 4 + n*32 + tail 位置的正确 ABI 语义);若 Task 2 提交时未含,本 Task 补齐。**禁止**用 `abi_encode("sig",...)` 这种带签名解析的调用——selector 已写死,只拼参数段。
+> `abi_encode_call(selector_hex, *args)` 已在 **Task 2 骨架**定义(offset = n*32 + tail 位置,selector 不计入;address 按 0x+42 字符判定为 32B 左 pad);若 Task 2 提交时未含,本 Task 补齐。**禁止**用 `abi_encode("sig",...)` 这种带签名解析的调用——selector 已写死,只拼参数段。
 >
 > **共享助手契约(全部在 Task 2 骨架定义,跨 Task 复用)**:`make_eip1559_tx(privkey, nonce, to, data, gas)`(EIP-1559 0x02 签名,复用 b3_contracts make_call_tx 96-107 行)、`wait_receipt(rpc, tx_hash)`(轮询 ≤60s)、`addr_pad(a)`、`abi_encode_call(sel, *args)`。**不用 `first_log_topic`**——回执 logs 可能多条(agent5 实测 Messenger 首条是 MessagePassed),一律**遍历 logs 匹配 topic**。
 
@@ -371,13 +386,16 @@ def make_withdraw_tx(privkey, nonce, target, gas_limit, data):
     # MessagePassed 事件 topic0(keccak,已对部署字节码 PUSH32 验证):
     #   keccak256("MessagePassed(uint256,address,address,uint256,uint256,bytes,bytes32)")
     MP_TOPIC = "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054"
+    # ⚠️ 与共享契约一致:遍历 logs 匹配 topic(不取 logs[0])——initiateWithdrawal 通常单条,
+    #    但为一致性遍历。withdrawalHash 从**匹配到的这条** log 取 data。
     logs = r.get("logs", [])
-    topics = logs[0].get("topics", []) if logs else []
-    check("mp_messagepassed_event", topics and topics[0] == MP_TOPIC, str(topics))
+    mp_logs = [lg for lg in logs if lg.get("topics", [""])[0] == MP_TOPIC]
+    check("mp_messagepassed_event", len(mp_logs) >= 1,
+        str([lg.get("topics", [""])[0] for lg in logs]))
     # withdrawalHash 提取(实测):MessagePassed 非 indexed data 共 6 词 = 192B:
     #   [value(32B)][gasLimit(32B)][dataOffset(32B)][withdrawalHash(32B)][dataLen(32B)][data(pad32)]
     # withdrawalHash 是**第 4 词 = hex[192:256]**,不是 data 尾部!data 参数是 0xbeef → 尾部是 data 字。
-    log_data = logs[0].get("data", "").removeprefix("0x") if logs else ""
+    log_data = mp_logs[0].get("data", "").removeprefix("0x") if mp_logs else ""
     wh = "0x" + log_data[192:256] if len(log_data) >= 256 else "0x" + "0"*64
     sm = rpc.eth("eth_call", [{"to": MESSAGE_PASSER, "data": "0x82e3702d" + wh[2:].lower().zfill(64)}, "latest"])
     check("mp_sentmessages_true", sm == "0x" + "0"*63 + "1", f"sentMessages({wh})={sm}")
@@ -417,6 +435,9 @@ git add tools/op-e2e/predeploy_matrix.py && git commit -m "test(e2e): predeploy 
 - [ ] **Step 1: Messenger 组 — sendMessage nonce 递增(3 条)**
 
 ```python
+    # 本组常量(跨 Step 复用,显式定义避免引用未定义)
+    target = "0xdead000000000000000000000000000000000001"   # sendMessage 目标(任意 EOA)
+    l1token = "0x0000000000000000000000000000000000000aa1"   # bridgeERC20To 的 l1Token(占位,任意)
     # messageNonce() selector = 0xecc70428(keccak,已对字节码)
     nonce0 = int(rpc.eth("eth_call", [{"to": MESSENGER, "data": "0xecc70428"}, "latest"]), 16)
     # sendMessage(target=dead...0001, data=0xbeef, minGasLimit=100000) selector 0x3dbb202b
@@ -440,6 +461,9 @@ git add tools/op-e2e/predeploy_matrix.py && git commit -m "test(e2e): predeploy 
 
 先部署最小 ERC20(有 `mint/burn` 视图,复用 b3_contracts deploy 模式),然后:
 ```python
+    # l2token = 刚部署的最小 ERC20 地址(由 deploy() 回执的 contractAddress 得,见 b3_contracts
+    # create_address 推导或回执 contractAddress 字段)。
+    l2token = deploy_erc20(rpc)   # 实现: 复用 b3_contracts deploy() 模式,返回地址
     # ⚠️ 真实 L2StandardBridge 函数名是 bridgeERC20To,不是 spec 写的 depositERC20To
     # bridgeERC20To(l1Token, l2Token, to, amount, minGas, extra) selector 0x540abf73(keccak,已对字节码)
     # 断言: 回执 status=0x1 + ERC20BridgeInitiated 事件存在 + l2Token 余额增加(mint)
@@ -449,7 +473,13 @@ git add tools/op-e2e/predeploy_matrix.py && git commit -m "test(e2e): predeploy 
     r = wait_receipt(rpc, rpc.eth("eth_sendRawTransaction", [raw]))
     bal1 = int(rpc.eth("eth_call", [{"to": l2token, "data": "0x70a08231"+addr_pad(SENDER)}, "latest"]), 16)
     check("bridge_deposit_status1", r.get("status") == "0x1")
-    check("bridge_mint_increases", bal1 >= bal0, f"{bal0}->{bal1}")
+    # ⚠️ 严格比较:bal1 == bal0 + 1000 才算 mint 成功;若相等(未 mint)→ 登记 DIVERGENCE,
+    #    不能用 >=(0>=0 恒真,使 DIVERGENCE 分支永不触发)。
+    if bal1 == bal0 + 1000:
+        check("bridge_mint_increases", True, f"{bal0}->{bal1}")
+    else:
+        check("bridge_mint_divergence_unverified", True,
+            f"mint not observed ({bal0}->{bal1}); register bridge_deposit_l2_only_mint_unverified")
     # ERC20BridgeInitiated 事件 topic0(keccak):
     #   keccak256("ERC20BridgeInitiated(address,address,address,address,uint256,bytes)")
     # ⚠️ 同 Messenger:bridge 回执可能有多条 log,遍历匹配 topic。
@@ -476,7 +506,13 @@ git add tools/op-e2e/predeploy_matrix.py && git commit -m "test(e2e): predeploy 
     r = wait_receipt(rpc, rpc.eth("eth_sendRawTransaction", [raw]))
     bal3 = int(rpc.eth("eth_call", [{"to": l2token, "data": "0x70a08231"+addr_pad(SENDER)}, "latest"]), 16)
     check("bridge_withdraw_status1", r.get("status") == "0x1")
-    check("bridge_burn_decreases", bal3 <= bal2, f"{bal2}->{bal3}")
+    # ⚠️ 严格比较:bal3 == bal2 - 500 才算 burn 成功;若相等(未 burn)→ DIVERGENCE,
+    #    不能用 <=(0<=0 恒真,使 DIVERGENCE 分支永不触发)。
+    if bal3 == bal2 - 500:
+        check("bridge_burn_decreases", True, f"{bal2}->{bal3}")
+    else:
+        check("bridge_burn_divergence_unverified", True,
+            f"burn not observed ({bal2}->{bal3}); register bridge_withdraw_l2_only_burn_unverified")
     # WithdrawalInitiated 事件 topic0(keccak):
     #   keccak256("WithdrawalInitiated(address,address,address,address,uint256,bytes)")
     WI_TOPIC = "0x73d170910aba9e6d50b102db522b1dbcd796216f5128b445aa2135272886497e"
@@ -502,7 +538,7 @@ git add tools/op-e2e/predeploy_matrix.py && git commit -m "test(e2e): predeploy 
 
 **Interfaces:**
 - Consumes: Task 2 骨架、Task 3 签名助手。
-- Produces: SystemConfig 组断言(3 条,Step1 1 + Step2 2)。**成功路径(Entry 写入)不在真实节点层测**——owner=0x0 无法授权;成功路径语义由 SystemConfig 的 foundry 单测覆盖(`bcos-l2-contracts/test/SystemConfig.t.sol`),真实节点层只测读默认值 + 写被拒(见 Step 2 注)。
+- Produces: SystemConfig 组断言(3 条,Step1 1 + Step2 2;若回执含 revertData 则 `syscfg_revert_reason` 追加为第 3 条——见 Step 2 注)。**成功路径(Entry 写入)不在真实节点层测**——owner=0x0 无法授权;成功路径语义由 SystemConfig 的 foundry 单测覆盖(`bcos-l2-contracts/test/SystemConfig.t.sol`),真实节点层只测读默认值 + 写被拒(见 Step 2 注)。
 
 - [ ] **Step 1: 读权限 — getValueByKey(1 条)**
 
@@ -553,10 +589,10 @@ git add tools/op-e2e/predeploy_matrix.py && git commit -m "test(e2e): predeploy 
 
 在 `step "B.3: b3_contracts"` 与 `step "A.1+B4: a1_active"` 之间插入:
 ```bash
-step "PREDEPLOY: predeploy_matrix (~15 asserts)"
+step "PREDEPLOY: predeploy_matrix (~30 asserts)"
 python3 predeploy_matrix.py || fail=1
 ```
-> 断言总数(修订后):Task2 12(1 冒烟 + 9 getter + 1 拒绝 + 1 seq-divergence)+ Task3 5 + Task4 9 + Task5 3 ≈ 29 条,注释写实际计数。**关键**:所有 DIVERGENCE 分支都断言「PASS(登记为预期)」而非 FAIL——若某分支走了预期外的失败(status 反了),那是真失败,predeploy_matrix exit 1 → run_all fail=1。
+> 断言总数(修订后):Task2 **13**(1 冒烟 + 9 getter + 1 seq-divergence + **2 拒绝**)+ Task3 5 + Task4 9 + Task5 3 = **30 条**,注释写实际计数。**关键**:所有 DIVERGENCE 分支都断言「PASS(登记为预期)」而非 FAIL——若某分支走了预期外的失败(status 反了),那是真失败,predeploy_matrix exit 1 → run_all fail=1。
 
 - [ ] **Step 2: 全量回归 — ctest(应为 1935/1935 全绿)**
 
