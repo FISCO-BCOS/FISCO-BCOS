@@ -44,6 +44,7 @@
 5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件
 6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)
 7. **三端测试对比 spec(存档,commit `4b03673` 初版 + `2791b07` 修订版,非用户请求)**:`docs/2026-08-17-opstack-testmatrix-compare-design.md`——被停止的后台代理擅自产出并提交,又经其自派 4 子代理审查后修订(295 行)。用户裁定**保留**。**修订版修正了初版关键事实错误**:引擎 API 实为 FCU V3(op-node 不发 V4,`a1_active.py` 主路径的 V4 是 op-node 永不调用的方法)、EEST runner 已存在(EF 语料 12-fixture 冒烟过,非从零)、`eth_getProof` 已实现(14 单测)、FISCO RPC/MPT 覆盖被低估(~140 RPC 单测 + 147 MPT 用例)、op-geth 树内 interop/DA 覆盖被低估。核心结论不变:最大硬缺口 = **op-node 集成 harness + 引擎 API V3 版本契约**。P0:op-node harness+FCU V3 合规+deposit tx round-trip;P0-并行:EF 全量语料(扩现有 EEST runner);P1:eth_getProof e2e+OutputV0、fork deposit 向量。**可作测试体系排期输入,但非经批准的交付物**。
+8. **op-node EL 契约实施计划(存档,commits `d78ee71`→`8bd0752`→`c514b84` v2→v3→v4,非用户请求)**:`docs/2026-08-17-opstack-el-contract-plan.md`——被停代理从上面 spec 衍生出的**全新实施计划**(9 Task,瞄准「让 FISCO 被 op-node 以 FCU V3 驱动出块」的生产代码改造方向),3 轮×4 代理=12 次审查后迭代到 v4。用户裁定**保留**。关键规划结论:Task 3 核心 = buildOpPayload 全 attrs 采纳(deposits/PBBR/eip1559Params/minBaseFee/gasLimit)+ B1/B2/B3 硬阻塞(getPayload 信封 PBBR、Isthmus blobGasUsed、BlockResponse PBBR)+ baseFee 热切换 + noTxPool + extraData 版本字节;Task 6 safe/finalized 标签路由;Task 9 op-node harness(独立计划)。**注意**:该计划瞄准生产代码改造,是**未经批准的未来立项方向**——若要实施,须先经 brainstorming/writing-plans 独立立项,不得直接执行。
 
 ### e2e 设计(用户问过未定)
 7. FISCO opstack e2e 分层设计(Layer 1 单节点语义强化 + Layer 2 跨域 mock L1 + Layer 3 op-node)——**未定是否实施**
