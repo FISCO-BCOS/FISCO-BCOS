@@ -25,10 +25,10 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <ethereum-executor/EthereumState.h>  // clearAccountStorage (applyStateDiff)
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <ethereum-executor/EthereumState.h>  // clearAccountStorage (applyStateDiff)
 #include <opstack-executor/Storage2StateHelpers.h>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
@@ -57,8 +57,7 @@ public:
     /// @param sharedError optional block-wide error slot (op-geth's dbErr analogue): every
     /// Storage2State constructed with the same shared slot reports poison to it, so a read error
     /// in ANY per-tx execution instance is visible to the block-level check that owns the slot.
-    explicit Storage2State(Storage& storage,
-        std::shared_ptr<std::string> sharedError = {}) noexcept
+    explicit Storage2State(Storage& storage, std::shared_ptr<std::string> sharedError = {}) noexcept
       : m_storage(storage), m_sharedError(std::move(sharedError))
     {}
 
@@ -462,7 +461,8 @@ private:
     /// public visitAccounts entry point). Two kinds of row are skipped before they can reach the
     /// returned map, and the two filters are cumulative, not alternatives: tombstoned rows (so a
     /// logically-deleted slot cannot resurrect) and zero-valued slot rows (zero ≡ the slot does
-    /// not exist, matching what accountStorageRoot/opStorageRoot already do when building the trie).
+    /// not exist, matching what accountStorageRoot/opStorageRoot already do when building the
+    /// trie).
     task::Task<std::map<evmc::bytes32, evmc::bytes32>> fetchAllStorage(std::string tableName) const
     {
         std::map<evmc::bytes32, evmc::bytes32> storage;
@@ -716,7 +716,8 @@ private:
     }
 
     /// get_account_code: read via CODE_HASH -> SYS_CODE_BINARY. This bridge serves only the
-    /// storage2 stack and does not reproduce EVMAccount::code()'s fallback to the legacy CODE field.
+    /// storage2 stack and does not reproduce EVMAccount::code()'s fallback to the legacy CODE
+    /// field.
     task::Task<evmc::bytes> fetchCode(std::string tableName) const
     {
         auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
@@ -795,7 +796,21 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
     for (auto const& m : diff.modified_accounts)
     {
         EVMAccount<Storage> acc(storage, m.addr, false);
-        if (!co_await acc.exists())
+        const bool createdNew = !co_await acc.exists();
+        const std::string_view tableName = co_await acc.path();
+        // EIP-161 guard (ported from Storage2State::applyDiff): creating a NEW EIP-161-empty
+        // account (nonce=0, balance=0, no code) on the ledger is a protocol violation — such
+        // accounts are treated as nonexistent. evmone's build_diff routes touch-empty accounts
+        // to deleted_accounts, so this only fires on a default get_or_insert that ends empty.
+        if (createdNew && m.nonce == 0 && m.balance == 0 &&
+            (!m.code.has_value() || m.code->empty()))
+        {
+            throw std::runtime_error(
+                std::string("applyStateDiff: EIP-161-empty account would be created in the "
+                            "ledger by a diff entry that never bumped nonce (address table '") +
+                std::string{tableName} + "')");
+        }
+        if (createdNew)
             co_await acc.create();
         co_await acc.setNonce(std::to_string(m.nonce));
         co_await acc.setBalance(toBcosU256(m.balance));
@@ -815,12 +830,20 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
         }
         for (auto const& [key, value] : m.modified_storage)
         {
-            // NOTE: EVMAccount::setStorage always writes the entry (a zero
-            // value leaves a zero-valued row; there is no delete-storage API).
-            // Known limitation: such zero rows are only cleaned on self-destruct
-            // via clearAccountStorage(). This matches evmone's state semantics
-            // (a zero slot reads back as zero).
-            co_await acc.setStorage(key, value);
+            // Zero-valued slot: delete the row (never write a zero — EVMAccount has no delete
+            // API, and a zero row is skipped by has_storage/stateRoot but is garbage that only
+            // self-destruct cleans). Ported from Storage2State::applyDiff (contract ②).
+            if (evmc::is_zero(value))
+            {
+                std::string_view keyView(
+                    reinterpret_cast<const char*>(key.bytes), sizeof(key.bytes));
+                co_await storage2::removeOne(
+                    storage, executor_v1::StateKeyView{tableName, keyView});
+            }
+            else
+            {
+                co_await acc.setStorage(key, value);
+            }
         }
     }
 
@@ -855,8 +878,8 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
             // same tableName key space Storage2State::applyDeletedEntry removes
             // (Storage2State.h:427-428); the exists() guard above keeps this shared
             // function quiet when the account is already missing.
-            co_await storage2::removeOne(
-                storage, bcos::executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, co_await acc.path()));
+            co_await storage2::removeOne(storage,
+                bcos::executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, co_await acc.path()));
         }
     }
 
