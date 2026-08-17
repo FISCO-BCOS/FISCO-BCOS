@@ -15,6 +15,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::toQuantity (hexCumulative reuse, review #5429 R)
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-evm/eth/state/block.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
@@ -59,9 +60,7 @@ struct OpBlockSeal
 /// "0x" + lowercase hex (op-geth hexutil.Uint64); parsed back by encodeReceiptForRoot.
 [[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
 {
-    std::ostringstream oss;
-    oss << "0x" << std::hex << cumulative;
-    return oss.str();
+    return bcos::toQuantity(cumulative);  // reuse the library quantity formatter (review #5429 R)
 }
 
 /// EIP-2718 tx-type classification, single home for the three block-execution sites (the

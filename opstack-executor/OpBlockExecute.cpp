@@ -5,6 +5,7 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::safeFromQuantity (parseHexUint64 reuse, review #5429 T)
 #include <opstack-executor/OpBlockExecute.h>
 #include <algorithm>
 #include <bcos-evm/eth/state/state.hpp>  // evmone::state::finalize
@@ -161,26 +162,15 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 // ---- block-header seal ----
 namespace
 {
-/// Parse "0x"-prefixed lowercase hex back to uint64 (the EncodeIndex leaf's cumulativeGasUsed).
+/// Parse "0x"-prefixed hex back to uint64 (the EncodeIndex leaf's cumulativeGasUsed). Delegates to
+/// the strict library parser bcos::safeFromQuantity — the previous hand-rolled loop silently
+/// wrapped >16-hex-digit input, where the library rejects overflow (review #5429 T).
 [[nodiscard]] uint64_t parseHexUint64(std::string_view s)
 {
-    if (s.size() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
-        s.remove_prefix(2);
-    uint64_t v = 0;
-    for (const char c : s)
-    {
-        v <<= 4;
-        if (c >= '0' && c <= '9')
-            v |= static_cast<uint8_t>(c - '0');
-        else if (c >= 'a' && c <= 'f')
-            v |= static_cast<uint8_t>(c - 'a' + 10);
-        else if (c >= 'A' && c <= 'F')
-            v |= static_cast<uint8_t>(c - 'A' + 10);
-        else
-            throw std::runtime_error(
-                "op block: invalid cumulativeGasUsed in receipt (not hex): " + std::string(s));
-    }
-    return v;
+    if (auto v = bcos::safeFromQuantity(s))
+        return *v;
+    throw std::runtime_error(
+        "op block: invalid cumulativeGasUsed in receipt (not hex or overflow): " + std::string(s));
 }
 
 /// RLP list of logs: [address, [topics...], data] each, whole collection wrapped in a list

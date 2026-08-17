@@ -25,6 +25,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian (checkEip2Signature reuse, review #5429 S)
 #include <limits>
 #include <range/v3/algorithm/move.hpp>
 #include <utility>
@@ -45,8 +46,10 @@ const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
 bcos::Error::UniquePtr checkEip2Signature(
     bcos::bytes const& signatureR, bcos::bytes const& signatureS)
 {
-    const u256 r = u256("0x" + toHex(signatureR));
-    const u256 s = u256("0x" + toHex(signatureS));
+    // r/s are raw 32-byte big-endian scalars — decode in place instead of round-tripping through a
+    // "0x"+hex string + u256 parse (4 heap allocations per tx on the shared decode funnel).
+    const u256 r = bcos::fromBigEndian<u256>(signatureR);
+    const u256 s = bcos::fromBigEndian<u256>(signatureS);
     if (r == 0 || r >= c_secp256k1n || s == 0 || s >= c_secp256k1n || s > c_secp256k1nOver2)
     {
         return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
