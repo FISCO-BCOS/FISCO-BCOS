@@ -18,7 +18,13 @@
 // (SIGABRT / exit 134) instead of returning 1. Every failure is therefore an
 // explicit check + std::cerr + return 1, never a throw.
 //
-// --check mode is Task 6; this runner only implements --grid/--out.
+// --check mode (Task 6): --check <fisco|opgeth|oprevm> --golden <dir> loads the
+// committed golden snapshot golden/out_<end>.json, recomputes the FISCO values
+// per grid case and compares VALUE-LEVEL (parsed JSON strings, not raw file
+// text — the fisco golden is jsoncpp-serialized "id" : while the Go/Rust ends
+// emit "id":). known_divergence rows (DIVERGENCES.md) and rows absent from the
+// golden are skipped and counted; zero compared cases is a FAILURE (empty-run
+// guard), and any mismatch exits non-zero.
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
@@ -31,13 +37,16 @@
 #include <evmc/hex.hpp>
 #include <intx/intx.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 using namespace bcos::evm::opstack;
 
@@ -87,12 +96,88 @@ std::string toHex(const intx::uint256& v)
 {
     return "0x" + intx::to_string(v, 16);
 }
+
+struct CaseResult
+{
+    std::string id;
+    std::string l1Hex;
+    std::string opHex;
+};
+
+// Parses + computes one grid case. Shared by --grid/--out and --check modes.
+// NEVER throws (see header note on exceptions); on failure returns false and
+// fills `err` so the caller can cerr + return 1.
+bool computeCase(
+    const Json::Value& c, const Json::Value& envelopes, CaseResult& out, std::string& err)
+{
+    if (!c.isObject())
+    {
+        err = "each case must be a JSON object";
+        return false;
+    }
+    const std::string id = c.get("id", "").asString();
+    const std::string envRef = c.get("envelope_ref", "").asString();
+    if (!envelopes.isMember(envRef))
+    {
+        err = "case '" + id + "' unknown envelope_ref: " + envRef;
+        return false;
+    }
+
+    // gas: jsoncpp asUInt64() — the overflow rows carry gas=2^64-1 and asDouble()
+    // would round it up to 2^64 (off-by-one).
+    const uint64_t gas = c["gas"].asUInt64();
+
+    const auto envBytes = evmc::from_hex(envelopes[envRef].asString());
+    if (!envBytes.has_value())
+    {
+        err = "case '" + id + "' envelope is not valid hex";
+        return false;
+    }
+    evmc::bytes_view env;
+    if (!envBytes->empty())
+        env = evmc::bytes_view{envBytes->data(), envBytes->size()};
+
+    const Json::Value& slots = c["slots"];
+    if (!slots.isObject())
+    {
+        err = "case '" + id + "' has no 'slots' object";
+        return false;
+    }
+    evmc::bytes32 slot1, slot3, slot7, slot8;
+    if (!hexToBytes32(slots["1"].asString(), slot1) ||
+        !hexToBytes32(slots["3"].asString(), slot3) ||
+        !hexToBytes32(slots["7"].asString(), slot7) || !hexToBytes32(slots["8"].asString(), slot8))
+    {
+        err = "case '" + id + "' has an invalid slot (must be exactly 32-byte hex)";
+        return false;
+    }
+
+    const auto params = unpackOpFeeParams(slot1, slot3, slot7, slot8);
+
+    const std::string fork = c["fork"].asString();
+    if (!isKnownFork(fork))
+    {
+        err = "case '" + id + "' unknown fork: " + fork;
+        return false;
+    }
+    const OpForkConfig& cfg = forkConfigFor(fork);
+
+    const auto l1 = computeL1Cost(params, env, cfg);
+    const auto op = computeChargedOperatorCost(params, gas, cfg);
+
+    out.id = id;
+    out.l1Hex = toHex(l1);
+    out.opHex = toHex(op);
+    return true;
+}
 }  // namespace
 
 int main(int argc, char** argv)
 {
     std::string gridPath;
     std::string outPath;
+    std::string checkEnd;  // "fisco" | "opgeth" | "oprevm"; empty = --grid/--out mode
+    std::string goldenDir;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -101,14 +186,42 @@ int main(int argc, char** argv)
             gridPath = argv[++i];
         else if (arg == "--out" && i + 1 < argc)
             outPath = argv[++i];
+        else if (arg == "--check" && i + 1 < argc)
+            checkEnd = argv[++i];
+        else if (arg == "--golden" && i + 1 < argc)
+            goldenDir = argv[++i];
         else
         {
             std::cerr << "usage: " << argv[0]
-                      << " --grid <da_matrix.json> --out <out_fisco.json>\n";
+                      << " --grid <da_matrix.json> [--out <out_fisco.json>]"
+                         " [--check <fisco|opgeth|oprevm> --golden <golden-dir>]\n";
             return 2;
         }
     }
-    if (gridPath.empty() || outPath.empty())
+    if (gridPath.empty())
+    {
+        std::cerr << "usage: " << argv[0]
+                  << " --grid <da_matrix.json>"
+                     " [--out <out_fisco.json>]"
+                     " [--check <fisco|opgeth|oprevm> --golden <golden-dir>]\n";
+        return 2;
+    }
+    const bool checkMode = !checkEnd.empty();
+    if (checkMode)
+    {
+        if (checkEnd != "fisco" && checkEnd != "opgeth" && checkEnd != "oprevm")
+        {
+            std::cerr << "run_fisco: invalid --check end '" << checkEnd
+                      << "' (expect fisco|opgeth|oprevm)\n";
+            return 2;
+        }
+        if (goldenDir.empty())
+        {
+            std::cerr << "run_fisco: --check requires --golden <dir>\n";
+            return 2;
+        }
+    }
+    else if (outPath.empty())
     {
         std::cerr << "usage: " << argv[0] << " --grid <da_matrix.json> --out <out_fisco.json>\n";
         return 2;
@@ -147,73 +260,119 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    // --check mode: value-level comparison against the committed golden snapshot.
+    // Compares parsed JSON string values (not raw file text — the fisco golden is
+    // jsoncpp-serialized, the Go/Rust ends are not). known_divergence rows and
+    // rows absent from the golden are skipped + counted.
+    if (checkMode)
+    {
+        std::string goldenPath = goldenDir;
+        if (goldenPath.back() != '/')
+            goldenPath += '/';
+        goldenPath += "out_" + checkEnd + ".json";
+
+        std::ifstream gfin(goldenPath);
+        if (!gfin.good())
+        {
+            std::cerr << "run_fisco: cannot open golden: " << goldenPath << "\n";
+            return 1;
+        }
+        std::stringstream gss;
+        gss << gfin.rdbuf();
+        Json::Value goldenRoot;
+        Json::Reader greader;
+        if (!greader.parse(gss.str(), goldenRoot))
+        {
+            std::cerr << "run_fisco: golden JSON parse failed: "
+                      << greader.getFormattedErrorMessages() << "\n";
+            return 1;
+        }
+        if (!goldenRoot.isArray())
+        {
+            std::cerr << "run_fisco: golden must be a JSON array of"
+                         " {id,l1_cost,operator_cost}\n";
+            return 1;
+        }
+
+        std::map<std::string, std::pair<std::string, std::string>> golden;
+        for (const auto& g : goldenRoot)
+        {
+            if (!g.isObject())
+            {
+                std::cerr << "run_fisco: golden entries must be JSON objects\n";
+                return 1;
+            }
+            const std::string id = g.get("id", "").asString();
+            golden[id] = {g.get("l1_cost", "").asString(), g.get("operator_cost", "").asString()};
+        }
+
+        std::size_t compared = 0, skippedKnown = 0, skippedMissing = 0, mismatches = 0;
+        for (const auto& c : cases)
+        {
+            // known_divergence rows are registered differences (DIVERGENCES.md) — skip + count.
+            if (!c["known_divergence"].isNull())
+            {
+                ++skippedKnown;
+                continue;
+            }
+            CaseResult res;
+            std::string err;
+            if (!computeCase(c, envelopes, res, err))
+            {
+                std::cerr << "run_fisco: " << err << "\n";
+                return 1;
+            }
+            const auto it = golden.find(res.id);
+            if (it == golden.end())
+            {
+                ++skippedMissing;  // absent from golden (fork the other end cannot produce)
+                continue;
+            }
+            ++compared;
+            if (it->second.first != res.l1Hex || it->second.second != res.opHex)
+            {
+                ++mismatches;
+                std::cerr << "run_fisco: MISMATCH " << res.id << "\n"
+                          << "  expected l1=" << it->second.first << " op=" << it->second.second
+                          << "\n"
+                          << "  actual   l1=" << res.l1Hex << " op=" << res.opHex << "\n";
+            }
+        }
+
+        // Skipped-row counts go to stderr (CI visibility); summary to stdout.
+        std::cerr << "run_fisco: --check " << checkEnd << ": skipped " << skippedKnown
+                  << " known_divergence, " << skippedMissing << " missing-from-golden\n";
+        std::cout << "run_fisco: --check " << checkEnd << ": compared " << compared << " cases, "
+                  << mismatches << " mismatches\n";
+
+        // Empty-run guard: zero compared cases must not report green.
+        if (compared == 0)
+        {
+            std::cerr << "run_fisco: --check " << checkEnd
+                      << ": FAIL — zero cases compared (everything skipped);"
+                         " refusing to report green\n";
+            return 1;
+        }
+        return (mismatches == 0) ? 0 : 1;
+    }
+
     Json::Value out(Json::arrayValue);
     for (const auto& c : cases)
     {
-        if (!c.isObject())
+        CaseResult res;
+        std::string err;
+        if (!computeCase(c, envelopes, res, err))
         {
-            std::cerr << "run_fisco: each case must be a JSON object\n";
+            std::cerr << "run_fisco: " << err << "\n";
             return 1;
         }
-        const std::string id = c.get("id", "").asString();
-        const std::string envRef = c.get("envelope_ref", "").asString();
-        if (!envelopes.isMember(envRef))
-        {
-            std::cerr << "run_fisco: case '" << id << "' unknown envelope_ref: " << envRef << "\n";
-            return 1;
-        }
-
-        // gas: jsoncpp asUInt64() — the overflow rows carry gas=2^64-1 and asDouble()
-        // would round it up to 2^64 (off-by-one).
-        const uint64_t gas = c["gas"].asUInt64();
-
-        const auto envBytes = evmc::from_hex(envelopes[envRef].asString());
-        if (!envBytes.has_value())
-        {
-            std::cerr << "run_fisco: case '" << id << "' envelope is not valid hex\n";
-            return 1;
-        }
-        evmc::bytes_view env;
-        if (!envBytes->empty())
-            env = evmc::bytes_view{envBytes->data(), envBytes->size()};
-
-        const Json::Value& slots = c["slots"];
-        if (!slots.isObject())
-        {
-            std::cerr << "run_fisco: case '" << id << "' has no 'slots' object\n";
-            return 1;
-        }
-        evmc::bytes32 slot1, slot3, slot7, slot8;
-        if (!hexToBytes32(slots["1"].asString(), slot1) ||
-            !hexToBytes32(slots["3"].asString(), slot3) ||
-            !hexToBytes32(slots["7"].asString(), slot7) ||
-            !hexToBytes32(slots["8"].asString(), slot8))
-        {
-            std::cerr << "run_fisco: case '" << id
-                      << "' has an invalid slot (must be exactly 32-byte hex)\n";
-            return 1;
-        }
-
-        const auto params = unpackOpFeeParams(slot1, slot3, slot7, slot8);
-
-        const std::string fork = c["fork"].asString();
-        if (!isKnownFork(fork))
-        {
-            std::cerr << "run_fisco: case '" << id << "' unknown fork: " << fork << "\n";
-            return 1;
-        }
-        const OpForkConfig& cfg = forkConfigFor(fork);
-
-        const auto l1 = computeL1Cost(params, env, cfg);
-        const auto op = computeChargedOperatorCost(params, gas, cfg);
-
         Json::Value item(Json::objectValue);
-        item["id"] = id;
-        item["l1_cost"] = toHex(l1);
-        item["operator_cost"] = toHex(op);
+        item["id"] = res.id;
+        item["l1_cost"] = res.l1Hex;
+        item["operator_cost"] = res.opHex;
         out.append(item);
 
-        std::cout << id << "\tl1=" << toHex(l1) << "\top=" << toHex(op) << "\n";
+        std::cout << res.id << "\tl1=" << res.l1Hex << "\top=" << res.opHex << "\n";
     }
 
     std::ofstream outFile(outPath);

@@ -71,6 +71,20 @@ target_link_libraries(opstack-da-matrix-runner PRIVATE
 add_test(NAME DaMatrixFiscoBaseline COMMAND opstack-da-matrix-runner
     --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
     --out ${CMAKE_CURRENT_BINARY_DIR}/out_fisco.json)
+# Task 6: --check mode — value-level comparison of the FISCO computed L1/operator
+# fees against the committed op-geth / op-revm golden snapshots. known_divergence
+# rows (switch_karst) and golden-missing rows are skipped+counted by the runner,
+# and a zero-compare run fails. solidity is intentionally NOT wired: its
+# l1_cost is a cross-reference only (unsigned-tx +68 convention, DIVERGENCES.md)
+# and would need external contracts-bedrock to regenerate.
+add_test(NAME DaMatrixFiscoCheckOpgeth COMMAND opstack-da-matrix-runner
+    --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+    --check opgeth
+    --golden ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden/opgeth)
+add_test(NAME DaMatrixFiscoCheckOpRevm COMMAND opstack-da-matrix-runner
+    --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+    --check oprevm
+    --golden ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden/oprevm)
 
 # Extracted pure-function layer (OpRlpDecode.h / Storage2StateHelpers.h): direct unit tests
 # over the decode primitives and state-bridge helpers, no class-template instantiation.
