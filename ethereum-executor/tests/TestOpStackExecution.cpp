@@ -28,6 +28,8 @@
 #include <evmone/evmone.h>
 #include <iostream>
 #include <memory>
+#include <set>
+#include <string>
 
 namespace
 {
@@ -337,14 +339,43 @@ void testDepositDecoder()
         CHECK(!dep->mint.has_value());
     }
 
-    // Wrong type byte.
-    auto notDeposit = bcos::bytes{0x02, 0x01};
-    CHECK(std::holds_alternative<std::error_code>(decodeDepositTx(bcos::ref(notDeposit))));
+    // Every rejection below asserts BOTH halves: that the envelope is still rejected
+    // (the consensus verdict, unchanged by the error-code split) and which
+    // DepositDecodeError it reports (the diagnosability the split buys — previously all
+    // of these surfaced as the single message "Invalid argument").
+    auto expectRejectCode = [](bcos::bytes const& raw, DepositDecodeError expected) {
+        auto decoded = decodeDepositTx(bcos::ref(raw));
+        const auto* error = std::get_if<std::error_code>(&decoded);
+        CHECK(error != nullptr);
+        if (error != nullptr)
+        {
+            if (*error != make_error_code(expected))
+            {
+                std::cerr << "  expected \"" << make_error_code(expected).message() << "\", got \""
+                          << error->message() << "\"\n";
+            }
+            CHECK(*error == make_error_code(expected));
+            CHECK(!error->message().empty());
+        }
+    };
+
+    // Wrong type byte — and the empty envelope reaches the same verdict.
+    expectRejectCode(bcos::bytes{0x02, 0x01}, DepositDecodeError::WrongTypeByte);
+    expectRejectCode(bcos::bytes{}, DepositDecodeError::WrongTypeByte);
 
     // Trailing bytes after the RLP list are consensus-rejected.
     auto trailing = buildDepositEnvelope(from, to, 100, 0, 21000, false, {});
     trailing.push_back(0x00);
-    CHECK(std::holds_alternative<std::error_code>(decodeDepositTx(bcos::ref(trailing))));
+    expectRejectCode(trailing, DepositDecodeError::TrailingBytes);
+
+    // The type byte alone: no RLP header at all.
+    expectRejectCode(bcos::bytes{0x7e}, DepositDecodeError::MalformedEnvelope);
+    // A list header announcing more payload than is present — decodeHeader's own
+    // InputTooShort, surfaced as a malformed envelope.
+    expectRejectCode(bcos::bytes{0x7e, 0xc8, 0x01, 0x02}, DepositDecodeError::MalformedEnvelope);
+    // A non-list (bytes) item where the field list belongs.
+    expectRejectCode(
+        bcos::bytes{0x7e, 0x83, 0x01, 0x02, 0x03}, DepositDecodeError::MalformedEnvelope);
 
     // Non-canonical integer encodings (op-geth rejects each of these; the shared
     // lenient decode() would wrap/truncate/accept them). Items are 0-based:
@@ -374,30 +405,81 @@ void testDepositDecoder()
         out.insert(out.end(), body.begin(), body.end());
         return out;
     };
-    auto expectReject = [&](size_t index, bcos::bytes rawItem) {
+    auto expectReject = [&](size_t index, bcos::bytes rawItem, DepositDecodeError expected) {
         auto items = canonicalItems();
         items[index] = std::move(rawItem);
-        auto bad = wrapItems(items);
-        CHECK(std::holds_alternative<std::error_code>(decodeDepositTx(bcos::ref(bad))));
+        expectRejectCode(wrapItems(items), expected);
     };
     // Positive control: the canonical items decode.
     auto good = wrapItems(canonicalItems());
     CHECK(std::holds_alternative<opstack::DepositTx>(decodeDepositTx(bcos::ref(good))));
     // gas with a leading zero byte (0x82 0x00 0x52).
-    expectReject(5, {0x82, 0x00, 0x52});
+    expectReject(5, {0x82, 0x00, 0x52}, DepositDecodeError::NonCanonicalInteger);
     // gas payload longer than uint64 (9 bytes).
-    expectReject(5, {0x89, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+    expectReject(5, {0x89, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+        DepositDecodeError::IntegerTooWide);
     // value payload longer than 32 bytes (33 bytes, would wrap mod 2^256).
     {
         bcos::bytes wide{0xa1};
         wide.push_back(0x01);
         wide.insert(wide.end(), 32, 0x00);
-        expectReject(4, std::move(wide));
+        expectReject(4, std::move(wide), DepositDecodeError::IntegerTooWide);
     }
     // value zero encoded as inline 0x00 (canonical zero is the empty payload 0x80).
-    expectReject(4, {0x00});
+    expectReject(4, {0x00}, DepositDecodeError::NonCanonicalInteger);
     // isSystemTx = 2 (only 0x80/0x01 are canonical bools).
-    expectReject(6, {0x02});
+    expectReject(6, {0x02}, DepositDecodeError::NonCanonicalBool);
+    // gas = 2^63 (8 bytes, canonical) fits uint64 but not the executable int64 gas_limit.
+    expectReject(5, {0x88, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+        DepositDecodeError::GasLimitOutOfRange);
+    // `to` truncated to 19 bytes — a field that is present but the wrong width.
+    {
+        bcos::bytes shortTo{0x93};
+        shortTo.insert(shortTo.end(), 19, 0xdd);
+        expectReject(2, std::move(shortTo), DepositDecodeError::MalformedField);
+    }
+    // An integer field whose own RLP header is undecodable (gas announces 4 bytes but the
+    // list ends). It is a FIELD failure, not the outer envelope's.
+    {
+        auto items = canonicalItems();
+        items[5] = {0x84};
+        items[6].clear();
+        items[7].clear();
+        expectRejectCode(wrapItems(items), DepositDecodeError::MalformedField);
+    }
+    // An integer field encoded as a list where a scalar belongs — same field-level code.
+    expectReject(4, {0xc1, 0x01}, DepositDecodeError::MalformedField);
+    // Field list that simply stops early: `to` present, nothing after it. The decoder runs
+    // out of items rather than failing to parse one.
+    {
+        auto items = canonicalItems();
+        for (size_t index = 3; index < items.size(); ++index)
+        {
+            items[index].clear();
+        }
+        expectRejectCode(wrapItems(items), DepositDecodeError::TruncatedBody);
+    }
+    // Stopping one item earlier lands on the `to` check, the other TruncatedBody site.
+    {
+        auto items = canonicalItems();
+        for (size_t index = 2; index < items.size(); ++index)
+        {
+            items[index].clear();
+        }
+        expectRejectCode(wrapItems(items), DepositDecodeError::TruncatedBody);
+    }
+    // Every distinct failure reports a distinct message: the whole point of the split.
+    const DepositDecodeError allErrors[] = {DepositDecodeError::WrongTypeByte,
+        DepositDecodeError::MalformedEnvelope, DepositDecodeError::TrailingBytes,
+        DepositDecodeError::TruncatedBody, DepositDecodeError::MalformedField,
+        DepositDecodeError::NonCanonicalInteger, DepositDecodeError::IntegerTooWide,
+        DepositDecodeError::NonCanonicalBool, DepositDecodeError::GasLimitOutOfRange};
+    std::set<std::string> messages;
+    for (auto error : allErrors)
+    {
+        messages.insert(make_error_code(error).message());
+    }
+    CHECK(messages.size() == std::size(allErrors));
 }
 
 void testExecuteDeposit()

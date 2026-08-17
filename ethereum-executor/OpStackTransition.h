@@ -45,12 +45,44 @@ DERIVE_BCOS_EXCEPTION(OpStateReadFailed);
 protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& error,
     protocol::TransactionReceiptFactory const& rf, int64_t blockNumber);
 
+/// Why a 0x7e envelope failed to decode. Every value is a REJECT and which one it is
+/// changes nothing about that verdict — the codes exist purely so the rejection can be
+/// read. Collapsing them all into std::errc::invalid_argument made
+/// InvalidDepositTransaction report "Invalid argument" for a wrong type byte, a
+/// truncated field and a non-canonical integer alike, with nothing in the log to tell an
+/// operator which one stalled the payload.
+enum class DepositDecodeError : int
+{
+    WrongTypeByte = 1,    ///< Empty input, or the first byte is not 0x7e.
+    MalformedEnvelope,    ///< The outer RLP header is undecodable or is not a list.
+    TrailingBytes,        ///< Bytes remain after the RLP list / after the final field.
+    TruncatedBody,        ///< A field is missing: the list ran out mid-way.
+    MalformedField,       ///< An item's RLP is undecodable or the wrong width — a hash,
+                          ///< an address, the data blob, or an integer field whose own
+                          ///< header will not decode.
+    NonCanonicalInteger,  ///< Integer payload starts with a zero byte (canonical zero is
+                          ///< the empty payload).
+    IntegerTooWide,       ///< Integer payload exceeds the field's width (mint/value 32
+                          ///< bytes, gas 8, isSystemTx 1).
+    NonCanonicalBool,     ///< isSystemTx is neither 0x80 (false) nor 0x01 (true).
+    GasLimitOutOfRange,   ///< gas does not fit the executable int64 gas_limit.
+};
+
+/// Category for DepositDecodeError, in the same shape as evm_error_category()
+/// (EVMSupport.h). Defined in OpStackTransition.cpp.
+const std::error_category& depositDecodeCategory() noexcept;
+
+/// Creates an error_code out of a deposit-decode error value.
+std::error_code make_error_code(DepositDecodeError error) noexcept;
+
 /// Decode a raw `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx,
 /// data])` envelope into the executable DepositTx. Consensus-grade, unlike the
 /// display decoder in bcos-rpc (DepositTransaction.h): the envelope must be fully
 /// consumed (no trailing bytes after the RLP list), integer fields follow op-geth's
 /// canonical rules (no leading zeros, mint/value <= 32 bytes, gas <= 8 bytes and
-/// int64, isSystemTx only 0x80/0x01). Defined in OpStackTransition.cpp.
+/// int64, isSystemTx only 0x80/0x01). The failure value is a DepositDecodeError-coded
+/// error_code; the set of accepted envelopes does not depend on it. Defined in
+/// OpStackTransition.cpp.
 std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     bcos::bytesConstRef rawDeposit);
 

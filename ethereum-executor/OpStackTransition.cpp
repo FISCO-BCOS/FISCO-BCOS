@@ -20,6 +20,48 @@
 namespace bcos::executor_v1::eth
 {
 
+const std::error_category& depositDecodeCategory() noexcept
+{
+    struct Category : std::error_category
+    {
+        [[nodiscard]] const char* name() const noexcept final { return "op-deposit-decode"; }
+
+        [[nodiscard]] std::string message(int ev) const noexcept final
+        {
+            switch (static_cast<DepositDecodeError>(ev))
+            {
+            case DepositDecodeError::WrongTypeByte:
+                return "not a 0x7e deposit envelope";
+            case DepositDecodeError::MalformedEnvelope:
+                return "malformed RLP envelope header (not a list)";
+            case DepositDecodeError::TrailingBytes:
+                return "trailing bytes after the deposit field list";
+            case DepositDecodeError::TruncatedBody:
+                return "truncated deposit field list";
+            case DepositDecodeError::MalformedField:
+                return "malformed deposit field (hash / address / data / integer)";
+            case DepositDecodeError::NonCanonicalInteger:
+                return "non-canonical integer (leading zero bytes)";
+            case DepositDecodeError::IntegerTooWide:
+                return "integer wider than the field allows";
+            case DepositDecodeError::NonCanonicalBool:
+                return "non-canonical bool for isSystemTx";
+            case DepositDecodeError::GasLimitOutOfRange:
+                return "gas does not fit int64";
+            }
+            return "unknown deposit decode error";
+        }
+    };
+
+    static const Category categoryInstance;
+    return categoryInstance;
+}
+
+std::error_code make_error_code(DepositDecodeError error) noexcept
+{
+    return {static_cast<int>(error), depositDecodeCategory()};
+}
+
 namespace
 {
 /// Strict RLP unsigned-integer read for the consensus-grade deposit decoder. decodeHeader
@@ -28,20 +70,31 @@ namespace
 /// @p maxBytes — the shared decode(UnsignedIntegral) silently wraps/truncates an over-long
 /// value — and must not start with a zero byte (canonical zero is the EMPTY payload, so an
 /// inline 0x00 is equally non-canonical: "rlp: non-canonical integer (leading zero bytes)").
-bool decodeStrictUint(bcos::bytesRef& from, size_t maxBytes, bcos::u256& out)
+/// Returns a default-constructed (success) error_code on acceptance.
+std::error_code decodeStrictUint(bcos::bytesRef& from, size_t maxBytes, bcos::u256& out)
 {
     using namespace bcos::codec::rlp;
     auto&& [error, header] = decodeHeader(from);
-    if (error != nullptr || header.isList || header.payloadLength > maxBytes)
+    if (error != nullptr || header.isList)
     {
-        return false;
+        // MalformedField, not MalformedEnvelope: this is an integer FIELD inside the list
+        // (mint / value / gas / isSystemTx), so reporting the outer envelope's code would
+        // point an operator at the wrong place.
+        return make_error_code(DepositDecodeError::MalformedField);
     }
+    if (header.payloadLength > maxBytes)
+    {
+        return make_error_code(DepositDecodeError::IntegerTooWide);
+    }
+    // The direct from[i] indexing below is in bounds: decodeHeader's last act is to reject
+    // a header announcing more payload than remains (RLPDecode.h, InputTooShort), which
+    // the MalformedField branch above already returned on.
     // For an inline single byte (< 0x80) decodeHeader leaves the byte in place as the
     // payload; for prefixed forms it has already consumed the header — either way the
     // payload starts at from[0].
     if (header.payloadLength >= 1 && from[0] == 0x00)
     {
-        return false;
+        return make_error_code(DepositDecodeError::NonCanonicalInteger);
     }
     out = 0;
     for (size_t i = 0; i < header.payloadLength; ++i)
@@ -49,7 +102,7 @@ bool decodeStrictUint(bcos::bytesRef& from, size_t maxBytes, bcos::u256& out)
         out = (out << 8) | from[i];
     }
     from = from.getCroppedData(header.payloadLength);
-    return true;
+    return {};
 }
 }  // namespace
 
@@ -57,11 +110,10 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     bcos::bytesConstRef rawDeposit)
 {
     using namespace bcos::codec::rlp;
-    const auto decodeError = std::make_error_code(std::errc::invalid_argument);
 
     if (rawDeposit.empty() || rawDeposit[0] != 0x7e)
     {
-        return decodeError;
+        return make_error_code(DepositDecodeError::WrongTypeByte);
     }
     // The bcos-codec rlp decode API only offers mutable-ref entry points (it re-slices the
     // ref as it consumes; it never writes through it, but the type demands a writable
@@ -71,13 +123,18 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     bcos::bytes buffer(rawDeposit.begin() + 1, rawDeposit.end());
     bcos::bytesRef in(buffer.data(), buffer.size());
 
+    // Consensus-grade: the envelope is exactly the type byte + one RLP list — trailing
+    // bytes after the list are rejected (the display decoder tolerates them).
     auto&& [headerError, header] = decodeHeader(in);
-    if (headerError != nullptr || !header.isList || header.payloadLength != in.size())
+    if (headerError != nullptr || !header.isList)
     {
-        // Consensus-grade: the envelope is exactly the type byte + one RLP list —
-        // trailing bytes after the list are rejected (the display decoder tolerates
-        // them).
-        return decodeError;
+        return make_error_code(DepositDecodeError::MalformedEnvelope);
+    }
+    // decodeHeader already rejected a list announcing more than remains, so a mismatch
+    // here can only be leftover bytes past the list's end.
+    if (header.payloadLength != in.size())
+    {
+        return make_error_code(DepositDecodeError::TrailingBytes);
     }
     bcos::bytesRef body(in.data(), header.payloadLength);
 
@@ -85,7 +142,7 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     bcos::Address from;
     if (decodeItems(body, sourceHash, from) != nullptr)
     {
-        return decodeError;
+        return make_error_code(DepositDecodeError::MalformedField);
     }
 
     bcos::evm::opstack::DepositTx deposit{};
@@ -96,7 +153,7 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     // Ethereum tx type).
     if (body.empty())
     {
-        return decodeError;
+        return make_error_code(DepositDecodeError::TruncatedBody);
     }
     if (body[0] == BYTES_HEAD_BASE)
     {
@@ -108,7 +165,7 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
         bcos::Address to;
         if (decode(body, to) != nullptr)
         {
-            return decodeError;
+            return make_error_code(DepositDecodeError::MalformedField);
         }
         evmc::address toAddr{};
         std::copy_n(to.data(), sizeof(evmc_address), toAddr.bytes);
@@ -118,7 +175,7 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     // `mint`: the empty RLP item = no mint (op-geth encodes a nil *big.Int that way).
     if (body.empty())
     {
-        return decodeError;
+        return make_error_code(DepositDecodeError::TruncatedBody);
     }
     if (body[0] == BYTES_HEAD_BASE)
     {
@@ -128,9 +185,9 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     else
     {
         bcos::u256 mint{0};
-        if (!decodeStrictUint(body, sizeof(evmc_bytes32), mint))
+        if (auto error = decodeStrictUint(body, sizeof(evmc_bytes32), mint))
         {
-            return decodeError;
+            return error;
         }
         deposit.mint = evm::toIntxU256(mint);
     }
@@ -142,20 +199,34 @@ std::variant<bcos::evm::opstack::DepositTx, std::error_code> decodeDepositTx(
     bcos::u256 gas{0};
     bcos::u256 isSystemTx{0};
     bcos::bytes input;
-    if (!decodeStrictUint(body, sizeof(evmc_bytes32), value) ||
-        !decodeStrictUint(body, sizeof(uint64_t), gas) || !decodeStrictUint(body, 1, isSystemTx) ||
-        isSystemTx > 1)
+    if (auto error = decodeStrictUint(body, sizeof(evmc_bytes32), value))
     {
-        return decodeError;
+        return error;
     }
-    if (decode(body, input) != nullptr || !body.empty())
+    if (auto error = decodeStrictUint(body, sizeof(uint64_t), gas))
     {
-        return decodeError;
+        return error;
+    }
+    if (auto error = decodeStrictUint(body, 1, isSystemTx))
+    {
+        return error;
+    }
+    if (isSystemTx > 1)
+    {
+        return make_error_code(DepositDecodeError::NonCanonicalBool);
+    }
+    if (decode(body, input) != nullptr)
+    {
+        return make_error_code(DepositDecodeError::MalformedField);
+    }
+    if (!body.empty())
+    {
+        return make_error_code(DepositDecodeError::TrailingBytes);
     }
     // Consensus-grade: gas must additionally fit an int64 (the executable gas_limit).
     if (gas > bcos::u256(std::numeric_limits<int64_t>::max()))
     {
-        return decodeError;
+        return make_error_code(DepositDecodeError::GasLimitOutOfRange);
     }
     deposit.value = evm::toIntxU256(value);
     deposit.gas_limit = static_cast<int64_t>(gas);

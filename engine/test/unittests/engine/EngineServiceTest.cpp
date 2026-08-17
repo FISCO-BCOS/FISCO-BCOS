@@ -78,14 +78,15 @@ static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t n
 /// type=Web3Transaction, extraTransactionBytes = 0x02 || rlp(unsigned fields),
 /// signature = r(32) || s(32) || yParity(1). calculateHash() runs the same raw-bytes
 /// splice buildPayload uses, so constructing one also validates the payload shape.
-static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint64_t nonce)
+static protocol::Transaction::Ptr makeWeb3Tx(
+    std::string_view senderBytes, uint64_t nonce, uint64_t gasLimit = 21000)
 {
     bytes body;
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // chainId
     bcos::codec::rlp::encode(body, nonce);
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));      // maxPriorityFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));      // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(21000));  // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // maxFeePerGas
+    bcos::codec::rlp::encode(body, gasLimit);
     bcos::codec::rlp::encode(body, Address("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));  // value
     bcos::codec::rlp::encode(body, bytes{});                   // data
@@ -99,6 +100,9 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     auto tx = std::make_shared<TestTransactionImpl>();
     tx->mutableInner().type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
     tx->mutableInner().extraTransactionBytes.assign(payload.begin(), payload.end());
+    // Transaction::gasLimit() reads the Tars field, not the signing payload — the
+    // eth_sendRawTransaction ingress fills both, so keep them in step here too.
+    tx->mutableInner().data.gasLimit = static_cast<int64_t>(gasLimit);
     bytes signature(65, 0);
     signature[31] = 0x12;  // r != 0
     signature[63] = 0x34;  // s != 0
@@ -165,6 +169,19 @@ struct RealGlobalStateStorageFixture
     void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
     {
         task::syncWait(writeBlockNumberToStorage(backendStorage, blockHash, blockNumber));
+    }
+
+    /// Seed the SYS_CONFIG tx_gas_limit row getLedgerConfig reads. Without it that read
+    /// falls back to "0" (LedgerMethods.h getOrDefault) and buildPayload treats the block
+    /// gas budget as unconfigured.
+    void setGasLimit(uint64_t gasLimit)
+    {
+        storage::Entry entry;
+        entry.set(bcos::storage::serialize::encode(
+            ledger::SystemConfigEntry{std::to_string(gasLimit), 0}));
+        task::syncWait(storage2::writeOne(backendStorage,
+            bcos::executor_v1::StateKey{ledger::SYS_CONFIG, ledger::SYSTEM_KEY_TX_GAS_LIMIT},
+            std::move(entry)));
     }
 
     void setNonce(std::string_view sender, std::string nonce)
@@ -953,6 +970,9 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
 struct DepositRecordingExecutor : StubExecutor
 {
     std::vector<bytes> executedDeposits;
+    /// gasUsed each executed deposit reports. Raised by the gas-budget tests so the
+    /// deposits consume (or overrun) the whole block gas limit.
+    u256 depositGasUsed{21000};
 
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> executeDeposit(Storage& /*storage*/,
@@ -961,7 +981,7 @@ struct DepositRecordingExecutor : StubExecutor
     {
         executedDeposits.emplace_back(rawDeposit.begin(), rawDeposit.end());
         auto inner = std::make_shared<bcostars::TransactionReceipt>();
-        inner->data.gasUsed = "21000";
+        inner->data.gasUsed = depositGasUsed.str();
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
             [inner]() mutable { return inner.get(); });
         Keccak256 hasher;
@@ -1005,6 +1025,136 @@ BOOST_AUTO_TEST_CASE(build_payload_executes_forced_deposits)
     BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 2);
     BOOST_CHECK(payload->executionPayload.transactions[0].raw ==
                 (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
+}
+
+/// Mixed block: a deposit that consumes most of the block gas limit and a pool
+/// transaction coexist. The deposit's gas enters the block totals (Step 2f sums over
+/// deposits AND scheduler receipts), the block stays inside its own limit, and nothing is
+/// dropped -- the guard judges the total, it does not ration admission.
+BOOST_AUTO_TEST_CASE(build_payload_counts_deposit_gas_in_the_block_totals)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    constexpr uint64_t c_blockGasLimit = ledger::DEFAULT_GAS_LIMIT;
+    globalStateStorageFixture.setGasLimit(c_blockGasLimit);
+    std::string sender("9999999999aaaaaaaaaa", 20);
+    auto poolTx = makeWeb3Tx(sender, 0, /*gasLimit=*/21000);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+
+    auto attributes = makePayloadAttributesV3();
+    attributes.transactions = std::vector<std::string>{"0x7e0102030405"};
+
+    DepositRecordingExecutor executor;
+    executor.depositGasUsed = u256(c_blockGasLimit - 1000);
+    StubScheduler scheduler;
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, DepositRecordingExecutor, StubScheduler>
+        engineService(
+            memPool, globalStateStorageFixture.storage, executor, scheduler, blockFactory);
+
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    // Both entries ride the payload: the forced deposit and the sealed transaction.
+    BOOST_REQUIRE_EQUAL(executor.executedDeposits.size(), 1);
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 2);
+    BOOST_CHECK(payload->executionPayload.transactions[0].decoded == nullptr);
+    BOOST_CHECK(payload->executionPayload.transactions[1].decoded == poolTx);
+    // The deposit's gas is in the block totals, and the block stays legal.
+    BOOST_CHECK_EQUAL(payload->executionPayload.gasLimit, c_blockGasLimit);
+    BOOST_CHECK_EQUAL(payload->executionPayload.gasUsed, u256(c_blockGasLimit - 1000));
+    BOOST_CHECK(payload->executionPayload.gasUsed <= payload->executionPayload.gasLimit);
+}
+
+/// Anti-starvation regression. A transaction declaring the ENTIRE block gas limit must not
+/// cost any other transaction its slot. This is why buildPayload only judges the block's
+/// total and never reserves a transaction's declared gasLimit up front: nothing bounds a
+/// declared gasLimit on the way in (EthEndpoint checks signature and chainId, MemPoolImpl
+/// hash and nonce), and such a transaction is rejected WITHOUT executing, so its nonce
+/// never advances and MemPoolImpl::remove — which prunes strictly by nonce — can never
+/// evict it. A reserve-up-front scheme would let one free eth_sendRawTransaction consume
+/// the budget of every future block forever.
+BOOST_AUTO_TEST_CASE(build_payload_does_not_let_one_huge_gaslimit_starve_other_senders)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    globalStateStorageFixture.setGasLimit(ledger::DEFAULT_GAS_LIMIT);
+
+    // The hog declares the entire block gas limit; the ordinary transaction is a plain
+    // 21000-gas transfer from a DIFFERENT sender.
+    std::string hogSender("11111111111111111111", 20);
+    std::string plainSender("22222222222222222222", 20);
+    auto hogTx = makeWeb3Tx(hogSender, 0, /*gasLimit=*/ledger::DEFAULT_GAS_LIMIT);
+    auto plainTx = makeWeb3Tx(plainSender, 0, /*gasLimit=*/21000);
+    memPool.add(std::vector{hogTx, plainTx});
+    globalStateStorageFixture.setNonce(hogSender, "0");
+    globalStateStorageFixture.setNonce(plainSender, "0");
+
+    auto attributes = makePayloadAttributesV3();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    // BOTH transactions ride the payload. The hog's declared 3e9 gas costs the other
+    // sender nothing, because no budget is reserved from a declaration — only the
+    // resulting total is judged. seal() visits senders through a hashed index, so the
+    // order is not fixed; assert membership rather than position.
+    auto const& transactions = payload->executionPayload.transactions;
+    BOOST_REQUIRE_EQUAL(transactions.size(), 2);
+    bool hogPresent = false;
+    bool plainPresent = false;
+    for (auto const& engineTx : transactions)
+    {
+        hogPresent = hogPresent || engineTx.decoded == hogTx;
+        plainPresent = plainPresent || engineTx.decoded == plainTx;
+    }
+    BOOST_CHECK(hogPresent);
+    BOOST_CHECK(plainPresent);
+    // And the block still respects its own limit.
+    BOOST_CHECK(payload->executionPayload.gasUsed <= payload->executionPayload.gasLimit);
+}
+
+/// Forced deposits that alone overrun the block gas limit are a block-level error: the
+/// builder refuses the payload instead of emitting a block whose gasUsed exceeds its own
+/// gasLimit. op-geth reaches the same verdict — SubGas's ErrGasLimitReached is excluded
+/// from the failed-deposit salvage branch (core/state_transition.go:486).
+BOOST_AUTO_TEST_CASE(build_payload_rejects_deposits_over_the_block_gas_limit)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+
+    globalStateStorageFixture.setGasLimit(ledger::DEFAULT_GAS_LIMIT);
+    auto attributes = makePayloadAttributesV3();
+    // Two deposits, each reporting two thirds of the block gas limit.
+    attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x7e0607080910"};
+
+    DepositRecordingExecutor executor;
+    executor.depositGasUsed = u256(ledger::DEFAULT_GAS_LIMIT / 3 * 2);
+    StubScheduler scheduler;
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, DepositRecordingExecutor, StubScheduler>
+        engineService(
+            memPool, globalStateStorageFixture.storage, executor, scheduler, blockFactory);
+
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3)),
+        bcos::engine::BlockGasLimitExceeded);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

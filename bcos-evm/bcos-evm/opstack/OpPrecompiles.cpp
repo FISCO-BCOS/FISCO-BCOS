@@ -40,8 +40,13 @@ constexpr PrecompileOverrides::Entry kJovianEntries[] = {
     {.addr = evmc::address{0x0f}, .gas_cost_override = -1, .max_input_size = 156672},
 };
 
-// Karst re-tightens only bn256Pairing (81984 -> 57600); the BLS MSM/pairing limits carry
-// over from Jovian unchanged. P256Verify deliberately has NO Karst entry: Karst adopts
+// Karst re-tightens only bn256Pairing, and what it tightens is the INPUT SIZE, not the
+// gas cost: 81984 -> 57600 BYTES of calldata. bn256 pairing consumes 192 bytes per pair,
+// so those are Jovian's 427 pairs and Karst's 300 (81984/192 = 427, 57600/192 = 300) —
+// matching Optimism Upgrade 19's "from 427 pairs (81,984 bytes) to 300 pairs (57,600
+// bytes)". Pricing is untouched (gas_cost_override = -1 => no override); the per-pair gas
+// stays whatever the vendored precompile charges. The BLS MSM/pairing limits carry over
+// from Jovian unchanged. P256Verify deliberately has NO Karst entry: Karst adopts
 // EIP-7951 (P256VERIFY at gas 6900), and karstConfig().rev is EVMC_OSAKA, so with no
 // override OpHost::call falls through to the vendored Osaka-gated p256verify with exactly
 // the EIP-7951 pricing — the pre-Karst 3450 (RIP-7212 P256VerifyGasFjord) entries stop at

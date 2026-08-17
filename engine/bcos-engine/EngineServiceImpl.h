@@ -66,6 +66,7 @@ DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+DERIVE_BCOS_EXCEPTION(BlockGasLimitExceeded);
 
 namespace detail
 {
@@ -290,7 +291,7 @@ public:
             .parentBeaconBlockRoot = payloadAttributes->parentBeaconBlockRoot,
             .view = std::make_shared<ViewType>(std::move(view)),
             .header = std::move(built.header),
-            .receipts = std::move(built.receipts),
+            .persistedReceipts = std::move(built.persistedReceipts),
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
@@ -370,7 +371,11 @@ private:
         /// SYS_HASH_2_RECEIPT / SYS_HASH_2_TX) via ledger::prewriteBlockToBuffer. Externally
         /// received payloads leave these null/empty.
         bcos::protocol::BlockHeader::Ptr header;
-        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// Receipts of the DECODED transactions only, aligned index-by-index with the
+        /// decoded subset of executionPayload.transactions. Deliberately not the set the
+        /// header's receiptsRoot / gasUsed / logsBloom were computed over (that one also
+        /// covers deposits) — see BuildPayloadResult::persistedReceipts.
+        std::vector<protocol::TransactionReceipt::Ptr> persistedReceipts;
     };
 
     static bool isVersionSupported(std::uint32_t version)
@@ -488,7 +493,7 @@ private:
             .parentBeaconBlockRoot = request.parentBeaconBlockRoot,
             .view = nullptr,
             .header = nullptr,
-            .receipts = {},
+            .persistedReceipts = {},
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
@@ -535,7 +540,7 @@ private:
                         block->appendTransaction(tx.decoded);
                     }
                 }
-                for (auto const& receipt : it->second.receipts)
+                for (auto const& receipt : it->second.persistedReceipts)
                 {
                     block->appendReceipt(receipt);
                 }
@@ -582,7 +587,12 @@ private:
     {
         ExecutionPayload executionPayload;
         bcos::protocol::BlockHeader::Ptr header;
-        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The receipts that get PERSISTED, which is NOT the set the header's totals were
+        /// computed over. Named so at the type level because the two differ: the header's
+        /// receiptsRoot / gasUsed / logsBloom cover deposits too, while this list only
+        /// covers the decoded (scheduler) transactions, index-by-index with the persisted
+        /// transaction list. See Step 2c's comment for why, and for when the two converge.
+        std::vector<protocol::TransactionReceipt::Ptr> persistedReceipts;
     };
 
     bcos::task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
@@ -684,10 +694,11 @@ private:
         ledger::LedgerConfig ledgerConfig;
         co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
         auto blockVersion = ledgerConfig.compatibilityVersion();
+        auto const blockGasLimit = std::get<0>(ledgerConfig.gasLimit());
 
         // Fill gasLimit from ledger config (FISCO-BCOS does not use EIP-1559 baseFeePerGas,
         // and logsBloom is not part of BlockHeader hash computation in FISCO-BCOS).
-        executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
+        executionPayload.gasLimit = blockGasLimit;
 
         // Real EVM execution: execute transactions and compute real hashes.
         if (executionPayload.transactions.empty())
@@ -701,7 +712,7 @@ private:
             emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
             emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
             emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
-            emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+            emptyHeader->setGasLimit(u256(blockGasLimit));
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
             emptyHeader->setReceiptsRoot(h256{});
             emptyHeader->setTxsRoot(h256{});
@@ -713,7 +724,7 @@ private:
             executionPayload.blockHash = emptyHeader->hash();
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
                 .header = std::move(emptyHeader),
-                .receipts = {}};
+                .persistedReceipts = {}};
         }
 
         // Step 2b: Create BlockHeader for the new block
@@ -726,7 +737,7 @@ private:
         blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
         blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
-        blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+        blockHeader->setGasLimit(u256(blockGasLimit));
 
         // Step 2c-0: Execute 0x7E deposits (raw-only forced entries) FIRST, before the
         // scheduler runs the decoded transactions — deposits lead the OP payload and the
@@ -764,8 +775,9 @@ private:
             *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
         // Deposit receipts lead, matching payload order (forced entries come first) — but
         // ONLY for the block totals below (receiptsRoot / gasUsed / logsBloom).
-        // BuildPayloadResult.receipts stays the scheduler subset: newPayload persistence
-        // pairs receipts with the persisted (decoded) transaction list index-by-index
+        // BuildPayloadResult.persistedReceipts stays the scheduler subset (hence the name —
+        // the two sets are NOT interchangeable): newPayload persistence pairs receipts with
+        // the persisted (decoded) transaction list index-by-index
         // (prewriteBlockToBuffer keys SYS_HASH_2_RECEIPT by blockTxs[i]->hash()), and a
         // deposit has no ledger transaction to pair with until deposits are modeled as
         // ledger transactions. Merging them into the persisted list would mis-key the
@@ -849,6 +861,90 @@ private:
                 orBloom(logsBloom, receipt->logsBloom());
             }
         }
+        // No pool bounds the block's gas here. op-geth runs ONE GasPool per block
+        // (core/state_processor.go:70, `gp = NewGasPool(block.GasLimit())`) that every
+        // transaction draws its own gasLimit from before executing — deposits included
+        // (core/state_transition.go:360, `return st.gp.SubGas(st.msg.GasLimit) // gas used
+        // by deposits may not be used by other txs`) — with the unused remainder returned
+        // afterwards (:669-672). This lane has none: EthereumExecutor passes the FULL block
+        // gas limit as every transaction's blockGasLeft, so each deposit and each scheduler
+        // transaction believes it owns the whole budget and the sum above can land past it.
+        //
+        // Only the deposits are a hard failure, and ONLY they may be. Which half overran
+        // decides whether failing the payload is a fix or a weapon:
+        //
+        //   * Deposits are consensus-injected by the CL, so an over-budget deposit set is a
+        //     malformed payload request and refusing it is the correct verdict — the same
+        //     one op-geth reaches, since SubGas's ErrGasLimitReached is excluded from the
+        //     failed-deposit salvage branch (core/state_transition.go:486) and propagates as
+        //     a block error rather than a failure receipt. Retrying is futile until the CL
+        //     sends different attributes, so there is nothing to stall.
+        //
+        //   * The scheduler's half arrives from eth_sendRawTransaction, and throwing on it
+        //     would hand any caller a permanent production halt. The throw escapes
+        //     updateForkchoice, so the block is abandoned and nothing commits; the mempool
+        //     is untouched (remove()/seal() already ran, and MemPoolImpl::remove(state)
+        //     prunes strictly by nonce with no TTL, while these transactions never executed
+        //     so no nonce moved); the next forkchoice update seals the identical batch off
+        //     the identical state and throws again. The node would never produce another
+        //     block. It is also cheap to trigger: base_fee defaults to 0 (EthereumHost.h:46)
+        //     so a zero-balance sender passes the fee checks, and gasUsed is driven by
+        //     calldata intrinsic cost rather than real computation. Log it instead — loudly,
+        //     because it means the C3 accounting below is overdue.
+        //
+        // Nothing on this lane consumes the check either way today: handleNewPayload only
+        // commits payloads this node built (it re-executes nothing when view == nullptr), so
+        // no peer validates the totals.
+        //
+        // Only the check, not the accounting: a real pool has to be threaded through
+        // scheduler_v1::TransactionScheduler::executeBlock — a bcos-framework concept shared
+        // by the serial, parallel and baseline schedulers — AND needs each transaction's
+        // actual gasUsed fed back so the unspent remainder returns to the pool. That is the
+        // block-lifecycle layer's job (C3).
+        //
+        // Approximating it here by reserving each sealed transaction's DECLARED gasLimit up
+        // front, without the refund half, was tried and rejected: it starves the chain.
+        // op-geth can reserve safely because its txpool refuses a transaction whose gas
+        // exceeds the block limit at admission (core/txpool/validation.go:135, ErrGasLimit).
+        // FISCO's ingress has no such check — EthEndpoint's mempool branch validates
+        // signature and chainId only, MemPoolImpl::add hash and nonce parseability — while
+        // the executor rejects an over-cap transaction (EIP-7825, Osaka) WITHOUT executing
+        // it, so it burns no gas, never advances its sender's nonce, and
+        // MemPoolImpl::remove(state), which prunes strictly by nonce, can never evict it.
+        // A single free eth_sendRawTransaction declaring gas == the block limit would then
+        // reserve the entire budget of every future block forever. Reserving correctly
+        // needs the executor's per-revision gas cap, which the engine deliberately does not
+        // link (engine/CMakeLists.txt: bcos-framework, bcos-task, bcos-utilities, ledger).
+        //
+        // A zero limit means UNCONFIGURED, not "this block may burn no gas": getLedgerConfig
+        // reads tx_gas_limit with getOrDefault(..., "0") (LedgerMethods.h), so a chain
+        // without that SYS_CONFIG row lands here with 0 and must not be judged against it.
+        if (blockGasLimit > 0)
+        {
+            u256 depositGasUsed;
+            for (auto const& depositReceipt : depositReceipts)
+            {
+                depositGasUsed += depositReceipt->gasUsed();
+            }
+            if (depositGasUsed > u256(blockGasLimit))
+            {
+                BOOST_THROW_EXCEPTION(
+                    BlockGasLimitExceeded{} << bcos::errinfo_comment{
+                        "Forced deposits consume more gas than the block gas limit allows"});
+            }
+            if (totalGasUsed > u256(blockGasLimit))
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("EngineService")
+                                << LOG_DESC(
+                                       "buildPayload: block gas used exceeds the block gas "
+                                       "limit; the scheduler has no cross-transaction gas "
+                                       "accounting yet")
+                                << LOG_KV("blockNumber", nextBlockNumber)
+                                << LOG_KV("gasUsed", totalGasUsed)
+                                << LOG_KV("gasLimit", blockGasLimit)
+                                << LOG_KV("depositGasUsed", depositGasUsed);
+            }
+        }
 
         // Step 2g: Compute state root (MPT over state storage)
         h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
@@ -865,12 +961,12 @@ private:
         executionPayload.receiptsRoot = receiptRoot;
         executionPayload.gasUsed = totalGasUsed;
         executionPayload.blockHash = blockHeader->hash();
-        executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
+        executionPayload.gasLimit = blockGasLimit;
         executionPayload.logsBloom = logsBloom;
 
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(blockHeader),
-            .receipts = std::move(receipts)};
+            .persistedReceipts = std::move(receipts)};
     }
 
     /// Compute state root by iterating over storage and XOR-ing entry hashes.
