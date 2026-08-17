@@ -26,6 +26,9 @@ python3 b4_persist.py || fail=1
 step "B.3: b3_contracts (8 asserts)"
 python3 b3_contracts.py || fail=1
 
+step "PREDEPLOY: predeploy_matrix (~30 asserts)"
+python3 predeploy_matrix.py || fail=1
+
 step "A.1+B4: a1_active on B3a (16 asserts)"
 bash /tmp/op-spike/b3a/start.sh || fail=1
 python3 a1_active.py || fail=1

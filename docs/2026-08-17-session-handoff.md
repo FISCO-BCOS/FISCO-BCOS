@@ -38,7 +38,7 @@
 3. **计划文档 2 处笔误**:DA 计划 `contract_call_tx` 例 312B 截断(实现用权威 345B)、brief `...ull` 超 uint64——顺手修
 
 ### 预部署矩阵下一步
-4. ✅ `docs/2026-08-17-opstack-predeploy-matrix-design.md` 已获批 → **实施计划已写**(`docs/2026-08-17-opstack-predeploy-matrix-plan.md`,6 Task;selector/topic 全 keccak 重算并逐条对过节点字节码;发现 spec 勘误:MessagePasser 无 getSentMessage,用 sentMessages(bytes32))。**待 SDD 执行**(Task 1 t8n 差分向量 → Task 6 挂 run_all)
+4. ✅ `docs/2026-08-17-opstack-predeploy-matrix-design.md` 已获批 → **实施计划已写**(`docs/2026-08-17-opstack-predeploy-matrix-plan.md`,6 Task;selector/topic 全 keccak 重算并逐条对过节点字节码;发现 spec 勘误:MessagePasser 无 getSentMessage,用 sentMessages(bytes32))。**SDD 已全部交付**(Task 1-6):t8n 差分向量 + `tools/op-e2e/predeploy_matrix.py`(30 断言)已挂 `run_all.sh`(chain_driver 之后、a1_active 之前);全量回归 ctest 1935/1935 + op-e2e ALL GREEN。Divergence 登记:`l1block_deposit_reverts_ecotone_vs_jovian`(genesis L1Block 为 Ecotone 版,节点注入 Jovian deposit 每块 revert→getter 返回 0,断言仅要求可读+格式正确)、`bridge_deposit_l2_only_mint_unverified`/`bridge_withdraw_l2_only_burn_unverified`(bridge 预部署未初始化,messenger()=0→桥内 sendMessage 落到 address(0) revert,断言降级为回执可查)。
 
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
 5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件
@@ -53,7 +53,7 @@
 ## 4. 关键路径
 
 - 节点工作区:`/tmp/op-spike/{b3,b3a}`(config.genesis 合并文件、conf/、jwt.hex、node.pem)
-- op-e2e 套件:`tools/op-e2e/`(run_all.sh / restart_b3.sh / predeploy_matrix.py 待建)
+- op-e2e 套件:`tools/op-e2e/`(run_all.sh / restart_b3.sh / predeploy_matrix.py)
 - DA 矩阵:`opstack-executor/tests/da-matrix/`
 - t8n harness:`opstack-executor/tests/t8n/`(generator/cases.go、regen.sh、OpT8nReplayTest)
 - 预部署合约:FISCO 自研 `bcos-l2-contracts/src/{SystemConfig,L2ValidatorSet}.sol`;OP-fork 11 个字节码在 `bcos-l2-contracts/out/`,源码在 `/tmp/op-spike/op-pinned`(33f06d2d)
