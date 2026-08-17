@@ -163,13 +163,16 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
         evmTx.blob_hashes.push_back(hash);
     }
-    // chainId and nonce from BCOS tx may or may not have 0x prefix.
-    // RPC/Web3 decoding stores values with 0x prefix (toQuantity). Parse strictly and
-    // non-throwing via the shared helper (fromQuantity / safeFromQuantity), so a
-    // double 0x (e.g. "0x0x1a"), a non-numeric value (e.g. a FISCO chain_id like
-    // "chain0"), a sign, trailing garbage, or a value above uint64 all fall through to 0.
-    // A value that cannot be parsed is left at 0. Note that 0 is NOT a
-    // guaranteed rejection:
+    // chainId and nonce from the BCOS tx use DIFFERENT string encodings in the tars field:
+    // nonce is a hex quantity (takeToTarsTransaction writes toQuantity(nonce),
+    // Web3Transaction.cpp:262), while chainID is DECIMAL (takeToTarsTransaction writes
+    // std::to_string(chainId), Web3Transaction.cpp:263; FISCO-native txs use a decimal chain_id
+    // too). safeFromQuantity parses hex quantities, so it is correct for nonce but misparses a
+    // decimal chainID
+    // ("10" -> 0x10 = 16). Parse chainID as decimal instead. Both are parsed strictly and
+    // non-throwing: empty, a double 0x (e.g. "0x0x1a"), a non-numeric value (e.g. a FISCO
+    // chain_id like "chain0"), a sign, trailing garbage, or a value above uint64 all fall
+    // through to 0. Note that 0 is NOT a guaranteed rejection:
     //   * chain_id 0 never matches a real chain id (and evmone's
     //     validate_transaction does not check chain_id — the signature binds it
     //     upstream, so a malformed chain_id implies an invalid signature that
@@ -179,7 +182,21 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     //     nonce is part of the signed payload, so a malformed nonce means the
     //     signature check failed upstream — this fallback only ever matters for
     //     byzantine/unsigned inputs.
-    evmTx.chain_id = bcos::safeFromQuantity(tx.chainId()).value_or(0);
+    evmTx.chain_id = [&]() -> uint64_t {
+        auto const s = tx.chainId();
+        if (s.empty())
+            return 0;
+        try
+        {
+            std::size_t pos = 0;
+            auto const v = std::stoull(std::string(s), &pos, 10);
+            return pos == s.size() ? v : 0;  // reject trailing garbage ("10x")
+        }
+        catch (...)
+        {
+            return 0;
+        }
+    }();
     evmTx.nonce = bcos::safeFromQuantity(tx.nonce()).value_or(0);
     for (auto const& auth : tx.authorizationList())
     {
