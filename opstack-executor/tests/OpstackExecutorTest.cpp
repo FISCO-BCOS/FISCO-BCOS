@@ -12,6 +12,7 @@
 #include "bcos-evm/opstack/OpPredeploys.h"
 #include "opstack-executor/OpstackExecutor.h"
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPEncode.h>  // construct a 33-byte-mint envelope for the over-wide test
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/ledger/EVMAccount.h>
@@ -658,6 +659,28 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
     trailing.push_back(0x00);
     BOOST_CHECK_THROW(
         [&]() { (void)decodeDepositEnvelope(bcos::ref(trailing)); }(), OpTxValidationFailed);
+
+    // Rejection (#1, kyonRay): an over-wide integer (33-byte mint) must fail loud —
+    // rlp::decode(UnsignedIntegral) alone would truncate to the low 32 bytes via fromBigEndian.
+    {
+        bcos::bytes body;
+        bcos::codec::rlp::encode(
+            body, bcos::h256("0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7"));
+        bcos::codec::rlp::encode(body, bcos::Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"));
+        bcos::codec::rlp::encode(body, bcos::Address("0x4200000000000000000000000000000000000015"));
+        bcos::codec::rlp::encode(body, bcos::bytes(33, 0xff));  // 33-byte mint -> over-wide
+        bcos::codec::rlp::encode(body, bcos::bytes{});          // value = 0 (empty RLP item)
+        bcos::codec::rlp::encode(body, bcos::bytes{});          // gas = 0
+        bcos::codec::rlp::encode(body, bcos::bytes{});          // isSystemTx = 0
+        bcos::codec::rlp::encode(body, bcos::bytes{});          // data = empty
+        bcos::bytes list;
+        bcos::codec::rlp::encodeHeader(list, bcos::codec::rlp::Header{true, body.size()});
+        list.insert(list.end(), body.begin(), body.end());
+        bcos::bytes overWideEnv{0x7e};
+        overWideEnv.insert(overWideEnv.end(), list.begin(), list.end());
+        BOOST_CHECK_THROW(
+            [&]() { (void)decodeDepositEnvelope(bcos::ref(overWideEnv)); }(), OpTxValidationFailed);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

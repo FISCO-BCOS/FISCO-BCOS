@@ -241,6 +241,31 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
     auto fail = [](std::string const& msg) {
         BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
     };
+    // Reject an over-wide integer RLP item (kyonRay review #5429 #1): rlp::decode(UnsignedIntegral)
+    // does not check the payload length against the target width — fromBigEndian folds excess high
+    // bytes, so a 33-byte mint would silently truncate to its low 32 bytes. Return the payload
+    // length of the integer at `ref`'s front, or nullopt if it is not a well-formed integer
+    // (RLP list / truncated length prefix).
+    auto integerPayloadLength = [&](bcos::bytesConstRef const& ref) -> std::optional<size_t> {
+        if (ref.empty())
+            return std::nullopt;
+        uint8_t const b = ref[0];
+        if (b < 0x80)
+            return 0;  // single byte value
+        if (b <= 0xb7)
+            return static_cast<size_t>(b - 0x80);  // short string
+        if (b <= 0xbf)
+        {  // long string
+            size_t const n = b - 0xb7;
+            if (ref.size() < 1 + n)
+                return std::nullopt;
+            size_t len = 0;
+            for (size_t i = 0; i < n; ++i)
+                len = (len << 8) | ref[1 + i];
+            return len;
+        }
+        return std::nullopt;  // list (not an integer)
+    };
     if (env.size() < 2 || env[0] != static_cast<uint8_t>(op::kDepositTxType))
         fail("deposit envelope: not a 0x7e deposit");
     bcos::bytesRef body{const_cast<bcos::byte*>(env.data() + 1), env.size() - 1};
@@ -287,6 +312,8 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
     }
     else
     {
+        if (auto pl = integerPayloadLength(items); !pl || *pl > 32)
+            fail("deposit envelope: mint over-wide (>32 bytes)");
         bcos::u256 m{0};
         if (auto e = rlp::decode(items, m); e != nullptr)
             fail("deposit envelope: mint decode failed");
@@ -296,8 +323,23 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
     uint64_t gas = 0;
     uint64_t isSystemTxValue = 0;
     bcos::bytes data;
-    if (auto e = rlp::decodeItems(items, value, gas, isSystemTxValue, data); e != nullptr)
-        fail("deposit envelope: value/gas/isSystemTx/data decode failed");
+    // value (u256): width check before decode — over-wide would truncate silently.
+    if (auto pl = integerPayloadLength(items); !pl || *pl > 32)
+        fail("deposit envelope: value over-wide (>32 bytes)");
+    if (auto e = rlp::decode(items, value); e != nullptr)
+        fail("deposit envelope: value decode failed");
+    // gas (uint64): width check.
+    if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
+        fail("deposit envelope: gas over-wide (>8 bytes)");
+    if (auto e = rlp::decode(items, gas); e != nullptr)
+        fail("deposit envelope: gas decode failed");
+    // isSystemTx (uint64): width check.
+    if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
+        fail("deposit envelope: isSystemTx over-wide (>8 bytes)");
+    if (auto e = rlp::decode(items, isSystemTxValue); e != nullptr)
+        fail("deposit envelope: isSystemTx decode failed");
+    if (auto e = rlp::decode(items, data); e != nullptr)
+        fail("deposit envelope: data decode failed");
     if (!items.empty())
         fail("deposit envelope: trailing bytes inside the RLP list");
 
@@ -431,7 +473,19 @@ public:
                 if (m_ctx->seenNonDeposit)  // M2 order gate
                     throw bcos::evm::engine::OpConsensusError(
                         "op block: deposit after non-deposit");
-                m_deposit = OpstackExecutor::depositFromTransaction(transaction);
+                try
+                {
+                    m_deposit = OpstackExecutor::depositFromTransaction(transaction);
+                }
+                catch (const OpTxValidationFailed& e)
+                {
+                    // kyonRay review #5429 #2: a malformed deposit envelope (e.g. a 0x02-envelope
+                    // whose tars mirror claims deposit) is a CONSENSUS rejection, not an internal
+                    // error — reclassify so the block surfaces as INVALID instead of -32603.
+                    throw bcos::evm::engine::OpConsensusError(
+                        std::string("OpScheduler: deposit envelope validation failed: ") +
+                        e.what());
+                }
                 co_return;  // deposit has no opValidate
             }
             m_ctx->seenNonDeposit = true;
@@ -649,18 +703,32 @@ private:
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         auto evmTx = eth::toEvmoneTransaction(transaction);
-        // op-geth parity (morebtcg review #5429): reject protected txs whose chainId differs from
-        // the node's chainId. op-geth EIP155Signer.Sender / modernSigner.Sender check
+        // op-geth parity (morebtcg review #5429): reject txs whose chainId differs from the node's
+        // chainId. op-geth EIP155Signer.Sender / modernSigner.Sender check
         // `tx.ChainId() == chainID` (ErrInvalidChainId) during block processing; FISCO previously
         // accepted any self-consistent chainId (the signature binds the tx's own chainId, so
-        // sender recovery always succeeds). Legacy unprotected txs (chainId 0, v=27/28) are
-        // accepted per Homestead semantics. chainId == 0 here means the caller did not supply a
-        // node chainId (fail-open); the block path always passes m_ctx->chainId.
-        if (chainId != 0 && evmTx.chain_id != 0 && evmTx.chain_id != chainId)
+        // sender recovery always succeeds). Only legacy UNPROTECTED txs (v=27/28, chain_id==0,
+        // Homestead) have no chainId concept and are accepted; every other tx (EIP-155 protected
+        // legacy + ALL typed txs) must match the node chainId — including a typed tx whose
+        // chain_id field is 0, which modernSigner.Sender also rejects (0 != chainID →
+        // ErrInvalidChainId; a malicious proposer can craft a 0x02 envelope with chain_id 0).
+        // chainId == 0 here means the caller did not supply a node chainId (fail-open); the block
+        // path always passes m_ctx->chainId.
+        if (chainId != 0)
         {
-            throw bcos::evm::engine::OpConsensusError(
-                "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
-                " does not match node chainId " + std::to_string(chainId));
+            if (evmTx.type == evmone::state::Transaction::Type::legacy)
+            {
+                if (evmTx.chain_id != 0 && evmTx.chain_id != chainId)  // EIP-155 protected legacy
+                    throw bcos::evm::engine::OpConsensusError(
+                        "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
+                        " does not match node chainId " + std::to_string(chainId));
+            }
+            else if (evmTx.chain_id != chainId)  // typed: chain_id==0 is NOT exempt
+            {
+                throw bcos::evm::engine::OpConsensusError(
+                    "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
+                    " does not match node chainId " + std::to_string(chainId));
+            }
         }
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto envRef = transaction.extraTransactionBytes();
