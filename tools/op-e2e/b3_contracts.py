@@ -4,12 +4,13 @@ eth_sendRawTransaction, then assert eth_getCode == runtime and eth_call behaviou
 (storage contract succeeds, REVERT contract fails). Spec §4 B.3 items 2-3.
 """
 import json
+import os
 import subprocess
 import sys
 import time
 import urllib.request
 
-SIGN_SECP = "/tmp/op-spike/sign_secp"
+SIGN_SECP = os.environ.get("SIGN_SECP", "/tmp/op-spike/sign_secp")
 SENDER = "0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693"
 PRIVKEY = "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29"
 CHAIN_ID = 11155111

@@ -3,7 +3,7 @@
 # RocksDB across restarts. setup_b3.sh rm -rf's the data dirs, so it must NOT be used here.
 set -u
 WORK=${WORK:-/tmp/op-spike/b3}
-BINARY=${BINARY:-/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/build/fisco-bcos-air/fisco-bcos}
+BINARY=${BINARY:-$(cd "$(dirname "$0")/../.." && pwd)/build/fisco-bcos-air/fisco-bcos}
 
 [ -f "$WORK/node.pid" ] && kill "$(cat "$WORK/node.pid")" 2>/dev/null
 # Wait for the old process to free the RocksDB lock before relaunching.

@@ -10,6 +10,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -58,7 +59,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--eth-port", type=int, default=8563)
     ap.add_argument("--engine-port", type=int, default=8564)
-    ap.add_argument("--jwt", default="/tmp/op-spike/b3a/jwt.hex")
+    ap.add_argument("--jwt", default=os.environ.get("B3A_JWT", "/tmp/op-spike/b3a/jwt.hex"))
     args = ap.parse_args()
     eth = Rpc(args.eth_port)
     jwt = open(args.jwt).read().strip()

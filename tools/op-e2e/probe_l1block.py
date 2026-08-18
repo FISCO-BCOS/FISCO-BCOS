@@ -11,10 +11,11 @@ Reuses the b3_contracts signing (libsecp256k1, keccak, EIP-1559 0x02).
 import json
 import subprocess
 import sys
+import os
 import time
 import urllib.request
 
-SIGN_SECP = "/tmp/op-spike/sign_secp"
+SIGN_SECP = os.environ.get("SIGN_SECP", "/tmp/op-spike/sign_secp")
 SENDER = "0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693"
 PRIVKEY = "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29"
 CHAIN_ID = 11155111
@@ -133,7 +134,8 @@ def build_jovian_calldata(l1_base_fee=0xabc, base_fee_scalar=0x100, blob_scalar=
 
 
 class Rpc:
-    def __init__(self, port=8563, engine_port=8564, jwt="/tmp/op-spike/b3a/jwt.hex"):
+    def __init__(self, port=8563, engine_port=8564,
+            jwt=os.environ.get("B3A_JWT", "/tmp/op-spike/b3a/jwt.hex")):
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self.url = f"http://127.0.0.1:{port}"
         self.eng_url = f"http://127.0.0.1:{engine_port}"

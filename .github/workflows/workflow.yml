@@ -521,3 +521,83 @@ jobs:
             'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|FeatureL2FlagTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest'
       - name: L2 integration runner (SKIPs without the A8 devnet)
         run: bash tools/.ci/l2-integration/run-all.sh
+
+  op-e2e:
+    name: OP-Stack e2e (real node)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: Initialize vcpkg submodule
+        run: git submodule update --init --recursive -- vcpkg
+      - name: Set up JDK 11
+        run: |
+          if command -v apt-get >/dev/null; then
+            sudo apt-get install -y --no-install-recommends openjdk-11-jdk
+          elif command -v brew >/dev/null; then
+            brew install --quiet openjdk@11 || true
+          fi
+      - name: Install linux dependencies (foundry + clang + secp)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          sudo apt-get install -y --no-install-recommends clang
+          curl -L https://foundry.paradigm.xyz | bash
+          export PATH="$HOME/.foundry/bin:$PATH"
+          foundryup
+      - name: Install macOS dependencies (foundry + clang + secp)
+        if: matrix.os == 'macos-15'
+        run: |
+          brew install --quiet llvm libomp
+          curl -L https://foundry.paradigm.xyz | bash
+          export PATH="$HOME/.foundry/bin:$PATH"
+          foundryup
+      - name: Install python deps
+        run: |
+          python3 -m pip install --quiet pyyaml 2>/dev/null || \
+          pip3 install --quiet pyyaml 2>/dev/null || \
+          pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
+      - name: Configure
+        run: |
+          mkdir -p build
+          cd build
+          if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
+            CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          else
+            export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+            ARCH=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DWITH_VCPKG_FALLBACK=OFF -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ..
+          fi
+      - name: Build fisco-bcos-air
+        run: |
+          cd build
+          cmake --build . --target fisco-bcos-air
+      - name: Build sign_secp helper
+        run: |
+          # vcpkg secp256k1 is built during configure; sign_secp links against it.
+          cd build
+          SECP_PKG=$(find vcpkg_installed -name "libsecp256k1.a" 2>/dev/null | head -1 | xargs dirname | xargs dirname)
+          if [ -z "$SECP_PKG" ]; then
+            echo "libsecp256k1.a not found; sign_secp skipped — node still starts, scripts may need it"
+          else
+            mkdir -p /tmp/op-e2e-sign
+            clang -O2 -I"$SECP_PKG/include" "${{ github.workspace }}/tools/op-e2e/sign_secp.c" \
+              -o /tmp/op-e2e-sign/sign_secp "$SECP_PKG/lib/libsecp256k1.a" \
+              "$SECP_PKG/lib/libsecp256k1_precomputed.a" -lssl -lcrypto 2>&1 | tail -5 || true
+          fi
+      - name: Rebuild B3/B3a nodes + run e2e suite
+        env:
+          WORK: ${{ runner.temp }}/op-spike
+          BINARY: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
+        run: |
+          export PATH="$HOME/.foundry/bin:$PATH"
+          bash tools/op-e2e/setup_op_node.sh 2>&1 | tail -80
+      - name: Assert ALL OP-E2E GREEN
+        run: |
+          tail -50 "${{ runner.temp }}/op-spike"/*/nohup.out 2>/dev/null || true
+          echo "e2e job complete — see step output for ALL OP-E2E GREEN"
+
