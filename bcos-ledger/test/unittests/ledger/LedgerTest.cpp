@@ -22,7 +22,6 @@
  */
 
 #include "bcos-ledger/Ledger.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "../../mock/MockKeyFactor.h"
 #include "GenesisFeatureFlagsHelper.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
@@ -40,9 +39,9 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include "bcos-utilities/Bloom.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/Bloom.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -50,6 +49,7 @@
 #include <bcos-framework/consensus/ConsensusNode.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
@@ -999,8 +999,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
 
     // one transaction so the block has a tx-hash row for the receipt lookup
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
-        "0x1000000000000000000000000000000000000000", bcos::bytes{0x60}, "1", 1000,
-        "chain0", "group0", 0);
+        "0x1000000000000000000000000000000000000000", bcos::bytes{0x60}, "1", 1000, "chain0",
+        "group0", 0);
     block->appendTransaction(tx);
 
     protocol::LogEntry logEntry(bcos::bytes(20, 0x10),
@@ -1014,7 +1014,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
     bcos::orBloom(expectedBloom, bcos::getLogsBloom(receipt->logEntries()));
 
     std::promise<bool> prewritePromise;
-    m_ledger->asyncPrewriteBlock(m_storage, nullptr, block,
+    m_ledger->asyncPrewriteBlock(
+        m_storage, nullptr, block,
         [&](std::string, Error::Ptr&& error) {
             BOOST_CHECK(!error);
             prewritePromise.set_value(true);
@@ -1023,8 +1024,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
     BOOST_CHECK(prewritePromise.get_future().get());
 
     std::promise<protocol::Block::Ptr> blockPromise;
-    m_ledger->asyncGetBlockDataByNumber(1, bcos::ledger::RECEIPTS,
-        [&](Error::Ptr error, protocol::Block::Ptr result) {
+    m_ledger->asyncGetBlockDataByNumber(
+        1, bcos::ledger::RECEIPTS, [&](Error::Ptr error, protocol::Block::Ptr result) {
             BOOST_CHECK(!error);
             blockPromise.set_value(std::move(result));
         });
@@ -1035,8 +1036,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataRecomputesLogsBloom)
     BOOST_CHECK(!readBloom.empty());
     bcos::bytes readBloomBytes(readBloom.begin(), readBloom.end());
     BOOST_CHECK(readBloomBytes != bcos::bytes(bcos::BloomBytesSize, 0));
-    BOOST_CHECK(readBloomBytes ==
-                bcos::bytes(expectedBloom.begin(), expectedBloom.end()));
+    BOOST_CHECK(readBloomBytes == bcos::bytes(expectedBloom.begin(), expectedBloom.end()));
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionByHash)
@@ -1405,7 +1405,8 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto table = tablePromise.get_future().get();
 
     auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
-    auto [txCountLimit, enableNum] = bcos::storage::serialize::decode<SystemConfigEntry>(oldEntry->get());
+    auto [txCountLimit, enableNum] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(oldEntry->get());
     BOOST_CHECK_EQUAL(txCountLimit, "1000");
     BOOST_CHECK_EQUAL(enableNum, 0);
 
@@ -1632,6 +1633,51 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             BOOST_CHECK_EQUAL(codeHashEntry->get(),
                 std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
         }
+    }());
+}
+
+// State-layout contract (08-18 diagnosis "Bug A"): the genesis alloc import writes raw
+// "table:key" rows, and the storage2 executor line (v2/v3) persists state the same way —
+// so the storage2-line wiring reads the ledger with keyPageSize=0 (raw). This pins that
+// getStorageAt sees the allocs under that wiring. The v1 executor instead persists KeyPage
+// pages and keeps the configured keyPageSize (reads match its own writer).
+BOOST_AUTO_TEST_CASE(genesisAllocsReadableViaGetStorageAtRawLayout)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        memoryStorage->setEnableTraverse(true);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        storage->setEnableTraverse(true);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        ledger->setKeyPageSize(0);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
+        genesisConfig.m_allocs.push_back(
+            Alloc{.address = "6afa9580383e6627da926b6f6ed9ab2b9c8cc693",
+                .balance = bcos::u256("1000000000000000000000000"),
+                .nonce = "0",
+                .code = "",
+                .storage = {}});
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        auto balanceEntry = co_await ledger->getStorageAt(
+            "6afa9580383e6627da926b6f6ed9ab2b9c8cc693", ACCOUNT_TABLE_FIELDS::BALANCE, 0);
+        BOOST_REQUIRE(balanceEntry.has_value());
+        BOOST_CHECK_EQUAL(balanceEntry->get(), "1000000000000000000000000");
+
+        auto nonceEntry = co_await ledger->getStorageAt(
+            "6afa9580383e6627da926b6f6ed9ab2b9c8cc693", ACCOUNT_TABLE_FIELDS::NONCE, 0);
+        BOOST_REQUIRE(nonceEntry.has_value());
+        BOOST_CHECK_EQUAL(nonceEntry->get(), "0");
     }());
 }
 

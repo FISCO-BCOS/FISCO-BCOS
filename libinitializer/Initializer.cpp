@@ -430,6 +430,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     m_executorVersion = executorVersion;
 
+    // State-layout gate (08-18 diagnosis "Bug A"): the storage2 executors (v2 EthereumExecutor
+    // / v3 OP) persist state as raw "table:key" rows — the genesis alloc import included —
+    // while the legacy v1 executor persists KeyPage pages (ShardingBlockExecutive wraps its
+    // execution storage in KeyPageStorage). Ledger::getStorageAt — the RPC state reads — must
+    // read the layout the chain's writer actually used, so force raw reads (keyPageSize=0) on
+    // storage2 chains; v1 keeps the configured keyPage layout where writer and reader match.
+    if (auto concreteLedger = std::dynamic_pointer_cast<bcos::ledger::Ledger>(m_ledger);
+        m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION && concreteLedger)
+    {
+        concreteLedger->setKeyPageSize(0);
+    }
+
     // Engine API (OP-Stack engine endpoints) is wired to the v1 TransactionExecutorImpl.
     // It must not be built for executor_version >= 2: a v2 chain's state transitions run
     // through the pure-Ethereum EthereumExecutor, and an Engine API driven through the v1

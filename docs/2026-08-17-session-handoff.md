@@ -169,3 +169,14 @@ testWeb3RPC 新用例绿(jwtHttpRequestAuthTest 为预存失败,与本链路无�
 ### 对比结论（op-geth / op-reth 不变量，Phase B 精神）
 geth 单一 trie 表示、reth plain/hashed 双表均由导入一次填满且读写对称——两者均不存在
 "写读布局分叉"这类 bug 的结构空间。FISCO 的修复验收标准 = **读写走同一布局**。
+
+### Bug A 修复（08-18 晚，同日完成）
+- **改动**（Initializer.cpp:433-443）：executor_version >= 2（storage2 执行器线）时给 Ledger 覆写
+  `keyPageSize=0` → `getStateStorage()` 返回 plain StateStorage（raw "table:key" 读，与 genesis 导入
+  及 storage2 执行器的写布局一致）；v1 线保持配置值（其 KeyPage 读写对称不受影响）。
+- **单测**：LedgerTest/genesisAllocsReadableViaGetStorageAtRawLayout（genesis alloc → getStorageAt
+  round-trip，钉住 raw 布局契约）。
+- **e2e 验证**：B3/B3a `eth_getBalance` 均返回 10^24（与 MPT proof 一致）；rpc_matrix 52 过 / 0 败 /
+  7 known-red（"getBalance nonzero" 转绿并按陈旧门告警摘除）；run_all 门禁 ALL GREEN。
+- **遗留**：eth_call 族 -32603（Bug B，仍 7 项 known-red 中的 4 项）待钉抛点；v1 线首块可见创世余额
+  的疑点仍登记待查。

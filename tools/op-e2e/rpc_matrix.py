@@ -84,7 +84,6 @@ KNOWN_TIER1 = {
     "timestamp sane",
     "getProof block 1 returns MPT-limited error code",
     "outputv0 withdrawalsRoot present 32B",
-    "getBalance nonzero",
     "eth_call EOA->EOA returns 0x",
     "eth_estimateGas == 21000",
     "eth_call empty-code address returns 0x",
