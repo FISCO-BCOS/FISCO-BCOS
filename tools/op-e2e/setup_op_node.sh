@@ -148,6 +148,12 @@ if step_run 5; then
   NODE_BASE="$WORK/b3"
   mkdir -p "$NODE_BASE/conf"
   [ -x "$BINARY" ] || die "节点二进制不存在: $BINARY(需先构建)"
+  # 5.0 eth_genesis_header: L2 模式必需(22 字段 + hash,NodeConfig fail-fast)。
+  # 用 gen_eth_header_fixture.py 生成(独立 RLP+keccak,hash 与 C++ 测试一致)。
+  ETH_HEADER="$WORK/eth_genesis_header.ini"
+  "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml > "$ETH_HEADER" \
+    || die "eth_genesis_header 生成失败"
+  log "eth_genesis_header 就绪(hash=$(grep '^hash=' "$ETH_HEADER" | cut -d= -f2))"
 
   # 5.1 节点签名私钥 node.pem(secp256k1,与 genesis node.0 绑定)
   [ -f "$NODE_BASE/node.pem" ] || \
@@ -204,6 +210,7 @@ if step_run 5; then
     auth_admin_account=$AUTH_ADMIN
 [features]
     feature_l2_ethereum_compat=true
+$(cat "$ETH_HEADER")
 [web3]
     chain_id=$CHAIN_ID
 [service]

@@ -128,12 +128,40 @@ def encode_header(fields):
     return rlp_encode_list(items)
 
 
+def to_toml_section(fields):
+    """Emit the [eth_genesis_header] section (22 fields + hash) for config.genesis.
+
+    Field order and names match NodeConfig::loadEthGenesisHeader. The hash is the
+    keccak256(rlp(header)) checksum recomputed by Ledger::buildGenesisBlock from the
+    other 21 fields; it must match for the node to start.
+    """
+    encoded = encode_header(fields)
+    digest = keccak256(encoded)
+    order = [
+        "parent_hash", "sha3_uncles", "miner", "state_root", "transactions_root",
+        "receipts_root", "logs_bloom", "difficulty", "number", "gas_limit", "gas_used",
+        "timestamp", "extra_data", "mix_hash", "nonce", "base_fee_per_gas",
+        "withdrawals_root", "blob_gas_used", "excess_blob_gas", "parent_beacon_block_root",
+        "requests_hash",
+    ]
+    lines = ["[eth_genesis_header]"]
+    for key in order:
+        lines.append(f"{key}={fields[key]}")
+    lines.append(f"hash=0x{digest.hex()}")
+    return "\n".join(lines) + "\n"
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
+    toml = argv and argv[0] == "--toml"
+    json_path = argv[1] if toml and len(argv) > 1 else (argv[0] if argv and not toml else None)
     fields = dict(DEFAULT_FIELDS)
-    if argv:
-        with open(argv[0]) as handle:
+    if json_path:
+        with open(json_path) as handle:
             fields.update(json.load(handle))
+    if toml:
+        print(to_toml_section(fields), end="")
+        return 0
     encoded = encode_header(fields)
     digest = keccak256(encoded)
     print("rlp    = 0x" + encoded.hex())
