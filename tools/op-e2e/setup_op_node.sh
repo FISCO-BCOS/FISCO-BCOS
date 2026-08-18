@@ -21,6 +21,10 @@
 #   - [rpc] listen_port(不是 rpc_listen_port)
 #   - [web3] chain_id 决定 eth_chainId;套件签名用 CHAIN_ID=11155111
 #   - without_tars_framework=true 需要 conf/tars_proxy.ini 存在
+#   - enable_single_node_consensus=true(必须!B3 靠单节点共识自动出块;
+#     chain_driver/rpc_matrix/b3_contracts/predeploy 的交易入块依赖它。
+#     曾误改成 false 声称"与 op_engine_rpc 冲突",实际 B3a 的 a1_active 走 FCU
+#     驱动、B3 走单节点共识,两者可共存;false 会让 B3 链停摆 → 大量断言红)
 #   - B3a produce_empty_blocks=false(a1_active FCU 秒级 timestamp 竞态)
 #   - SENDER genesis 余额 10^24 wei(chain_driver/b3_contracts 依赖)
 set -u
@@ -210,7 +214,7 @@ if step_run 5; then
     block_tx_count_limit=1000
     leader_period=1
     node.0=$NODE_ID
-    enable_single_node_consensus=false
+    enable_single_node_consensus=true
     block_interval=1000
     produce_empty_blocks=true
     fee_recipient=$FEE_RECIPIENT

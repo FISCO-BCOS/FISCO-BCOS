@@ -53,7 +53,8 @@
 ### e2e CI 接入(进行中,当前主线)
 4a. ✅ CI op-e2e job + 脚本可配置化(commit `440a497`)
 4b. ✅ eth_genesis_header 生成 + 单节点配置修复(commit `3ea2285`)
-4c. 🔴 **eth_genesis_header.state_root 必须匹配 allocs 的 MPT root**(`computeGenesisStateTrie`)——当前 empty root 不匹配(`artifact=56e81f... vs derived=0f4dbf6c...`)。**MPT 子代理在跑**(opus),交付:Python 复现 MPT root + 接入 gen_eth_header_fixture + setup。完成后旧分支 CI 可全自动跑通。
+4c. ✅ **MPT state_root 已交付**(commit `c33bfe83f`):`tools/opstack-genesis/mpt_state_root.py`(纯 Python op-geth 兼容 secure MPT,逐字节 == C++ `GenesisStateRoot.cpp`)+ `gen_eth_header_fixture.py --allocs` + setup step 5 集成。验证:setup allocs+SENDER → `0x0f4dbf6c...` == C++ derived root;B3/B3a 带正确 state_root 启动,`eth_getBlockByNumber(0)` stateRoot/hash 四者一致。**报告**:`docs/2026-08-18-mpt-root-report.md`。
+    - ⚠️ **子代理误判记录**:子代理(ab2661bd)报告 run_all 未全绿(eth_call Invalid argument + a1_active `engine_forkchoiceUpdatedV4 is not yet supported`),归因"既有问题"。**已查明为陈旧二进制**:worktree build 的 bcos-rpc/librpc.a 是 08-11 陈旧 UNITY_BUILD 对象(当时源码无 V4),含桩串;强制重建 librpc.a 后桩串 3→0。worktree 源码 EngineEndpoint.cpp 是真实 V4(`514e87046`,0 桩串);主 checkout 二进制(08-12)= 0 桩串。**MPT 提交零 C++ 改动,不可能引入回归**。worktree 完整重建受限于 tars2cpp/vcpkg 环境(CI 全新 checkout 无此问题)。记忆:`stale-worktree-build-v4-stub-trap.md`。
 4d. ⏳ scheduler 分支 Karst base-allocs 缺口(task 104):`base_allocs_sha256=""`,需 op-deployer 生成 terminal allocs。若 CI 也要在 scheduler 分支跑,需补此缺口。
 
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
