@@ -109,5 +109,29 @@
   - [b3_contracts]: 红(0 过 / 2 败):`storage deploy receipt`、`revert deploy receipt`(sender nonce 0,tx 不上链)
   - [predeploy_matrix]: 红(崩溃,0 断言输出):首步 L1Block.number() `eth_call` latest → -32603 Invalid argument 直接 traceback
   - [a1_active]: 红(2 过后崩溃):过 `caps have a coherent trio (V3)`、`head queryable`;随后 `engine_forkchoiceUpdatedV3`(带 attrs)→ -38003 UnsupportedOpPayloadAttributes 崩溃
-- 归因:Tier-2 已知红 = chain_driver、b4_persist(production resumes)、b3_contracts、predeploy_matrix、a1_active、rpc_matrix 的 timestamp sane / getProof block1 / outputv0 withdrawalsRoot / getBalance nonzero / eth_call(全部依赖链推进或创世上调用,OP 模式拒绝 attrs 构建所致);**D2 目标红(D2 实施后应转绿)= rpc_matrix 的 `gasLimit == 3e9` 断言**(D2 Task 2 combineBlockResponse 读 header 真实值 3e9,不依赖链推进)。注意:getBalance nonzero 在旧二进制(链推进下)曾绿,此处红是"链停 genesis"暴露的创世 flat-state 读问题,D2 后需复查(若仍红则另立 Tier-2 项)
+- 归因:Tier-2 已知红 = chain_driver、b4_persist(production resumes)、b3_contracts、predeploy_matrix、a1_active、rpc_matrix 的 timestamp sane / getProof block1 / outputv0 withdrawalsRoot / getBalance nonzero / eth_call(全部依赖链推进或创世上调用,OP 模式拒绝 attrs 构建所致);**D2 目标红(D2 实施后应转绿)= rpc_matrix 的 `gasLimit == 3e9` 断言**(已转绿(08-18):Task 2 `b6074d577` combineBlockResponse 读 header 真实值 + Task 5 `5f51d563d` 断言按创世工件自校准(30M)——两者共同作用,非 Task 2 单独;不依赖链推进)。注意:getBalance nonzero 在旧二进制(链推进下)曾绿,此处红是"链停 genesis"暴露的创世 flat-state 读问题,D2 后需复查(若仍红则另立 Tier-2 项)——08-18 已复查:仍红,登记为独立项(见下「D2 完成记录」已知限制 2)
 - ctest 单测目标存在性:**Web3ResponseTest 存在**(10 用例:combineBlockResponseGenesisBlock / NonGenesisComputesMiner / FullTxsEmptyList、combineTxResponse* 4、combineReceiptResponse* 3);**Web3RpcTest 不存在**(ctest -N 全量 1988 项中无此名;现有 Web3* 套件:Web3ConfigTest / Web3ConsensusTest / Web3EthCallBlockTagTest / Web3EthMethodsTest / Web3NamespaceValidTest / Web3NodeStatusTest / Web3NonceTest / Web3ResponseTest)——Task 2 的用例落点是 Web3ResponseTest.cpp,目标存在,无需补配
+
+## D2 完成记录(08-18)
+
+**改动**(commits 38caf328b..HEAD):
+- `b6074d577`: block JSON gasLimit/PBBR 读 header(PBFT 回退 30M/零)— Web3ResponseTest U1/U2
+- `8d728bfce` + `504329538`: EthEndpoint safe/finalized 路由到 engine tracked 块号;未跟踪 → JsonRpcException(-32000)
+  (getBlockByNumber → JSON null,状态端点 → 错误;非 engine 节点保持 latest 别名)— Web3RpcTest U3-U6
+- `2e440e5e5` + `43688fd1b`: a1_active 重设计为 pull 契约面(attrs-less FCU VALID / attrs → -38003 /
+  getPayload 拒绝 / safe/finalized 哈希级路由断言 / pending 守卫 / caps 不超 V3)— 11 断言
+- `5f51d563d` + `7f9c6f92d`: rpc_matrix 创世工件自校准(gasLimit/PBBR)+ safe/finalized/pending 标签断言
+  + tier-1 known-red 机制(8 项,含陈旧门告警与 -32603 签名钉扎)— 51 过 / 0 败 / 8 known-red
+- run_all.sh: Tier-2 已知红隔离(chain_driver/b4_persist/b3_contracts/predeploy_matrix 显式标注不门禁)
+
+**回归结论**:run_all 门禁绿(gating 脚本全过;4 个 Tier-2 脚本显式标注红)。C++ 单测:Web3ResponseTest 11/11、
+testWeb3RPC 新用例绿(jwtHttpRequestAuthTest 为预存失败,与本链路无关,stash 验证过)。
+
+**已知限制/后续项**:
+1. **Tier-2(立项,估 3-5 天)**:OP 模式 payload 构建(buildPayload+getPayload OP 化)——恢复 B3 出块、
+   a1_active payload 流程、C2 sequencer 路径的共同前置。完成后:解除 run_all 四脚本门禁、rpc_matrix 8 项
+   tier-1 known-red 逐一摘除(注意脚本内陈旧门告警)、safe/finalized 断言升级为窗口检查。
+2. **创世 flat-state 读 bug(独立项)**:alloc 在 config.genesis(含 SENDER 10^24 与 14 个 predeploy)但
+   eth_getBalance/eth_call 族在创世链上返回 0x0/-32603 —— 与 D2 无关,Tier-2 前建议先查(影响所有链停场景)。
+3. FilterRequest safe/finalized 仍别名 latest(设计决定,OP-Stack 不依赖 filter 标签)。
+4. tracked 值不持久化(重启后 nullopt → null,诚实语义;与 Tier-2 一起评估是否加持久化)。
