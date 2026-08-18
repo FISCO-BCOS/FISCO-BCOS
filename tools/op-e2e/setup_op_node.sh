@@ -150,10 +150,26 @@ if step_run 5; then
   [ -x "$BINARY" ] || die "节点二进制不存在: $BINARY(需先构建)"
   # 5.0 eth_genesis_header: L2 模式必需(22 字段 + hash,NodeConfig fail-fast)。
   # 用 gen_eth_header_fixture.py 生成(独立 RLP+keccak,hash 与 C++ 测试一致)。
+  # state_root 必须等于 Ledger::computeGenesisStateTrie 对 config.genesis 合并后
+  # 完整 alloc 集合(含下方 [alloc.13] SENDER)算出的 MPT root,否则
+  # applyEthGenesisHeader 报 "state_root does not match" 拒绝启动。
   ETH_HEADER="$WORK/eth_genesis_header.ini"
-  "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml > "$ETH_HEADER" \
-    || die "eth_genesis_header 生成失败"
-  log "eth_genesis_header 就绪(hash=$(grep '^hash=' "$ETH_HEADER" | cut -d= -f2))"
+  if [ -f "$WORK/allocs.ini" ]; then
+    HEADER_ALLOCS="$WORK/header_allocs.ini"
+    {
+      cat "$WORK/allocs.ini"
+      # SENDER alloc 与下方 config.genesis 合并处的 [alloc.N] 字段保持一致
+      printf '\n[alloc.%d]\naddress=%s\nbalance=%s\nnonce=0\ncode=\n' \
+        "$(grep -c '^\[alloc\.' "$WORK/allocs.ini")" "$SENDER" "$SENDER_BAL"
+    } > "$HEADER_ALLOCS"
+    "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml --allocs "$HEADER_ALLOCS" \
+      > "$ETH_HEADER" || die "eth_genesis_header 生成失败"
+  else
+    # 无 allocs.ini(仅跑 -s 5 等局部场景):退回空 alloc 的空 trie root
+    "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml > "$ETH_HEADER" \
+      || die "eth_genesis_header 生成失败"
+  fi
+  log "eth_genesis_header 就绪(hash=$(grep '^hash=' "$ETH_HEADER" | cut -d= -f2),state_root=$(grep '^state_root=' "$ETH_HEADER" | cut -d= -f2))"
 
   # 5.1 节点签名私钥 node.pem(secp256k1,与 genesis node.0 绑定)
   [ -f "$NODE_BASE/node.pem" ] || \

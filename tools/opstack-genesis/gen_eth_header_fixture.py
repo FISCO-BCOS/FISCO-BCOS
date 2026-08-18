@@ -14,13 +14,21 @@ Field order is the go-ethereum types.Header order (21 items, Prague-era):
   mixHash, nonce, baseFeePerGas, withdrawalsRoot, blobGasUsed, excessBlobGas,
   parentBeaconBlockRoot, requestsHash
 
+state_root: when --allocs is given, the op-geth-compatible secure-MPT root over
+the allocs is computed (mpt_state_root.py, byte-identical to C++
+computeGenesisStateTrie) and fills the field; otherwise the empty-trie root is
+used (the default fixture). The root MUST match what the node derives from the
+merged [alloc.*] sections of config.genesis, or applyEthGenesisHeader refuses
+to start.
+
 Usage:
   python3 gen_eth_header_fixture.py            # prints the default fixture
   python3 gen_eth_header_fixture.py my.json    # fields overridden from JSON
+  python3 gen_eth_header_fixture.py --toml --allocs allocs.ini  # [eth_genesis_header] TOML
 """
+import argparse
 import importlib.util
 import json
-import sys
 from pathlib import Path
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -28,6 +36,8 @@ _SPEC = importlib.util.spec_from_file_location(
 _build_allocs = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_build_allocs)
 keccak256 = _build_allocs.keccak256
+
+from mpt_state_root import parse_allocs_ini, compute_state_root
 
 EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 EMPTY_OMMERS_HASH = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
@@ -152,14 +162,24 @@ def to_toml_section(fields):
 
 
 def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
-    toml = argv and argv[0] == "--toml"
-    json_path = argv[1] if toml and len(argv) > 1 else (argv[0] if argv and not toml else None)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--toml", action="store_true",
+                        help="emit the [eth_genesis_header] TOML section for config.genesis")
+    parser.add_argument("--allocs", metavar="INI",
+                        help="allocs INI path ([alloc.N] sections, plus SENDER etc.); "
+                             "state_root is computed as the op-geth-compatible secure-MPT root "
+                             "over these allocs instead of the empty-trie root")
+    parser.add_argument("json", nargs="?", help="optional JSON file overriding header fields")
+    args = parser.parse_args(argv)
+
     fields = dict(DEFAULT_FIELDS)
-    if json_path:
-        with open(json_path) as handle:
+    if args.json:
+        with open(args.json) as handle:
             fields.update(json.load(handle))
-    if toml:
+    if args.allocs:
+        allocs = parse_allocs_ini(args.allocs)
+        fields["state_root"] = "0x" + compute_state_root(allocs).hex()
+    if args.toml:
         print(to_toml_section(fields), end="")
         return 0
     encoded = encode_header(fields)
