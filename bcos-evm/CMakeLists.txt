@@ -15,9 +15,9 @@ find_package(evmone CONFIG REQUIRED)
 # The evmone port installs test/utils sources verbatim (headers AND .cpp) under
 # include/test/utils; compile the ones we use straight from the package instead of
 # carrying a vendored copy.
-# TODO(eth-utils-removal): 改为自研——rlp_encode→bcos-codec RLP,test_state→自研内存账本;
-# 届时删除本段包源编译、portfile 的 vcpkg_replace_string 补丁与下方 shim。
-# （mpt/mpt_hash 曾在此列，现已不随 port 安装，无需替换。）
+# TODO(eth-utils-removal): replace test_state with the in-house memory ledger, then drop this
+# package-source compile, the portfile vcpkg_replace_string patch, and the shim below.
+# (rlp_encode already migrated to bcos-codec + test target; mpt/mpt_hash no longer ship.)
 get_target_property(_evmone_include_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
 list(GET _evmone_include_dirs 0 _evmone_include_dir)
 cmake_path(NORMAL_PATH _evmone_include_dir)
@@ -58,25 +58,30 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    # 只编入实际被引用的两个。blob_schedule/mpt/mpt_hash/utils 曾在此，但全模块零引用
+    # StateRootCompute 是状态根引擎（AccountVisitor 建根，用 FISCO bcos-ledger/mpt
+    # computeTrieRoot，不再依赖 evmone 的 MPT/mpt_hash）。
+    # MemoryState（自研内存账本，evmone test_state 的替换品）已移到 bcos-evm/test/testutils/。
+    bcos-evm/adapter/StateRootCompute.cpp
+    # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
-    # rlp_encode：OpReceipt.cpp 的回执编码用它，属生产依赖。
+    # rlp_encode: removed from the production lib (zero production callers, grep+nm verified).
+    # Its only consumer is OpReceiptEncodeTest (ADL into evmone::state::rlp_encode), now compiled
+    # directly in the opstack-executor test target (opstack-executor/tests/CMakeLists.txt).
     #
-    # DEBT(eth-utils-removal): test_state 是 evmone 的内存**测试**账本。全部 11 个引用点都在
-    # bcos-evm/test/ 下，两个生产库一个都不引用（nm 核验），所以它出现在生产库
-    # bcos-evm-eth 里是不对的——bcosevm::eth 正是节点/执行器将要链接的那个库。
+    # DEBT(eth-utils-removal): test_state is evmone's in-memory test ledger; all 11 reference
+    # points are under bcos-evm/test/, and neither production lib references it (nm-verified),
+    # so compiling it into bcos-evm-eth — the lib nodes/executors link — is wrong.
     #
-    # 它没有被挪到测试 target，是因为那样解决不了根因：state::transition() 的声明是共享的，
-    # 测试 target 编译 test_state.cpp 时同样会撞上上游的 7 参数调用，签名问题原样存在。真正
-    # 的代价已经具体化过一次——为了让 chain id 参数保持「必需」而不是退回带默认值的
-    # optional（那会让不安全语义成为 API 默认），ports/evmone/portfile.cmake 不得不用
-    # vcpkg_replace_string 去改上游那一处调用点。一个上游测试助手就这样决定了共识函数的接口。
+    # It can't just move to a test target: state::transition()'s declaration is shared, so a
+    # test target hits the same upstream 7-arg signature problem. To keep the chain-id param
+    # required (not an optional default that bakes unsafe semantics into the API), the portfile
+    # has to vcpkg_replace_string an upstream call site — one test helper dictating a consensus
+    # function's interface.
     #
-    # 唯一干净的出口是块级 PR 里的自研内存账本：届时 test_state.{hpp,cpp} 不再需要安装，
-    # 这一行、portfile 的补丁、以及下方的 shim 一并删除。在那之前这是一笔明确记账的债务，
-    # 不是疏漏。
-    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+    # The only clean exit is the block-level PR's in-house memory ledger: then test_state no
+    # longer ships, and this line, the portfile patch, and the shim below all go. Until then
+    # this is booked debt, not an oversight.
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
 # Shim first: ${CMAKE_CURRENT_SOURCE_DIR} is <repo>/bcos-evm, which contains a real test/
@@ -89,6 +94,14 @@ target_include_directories(bcos-evm-eth PUBLIC
     ${EVMONE_PKG_SHIM_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
+# 自研建根(替代退役 evmone mpt/mpt_hash):StateRootCompute.h 用 bcos-codec RLP + bcos-ledger
+# computeTrieRoot。`codec` 仅 in-tree 存在;`ledger` 由顶层 add_subdirectory(bcos-ledger) 提供
+# (在 bcos-evm 之后,目标引用在 generate 期解析)。
+if(TARGET codec)
+    target_link_libraries(bcos-evm-eth PUBLIC codec)
+endif()
+target_link_libraries(bcos-evm-eth PUBLIC ledger)
+target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_SOURCE_DIR}/bcos-ledger)
 
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
 # （cmake/CompilerSettings.cmake），AppleClang 对上游代码报 missing-field-initializers。
@@ -101,7 +114,6 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 
@@ -111,11 +123,17 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpPrecompiles.cpp
     bcos-evm/opstack/OpFeeParams.cpp
     bcos-evm/opstack/RollupCost.cpp
-    bcos-evm/opstack/OpTransition.cpp
-    bcos-evm/opstack/OpReceipt.cpp)
+    bcos-evm/opstack/OpTransition.cpp)
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # kyonRay review #5429 K5: OP modules deliberately use skipped-field designated initializers
+    # and GCC-13 reference-returning helpers; downgrade only here, not repository-wide (the global
+    # -Wmissing-field-initializers detector stays active for all non-OP modules).
+    target_compile_options(bcos-evm-opstack PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
 
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；
 # 否则整树 TESTS=ON 构建/CI 也不会编译 bcos-evm-eth-tests，回归无从暴露。

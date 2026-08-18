@@ -43,6 +43,25 @@ BOOST_AUTO_TEST_CASE(IsthmusDisablesJovianFlags)
     BOOST_CHECK(!(i.has_da_footprint));
 }
 
+// Feature-flag fork selection (feature_op_jovian replaces the former timestamp thresholds):
+// OFF → Isthmus baseline, ON → Jovian semantics.
+BOOST_AUTO_TEST_CASE(ConfigAtSelectsForkByFeatureFlag)
+{
+    // Value copies, not references: configAt returns a reference to a static config, but the
+    // OpForkFlags{...} argument is a prvalue temporary — GCC-14 -Wdangling-reference flags the
+    // reference binding as potentially dangling (false positive; the returned ref never aliases
+    // the flags argument). Copy the ~32B config instead.
+    const auto ist = configAt(OpForkFlags{.jovianActive = false});
+    BOOST_CHECK_EQUAL(ist.fork, OpFork::Isthmus);
+    BOOST_CHECK(!ist.has_jovian_operator_formula);
+    BOOST_CHECK(!ist.has_da_footprint);
+
+    const auto jov = configAt(OpForkFlags{.jovianActive = true});
+    BOOST_CHECK_EQUAL(jov.fork, OpFork::Jovian);
+    BOOST_CHECK(jov.has_jovian_operator_formula);
+    BOOST_CHECK(jov.has_da_footprint);
+}
+
 BOOST_AUTO_TEST_CASE(PreIsthmusConfigsPinned)
 {
     for (const auto* cfg : {&ecotoneConfig(), &fjordConfig(), &graniteConfig(), &holoceneConfig()})
