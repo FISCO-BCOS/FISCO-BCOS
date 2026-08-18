@@ -408,7 +408,6 @@ public:
 
         task::Task<RangeValue> next()
         {
-            // 基于合并排序，找到所有迭代器的最小值，推进迭代器并返回值
             // Based on merge sort, find the minimum value of all iterators, advance the
             // iterator and return its value
             auto iterators = m_iterators | ::ranges::views::filter([](auto const& rangeValue) {
@@ -564,6 +563,17 @@ public:
         }
         std::unique_lock lock(m_listMutex);
         m_storages.push_front(std::move(view.m_mutableStorage));
+    }
+
+    /// mergeView = pushView + mergeBackStorage combined: push first, then merge the oldest layer
+    /// (m_storages.back(), FIFO). If mergeBackStorage throws, the pushed layer stays queued for
+    /// retry (degraded semantics, exception propagation decided by caller). No-op on empty mutable.
+    task::Task<void> mergeView(ViewType view)
+    {
+        if (!view.m_mutableStorage)
+            co_return;  // review fix: coroutine must use co_return (return; fails to compile) — avoid merging an empty stack
+        pushView(std::move(view));
+        co_await mergeBackStorage();
     }
 
     void popFrontStorage()

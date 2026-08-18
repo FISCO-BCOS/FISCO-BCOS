@@ -122,6 +122,13 @@ public:
         // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
         // renumber every feature_ flag after it and silently move their on-chain bits.
         bugfix_nonce_ordering = 59,  // web3 EOA nonce must be independent of intra-block tx order
+        feature_op_jovian = 60,      // OP-Stack: Jovian fork semantics (DA footprint in
+                                     // header.BlobGasUsed, operator fee ×100 formula, 17B Jovian
+                                     // extraData). OFF → Isthmus semantics. Replaces the former
+                                     // chain.jovian_time timestamp threshold (FISCO has no
+                                     // timestamp-based fork activation); read at startup from
+                                     // genesis [features], same channel as
+                                     // feature_l2_ethereum_compat.
     };
 
     // feature_flags bit = enum value; magic_enum's default reflection range is

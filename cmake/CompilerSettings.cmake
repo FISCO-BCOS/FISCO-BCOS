@@ -114,6 +114,11 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-Wno-restrict)
         add_compile_options(-Wno-error=format-truncation)
         add_compile_options(-Wno-error=free-nonheap-object)
+        # NOTE (kyonRay review #5429 K5): the two OP-specific downgrades below are NOT applied
+        # repository-wide — `add_compile_options` would silence a real defect detector
+        # (-Wmissing-field-initializers) for all 25+ modules on behalf of one feature. They are
+        # applied per-target in the OP modules that deliberately use skipped-field designated
+        # initializers (bcos-evm-opstack / opstack-executor / ethereum-executor CMakeLists).
 
         # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
         add_compile_options(-Wno-subobject-linkage)
