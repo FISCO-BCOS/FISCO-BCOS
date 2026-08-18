@@ -53,12 +53,13 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
     // here would also break the pre-Karst callers this node still serves — the v1 Engine
     // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
     //
-    // getPayloadV4 and forkchoiceUpdatedV4 are absent because they are not implemented
-    // (the endpoints answer -38005); getPayloadV5 and newPayloadV4 were added by B4.
+    // forkchoiceUpdatedV4 is the one absentee, and genuinely so: the forkchoice version
+    // window tops out at V3 (isForkchoiceVersionSupported), so the endpoint answers
+    // -38005. getPayloadV5 and newPayloadV4 were added by B4.
     return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
-        "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV5", "engine_newPayloadV1",
-        "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
+        "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
+        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(

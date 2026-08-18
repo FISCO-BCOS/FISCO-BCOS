@@ -211,6 +211,9 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
 }
 
+// The one method version this node really does not implement: the service-layer forkchoice
+// window tops out at V3 (isForkchoiceVersionSupported), so V4 answers -38005 without
+// reaching the engine service.
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
     Json::Value params(Json::arrayValue);
@@ -225,6 +228,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 
     BOOST_CHECK(response.isMember("error"));
     BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(!mockService.m_state->capturedForkchoiceVersion.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV1)
@@ -272,19 +276,27 @@ BOOST_AUTO_TEST_CASE(getPayloadV3)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 3);
 }
 
-// getPayloadV4 (Prague response shape) is not implemented, so the endpoint answers
-// -38005. This is a "not built yet", not a statement that older versions are unsupported.
 BOOST_AUTO_TEST_CASE(getPayloadV4)
 {
+    mockService.m_state->getPayloadResult->executionPayload.withdrawals =
+        std::vector<engine::WithdrawalV1>{};
+    mockService.m_state->getPayloadResult->executionPayload.withdrawalsRoot = h256{};
+    mockService.m_state->getPayloadResult->executionRequests = std::vector<bytes>{};
+
     Json::Value params(Json::arrayValue);
     params.append("0x0000000021f32cc1");
 
     Json::Value response;
     CALL_ENGINE(getPayloadV4, params, response);
 
-    BOOST_CHECK(response.isMember("error"));
-    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
-    BOOST_CHECK(!mockService.m_state->capturedGetPayloadVersion.has_value());
+    // Isthmus response shape: the V4 payload (with withdrawalsRoot) plus executionRequests.
+    auto const& result = response["result"];
+    BOOST_REQUIRE(result.isMember("executionPayload"));
+    BOOST_CHECK(result["executionPayload"].isMember("withdrawalsRoot"));
+    BOOST_REQUIRE(result.isMember("executionRequests"));
+    BOOST_CHECK(result["executionRequests"].isArray());
+    BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 4);
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV5)
@@ -770,7 +782,9 @@ BOOST_AUTO_TEST_CASE(newPayloadV4RejectsWrongTypedPayloadFields)
 // Json::LogicError (-32603) on an array/object.
 BOOST_AUTO_TEST_CASE(newPayloadRejectsMalformedBlobVersionedHashElements)
 {
-    auto expectInvalidParams = [&](Json::Value blobHashes) {
+    // The message is asserted, not just the code: several other things in this params
+    // shape can also answer -32602, so only the message proves the element gate fired.
+    auto expectBlobHashError = [&](Json::Value blobHashes) {
         Json::Value params(Json::arrayValue);
         params.append(makeV4ExecutionPayloadJson());
         params.append(std::move(blobHashes));
@@ -778,22 +792,72 @@ BOOST_AUTO_TEST_CASE(newPayloadRejectsMalformedBlobVersionedHashElements)
         params.append(Json::Value(Json::arrayValue));
         Json::Value response;
         BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
-            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+            [](JsonRpcException const& e) {
+                return e.code() == InvalidParams &&
+                       e.msg().find("expectedBlobVersionedHashes") != std::string::npos;
+            });
     };
 
     Json::Value numeric(Json::arrayValue);
     numeric.append(123);
-    expectInvalidParams(numeric);
+    expectBlobHashError(numeric);
 
     Json::Value nested(Json::arrayValue);
     nested.append(Json::Value(Json::arrayValue));
-    expectInvalidParams(nested);
+    expectBlobHashError(nested);
 
     Json::Value object(Json::arrayValue);
     object.append(Json::Value(Json::objectValue));
-    expectInvalidParams(object);
+    expectBlobHashError(object);
 
     BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+}
+
+// V1-V3 had no shape gate on params[1]: gating the whole read on isArray() failed OPEN,
+// so `[payload, "notarray", beaconRoot]` was accepted as a V3 request with an empty blob
+// hash list. Only V4 was covered, by requireNewPayloadV4ParamShape.
+BOOST_AUTO_TEST_CASE(newPayloadV3RejectsWrongTypedBlobVersionedHashes)
+{
+    auto expectBlobHashError = [&](Json::Value blobHashes) {
+        auto ep = makeV1ExecutionPayloadJson();
+        ep["withdrawals"] = Json::Value(Json::arrayValue);
+        ep["blobGasUsed"] = "0x0";
+        ep["excessBlobGas"] = "0x0";
+        Json::Value params(Json::arrayValue);
+        params.append(ep);
+        params.append(std::move(blobHashes));
+        params.append(c_beaconRootHex);
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV3, params, response), JsonRpcException,
+            [](JsonRpcException const& e) {
+                return e.code() == InvalidParams &&
+                       e.msg().find("expectedBlobVersionedHashes") != std::string::npos;
+            });
+    };
+
+    expectBlobHashError("notarray");
+    expectBlobHashError(123);
+    Json::Value numericElement(Json::arrayValue);
+    numericElement.append(123);
+    expectBlobHashError(numericElement);
+
+    BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+}
+
+// The first Engine method a CL calls: a non-string element used to reach asString(), whose
+// Json::LogicError escaped as -32603 carrying boost's diagnostic string to the caller.
+BOOST_AUTO_TEST_CASE(exchangeCapabilitiesRejectsNonStringEntries)
+{
+    for (auto const& bad : {Json::Value(Json::arrayValue), Json::Value(Json::objectValue)})
+    {
+        Json::Value caps(Json::arrayValue);
+        caps.append(bad);
+        Json::Value params(Json::arrayValue);
+        params.append(caps);
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(exchangeCapabilities, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    }
 }
 
 // engine_forkchoiceUpdatedV3 is the live entry point op-node drives, and its

@@ -419,6 +419,18 @@ private:
                 IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                     "Payload version is incompatible with requested method version"});
         }
+        // The version window alone is not enough once the entry may have been REWRITTEN by
+        // a commit: newPayload replaces the cached payload with the request's, and a V3
+        // request carries no withdrawalsRoot (it is a V4+/Isthmus field). Such an entry is
+        // still tagged version 3, so it passes the V4/V5 window above, and
+        // serializeExecutionPayload would then throw InternalError on the missing field.
+        // Answer the version error it really is instead of -32603.
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V4) &&
+            !it->second.executionPayload.withdrawalsRoot.has_value())
+        {
+            BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
+                                      "Payload does not carry the V4+ response shape"});
+        }
 
         return std::make_unique<GetPayloadData>(GetPayloadData{
             .executionPayload = it->second.executionPayload,

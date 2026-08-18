@@ -58,6 +58,14 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     auto const& capsArray = request[0u];
     for (auto const& cap : capsArray)
     {
+        // This is the FIRST Engine method a CL calls, and asString() throws
+        // Json::LogicError on an array/object element — which the RPC entry point turns
+        // into -32603 carrying boost's diagnostic string back to the caller.
+        if (!cap.isString())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "engine_exchangeCapabilities expects an array of method names"));
+        }
         remoteCaps.push_back(cap.asString());
     }
 
@@ -74,10 +82,11 @@ void EngineEndpoint::buildUnimplementedVersionError(
     std::string_view method, Json::Value& response) const
 {
     // -38005 Unsupported fork for a method version this node does not implement at all
-    // (currently forkchoiceUpdatedV4 and getPayloadV4, both Prague-shaped). This is NOT a
-    // declaration that older versions are incompatible: every version that is implemented
-    // stays served, so a pre-Karst CL — the v1 Engine API harness kept alive by
-    // unsafe_allow_v1_executor, or a stock Lodestar driving V1-V3 — keeps working.
+    // (currently only forkchoiceUpdatedV4: the service layer's forkchoice window tops out
+    // at V3, see isForkchoiceVersionSupported). This is NOT a declaration that older
+    // versions are incompatible: every version that IS implemented stays served, so a
+    // pre-Karst CL — the v1 Engine API harness kept alive by unsafe_allow_v1_executor, or
+    // a stock Lodestar driving V1-V3 — keeps working.
     //
     // Built inline instead of through buildJsonError(request, ...) because a handler only
     // ever receives the params array, never the request envelope: the JSON-RPC id is
@@ -154,12 +163,15 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
     co_await handleGetPayload(engine::ApiVersion::V3, request, response);
 }
 
-task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value&, Json::Value& response)
+task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value& request, Json::Value& response)
 {
-    // Prague getPayload response shape (executionRequests without the Osaka blobs bundle);
-    // not implemented. Karst goes straight from the V3 build to the V5 response shape.
-    buildUnimplementedVersionError("engine_getPayloadV4", response);
-    co_return;
+    // Isthmus getPayload — a pre-Karst version, and served like every other one. The whole
+    // stack below already handles V4: isGetPayloadVersionSupported spans V1-V5,
+    // isGetPayloadVersionCompatible has its own V4 window, handleGetPayload fills
+    // executionRequests for V4+, and combineGetPayloadResponse renders the V4 shape.
+    // Refusing it here while serving newPayloadV4 would be the same fork-narrowing this
+    // node no longer does.
+    co_await handleGetPayload(engine::ApiVersion::V4, request, response);
 }
 
 task::Task<void> EngineEndpoint::getPayloadV5(const Json::Value& request, Json::Value& response)

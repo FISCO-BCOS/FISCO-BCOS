@@ -381,8 +381,17 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .parentBeaconBlockRoot = std::nullopt,
         .executionRequests = std::nullopt,
     };
-    if (version >= engine::ApiVersion::V3 && params.size() >= 2 && params[1].isArray())
+    if (version >= engine::ApiVersion::V3 && params.size() >= 2 && !params[1].isNull())
     {
+        // Reject a wrongly-typed params[1] rather than skipping the block: gating the
+        // whole read on isArray() fails OPEN, leaving the list empty and letting
+        // `[payload, "notarray", beaconRoot]` through as a valid V3 request. V4 is covered
+        // by requireNewPayloadV4ParamShape; this is the V1-V3 half of the same gate.
+        if (!params[1].isArray())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "expectedBlobVersionedHashes must be an array"));
+        }
         // Element type is checked, not just the array type: a non-string element reaches
         // parseH256's asString(), which throws Json::LogicError on an array/object
         // (-32603) and silently stringifies a number.

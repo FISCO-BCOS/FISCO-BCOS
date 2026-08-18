@@ -443,13 +443,14 @@ if echo "${RESP}" | grep -q '"result"'; then
     MISSING=""
     for CAP in engine_exchangeCapabilities \
         engine_forkchoiceUpdatedV1 engine_forkchoiceUpdatedV2 engine_forkchoiceUpdatedV3 \
-        engine_getPayloadV1 engine_getPayloadV2 engine_getPayloadV3 engine_getPayloadV5 \
+        engine_getPayloadV1 engine_getPayloadV2 engine_getPayloadV3 \
+        engine_getPayloadV4 engine_getPayloadV5 \
         engine_newPayloadV1 engine_newPayloadV2 engine_newPayloadV3 engine_newPayloadV4; do
         echo "${RESP}" | grep -q "\"${CAP}\"" || MISSING="${MISSING} ${CAP}"
     done
-    # getPayloadV4 / forkchoiceUpdatedV4 are not implemented, so must not be advertised.
+    # forkchoiceUpdatedV4 is not implemented, so must not be advertised.
     EXTRA=""
-    for CAP in engine_getPayloadV4 engine_forkchoiceUpdatedV4; do
+    for CAP in engine_forkchoiceUpdatedV4; do
         echo "${RESP}" | grep -q "\"${CAP}\"" && EXTRA="${EXTRA} ${CAP}"
     done
     if [ -z "${MISSING}" ] && [ -z "${EXTRA}" ]; then
@@ -538,11 +539,13 @@ print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV4','params'
             -H "Authorization: Bearer ${JWT_TOKEN}" \
             -d "@${NEW_REQ_FILE}" 2>/dev/null || echo '{}')
         NEW_STATUS=$(json_val "${NEW_RESP}" "status")
+        # VALID only: ACCEPTED means the node acknowledged the block without validating or
+        # storing it, the escape M9 removed. Accepting it here would hide its return.
         log_info "newPayloadV4 status = ${NEW_STATUS}"
-        if [ "${NEW_STATUS}" = "VALID" ] || [ "${NEW_STATUS}" = "ACCEPTED" ]; then
+        if [ "${NEW_STATUS}" = "VALID" ]; then
             log_pass
         else
-            log_fail "Unexpected newPayloadV4 status: ${NEW_RESP}"
+            log_fail "newPayloadV4 did not answer VALID: ${NEW_RESP}"
         fi
 
         # The Engine boundary speaks Unix seconds; block headers store milliseconds. The
@@ -624,9 +627,10 @@ else
     log_fail "Cannot get head hash"
 fi
 
-# 3.7 an unimplemented method version answers -38005 (not method-not-found)
-log_test "engine_getPayloadV4 answers -38005 (not implemented)"
-RESP=$(rpc_call "engine_getPayloadV4" "[\"0x0000000000000001\"]")
+# 3.7 the one unimplemented method version answers -38005 (not method-not-found)
+log_test "engine_forkchoiceUpdatedV4 answers -38005 (not implemented)"
+RESP=$(rpc_call "engine_forkchoiceUpdatedV4" \
+    "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},null]")
 if echo "${RESP}" | grep -q '\-38005'; then
     log_pass
 else

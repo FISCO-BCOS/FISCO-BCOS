@@ -54,6 +54,7 @@ EXPECTED_CAPABILITIES = {
     "engine_getPayloadV1",
     "engine_getPayloadV2",
     "engine_getPayloadV3",
+    "engine_getPayloadV4",
     "engine_getPayloadV5",
     "engine_newPayloadV1",
     "engine_newPayloadV2",
@@ -61,8 +62,8 @@ EXPECTED_CAPABILITIES = {
     "engine_newPayloadV4",
 }
 
-# Routable but not implemented: the endpoints answer -38005 and must not be advertised.
-UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4", "engine_getPayloadV4")
+# The one genuinely unimplemented version: routable, answers -38005, never advertised.
+UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4",)
 
 # The gas limit sent in payloadAttributes. See test_negative_cases / the note below: this
 # node currently IGNORES it and takes the gas limit from its own SystemConfig.
@@ -324,9 +325,12 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
 
     beacon_root = result.get("parentBeaconBlockRoot", ZERO_HASH)
     new_status = rpc_result("engine_newPayloadV4", [payload, [], beacon_root, []])
+    # VALID only. ACCEPTED would mean the node acknowledged the block without validating
+    # or storing it, which is exactly the escape M9 removed — accepting it here would let
+    # that regression back in silently.
     _log_info(f"newPayloadV4 status = {new_status['status']}")
-    if new_status["status"] not in ("VALID", "ACCEPTED"):
-        _log_fail(f"newPayloadV4 rejected the built payload: {new_status}")
+    if new_status["status"] != "VALID":
+        _log_fail(f"newPayloadV4 did not answer VALID for the built payload: {new_status}")
         return False
 
     # Wait for the committed block to become the eth_* head (ledger rows are written
@@ -468,7 +472,9 @@ def test_negative_cases() -> None:
     # than -32601: they are routed, just not built. Every OTHER version is served — the
     # V1-V3 flows above are the positive side of that.
     expect_error_code("engine_forkchoiceUpdatedV4", [fc_state, None], -38005)
-    expect_error_code("engine_getPayloadV4", ["0x0000000000000001"], -38005)
+
+    # getPayloadV4 IS served (Isthmus): an unknown id is -38001, not -38005.
+    expect_error_code("engine_getPayloadV4", ["0x00000000deadbeef"], -38001)
 
     # Unknown payloadId -> -38001 Unknown payload.
     expect_error_code("engine_getPayloadV5", ["0x00000000deadbeef"], -38001)
@@ -502,6 +508,12 @@ def test_negative_cases() -> None:
     # newPayloadV4 blob-hash elements are type-checked, not just the array itself.
     expect_error_code("engine_newPayloadV4", [{}, [123], ZERO_HASH, []], -32602)
     expect_error_code("engine_newPayloadV4", [{}, [[]], ZERO_HASH, []], -32602)
+    # V1-V3 had no params[1] shape gate at all, so this used to be accepted as VALID.
+    expect_error_code("engine_newPayloadV3", [{}, "notarray", ZERO_HASH], -32602)
+
+    # exchangeCapabilities is the first method a CL calls; a non-string entry used to
+    # escape as -32603 with boost's diagnostic string attached.
+    expect_error_code("engine_exchangeCapabilities", [[[]]], -32602)
 
     # Unknown method -> -32601 MethodNotFound.
     expect_error_code("engine_unknownMethod", [], -32601)

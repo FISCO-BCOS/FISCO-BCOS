@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
     // Everything implemented, not narrowed to the active fork (op-geth advertises its
     // whole method set and lets the CL pick). The Karst triple joins the pre-Karst
     // versions rather than replacing them.
-    BOOST_CHECK_EQUAL(capabilities.size(), 12);
+    BOOST_CHECK_EQUAL(capabilities.size(), 13);
     auto contains = [&](std::string_view name) {
         return std::find(capabilities.begin(), capabilities.end(), name) != capabilities.end();
     };
@@ -357,14 +357,15 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
     BOOST_CHECK(contains("engine_getPayloadV1"));
     BOOST_CHECK(contains("engine_getPayloadV2"));
     BOOST_CHECK(contains("engine_getPayloadV3"));
+    BOOST_CHECK(contains("engine_getPayloadV4"));
     BOOST_CHECK(contains("engine_getPayloadV5"));
     BOOST_CHECK(contains("engine_newPayloadV1"));
     BOOST_CHECK(contains("engine_newPayloadV2"));
     BOOST_CHECK(contains("engine_newPayloadV3"));
     BOOST_CHECK(contains("engine_newPayloadV4"));
-    // Not implemented, so not advertised (the endpoints answer -38005).
+    // The one genuinely unimplemented version (the forkchoice window tops out at V3), so
+    // not advertised; the endpoint answers -38005.
     BOOST_CHECK(!contains("engine_forkchoiceUpdatedV4"));
-    BOOST_CHECK(!contains("engine_getPayloadV4"));
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)
@@ -686,6 +687,43 @@ BOOST_AUTO_TEST_CASE(new_payload_v3_rejects_blob_versioned_hashes)
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(status.validationError.has_value());
     BOOST_CHECK_NE(status.validationError->find("expectedBlobVersionedHashes"), std::string::npos);
+}
+
+/// Re-querying with getPayloadV5 a payloadId that was committed through newPayloadV3 must
+/// answer the version error (-38005 at the RPC layer), not InternalError. A commit REWRITES
+/// the cache entry with the request's payload, and a V3 request carries no withdrawalsRoot
+/// — but the entry stays tagged version 3, so it passes the V5 window and used to blow up
+/// in serializeExecutionPayload's "withdrawalsRoot missing" check as -32603.
+BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdrawals_root)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    // The build always sets the field; a V3 wire request never does.
+    BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.executionPayload.withdrawalsRoot = std::nullopt;
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion);
+    // The V3 view of the same entry is still perfectly serviceable.
+    auto v3 = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK(v3);
 }
 
 BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_root)
