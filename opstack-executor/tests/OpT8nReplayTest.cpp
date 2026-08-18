@@ -1015,8 +1015,10 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk, evmone::
             receipt->status() == 0 ? "0x1" : "0x0");
         ctx.checkField(p + ".gasUsed", hexU256(parseU256(jAt(er, "gasUsed"))),
             hexU64(static_cast<uint64_t>(receipt->gasUsed())));
+        // Tier-2 Phase B: the stored field is DECIMAL (tars convention, RPC lexical_cast
+        // semantics); the generator's golden is a hex quantity — compare by VALUE.
         ctx.checkField(p + ".cumulativeGasUsed", hexU256(parseU256(jAt(er, "cumulativeGasUsed"))),
-            std::string{receipt->cumulativeGasUsed()});
+            hexU256(parseU256(std::string{receipt->cumulativeGasUsed()})));
         ctx.checkField(p + ".logsCount", std::to_string(jAt(er, "logsCount").asInt64()),
             std::to_string(receipt->logEntries().size()));
         // Receipt output (tx return data): the generator always emits it (empty = "0x");

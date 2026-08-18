@@ -384,6 +384,18 @@ public:
         }
         if constexpr (c_opMode)
         {
+            // Isthmus+ payloads are V4-only on the OP face — the same gate newPayload enforces
+            // (c_opIsthmusPayloadVersion). An attrs-carrying FCU BUILDS a payload, so the gate
+            // belongs here too: a V3 build would produce a payload the OP newPayload path then
+            // refuses with -38005 (a build/submit version skew).
+            constexpr std::uint32_t c_opIsthmusFcuVersion = 4;
+            if (payloadAttributes != nullptr && version != c_opIsthmusFcuVersion)
+            {
+                BOOST_THROW_EXCEPTION(
+                    UnsupportedFork{} << bcos::errinfo_comment{
+                        "Isthmus+ payload building requires engine_forkchoiceUpdatedV4 "
+                        "(JSON-RPC -38005)"});
+            }
             // Tier-2 (08-19): attribute-driven OP building. Everything above -- the storage
             // lookups, the monotonicity checks, and the tracked-head/safe/finalized update under
             // `x_state` -- has already run and is *kept*. The build synthesizes the mandatory

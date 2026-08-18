@@ -91,6 +91,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     bool feeLoaded = false;
     OpFeeParams fee{};
 
+    size_t transactionIndex = 0;
     for (const auto& btx : txs)
     {
         if (const auto* dep = std::get_if<DepositTx>(&btx.tx))
@@ -104,7 +105,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             const auto gasUsed = narrowGasUsed(receipt->gasUsed());
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
-            receipt->setCumulativeGasUsed(hexCumulative(cumulative));
+            // Decimal storage + the receipt's block index: the RPC read path lexical_casts
+            // decimal only and serves transactionIndex from the receipt (Tier-2 Phase B).
+            receipt->setCumulativeGasUsed(decimalCumulative(static_cast<uint64_t>(cumulative)));
+            receipt->setTransactionIndex(transactionIndex++);
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(classifyTxType(static_cast<uint8_t>(kDepositTxType)));
         }
@@ -145,7 +149,8 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             const auto gasUsed = narrowGasUsed(receipt->gasUsed());
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
-            receipt->setCumulativeGasUsed(hexCumulative(cumulative));
+            receipt->setCumulativeGasUsed(decimalCumulative(static_cast<uint64_t>(cumulative)));
+            receipt->setTransactionIndex(transactionIndex++);
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(classifyTxType(static_cast<uint8_t>(tx.type)));
         }
@@ -167,10 +172,26 @@ namespace
 /// wrapped >16-hex-digit input, where the library rejects overflow (review #5429 T).
 [[nodiscard]] uint64_t parseHexUint64(std::string_view s)
 {
-    if (auto v = bcos::safeFromQuantity(s))
-        return *v;
+    // Tier-2 Phase B: the stored field is now DECIMAL (tars convention); the historical hex
+    // form (hexCumulative, pre-Phase-B blocks) stays parseable. Dispatch on the prefix —
+    // safeFromQuantity accepts a BARE-digit string as hex ("22760" -> 0x22760), so a decimal
+    // value must never reach it.
+    if (s.size() > 1 && (s[0] == '0') && (s[1] == 'x' || s[1] == 'X'))
+    {
+        if (auto v = bcos::safeFromQuantity(s))
+            return *v;
+    }
+    else
+    {
+        try
+        {
+            return boost::lexical_cast<uint64_t>(s);
+        }
+        catch (const boost::bad_lexical_cast&)
+        {}
+    }
     throw std::runtime_error(
-        "op block: invalid cumulativeGasUsed in receipt (not hex or overflow): " + std::string(s));
+        "op block: invalid cumulativeGasUsed in receipt (not hex or decimal): " + std::string(s));
 }
 
 /// RLP list of logs: [address, [topics...], data] each, whole collection wrapped in a list

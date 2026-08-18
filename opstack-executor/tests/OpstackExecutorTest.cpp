@@ -482,8 +482,7 @@ BOOST_FIXTURE_TEST_CASE(DepositLifecycleThroughExecuteContext, Fixture)
     BOOST_CHECK_LT(ctx.blockGasLeft, kInitialGasLeft);
     BOOST_CHECK_EQUAL(ctx.blockGasLeft, kInitialGasLeft - gasUsed);
     BOOST_CHECK(ctx.cumulativeGasUsed == gasUsed);
-    BOOST_CHECK_EQUAL(
-        std::string(receipt->cumulativeGasUsed()), bcos::evm::opstack::hexCumulative(gasUsed));
+    BOOST_CHECK_EQUAL(std::string(receipt->cumulativeGasUsed()), std::to_string(gasUsed));
 }
 
 // 6-arg createExecuteContext (generic scheduler / concept form) has no BlockContext: the old

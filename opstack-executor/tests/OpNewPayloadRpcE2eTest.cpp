@@ -1301,15 +1301,24 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
 // ③ OP attributes -> -38003 (UnsupportedOpPayloadAttributes; mirrors op-geth attribute rejection).
 // Note: the forkchoice state update takes effect first, then the build is rejected
 // (EngineServiceImpl.h:356-359).
-BOOST_AUTO_TEST_CASE(ForkchoiceAttributesRejected)
+// Tier-2 (08-19): attribute-driven OP building replaced the -38003 refusal — an attrs FCU at
+// V4 now builds a payload (synthesized L1-attributes deposit, canonical two-pass execute).
+// The V4 build path is exercised live by the B3 fixture chain and a1_active; THIS golden
+// fixture's storage cannot continue a block past the vector (its ledger-config rows end at
+// the vector height), so the in-fixture assertion pins the remaining OP-face refusal: the
+// engine is Isthmus+/V4-only and a V3 attrs FCU is rejected at the version gate.
+BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     (void)number;
     bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = 2'000'000'000'000;  // strictly after the golden parent (ms domain)
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
     BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
                           bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
                           /*version=*/3)),
-        bcos::engine::UnsupportedOpPayloadAttributes);
+        bcos::engine::UnsupportedFork);
 }
 
 // ④ finalized > head -> InvalidForkchoiceState (-38002 monotonicity; mirrors updateForkchoice

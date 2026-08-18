@@ -403,6 +403,7 @@ struct OpBlockExecutionContext
     mutable bool feeLoaded = false;                // fee lazy-load flag (H1)
     mutable int64_t blockGasLeft;                  // decremented per tx
     mutable int64_t cumulativeGasUsed = 0;         // accumulated across txs (H4)
+    mutable size_t transactionIndex = 0;           // per-tx receipt index (Tier-2 Phase B)
     mutable bool seenNonDeposit = false;           // deposit-after-non-deposit gate (M2)
     evmone::state::BlockHashes* blockHashes;       // built once at block level (H3)
     uint64_t chainId;                              // constant (H3)
@@ -603,10 +604,13 @@ public:
                     storage, blockHeader, ledgerConfig, m_receipt, m_diff);
             }
             // H4: sole owner of cumulative-gas backfill + blockGasLeft decrement (narrowGasUsed /
-            // hexCumulative live in OpCommon.h).
+            // decimalCumulative live in OpCommon.h). Decimal + the block index — the RPC read
+            // path lexical_casts decimal only and serves transactionIndex from the receipt.
             auto gasUsed = op::narrowGasUsed(receipt->gasUsed());
             m_ctx->cumulativeGasUsed += gasUsed;
-            receipt->setCumulativeGasUsed(op::hexCumulative(m_ctx->cumulativeGasUsed));
+            receipt->setCumulativeGasUsed(
+                op::decimalCumulative(static_cast<uint64_t>(m_ctx->cumulativeGasUsed)));
+            receipt->setTransactionIndex(m_ctx->transactionIndex++);
             m_ctx->blockGasLeft -= gasUsed;
             co_return receipt;
         }

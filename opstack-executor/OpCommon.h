@@ -63,6 +63,15 @@ struct OpBlockSeal
     return bcos::toQuantity(cumulative);  // reuse the library quantity formatter (review #5429 R)
 }
 
+/// Plain DECIMAL string — the tars receipt field's de-facto convention (the generic line's
+/// BaselineScheduler writes u256.str(), and the RPC read path's safeCastToU256 lexical_casts
+/// decimal only, so a hex string serialises as cumulativeGasUsed=0x0). The receipts-root
+/// encoder's parser accepts both formats (OpBlockExecute.cpp parseHexUint64).
+[[nodiscard]] inline std::string decimalCumulative(uint64_t cumulative)
+{
+    return std::to_string(cumulative);
+}
+
 /// EIP-2718 tx-type classification, single home for the three block-execution sites (the
 /// OpScheduler deposit-classification loop, finalizeOpBlockResult's txTypes rebuild, and
 /// processOpBlock's variant branch) so the mapping can't drift and silently emit a wrong

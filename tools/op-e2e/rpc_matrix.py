@@ -79,10 +79,9 @@ KNOWN_RED = []
 # Remove names from this set as Tier-2 restores them. All three remaining names depend
 # on chain advancement (genesis timestamp artifact / block 1 / MessagePasser writes).
 KNOWN_TIER1 = {
-    "timestamp sane",
     "outputv0 withdrawalsRoot present 32B",
-    # Tier-2 Phase B: OP 块的 tx/receipt 落库检索路径断（byHash 全空）——delegate commit 写
-    # 交易表但 RPC 检索键/格式不匹配；修复合并进 Phase B。
+    # Tier-2 Phase B 缺口②：withdrawalsRoot 未传播（executedHeader 恒零）。
+    # getBlockByHash roundtrip：链推进下仍稳定红（待查——与 chain_driver 已修的 byHash 不同根）。
     "getBlockByHash roundtrip",
 }
 
