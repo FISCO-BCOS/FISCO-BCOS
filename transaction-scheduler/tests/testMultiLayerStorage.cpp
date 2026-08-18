@@ -146,7 +146,6 @@ BOOST_AUTO_TEST_CASE(mergeViewPersistsToBackend)
         co_await storage2::writeOne(*view, key, entry);
 
         // mergeView 落盘：先入栈再合并最旧层 → backend（m_latestBackend）
-        // 注意：非原子操作（pushView 和 mergeBackStorage 是独立临界区；kyonRay #5434 round-3）
         co_await multiLayerStorage.mergeView(std::move(*view));
 
         // 数据经 backend 层读到——证明已落盘,非仅内存层栈

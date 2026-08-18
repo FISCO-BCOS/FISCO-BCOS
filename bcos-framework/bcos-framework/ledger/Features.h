@@ -133,16 +133,10 @@ public:
     };
 
     // feature_flags bit = enum value. The per-enum specialization (below the
-    // the reflection range to [0,255] so that flags up to 255 are visible — a
-    // flag beyond the range would be silently excluded from enum_count/enum_value
-    // BEFORE this assert runs, making the guard a tautology (morebtcg #5434,
-    // kyonRay #5434 round-3). magic_enum reflects values SORTED BY VALUE (not
-    // by declaration order), so enum_value(count-1) is the maximum reflected
-    // value: check it directly instead of the count — a count-only check misses
-    // a numbering gap below the range ceiling. The values must also stay
-    // CONTIGUOUS from zero: m_flags is indexed by position in that value-sorted
-    // reflection order, and toFlagsNumber packs bit = enum value — a gap
-    // silently desyncs the two encodings.
+    // class) raises the reflection range to [0,255]. magic_enum reflects values
+    // SORTED BY VALUE, so enum_value(count-1) is the max — check it directly.
+    // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
+    // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
         "max Flag value exceeds 127; bitset encoding (bit = enum value) requires "

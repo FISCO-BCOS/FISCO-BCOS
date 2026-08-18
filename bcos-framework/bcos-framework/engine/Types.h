@@ -140,9 +140,8 @@ struct ExecutionPayload
     u256 baseFeePerGas = 0;
     h256 blockHash;
     /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). This is the single
-    /// authoritative carrier for both the generic and OP engine paths — there is no
-    /// separate OP-only transaction field (kyonRay #5434 round-2 finding 1).
+    /// encoded bytes (including the OP 0x7E deposit envelope). Single authoritative
+    /// carrier for both generic and OP engine paths.
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
