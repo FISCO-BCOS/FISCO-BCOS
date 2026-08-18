@@ -63,7 +63,7 @@
 
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
 5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件(扩现有 EEST runner)
-6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)——✅ **eth_gasPrice + withdrawalsRoot 已完成**(08-18,§2f);~~reorg~~(见下方 D4 重分类)/ Fuzz(2 天+)/ Karst D-2(单独立案)
+6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)——✅ **eth_gasPrice + withdrawalsRoot 已完成**(08-18,§2f);✅ **B4: P1 三件套完成**(08-18,getProof e2e + engine API boundary; pre-Isthmus 向量已覆盖);剩 Fuzz(2 天+)/ Karst D-2(单独立案)
 7. **三端测试对比 spec(存档,非用户请求)**:`docs/2026-08-17-opstack-testmatrix-compare-design.md`。核心结论:最大硬缺口 = **op-node 集成 harness + 引擎 API V3 版本契约**。可作排期输入
 8. **op-node EL 契约实施计划(存档,v5 终版)**:`docs/2026-08-17-opstack-el-contract-plan.md`。瞄准生产改造,**须重新立项,不得直接执行**
 9. **reorg 能力实现(08-18 重分类,D4)**:**FISCO opstack 当前没有链级 reorg 能力**。testmatrix spec §5.5 评级 🟡(MPT 基座强,缺 reorg 执行+归档+状态同步)。原始估为"约 1 天测试增补"(B2),实际为生产特性——需要:①引擎 FCU safe/finalized head 切换语义(执行层撤销已提交块、恢复多层存储到旧状态)②存储层回退(MultiLayerStorage commit/mergeView 支持"丢弃最近 N 块写入")③RPC 读取一致性(被回退块的交易/receipt/状态不可查或标记 reverted)。与 D2(EL 契约)耦合——op-node 驱动 reorg 的通道(FCU safe/finalized 切换)正是 D2 要实现的引擎 API 契约一部分;建议合并立项。
