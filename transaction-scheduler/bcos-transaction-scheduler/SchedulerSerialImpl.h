@@ -137,9 +137,10 @@ public:
                                     // createExecuteContext does not accept it, the per-block
                                     // context would be silently dropped — catch at compile time
                                     // (kyonRay #5434 round-2 finding 4, morebtcg #5434).
-                                    static_assert(std::same_as<typename BlockContextOf<
-                                                                   TransactionExecutor>::type,
-                                                      EmptyBlockContext>,
+                                    static_assert(
+                                        std::same_as<
+                                            typename BlockContextOf<TransactionExecutor>::type,
+                                            EmptyBlockContext>,
                                         "executor declares a BlockContext but "
                                         "createExecuteContext does not accept it; "
                                         "the context would be silently dropped");

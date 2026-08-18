@@ -431,8 +431,10 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
     // may lack the prefix. bcos::u256("100") without 0x-parses as decimal 100, not 0x100=256
     // (a silent value error for a value-bearing field). Always force a 0x prefix so the
     // identity "mint stored = mint parsed" holds regardless of input form.
-    // Invalid hex from corrupt data must not throw through the const getter — try/catch falls
-    // back to 0, consistent with the empty-string case.
+    // Invalid hex from corrupt data must not throw through the const getter — the length
+    // guard handles over-wide values (u256 uses boost unchecked backend which silently
+    // truncates >256 bits), and try/catch handles remaining corrupt/non-hex input; both
+    // fall back to 0, consistent with the empty-string case.
     // IMPORTANT: the tars mirror is display-only and unauthenticated — the signature binds
     // only extraTransactionBytes; execution MUST re-derive mint from the envelope, never
     // trust this value from an untrusted peer (see Transaction.tars field 14).
@@ -443,7 +445,16 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
         {
             return 0;
         }
-        return bcos::u256(s.starts_with("0x") || s.starts_with("0X") ? s : ("0x" + s));
+        // bcos::u256 (boost unchecked backend) silently truncates >256-bit values rather
+        // than throwing — catch over-wide hex explicitly before the parse: with a 0x/0X
+        // prefix, valid is at most 66 chars (2 prefix + 64 hex digits); without, at most 64.
+        auto const hasPrefix = s.starts_with("0x") || s.starts_with("0X");
+        auto const hexLen = hasPrefix ? s.size() - 2 : s.size();
+        if (hexLen > 64)
+        {
+            return 0;
+        }
+        return bcos::u256(hasPrefix ? s : ("0x" + s));
     }
     catch (std::exception const&)
     {
