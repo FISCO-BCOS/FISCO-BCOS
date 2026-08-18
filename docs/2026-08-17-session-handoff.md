@@ -1,89 +1,86 @@
 # 会话交接 — 2026-08-18(FISCO-BCOS opstack 测试体系)
 
-> 交接对象:下一会话/代理。本会话完成 op-e2e 节点重建 + DA 矩阵 + 预部署矩阵 + **e2e CI 接入(进行中)**。以下为可续接的完整状态。
+> 交接对象:下一会话/代理。本会话完成 op-e2e 节点重建 + DA 矩阵 + 预部署矩阵 + **e2e CI 接入 + MPT state_root + 回归修复(全绿)**。以下为可续接的完整状态。
 
 ## 1. 分支与工作区
 
-- **当前分支**:`worktree-op-alignment`(隔离 worktree:`.claude/worktrees/op-alignment`),HEAD `3ea2285`
-- 相关分支:`opstack-op-e2e-on-scheduler`(基于远程 tip `174d8e4c2`,被停代理自主创建,用户裁定保留;含 EmptyEnvelope 修复 + 2 文档 + 可配置化 + CI job)
-- op-e2e 节点:本地 `/tmp/op-spike/{b3,b3a}`(已重建,ALL GREEN);CI 模拟 `/tmp/op-e2e-ci-sim{2,3}`(验证用)
+- **当前分支**:`worktree-op-alignment`(隔离 worktree:`.claude/worktrees/op-alignment`),HEAD `84b3be0`
+- 相关分支:`opstack-op-e2e-on-scheduler`(基于远程 tip `174d8e4c2`,被停代理自主创建,用户裁定保留;含 EmptyEnvelope 修复 + 2 文档 + 可配置化 + CI job;**genesis 链路断裂待补,见 §3-10**)
+- op-e2e 节点:本地 `/tmp/op-spike/{b3,b3a}`(本会话从零重建,ALL GREEN 149 断言)
+- 未跟踪文件:`tools/opstack-genesis/chain-config.yaml`(build-allocs.py 输入模板,66 行,待用户决定是否提交)
 
 ## 2. 已完成 ✅
 
-### 2a. op-e2e 节点重建(会话前半,已交付)
+### 2a. op-e2e 节点重建(08-17,已交付)
 - B3/B3a 从全新链重建(原 1.39M 块链因 node.0 私钥丢失不可复用,旧数据在 `data.old-20260817` 663M 可删)
-- `run_all.sh` **ALL OP-E2E GREEN**:rpc_matrix 44 / state_verify 12 / chain_driver 31 / b4_persist 3 / b3_contracts 12 / a1_active 16
 - `setup_op_node.sh` 重写为可复用一键脚本(9 步幂等,提交 `783f883`)
-- **5 个 config key 坑**(记忆 `op-e2e-node-rebuilt-config-blueprint.md`):`[executor] version=3`(非 executor_version)、`evm_revision_forks=0:prague`、`[rpc] listen_port`(非 rpc_listen_port)、`[web3] chain_id`、`tars_proxy.ini` 必需;B3a `produce_empty_blocks=false`(a1_active 竞态)
+- **5 个 config key 坑**(记忆 `op-e2e-node-rebuilt-config-blueprint.md`):`[executor] version=3`、`evm_revision_forks=0:prague`、`[rpc] listen_port`、`[web3] chain_id`、`tars_proxy.ini` 必需;B3a `produce_empty_blocks=false`
 - `sign_secp`(libsecp256k1 可恢复签名 + 低-s)已入库 `tools/op-e2e/sign_secp.c`
 
-### 2b. DA / operator fee 参数化矩阵(主线,已交付 + MERGE-READY)
+### 2b. DA / operator fee 参数化矩阵(已交付 + MERGE-READY)
 - **跨客户端四端对拍**:FISCO/op-geth/op-revm 20.0.0/Solidity GasPriceOracle — 16 网格 operator_cost 逐位一致
-- 交付:`opstack-executor/tests/da-matrix/`(da_matrix.json 16 用例 7 类、run_fisco.cpp、run_opgeth/、run_oprevm/、solidity/、golden/{fisco,opgeth,oprevm,solidity}/、DIVERGENCES.md、README PINNED REFERENCES)
-- A 层单测:OpFeeParams +3、RollupCost +6、JovianShape +2;CI 门 `DaMatrixFiscoCheckOpgeth/OpRevm` 挂 ctest
-- 生产改动唯一:`computeChargedOperatorCost`(RollupCost.h/.cpp,+6 additive)
-- **抓到真实 bug**:Solidity `getL1Fee` baseFeeScalar≥2^28 时 uint32 溢出(登记 `solidity_l1_uint32_overflow`)
-- 回归:ctest 1934/1935 + op-e2e ALL GREEN;最终整支审查 **MERGE-READY**
-- 计划/审查台账:`.superpowers/sdd/2026-08-17-opstack-da-matrix-plan/progress.md`(全部 deferred minors + parked)
+- 交付:`opstack-executor/tests/da-matrix/`(da_matrix.json 16 用例 7 类、run_fisco.cpp、run_opgeth/、run_oprevm/、solidity/、golden/、DIVERGENCES.md、README PINNED REFERENCES)
+- 生产改动唯一:`computeChargedOperatorCost`(RollupCost.h/.cpp,+6 additive);抓到 Solidity uint32 溢出 bug
+- 回归:ctest 1934/1935 + op-e2e ALL GREEN;MERGE-READY;台账 `.superpowers/sdd/2026-08-17-opstack-da-matrix-plan/progress.md`
 
 ### 2c. 预部署行为矩阵(已交付)
-- spec + plan(`docs/2026-08-17-opstack-predeploy-matrix-{design,plan}.md`),SDD 6 Task 全绿;t8n 差分向量 + `predeploy_matrix.py` 30 断言挂 run_all;ctest 1935/1935 + op-e2e ALL GREEN;MERGE-READY
+- spec + plan,SDD 6 Task 全绿;t8n 差分向量 + `predeploy_matrix.py` 30 断言挂 run_all;ctest 1935/1935 + op-e2e ALL GREEN;MERGE-READY
 
-### 2d. e2e CI 接入(2026-08-18,进行中)
-- **CI op-e2e job**:`workflow.yml` 追加(ubuntu-24.04 + macos-15 矩阵,装 foundry → 编译 fisco-bcos-air → setup_op_node.sh → run_all)。每次 push/PR 跑。
-- **op-e2e 脚本可配置化**(commit `440a497`):`/tmp/op-spike` 硬编码 → env(SIGN_SECP/B3A_JWT/B3_JWT/B3_DB/OP_STATE_READ/B3A_START);restart_b3 BINARY repo-relative;run_all 修正陈旧断言数。默认值保持。
-- **eth_genesis_header 生成**(commit `3ea2285`):`gen_eth_header_fixture.py` 加 `--toml` 模式;`build-allocs.py` 补纯 Python keccak256;setup step 5 生成 header 段;`enable_single_node_consensus=false`(与 op_engine_rpc 互斥修复)。
-- **scheduler 分支验证**:`docs/2026-08-18-opstack-scheduler-e2e-verification.md`(5 config 修复 + FCU V3 vs V4 差异)。
+### 2d. e2e CI 接入 + MPT state_root + 回归修复(2026-08-18,已交付全绿)
+- **CI op-e2e job**:`workflow.yml` 追加(ubuntu-24.04 + macos-15 矩阵,装 foundry → 编译 → setup → run_all)
+- **op-e2e 脚本可配置化**(`440a497`):硬编码 → env(SIGN_SECP/B3A_JWT/B3_JWT/B3_DB/OP_STATE_READ/B3A_START)
+- **MPT state_root**(`c33bfe83f`):`mpt_state_root.py`(纯 Python op-geth 兼容 secure MPT,逐字节 == C++ `GenesisStateRoot.cpp`)+ `gen_eth_header_fixture.py --allocs` + setup 集成。验证:`0x0f4dbf6c...` == C++ derived;`eth_getBlockByNumber(0)` stateRoot/hash 四者一致。报告 `docs/2026-08-18-mpt-root-report.md`
+- **回归修复**(`84b3be0`):`enable_single_node_consensus=true` 恢复(见 §3-4c 详解)
+- **scheduler 分支验证**:`docs/2026-08-18-opstack-scheduler-e2e-verification.md`(5 config 修复 + FCU V3 vs V4 差异)
 
 ### 2e. 存档(被停代理产出,用户裁定保留,非经批准交付物)
-- `docs/2026-08-17-opstack-testmatrix-compare-design.md`(三端对比 spec,4b03673+2791b07)
-- `docs/2026-08-17-opstack-el-contract-plan.md`(EL 契约计划 v2→v5,159c130 终版,瞄准生产改造须重新立项)
-- `opstack-op-e2e-on-scheduler` 分支(被停代理建)
+- `docs/2026-08-17-opstack-testmatrix-compare-design.md`(三端对比 spec)
+- `docs/2026-08-17-opstack-el-contract-plan.md`(EL 契约计划 v5 终版)
+- `opstack-op-e2e-on-scheduler` 分支
 
 ## 3. 待办/决策 ⏳
 
 ### 收尾决策(用户待选)
 1. **DA 计划收尾**:`worktree-op-alignment` 合并/推 PR/保持——**未定**
-2. ✅ **EmptyEnvelopeFails 已修**(2026-08-17):改名 `EmptyEnvelopeAccepted`,断言空 envelope 被接受且 l1_cost=0(对齐 OpTransition.cpp:376-379 有意语义);`bcos-evm-opstack-tests` 112 全绿,ctest 唯一红消除
-3. **计划文档 2 处笔误**:DA 计划 `contract_call_tx` 例 312B 截断(实现用权威 345B)、brief `...ull` 超 uint64——顺手修
+2. ✅ **EmptyEnvelopeFails 已修**(08-17):改名 `EmptyEnvelopeAccepted`
+3. **计划文档 2 处笔误**:DA 计划 `contract_call_tx` 例 312B 截断(实现用 345B)、brief `...ull` 超 uint64——顺手修
 
-### 预部署矩阵 ✅
-4. ✅ 预部署矩阵 spec+plan 已交付(SDD 6 Task 全绿,MERGE-READY),详见 2c。
-
-### e2e CI 接入(进行中,当前主线)
-4a. ✅ CI op-e2e job + 脚本可配置化(commit `440a497`)
-4b. ✅ eth_genesis_header 生成 + 单节点配置修复(commit `3ea2285`)
-4c. ✅ **MPT state_root 已交付**(commit `c33bfe83f`):`tools/opstack-genesis/mpt_state_root.py`(纯 Python op-geth 兼容 secure MPT,逐字节 == C++ `GenesisStateRoot.cpp`)+ `gen_eth_header_fixture.py --allocs` + setup step 5 集成。验证:setup allocs+SENDER → `0x0f4dbf6c...` == C++ derived root;B3/B3a 带正确 state_root 启动,`eth_getBlockByNumber(0)` stateRoot/hash 四者一致。**报告**:`docs/2026-08-18-mpt-root-report.md`。
-    - ⚠️ **子代理误判记录**:子代理(ab2661bd)报告 run_all 未全绿(eth_call Invalid argument + a1_active `engine_forkchoiceUpdatedV4 is not yet supported`),归因"既有问题"。**已查明为陈旧二进制**:worktree build 的 bcos-rpc/librpc.a 是 08-11 陈旧 UNITY_BUILD 对象(当时源码无 V4),含桩串;强制重建 librpc.a 后桩串 3→0。worktree 源码 EngineEndpoint.cpp 是真实 V4(`514e87046`,0 桩串);主 checkout 二进制(08-12)= 0 桩串。**MPT 提交零 C++ 改动,不可能引入回归**。worktree 完整重建受限于 tars2cpp/vcpkg 环境(CI 全新 checkout 无此问题)。记忆:`stale-worktree-build-v4-stub-trap.md`。
-4d. ⏳ scheduler 分支 Karst base-allocs 缺口(task 104):`base_allocs_sha256=""`,需 op-deployer 生成 terminal allocs。若 CI 也要在 scheduler 分支跑,需补此缺口。
+### e2e CI(本会话主线,已全绿,剩收尾)
+4a. ✅ CI op-e2e job + 脚本可配置化(`440a497`)
+4b. ✅ eth_genesis_header 生成(`3ea2285` 初版;⚠️ 该 commit 含一处误改,已由 `84b3be0` 修复)
+4c. ✅ **MPT state_root**(`c33bfe83f`)+ **enable_single_node_consensus 回归修复**(`84b3be0`)
+    - **回归详情**:`3ea22859e` 把 `enable_single_node_consensus=true` 改 `false`,声称"与 op_engine_rpc 冲突"——**误判**。false 下 B3 链停摆(不出块,blockNumber 恒 0),chain_driver/rpc_matrix/b4_persist/b3_contracts/predeploy 全红。改回 true 后**从零重建全绿 149 断言**,且 a1_active(B3a,FCU 驱动)16/16 证明 true+op_engine_rpc 可共存。**记忆**:`op-e2e-single-node-consensus-regression.md`
+    - **子代理误判记录**:子代理(ab2661bd)报 run_all 未全绿并归因"V4 端点是桩/既有问题"。实为 worktree build 陈旧 librpc.a(08-11 对象,含桩串);强制重建后桩串 3→0,worktree 源码是真实 V4(`514e87046`)。**记忆**:`stale-worktree-build-v4-stub-trap.md`
+    - **当前验证**:本地 `setup_op_node.sh` 从零重建 → **ALL OP-E2E GREEN**:rpc_matrix 45 / state_verify 12 / chain_driver 31 / b4_persist 3 / b3_contracts 12 / predeploy 30 / a1_active 16 = **149 断言**
+4d. ⏳ scheduler 分支 Karst base-allocs 缺口(task 104):`base_allocs_sha256=""`,需 op-deployer 生成 terminal allocs。**非当前分支必需**(worktree-op-alignment genesis 链路完整)
 
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
-5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件
-6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)
-7. **三端测试对比 spec(存档,commit `4b03673` 初版 + `2791b07` 修订版,非用户请求)**:`docs/2026-08-17-opstack-testmatrix-compare-design.md`——被停止的后台代理擅自产出并提交,又经其自派 4 子代理审查后修订(295 行)。用户裁定**保留**。**修订版修正了初版关键事实错误**:引擎 API 实为 FCU V3(op-node 不发 V4,`a1_active.py` 主路径的 V4 是 op-node 永不调用的方法)、EEST runner 已存在(EF 语料 12-fixture 冒烟过,非从零)、`eth_getProof` 已实现(14 单测)、FISCO RPC/MPT 覆盖被低估(~140 RPC 单测 + 147 MPT 用例)、op-geth 树内 interop/DA 覆盖被低估。核心结论不变:最大硬缺口 = **op-node 集成 harness + 引擎 API V3 版本契约**。P0:op-node harness+FCU V3 合规+deposit tx round-trip;P0-并行:EF 全量语料(扩现有 EEST runner);P1:eth_getProof e2e+OutputV0、fork deposit 向量。**可作测试体系排期输入,但非经批准的交付物**。
-8. **op-node EL 契约实施计划(存档,commits `d78ee71`→`8bd0752`→`c514b84`→`159c130` v2→v5,非用户请求;用户裁定 v5 为终版存档,不再追踪演进)**:`docs/2026-08-17-opstack-el-contract-plan.md`——被停代理从上面 spec 衍生出的**全新实施计划**(9 Task,瞄准「让 FISCO 被 op-node 以 FCU V3 驱动出块」的生产代码改造方向),4 轮×4 代理=16 次审查后迭代到 v5(终版)。关键规划结论:Task 3 核心 = buildOpPayload 全 attrs 采纳(deposits/PBBR/eip1559Params/minBaseFee/gasLimit)+ B1/B2/B3 硬阻塞(getPayload 信封 PBBR、Isthmus blobGasUsed、BlockResponse PBBR)+ baseFee 父块派生(不改,R4-B 已用 op-geth eip1559.go:64-94 推翻热切换建议)+ noTxPool + extraData 版本字节;Task 0 基线+maxEngineVersion 接线;Task 1 FCU V3 单测;Task 6 safe/finalized;Task 9 harness(独立)。**注意**:该计划瞄准生产代码改造,是**未经批准的未来立项方向**——若要实施,须先经 brainstorming/writing-plans 独立立项,不得直接执行。
-9. **`opstack-op-e2e-on-scheduler` 分支(保留,非用户请求)**:被停代理自主创建(基于远程 tip `174d8e4c2`),2 个 commit(`1d251f040` op-e2e 套件 17 文件 + `f01285ed0` DA 矩阵 18 文件)——它想把已交付的 op-e2e/DA 矩阵搬到远程 scheduler 重构基线上。用户裁定**保留**。**注意**:该分支基于远程重构(已删 OpEngineSeam/OpSchedulerImpl 等),计划 v5 的行号在其上不成立;**与 `worktree-op-alignment` 原分支互不影响,原分支交付完好。**
-10. **`opstack-op-e2e-on-scheduler` 分支后续处置(2026-08-18)**:①已补 EmptyEnvelope 修复(commit `2d36b85`,新分支原是旧断言)。②**t8n 预部署向量/预部署 case 不需同步**——新分支生成器已内置 `l1BlockRuntimeCode`(caseFrame 全程给 L1Block 播种真实代码,比旧分支单 case 方案更彻底),regen 集合校验会拒孤儿向量,故回滚了误加的 8 向量+manifest。③**新分支 genesis 链路断裂**:`op-fork-pin.toml` 的 `[karst_pin] base_allocs_sha256=""`(空),`build-allocs.py` 的 `--base-allocs`(必需)无 frozen op-deployer terminal allocs 可喂 → setup 第 4 步必失败。**Karst base allocs 是新分支(远程重构)自身的未完成基建,非旧分支引入**;要在此分支做 e2e 需先按 pin 生成 allocs 并填 sha256(单独立项)。④当前 e2e 验证在旧分支 `worktree-op-alignment` 上进行(genesis 链路完整)。
+5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件(扩现有 EEST runner)
+6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)——**可拆分**:eth_gasPrice 半天,reorg/withdrawalsRoot 各约 1 天,Fuzz 2 天+
+7. **三端测试对比 spec(存档,非用户请求)**:`docs/2026-08-17-opstack-testmatrix-compare-design.md`。核心结论:最大硬缺口 = **op-node 集成 harness + 引擎 API V3 版本契约**。可作排期输入
+8. **op-node EL 契约实施计划(存档,v5 终版)**:`docs/2026-08-17-opstack-el-contract-plan.md`。瞄准生产改造,**须重新立项,不得直接执行**
+9. **`opstack-op-e2e-on-scheduler` 分支(保留)**:2 commits(`1d251f040` op-e2e 套件 + `f01285ed0` DA 矩阵),基于远程重构;计划 v5 行号在其上不成立
+10. **scheduler 分支后续处置**:①已补 EmptyEnvelope 修复(`2d36b85`)②t8n 预部署向量不需同步 ③**genesis 链路断裂**:`op-fork-pin.toml` `[karst_pin] base_allocs_sha256=""`,需按 pin 生成 allocs 并填 sha256(单独立项)④当前 e2e 验证在旧分支进行
 
 ### e2e 设计(用户问过未定)
 7. FISCO opstack e2e 分层设计(Layer 1 单节点语义强化 + Layer 2 跨域 mock L1 + Layer 3 op-node)——**未定是否实施**
 
 ### 其它线程
-8. **PR #5429 拆分**(pr5429-split worktree):剩余分支 infra-rebuilt/initializer/RPC/eth-executor-remainder/**engine LAST**;清理 superseded(split-pr-framework-types/split-pr-tars-protocol/split-op-receipt-meta-v2)
+8. **PR #5429 拆分**(pr5429-split worktree):剩余 infra-rebuilt/initializer/RPC/eth-executor-remainder/**engine LAST**;清理 superseded 分支
 
 ## 4. 关键路径
 
-- 节点工作区:本地 `/tmp/op-spike/{b3,b3a}`(ALL GREEN);CI 模拟 `/tmp/op-e2e-ci-sim{2,3}`(验证 genesis 装配)
+- 节点工作区:本地 `/tmp/op-spike/{b3,b3a}`(ALL GREEN);CI 模拟 `/tmp/op-e2e-ci-sim{2,3}`
 - op-e2e 套件:`tools/op-e2e/`(run_all.sh / restart_b3.sh / predeploy_matrix.py / setup_op_node.sh)
-- genesis 工具:`tools/opstack-genesis/`(build-allocs.py / gen_eth_header_fixture.py --toml / chain-config 模板)
+- genesis 工具:`tools/opstack-genesis/`(build-allocs.py / gen_eth_header_fixture.py --toml --allocs / mpt_state_root.py / chain-config.yaml 模板)
 - CI:`.github/workflows/workflow.yml`(op-e2e job)
 - DA 矩阵:`opstack-executor/tests/da-matrix/`
 - t8n harness:`opstack-executor/tests/t8n/`(generator/cases.go、regen.sh、OpT8nReplayTest)
-- 预部署合约:FISCO 自研 `bcos-l2-contracts/src/{SystemConfig,L2ValidatorSet}.sol`;OP-fork 11 个字节码在 `bcos-l2-contracts/out/`,源码在 `/tmp/op-spike/op-pinned`(33f06d2d)
+- 预部署合约:FISCO 自研 `bcos-l2-contracts/src/{SystemConfig,L2ValidatorSet}.sol`;OP-fork 11 字节码在 `bcos-l2-contracts/out/`,源码在 `/tmp/op-spike/op-pinned`
 - 参考端:op-geth `/Users/octopus/octo/code/blockchain-impl/op-geth`(v1.101702.2)、op-revm `/Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm`(da197e45)、contracts-bedrock 同 monorepo
-- 记忆:`.claude/projects/-Users-octopus-octo-code-FISCO-BCOS/memory/`(op-e2e 重建/config 蓝图/DA 计划等)
+- 记忆:`.claude/projects/-Users-octopus-octo-code-FISCO-BCOS/memory/`(含本会话新增 `op-e2e-single-node-consensus-regression.md` + `stale-worktree-build-v4-stub-trap.md`)
 
 ## 5. 硬约束(不可退步)
 
 - **已通过的测试或测试集合不能变的无法通过**;测试可加强不可退步。
-- 本会话全部改动纯增补,唯一生产改动 `computeChargedOperatorCost`(additive);`EmptyEnvelopeFails` 是唯一红(pre-existing,单独立案)。
+- 本会话全部改动纯增补;唯一生产改动 `computeChargedOperatorCost`(additive)。**`84b3be0` 修复了 `3ea2285` 引入的配置回归(恢复已通过的 e2e 测试)**。
