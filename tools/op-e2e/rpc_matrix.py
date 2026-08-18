@@ -76,18 +76,12 @@ KNOWN_RED = []
 # Tier-1 known-reds: these checks depend on chain advancement (Tier-2: OP-mode payload
 # building) or on the genesis flat-state read bug recorded in the handoff. At Tier-1 the
 # chain sits at genesis, so they record as KNOWN-RED — visible in output, not gating.
-# Remove names from this set as Tier-2 restores them. The four eth_call/estimateGas
-# names are one family: at genesis every executed call fails with -32603 "Invalid
-# argument" (same root as predeploy_matrix's first step). The D2 baseline recorded the
-# whole a2_exec group as a single "<lambda>" raise; each check is now recorded by name.
+# Remove names from this set as Tier-2 restores them. All three remaining names depend
+# on chain advancement (genesis timestamp artifact / block 1 / MessagePasser writes).
 KNOWN_TIER1 = {
     "timestamp sane",
     "getProof block 1 returns MPT-limited error code",
     "outputv0 withdrawalsRoot present 32B",
-    "eth_call EOA->EOA returns 0x",
-    "eth_estimateGas == 21000",
-    "eth_call empty-code address returns 0x",
-    "eth_call historical tag reachable (0x1)",
 }
 
 

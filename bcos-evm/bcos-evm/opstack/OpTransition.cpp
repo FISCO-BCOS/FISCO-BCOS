@@ -362,7 +362,7 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
 std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::Transaction& tx,
     evmc::bytes_view signedTxEnvelope, const OpForkConfig& cfg, const OpFeeParams& fee,
-    int64_t blockGasLeft)
+    int64_t blockGasLeft, bool skipBalanceCheck)
 {
     // Whitelist, not a blacklist. Transaction::Type has uint8_t as its underlying type and
     // validate_transaction's type switch (state.cpp:365-383) carries no default label, so EVERY
@@ -383,7 +383,8 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     if (signedTxEnvelope.empty())
         return make_error_code(std::errc::invalid_argument);
 
-    auto base = evmone::state::validate_transaction(view, block, tx, cfg.rev, blockGasLeft, 0);
+    auto base = evmone::state::validate_transaction(
+        view, block, tx, cfg.rev, blockGasLeft, 0, skipBalanceCheck);
     if (auto* err = std::get_if<std::error_code>(&base))
         return *err;
 
@@ -412,7 +413,11 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     maxCost += tx.value;
     maxCost += l1Cost;
     maxCost += opCost;
-    if (intx::uint512{balance} < maxCost)
+    // Balance cap for real transactions. Simulations (eth_call/estimateGas) skip it: op-geth
+    // never balance-validates a call — its simulated sender (the request's `from`, or the
+    // dummy-signature recovery when absent) routinely carries no funds, and the check would
+    // reject read-only contract probes the chain should answer.
+    if (!skipBalanceCheck && intx::uint512{balance} < maxCost)
         return make_error_code(std::errc::result_out_of_range);
 
     OpTxProperties props{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,

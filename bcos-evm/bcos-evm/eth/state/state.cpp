@@ -326,7 +326,7 @@ void State::rollback(size_t checkpoint)
 /// @return  Execution gas limit or transaction validation error.
 std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
-    int64_t block_gas_left, int64_t blob_gas_left) noexcept
+    int64_t block_gas_left, int64_t blob_gas_left, bool skip_balance_check) noexcept
 {
     switch (tx.type)  // Validate "special" transaction types.
     {
@@ -427,7 +427,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         // FIXME: Can overflow uint256.
         max_total_fee += total_blob_gas * tx.max_blob_gas_price;
     }
-    if (sender_acc.balance < max_total_fee)
+    if (!skip_balance_check && sender_acc.balance < max_total_fee)
         return make_error_code(INSUFFICIENT_FUNDS);
 
     const auto [intrinsic_cost, min_cost] = compute_tx_intrinsic_cost(rev, tx);

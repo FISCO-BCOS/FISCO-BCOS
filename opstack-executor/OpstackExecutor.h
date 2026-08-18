@@ -665,7 +665,7 @@ public:
         // the same instance so the validate-phase account/fee reads cache-hit in the transition.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
-            blockGasLeft, call ? 0 : chainId);
+            blockGasLeft, call ? 0 : chainId, call);
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,
             diff, chainId, blockGasLeft, blockHashes);
@@ -740,7 +740,7 @@ private:
         bcos::evm::evmstate::Storage2State<Storage>& stateView,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee = {},
-        int64_t blockGasLeft = 0, uint64_t chainId = 0)
+        int64_t blockGasLeft = 0, uint64_t chainId = 0, bool call = false)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
@@ -793,8 +793,8 @@ private:
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
-        auto validated =
-            op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft);
+        auto validated = op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee,
+            blockGasLeft, /*skipBalanceCheck=*/call);
         if (auto const* err = std::get_if<std::error_code>(&validated))
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));
         auto props = std::move(std::get<op::OpTxProperties>(validated));

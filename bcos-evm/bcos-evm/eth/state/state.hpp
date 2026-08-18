@@ -164,8 +164,12 @@ TransactionReceipt transition(const StateView& state, const BlockInfo& block,
 
 /// Validate a transaction.
 ///
+/// @param skip_balance_check simulations (eth_call/estimateGas) set this: the simulated
+///         sender routinely carries no funds and op-geth never balance-validates a call.
+///         Every other check (type gates, nonce, fee caps, gas) still applies.
 /// @return Computed execution gas limit or validation error.
 [[nodiscard]] std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
-    int64_t block_gas_left, int64_t blob_gas_left) noexcept;
+    int64_t block_gas_left, int64_t blob_gas_left,
+    bool skip_balance_check = false) noexcept;
 }  // namespace evmone::state

@@ -236,4 +236,39 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
     }
 }
 
+// Bug B regression (08-18): the OP-line call pipeline (OpstackExecutor::m_prepare →
+// opValidate) prices eth_call through the tx's RLP envelope (extraTransactionBytes) and
+// rejects an empty envelope with EINVAL — the RPC-built simulation tx must carry the
+// envelope, keep the nonce passthrough semantics, and force the requested sender.
+BOOST_AUTO_TEST_CASE(callTxCarriesEnvelopeForOpPipeline)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    CallRequest req;
+    req.from = "0x6afa9580383e6627da926b6f6ed9ab2b9c8cc693";
+    req.to = "0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1";
+    req.value = "0x1";
+    req.gas = 21000;
+
+    auto tx = req.takeToTransaction(txFactory, nullptr);
+    // The envelope the OP pipeline prices and type-checks must be present.
+    BOOST_CHECK(!tx->extraTransactionBytes().empty());
+    // No pending-nonce scheduler → the nonce stays unset for the executor's state fallback.
+    BOOST_CHECK_EQUAL(tx->nonce(), std::string{});
+    // The simulation sender is the request's `from` (forced as raw address bytes), not the
+    // dummy-signature recovery.
+    auto const expectedSender = Address("0x6afa9580383e6627da926b6f6ed9ab2b9c8cc693").asBytes();
+    BOOST_CHECK(
+        tx->sender() == std::string_view(reinterpret_cast<char const*>(expectedSender.data()),
+                            expectedSender.size()));
+
+    // With an explicit gasPrice the envelope is still carried (pricing passes through).
+    req.gasPrice = "0x3b9aca00";
+    auto tx2 = req.takeToTransaction(txFactory, nullptr);
+    BOOST_CHECK(!tx2->extraTransactionBytes().empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

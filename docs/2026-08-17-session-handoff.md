@@ -180,3 +180,27 @@ geth 单一 trie 表示、reth plain/hashed 双表均由导入一次填满且读
   7 known-red（"getBalance nonzero" 转绿并按陈旧门告警摘除）；run_all 门禁 ALL GREEN。
 - **遗留**：eth_call 族 -32603（Bug B，仍 7 项 known-red 中的 4 项）待钉抛点；v1 线首块可见创世余额
   的疑点仍登记待查。
+
+### Bug B 修复（08-18 深夜，同日完成）
+- **根因**（lldb `__cxa_throw` 断点钉死）：eth_call 的 tx 由 `CallRequest::takeToTransaction` 用
+  factory 构造，**无签名信封**（extraTransactionBytes 空）→ OP 线 `OpstackExecutor::m_prepare` →
+  `opValidate`（OpTransition.cpp:384 空信封检查）返回 EINVAL → "Invalid argument"。与块高无关。
+- **修复**（三层，op-geth 模拟语义）：
+  1. `CallRequest.cpp`：经 `Web3Transaction::takeToTarsTransaction` 构造（携带 encodeForSign 信封，
+     legacy + chainId nullopt 豁免链检查，dummy r/s，nonce 透传语义保持）；gas 缺省 30M（intrinsic
+     检查）、gasPrice 缺省 2gwei（创世 baseFee 1e9 的费率上限）；noexcept 回退旧路径。
+  2. `opValidate`/`validate_transaction`（OpTransition + bcos-evm state）：新增
+     `skipBalanceCheck/skip_balance_check`（仅模拟执行透传；费率上限/nonce/类型门全部保留）——
+     无 from 的调用 sender 为垃圾恢复地址余额 0，op-geth 对 eth_call 从不校验余额。
+  3. `OpstackExecutor.h`：m_prepare 增加 call 参数贯通。
+- **验证**：CallRequestTest 12/12（新增 callTxCarriesEnvelopeForOpPipeline）；opstack
+  block/detail/bcos-evm-opstack 套件全绿（CallHappyPath/CallInvalid 不受余额旁路影响）；
+  e2e：EOA→EOA `0x`、estimateGas 0x5208、empty-code `0x`、无 from 调用通、WETH9 name() 返回
+  "Wrapped Ether"（执行栈正确性证明）；rpc_matrix **56 过 / 0 败 / 3 known-red**（eth_call 族 4 项
+  按陈旧门摘除）；run_all ALL GREEN。
+- **发现 Bug C（归并 D1）**：allocs.ini **无任何 storage 段**（emit_ini 支持但现文件是陈旧产物），
+  predeploy 表仅 codeHash/nonce 行；`op-fork-base-allocs.json` 不存在（即 D1 登记的 base-allocs
+  缺口）→ SystemConfig/L1Block 的 storage 型 getter revert（owner()/number() code:1）。修复 =
+  D1 生成 base-allocs → 重跑 build-allocs → 重生成 genesis → 重init 链后复查。
+- **预存失败登记**：OpstackExecutorTests 的 decodeDepositEnvelope "body must be an RLP list" 1 例
+  在干净 HEAD 同样失败（stash 对照验证），与本次改动无关，待查。
