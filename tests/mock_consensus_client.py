@@ -4,13 +4,14 @@ mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Karst dialect)
 
 模拟 op-node 对 EL 节点的 Engine API 调用流程(W0 mock,B4 起说 Karst 方言):
 
-  1. engine_exchangeCapabilities   — 只允许 Karst 面:FCU V3 / getPayloadV5 / newPayloadV4
+  1. engine_exchangeCapabilities   — 节点实现的全部方法(Karst 三件套 + V1-V3 旧版本)
   2. engine_forkchoiceUpdatedV3    — 无 payloadAttributes(纯状态更新)
   3. engine_forkchoiceUpdatedV3    — 带 payloadAttributes:秒级时间戳、注入一笔 0x7e
                                      deposit 裸交易、noTxPool true/false 轮换
   4. engine_getPayloadV5           — 校验 V5 响应形状,断言 deposit 原字节在列
   5. engine_newPayloadV4           — [payload, [], beaconRoot, []] 提交
-  6. 负测                          — 旧版本方法 -38005、未知 payloadId -38001、缺参 -32602
+  6. V2 旧版本回路                 — FCU V2 -> getPayloadV2 -> newPayloadV2 仍然可用
+  7. 负测                          — 未实现版本 -38005、未知 payloadId -38001、缺参 -32602
 
 用法:
     pip install requests
@@ -42,13 +43,29 @@ ZERO_HASH = "0x" + "00" * 32
 FEE_RECIPIENT = "0x0000000000000000000000000000000000000001"
 PREV_RANDAO = "0x" + "00" * 31 + "01"
 
-# Karst-only Engine surface (must match detail::supportedCapabilities()).
-KARST_CAPABILITIES = {
+# Everything the node implements (must match detail::supportedCapabilities()). The list is
+# NOT narrowed to the active fork: op-geth advertises its whole method set and lets the CL
+# pick, and the pre-Karst versions stay served.
+EXPECTED_CAPABILITIES = {
     "engine_exchangeCapabilities",
+    "engine_forkchoiceUpdatedV1",
+    "engine_forkchoiceUpdatedV2",
     "engine_forkchoiceUpdatedV3",
+    "engine_getPayloadV1",
+    "engine_getPayloadV2",
+    "engine_getPayloadV3",
     "engine_getPayloadV5",
+    "engine_newPayloadV1",
+    "engine_newPayloadV2",
+    "engine_newPayloadV3",
     "engine_newPayloadV4",
 }
+
+# Routable but not implemented: the endpoints answer -38005 and must not be advertised.
+UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4", "engine_getPayloadV4")
+
+# The gas limit sent in payloadAttributes.
+ATTRS_GAS_LIMIT = "0x1c9c380"
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----
 
@@ -173,20 +190,20 @@ def expect_error_code(method: str, params: List[Any], expected_code: int) -> Non
 
 
 def test_exchange_capabilities() -> None:
-    """The advertised surface is Karst-only: no V1/V2 methods, no getPayloadV1-V4."""
-    _log_test("engine_exchangeCapabilities (Karst-only surface)")
+    """The node advertises everything it implements, pre-Karst versions included."""
+    _log_test("engine_exchangeCapabilities (implemented surface)")
 
-    result = rpc_result("engine_exchangeCapabilities", [sorted(KARST_CAPABILITIES)])
+    result = rpc_result("engine_exchangeCapabilities", [sorted(EXPECTED_CAPABILITIES)])
     returned = set(result)
 
-    if returned != KARST_CAPABILITIES:
+    if returned != EXPECTED_CAPABILITIES:
         _log_fail(
-            f"capability mismatch: missing={KARST_CAPABILITIES - returned} "
-            f"extra={returned - KARST_CAPABILITIES}"
+            f"capability mismatch: missing={EXPECTED_CAPABILITIES - returned} "
+            f"extra={returned - EXPECTED_CAPABILITIES}"
         )
         return
 
-    _log_info(f"exactly {len(returned)} Karst capabilities advertised")
+    _log_info(f"{len(returned)} capabilities advertised, V1-V3 included")
     _log_pass()
 
 
@@ -244,7 +261,7 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         "parentBeaconBlockRoot": ZERO_HASH,
         "transactions": [DEPOSIT_RAW],
         "noTxPool": no_tx_pool,
-        "gasLimit": "0x1c9c380",
+        "gasLimit": ATTRS_GAS_LIMIT,
     }
 
     fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
@@ -339,20 +356,69 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
     return True
 
 
-def test_negative_cases() -> None:
-    """Error semantics: -38005 for pre-Karst versions, -38001 unknown payload, -32602 shape."""
+def run_v2_block_flow() -> None:
+    """The pre-Karst loop still works end to end: FCU V2 -> getPayloadV2 -> newPayloadV2.
+
+    Targeting Karst does not make the older method versions incompatible. A stock CL
+    driving the standard V1-V3 surface (and the v1 Engine API harness kept alive by
+    unsafe_allow_v1_executor) must keep building and submitting blocks.
+    """
+    _log_test("FCU V2 + getPayloadV2 + newPayloadV2 (pre-Karst surface)")
+
     head_hash = get_head_hash()
     fc_state = {
         "headBlockHash": head_hash,
         "safeBlockHash": head_hash,
         "finalizedBlockHash": head_hash,
     }
-    # Pre-Karst method versions are rejected with -38005 Unsupported fork.
-    expect_error_code("engine_forkchoiceUpdatedV1", [fc_state, None], -38005)
-    expect_error_code("engine_forkchoiceUpdatedV2", [fc_state, None], -38005)
-    expect_error_code("engine_getPayloadV2", ["0x0000000000000001"], -38005)
+    payload_attrs = {
+        "timestamp": next_timestamp(),
+        "prevRandao": PREV_RANDAO,
+        "suggestedFeeRecipient": FEE_RECIPIENT,
+        "withdrawals": [],
+    }
+
+    fcu = rpc_result("engine_forkchoiceUpdatedV2", [fc_state, payload_attrs])
+    payload_id = fcu.get("payloadId")
+    if fcu["payloadStatus"]["status"] != "VALID" or not payload_id:
+        _log_fail(f"FCU V2 did not build a payload: {fcu}")
+        return
+
+    result = rpc_result("engine_getPayloadV2", [payload_id])
+    # V2 response shape: executionPayload + blockValue only — no blobsBundle (V3+),
+    # no executionRequests (V4+), no withdrawalsRoot on the payload (V4+).
+    if "executionPayload" not in result or "blockValue" not in result:
+        _log_fail(f"getPayloadV2 response is not the V2 shape: {sorted(result.keys())}")
+        return
+    if "blobsBundle" in result or "executionRequests" in result:
+        _log_fail(f"getPayloadV2 leaked V3+/V4+ response fields: {sorted(result.keys())}")
+        return
+    payload = result["executionPayload"]
+    if "withdrawalsRoot" in payload:
+        _log_fail("getPayloadV2 leaked the V4-only withdrawalsRoot field")
+        return
+
+    status = rpc_result("engine_newPayloadV2", [payload])
+    _log_info(f"newPayloadV2 status = {status['status']}")
+    if status["status"] != "VALID":
+        _log_fail(f"newPayloadV2 rejected the V2 payload it just built: {status}")
+        return
+    _log_pass()
+
+
+def test_negative_cases() -> None:
+    """Error semantics: -38005 for unimplemented versions, -38001 unknown payload, -32602 shape."""
+    fc_state_head = get_head_hash()
+    fc_state = {
+        "headBlockHash": fc_state_head,
+        "safeBlockHash": fc_state_head,
+        "finalizedBlockHash": fc_state_head,
+    }
+    # Method versions this node does not implement answer -38005 Unsupported fork rather
+    # than -32601: they are routed, just not built. Every OTHER version is served — the
+    # V1-V3 flows above are the positive side of that.
+    expect_error_code("engine_forkchoiceUpdatedV4", [fc_state, None], -38005)
     expect_error_code("engine_getPayloadV4", ["0x0000000000000001"], -38005)
-    expect_error_code("engine_newPayloadV3", [{}, [], ZERO_HASH], -38005)
 
     # Unknown payloadId -> -38001 Unknown payload.
     expect_error_code("engine_getPayloadV5", ["0x00000000deadbeef"], -38001)
@@ -413,7 +479,10 @@ def main() -> int:
         if run_karst_block_flow(no_tx_pool=True):
             run_karst_block_flow(no_tx_pool=False)
 
-        # 6. Error semantics.
+        # 6. The pre-Karst surface is still live.
+        run_v2_block_flow()
+
+        # 7. Error semantics.
         test_negative_cases()
 
     except requests.ConnectionError:

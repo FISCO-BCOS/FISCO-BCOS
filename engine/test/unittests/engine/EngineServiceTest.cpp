@@ -342,19 +342,28 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
     auto capabilities = task::syncWait(
         engineService.exchangeCapabilities({"engine_forkchoiceUpdatedV1", "unknown_method"}));
 
-    // Karst-only surface: exchangeCapabilities + exactly the three method versions
-    // op-node drives a Karst chain with. Pre-Karst versions must not be advertised.
-    BOOST_CHECK_EQUAL(capabilities.size(), 4);
+    // Everything implemented, not narrowed to the active fork (op-geth advertises its
+    // whole method set and lets the CL pick). The Karst triple joins the pre-Karst
+    // versions rather than replacing them.
+    BOOST_CHECK_EQUAL(capabilities.size(), 12);
     auto contains = [&](std::string_view name) {
         return std::find(capabilities.begin(), capabilities.end(), name) != capabilities.end();
     };
     BOOST_CHECK(contains("engine_exchangeCapabilities"));
+    BOOST_CHECK(contains("engine_forkchoiceUpdatedV1"));
+    BOOST_CHECK(contains("engine_forkchoiceUpdatedV2"));
     BOOST_CHECK(contains("engine_forkchoiceUpdatedV3"));
+    BOOST_CHECK(contains("engine_getPayloadV1"));
+    BOOST_CHECK(contains("engine_getPayloadV2"));
+    BOOST_CHECK(contains("engine_getPayloadV3"));
     BOOST_CHECK(contains("engine_getPayloadV5"));
+    BOOST_CHECK(contains("engine_newPayloadV1"));
+    BOOST_CHECK(contains("engine_newPayloadV2"));
+    BOOST_CHECK(contains("engine_newPayloadV3"));
     BOOST_CHECK(contains("engine_newPayloadV4"));
-    BOOST_CHECK(!contains("engine_forkchoiceUpdatedV1"));
-    BOOST_CHECK(!contains("engine_getPayloadV3"));
-    BOOST_CHECK(!contains("engine_newPayloadV3"));
+    // Not implemented, so not advertised (the endpoints answer -38005).
+    BOOST_CHECK(!contains("engine_forkchoiceUpdatedV4"));
+    BOOST_CHECK(!contains("engine_getPayloadV4"));
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)

@@ -56,8 +56,8 @@ private:
     /// Build a JSON-RPC error response when the engine service is unavailable.
     void buildEngineNotAvailableError(Json::Value& response) const;
 
-    /// Build the -38005 rejection every pre-Karst Engine method version answers with.
-    void buildPreKarstVersionError(std::string_view method, Json::Value& response) const;
+    /// Build the -38005 answer for a method version this node does not implement.
+    void buildUnimplementedVersionError(std::string_view method, Json::Value& response) const;
 
     NodeService::Ptr m_nodeService;
 };

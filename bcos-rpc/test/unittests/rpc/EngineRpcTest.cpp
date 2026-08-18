@@ -138,27 +138,51 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilities)
     BOOST_CHECK(response.isMember("result"));
 }
 
-// Karst-only surface: every pre-Karst method version answers -38005 without reaching
-// the engine service (op-geth answers engine.UnsupportedFork for wrong-fork versions).
-BOOST_AUTO_TEST_CASE(preKarstVersionsRejected)
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV1)
 {
-    for (auto method : {&Endpoints::forkchoiceUpdatedV1, &Endpoints::forkchoiceUpdatedV2,
-             &Endpoints::getPayloadV1, &Endpoints::getPayloadV2, &Endpoints::getPayloadV3,
-             &Endpoints::newPayloadV1, &Endpoints::newPayloadV2, &Endpoints::newPayloadV3})
-    {
-        Json::Value params(Json::arrayValue);
-        Json::Value response;
-        task::wait([&](Endpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await (ep->*method)(p, r);
-        }(endpoints.get(), params, response));
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
 
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
-    }
-    // None of the rejected calls may have reached the engine service.
-    BOOST_CHECK(!mockService.m_state->capturedForkchoiceVersion.has_value());
-    BOOST_CHECK(!mockService.m_state->capturedGetPayloadVersion.has_value());
-    BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+    Json::Value response;
+    CALL_ENGINE(forkchoiceUpdatedV1, params, response);
+
+    BOOST_CHECK(response["result"].isMember("payloadStatus"));
+    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
+    BOOST_CHECK(!response["result"].isMember("payloadId"));
+
+    BOOST_REQUIRE(mockService.m_state->capturedForkchoiceState.has_value());
+    BOOST_CHECK_EQUAL(mockService.m_state->capturedForkchoiceState->headBlockHash.hex(),
+        "1111111111111111111111111111111111111111111111111111111111111111");
+    BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 1);
+}
+
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV2)
+{
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value attrs;
+    attrs["timestamp"] = "0x1";
+    attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+    params.append(attrs);
+
+    Json::Value response;
+    CALL_ENGINE(forkchoiceUpdatedV2, params, response);
+
+    BOOST_CHECK(response["result"].isMember("payloadStatus"));
+    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
+
+    BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 2);
 }
 
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
@@ -203,6 +227,53 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
 }
 
+BOOST_AUTO_TEST_CASE(getPayloadV1)
+{
+    mockService.m_state->getPayloadResult->executionPayload.parentHash =
+        h256("1111111111111111111111111111111111111111111111111111111111111111");
+    mockService.m_state->getPayloadResult->executionPayload.blockHash =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x0000000021f32cc1");
+
+    Json::Value response;
+    CALL_ENGINE(getPayloadV1, params, response);
+
+    BOOST_CHECK(response["result"].isMember("parentHash"));
+    BOOST_CHECK_EQUAL(response["result"]["parentHash"].asString(),
+        "0x1111111111111111111111111111111111111111111111111111111111111111");
+    BOOST_REQUIRE(mockService.m_state->capturedPayloadId.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedPayloadId, "0x0000000021f32cc1");
+    BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 1);
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadV3)
+{
+    mockService.m_state->getPayloadResult->executionPayload.parentHash =
+        h256("1111111111111111111111111111111111111111111111111111111111111111");
+    mockService.m_state->getPayloadResult->executionPayload.blockHash =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    mockService.m_state->getPayloadResult->blockValue = u256(100);
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x0000000021f32cc1");
+
+    Json::Value response;
+    CALL_ENGINE(getPayloadV3, params, response);
+
+    BOOST_CHECK(response["result"].isMember("executionPayload"));
+    BOOST_CHECK(response["result"].isMember("blockValue"));
+    BOOST_CHECK(response["result"].isMember("blobsBundle"));
+    BOOST_CHECK(response["result"].isMember("shouldOverrideBuilder"));
+    BOOST_CHECK(!response["result"].isMember("executionRequests"));
+    BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 3);
+}
+
+// getPayloadV4 (Prague response shape) is not implemented, so the endpoint answers
+// -38005. This is a "not built yet", not a statement that older versions are unsupported.
 BOOST_AUTO_TEST_CASE(getPayloadV4)
 {
     Json::Value params(Json::arrayValue);
@@ -213,6 +284,7 @@ BOOST_AUTO_TEST_CASE(getPayloadV4)
 
     BOOST_CHECK(response.isMember("error"));
     BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(!mockService.m_state->capturedGetPayloadVersion.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV5)
@@ -305,7 +377,108 @@ Json::Value makeV4ExecutionPayloadJson()
 
 constexpr auto c_beaconRootHex =
     "0x169630f535b4a41330164c6e5c92b1224c0c407f582d407d0ac3d206cd32fd52";
+
+/// Base V1 executionPayload JSON: the fields every version shares, no V2/V3/V4 additions.
+Json::Value makeV1ExecutionPayloadJson()
+{
+    auto ep = makeV4ExecutionPayloadJson();
+    ep.removeMember("withdrawals");
+    ep.removeMember("blobGasUsed");
+    ep.removeMember("excessBlobGas");
+    ep.removeMember("withdrawalsRoot");
+    return ep;
+}
 }  // namespace
+
+BOOST_AUTO_TEST_CASE(newPayloadV1)
+{
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV1, params, response);
+
+    BOOST_CHECK(response["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 1);
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV2)
+{
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100, chainId,
+        groupId, static_cast<int64_t>(utcTime()));
+    bytes encodedTx;
+    tx->encode(encodedTx);
+    auto encodedTxHex = toHexStringWithPrefix(encodedTx);
+
+    auto const largeQuantity = std::string("0x100000000000000000");
+
+    auto ep = makeV1ExecutionPayloadJson();
+    ep["gasUsed"] = "0x5208";
+    ep["transactions"].append(encodedTxHex);
+    Json::Value w;
+    w["index"] = "0x1";
+    w["validatorIndex"] = "0x2";
+    w["address"] = "0x7777777777777777777777777777777777777777";
+    w["amount"] = largeQuantity;
+    ep["withdrawals"].append(w);
+    ep["blobGasUsed"] = largeQuantity;
+    ep["excessBlobGas"] = largeQuantity;
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV2, params, response);
+
+    BOOST_CHECK(response["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
+
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    auto& capturedReq = *mockService.m_state->capturedNewPayloadRequest;
+    BOOST_CHECK_EQUAL(capturedReq.executionPayload.transactions.size(), 1);
+    BOOST_REQUIRE(capturedReq.executionPayload.withdrawals.has_value());
+    BOOST_CHECK_EQUAL(
+        capturedReq.executionPayload.withdrawals->front().amount, fromBigQuantity(largeQuantity));
+    BOOST_REQUIRE(capturedReq.executionPayload.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*capturedReq.executionPayload.blobGasUsed, fromBigQuantity(largeQuantity));
+    BOOST_REQUIRE(capturedReq.executionPayload.excessBlobGas.has_value());
+    BOOST_CHECK_EQUAL(*capturedReq.executionPayload.excessBlobGas, fromBigQuantity(largeQuantity));
+    // V4-only fields stay absent at V2, and the V4 param tail is not required.
+    BOOST_CHECK(!capturedReq.executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK(!capturedReq.executionRequests.has_value());
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 2);
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadV3)
+{
+    auto ep = makeV1ExecutionPayloadJson();
+    ep["withdrawals"] = Json::Value(Json::arrayValue);
+    ep["blobGasUsed"] = "0x0";
+    ep["excessBlobGas"] = "0x0";
+
+    Json::Value params(Json::arrayValue);
+    params.append(ep);
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes (empty)
+    params.append(c_beaconRootHex);                // parentBeaconBlockRoot
+
+    Json::Value response;
+    CALL_ENGINE(newPayloadV3, params, response);
+
+    BOOST_CHECK(response["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    BOOST_REQUIRE(
+        mockService.m_state->capturedNewPayloadRequest->parentBeaconBlockRoot.has_value());
+    BOOST_CHECK_EQUAL(
+        mockService.m_state->capturedNewPayloadRequest->parentBeaconBlockRoot->hexPrefixed(),
+        c_beaconRootHex);
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 3);
+}
 
 BOOST_AUTO_TEST_CASE(newPayloadV4)
 {

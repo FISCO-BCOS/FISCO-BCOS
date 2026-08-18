@@ -46,14 +46,19 @@ bcos::h256 bcos::engine::detail::syntheticHash(std::string_view seed)
 
 std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 {
-    // Karst-only Engine surface: op-node's version selection (rollup/types.go) drives a
-    // Karst chain with exactly forkchoiceUpdatedV3 + getPayloadV5 + newPayloadV4, so only
-    // those are advertised. Pre-Karst method versions stay routable but answer -38005
-    // Unsupported fork (matching op-geth, where a versioned call outside its fork window
-    // returns engine.UnsupportedFork — e.g. "fcuV1 called post-shanghai" — rather than
-    // method-not-found).
-    return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV3", "engine_getPayloadV5",
-        "engine_newPayloadV4"};
+    // Everything this node implements, not a fork-narrowed subset. op-geth advertises its
+    // full `caps` list regardless of the active fork and lets the CL pick; op-node picks
+    // its method versions from the rollup config (forkchoiceUpdatedV3 / getPayloadV5 /
+    // newPayloadV4 on Karst) without needing the EL to prune the list for it. Narrowing
+    // here would also break the pre-Karst callers this node still serves — the v1 Engine
+    // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
+    //
+    // getPayloadV4 and forkchoiceUpdatedV4 are absent because they are not implemented
+    // (the endpoints answer -38005); getPayloadV5 and newPayloadV4 were added by B4.
+    return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
+        "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
+        "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV5", "engine_newPayloadV1",
+        "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
@@ -90,11 +95,12 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
         // Exactly V3 builds, matching op-geth's GetPayloadV5, which passes
         // []engine.PayloadVersion{engine.PayloadV3} to its getPayload helper and answers
         // engine.UnsupportedFork for anything else (eth/catalyst/api.go:498-511, 531-533).
-        // The invariant holds on this stack too: every wire-visible build goes through
-        // forkchoiceUpdatedV3 (the only FCU version the Karst surface serves), and the
+        // A Karst CL always pairs getPayloadV5 with a forkchoiceUpdatedV3 build, and the
         // built-in single-node CL uses the same V3/V5/V4 triple. Accepting V1/V2 builds
         // here would serialize them in the V5 response shape, fabricating a zero
-        // withdrawalsRoot and omitting the required blobGasUsed / excessBlobGas.
+        // withdrawalsRoot and omitting the required blobGasUsed / excessBlobGas. A V1/V2
+        // CL is unaffected: it fetches its builds through getPayloadV1/V2, which still
+        // accept them.
         return payloadVersion == 3;
     }
     return false;

@@ -365,9 +365,10 @@ private:
 
     /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
     /// version Karst payload building runs on), newPayload at V4 (Isthmus payload with
-    /// executionRequests), getPayload at V5 (Osaka response shape). The RPC endpoint
-    /// additionally rejects every pre-Karst version with -38005; the wider windows here
-    /// keep in-process callers and existing V1-V3 service-level tests working.
+    /// executionRequests), getPayload at V5 (Osaka response shape). Every version from V1
+    /// up is served: adapting to Karst does not make the older versions incompatible, and
+    /// the V1-V3 callers (the unsafe_allow_v1_executor harness, the integration suites)
+    /// keep working.
     static bool isForkchoiceVersionSupported(std::uint32_t version)
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&

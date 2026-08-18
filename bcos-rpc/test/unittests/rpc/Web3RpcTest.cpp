@@ -624,12 +624,19 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_TEST(getPayloadResponse["result"]["executionRequests"].isArray());
     BOOST_TEST(getPayloadResponse["result"]["executionRequests"].size() == 0U);
 
-    // Pre-Karst versions answer -38005 over the same full RPC path.
+    // Adapting to Karst does not retire the older method versions: getPayloadV2 still
+    // reaches the engine service over the same full RPC path, and answers in the V2 shape
+    // (executionPayload + blockValue, no blobsBundle / executionRequests).
     const auto oldVersionRequest =
         R"({"jsonrpc":"2.0","id":10,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
     auto oldVersionResponse = engineRequest(oldVersionRequest);
-    BOOST_TEST(oldVersionResponse.isMember("error"));
-    BOOST_TEST(oldVersionResponse["error"]["code"].asInt() == EngineError::UnsupportedFork);
+    validRespCheck(oldVersionResponse);
+    BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
+    BOOST_TEST(oldVersionResponse["result"].isMember("executionPayload"));
+    BOOST_TEST(oldVersionResponse["result"].isMember("blockValue"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("blobsBundle"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("executionRequests"));
 }
 
 BOOST_AUTO_TEST_CASE(logMatcherTest)
