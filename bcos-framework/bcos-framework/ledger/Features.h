@@ -7,6 +7,11 @@
 #include <bcos-utilities/Exceptions.h>
 #include <array>
 #include <bitset>
+// Raise this before adding a Flag value > 200. The static_assert below checks
+// that the max reflected value stays ≤ 127 (bitset encoding constraint); with
+// the default range [-128,128] a flag > 128 is silently excluded from reflection
+// BEFORE the assert runs, making the guard a tautology (morebtcg #5434).
+#define MAGIC_ENUM_RANGE_MAX 200
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <ostream>
@@ -46,8 +51,8 @@ public:
     // so each value is PERMANENT: never change or reuse a value, never delete a
     // flag's number. New flags take the next unused number — the declaration
     // position is free (you may group them anywhere), only the value matters.
-    // magic_enum reflects values in its default range [-128,128]; the
-    // static_assert below keeps the count within it.
+    // magic_enum reflects values in [MAGIC_ENUM_RANGE_MIN, MAGIC_ENUM_RANGE_MAX]
+    // (raised to 200 above); the static_assert below keeps the max value ≤ 127.
     enum class Flag
     {
         bugfix_revert = 0,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
@@ -131,17 +136,22 @@ public:
                                      // feature_l2_ethereum_compat.
     };
 
-    // feature_flags bit = enum value; magic_enum's default reflection range is [-128,128].
-    // magic_enum reflects values SORTED BY VALUE (not by declaration order), so
-    // enum_value(count-1) is the maximum value: check it directly instead of the count —
-    // a count-only check misses a numbering gap below 128. The values must also stay
-    // CONTIGUOUS from zero: m_flags is indexed by position in that value-sorted
-    // reflection order, and toFlagsNumber packs bit = enum value — a gap silently
-    // desyncs the two encodings. Raise MAGIC_ENUM_RANGE_MAX before exceeding the range.
+    // feature_flags bit = enum value. MAGIC_ENUM_RANGE_MAX is raised to 200
+    // (above the file header) so that flags up to 200 are reflected — a flag
+    // beyond the range would be silently excluded from enum_count/enum_value
+    // BEFORE this assert runs, making the guard a tautology. magic_enum
+    // reflects values SORTED BY VALUE (not by declaration order), so
+    // enum_value(count-1) is the maximum reflected value: check it directly
+    // instead of the count — a count-only check misses a numbering gap below
+    // the range ceiling. The values must also stay CONTIGUOUS from zero:
+    // m_flags is indexed by position in that value-sorted reflection order,
+    // and toFlagsNumber packs bit = enum value — a gap silently desyncs the
+    // two encodings.
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
-        "max Flag value exceeds magic_enum's default reflection range ([-128,128]); flags "
-        "beyond it would be silently dropped from get/set/string2Flag/feature_flags");
+        "max Flag value exceeds 127; bitset encoding (bit = enum value) requires "
+        "values 0..127. Raise MAGIC_ENUM_RANGE_MAX if the ceiling is fine but the "
+        "value is beyond the current reflection range");
     static_assert(static_cast<std::size_t>(magic_enum::enum_integer(magic_enum::enum_value<Flag>(
                       magic_enum::enum_count<Flag>() - 1))) == magic_enum::enum_count<Flag>() - 1,
         "Flag values must stay contiguous from zero: bit i of feature_flags means enum "
