@@ -138,7 +138,22 @@ public:
         callback({}, {});
     }
 
-    void reset(std::function<void(Error::Ptr)> callback) override { callback(nullptr); }
+    void reset(std::function<void(Error::Ptr)> callback) override
+    {
+        // Drop an uncommitted pending block (Tier-2: an abandoned self-built payload) so the
+        // next executeBlock is not refused by the continuity guard. The pushed execute view
+        // stays on the MLS stack (no pop API); abandoning is a leak bounded by the engine's
+        // payload-cache eviction cadence — documented Phase A caveat.
+        std::lock_guard<std::mutex> lock(m_pendingMutex);
+        if (m_pending)
+        {
+            OP_SCHEDULER_LOG(INFO) << "reset: dropping uncommitted pending block "
+                                   << m_pending->executedHeader->number();
+            m_pending.reset();
+            m_lastExecutedBlockNumber = -1;
+        }
+        callback(nullptr);
+    }
 
     void preExecuteBlock(
         bcos::protocol::Block::Ptr, bool, std::function<void(Error::Ptr)> callback) override
@@ -365,19 +380,32 @@ private:
             auto executedHeader = co_await finishExecute(
                 view, outcome, *blockHeader, *block, transactions, *ledgerConfig, sysBlock);
 
-            // verify: unconditional six-way comparison; a mismatch throws OpConsensusError →
-            // OpConsensusRejected.
+            // Six-way commitment comparison (a mismatch throws OpConsensusError →
+            // OpConsensusRejected), gated on `verify`: an external payload's announced
+            // commitments must match execution. A SELF-BUILT payload (Tier-2 attribute-driven
+            // building) executes with verify=false — its announced roots are provisional
+            // zeros; the engine fills the real commitments from `executedHeader` afterwards,
+            // and the payload is only published after the round-trip is self-consistent.
             namespace engine = bcos::evm::engine;
-            if (auto mismatch = engine::mismatchedFieldOf(
-                    headerCommitments(*executedHeader), headerCommitments(*blockHeader)))
+            if (verify)
             {
-                throw engine::OpConsensusError(
-                    "OpScheduler: six-way commitment mismatch on field " + *mismatch);
+                if (auto mismatch = engine::mismatchedFieldOf(
+                        headerCommitments(*executedHeader), headerCommitments(*blockHeader)))
+                {
+                    throw engine::OpConsensusError(
+                        "OpScheduler: six-way commitment mismatch on field " + *mismatch);
+                }
             }
 
             // Push the execute view onto the MLS layer stack (mergeBackStorage in the commit
             // phase requires a non-empty stack — the pushed view IS the block's state delta).
-            m_multiLayerStorage->pushView(std::move(view));
+            // Probe executions (verify=false, the Tier-2 build's first pass) skip the push:
+            // their view is discarded, so no layer residue accumulates per built block; the
+            // canonical second pass (verify=true) pushes the view the commit merges.
+            if (verify)
+            {
+                m_multiLayerStorage->pushView(std::move(view));
+            }
 
             // stash for the commit phase (the view already rides the layer stack).
             {

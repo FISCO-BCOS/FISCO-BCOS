@@ -616,7 +616,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_engineServiceInitializer = EngineServiceInitializer::build(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             transactionExecutor, m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
-            bcos::engine::c_defaultBlockTxCountLimit, opDelegate);
+            bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
+            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4));
         // Compile-time proof that this production composition root activates the OP engine branch.
         // ⚠️ 必须用裸类型：decltype(*opScheduler) 是 OpSchedulerSeam<...>&（左值引用），若作
         // SchedulerType 会使 c_opMode 的 requires 表达式对引用类型求值为 false（&T&::...病式），
@@ -872,12 +873,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 InvalidConfig() << errinfo_comment(
                     "enable_single_node_consensus requires the EngineService to be built"));
         }
+        // Tier-2: the OP engine branch is Isthmus+/V4-only, so the OP fixture's driver drives
+        // the engine at V4; the generic (v1-executor) composition keeps V1.
+        auto const driverEngineApiVersion =
+            opStackMode ? static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4) :
+                          static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1);
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             *m_engineServiceInitializer->engineService(), m_ledger,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp());
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(), driverEngineApiVersion);
     }
 
 #ifdef TOOLS

@@ -38,9 +38,8 @@ class CallbackPromise
 public:
     void setValue(T value)
     {
-        std::call_once(m_once, [this, v = std::move(value)]() mutable {
-            m_promise.set_value(std::move(v));
-        });
+        std::call_once(
+            m_once, [this, v = std::move(value)]() mutable { m_promise.set_value(std::move(v)); });
     }
 
     T wait(std::atomic_bool const& _running,
@@ -75,8 +74,9 @@ constexpr std::uint32_t c_engineApiVersion =
 SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::uint64_t _blockIntervalMs,
     bool _produceEmptyBlocks, bcos::crypto::HashType _prevRandao, std::string _feeRecipient,
-    std::uint64_t _fixedTimestamp)
+    std::uint64_t _fixedTimestamp, std::uint32_t _engineApiVersion)
   : m_engineService(_engineService),
+    m_engineApiVersion(_engineApiVersion),
     m_ledger(std::move(_ledger)),
     m_blockIntervalMs(_blockIntervalMs > 0 ? _blockIntervalMs : 1000),
     m_produceEmptyBlocks(_produceEmptyBlocks),
@@ -156,10 +156,9 @@ void SingleNodeConsensus::resolveInitialHead()
 {
     auto headPromise =
         std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::BlockNumber>>>();
-    m_ledger->asyncGetBlockNumber(
-        [headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-            headPromise->setValue(std::make_tuple(std::move(_error), _number));
-        });
+    m_ledger->asyncGetBlockNumber([headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
+        headPromise->setValue(std::make_tuple(std::move(_error), _number));
+    });
     auto [headError, headNumber] = headPromise->wait(m_running);
     if (headError || headNumber < 0)
     {
@@ -196,15 +195,18 @@ bool SingleNodeConsensus::produceBlock()
     // multiply by 1000, which would make the block timestamp ~1.786e15 -> year 58577 in the
     // EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
-    std::uint64_t const timestamp = m_fixedTimestamp > 0 ?
-                                        m_fixedTimestamp * 1000 +
-                                            static_cast<std::uint64_t>(m_headNumber + 1) :
-                                        std::max(nowMs, m_lastTimestamp + 1);
+    std::uint64_t const timestamp =
+        m_fixedTimestamp > 0 ?
+            m_fixedTimestamp * 1000 + static_cast<std::uint64_t>(m_headNumber + 1) :
+            std::max(nowMs, m_lastTimestamp + 1);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
     payloadAttributes.suggestedFeeRecipient = m_feeRecipient;
     payloadAttributes.timestamp = timestamp;
+    // Tier-2 OP build: the engine fills the payload/header beacon root from this field; the
+    // newPayload round-trip below must carry the same value (zero when unset).
+    payloadAttributes.parentBeaconBlockRoot = bcos::crypto::HashType{};
 
     // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes
     // stale transactions, seals the in-process mempool (with the nonce-vs-state check) and
@@ -216,30 +218,35 @@ bool SingleNodeConsensus::produceBlock()
         .safeBlockHash = m_headHash,
         .finalizedBlockHash = m_headHash,
     };
-    auto fcResult = task::syncWait(m_engineService.updateForkchoice(
-        forkchoiceState, &payloadAttributes, c_engineApiVersion));
+    auto fcResult = task::syncWait(
+        m_engineService.updateForkchoice(forkchoiceState, &payloadAttributes, m_engineApiVersion));
     if (fcResult.payloadStatus.status != bcos::engine::PayloadValidationStatus::Valid ||
         !fcResult.payloadId)
     {
-        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("updateForkchoice failed to build a payload")
-                                    << LOG_KV("status",
-                                        static_cast<int>(fcResult.payloadStatus.status))
-                                    << LOG_KV("error",
-                                        fcResult.payloadStatus.validationError.value_or(
-                                            "no payloadId returned"));
+        SINGLE_CONSENSUS_LOG(ERROR)
+            << LOG_DESC("updateForkchoice failed to build a payload")
+            << LOG_KV("status", static_cast<int>(fcResult.payloadStatus.status))
+            << LOG_KV("error",
+                   fcResult.payloadStatus.validationError.value_or("no payloadId returned"));
         return false;
     }
 
     // getPayload: fetch the built block proposal (sealed transactions + header).
     auto payload =
-        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, c_engineApiVersion));
+        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, m_engineApiVersion));
     if (!payload)
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("getPayload returned null");
         return false;
     }
     auto& executionPayload = payload->executionPayload;
-    bool const sealedTxBlock = !executionPayload.transactions.empty();
+    // Tier-2: every OP payload carries the synthesized L1-attributes deposit (0x7e) as tx[0],
+    // so "transactions non-empty" no longer means user activity. Pace the loop only when no
+    // NON-deposit transaction was sealed.
+    bool const sealedTxBlock = std::any_of(executionPayload.transactions.begin(),
+        executionPayload.transactions.end(), [](bcos::engine::EngineTransaction const& tx) {
+            return tx.raw.empty() || tx.raw.front() != 0x7e;
+        });
 
     // produceEmptyBlocks=false: only produce a block that carries at least one transaction
     // (used by EEST fixture runs so the produced block environment matches the fixture).
@@ -255,15 +262,14 @@ bool SingleNodeConsensus::produceBlock()
     // and the eth_* RPC reads.
     bcos::engine::NewPayloadRequest request;
     request.executionPayload = std::move(executionPayload);
-    auto newPayloadStatus =
-        task::syncWait(m_engineService.newPayload(request, c_engineApiVersion));
+    request.parentBeaconBlockRoot = payloadAttributes.parentBeaconBlockRoot;
+    auto newPayloadStatus = task::syncWait(m_engineService.newPayload(request, m_engineApiVersion));
     if (newPayloadStatus.status != bcos::engine::PayloadValidationStatus::Valid)
     {
-        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("newPayload failed")
-                                    << LOG_KV("status",
-                                        static_cast<int>(newPayloadStatus.status))
-                                    << LOG_KV("error",
-                                        newPayloadStatus.validationError.value_or(""));
+        SINGLE_CONSENSUS_LOG(ERROR)
+            << LOG_DESC("newPayload failed")
+            << LOG_KV("status", static_cast<int>(newPayloadStatus.status))
+            << LOG_KV("error", newPayloadStatus.validationError.value_or(""));
         return false;
     }
 
@@ -279,6 +285,6 @@ bool SingleNodeConsensus::produceBlock()
                                << LOG_KV("txs", request.executionPayload.transactions.size())
                                << LOG_KV("gasUsed", request.executionPayload.gasUsed.str())
                                << LOG_KV("stateRoot",
-                                   request.executionPayload.stateRoot.hexPrefixed());
+                                      request.executionPayload.stateRoot.hexPrefixed());
     return sealedTxBlock;
 }

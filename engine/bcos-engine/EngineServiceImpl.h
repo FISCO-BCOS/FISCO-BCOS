@@ -384,20 +384,16 @@ public:
         }
         if constexpr (c_opMode)
         {
-            // An OP validator's L1-derivation path *does* send forkchoiceUpdated with
-            // OP-extended attributes (noTxPool=true + derived transactions) whenever consolidation
-            // fails or there is no unsafe block -- "the validator does not send attributes" is not
-            // true. Attribute-driven building is not supported this cycle (the same road as
-            // OP-izing getPayload), so the answer is -38003.
-            //
-            // Placement is the whole point: everything above -- the storage lookups, the
-            // monotonicity checks, and the tracked-head/safe/finalized update under `x_state` --
-            // has already run and is *kept*. The forkchoice update is not rolled back; only the
-            // build is refused.
-            BOOST_THROW_EXCEPTION(
-                UnsupportedOpPayloadAttributes{} << bcos::errinfo_comment{
-                    "Payload attributes are not supported in OP mode (block building is not "
-                    "OP-ized; JSON-RPC -38003)"});
+            // Tier-2 (08-19): attribute-driven OP building. Everything above -- the storage
+            // lookups, the monotonicity checks, and the tracked-head/safe/finalized update under
+            // `x_state` -- has already run and is *kept*. The build synthesizes the mandatory
+            // L1-attributes deposit, seals the mempool (raw EIP-2718 forms only), pre-executes
+            // via the delegate with verify=false (announced commitments are provisional), fills
+            // the real commitments from the executed header and caches the payload. The driver's
+            // newPayload(self payload) hits the self-built fast path (runOpNewPayloadSteps) and
+            // commits the delegate's pending block directly.
+            co_return co_await buildOpPayload(
+                forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1);
         }
         else
         {
@@ -566,6 +562,234 @@ private:
                 std::to_string(error.errorCode()) + "): " + error.errorMessage()});
     }
 
+    /// Tier-2 attribute-driven OP payload build (08-19 design:
+    /// docs/superpowers/specs/2026-08-19-tier2-op-payload-building-design.md). Pre-executes via
+    /// the delegate with verify=false (announced commitments are provisional placeholders), then
+    /// fills the payload with the executed header's real commitments and the OP blockHash
+    /// (keccak of the 21-field RLP header). The delegate's pending block stays uncommitted; the
+    /// driver's newPayload(self payload) takes runOpNewPayloadSteps' self-built fast path and
+    /// commits it. An abandoned build is dropped by the next build's reset().
+    bcos::task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes& payloadAttributes, std::uint32_t version,
+        bcos::protocol::BlockNumber nextBlockNumber)
+    {
+        // Mempool hygiene + seal over a throwaway view (the delegate owns the real execution
+        // view; this one only reads nonces to pick the gapless prefix, like the generic path).
+        auto sealView = m_globalStateStorage.get().fork();
+        std::vector<protocol::Transaction::Ptr> sealedTxs;
+        if (!payloadAttributes.noTxPool.value_or(false))
+        {
+            sealView.newMutable();
+            m_memPool.get().remove(sealView);
+            m_memPool.get().seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));
+        }
+
+        // Raw envelope list. tx[0] is the synthesized L1-attributes deposit -- OP blocks
+        // hard-require a leading deposit (OpBlockExecute rejects a deposit-less block) and a
+        // single-node chain has no L1 derivation to produce one. Phase-A field values are zeros;
+        // execution against the Ecotone-era genesis L1Block reverts and is tolerated (receipts
+        // record the revert -- the documented predeploy-matrix divergence). Then the forced
+        // transactions (attrs.transactions, OP's sanctioned deposit path), then the sealed
+        // mempool transactions in their reassembled EIP-2718 wire forms.
+        std::vector<bytes> envelopes;
+        // The L1-attributes deposit synthesis lives on the seam (OpSchedulerSeam) so the
+        // engine stays decoupled from bcos-evm/opstack-executor (EngineServiceImpl.cpp:93).
+        envelopes.push_back(
+            m_scheduler.get().synthesizeL1AttributesEnvelope(m_scheduler.get().isJovianActive()));
+        if (payloadAttributes.transactions.has_value())
+        {
+            for (auto const& forcedHex : *payloadAttributes.transactions)
+            {
+                envelopes.push_back(fromHex(forcedHex));
+            }
+        }
+        for (auto& sealedTx : sealedTxs)
+        {
+            if (sealedTx->type() !=
+                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+            {
+                BCOS_LOG(WARNING)
+                    << LOG_BADGE("EngineService")
+                    << LOG_DESC(
+                           "buildOpPayload: excluding transaction without an EIP-2718 "
+                           "wire form");
+                continue;
+            }
+            envelopes.push_back(bcostars::protocol::reassembleWeb3RawTransaction(
+                sealedTx->extraTransactionBytes(), sealedTx->signatureData()));
+        }
+
+        // Ledger config (gasLimit) off a read-only view.
+        ledger::LedgerConfig ledgerConfig;
+        {
+            auto view = m_globalStateStorage.get().fork();
+            co_await ledger::getLedgerConfig(
+                view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+        }
+        // Parent baseFee carried forward (EIP-1559 field of the payload/header; no L1-driven
+        // baseFee recalculation on this chain -- Phase A keeps the parent's value).
+        u256 baseFee{1'000'000'000};
+        {
+            auto view = m_globalStateStorage.get().fork();
+            auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
+            if (auto parentHeaderEntry = co_await storage2::readOne(view,
+                    executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOCK_HEADER, parentNumberStr});
+                parentHeaderEntry.has_value())
+            {
+                auto stored = parentHeaderEntry->get();
+                bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
+                auto parentHeader =
+                    m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
+                if (auto parentBaseFee = parentHeader->baseFee(); parentBaseFee.has_value())
+                {
+                    baseFee = *parentBaseFee;
+                }
+            }
+        }
+
+        std::vector<EngineTransaction> engineTransactions;
+        engineTransactions.reserve(envelopes.size());
+        for (auto& env : envelopes)
+        {
+            engineTransactions.push_back(EngineTransaction{.raw = env, .decoded = nullptr});
+        }
+
+        auto const parentBeaconBlockRoot =
+            payloadAttributes.parentBeaconBlockRoot.value_or(crypto::HashType{});
+        ExecutionPayload payload{
+            .logsBloom = Bloom{},
+            .parentHash = forkchoiceState.headBlockHash,
+            .stateRoot = h256{},
+            .receiptsRoot = h256{},
+            .prevRandao = payloadAttributes.prevRandao,
+            .gasLimit = u256(std::get<0>(ledgerConfig.gasLimit())),
+            .gasUsed = 0,
+            .baseFeePerGas = baseFee,
+            .blockHash = h256{},
+            .transactions = std::move(engineTransactions),
+            // Holocene+ header shape (op-geth eip1559_optimism.go): Isthmus = 9 bytes
+            // (0x00 version || u32 denominator || u32 elasticity, both non-zero); Jovian =
+            // 17 bytes (0x01 || the same 8 bytes || u64 minBaseFee). Neutral 1/1 parameters
+            // (denominator = elasticity = 1: baseFee unchanged per Holocene recalc).
+            .extraData =
+                [jovian = m_scheduler.get().isJovianActive()]() {
+                    bcos::bytes extra{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01};
+                    if (jovian)
+                    {
+                        extra[0] = 0x01;
+                        extra.resize(17, 0x00);  // minBaseFee = 0 (arbitrary, not validated)
+                    }
+                    return extra;
+                }(),
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .timestamp = payloadAttributes.timestamp,
+            .blockNumber = nextBlockNumber,
+            .withdrawals = std::vector<WithdrawalV1>{},
+            .blobGasUsed = u256(0),
+            .excessBlobGas = u256(0),
+            .blockAccessList = std::nullopt,
+            .slotNumber = std::nullopt,
+            .rawTransactions = std::move(envelopes),
+            .withdrawalsRoot = h256{},  // filled from the executed header below
+        };
+
+        // Provisional header (placeholder commitments) -> block -> delegate pre-execution.
+        const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
+        auto provisionalHeader = detail::rebuildOpEthHeader(
+            m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
+        auto block = buildOpBlock(payload, provisionalHeader);
+
+        // Drop an uncommitted abandoned build first (the delegate's continuity guard would
+        // refuse the re-execute), then pre-execute. verify=false: the six-way commitment
+        // comparison must not run against the placeholder announcements.
+        m_delegate->reset([](bcos::Error::Ptr) {});
+        bcos::Error::Ptr executeError;
+        bcos::protocol::BlockHeader::Ptr executedHeader;
+        m_delegate->executeBlock(block, /*verify=*/false,
+            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                executeError = std::move(error);
+                executedHeader = std::move(header);
+            });
+        if (executeError || !executedHeader)
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    std::string("OP payload build execution failed: ") +
+                    (executeError ? executeError->errorMessage() : "no executed header")});
+        }
+
+        // Fill the real commitments and derive the final OP blockHash over the now-complete
+        // 21-field header.
+        payload.stateRoot = executedHeader->stateRoot();
+        payload.receiptsRoot = executedHeader->receiptsRoot();
+        payload.gasUsed = u256(executedHeader->gasUsed());
+        {
+            auto executedBloom = executedHeader->logsBloom();
+            std::copy(executedBloom.begin(), executedBloom.end(), payload.logsBloom.begin());
+        }
+        payload.withdrawalsRoot = executedHeader->withdrawalsRoot();
+        auto finalHeader = detail::rebuildOpEthHeader(
+            m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
+        payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
+
+        // Canonical second pass: execute the FINAL block (real announced commitments) with
+        // verify=true. The six-way comparison now proves the payload self-consistent, the
+        // pushed view is the one the commit merges, and the delegate's registered hash
+        // (announcedBlockHash = computeHash of this header) equals payload.blockHash by
+        // construction — the self-built fast path's commit then registers the hash the driver
+        // round-trips. The reset drops the probe pass's pending slot; the probe pushed no view.
+        auto finalBlock = buildOpBlock(payload, finalHeader);
+        m_delegate->reset([](bcos::Error::Ptr) {});
+        m_delegate->executeBlock(finalBlock, /*verify=*/true,
+            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                executeError = std::move(error);
+                executedHeader = std::move(header);
+            });
+        if (executeError || !executedHeader)
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    std::string("OP payload build canonical pass failed: ") +
+                    (executeError ? executeError->errorMessage() : "no executed header")});
+        }
+
+        auto payloadId = nextPayloadID();
+        PayloadEntry entry{
+            .version = version,
+            .executionPayload = std::move(payload),
+            .blockValue = 0,
+            .blobsBundle = std::nullopt,
+            .shouldOverrideBuilder = false,
+            .parentBeaconBlockRoot = parentBeaconBlockRoot,
+            .view = nullptr,
+            .header = std::move(executedHeader),
+            .receipts = {},
+        };
+        if (version == static_cast<std::uint32_t>(ApiVersion::V3))
+        {
+            entry.blobsBundle = BlobsBundleV1{};
+        }
+        {
+            std::unique_lock lock(x_state);
+            m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
+            m_payloadCache[payloadId] = std::move(entry);
+            m_payloadOrder.push_back(payloadId);
+            while (m_payloadOrder.size() > c_maxPayloadEntries)
+            {
+                auto const evictedId = m_payloadOrder.front();
+                m_payloadOrder.pop_front();
+                m_payloadCache.erase(evictedId);
+                std::erase_if(
+                    m_blockHashToPayloadId, [&](auto const& kv) { return kv.second == evictedId; });
+            }
+        }
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = makeStatus(
+                PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
+            .payloadId = payloadId,
+        };
+    }
+
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const
     {
         if (!isVersionSupported(version))
@@ -573,21 +797,11 @@ private:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
-        if constexpr (c_opMode)
         {
-            // `getPayloadV4`'s stated behaviour is "return an explicit error in OP mode (block
-            // building is not OP-ized)". The refusal is unconditional in OP mode rather than
-            // V4-only, because the *cause* is version-independent: OP mode never builds a payload
-            // at all (the attributes path above refuses with -38003), so the cache is always
-            // empty and every version would otherwise answer the misleading `UnknownPayload`.
-            // Full V4 response shaping (executionRequests etc.) ships together with
-            // attributes-driven building.
-            BOOST_THROW_EXCEPTION(
-                OpPayloadBuildingUnsupported{} << bcos::errinfo_comment{
-                    "getPayload is not supported in OP mode (block building is not OP-ized)"});
-        }
-        else
-        {
+            // Tier-2 (08-19): OP mode builds payloads via the attribute path above and caches
+            // them exactly like the generic path, so getPayload serves the shared cache. The
+            // historical OP-mode refusal existed only because the cache could never be
+            // populated; an unknown payload still answers UnknownPayload below.
             std::shared_lock lock(x_state);
             auto it = m_payloadCache.find(payloadId);
             if (it == m_payloadCache.end())
@@ -926,6 +1140,43 @@ private:
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("blockHash does not match the reconstructed block header"));
+        }
+
+        // ---- Tier-2 self-built fast path (08-19) ----
+        //
+        // A payload this engine built via attribute-driven OP building round-trips from
+        // getPayload; the delegate's pending block (pre-executed with verify=false at build
+        // time) is committed directly -- mirroring the generic path's locally-built shortcut.
+        // The static blockHash check above proved the payload matches its 21-field header, and
+        // the pending came from the same execution pipeline, so re-execution would reproduce it.
+        {
+            auto it = m_blockHashToPayloadId.find(payload.blockHash);
+            if (it != m_blockHashToPayloadId.end())
+            {
+                auto payloadId = it->second;
+                bcos::protocol::BlockHeader::Ptr builtHeader;
+                {
+                    std::shared_lock lock(x_state);
+                    if (auto entry = m_payloadCache.find(payloadId); entry != m_payloadCache.end())
+                    {
+                        builtHeader = entry->second.header;
+                    }
+                }
+                if (builtHeader)
+                {
+                    bcos::Error::Ptr commitError;
+                    m_delegate->commitBlock(
+                        builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+                            commitError = std::move(error);
+                        });
+                    if (commitError)
+                    {
+                        co_return mapDelegateError(*commitError, std::nullopt);
+                    }
+                    co_return makeStatus(
+                        PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+                }
+            }
         }
 
         // From here on the storage/execution segment runs under `x_state`, which is safety

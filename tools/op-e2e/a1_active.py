@@ -118,16 +118,16 @@ def main():
     check(f"FCU {V} attrs-less VALID, no payloadId",
           fc["payloadStatus"]["status"] == "VALID" and fc.get("payloadId") is None, str(fc))
 
-    # 4. FCU with attrs -> -38003 (OP pull contract: attribute-driven building refused;
-    # the tracking update above has already run and is kept)
+    # 4. FCU with attrs -> Tier-2 attribute-driven building: VALID + payloadId (a fresh node
+    # answers from the tracked head; the built payload is abandoned — the engine drops the
+    # delegate's pending on the next build).
     now = int(time.time())
     attrs = {"timestamp": hex(now), "prevRandao": "0x" + "00" * 32,
              "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011"}
-    try:
-        fc2 = eng.call(f"engine_forkchoiceUpdatedV{ver}", [fcs, attrs])
-        check("FCU attrs refused in OP mode (-38003)", "-38003" in str(fc2), str(fc2)[:120])
-    except AssertionError as e:
-        check("FCU attrs refused in OP mode (-38003)", "-38003" in str(e), str(e)[:120])
+    fc2 = eng.call(f"engine_forkchoiceUpdatedV{ver}", [fcs, attrs])
+    check("FCU attrs builds (VALID + payloadId, Tier-2)",
+          fc2["payloadStatus"]["status"] == "VALID" and fc2.get("payloadId") is not None,
+          str(fc2)[:120])
 
     # 5. getPayload -> refused (no OP-ized builder; Tier-2 will implement)
     try:

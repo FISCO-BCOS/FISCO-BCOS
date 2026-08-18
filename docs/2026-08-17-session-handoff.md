@@ -218,3 +218,32 @@ geth 单一 trie 表示、reth plain/hashed 双表均由导入一次填满且读
   重 init 链 → 复查 state-root parity。
 - **decodeDepositEnvelope 预存失败已修**（d5a5cae25）：测试的 envelopeFromItems lambda 漏拼 RLP
   body 载荷——(a)-(f) 截断信封"碰巧"抛对类型、(g) happy path 炸 fatal。补一行 body 拼接后 19/19 绿。
+
+## Tier-2 Phase A 完成（08-19 凌晨，B3 出块恢复）
+
+**核心改动**（B3 以 1 块/秒稳定出块，a1_active 11/11，b3_contracts 12/12，b4_persist 3/3，predeploy 35/38，rpc_matrix 57/1/1）：
+1. `EngineServiceImpl.h`：c_opMode 分支从 -38003 拒绝改为 `buildOpPayload`（两段执行：探针
+   verify=false 取真实承诺 → final 块 verify=true 自洽复执行）；handleGetPayload 解除 OP 拒绝；
+   handleOpNewPayload 增加自建快路径（缓存命中直接 commitBlock）；isGetPayloadVersionCompatible 补 V4。
+2. `OpScheduler.h`：six-way 对照真实门在 verify 上；reset 真实清 pending/连续性游标；pushView 门在
+   verify 上（探针无层残留）。
+3. `OpSchedulerSeam.h`：synthesizeL1AttributesEnvelope（Isthmus 176B / Jovian 178B+selector，Phase A 零值）。
+4. `EngineServiceInitializer.h` + `Initializer.cpp`：maxEngineVersion 线程化（OP=4）；驱动
+   engineApiVersion 参数化（OP=V4，generic=V1）。
+5. `SingleNodeConsensus.cpp`：attrs/request 带 PBBR；sealedTxBlock 排除 deposit（恢复 1s 节奏）。
+6. `state.cpp`：模拟执行（skip_balance_check）同时容忍 nonce 双向（op-geth call 语义）。
+7. `OpDepositEncode.h`/`RlpEncodeTuple.h` 从 tests/support 提升为生产头；三个测试 StubMemPool 补 no-op。
+8. rpc_matrix/a1_active 断言适配推进链（gasLimit 锚 block 0、safe/finalized 竞态容差、FCU-attrs 翻转）。
+
+**验证链**：-38003 消失 → Execute block 跑通 → extraData Holocene 9B 修复 → **块 1 提交** →
+两段执行修复注册哈希（announced=final）→ 持续出块 → 节奏修复（deposit 不算 user tx）。
+
+**Tier-2 Phase B 清单**（新发现，按优先级）：
+1. **OP 块 tx/receipt 检索断**：delegate commit 写交易表但 RPC byHash/by-index 检索全空
+   （chain_driver 4 败 + rpc_matrix roundtrip 已入 known-red）。
+2. **withdrawalsRoot 未传播**：executedHeader 的 withdrawalsRoot 恒零（predeploy 3 败）——
+   finishExecute 或 build 取值链上缺 passer root 填充。
+3. L1-attributes deposit 实值化 + Ecotone-vs-Jovian revert 消解（旧 divergence）。
+4. RPC V4 三端点接线（FCU/getPayload/newPayload V4 现为桩）+ 能力通告恢复 V4——a1_active 已在
+   V3 面通过，op-node（C2）前必须。
+5. abandoned build 的 MLS 层泄漏（reset 不弹 view；probe 已不 push，剩 canonical pass 被放弃的场景）。

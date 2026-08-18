@@ -62,6 +62,14 @@ using ViewType = typename MLS::ViewType;
 
 struct StubMemPool
 {
+    // Tier-2: the OP build path mempool hygiene (remove/seal) — no-op stubs; the tests never
+    // populate the pool, so the built payloads carry only the synthesized L1 deposit.
+    template <class View>
+    void remove(View&)
+    {}
+    template <class View, class OutputIt>
+    void seal(int64_t, View&, OutputIt)
+    {}
 };
 
 struct StubExecutor

@@ -77,9 +77,15 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-// ── Composition-root stand-ins (OP mode bypasses memPool/executor) ──
+// ── Composition-root stand-ins (the OP build path touches memPool hygiene; never populated) ──
 struct StubMemPool
 {
+    template <class View>
+    void remove(View&)
+    {}
+    template <class View, class OutputIt>
+    void seal(int64_t, View&, OutputIt)
+    {}
 };
 struct StubExecutor
 {

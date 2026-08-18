@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Test-support header: canonical RLP tuple encoder (bcos::evm::eth::detail::encodeTuple) used
-// ONLY by test code — currently OpDepositEncode.h (0x7e deposit-envelope reconstruction).
+// Canonical RLP tuple encoder (promoted from test support 08-19: production consumer is
+// OpDepositEncode.h via the engine's Tier-2 OP build) (bcos::evm::eth::detail::encodeTuple) used
+// by OpDepositEncode.h (0x7e deposit-envelope encoding).
 //
 // Byte-for-byte equivalents of the evmone *test-only* RLP encoder (test/utils/rlp.hpp +
 // test/utils/rlp_encode.hpp), rebuilt on the production bcos-codec encoder. `encodeTuple` mirrors

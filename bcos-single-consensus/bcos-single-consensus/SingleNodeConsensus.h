@@ -52,7 +52,10 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0);
+        std::uint64_t _fixedTimestamp = 0,
+        /// Engine API version for the in-process FCU/getPayload/newPayload calls. The OP
+        /// engine branch (executor >= 3) is Isthmus+/V4-only; generic engines keep V1.
+        std::uint32_t _engineApiVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1));
 
     ~SingleNodeConsensus();
 
@@ -74,6 +77,7 @@ private:
     void resolveInitialHead();
 
     bcos::engine::AnyEngineService& m_engineService;
+    std::uint32_t m_engineApiVersion;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 
     std::uint64_t m_blockIntervalMs;

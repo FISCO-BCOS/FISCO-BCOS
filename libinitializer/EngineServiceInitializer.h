@@ -22,7 +22,10 @@ public:
         std::shared_ptr<ExecutorType> transactionExecutor, bcos::txpool::MemPoolImpl& memPool,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
-        bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr)
+        bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
+        /// Tier-2: the OP composition root raises the Engine API ceiling to V4 (Isthmus+
+        /// payloads are V4-only, EngineServiceImpl.h's opIsthmusPayloadVersion gate).
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3))
     {
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl,
@@ -31,7 +34,7 @@ public:
             std::make_shared<ConcreteModel<SchedulerType, ExecutorType, ConcreteEngineService>>(
                 std::move(storageInitializer), std::move(blockFactory), std::move(scheduler),
                 std::move(transactionExecutor), memPool, std::move(ledger), blockTxCountLimit,
-                std::move(delegate));
+                std::move(delegate), maxEngineVersion);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -57,15 +60,15 @@ private:
             std::shared_ptr<SchedulerType> scheduler,
             std::shared_ptr<ExecutorType> transactionExecutor, bcos::txpool::MemPoolImpl& memPool,
             bcos::ledger::LedgerInterface::Ptr ledger, int64_t blockTxCountLimit,
-            bcos::scheduler::SchedulerInterface::Ptr delegate)
+            bcos::scheduler::SchedulerInterface::Ptr delegate, std::uint32_t maxEngineVersion)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_transactionExecutor(std::move(transactionExecutor)),
             m_scheduler(std::move(scheduler)),
             m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
                 m_storageInitializer->storage(), *m_transactionExecutor, *m_scheduler,
-                std::move(blockFactory), std::move(ledger), blockTxCountLimit,
-                static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3), std::move(delegate))
+                std::move(blockFactory), std::move(ledger), blockTxCountLimit, maxEngineVersion,
+                std::move(delegate))
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;

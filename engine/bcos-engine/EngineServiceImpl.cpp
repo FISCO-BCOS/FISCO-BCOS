@@ -157,6 +157,12 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
     {
         return payloadVersion <= 3;
     }
+    if (requestVersion == ApiVersion::V4)
+    {
+        // Tier-2: V4-built payloads (the OP composition's attribute-driven builds) are
+        // served by getPayloadV4 only, mirroring the V3 rule's shape.
+        return payloadVersion <= 4;
+    }
     return false;
 }
 

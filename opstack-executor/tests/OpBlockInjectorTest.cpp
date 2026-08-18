@@ -13,8 +13,8 @@
 // Per-tx BlockInfo gasLimit==header is deliberately NOT asserted here — that belongs to
 // OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit.
 
-#include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope (deposit envelope reconstruction)
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>

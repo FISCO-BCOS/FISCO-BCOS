@@ -16,6 +16,7 @@
 #include <opstack-executor/OpBlockExecute.h>  // computeOpTxRoot / announcedCommitmentsOf
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
 #include <opstack-executor/OpCommon.h>
+#include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope (Tier-2 build)
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
@@ -114,6 +115,32 @@ public:
     {
         throw std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode");
         co_return {};  // unreachable; satisfies the coroutine's declared return type
+    }
+
+    /// Tier-2 attribute-driven build: the mandatory L1-attributes deposit envelope (OP blocks
+    /// hard-require a leading deposit). Phase-A field values are zeros (fixture chain without
+    /// an L1): Isthmus shape = 176 zero bytes; Jovian = selector(0x3db6be2b) + zeros to 178.
+    /// The deposit's execution against the Ecotone-era genesis L1Block reverts and is
+    /// tolerated (documented predeploy-matrix divergence).
+    static bcos::bytes synthesizeL1AttributesEnvelope(bool jovianActive)
+    {
+        namespace op = bcos::evm::opstack;
+        evmc::bytes data(op::IsthmusL1AttributesLen, 0);
+        if (jovianActive)
+        {
+            data.resize(op::JovianL1AttributesLen, 0);
+            std::copy(op::JovianL1AttributesSelector.begin(), op::JovianL1AttributesSelector.end(),
+                data.begin());
+        }
+        op::DepositTx deposit{.source_hash = evmc::bytes32{},
+            .from = op::OP_DEPOSITOR,
+            .to = op::OP_L1_BLOCK,
+            .mint = std::nullopt,
+            .value = intx::uint256{0},
+            .gas_limit = 1'000'000,
+            .is_system_tx = false,
+            .data = std::move(data)};
+        return encodeDepositEnvelope(deposit);
     }
 
 private:

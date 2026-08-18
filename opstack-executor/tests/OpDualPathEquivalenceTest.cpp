@@ -28,7 +28,7 @@
 // (accountTableName(addr) prefix == apps/).
 
 #include "support/GoldenSample.h"
-#include "support/OpDepositEncode.h"  // encodeDepositEnvelope (deposit envelope reconstruction)
+#include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include "support/SeedPreState.h"
 
 #include <bcos-concepts/ByteBuffer.h>
