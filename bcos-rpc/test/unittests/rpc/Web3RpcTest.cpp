@@ -668,12 +668,21 @@ BOOST_AUTO_TEST_CASE(safeFinalizedTagRoutingTest)
             tag + std::string(" returns null when untracked (strict op-geth semantics)"));
     }
 
-    // Engine wired, tracked to a number the ledger cannot serve -> null (proves routing:
-    // a latest-fallback would return the latest block instead)
+    // Engine wired, tracked to a number the ledger cannot serve (FakeLedger tops out at
+    // 20 blocks; latest+1000 is far beyond) -> null (proves routing: a latest-fallback
+    // would return the latest block instead)
     testEngineService.m_state->safeBlockNumber = latestNumeric + 1000;
     auto resp = onRPCRequestWrapper(
         R"({"jsonrpc":"2.0","id":4,"method":"eth_getBlockByNumber","params":["safe",false]})");
     BOOST_CHECK(resp["result"].isNull());
+
+    // Positive routing: tracked to a servable number (== latest) -> that block, non-null.
+    // Catches an inverted has_value() regression (an always-throw passes the phases above).
+    testEngineService.m_state->safeBlockNumber = latestNumeric;
+    resp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":5,"method":"eth_getBlockByNumber","params":["safe",false]})");
+    BOOST_CHECK(!resp["result"].isNull());
+    BOOST_CHECK(resp["result"]["number"].asString() == latestNumber);
 }
 
 BOOST_AUTO_TEST_CASE(logMatcherTest)
