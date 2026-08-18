@@ -7,12 +7,13 @@ Usage: state_verify.py [--db DIR] [--node-rpc URL] [--max-blocks N]
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 import urllib.request
 
-DEFAULT_DB = "/tmp/op-spike/b3/data/group/latest"
-TOOL = "/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/tools/op-e2e/op_state_read"
+DEFAULT_DB = os.environ.get("B3_DB", "/tmp/op-spike/b3/data/group/latest")
+TOOL = os.environ.get("OP_STATE_READ", "/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/tools/op-e2e/op_state_read")
 
 PASSED = []
 FAILED = []

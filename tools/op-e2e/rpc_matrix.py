@@ -11,6 +11,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -207,7 +208,7 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8553)
     ap.add_argument("--engine-port", type=int, default=8554)
-    ap.add_argument("--jwt-secret", default="/tmp/op-spike/b3/jwt.hex")
+    ap.add_argument("--jwt-secret", default=os.environ.get("B3_JWT", "/tmp/op-spike/b3/jwt.hex"))
     ap.add_argument("--only", default=None, help="a1|a2|a3")
     ap.add_argument("--sender", default="0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693")
     args = ap.parse_args()
