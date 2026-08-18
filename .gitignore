@@ -73,6 +73,9 @@ tools/BcosAirBuilder/*
 bcos-evm/test/opstack/t8n/cases/
 opstack-executor/tests/t8n/cases/
 
+# opstack-genesis local working config (copied from chain-config.template.yaml per README; template is the tracked asset)
+tools/opstack-genesis/chain-config.yaml
+
 test/*
 /CMakeSettings.json
 

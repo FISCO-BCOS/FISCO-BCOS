@@ -7,7 +7,7 @@
 - **当前分支**:`worktree-op-alignment`(隔离 worktree:`.claude/worktrees/op-alignment`),HEAD `84b3be0`
 - 相关分支:`opstack-op-e2e-on-scheduler`(基于远程 tip `174d8e4c2`,被停代理自主创建,用户裁定保留;含 EmptyEnvelope 修复 + 2 文档 + 可配置化 + CI job;**genesis 链路断裂待补,见 §3-10**)
 - op-e2e 节点:本地 `/tmp/op-spike/{b3,b3a}`(本会话从零重建,ALL GREEN 149 断言)
-- 未跟踪文件:`tools/opstack-genesis/chain-config.yaml`(build-allocs.py 输入模板,66 行,待用户决定是否提交)
+- ~~未跟踪文件:`tools/opstack-genesis/chain-config.yaml`~~ ✅已处置(08-18,A2):经比对与已入库的 `chain-config.template.yaml` 逐字节相同,系 `setup_op_node.sh:141` 幂等复制的本地运行时产物(README 约定 cp template 后本地编辑)——**不入库**,已加 `.gitignore`(本地文件保留)
 
 ## 2. 已完成 ✅
 
