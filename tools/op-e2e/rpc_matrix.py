@@ -62,7 +62,9 @@ def _eth_genesis_header():
     """[eth_genesis_header] of the node's config.genesis — the authority for what the
     genesis block's header fields must round-trip to (applyEthGenesisHeader writes them)."""
     import configparser
-    cp = configparser.ConfigParser()
+    if not os.path.exists(GENESIS):
+        raise SystemExit(f"genesis artifact not found: {GENESIS} (set B3_GENESIS)")
+    cp = configparser.ConfigParser(interpolation=None)
     cp.read(GENESIS)
     return cp["eth_genesis_header"]
 
@@ -100,6 +102,15 @@ def check(name, cond, detail=""):
     else:
         FAILED.append(name)
         print(f"  FAIL {name} {detail}")
+
+
+def _known_error_check(name, e):
+    """Record a failed call through check(), pinning the error signature: only the
+    documented genesis flat-state error (-32603 "Invalid argument") may record as the
+    tier-1 KNOWN-RED. Any other error code (e.g. -32601 method removed) fails loudly
+    under a distinct name instead of hiding behind the known-red one."""
+    check(name if "-32603" in str(e) else f"{name} (unexpected error code)",
+          False, str(e)[:80])
 
 
 # ---- A.1 engine_* (needs a separate node with enable_single_node_consensus=false for the
@@ -254,24 +265,25 @@ def a2_exec(rpc, sender):
     # Tier-1: at genesis every executed call dies in the executor's flat-state read with
     # -32603 "Invalid argument" (same family as getBalance nonzero / predeploy_matrix step 1).
     # Record the RPC error through check() — KNOWN_TIER1 marks it — instead of letting the
-    # raise kill the whole group lambda (the baseline's single "<lambda>" red).
+    # raise kill the whole group lambda (the baseline's single "<lambda>" red). The -32603
+    # signature is pinned: any other error code fails loudly (_known_error_check).
     try:
         out = rpc.call("eth_call", [tx, "latest"])
         check("eth_call EOA->EOA returns 0x", out == "0x", str(out))
     except AssertionError as e:
-        check("eth_call EOA->EOA returns 0x", False, str(e)[:80])
+        _known_error_check("eth_call EOA->EOA returns 0x", e)
     try:
         gas = rpc.call("eth_estimateGas", [tx])
         check("eth_estimateGas == 21000", int(gas, 16) == 21000, str(gas))
     except AssertionError as e:
-        check("eth_estimateGas == 21000", False, str(e)[:80])
+        _known_error_check("eth_estimateGas == 21000", e)
     # A call to an empty-code address is a no-op returning empty output, not an error or crash.
     try:
         empty_out = rpc.call("eth_call",
             [{"to": "0x000000000000000000000000000000000000c0de", "data": "0x9a2ac6d5"}, "latest"])
         check("eth_call empty-code address returns 0x", empty_out == "0x", str(empty_out))
     except AssertionError as e:
-        check("eth_call empty-code address returns 0x", False, str(e)[:80])
+        _known_error_check("eth_call empty-code address returns 0x", e)
     # The rebuilt genesis seeds the L1Block predeploy (getCode != 0x); its runtime rejects every
     # selector except setL1BlockValues with a clean revert. Assert the predeploy is present and
     # that eth_call on it returns an RPC error (revert), never a crash.
@@ -290,7 +302,7 @@ def a2_exec(rpc, sender):
         h_out = rpc.call("eth_call", [tx, "0x1"])
         check("eth_call historical tag reachable (0x1)", h_out == "0x", str(h_out))
     except AssertionError as e:
-        check("eth_call historical tag reachable (0x1)", False, str(e)[:80])
+        _known_error_check("eth_call historical tag reachable (0x1)", e)
 
 
 def a4_scope(rpc):
@@ -359,9 +371,12 @@ def main():
                     FAILED.append(fn.__name__)
                     print(f"  FAIL {fn.__name__} raised: {e}")
 
-    print(f"\n{PASSED} passed, {len(FAILED)} failed")
+    print(f"\n{len(PASSED)} passed, {len(FAILED)} failed, {len(KNOWN_RED)} known-red (tier-1)")
     if KNOWN_RED:
         print(f"known-red (tier-1): {len(KNOWN_RED)} ({', '.join(KNOWN_RED)})")
+    stale = KNOWN_TIER1.intersection(PASSED)
+    if stale:
+        print(f"WARNING: known-red checks passing (remove from KNOWN_TIER1): {sorted(stale)}")
     if FAILED:
         print("Failed:", FAILED)
         sys.exit(1)
