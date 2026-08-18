@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.25)
+
+find_package(evmone REQUIRED)
+find_package(intx REQUIRED)
+find_package(TBB CONFIG REQUIRED)
+
+add_library(opstack-executor INTERFACE)
+target_include_directories(opstack-executor INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/opstack-executor>)
+target_link_libraries(opstack-executor INTERFACE
+    bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol
+    ledger evmone::evmone intx::intx TBB::tbb rlp-protocol)
+set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # kyonRay review #5429 K5: OP modules deliberately use skipped-field designated initializers
+    # and GCC-13 reference-returning helpers (jAt); downgrade only here, not repository-wide.
+    target_compile_options(opstack-executor PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
+
+if (TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
