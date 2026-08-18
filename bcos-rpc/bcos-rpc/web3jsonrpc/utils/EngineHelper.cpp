@@ -554,4 +554,11 @@ void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
     {
         _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();
     }
+    // V4 (Prague payload shape): executionRequests is a required member of the response. This
+    // chain produces none (no deposit/consolidation requests), so an empty list is the honest
+    // payload — op-geth's own no-request blocks serialize the same shape.
+    if (version == engine::ApiVersion::V4)
+    {
+        _result["executionRequests"] = Json::Value(Json::arrayValue);
+    }
 }

@@ -134,12 +134,16 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 
 std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
 {
-    // Production interop downgrade: do not advertise `engine_newPayloadV4` /
-    // `engine_getPayloadV4` in the OP-mode capability negotiation. Both only have
-    // EngineServiceImpl-layer semantics; the RPC endpoint registration is not implemented, so
-    // advertising V4 would let op-node negotiate to a non-existent endpoint and hit a -38005 stub
-    // on every call. Honestly expose V3; restore the V4 entries here once the endpoints exist.
-    return supportedCapabilities();
+    // Tier-2 (08-19): the V4 endpoints are wired (forkchoiceUpdatedV4 / getPayloadV4 /
+    // newPayloadV4 delegate to the version-parameterized handlers) and the OP face is
+    // Isthmus+/V4-only (the attrs build and newPayload both gate on V4), so the V4 trio is
+    // advertised — the historical V3-only downgrade would negotiate op-node onto a version the
+    // engine then refuses with -38005.
+    auto caps = supportedCapabilities();
+    caps.push_back("engine_forkchoiceUpdatedV4");
+    caps.push_back("engine_getPayloadV4");
+    caps.push_back("engine_newPayloadV4");
+    return caps;
 }
 
 bool bcos::engine::detail::isGetPayloadVersionCompatible(

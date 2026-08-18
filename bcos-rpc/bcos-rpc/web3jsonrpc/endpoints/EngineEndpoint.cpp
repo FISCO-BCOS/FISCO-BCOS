@@ -88,13 +88,13 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
     co_await handleForkchoiceUpdated(engine::ApiVersion::V3, request, response);
 }
 
-task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(const Json::Value&, Json::Value& response)
+task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(
+    const Json::Value& request, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_forkchoiceUpdatedV4 is not yet supported", response);
-    co_return;
+    // Tier-2 (08-19): the OP face is Isthmus+/V4-only — the engine's attribute-driven build and
+    // the newPayload path both gate on V4, so the RPC surface serves it (Prague payload shape;
+    // executionRequests stays empty on this chain).
+    co_await handleForkchoiceUpdated(engine::ApiVersion::V4, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
@@ -135,13 +135,9 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
     co_await handleGetPayload(engine::ApiVersion::V3, request, response);
 }
 
-task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value&, Json::Value& response)
+task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value& request, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_getPayloadV4 is not yet supported", response);
-    co_return;
+    co_await handleGetPayload(engine::ApiVersion::V4, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleGetPayload(
@@ -183,13 +179,9 @@ task::Task<void> EngineEndpoint::newPayloadV3(const Json::Value& request, Json::
     co_await handleNewPayload(engine::ApiVersion::V3, request, response);
 }
 
-task::Task<void> EngineEndpoint::newPayloadV4(const Json::Value&, Json::Value& response)
+task::Task<void> EngineEndpoint::newPayloadV4(const Json::Value& request, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_newPayloadV4 is not yet supported", response);
-    co_return;
+    co_await handleNewPayload(engine::ApiVersion::V4, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleNewPayload(
