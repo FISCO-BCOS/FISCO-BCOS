@@ -6,7 +6,7 @@
 // emitted as lowercase "0x" hex, the op-geth hexutil.Big convention
 // ("0x" + hex, no leading zeros).
 //
-// The operator cost MUST go through computeChargedOperatorCost — the
+// The operator cost MUST go through computeOperatorCost — the
 // has_operator_fee gate mirroring the block-transition decision
 // (OpTransition.cpp:395) — never through raw computeOperatorCost, so a
 // pre-Isthmus fork (fjord/granite/holocene) reports 0 even with a non-zero
@@ -163,7 +163,10 @@ bool computeCase(
     const OpForkConfig& cfg = forkConfigFor(fork);
 
     const auto l1 = computeL1Cost(params, env, cfg);
-    const auto op = computeChargedOperatorCost(params, gas, cfg);
+    // The scheduler line moved the has_operator_fee gate out of the cost function (callers
+    // gate); the runner re-applies it so the four-end comparable value matches what the goldens
+    // pin (pre-Isthmus forks carry no operator fee).
+    const auto op = cfg.has_operator_fee ? computeOperatorCost(params, gas, cfg) : intx::uint256{0};
 
     out.id = id;
     out.l1Hex = toHex(l1);

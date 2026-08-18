@@ -323,6 +323,11 @@ def main():
     #   [value][gasLimit][dataOffset][withdrawalHash][dataLen][data];withdrawalHash 是**第 4 词
     #   hex[192:256]**,不是 data 尾部(尾部是 data 参数的字)。
     MP_TOPIC = "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054"
+    # Root before the withdrawal lands — the full-flow assertions below compare the header
+    # withdrawalsRoot across the write (op-geth Isthmus+: header root == MessagePasser
+    # storage root at seal time, consensus/beacon/consensus.go:416-427).
+    head_before = rpc.eth("eth_getBlockByNumber", ["latest", False])
+    root_before = head_before.get("withdrawalsRoot")
     nonce = int(rpc.eth("eth_getTransactionCount", [SENDER, "latest"]), 16)
     raw = make_withdraw_tx(PRIVKEY, nonce, "0xdead000000000000000000000000000000000001", 100000, b"\xbe\xef")
     r = wait_receipt(rpc, rpc.eth("eth_sendRawTransaction", [raw]))
@@ -340,6 +345,58 @@ def main():
     check("mp_withdrawalsroot_present", wr is not None and wr != "0x" + "0" * 64,
           f"withdrawalsRoot={wr}")
     check("mp_withdrawalsroot_32B", wr is not None and len(wr) == 66, wr)
+
+    # ═══ withdrawalsRoot full-flow group (B3, 08-18) ═══
+    # Cross-checks the header root against the MessagePasser storage that drives it:
+    #   (a) dynamic — the root changes exactly when the passer storage changes (our
+    #       withdrawal) and stays constant across later blocks with no passer writes;
+    #   (b) physical — sentMessages lives at slot keccak256(wh ‖ 0) (mapping at storage
+    #       index 0, live-verified) and reads back 1;
+    #   (c) static golden — the pure-Python op-geth-compatible storage trie
+    #       (tools/opstack-genesis/mpt_state_root.py) recomputes the t8n golden vector's
+    #       withdrawalsRoot byte-for-byte, tying Python MPT == C++ opStorageRoot == op-geth.
+    n = int(r["blockNumber"], 16)
+    blk_n = rpc.eth("eth_getBlockByNumber", [hex(n), False])
+    root_at = blk_n.get("withdrawalsRoot")
+    check("mp_root_changes_on_write",
+          root_at is not None and root_at != root_before,
+          f"before={root_before} at(n={n})={root_at}")
+    slot = keccak256(bytes.fromhex(wh[2:]) + (0).to_bytes(32, "big"))
+    sv = rpc.eth("eth_getStorageAt", [MESSAGE_PASSER, "0x" + slot.hex(), "latest"])
+    check("mp_sentmessages_slot0_physical", sv == "0x" + "0" * 63 + "1",
+          f"getStorageAt(keccak(wh‖0))={sv}")
+    # Stability: wait for a strictly later sealed block (empty blocks keep coming), then the
+    # root must be unchanged — only passer writes move it.
+    stable_root = None
+    for _ in range(60):  # ≤30s
+        head = rpc.eth("eth_getBlockByNumber", ["latest", False])
+        if int(head["number"], 16) > n:
+            stable_root = head.get("withdrawalsRoot")
+            break
+        time.sleep(0.5)
+    check("mp_root_stable_no_writes", stable_root == root_at,
+          f"at={root_at} later={stable_root}")
+    # Static golden replay (no node involved).
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "..", "opstack-genesis"))
+        from mpt_state_root import compute_storage_root
+        vec = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                          "..", "..", "opstack-executor", "tests", "t8n",
+                                          "vectors", "isthmus_message_passer_write.json")))
+        v = vec["isthmus_message_passer_write"]
+        passer_post = next(a for addr, a in v["postState"].items()
+                           if addr.lower().endswith("4200000000000000000000000000000000000016"))
+        py_root = "0x" + compute_storage_root(passer_post["storage"].items()).hex()
+        expected = v["_op_expected"]["header"]["withdrawalsRoot"].lower()
+        check("mp_storage_root_python_golden", py_root == expected,
+              f"python={py_root} golden={expected}")
+        py_empty = "0x" + compute_storage_root([]).hex()
+        check("mp_storage_root_empty_constant",
+              py_empty == "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+              py_empty)
+    except Exception as e:  # noqa
+        check("mp_storage_root_python_golden", False, f"replay raised: {e}")
 
     # ═══ L2CrossDomainMessenger group (Task 4) ═══
     # sendMessage(target, message, minGasLimit) → status 0x1 + messageNonce 递增 + SentMessage 事件。

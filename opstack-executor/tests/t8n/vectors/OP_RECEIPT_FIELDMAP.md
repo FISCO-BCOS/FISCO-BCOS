@@ -309,13 +309,3 @@ tx[1] type=0x02
   DAFootprintGasScalar	absent
   BlobGasUsed	absent
 ```
-
----
-
-## §9 等价性 gate（OpDualPathEquivalence）
-
-- 命令：opstack-executor-block-tests --run_test=OpDualPathEquivalence
-- 结果：0 DIVERGE, 0 soft 分叉（ALLOWLIST 已清空）
-- 作用：证明 OpBlockInjector（逐笔注入循环）== executeOpBlock（processOpBlock）全语料等价；
-  GASLIMIT 定向向量为修复锚；deposit_basefee 为绿守卫。
-- golden 三方硬断言（作用域 isthmus/jovian 非 contract_create；pre-isthmus + contract_create 软 REPORT）

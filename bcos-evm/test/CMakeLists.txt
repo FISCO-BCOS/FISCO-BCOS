@@ -31,6 +31,11 @@ target_link_libraries(bcos-evm-opstack-tests PRIVATE
     bcosevm::opstack
     Boost::unit_test_framework
 )
+# evmone_precompiles' bare -lblst needs the vcpkg lib dir on the search path (shared-vcpkg
+# worktree layout; same fix as opstack-executor/tests/CMakeLists.txt).
+find_library(BLST_EVM_LIBRARY NAMES blst REQUIRED)
+get_filename_component(BLST_EVM_LIB_DIR ${BLST_EVM_LIBRARY} DIRECTORY)
+target_link_directories(bcos-evm-opstack-tests PRIVATE ${BLST_EVM_LIB_DIR})
 
 # OpEnvelopeToTarsTest is the sole guard-block test kept in bcos-evm: it verifies
 # opEnvelopeToTars' sender derivation against known-signature envelopes. It is in-tree-only —

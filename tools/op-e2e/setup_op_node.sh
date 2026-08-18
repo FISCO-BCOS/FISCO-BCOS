@@ -21,6 +21,15 @@
 #   - [rpc] listen_port(不是 rpc_listen_port)
 #   - [web3] chain_id 决定 eth_chainId;套件签名用 CHAIN_ID=11155111
 #   - without_tars_framework=true 需要 conf/tars_proxy.ini 存在
+#   - B3: enable_single_node_consensus=true + op_engine_rpc.enable=false(被动出块;
+#     本分支 OP 模式由 SingleNodeConsensus 驱动块生产,两者与 engine RPC 互斥
+#     "both drive the same EngineService"(NodeConfig.cpp);PBFT 不在 OP 模式初始化)
+#   - B3a: enable_single_node_consensus=false + op_engine_rpc.enable=true(FCU 驱动,
+#     与 a1_active 套件配合;步骤 6 clone sed 自动翻转这两个 flag)
+#   - 注意:旧分支 worktree-op-alignment 上两者可共存且必须开 true——那是旧线
+#     行为,在旧线的 84b3be0d 回归修复有记录;两条分支的配置契约不同
+#   - [eth_genesis_header] 22 字段必须存在(feature_l2_ethereum_compat 强制,
+#     state_root 必须是合并 allocs 的真实 MPT 根——--allocs 链路)
 #   - B3a produce_empty_blocks=false(a1_active FCU 秒级 timestamp 竞态)
 #   - SENDER genesis 余额 10^24 wei(chain_driver/b3_contracts 依赖)
 set -u
@@ -150,10 +159,26 @@ if step_run 5; then
   [ -x "$BINARY" ] || die "节点二进制不存在: $BINARY(需先构建)"
   # 5.0 eth_genesis_header: L2 模式必需(22 字段 + hash,NodeConfig fail-fast)。
   # 用 gen_eth_header_fixture.py 生成(独立 RLP+keccak,hash 与 C++ 测试一致)。
+  # state_root 必须等于 Ledger::computeGenesisStateTrie 对 config.genesis 合并后
+  # 完整 alloc 集合(含下方 [alloc.13] SENDER)算出的 MPT root,否则
+  # applyEthGenesisHeader 报 "state_root does not match" 拒绝启动。
   ETH_HEADER="$WORK/eth_genesis_header.ini"
-  "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml > "$ETH_HEADER" \
-    || die "eth_genesis_header 生成失败"
-  log "eth_genesis_header 就绪(hash=$(grep '^hash=' "$ETH_HEADER" | cut -d= -f2))"
+  if [ -f "$WORK/allocs.ini" ]; then
+    HEADER_ALLOCS="$WORK/header_allocs.ini"
+    {
+      cat "$WORK/allocs.ini"
+      # SENDER alloc 与下方 config.genesis 合并处的 [alloc.N] 字段保持一致
+      printf '\n[alloc.%d]\naddress=%s\nbalance=%s\nnonce=0\ncode=\n' \
+        "$(grep -c '^\[alloc\.' "$WORK/allocs.ini")" "$SENDER" "$SENDER_BAL"
+    } > "$HEADER_ALLOCS"
+    "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml --allocs "$HEADER_ALLOCS" \
+      > "$ETH_HEADER" || die "eth_genesis_header 生成失败"
+  else
+    # 无 allocs.ini(仅跑 -s 5 等局部场景):退回空 alloc 的空 trie root
+    "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml > "$ETH_HEADER" \
+      || die "eth_genesis_header 生成失败"
+  fi
+  log "eth_genesis_header 就绪(hash=$(grep '^hash=' "$ETH_HEADER" | cut -d= -f2),state_root=$(grep '^state_root=' "$ETH_HEADER" | cut -d= -f2))"
 
   # 5.1 节点签名私钥 node.pem(secp256k1,与 genesis node.0 绑定)
   [ -f "$NODE_BASE/node.pem" ] || \
@@ -223,7 +248,7 @@ $(cat "$ETH_HEADER")
     listen_ip=127.0.0.1
     listen_port=$B3_WEB3
 [op_engine_rpc]
-    enable=true
+    enable=false
     listen_ip=127.0.0.1
     listen_port=$B3_ENGINE
     jwt_secret_file=jwt.hex
@@ -269,6 +294,8 @@ if step_run 6; then
       -e "s/listen_port=$B3_WEB3/listen_port=$B3A_WEB3/" \
       -e "s/listen_port=$B3_ENGINE/listen_port=$B3A_ENGINE/" \
       -e "s/listen_port=$B3_P2P/listen_port=$B3A_P2P/" \
+      -e "s/enable_single_node_consensus=true/enable_single_node_consensus=false/" \
+      -e "s/enable=false/enable=true/" \
       -e "s/produce_empty_blocks=true/produce_empty_blocks=false/" \
       "$B3A/config.genesis"
   rm -f "$B3A/config.genesis.bak"

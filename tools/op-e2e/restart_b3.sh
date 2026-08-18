@@ -3,6 +3,11 @@
 # RocksDB across restarts. setup_b3.sh rm -rf's the data dirs, so it must NOT be used here.
 set -u
 WORK=${WORK:-/tmp/op-spike/b3}
+# setup_op_node.sh exports WORK as the PARENT workspace (/tmp/op-spike); this script wants the
+# b3 node dir. Accept either: if the parent layout is detected, descend into b3/.
+if [ ! -f "$WORK/config.genesis" ] && [ -f "$WORK/b3/config.genesis" ]; then
+  WORK="$WORK/b3"
+fi
 BINARY=${BINARY:-$(cd "$(dirname "$0")/../.." && pwd)/build/fisco-bcos-air/fisco-bcos}
 
 [ -f "$WORK/node.pid" ] && kill "$(cat "$WORK/node.pid")" 2>/dev/null

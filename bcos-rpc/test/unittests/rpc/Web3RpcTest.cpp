@@ -217,6 +217,18 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         BOOST_TEST(fromQuantity(response["result"].asString()) == 0);
     }
 
+    // method eth_gasPrice — config absent: no tx_gas_price entry in the (fresh-fixture)
+    // ledger, the handler must fall back to "0x0" (EthEndpoint::gasPrice). op-geth's
+    // gasPrice is head.baseFee + tip (>= 1e6 wei, never 0) — divergence D-GP-1,
+    // docs/2026-08-18-rpc-parity-gasprice-withdrawals.md.
+    {
+        const auto request =
+            R"({"jsonrpc":"2.0","id":541320, "method":"eth_gasPrice","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_TEST(response["result"].asString() == "0x0");
+    }
+
     // method eth_gasPrice
     {
         m_ledger->setSystemConfig(SYSTEM_KEY_TX_GAS_PRICE, "0x99e670");
@@ -572,14 +584,14 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
-            .has_value());
+                      .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
             .amount == expectedLargeValue);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
-            .has_value());
+                      .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .excessBlobGas.has_value());
+                      .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
         expectedLargeValue);
@@ -589,8 +601,8 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
-                       ->executionPayload.transactions.front()
-                       .raw) == encodedTxHex);
+                                         ->executionPayload.transactions.front()
+                                         .raw) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;

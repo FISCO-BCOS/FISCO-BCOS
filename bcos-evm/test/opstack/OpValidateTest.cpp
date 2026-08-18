@@ -142,16 +142,18 @@ BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
 }
 
-BOOST_AUTO_TEST_CASE(EmptyEnvelopeAccepted)
+BOOST_AUTO_TEST_CASE(EmptyEnvelopeRejected)
 {
-    // 空 envelope 是 eth_call 路径(OpCallScheduler 构造的 unsigned call tx 无 envelope),
-    // OpTransition.cpp 有意接受:flzLen=0 / bedrockCalldataGasUsed=0 → L1 成本为 0。
-    // 拒绝它会让每个 eth_call 失败。断言:接受 + l1_cost=0(镜像 SufficientBalancePasses)。
+    // Scheduler-line semantics: opValidate rejects an empty envelope outright
+    // (OpTransition.cpp: signedTxEnvelope.empty() -> invalid_argument). The old line's
+    // EmptyEnvelopeAccepted fix (its eth_call path fed unsigned call txs through opValidate
+    // with no envelope) does not apply here — this line's call path never sends an empty
+    // envelope, so the guard is a plain reject.
     test::TestState ts;
     ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const auto r = opValidate(ts, blk(), baseTx(), {}, isthmusConfig(), OpFeeParams{}, 30000000);
-    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
-    BOOST_CHECK_EQUAL(std::get<OpTxProperties>(r).l1_cost, intx::uint256{0});
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+    BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::invalid_argument);
 }
 
 BOOST_AUTO_TEST_CASE(SufficientBalancePasses)
