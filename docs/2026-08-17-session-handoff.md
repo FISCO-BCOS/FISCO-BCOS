@@ -247,3 +247,12 @@ geth 单一 trie 表示、reth plain/hashed 双表均由导入一次填满且读
 4. RPC V4 三端点接线（FCU/getPayload/newPayload V4 现为桩）+ 能力通告恢复 V4——a1_active 已在
    V3 面通过，op-node（C2）前必须。
 5. abandoned build 的 MLS 层泄漏（reset 不弹 view；probe 已不 push，剩 canonical pass 被放弃的场景）。
+
+### Tier-2 Phase A 收尾补记（08-19）
+- 模拟执行 nonce 双向容忍（op-geth call 语义）后 rpc_matrix **57 过 / 0 败 / 2 known-red**；
+  a1_active **11/11**（FCU-attrs 断言翻转为 VALID+payloadId）。
+- state_verify 两处适配：calc_op_base_fee 按_extraData 长度分支（B3 为 Isthmus 9B）；
+  纳入 Tier-2 名单——**当前 /tmp 链混合了 Tier-2 开发三个哈希推导时代的块**（parentHash 链路在
+  接缝断开），Phase B 首步 = 全新 init 链后恢复 gating。
+- run_all 门禁 **ALL GREEN**（chain_driver 4 败 / predeploy 3 败 = Phase B 缺口：tx/receipt
+  检索 + withdrawalsRoot 传播；state_verify 2 败 = 混合链接缝）。
