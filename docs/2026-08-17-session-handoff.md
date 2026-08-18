@@ -43,7 +43,7 @@
 ### 收尾决策(用户待选)
 1. **DA 计划收尾**:`worktree-op-alignment` 合并/推 PR/保持——**未定**
 2. ✅ **EmptyEnvelopeFails 已修**(08-17):改名 `EmptyEnvelopeAccepted`
-3. **计划文档 2 处笔误**:DA 计划 `contract_call_tx` 例 312B 截断(实现用 345B)、brief `...ull` 超 uint64——顺手修
+3. ✅ **计划文档 2 处笔误已修**(08-18):DA 计划 `contract_call_tx` hex 替换为与 da_matrix.json/RollupCostTest.cpp 逐字节一致的 345B 权威版(原 312B 系转写丢 3 段零);brief/plan 的 `...ull` 超 uint64 字面量改 `_u256`(与实现一致);progress.md 台账同步
 
 ### e2e CI(本会话主线,已全绿,剩收尾)
 4a. ✅ CI op-e2e job + 脚本可配置化(`440a497`)
