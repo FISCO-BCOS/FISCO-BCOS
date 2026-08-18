@@ -606,8 +606,14 @@ private:
         std::vector<bytes> envelopes;
         // The L1-attributes deposit synthesis lives on the seam (OpSchedulerSeam) so the
         // engine stays decoupled from bcos-evm/opstack-executor (EngineServiceImpl.cpp:93).
-        envelopes.push_back(
-            m_scheduler.get().synthesizeL1AttributesEnvelope(m_scheduler.get().isJovianActive()));
+        // A real CL (op-node) derives and supplies the L1-attributes deposit itself in
+        // attrs.transactions — synthesizing our own would double the leading deposit. Only
+        // attribute-less drivers (the single-node fixture) need the synthesized envelope.
+        if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
+        {
+            envelopes.push_back(m_scheduler.get().synthesizeL1AttributesEnvelope(
+                m_scheduler.get().isJovianActive()));
+        }
         if (payloadAttributes.transactions.has_value())
         {
             for (auto const& forcedHex : *payloadAttributes.transactions)
