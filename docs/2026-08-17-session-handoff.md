@@ -135,3 +135,37 @@ testWeb3RPC 新用例绿(jwtHttpRequestAuthTest 为预存失败,与本链路无�
    eth_getBalance/eth_call 族在创世链上返回 0x0/-32603 —— 与 D2 无关,Tier-2 前建议先查(影响所有链停场景)。
 3. FilterRequest safe/finalized 仍别名 latest(设计决定,OP-Stack 不依赖 filter 标签)。
 4. tracked 值不持久化(重启后 nullopt → null,诚实语义;与 Tier-2 一起评估是否加持久化)。
+
+## 创世 flat-state 读 bug 诊断（08-18 晚，Phase A 完成）
+
+### Bug A：getBalance/getStorageAt/getTransactionCount 返回 0 —— 根因钉死
+- **根因：写读物理布局不对称**。写侧全是 raw 行（"table:key" 直接键）：genesis 导入
+  （`importGenesisState` 直写 `*m_stateStorage`，Ledger.cpp:2380）+ 执行器 storage2 栈
+  （StateKeyResolver 编码即 "table:key" 拼接，StateKVResolver.h:34）。读侧
+  （`Ledger::getStorageAt` → `getStateStorage()` 的 keyPage 分支，Ledger.cpp:2763-2781；
+  `key_page_size` **默认 10240**，NodeConfig.cpp:1350 + 库内 compatibility 3.18）只查
+  分页键（"table:+N"），**无 raw 回退**（KeyPageStorage.cpp:748/827）。
+- **证据**：物理库有 `/apps/<sender>:balance` = "1000000000000000000000000"（10^24 正确）raw 行、
+  **零分页键**（全库扫描）；getProof（MPT raw 行）/getCode（scheduler->getCode storage2 路径）/
+  s_config（keyPage 忽略表走 raw）各自绕开 keyPage 而正常——与症状分布完全吻合。
+- **严重性修正：结构性，非创世特有**。storage2 执行器提交永远写 raw，Tier-2 恢复出块后 keyPage 读
+  照样 miss。OP 线（executor v3）与 v2 基线线全断；传统 v1 线不受影响（其执行器经 KeyPageStorage
+  写分页，ShardingBlockExecutive.cpp:303 / TransactionExecutor.cpp:453-457，读写对称）。
+- **修复方向（推荐）**：Initializer.cpp:347 对 storage2 执行器（executor_version>=2）给 Ledger 传
+  keyPageSize=0 → `getStateStorage()` 返回 plain StateStorage（raw 读，与写布局一致）。传统 v1 保持
+  配置值。`getStateStorage` 全库唯一调用方是 `getStorageAt`（已验证）——影响面收敛在 RPC 状态读。
+- **连带疑点（登记待查）**：本分支上传统 v1 线的 genesis 导入同样写 raw 行，而 v1 执行器读分页——
+  v1 链首块能否看到创世余额存疑（未实证）。
+
+### Bug B：eth_call/eth_estimateGenesis 族全部 -32603 "Invalid argument" —— 范围已定，抛点未钉
+- 复现：EOA→EOA 纯转账 eth_call → `{"code":-32603,"message":"Invalid argument"}`（B3/B3a 同）。
+- "Invalid argument" **不存在于源码** → errno EINVAL 的 strerror，来自库层 system_error 族异常，
+  经 `OpScheduler::call` 的 catch(std::exception) e.what() 透传（OpScheduler.h:158-167）。
+- 路径：EthEndpoint::call → scheduler->call → `OpScheduler::coCallLatest`。已排除：
+  loadOpFeeParams（noexcept，缺槽按零）、header.gasLimit（创世 30M 正常）、hashErr（不抛）。
+  失败在 blockNumber=0 的前置/执行阶段某处。
+- 下一步：TRACE 日志或 C++ 单测复现 coCallLatest@genesis 钉死抛点。
+
+### 对比结论（op-geth / op-reth 不变量，Phase B 精神）
+geth 单一 trie 表示、reth plain/hashed 双表均由导入一次填满且读写对称——两者均不存在
+"写读布局分叉"这类 bug 的结构空间。FISCO 的修复验收标准 = **读写走同一布局**。
