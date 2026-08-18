@@ -164,6 +164,21 @@ def a2_blocks(rpc):
         except AssertionError as e:
             check(f"getProof {desc} returns MPT-limited error code",
                   "-32602" in str(e) or "-32004" in str(e), str(e)[:80])
+    # ── OutputV0 cross-domain primitive (B3', spec §7) ──
+    # op-node computes OutputRoot = keccak256(0x00×32 || stateRoot ||
+    #   messagePasserStorageRoot || blockHash) from L2 block header fields.
+    # On Isthmus+: messagePasserStorageRoot = header.withdrawalsRoot (L2Client.outputV0:199).
+    # Verify the three inputs are present and non-zero on the latest block.
+    lb = rpc.call("eth_getBlockByNumber", ["latest", False])
+    sr = lb.get("stateRoot", "")
+    wr = lb.get("withdrawalsRoot", "")
+    bh = lb.get("hash", "")
+    check("outputv0 stateRoot present 32B",
+          sr and len(sr) == 66 and sr != "0x" + "0" * 64, str(sr[:20]))
+    check("outputv0 withdrawalsRoot present 32B",
+          wr and len(wr) == 66 and wr != "0x" + "0" * 64, str(wr[:20]))
+    check("outputv0 blockHash present 32B",
+          bh and len(bh) == 66 and bh != "0x" + "0" * 64, str(bh[:20]))
 
 
 def a2_accounts(rpc, sender):
