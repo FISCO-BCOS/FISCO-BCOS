@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""A.1 engine API matrix on the B3a ACTIVE instance (spec §3 A.1). External-driver flow:
-FCU (attrs) → payloadId → getPayload → newPayload, then the other-version gates (-38005)
-and invalid-tamper vectors (块未入库).
+"""A.1 engine API matrix on the B3a ACTIVE instance (spec §3 A.1). Pull-contract surface
+(D2 Tier-1): the OP-mode engine refuses attribute-driven building (FCU with attrs →
+-38003 UnsupportedOpPayloadAttributes, after the head/safe/finalized tracking update has
+run) and getPayload (OpPayloadBuildingUnsupported — no in-process builder until Tier-2).
+Payload-level flows (newPayload execution, -38005 version gates, tamper vectors) live in
+the C++ harness; this script asserts the FCU/label surface: attrs-less FCU VALID without
+payloadId, -38003 attrs refusal, getPayload refusal, safe/finalized routing to the
+tracked head (strict null pre-FCU), pending aliasing latest, and unknown-head SYNCING.
 
 Engine-version adaptive (08-18): the exchangeCapabilities trio is probed and the highest
 coherent V (V4 on worktree-op-alignment, V3 on the scheduler line — FCU V4 returns -38005
-"not supported" there, per docs/2026-08-18-opstack-scheduler-e2e-verification.md) drives the
-whole flow.
+"not supported" there, per docs/2026-08-18-opstack-scheduler-e2e-verification.md) drives
+the whole flow.
 
 Usage: a1_active.py [--eth-port 8563] [--engine-port 8564] [--jwt /tmp/op-spike/b3a/jwt.hex]
 """
@@ -79,111 +84,76 @@ def main():
     check(f"caps have a coherent V{ver or '?'} trio", ver is not None, str(caps))
     V = f"V{ver}"
 
-    def call_new_payload(payload, blob_hashes=(), root=None):
-        # V4 signature is [payload, blobHashes, parentBeaconBlockRoot]; V3 takes two params.
-        if ver == 4:
-            return eng.call(f"engine_newPayloadV4", [payload, list(blob_hashes), root])
-        return eng.call(f"engine_newPayloadV3", [payload, list(blob_hashes)])
-
-    # 1. current head hash (genesis on first run; a committed block after a restart — the
-    # active instance survives restarts, so never assume the chain is empty)
+    # 1. head (genesis on fresh B3a; at HEAD the pull model has no in-process builder,
+    # so the chain never advances — payload-side flows live in the C++ harness until Tier-2)
     head_block = eth.call("eth_getBlockByNumber", ["latest", False])
     check("head queryable", head_block is not None, str(head_block))
     head = head_block["hash"]
-    head_num = int(head_block["number"], 16)
-    now = int(time.time())
-    attrs = {
-        "timestamp": hex(now),
-        "prevRandao": "0x" + "00" * 32,
-        "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011",
-    }
+
+    # 2. pre-FCU label state: strict op-geth semantics — null when nothing tracked.
+    # Tolerant to a previously-FCU'd persistent node (tracking survives until restart).
+    try:
+        pre_safe = eth.call("eth_getBlockByNumber", ["safe", False])
+    except AssertionError:
+        pre_safe = None  # an error response is also acceptable pre-FCU (state endpoints)
+    check("pre-FCU safe is null (fresh) or the FCU'd head (persistent)",
+          pre_safe is None or pre_safe["number"] == head_block["number"],
+          str(pre_safe and pre_safe["number"]))
+
+    # 3. FCU attrs-less -> VALID, no payloadId (the pull-model head/safe/finalized update)
     fcs = {"headBlockHash": head, "safeBlockHash": head, "finalizedBlockHash": head}
+    fc = eng.call(f"engine_forkchoiceUpdatedV{ver}", [fcs, None])
+    check(f"FCU {V} attrs-less VALID, no payloadId",
+          fc["payloadStatus"]["status"] == "VALID" and fc.get("payloadId") is None, str(fc))
 
-    # 2. FCU with attrs → VALID + payloadId (active-driver block building)
-    fc = eng.call(f"engine_forkchoiceUpdatedV{ver}", [fcs, attrs])
-    check(f"FCU {V} VALID + payloadId",
-          fc["payloadStatus"]["status"] == "VALID" and fc.get("payloadId") is not None,
-          str(fc))
-    pid = fc["payloadId"]
-
-    # 3. getPayload → executionPayload is nested
-    pl = eng.call(f"engine_getPayloadV{ver}", [pid])
-    check(f"getPayload {V} result object", isinstance(pl, dict), str(pl)[:120])
-    ep = pl.get("executionPayload", {})
-    check(f"getPayload {V} returns head+1", ep.get("blockNumber") == hex(head_num + 1),
-          f"{ep.get('blockNumber')} vs {hex(head_num + 1)}")
-    check(f"getPayload {V} blockHash present", ep.get("blockHash", "").startswith("0x"),
-          str(ep.get("blockHash")))
-    check(f"getPayload {V} has 1 deposit tx", len(ep.get("transactions", [])) == 1,
-          str(len(ep.get("transactions", []))))
-
-    print("  ep txs:", len(ep.get("transactions", [])), "pbr:", repr(ep.get("parentBeaconBlockRoot")))
-    # 4. newPayload (same payload) → VALID.
-    root = "0x" + "00" * 32
-    np = call_new_payload(ep, root=root)
-    check(f"newPayload {V} VALID", np.get("status") == "VALID", str(np))
-
-    # 5. version gates: every OTHER payload version on the same payload → -38005 (the old
-    # line gates V1-V3 under V4; the scheduler line gates V4 under V3).
-    for n in (1, 2, 3, 4):
-        v = f"V{n}"
-        if v == V:
-            continue
-        try:
-            eng.call(f"engine_newPayload{v}", [ep])
-            check(f"newPayload{v} gated (-38005)", False, "expected version-gate error")
-        except AssertionError as e:
-            check(f"newPayload{v} gated (-38005)", "-38005" in str(e), str(e))
-
-    # 6. tamper stateRoot → INVALID, block must NOT be stored
-    bad = dict(ep)
-    bad["stateRoot"] = "0x" + "11" * 32
-    bad["blockHash"] = "0x" + "22" * 32  # hash must match to reach execution
+    # 4. FCU with attrs -> -38003 (OP pull contract: attribute-driven building refused;
+    # the tracking update above has already run and is kept)
+    now = int(time.time())
+    attrs = {"timestamp": hex(now), "prevRandao": "0x" + "00" * 32,
+             "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011"}
     try:
-        npt = call_new_payload(bad, root=root)
-        check("tampered stateRoot INVALID", npt.get("status") == "INVALID", str(npt))
+        fc2 = eng.call(f"engine_forkchoiceUpdatedV{ver}", [fcs, attrs])
+        check("FCU attrs refused in OP mode (-38003)", "-38003" in str(fc2), str(fc2)[:120])
     except AssertionError as e:
-        # -32603 internal may surface if the tamper trips a pre-execution gate; still an error
-        check("tampered stateRoot rejected (INVALID or error)", True, str(e))
+        check("FCU attrs refused in OP mode (-38003)", "-38003" in str(e), str(e)[:120])
 
-    # ---- B4: engine error-code matrix (op-geth test-stack item 4) ----
-    # 7. tamper gasUsed → the engine must reject (INVALID after execution, or an RPC error).
-    bad_gas = dict(ep)
-    bad_gas["gasUsed"] = hex(int(ep["gasUsed"], 16) + 1)
-    bad_gas["blockHash"] = "0x" + "33" * 32
+    # 5. getPayload -> refused (no OP-ized builder; Tier-2 will implement)
     try:
-        npt = call_new_payload(bad_gas, root=root)
-        check("tampered gasUsed rejected (INVALID or error)",
-              npt.get("status") in ("INVALID", "SYNCING") or npt.get("status") is None, str(npt))
+        eng.call(f"engine_getPayloadV{ver}", ["0x0000000000000000"])
+        check("getPayload refused in OP mode", False, "expected an error")
     except AssertionError as e:
-        check("tampered gasUsed rejected (INVALID or error)", True, str(e)[:70])
+        check("getPayload refused in OP mode", True, str(e)[:90])
 
-    # 8. tamper receiptsRoot → rejected the same way.
-    bad_rec = dict(ep)
-    bad_rec["receiptsRoot"] = "0x" + "44" * 32
-    bad_rec["blockHash"] = "0x" + "55" * 32
-    try:
-        npt = call_new_payload(bad_rec, root=root)
-        check("tampered receiptsRoot rejected (INVALID or error)",
-              npt.get("status") in ("INVALID", "SYNCING") or npt.get("status") is None, str(npt))
-    except AssertionError as e:
-        check("tampered receiptsRoot rejected (INVALID or error)", True, str(e)[:70])
+    # 6. post-FCU labels: routed to the tracked (genesis) head — hash equality with the
+    # FCU hashes proves the tracked path (not the latest alias) served them
+    for tag in ("safe", "finalized"):
+        b = eth.call("eth_getBlockByNumber", [tag, False])
+        check(f"{tag} routed to FCU'd head (hash match)",
+              b is not None and b["hash"] == head and b["number"] == head_block["number"],
+              str(b and b.get("hash")))
 
-    # 9. getPayload with a bogus payloadId → RPC error (unknown payload), never a block payload.
-    try:
-        eng.call(f"engine_getPayloadV{ver}", ["0xdeadbeef00"])
-        check("getPayload bogus payloadId error", False, "expected error")
-    except AssertionError as e:
-        check("getPayload bogus payloadId error", "-32602" in str(e) or "error" in str(e).lower(),
-              str(e)[:70])
+    # 7. pending guard: stays aliased to latest
+    p = eth.call("eth_getBlockByNumber", ["pending", False])
+    check("pending aliases latest", p is not None and p["hash"] == head, str(p and p["hash"]))
 
-    # 10. FCU with an unknown head hash → SYNCING (parent unknown), not VALID.
+    # 8. version gate at the capability level: no newPayload major version ABOVE the
+    # coherent trio is advertised (EngineServiceImpl supportedOpCapabilities deliberately
+    # hides V4 until its RPC endpoints exist — op-node must not negotiate to a -38005 stub).
+    # Lower versions (V1/V2) are advertised alongside V3, matching upstream geth semantics
+    # (every supported version of a method is listed). Payload-level -38005 gates need a
+    # payload source — Tier-2.
+    gated = [f"engine_newPayloadV{n}" for n in (1, 2, 3, 4)
+             if n > ver and f"engine_newPayloadV{n}" in caps]
+    check(f"no newPayload major version above the coherent trio advertised (V{ver})",
+          not gated, str(caps))
+
+    # 9. unknown-head FCU -> SYNCING (parent unknown), not VALID
     unknown_head = {"headBlockHash": "0x" + "aa" * 32,
                     "safeBlockHash": "0x" + "aa" * 32, "finalizedBlockHash": "0x" + "aa" * 32}
     try:
-        fc = eng.call(f"engine_forkchoiceUpdatedV{ver}", [unknown_head, None])
-        check("FCU unknown head SYNCING", fc.get("payloadStatus", {}).get("status") == "SYNCING",
-              str(fc)[:120])
+        fc3 = eng.call(f"engine_forkchoiceUpdatedV{ver}", [unknown_head, None])
+        check("FCU unknown head SYNCING",
+              fc3.get("payloadStatus", {}).get("status") == "SYNCING", str(fc3)[:120])
     except AssertionError as e:
         check("FCU unknown head SYNCING", "SYNCING" in str(e) or "error" in str(e).lower(),
               str(e)[:70])
