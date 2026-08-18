@@ -25,6 +25,15 @@
 #include <exception>
 #include <future>
 
+// windows.h -- dragged in by <boost/asio/...> above -- defines ERROR as 0, which turns the
+// BCOS_LOG(ERROR) calls below into bcos::LogLevel::0. BoostLog.h undefs it, but BoostLog.h is
+// #pragma once: in a unity build some earlier file in the same blob has already included it, back
+// when ERROR was still undefined, so its #undef ran as a no-op and cannot run again here. Undo it
+// after every include in this file, so no later asio header can re-introduce it before use.
+#ifdef ERROR
+#undef ERROR
+#endif
+
 using namespace bcos;
 
 namespace
