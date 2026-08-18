@@ -27,9 +27,23 @@ find_package(TBB REQUIRED)
 # INTERFACE_INCLUDE_DIRECTORIES is what makes `#include <evmc/evmc.hpp>` resolve.
 # Linux/macOS builds get the include path transitively through vcpkg's global
 # -isystem; MSVC builds need the dependency declared on the target (C1083 otherwise).
-find_package(evmone CONFIG REQUIRED)
-find_package(blst CONFIG REQUIRED)
-set_target_properties(blst PROPERTIES IMPORTED_GLOBAL TRUE)
+# Fullnode-only: evmone lives in the vcpkg "fullnode" feature, which Options.cmake
+# appends to VCPKG_MANIFEST_FEATURES only when FULLNODE is on, while this directory
+# is added unconditionally by the root CMakeLists — an unguarded REQUIRED lookup here
+# aborts the configure of FULLNODE=OFF / ONLY_CPP_SDK / lightnode builds, none of
+# which compile anything that includes that header.
+if(FULLNODE)
+    find_package(evmone CONFIG REQUIRED)
+    # evmone's config find_dependency(blst) creates the `blst` imported target in THIS
+    # directory's scope (first creation; blst-config.cmake's `if(NOT TARGET blst)` +
+    # include_guard(GLOBAL) make every later find_package(blst) — including the root's
+    # own, even with the GLOBAL keyword — a no-op that creates nothing). IMPORTED_GLOBAL
+    # may only be set from the creating directory, i.e. here, so promote it now or the
+    # root-scope and sibling consumers (bcos-executor / transaction-executor /
+    # fisco-bcos-air, all linked after this point) resolve the bare `blst` name to -lblst.
+    find_package(blst CONFIG REQUIRED)
+    set_target_properties(blst PROPERTIES IMPORTED_GLOBAL TRUE)
+endif()
 
 # LedgerConfig.h includes <evmc/evmc.hpp> — evmone installs evmc headers. PUBLIC link removed
 # (5cc25670d: macOS exception handling); include propagates PUBLIC-ly only, link PRIVATE.
@@ -62,8 +76,13 @@ target_link_libraries(bcos-framework PUBLIC
     bcos-crypto
     Microsoft.GSL::GSL
     fmt::fmt
-    TBB::tbb
-    evmone::evmone)
+    TBB::tbb)
+if(FULLNODE)
+    # PUBLIC rather than PRIVATE: LedgerConfig.h is an installed public header that
+    # includes <evmc/evmc.hpp>, so every in-tree consumer compiling that header needs
+    # the evmc include path propagated (MSVC C1083 otherwise).
+    target_link_libraries(bcos-framework PUBLIC evmone::evmone)
+endif()
 set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
 # Entry.cpp uses namespace bcos::storage which conflicts with unity build
 # namespace stacking from other translation units in the same batch.

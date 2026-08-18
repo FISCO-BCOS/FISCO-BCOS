@@ -156,9 +156,16 @@ bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
         return err;
     }
 
-    // Same field writes as toTarsHeader but WITHOUT validateHeader — usable for FISCO-native/OP
-    // (NON_ETH) headers that validateHeader rejects. For NON_ETH the RLP timestamp is SECONDS and
-    // the FISCO header stores MILLISECONDS, so ×1000 (ETH-version headers already carry seconds).
+    // Like toTarsHeader's field writes but WITHOUT validateHeader — usable for FISCO-native/OP
+    // (NON_ETH) headers that validateHeader rejects. One DELIBERATE omission from toTarsHeader's
+    // writes: ethBlockVersion is pinned to NON_ETH here instead of copying ethHeader.version()
+    // (which is itself always NON_ETH — the RLP stream carries no version). Write it explicitly
+    // so the seconds↔milliseconds pairing below does not rest on header->clear() leaving the
+    // tars field at its default 0 happening to equal NON_ETH: rlpEncode's /1000 keys off
+    // ethBlockVersion == NON_ETH, and a header of any other version would encode the
+    // millisecond timestamp raw and silently change the block hash. For NON_ETH the RLP
+    // timestamp is SECONDS and the FISCO header stores MILLISECONDS, so ×1000.
+    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
     header->setParentInfo(ethHeader.data().parentInfo);
     header->setCoinbase(ethHeader.data().coinbase);
     header->setUncleHash(ethHeader.data().uncleHash);

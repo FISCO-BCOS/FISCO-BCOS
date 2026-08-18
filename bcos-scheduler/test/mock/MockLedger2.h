@@ -13,9 +13,8 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features>,
-        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
-        bool writeNonces = true) override
+        std::optional<bcos::ledger::Features>, std::optional<bcos::crypto::HashType>,
+        bool writeNonces) override
     {
         auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
         auto header = mutableBlock->blockHeader();

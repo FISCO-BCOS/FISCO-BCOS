@@ -82,8 +82,9 @@ BOOST_AUTO_TEST_CASE(merge)
     task::syncWait([this]() -> task::Task<void> {
         auto view = std::make_optional(multiLayerStorage.fork());
         view->newMutable();
-        auto toKey = ::ranges::views::transform(
-            [](int num) { return StateKey{"test_table"sv, fmt::format("key: {}", num)}; });
+        auto toKey = ::ranges::views::transform([](int num) {
+            return StateKey{"test_table"sv, fmt::format("key: {}", num)};
+        });
         auto toValue = ::ranges::views::transform([](int num) {
             storage::Entry entry;
             entry.set(fmt::format("value: {}", num));
@@ -149,8 +150,7 @@ BOOST_AUTO_TEST_CASE(mergeViewPersistsToBackend)
 
         // 数据经 backend 层读到——证明已落盘,非仅内存层栈
         // （merge 后栈空,fork() 读等价 backend 读;直接 latestBackend() 最严格）
-        auto backendRead =
-            co_await storage2::readOne(multiLayerStorage.latestBackend(), key);
+        auto backendRead = co_await storage2::readOne(multiLayerStorage.latestBackend(), key);
         BOOST_REQUIRE(backendRead.has_value());
         BOOST_CHECK_EQUAL(backendRead->get(), entry.get());
 
@@ -325,28 +325,23 @@ BOOST_AUTO_TEST_CASE(bypassMultiLayerReadOneRaw)
         co_await storage2::writeOne(view, mutableKey, mutableEntry);
 
         // Both paths agree on a key present in the mutable layer
-        auto mutableByBypass =
-            co_await view.readOneRaw(mutableKey, storage2::BYPASS_MULTILAYER);
+        auto mutableByBypass = co_await view.readOneRaw(mutableKey, storage2::BYPASS_MULTILAYER);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(mutableByBypass));
-        BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(mutableByBypass).get(), "mutable_value"sv);
+        BOOST_CHECK_EQUAL(std::get<storage::Entry>(mutableByBypass).get(), "mutable_value"sv);
 
         auto mutableByNormal = co_await view.readOneRaw(mutableKey);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(mutableByNormal));
-        BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(mutableByNormal).get(), "mutable_value"sv);
+        BOOST_CHECK_EQUAL(std::get<storage::Entry>(mutableByNormal).get(), "mutable_value"sv);
 
         // Divergence on a key that only exists in the backend:
         // BYPASS_MULTILAYER → NOT_EXISTS (stops at mutable, unconditional co_return)
-        auto backendByBypass =
-            co_await view.readOneRaw(backendKey, storage2::BYPASS_MULTILAYER);
+        auto backendByBypass = co_await view.readOneRaw(backendKey, storage2::BYPASS_MULTILAYER);
         BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(backendByBypass));
 
         // No tag → falls through the full chain, reaches backend
         auto backendByNormal = co_await view.readOneRaw(backendKey);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(backendByNormal));
-        BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(backendByNormal).get(), "backend_value"sv);
+        BOOST_CHECK_EQUAL(std::get<storage::Entry>(backendByNormal).get(), "backend_value"sv);
 
         co_return;
     }());
@@ -372,20 +367,15 @@ BOOST_AUTO_TEST_CASE(bypassMultiLayerReadSomeRaw)
         auto bypassValues = co_await view.readSomeRaw(
             std::vector{mutableKey, backendKey}, storage2::BYPASS_MULTILAYER);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(bypassValues[0]));
-        BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(bypassValues[0]).get(), "mutable_value"sv);
-        BOOST_CHECK(
-            std::holds_alternative<storage2::NOT_EXISTS_TYPE>(bypassValues[1]));
+        BOOST_CHECK_EQUAL(std::get<storage::Entry>(bypassValues[0]).get(), "mutable_value"sv);
+        BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(bypassValues[1]));
 
         // No tag: backend-only key → resolved from backend
-        auto normalValues =
-            co_await view.readSomeRaw(std::vector{mutableKey, backendKey});
+        auto normalValues = co_await view.readSomeRaw(std::vector{mutableKey, backendKey});
         BOOST_CHECK(std::holds_alternative<storage::Entry>(normalValues[0]));
-        BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(normalValues[0]).get(), "mutable_value"sv);
+        BOOST_CHECK_EQUAL(std::get<storage::Entry>(normalValues[0]).get(), "mutable_value"sv);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(normalValues[1]));
-        BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(normalValues[1]).get(), "backend_value"sv);
+        BOOST_CHECK_EQUAL(std::get<storage::Entry>(normalValues[1]).get(), "backend_value"sv);
 
         co_return;
     }());
@@ -450,32 +440,27 @@ BOOST_AUTO_TEST_CASE(preImageCaptureBypassMultiLayerRegression)
         // Pre-image capture with BYPASS_READ_SET | BYPASS_MULTILAYER:
         // BYPASS_MULTILAYER → stops at mutable layer → NOT_EXISTS.
         // This is the old DIRECT behaviour and must NOT change.
-        auto bypassResult = co_await view.readOneRaw(
-            key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER);
-        BOOST_CHECK(
-            std::holds_alternative<storage2::NOT_EXISTS_TYPE>(bypassResult));
+        auto bypassResult =
+            co_await view.readOneRaw(key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER);
+        BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(bypassResult));
 
         // Untagged read: walks the full chain → reaches the backend.
         auto normalResult = co_await view.readOneRaw(key);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(normalResult));
         BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(normalResult).get(),
-            "value_from_previous_block"sv);
+            std::get<storage::Entry>(normalResult).get(), "value_from_previous_block"sv);
 
         // Verify the batch path as well (storeOldValues uses readSomeRaw)
         auto bypassBatch = co_await view.readSomeRaw(
-            std::vector{key}, storage2::BYPASS_READ_SET,
-            storage2::BYPASS_MULTILAYER);
+            std::vector{key}, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER);
         BOOST_CHECK_EQUAL(bypassBatch.size(), 1u);
-        BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(
-            bypassBatch[0]));
+        BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(bypassBatch[0]));
 
         auto normalBatch = co_await view.readSomeRaw(std::vector{key});
         BOOST_CHECK_EQUAL(normalBatch.size(), 1u);
         BOOST_CHECK(std::holds_alternative<storage::Entry>(normalBatch[0]));
         BOOST_CHECK_EQUAL(
-            std::get<storage::Entry>(normalBatch[0]).get(),
-            "value_from_previous_block"sv);
+            std::get<storage::Entry>(normalBatch[0]).get(), "value_from_previous_block"sv);
 
         co_return;
     }());
