@@ -35,7 +35,6 @@
     "tbb",
     "jsoncpp",
     "jwt-cpp",
-    "gmp",
     "curl",
     "tomlplusplus",
     {
@@ -78,6 +77,7 @@
         "tarscpp",
         "blst",
         "ittapi",
+        "gmp",
         "group-sig",
         "paillier"
       ]
