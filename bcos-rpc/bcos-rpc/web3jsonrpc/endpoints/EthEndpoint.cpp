@@ -727,9 +727,11 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
-    // Authoritative first-byte dispatch (RawTransactionDispatch.h). L2 never admits blob
-    // (type-3) transactions, and deposits (0x7e) can only be injected by the consensus
-    // layer through the Engine API, never through the public transaction pool.
+    // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
+    // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
+    // acceptance divergence, not a reference check (see the OpScheduler.h type-byte gate note).
+    // Deposits (0x7e) can only be injected by the consensus layer through the Engine API, never
+    // through the public transaction pool.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
@@ -745,6 +747,14 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     if (auto const error = codec::rlp::decode(bytesRef, web3Tx); error != nullptr) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
+    }
+    // op-geth rejects Deposit (0x7e) from eth_sendRawTransaction
+    // (ErrTxTypeNotSupported); deposits only enter via the derivation/engine
+    // path, never from a client RPC submission.
+    if (web3Tx.type == TransactionType::Deposit) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
     }
     auto encodeTxHash = web3Tx.txHash();
 
