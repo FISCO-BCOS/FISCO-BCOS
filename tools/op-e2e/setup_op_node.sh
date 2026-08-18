@@ -141,14 +141,28 @@ if step_run 3; then
 fi
 
 # ---------- 4. 生成 allocs(genesis 预部署 bytecode 片段) ----------
+# op-alignment-on-scheduler: build-allocs.py requires --base-allocs (the frozen
+# op-deployer terminal alloc JSON, op-fork-pin.toml [karst_pin].base_allocs_sha256).
+# If allocs.ini already exists (from a prior run or manual setup), skip regeneration.
 if step_run 4; then
-  step 4 "build-allocs.py → allocs.ini"
-  [ -f "$OPGEN/chain-config.yaml" ] || cp "$OPGEN/chain-config.template.yaml" "$OPGEN/chain-config.yaml"
-  "$VENV/bin/python" "$OPGEN/build-allocs.py" \
-      --config "$OPGEN/chain-config.yaml" \
-      --contracts "$L2CONTRACTS" \
-      --out "$WORK/allocs.ini" || die "build-allocs 失败"
-  log "$(grep -c '^\[alloc' "$WORK/allocs.ini") 个预部署 alloc"
+  if [ -s "$WORK/allocs.ini" ]; then
+    step 4 "allocs.ini 已存在($(grep -c '^\[alloc' "$WORK/allocs.ini") alloc sections),跳过"
+  else
+    step 4 "build-allocs.py → allocs.ini"
+    [ -f "$OPGEN/chain-config.yaml" ] || cp "$OPGEN/chain-config.template.yaml" "$OPGEN/chain-config.yaml"
+    # --base-allocs: provide via BASE_ALLOCS env var (CI) or default committed path.
+    # On first CI run, generate via: op-deployer init → bootstrap → apply → inspect genesis
+    # (see .github/workflows/workflow.yml op-genesis job for the full pipeline).
+    BASE_ALLOCS="${BASE_ALLOCS:-$OPGEN/op-fork-base-allocs.json}"
+    [ -f "$BASE_ALLOCS" ] || die "base-allocs JSON not found: $BASE_ALLOCS
+  Run op-deployer pipeline to generate it (see .github/workflows/workflow.yml op-genesis job)"
+    "$VENV/bin/python" "$OPGEN/build-allocs.py" \
+        --config "$OPGEN/chain-config.yaml" \
+        --contracts "$L2CONTRACTS" \
+        --base-allocs "$BASE_ALLOCS" \
+        --out "$WORK/allocs.ini" || die "build-allocs 失败"
+    log "$(grep -c '^\[alloc' "$WORK/allocs.ini") 个预部署 alloc"
+  fi
 fi
 
 # ---------- 5. B3 装配:node.pem + certs + nodes.json + jwt + 合并 config.genesis ----------

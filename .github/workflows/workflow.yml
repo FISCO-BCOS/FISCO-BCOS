@@ -599,6 +599,44 @@ jobs:
               -o /tmp/op-e2e-sign/sign_secp "$SECP_PKG/lib/libsecp256k1.a" \
               "$SECP_PKG/lib/libsecp256k1_precomputed.a" -lssl -lcrypto 2>&1 | tail -5 || true
           fi
+      - name: Set up Go (for op-deployer genesis pipeline, D1)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Generate OP-deployer terminal allocs (genesis base, D1)
+        # op-deployer v0.7.1 requires L1 RPC + deployer key. Secrets provide
+        # Sepolia testnet access for CI; locally the committed op-fork-base-allocs.json
+        # is used (setup step 4 skips regeneration if allocs.ini exists).
+        # On first successful run, commit op-fork-base-allocs.json to pin the artifact
+        # and compute base_allocs_sha256 in op-fork-pin.toml.
+        if: ${{ env.DEPLOYER_L1_RPC_URL != '' && env.DEPLOYER_PRIVATE_KEY != '' }}
+        env:
+          DEPLOYER_L1_RPC_URL: ${{ secrets.OP_DEPLOYER_L1_RPC_URL }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.OP_DEPLOYER_PRIVATE_KEY }}
+        run: |
+          OPD="${{ github.workspace }}/tools/opstack-genesis/op-deployer"
+          if [ ! -x "$OPD" ]; then
+            echo "Building op-deployer v0.7.1 from optimism monorepo..."
+            OPTIMISM_DIR=$(mktemp -d)
+            git clone --depth 1 --branch op-deployer/v0.7.1 \
+              https://github.com/ethereum-optimism/optimism "$OPTIMISM_DIR"
+            cd "$OPTIMISM_DIR/op-deployer"
+            go build -o "$OPD" ./cmd/...
+            cd "$OPTIMISM_DIR" && rm -rf "$OPTIMISM_DIR"
+          fi
+          WORKD=$(mktemp -d)
+          "$OPD" init --l1-chain-id 11155111 --l2-chain-ids 11155111 --workdir "$WORKD"
+          "$OPD" bootstrap implementations --workdir "$WORKD" \
+            --l1-rpc-url "$DEPLOYER_L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
+          "$OPD" apply --workdir "$WORKD" \
+            --l1-rpc-url "$DEPLOYER_L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
+          OUT="${{ github.workspace }}/tools/opstack-genesis/op-fork-base-allocs.json"
+          "$OPD" inspect genesis 11155111 --workdir "$WORKD" --outfile "$OUT"
+          echo "base-allocs.json generated ($(wc -c < "$OUT") bytes)"
+          SHA=$(sha256sum "$OUT" | cut -d' ' -f1)
+          echo "sha256: $SHA"
+          echo "TODO: commit this file and update base_allocs_sha256 in op-fork-pin.toml"
+          rm -rf "$WORKD"
       - name: Rebuild B3/B3a nodes + run e2e suite
         env:
           WORK: ${{ runner.temp }}/op-spike
