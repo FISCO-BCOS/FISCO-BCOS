@@ -115,13 +115,6 @@ public:
     IOServicePool& operator=(IOServicePool&&) = delete;
     ~IOServicePool();
 
-    // Stop all worker io_contexts and join their threads. After stop() returns no
-    // queued task will run against the pool, so callers that own the pool can tear
-    // down objects that posted work to it without a use-after-free. Idempotent:
-    // safe to call more than once (subsequent calls are no-ops). The destructor
-    // calls stop() internally.
-    void stop();
-
     std::shared_ptr<IOService>& getIOService();
 
     template <class Task>

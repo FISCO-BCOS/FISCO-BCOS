@@ -36,7 +36,7 @@ IOServicePool::IOServicePool(size_t _workerNum, std::string_view _threadName)
     ::ranges::sort(m_threadIds);
 }
 
-void IOServicePool::stop()
+IOServicePool::~IOServicePool()
 {
     for (auto& ctx : m_contexts)
     {
@@ -46,7 +46,7 @@ void IOServicePool::stop()
     {
         if (ctx.thread.joinable())
         {
-            // Handle the edge case where the pool is stopped on its own
+            // Handle the edge case where the pool is destroyed on its own
             // worker thread (e.g. when FrontService destruction is triggered
             // by a temporary shared_ptr held by a completion handler).
             // Joining self would cause pthread_join EDEADLK.
@@ -62,11 +62,6 @@ void IOServicePool::stop()
             }
         }
     }
-}
-
-IOServicePool::~IOServicePool()
-{
-    stop();
 }
 
 std::shared_ptr<IOServicePool::IOService>& IOServicePool::getIOService()
