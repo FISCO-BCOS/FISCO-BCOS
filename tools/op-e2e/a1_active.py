@@ -37,6 +37,14 @@ def check(name, cond, detail=""):
         print(f"  FAIL {name} {detail}")
 
 
+def fail_out():
+    """Print the summary and exit 1 — used when a failed check leaves nothing to assert on."""
+    print(f"\n{len(PASSED)} passed, {len(FAILED)} failed")
+    if FAILED:
+        print("Failed:", FAILED)
+    sys.exit(1)
+
+
 def _jwt(secret_hex):
     def b64url(d):
         return base64.urlsafe_b64encode(d).rstrip(b"=").decode()
@@ -82,12 +90,16 @@ def main():
                 if all(f"engine_{m}V{v}" in caps
                        for m in ["newPayload", "forkchoiceUpdated", "getPayload"])), None)
     check(f"caps have a coherent V{ver or '?'} trio", ver is not None, str(caps))
+    if ver is None:
+        fail_out()  # every later engine call would render engine_*VNone
     V = f"V{ver}"
 
     # 1. head (genesis on fresh B3a; at HEAD the pull model has no in-process builder,
     # so the chain never advances — payload-side flows live in the C++ harness until Tier-2)
     head_block = eth.call("eth_getBlockByNumber", ["latest", False])
     check("head queryable", head_block is not None, str(head_block))
+    if head_block is None:
+        fail_out()  # head_block["hash"] below would crash
     head = head_block["hash"]
 
     # 2. pre-FCU label state: strict op-geth semantics — null when nothing tracked.
@@ -122,7 +134,7 @@ def main():
         eng.call(f"engine_getPayloadV{ver}", ["0x0000000000000000"])
         check("getPayload refused in OP mode", False, "expected an error")
     except AssertionError as e:
-        check("getPayload refused in OP mode", True, str(e)[:90])
+        check("getPayload refused in OP mode", "-32601" not in str(e), str(e)[:90])
 
     # 6. post-FCU labels: routed to the tracked (genesis) head — hash equality with the
     # FCU hashes proves the tracked path (not the latest alias) served them
@@ -155,8 +167,7 @@ def main():
         check("FCU unknown head SYNCING",
               fc3.get("payloadStatus", {}).get("status") == "SYNCING", str(fc3)[:120])
     except AssertionError as e:
-        check("FCU unknown head SYNCING", "SYNCING" in str(e) or "error" in str(e).lower(),
-              str(e)[:70])
+        check("FCU unknown head SYNCING", "SYNCING" in str(e), str(e)[:70])
 
     print(f"\n{len(PASSED)} passed, {len(FAILED)} failed")
     if FAILED:
