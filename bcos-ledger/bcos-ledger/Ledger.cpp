@@ -247,9 +247,10 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 header
-    // When blockHashOverride is set (OP path), the stored header's hash() differs
-    // from the override key in SYS_NUMBER_2_HASH. OP-aware readers must use the
-    // override hash, not header->hash().
+    // NOTE (morebtcg #5434): when blockHashOverride is set (OP path), the stored header's
+    // recomputable hash() differs from the override key in SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER.
+    // OP-aware readers must use the override hash, not header->hash(). Generic ledger tools that
+    // recompute hash from the stored header will see an intentional mismatch.
     bytes headerBuffer;
     header->encode(headerBuffer);
 

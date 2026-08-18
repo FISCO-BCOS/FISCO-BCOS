@@ -19,6 +19,8 @@
  */
 #include "EthBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <boost/throw_exception.hpp>
 #include <cstring>
 
 using namespace bcos;
@@ -446,6 +448,12 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // FISCO-native / OP headers (EthBlockVersion::NON_ETH) store the timestamp in MILLISECONDS;
     // the Ethereum RLP field is SECONDS — /1000 applies only to those (ETH-version headers
     // already carry seconds, e.g. via EthBlockHeader::toTarsHeader's passthrough).
+    //
+    // NOTE (morebtcg #5434): integer division is lossy for sub-second precision (1001 ms → 1 s).
+    // Real OP block timestamps are whole seconds today; if sub-second timestamps are ever fed,
+    // the RLP hash would not be reproducible from the decoded form. Assert the invariant:
+    assert((m_version != EthBlockVersion::NON_ETH || m_data.timestamp % 1000 == 0) &&
+           "NON_ETH timestamp must be a whole number of seconds (ms divisible by 1000)");
     const auto rlpTimestamp =
         m_version == EthBlockVersion::NON_ETH ? m_data.timestamp / 1000 : m_data.timestamp;
     codec::rlp::encode(out, m_data.parentInfo.blockHash, m_data.uncleHash, m_data.coinbase,
