@@ -18,6 +18,7 @@
  * @date 2026.05.20
  */
 
+#include <chrono>
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtErrors.h>
 #include <bcos-rpc/jwtAuth/JwtToken.h>

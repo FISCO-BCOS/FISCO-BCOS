@@ -18,6 +18,7 @@
  */
 #include "bcos-utilities/NewTimer.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <chrono>
 #include <boost/test/unit_test.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <thread>

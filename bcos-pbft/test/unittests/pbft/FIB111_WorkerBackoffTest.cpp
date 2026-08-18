@@ -20,6 +20,7 @@
  * @date 2026-05-07
  */
 #include "bcos-pbft/core/ConsensusEngine.h"
+#include <chrono>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>

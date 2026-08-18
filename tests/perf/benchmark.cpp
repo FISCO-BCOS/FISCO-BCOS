@@ -5,6 +5,7 @@
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
+#include <ostream>
 #include <boost/filesystem.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/trivial.hpp>

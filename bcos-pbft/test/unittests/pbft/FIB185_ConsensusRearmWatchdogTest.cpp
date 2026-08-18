@@ -18,6 +18,7 @@
  * @date 2026-06-15
  */
 #include "test/unittests/pbft/PBFTFixture.h"
+#include <chrono>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>

@@ -21,6 +21,8 @@
 
 #include "../common/RPCFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <ostream>
+#include <chrono>
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-rpc/filter/LogMatcher.h>

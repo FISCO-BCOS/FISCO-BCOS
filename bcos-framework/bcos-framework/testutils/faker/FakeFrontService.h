@@ -352,6 +352,10 @@ public:
     void asyncSendResponse(const std::string& _id, int _moduleId, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _responseData, ReceiveMsgFunc _responseCallback) override
     {
+        // m_fakeGateWay is only nulled by ~SyncFixture() teardown, after stop() has joined all
+        // worker threads, so there is no live race here. The guard is pure defense: a test that
+        // holds a frontService() handle and sends after fixture destruction gets a no-op instead
+        // of a null-deref.
         if (m_fakeGateWay)
         {
             return m_fakeGateWay->asyncSendResponse(

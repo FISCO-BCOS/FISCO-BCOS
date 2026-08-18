@@ -10,6 +10,7 @@
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/errors.hpp>
 #include <cassert>
+#include <limits>
 // TODO(eth-utils-removal): 本文件多段照抄自
 // evmone test/state/state.cpp(官方 v0.21.0),替换即照抄面重写,须重验等价性宣称。
 #include <evmone/delegation.hpp>

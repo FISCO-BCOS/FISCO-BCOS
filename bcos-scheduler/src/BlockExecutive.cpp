@@ -21,6 +21,9 @@
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
 #include <utility>
 
 #ifdef USE_TCMALLOC

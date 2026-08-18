@@ -19,6 +19,7 @@
  */
 
 #include "bcos-transaction-scheduler/GC.h"
+#include <chrono>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>

@@ -1,3 +1,4 @@
+#include <ostream>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-utilities/DataConvertUtility.h>

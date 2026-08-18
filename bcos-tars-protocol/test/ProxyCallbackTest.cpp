@@ -18,6 +18,7 @@
  * @date 2022-07-24
  */
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
+#include <chrono>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <util/tc_clientsocket.h>
 #include <boost/test/unit_test.hpp>
