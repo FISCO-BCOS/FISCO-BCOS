@@ -205,6 +205,14 @@ std::optional<uint64_t> safeFromQuantity(std::string_view quantity);
 
 u256 fromBigQuantity(std::string_view quantity);
 
+/// Strict non-throwing parser for the wide (u256) hex quantities, the safeFromQuantity
+/// counterpart of fromBigQuantity. fromBigQuantity delegates to hex2u, which swallows
+/// every parse failure and returns 0 — so malformed input is indistinguishable from a
+/// genuine zero — and silently truncates anything wider than 32 bytes. This returns
+/// nullopt instead, for an empty value (including a bare "0x"), any non-hex character,
+/// or more than 64 hex digits.
+std::optional<u256> safeFromBigQuantity(std::string_view quantity);
+
 /**
  * @brief convert the bytes into hex string with 0x prefixed
  *

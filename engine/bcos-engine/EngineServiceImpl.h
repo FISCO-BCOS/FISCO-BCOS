@@ -57,12 +57,11 @@
 
 namespace bcos::engine
 {
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
+// UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
+// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes.
 DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 
 namespace detail
 {
@@ -127,7 +126,7 @@ public:
         const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
         std::uint32_t version)
     {
-        if (!isVersionSupported(version))
+        if (!isForkchoiceVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -339,6 +338,13 @@ private:
 
     struct PayloadEntry
     {
+        /// Engine API version of the call that last wrote this entry: the forkchoiceUpdated
+        /// version for a build, the newPayload version for a commit. getPayload's version
+        /// window (detail::isGetPayloadVersionCompatible) is checked against it, so
+        /// re-querying a payloadId AFTER committing it through newPayloadV4 answers -38005
+        /// rather than replaying the payload. op-node never does that — it fetches a build
+        /// exactly once — and op-geth's build cache is likewise not meant to outlive the
+        /// commit.
         std::uint32_t version = 0;
         ExecutionPayload executionPayload;
         u256 blockValue = 0;
@@ -357,10 +363,28 @@ private:
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
     };
 
-    static bool isVersionSupported(std::uint32_t version)
+    /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
+    /// version Karst payload building runs on), newPayload at V4 (Isthmus payload with
+    /// executionRequests), getPayload at V5 (Osaka response shape). Every version from V1
+    /// up is served: adapting to Karst does not make the older versions incompatible, and
+    /// the V1-V3 callers (the unsafe_allow_v1_executor harness, the integration suites)
+    /// keep working.
+    static bool isForkchoiceVersionSupported(std::uint32_t version)
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
                version <= static_cast<std::uint32_t>(ApiVersion::V3);
+    }
+
+    static bool isNewPayloadVersionSupported(std::uint32_t version)
+    {
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V4);
+    }
+
+    static bool isGetPayloadVersionSupported(std::uint32_t version)
+    {
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V5);
     }
 
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -376,7 +400,7 @@ private:
 
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const
     {
-        if (!isVersionSupported(version))
+        if (!isGetPayloadVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -395,13 +419,29 @@ private:
                 IncompatiblePayloadVersion{} << bcos::errinfo_comment{
                     "Payload version is incompatible with requested method version"});
         }
+        // The version window alone is not enough once the entry may have been REWRITTEN by
+        // a commit: newPayload replaces the cached payload with the request's, and a V3
+        // request carries no withdrawalsRoot (it is a V4+/Isthmus field). Such an entry is
+        // still tagged version 3, so it passes the V4/V5 window above, and
+        // serializeExecutionPayload would then throw InternalError on the missing field.
+        // Answer the version error it really is instead of -32603.
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V4) &&
+            !it->second.executionPayload.withdrawalsRoot.has_value())
+        {
+            BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion{} << bcos::errinfo_comment{
+                                      "Payload does not carry the V4+ response shape"});
+        }
 
         return std::make_unique<GetPayloadData>(GetPayloadData{
             .executionPayload = it->second.executionPayload,
             .blockValue = it->second.blockValue,
             .blobsBundle = it->second.blobsBundle,
             .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
-            .executionRequests = std::nullopt,
+            // getPayloadV4/V5 responses must carry executionRequests; Karst never has
+            // any, so the value is a present-but-empty list (serialized as []).
+            .executionRequests = version >= static_cast<std::uint32_t>(ApiVersion::V4) ?
+                                     std::optional<std::vector<bytes>>{std::in_place} :
+                                     std::nullopt,
             .parentBeaconBlockRoot = it->second.parentBeaconBlockRoot,
         });
     }
@@ -409,7 +449,7 @@ private:
     bcos::task::Task<PayloadStatus> handleNewPayload(
         const NewPayloadRequest& request, std::uint32_t version)
     {
-        if (!isVersionSupported(version))
+        if (!isNewPayloadVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
@@ -427,19 +467,49 @@ private:
         if (version <= 2 && request.parentBeaconBlockRoot.has_value())
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                std::string("parentBeaconBlockRoot is only valid for newPayloadV3"));
+                std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
         }
-        if (version == 3)
+        if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
         {
-            if (!request.parentBeaconBlockRoot.has_value())
+            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string(
+                    "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and later"));
+        }
+        if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
+        {
+            // op-geth checks expectedBlobVersionedHashes against the blob hashes carried by
+            // the payload's OWN transactions and answers INVALID on any length or element
+            // mismatch (beacon/engine/types.go:311-322, whose error reaches
+            // eth/catalyst/api.go:867 api.invalid -> Status: engine.INVALID). No blob
+            // sidecar lookup is involved, so "the EL cannot verify these" is not a state
+            // this check can be in. L2 (Ecotone onwards) forbids blob transactions
+            // entirely, so the payload side is always empty and any non-empty list is a
+            // mismatch.
+            //
+            // There is deliberately no ACCEPTED escape. op-geth returns ACCEPTED from
+            // exactly one place — "State not available, ignoring new payload",
+            // eth/catalyst/api.go:904-907, the parent-block-known-but-state-missing case —
+            // which on this stack is the parentKnown -> SYNCING branch below. Answering
+            // ACCEPTED here (as the V3 path used to, whenever a payload carried
+            // transactions but no blob hashes) neither validated nor stored the payload,
+            // so the CL took the block as accepted while no later forkchoiceUpdated could
+            // ever make it head.
+            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
+                            "transactions)"));
+        }
+        if (version >= 4)
+        {
+            // Present-but-empty, not "absent or empty": op-geth's NewPayloadV4 rejects a
+            // nil executionRequests outright ("nil executionRequests post-prague",
+            // eth/catalyst/api.go:755) and only then requires the list to be empty for
+            // Isthmus. The RPC layer already enforces the fourth parameter, so accepting
+            // nullopt here would give in-process callers a laxer contract than the wire.
+            if (!request.executionRequests.has_value() || !request.executionRequests->empty())
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                    std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3"));
-            }
-            if (request.expectedBlobVersionedHashes.empty() &&
-                !request.executionPayload.transactions.empty())
-            {
-                co_return makeStatus(PayloadValidationStatus::Accepted, std::nullopt, std::nullopt);
+                    std::string("executionRequests must be a present-but-empty list on this "
+                                "chain"));
             }
         }
 
@@ -658,6 +728,31 @@ private:
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
+            // Isthmus payload shape (V4/V5, fed by forkchoiceUpdatedV3 on Karst): the
+            // field must be present so getPayloadV5 -> newPayloadV4 round-trips.
+            //
+            // TODO(C4 header fields): this is a zero PLACEHOLDER, not a computed value.
+            // On OP Stack withdrawalsRoot is the storage root of the L2ToL1MessagePasser
+            // predeploy and is what L1 withdrawal proofs are checked against, so until
+            // the real header wiring lands, validateExecutionPayload can only check that
+            // the field is present — never that its value is right, and a malicious CL
+            // submitting a zero root is indistinguishable from this node's own builds.
+            //
+            // This is a KNOWN UNCONTAINED gap, not a test-harness-only one. The
+            // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
+            // executor_version >= 2 (it throws for executor_version < 2 unless the
+            // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
+            // this code off a production endpoint. EngineServiceInitializer::build
+            // instantiates this same template for the v2 EthereumExecutor, so the
+            // intended production configuration — executor_version >= 2 with
+            // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
+            // here, getPayloadV5 serializes it, and newPayloadV4 accepts it on presence
+            // alone. Until C4 computes and verifies the real L2ToL1MessagePasser storage
+            // root, no L1 withdrawal proof may be taken against a root produced by this
+            // node. The v2 instantiation serving the zero root is pinned by
+            // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
+            // which has to be updated when the real value lands.
+            executionPayload.withdrawalsRoot = h256{};
         }
 
         // Step 2a: Get LedgerConfig via storage-based LedgerMethods

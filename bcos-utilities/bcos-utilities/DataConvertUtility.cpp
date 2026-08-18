@@ -157,3 +157,25 @@ bcos::u256 bcos::fromBigQuantity(std::string_view quantity)
 {
     return hex2u(quantity);
 }
+
+std::optional<bcos::u256> bcos::safeFromBigQuantity(std::string_view quantity)
+{
+    auto digits = quantity;
+    if (digits.size() >= 2 && digits[0] == '0' && (digits[1] == 'x' || digits[1] == 'X'))
+    {
+        digits.remove_prefix(2);
+    }
+    // 64 hex digits is the full 32-byte width of u256; hex2u truncates beyond it.
+    if (digits.empty() || digits.size() > 64)
+    {
+        return std::nullopt;
+    }
+    for (char c : digits)
+    {
+        if (convertCharToHexNumber(c) < 0)
+        {
+            return std::nullopt;  // sign, whitespace, or trailing garbage
+        }
+    }
+    return hex2u(digits);
+}

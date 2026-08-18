@@ -39,7 +39,7 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
 
 void EndpointsMapping::addHandlers(bool enableOPEngine)
 {
-    if (enableOPEngine) 
+    if (enableOPEngine)
     {
         addEngineHandlers();
     }
@@ -65,6 +65,7 @@ void EndpointsMapping::addEngineHandlers()
     m_handlers[methodString(EthMethod::engine_getPayloadV2)] = &Endpoints::getPayloadV2;
     m_handlers[methodString(EthMethod::engine_getPayloadV3)] = &Endpoints::getPayloadV3;
     m_handlers[methodString(EthMethod::engine_getPayloadV4)] = &Endpoints::getPayloadV4;
+    m_handlers[methodString(EthMethod::engine_getPayloadV5)] = &Endpoints::getPayloadV5;
     m_handlers[methodString(EthMethod::engine_newPayloadV1)] = &Endpoints::newPayloadV1;
     m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
     m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;

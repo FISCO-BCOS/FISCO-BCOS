@@ -306,12 +306,23 @@ PayloadAttributes makePayloadAttributesV3()
     return payloadAttributes;
 }
 
+/// Attributes op-node actually sends on a Karst chain: same as V3 except the withdrawals
+/// operation list is empty, which Isthmus requires of the resulting ExecutionPayloadV4
+/// (op-geth beacon/engine/types.go:324-326).
+PayloadAttributes makeKarstPayloadAttributes()
+{
+    auto payloadAttributes = makePayloadAttributesV3();
+    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
+    return payloadAttributes;
+}
+
 NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPayload)
 {
     NewPayloadRequest request;
     request.executionPayload = executionPayload;
-    request.expectedBlobVersionedHashes = {
-        h256("3333333333333333333333333333333333333333333333333333333333333333")};
+    // expectedBlobVersionedHashes stays empty: L2 forbids blob transactions, so a real CL
+    // never sends any and a non-empty list is INVALID from V3 up
+    // (new_payload_v3_rejects_blob_versioned_hashes below).
     // Deliberately different from makePayloadAttributesV3()'s beacon root (0x2222...):
     // tests must be able to tell whether newPayload really overwrites the cached value
     // with the request's, not just re-reads what the attributes stored.
@@ -332,9 +343,29 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
     auto capabilities = task::syncWait(
         engineService.exchangeCapabilities({"engine_forkchoiceUpdatedV1", "unknown_method"}));
 
-    BOOST_CHECK_EQUAL(capabilities.size(), 10);
-    BOOST_CHECK(std::find(capabilities.begin(), capabilities.end(), "engine_getPayloadV3") !=
-                capabilities.end());
+    // Everything implemented, not narrowed to the active fork (op-geth advertises its
+    // whole method set and lets the CL pick). The Karst triple joins the pre-Karst
+    // versions rather than replacing them.
+    BOOST_CHECK_EQUAL(capabilities.size(), 13);
+    auto contains = [&](std::string_view name) {
+        return std::find(capabilities.begin(), capabilities.end(), name) != capabilities.end();
+    };
+    BOOST_CHECK(contains("engine_exchangeCapabilities"));
+    BOOST_CHECK(contains("engine_forkchoiceUpdatedV1"));
+    BOOST_CHECK(contains("engine_forkchoiceUpdatedV2"));
+    BOOST_CHECK(contains("engine_forkchoiceUpdatedV3"));
+    BOOST_CHECK(contains("engine_getPayloadV1"));
+    BOOST_CHECK(contains("engine_getPayloadV2"));
+    BOOST_CHECK(contains("engine_getPayloadV3"));
+    BOOST_CHECK(contains("engine_getPayloadV4"));
+    BOOST_CHECK(contains("engine_getPayloadV5"));
+    BOOST_CHECK(contains("engine_newPayloadV1"));
+    BOOST_CHECK(contains("engine_newPayloadV2"));
+    BOOST_CHECK(contains("engine_newPayloadV3"));
+    BOOST_CHECK(contains("engine_newPayloadV4"));
+    // The one genuinely unimplemented version (the forkchoice window tops out at V3), so
+    // not advertised; the endpoint answers -38005.
+    BOOST_CHECK(!contains("engine_forkchoiceUpdatedV4"));
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)
@@ -588,6 +619,113 @@ BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
         static_cast<int>(PayloadValidationStatus::Valid));
 }
 
+/// A V3 payload that carries transactions and no blob hashes must be VALIDATED and
+/// COMMITTED, not waved through with ACCEPTED. The old branch answered ACCEPTED on exactly
+/// this shape: the CL saw its block taken while nothing was stored, so the next
+/// forkchoiceUpdated naming that block as head could never succeed. op-geth's only
+/// ACCEPTED is the parent-state-missing case (eth/catalyst/api.go:904-907), which here is
+/// the SYNCING branch.
+BOOST_AUTO_TEST_CASE(new_payload_v3_with_transactions_is_validated_not_accepted)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.executionPayload.transactions.push_back(
+        {.raw = bytes{0x7e, 0x01, 0x02}, .decoded = nullptr});
+    BOOST_REQUIRE(request.expectedBlobVersionedHashes.empty());
+    BOOST_REQUIRE(!request.executionPayload.transactions.empty());
+
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    // Stored, not merely acknowledged: the transactions came back out of the cache.
+    auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_EQUAL(committed->executionPayload.transactions.size(),
+        request.executionPayload.transactions.size());
+}
+
+/// Non-empty expectedBlobVersionedHashes is INVALID from V3 up, not ACCEPTED: op-geth
+/// compares the list against the payload's own transactions' blob hashes and answers
+/// INVALID on a mismatch (beacon/engine/types.go:311-322 -> api.invalid), and an L2
+/// payload never carries blob transactions.
+BOOST_AUTO_TEST_CASE(new_payload_v3_rejects_blob_versioned_hashes)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    // An otherwise perfectly valid payload — only the blob-hash list is non-empty.
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.expectedBlobVersionedHashes = {
+        h256("3333333333333333333333333333333333333333333333333333333333333333")};
+
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_NE(status.validationError->find("expectedBlobVersionedHashes"), std::string::npos);
+}
+
+/// Re-querying with getPayloadV5 a payloadId that was committed through newPayloadV3 must
+/// answer the version error (-38005 at the RPC layer), not InternalError. A commit REWRITES
+/// the cache entry with the request's payload, and a V3 request carries no withdrawalsRoot
+/// — but the entry stays tagged version 3, so it passes the V5 window and used to blow up
+/// in serializeExecutionPayload's "withdrawalsRoot missing" check as -32603.
+BOOST_AUTO_TEST_CASE(get_payload_v5_rejects_a_v3_committed_entry_without_withdrawals_root)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    // The build always sets the field; a V3 wire request never does.
+    BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.executionPayload.withdrawalsRoot = std::nullopt;
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion);
+    // The V3 view of the same entry is still perfectly serviceable.
+    auto v3 = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK(v3);
+}
+
 BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_root)
 {
     MemPoolImpl memPool;
@@ -603,11 +741,14 @@ BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_ro
     BOOST_REQUIRE(result.payloadId.has_value());
 
     // buildPayload stored the attributes' beacon root in the payload cache; getPayload
-    // must return it. withdrawalsRoot stays unset until real-value header wiring lands.
+    // must return it. withdrawalsRoot carries the zero placeholder on V3+ builds (B4:
+    // required for the getPayloadV5 -> newPayloadV4 round trip) until real-value header
+    // wiring lands.
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_REQUIRE(payload->parentBeaconBlockRoot.has_value());
     BOOST_CHECK_EQUAL(*payload->parentBeaconBlockRoot, *payloadAttributes.parentBeaconBlockRoot);
-    BOOST_CHECK(!payload->executionPayload.withdrawalsRoot.has_value());
+    BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, h256{});
 
     // newPayload carries both fields back in; the committed cache entry keeps them.
     // This exercises the structure layer only: withdrawalsRoot is set directly on the
@@ -944,6 +1085,160 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     {
         BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]), 0);
     }
+}
+
+// ---- B4: Karst method surface (forkchoiceUpdatedV3 -> getPayloadV5 -> newPayloadV4) ----
+
+BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    // getPayloadV5 retrieves a payload built via forkchoiceUpdatedV3.
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+    BOOST_REQUIRE(payload);
+    // V5 response shape: executionRequests present-but-empty, blobs bundle three empty
+    // arrays, shouldOverrideBuilder=false, Isthmus withdrawalsRoot placeholder present.
+    BOOST_REQUIRE(payload->executionRequests.has_value());
+    BOOST_CHECK(payload->executionRequests->empty());
+    BOOST_REQUIRE(payload->blobsBundle.has_value());
+    BOOST_CHECK(payload->blobsBundle->commitments.empty());
+    BOOST_CHECK(payload->blobsBundle->proofs.empty());
+    BOOST_CHECK(payload->blobsBundle->blobs.empty());
+    BOOST_CHECK(!payload->shouldOverrideBuilder);
+    BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
+    BOOST_REQUIRE(payload->parentBeaconBlockRoot.has_value());
+
+    // newPayloadV4 commits it: echoed beacon root + required-empty lists.
+    NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bytes>{};
+    auto status = task::syncWait(engineService.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makePayloadAttributesV2();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // A V2 build carries neither blobGasUsed/excessBlobGas nor withdrawalsRoot, so
+    // serializing it in the V5 response shape would fabricate them. op-geth's GetPayloadV5
+    // allows only PayloadV3 builds and answers UnsupportedFork otherwise; so does this.
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload(*result.payloadId, 5)), IncompatiblePayloadVersion);
+    // getPayloadV4 has the same window: op-geth's GetPayloadV4 also admits only
+    // PayloadV3 builds, and the V4 response shape needs the same three fields a V2 build
+    // does not have.
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload(*result.payloadId, 4)), IncompatiblePayloadVersion);
+    // The same build is still retrievable through its own method version.
+    BOOST_CHECK_NO_THROW(task::syncWait(engineService.getPayload(*result.payloadId, 2)));
+}
+
+BOOST_AUTO_TEST_CASE(new_payload_v4_rejects_nonempty_lists_and_missing_fields)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_validationBlockNumber,
+        c_validationBlockNumber, c_validationBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+
+    auto makeRequest = [&] {
+        NewPayloadRequest request;
+        request.executionPayload = payload->executionPayload;
+        request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+        request.executionRequests = std::vector<bytes>{};
+        return request;
+    };
+    auto expectInvalid = [&](NewPayloadRequest const& request, std::string_view needle) {
+        auto status = task::syncWait(engineService.newPayload(request, 4));
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
+        BOOST_REQUIRE(status.validationError.has_value());
+        BOOST_CHECK_NE(status.validationError->find(needle), std::string::npos);
+    };
+
+    // L2 forbids blob transactions: a V4 request can never expect blob hashes.
+    auto blobHashesRequest = makeRequest();
+    blobHashesRequest.expectedBlobVersionedHashes = {
+        h256("3333333333333333333333333333333333333333333333333333333333333333")};
+    expectInvalid(blobHashesRequest, "expectedBlobVersionedHashes");
+
+    // Karst carries no execution-layer requests.
+    auto executionRequestsRequest = makeRequest();
+    executionRequestsRequest.executionRequests = std::vector<bytes>{bytes{0x01}};
+    expectInvalid(executionRequestsRequest, "executionRequests");
+
+    // An absent executionRequests is rejected too, not silently accepted: the RPC layer
+    // makes the fourth parameter mandatory, so an in-process caller must not get a laxer
+    // contract than the wire (op-geth: "nil executionRequests post-prague").
+    auto absentRequestsRequest = makeRequest();
+    absentRequestsRequest.executionRequests = std::nullopt;
+    expectInvalid(absentRequestsRequest, "executionRequests");
+
+    // Isthmus requires a present-but-EMPTY withdrawals operation list at V4.
+    auto nonEmptyWithdrawalsRequest = makeRequest();
+    nonEmptyWithdrawalsRequest.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 2, .amount = 3, .address = Address{}}};
+    expectInvalid(nonEmptyWithdrawalsRequest, "withdrawals");
+
+    // Isthmus payload shape: withdrawalsRoot is required at V4.
+    auto missingRootRequest = makeRequest();
+    missingRootRequest.executionPayload.withdrawalsRoot = std::nullopt;
+    expectInvalid(missingRootRequest, "withdrawalsRoot");
+
+    // parentBeaconBlockRoot is required at V3 and later.
+    auto missingBeaconRequest = makeRequest();
+    missingBeaconRequest.parentBeaconBlockRoot = std::nullopt;
+    expectInvalid(missingBeaconRequest, "parentBeaconBlockRoot");
+}
+
+BOOST_AUTO_TEST_CASE(per_method_version_windows_and_unknown_payload)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // Unknown payloadId surfaces as a typed UnknownPayload (RPC maps it to -38001).
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload("0x0000000000000000", 5)), UnknownPayload);
+
+    // Out-of-window versions surface as UnsupportedEngineApiVersion (RPC maps to -38005):
+    // forkchoiceUpdated tops out at V3, newPayload at V4, getPayload at V5.
+    auto forkchoiceState = makeForkchoiceState();
+    BOOST_CHECK_THROW(task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 4)),
+        UnsupportedEngineApiVersion);
+    NewPayloadRequest request;
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.newPayload(request, 5)), UnsupportedEngineApiVersion);
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.getPayload("0x01", 6)), UnsupportedEngineApiVersion);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

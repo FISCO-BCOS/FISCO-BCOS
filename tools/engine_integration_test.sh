@@ -436,26 +436,45 @@ else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.2 engine_exchangeCapabilities
-log_test "engine_exchangeCapabilities"
-RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV2"]]')
+# 3.2 engine_exchangeCapabilities — everything implemented, pre-Karst included (B4)
+log_test "engine_exchangeCapabilities (implemented surface)"
+RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV4"]]')
 if echo "${RESP}" | grep -q '"result"'; then
-    if echo "${RESP}" | grep -q '"engine_exchangeCapabilities"'; then
+    MISSING=""
+    for CAP in engine_exchangeCapabilities \
+        engine_forkchoiceUpdatedV1 engine_forkchoiceUpdatedV2 engine_forkchoiceUpdatedV3 \
+        engine_getPayloadV1 engine_getPayloadV2 engine_getPayloadV3 \
+        engine_getPayloadV4 engine_getPayloadV5 \
+        engine_newPayloadV1 engine_newPayloadV2 engine_newPayloadV3 engine_newPayloadV4; do
+        echo "${RESP}" | grep -q "\"${CAP}\"" || MISSING="${MISSING} ${CAP}"
+    done
+    # forkchoiceUpdatedV4 is not implemented, so must not be advertised.
+    EXTRA=""
+    for CAP in engine_forkchoiceUpdatedV4; do
+        echo "${RESP}" | grep -q "\"${CAP}\"" && EXTRA="${EXTRA} ${CAP}"
+    done
+    if [ -z "${MISSING}" ] && [ -z "${EXTRA}" ]; then
         log_pass
     else
-        log_fail "Missing expected capabilities"
+        log_fail "capabilities missing:${MISSING:- none} unexpected:${EXTRA:- none} — ${RESP}"
     fi
 else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.3 engine_forkchoiceUpdatedV2 (without payloadAttributes)
-log_test "engine_forkchoiceUpdatedV2 (no payload)"
+# Zero beacon root: this mock CL has no beacon chain.
+ZERO_ROOT="0x0000000000000000000000000000000000000000000000000000000000000000"
+# Engine wire timestamps are Unix seconds.
+TS_SECS=$(date +%s)
+TS_HEX=$(printf '0x%x' "${TS_SECS}")
+
+# 3.3 engine_forkchoiceUpdatedV3 (without payloadAttributes)
+log_test "engine_forkchoiceUpdatedV3 (no payload)"
 HEAD_RESP=$(rpc_call "eth_getBlockByNumber" '["latest",false]')
 HEAD_HASH=$(json_val "${HEAD_RESP}" "hash")
 
 if [ -n "${HEAD_HASH}" ]; then
-    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV3" \
         "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},null]")
     if echo "${RESP}" | grep -q '"result"'; then
         STATUS=$(json_fcu_status "${RESP}")
@@ -472,12 +491,12 @@ else
     log_fail "Cannot get head hash"
 fi
 
-# 3.4 engine_forkchoiceUpdatedV2 (with payloadAttributes)
-log_test "engine_forkchoiceUpdatedV2 (with payload)"
+# 3.4 engine_forkchoiceUpdatedV3 (with V3 payloadAttributes: withdrawals + beacon root)
+log_test "engine_forkchoiceUpdatedV3 (with payload)"
 PAYLOAD_ID=""
 if [ -n "${HEAD_HASH}" ]; then
-    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
-        "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},{\"timestamp\":\"0x100\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[]}]")
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV3" \
+        "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},{\"timestamp\":\"${TS_HEX}\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[],\"parentBeaconBlockRoot\":\"${ZERO_ROOT}\"}]")
     if echo "${RESP}" | grep -q '"result"'; then
         STATUS=$(json_fcu_status "${RESP}")
         PAYLOAD_ID=$(json_val "${RESP}" "payloadId")
@@ -494,31 +513,67 @@ else
     log_fail "No head hash available"
 fi
 
-# 3.5 engine_getPayloadV2 + engine_newPayloadV2
-log_test "engine_getPayloadV2 + engine_newPayloadV2"
+# 3.5 engine_getPayloadV5 + engine_newPayloadV4
+log_test "engine_getPayloadV5 + engine_newPayloadV4"
 if [ -n "${PAYLOAD_ID:-}" ]; then
     # getPayload
-    GET_RESP=$(rpc_call "engine_getPayloadV2" "[\"${PAYLOAD_ID}\"]")
+    GET_RESP=$(rpc_call "engine_getPayloadV5" "[\"${PAYLOAD_ID}\"]")
     if echo "${GET_RESP}" | grep -q '"blockHash"'; then
-        # Extract payload and feed to newPayload. Use a temp file to avoid
-        # shell quoting issues with the multi-KB JSON.
+        # V5 response shape: executionRequests must be present.
+        if ! echo "${GET_RESP}" | grep -q '"executionRequests"'; then
+            log_fail "getPayloadV5 response missing executionRequests: ${GET_RESP}"
+        fi
+        # Extract payload and feed to newPayloadV4 with the required
+        # [payload, [], beaconRoot, []] parameter shape. Use a temp file to
+        # avoid shell quoting issues with the multi-KB JSON.
         NEW_REQ_FILE="${WORK_DIR}/newPayload_req.json"
         echo "${GET_RESP}" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)['result']
 p=d['executionPayload'] if 'executionPayload' in d else d
-print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params':[p]}))
+root=d.get('parentBeaconBlockRoot','${ZERO_ROOT}')
+print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV4','params':[p,[],root,[]]}))
 " 2>/dev/null > "${NEW_REQ_FILE}"
         NEW_RESP=$(curl -s -X POST "${RPC_URL}" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${JWT_TOKEN}" \
             -d "@${NEW_REQ_FILE}" 2>/dev/null || echo '{}')
         NEW_STATUS=$(json_val "${NEW_RESP}" "status")
-        log_info "newPayload status = ${NEW_STATUS}"
-        if [ "${NEW_STATUS}" = "VALID" ] || [ "${NEW_STATUS}" = "ACCEPTED" ]; then
+        # VALID only: ACCEPTED means the node acknowledged the block without validating or
+        # storing it, the escape M9 removed. Accepting it here would hide its return.
+        log_info "newPayloadV4 status = ${NEW_STATUS}"
+        if [ "${NEW_STATUS}" = "VALID" ]; then
             log_pass
         else
-            log_fail "Unexpected newPayload status: ${NEW_STATUS}"
+            log_fail "newPayloadV4 did not answer VALID: ${NEW_RESP}"
+        fi
+
+        # The Engine boundary speaks Unix seconds; block headers store milliseconds. The
+        # committed block is what proves the conversion happened: a missing conversion is
+        # symmetric on the wire (parse and serialize cancel out) but lands the seconds in
+        # the header as milliseconds, so eth_getBlockByNumber — which divides the header
+        # timestamp by 1000 — reports a 1970 timestamp.
+        log_test "committed block carries the Unix-seconds timestamp we sent"
+        BLOCK_NUM_HEX=$(echo "${GET_RESP}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)['result']
+p=d['executionPayload'] if 'executionPayload' in d else d
+print(p['blockNumber'])
+" 2>/dev/null || echo "")
+        BLOCK_TS=""
+        if [ -n "${BLOCK_NUM_HEX}" ]; then
+            BLOCK_RESP=$(rpc_call "eth_getBlockByNumber" "[\"${BLOCK_NUM_HEX}\",false]")
+            BLOCK_TS=$(echo "${BLOCK_RESP}" | python3 -c "
+import sys,json
+print(int(json.load(sys.stdin)['result']['timestamp'],16))
+" 2>/dev/null || echo "")
+        fi
+        if [ -n "${BLOCK_TS}" ] && \
+           [ "$((BLOCK_TS > TS_SECS ? BLOCK_TS - TS_SECS : TS_SECS - BLOCK_TS))" -le 1 ]; then
+            log_info "block ${BLOCK_NUM_HEX} timestamp = ${BLOCK_TS} (sent ${TS_SECS})"
+            log_pass
+        else
+            log_fail "block timestamp ${BLOCK_TS:-<none>} is not the ${TS_SECS} seconds we sent"
         fi
     else
         log_fail "getPayload failed: ${GET_RESP}"
@@ -526,6 +581,60 @@ print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params'
 else
     log_info "Skipping (no payloadId from forkchoiceUpdated)"
     log_pass
+fi
+
+# 3.6 pre-Karst surface still works: the V2 build/fetch/submit loop end to end.
+log_test "engine_forkchoiceUpdatedV2 + getPayloadV2 + newPayloadV2 (pre-Karst)"
+V2_HEAD=$(json_val "$(rpc_call "eth_getBlockByNumber" '["latest",false]')" "hash")
+V2_TS_SECS=$((TS_SECS + 12))
+V2_TS_HEX=$(printf '0x%x' "${V2_TS_SECS}")
+if [ -n "${V2_HEAD}" ]; then
+    RESP=$(rpc_call "engine_forkchoiceUpdatedV2" \
+        "[{\"headBlockHash\":\"${V2_HEAD}\",\"safeBlockHash\":\"${V2_HEAD}\",\"finalizedBlockHash\":\"${V2_HEAD}\"},{\"timestamp\":\"${V2_TS_HEX}\",\"prevRandao\":\"0x0000000000000000000000000000000000000000000000000000000000000001\",\"suggestedFeeRecipient\":\"0x0000000000000000000000000000000000000001\",\"withdrawals\":[]}]")
+    V2_PAYLOAD_ID=$(json_val "${RESP}" "payloadId")
+    if echo "${RESP}" | grep -q '\-38005'; then
+        log_fail "forkchoiceUpdatedV2 was rejected as an unsupported fork: ${RESP}"
+    elif [ -z "${V2_PAYLOAD_ID}" ]; then
+        log_fail "forkchoiceUpdatedV2 built no payload: ${RESP}"
+    else
+        GET_RESP=$(rpc_call "engine_getPayloadV2" "[\"${V2_PAYLOAD_ID}\"]")
+        # V2 response shape: executionPayload + blockValue, no blobsBundle.
+        if ! echo "${GET_RESP}" | grep -q '"blockValue"' \
+            || echo "${GET_RESP}" | grep -q '"blobsBundle"'; then
+            log_fail "getPayloadV2 did not answer in the V2 shape: ${GET_RESP}"
+        else
+            V2_REQ_FILE="${WORK_DIR}/newPayloadV2_req.json"
+            echo "${GET_RESP}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)['result']
+p=d['executionPayload'] if 'executionPayload' in d else d
+print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params':[p]}))
+" 2>/dev/null > "${V2_REQ_FILE}"
+            V2_RESP=$(curl -s -X POST "${RPC_URL}" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer ${JWT_TOKEN}" \
+                -d "@${V2_REQ_FILE}" 2>/dev/null || echo '{}')
+            V2_STATUS=$(json_val "${V2_RESP}" "status")
+            log_info "newPayloadV2 status = ${V2_STATUS}"
+            if [ "${V2_STATUS}" = "VALID" ]; then
+                log_pass
+            else
+                log_fail "Unexpected newPayloadV2 status: ${V2_RESP}"
+            fi
+        fi
+    fi
+else
+    log_fail "Cannot get head hash"
+fi
+
+# 3.7 the one unimplemented method version answers -38005 (not method-not-found)
+log_test "engine_forkchoiceUpdatedV4 answers -38005 (not implemented)"
+RESP=$(rpc_call "engine_forkchoiceUpdatedV4" \
+    "[{\"headBlockHash\":\"${HEAD_HASH}\",\"safeBlockHash\":\"${HEAD_HASH}\",\"finalizedBlockHash\":\"${HEAD_HASH}\"},null]")
+if echo "${RESP}" | grep -q '\-38005'; then
+    log_pass
+else
+    log_fail "Expected -38005 Unsupported fork, got: ${RESP}"
 fi
 
 # ---- Step 4: Python mock consensus client ----
