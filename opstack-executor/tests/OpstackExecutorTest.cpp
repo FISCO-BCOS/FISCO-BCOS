@@ -731,6 +731,7 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
             body.insert(body.end(), it.begin(), it.end());
         bcos::bytes list;
         bcos::codec::rlp::encodeHeader(list, bcos::codec::rlp::Header{true, body.size()});
+        list.insert(list.end(), body.begin(), body.end());
         bcos::bytes env{0x7e};
         env.insert(env.end(), list.begin(), list.end());
         return env;
