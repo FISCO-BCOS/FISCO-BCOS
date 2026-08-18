@@ -131,13 +131,21 @@ public:
                                      // feature_l2_ethereum_compat.
     };
 
-    // feature_flags bit = enum value; magic_enum's default reflection range is
-    // [-128,128], so the flag count (and thus the max value, when assigned
-    // sequentially) must stay within it. Raise MAGIC_ENUM_RANGE_MAX before
-    // exceeding this.
-    static_assert(magic_enum::enum_count<Flag>() <= 128,
-        "Flag count exceeds magic_enum's default reflection range (128); flags beyond it would "
-        "be silently dropped from get/set/string2Flag/feature_flags");
+    // feature_flags bit = enum value; magic_enum's default reflection range is [-128,128].
+    // magic_enum reflects values SORTED BY VALUE (not by declaration order), so
+    // enum_value(count-1) is the maximum value: check it directly instead of the count —
+    // a count-only check misses a numbering gap below 128. The values must also stay
+    // CONTIGUOUS from zero: m_flags is indexed by position in that value-sorted
+    // reflection order, and toFlagsNumber packs bit = enum value — a gap silently
+    // desyncs the two encodings. Raise MAGIC_ENUM_RANGE_MAX before exceeding the range.
+    static_assert(magic_enum::enum_integer(
+                      magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
+        "max Flag value exceeds magic_enum's default reflection range ([-128,128]); flags "
+        "beyond it would be silently dropped from get/set/string2Flag/feature_flags");
+    static_assert(static_cast<std::size_t>(magic_enum::enum_integer(magic_enum::enum_value<Flag>(
+                      magic_enum::enum_count<Flag>() - 1))) == magic_enum::enum_count<Flag>() - 1,
+        "Flag values must stay contiguous from zero: bit i of feature_flags means enum "
+        "value i, and m_flags/magic_enum indexing assumes no gaps");
 
 private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
@@ -210,11 +218,12 @@ public:
     }
 
     // Pack the enabled flags into a 256-bit number: bit = the flag's explicit
-    // enum value (see Flag). m_flags is indexed by declaration order, so map
-    // each set bit back to its flag and shift by that flag's value — the
-    // encoding stays stable even if flags are later grouped/reordered, as long
-    // as each flag keeps its value. Consumed by L2 genesis to seed
-    // SystemConfig's feature_flags entry.
+    // enum value (see Flag). m_flags is indexed by position in magic_enum's
+    // VALUE-SORTED reflection order (not by declaration order), so map each set
+    // bit back to its flag and shift by that flag's value — the encoding stays
+    // stable even if flags are later grouped/reordered, as long as each flag
+    // keeps its value. Consumed by L2 genesis to seed SystemConfig's
+    // feature_flags entry.
     u256 toFlagsNumber() const
     {
         u256 result = 0;

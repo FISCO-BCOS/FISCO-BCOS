@@ -104,8 +104,10 @@ public:
     static bcos::Error::UniquePtr toTarsHeader(
         bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
     /// Like toTarsHeader but WITHOUT validateHeader — usable for FISCO-native/OP (NON_ETH)
-    /// headers that validateHeader rejects. For NON_ETH the RLP timestamp is SECONDS and the
-    /// FISCO header stores MILLISECONDS, so ×1000 is applied (ETH-version headers carry seconds).
+    /// headers that validateHeader rejects. Unlike toTarsHeader, ethBlockVersion is PINNED to
+    /// NON_ETH (not copied): headers this produces are always treated as NON_ETH, so the RLP
+    /// timestamp is SECONDS and the FISCO header stores MILLISECONDS, ×1000 is applied, and
+    /// rlpEncode's /1000 pairs with it.
     static bcos::Error::UniquePtr decodeTarsHeader(
         bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data);
     static bcos::Error::UniquePtr toEthBlockHeader(

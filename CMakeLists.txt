@@ -61,6 +61,11 @@ endif()
 if(FULLNODE)
     find_package(group-sig CONFIG REQUIRED)
     find_package(paillier CONFIG REQUIRED)
+    # blst is created in bcos-framework's scope by evmone's config
+    # (find_dependency) and promoted to IMPORTED_GLOBAL there — bcos-framework is
+    # added above, so by the time this runs the target already exists and this
+    # call is a guarded no-op. Kept for the non-evmone consumers' documentation
+    # value and for the day evmone drops its blst dependency.
     find_package(blst CONFIG REQUIRED)
 
     add_subdirectory(bcos-evm)
