@@ -85,8 +85,17 @@ void bcos::rpc::combineBlockResponse(
     result["mixHash"] = crypto::HashType().hexPrefixed();
     result["baseFeePerGas"] = "0x0";
     result["withdrawals"] = Json::Value(Json::arrayValue);
-    // empty withdrawals trie root hash
-    result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
+    // Isthmus+: the header carries the MessagePasser storage root as withdrawalsRoot (the OP
+    // semantic — set by the executed seal and rebuilt by the engine); pre-Isthmus/PBFT headers
+    // have no value (nullopt) and keep the legacy zero.
+    if (auto withdrawalsRoot = blockHeader->withdrawalsRoot(); withdrawalsRoot.has_value())
+    {
+        result["withdrawalsRoot"] = withdrawalsRoot->hexPrefixed();
+    }
+    else
+    {
+        result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
+    }
     result["blobGasUsed"] = "0x0";
     result["excessBlobGas"] = "0x0";
     // EIP-4788: pre-Cancun/PBFT headers have no PBBR (accessor returns nullopt when the

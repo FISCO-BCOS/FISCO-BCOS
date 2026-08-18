@@ -9,10 +9,9 @@ set -u
 # transactions sealed into blocks fails until OP-mode payload building lands (Tier-2,
 # shared prerequisite with C2's sequencer path). They still RUN (output visible) but do
 # not fail this gate. Remove names as Tier-2 restores them.
-# Tier-2 Phase B closeout (08-19): state_verify/chain_driver/b4_persist/b3_contracts all
-# green on the freshly-initialized chain (canonical-hash override + receipt fixes) — restored
-# to gating. predeploy_matrix keeps 3 reds: withdrawalsRoot propagation (Phase B remainder).
-KNOWN_RED_TIER2="predeploy_matrix"
+# Tier-2 Phase B complete (08-19): withdrawalsRoot propagation fixed — every script is green,
+# full gating restored. The list stays (empty) as the mechanism's documentation.
+KNOWN_RED_TIER2=""
 
 run_step() {  # run_step <script-name-without-.py>
     local name="$1"
@@ -36,7 +35,7 @@ step "A: rpc_matrix (51 pass + 8 tier-1 known-red)"
 python3 rpc_matrix.py || fail=1
 
 step "B.1/B.2: state_verify (12 asserts)"
-run_step state_verify
+python3 state_verify.py || fail=1
 
 step "A.2/B.3: chain_driver (31 asserts)"
 python3 chain_driver.py || fail=1

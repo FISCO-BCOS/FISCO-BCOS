@@ -78,10 +78,8 @@ KNOWN_RED = []
 # chain sits at genesis, so they record as KNOWN-RED — visible in output, not gating.
 # Remove names from this set as Tier-2 restores them. All three remaining names depend
 # on chain advancement (genesis timestamp artifact / block 1 / MessagePasser writes).
-KNOWN_TIER1 = {
-    # Tier-2 Phase B 缺口②：withdrawalsRoot 未传播（executedHeader 恒零）——唯一剩余项。
-    "outputv0 withdrawalsRoot present 32B",
-}
+# (empty — Tier-2 Phase B complete: withdrawalsRoot propagates since 08-19)
+KNOWN_TIER1 = set()
 
 
 def check(name, cond, detail=""):
@@ -198,13 +196,14 @@ def a2_blocks(rpc):
     check("withdrawals always [] (OP semantics)", b.get("withdrawals") == [], str(b.get("withdrawals")))
     wr = b.get("withdrawalsRoot")
     check("withdrawalsRoot present 32B (Isthmus+)", wr is not None and len(wr) == 66, str(wr))
-    # Genesis: the fixture does not set withdrawalsRoot on the genesis header, so the RPC
-    # renders the zero hash (op-geth Canyon+ would render the empty-trie root) — pinned as
-    # divergence D-WR-3. The passer's ACTUAL genesis storage root is cross-checked below
-    # via eth_getProof against the empty-trie constant (== op-geth EmptyWithdrawalsHash).
+    # Genesis: the genesis header carries the empty MessagePasser storage root as
+    # withdrawalsRoot (the Isthmus semantic — same value op-geth serves via
+    # EmptyWithdrawalsHash for an empty passer). D-WR-3 (zero-render) resolved 08-19: the
+    # header-backed read propagates the artifact's value.
     g = rpc.call("eth_getBlockByNumber", ["0x0", False])
-    check("genesis withdrawalsRoot zero (field absent, D-WR-3)",
-          g.get("withdrawalsRoot") == "0x" + "00" * 32, str(g.get("withdrawalsRoot")))
+    check("genesis withdrawalsRoot == empty-trie root (D-WR-3 resolved)",
+          g.get("withdrawalsRoot") == "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+          str(g.get("withdrawalsRoot")))
     check("genesis withdrawals []", g.get("withdrawals") == [], str(g.get("withdrawals")))
     proof = rpc.call("eth_getProof", ["0x4200000000000000000000000000000000000016", [], "0x0"])
     check("genesis passer storageRoot == empty-trie root",
@@ -372,7 +371,7 @@ def main():
     print(f"\n{len(PASSED)} passed, {len(FAILED)} failed, {len(KNOWN_RED)} known-red (tier-1)")
     if KNOWN_RED:
         print(f"known-red (tier-1): {len(KNOWN_RED)} ({', '.join(KNOWN_RED)})")
-    stale = KNOWN_TIER1.intersection(PASSED)
+    stale = KNOWN_TIER1.intersection(set(PASSED))
     if stale:
         print(f"WARNING: known-red checks passing (remove from KNOWN_TIER1): {sorted(stale)}")
     if FAILED:
