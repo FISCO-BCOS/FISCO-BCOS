@@ -28,9 +28,8 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-rpc/validator/CallValidator.h>
-#include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <json/json.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

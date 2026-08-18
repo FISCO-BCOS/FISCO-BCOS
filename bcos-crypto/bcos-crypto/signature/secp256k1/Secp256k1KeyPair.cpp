@@ -18,7 +18,6 @@
  * @date 2021.03.05
  * @author yujiechen
  */
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <wedpr-crypto/WedprUtilities.h>

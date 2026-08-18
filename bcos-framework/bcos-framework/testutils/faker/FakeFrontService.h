@@ -103,6 +103,8 @@ public:
         m_nodeId2Sync[_nodeId] = std::move(_sync);
     }
 
+    void removeSync(NodeIDPtr _nodeId) { m_nodeId2Sync.erase(_nodeId); }
+
     void addConsensusInterface(NodeIDPtr _nodeId, ConsensusInterface::Ptr _consensusInterface)
     {
         m_nodeId2Consensus[_nodeId] = std::move(_consensusInterface);
@@ -350,15 +352,25 @@ public:
     void asyncSendResponse(const std::string& _id, int _moduleId, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _responseData, ReceiveMsgFunc _responseCallback) override
     {
-        return m_fakeGateWay->asyncSendResponse(
-            _id, _moduleId, _nodeID, _responseData, _responseCallback);
+        // m_fakeGateWay is only nulled by ~SyncFixture() teardown, after stop() has joined all
+        // worker threads, so there is no live race here. The guard is pure defense: a test that
+        // holds a frontService() handle and sends after fixture destruction gets a no-op instead
+        // of a null-deref.
+        if (m_fakeGateWay)
+        {
+            return m_fakeGateWay->asyncSendResponse(
+                _id, _moduleId, _nodeID, _responseData, _responseCallback);
+        }
     }
 
     void asyncSendMessageByNodeID(int _moduleId, NodeIDPtr _nodeId, bytesConstRef _data,
         uint32_t _timeout, CallbackFunc _responseCallback) override
     {
-        m_fakeGateWay->asyncSendMessageByNodeID(
-            _moduleId, m_nodeId, _nodeId, _data, _timeout, _responseCallback);
+        if (m_fakeGateWay)
+        {
+            m_fakeGateWay->asyncSendMessageByNodeID(
+                _moduleId, m_nodeId, _nodeId, _data, _timeout, _responseCallback);
+        }
 
         if (m_nodeId2AsyncSendSize.contains(_nodeId))
         {

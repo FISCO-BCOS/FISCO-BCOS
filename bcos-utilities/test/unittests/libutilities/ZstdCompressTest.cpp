@@ -18,9 +18,8 @@
  */
 #include "bcos-utilities/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/test/unit_test.hpp>
-#include <iostream>
 #include <string>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 namespace bcos

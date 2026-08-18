@@ -18,7 +18,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
-#include "bcos-txpool/txpool/utilities/Common.h"
 #include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
 #include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
@@ -26,7 +25,6 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/IOServicePool.h"
 
-#include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 
 #include <boost/test/unit_test.hpp>

@@ -29,7 +29,6 @@
 
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/gateway/PeersRouterTable.h"
-#include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <set>

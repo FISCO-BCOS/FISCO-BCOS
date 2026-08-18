@@ -1,7 +1,5 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/StateKVResolver.h"
-#include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/transaction-executor/StateKey.h>
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/statistics.h>
 #include <rocksdb/table.h>

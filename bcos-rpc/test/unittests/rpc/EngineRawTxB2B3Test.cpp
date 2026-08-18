@@ -23,7 +23,6 @@
 #include <bcos-rpc/web3jsonrpc/model/DepositTransaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <json/json.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 

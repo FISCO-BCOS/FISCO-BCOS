@@ -22,6 +22,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

@@ -21,10 +21,8 @@
 
 #include "bcos-gateway/libratelimit/ModuleWhiteList.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace gateway;
 using namespace bcos::test;

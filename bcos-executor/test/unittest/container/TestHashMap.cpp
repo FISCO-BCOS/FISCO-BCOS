@@ -1,13 +1,9 @@
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/algorithm/partition_point.hpp>
-#include <range/v3/algorithm/lower_bound.hpp>
-#include <range/v3/algorithm/binary_search.hpp>
 
+#include <chrono>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
-#include <chrono>
 #include <string>
 #include <variant>
 

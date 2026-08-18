@@ -9,7 +9,6 @@
  */
 
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <boost/log/core.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/test/unit_test.hpp>

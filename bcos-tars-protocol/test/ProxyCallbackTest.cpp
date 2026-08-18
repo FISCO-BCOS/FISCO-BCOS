@@ -17,24 +17,13 @@
  * @author: octopus
  * @date 2022-07-24
  */
-#include "bcos-tars-protocol/client/GatewayServiceClient.h"
-#include "bcos-tars-protocol/client/LedgerServiceClient.h"
-#include "bcos-tars-protocol/client/PBFTServiceClient.h"
-#include "bcos-tars-protocol/client/RpcServiceClient.h"
-#include "bcos-tars-protocol/client/SchedulerServiceClient.h"
-#include "bcos-tars-protocol/client/TxPoolServiceClient.h"
-#include "bcos-tars-protocol/tars/GatewayService.h"
-#include "bcos-utilities/Exceptions.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <servant/Communicator.h>
-#include <util/tc_clientsocket.h>
-#include <boost/test/tools/old/interface.hpp>
-#include <boost/test/unit_test.hpp>
 #include <chrono>
-#include <memory>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <util/tc_clientsocket.h>
+#include <boost/test/unit_test.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <thread>
-#include <vector>
 
 using namespace bcos;
 using namespace bcos::test;

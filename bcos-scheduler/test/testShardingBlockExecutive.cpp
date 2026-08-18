@@ -1,33 +1,21 @@
 #include <bcos-utilities/IOServicePool.h>
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
-#include "bcos-executor/test/unittest/mock/MockTxPool.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-scheduler/src/BlockExecutiveFactory.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
 #include "bcos-storage/RocksDBStorage.h"
-#include "bcos-table/src/KeyPageStorage.h"
-#include "bcos-table/src/StateStorage.h"
-#include "bcos-table/src/StateStorageInterface.h"
 #include "mock/MockBlockExecutive.h"
-#include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"
-#include "mock/MockExecutor.h"
-#include "mock/MockExecutorForCall.h"
-#include "mock/MockExecutorForCreate.h"
 #include "mock/MockLedger3.h"
 #include "mock/MockTxPool1.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-framework/storage/Table.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -36,11 +24,7 @@
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <rocksdb/write_batch.h>
 #include <boost/test/unit_test.hpp>
-#include <filesystem>
-#include <future>
-#include <optional>
 
 
 using namespace std;
@@ -112,7 +96,15 @@ struct ShardingBlockExecutiveFixture
             hashImpl, false, false, false, 0, ioServicePool);
     }
 
-    ~ShardingBlockExecutiveFixture() {}
+    // Release the shared IOServicePool before any member is destroyed: dropping
+    // the fixture's references lets ~IOServicePool() stop and join the worker
+    // threads up front, so a pending scheduler task (which captures `this`) cannot
+    // run against already-freed members (flaky teardown UAF).
+    ~ShardingBlockExecutiveFixture()
+    {
+        scheduler = nullptr;      // release the scheduler's pool reference
+        ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
+    }
 
     boost::asio::io_context ioService;
     bcos::IOServicePool::Ptr ioServicePool;

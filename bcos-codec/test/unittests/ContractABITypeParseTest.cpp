@@ -10,8 +10,8 @@
 
 #include "bcos-codec/abi/ContractABIType.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::codec::abi;
 

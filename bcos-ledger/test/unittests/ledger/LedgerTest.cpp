@@ -26,7 +26,6 @@
 #include "../../mock/MockKeyFactor.h"
 #include "GenesisFeatureFlagsHelper.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -35,20 +34,16 @@
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Bloom.h"
-#include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/consensus/ConsensusNode.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
@@ -57,7 +52,6 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>

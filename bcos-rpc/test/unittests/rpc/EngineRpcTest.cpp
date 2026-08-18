@@ -18,14 +18,13 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <json/json.h>
 #include <memory>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

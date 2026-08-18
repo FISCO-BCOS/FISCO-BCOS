@@ -22,12 +22,8 @@
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/asio/post.hpp>
-#include <boost/beast/websocket/rfc6455.hpp>
-#include <boost/beast/websocket/stream.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <chrono>
 #include <exception>
 #include <memory>

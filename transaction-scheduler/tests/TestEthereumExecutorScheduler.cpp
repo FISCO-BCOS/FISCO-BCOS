@@ -39,7 +39,6 @@
 #include "bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"

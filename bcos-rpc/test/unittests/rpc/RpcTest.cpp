@@ -19,24 +19,10 @@
  */
 
 #include "../common/RPCFixture.h"
-#include "bcos-crypto/encrypt/AESCrypto.h"
-#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
-#include "bcos-crypto/signature/sm2/SM2Crypto.h"
-#include "bcos-crypto/signature/sm2/SM2KeyPair.h"
-#include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-rpc/bcos-rpc/RpcFactory.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/testutils/faker/FakeFrontService.h>
-#include <bcos-framework/testutils/faker/FakeLedger.h>
-#include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
-#include <bcos-rpc/validator/CallValidator.h>
 #include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

@@ -12,7 +12,6 @@
 #include <bcos-framework/storage/Serialize.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <boost/archive/binary_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/test/unit_test.hpp>
 #include <string>

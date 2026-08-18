@@ -21,7 +21,6 @@
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
 #include "libinitializer/MemPoolInitializer.h"
-#include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -32,7 +31,6 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <rocksdb/env.h>
 
 using namespace bcos::node;
 using namespace bcos::initializer;

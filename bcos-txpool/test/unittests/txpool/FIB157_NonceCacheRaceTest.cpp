@@ -32,7 +32,6 @@
 #include <set>
 #include <thread>
 #include <unordered_map>
-#include <vector>
 
 using namespace bcos;
 using namespace bcos::txpool;

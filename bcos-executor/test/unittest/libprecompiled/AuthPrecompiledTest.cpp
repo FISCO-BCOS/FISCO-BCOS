@@ -21,6 +21,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/extension/ContractAuthMgrPrecompiled.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

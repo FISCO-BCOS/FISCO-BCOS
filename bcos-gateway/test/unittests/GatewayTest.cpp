@@ -21,12 +21,8 @@
 
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-crypto/signature/key/KeyFactoryImpl.h"
-#include "bcos-framework/multigroup/GroupInfo.h"
-#include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Gateway.h"
-#include "bcos-gateway/GatewayConfig.h"
-#include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"

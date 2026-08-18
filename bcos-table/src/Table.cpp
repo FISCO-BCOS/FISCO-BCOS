@@ -20,11 +20,7 @@
  */
 #include "bcos-framework/storage/Table.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "tbb/concurrent_vector.h"
-#include "tbb/parallel_for.h"
-#include "tbb/parallel_invoke.h"
 #include <boost/throw_exception.hpp>
-#include <sstream>
 
 namespace bcos::storage
 {

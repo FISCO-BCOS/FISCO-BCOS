@@ -1,6 +1,3 @@
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/algorithm/result_types.hpp>
 /**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -24,7 +21,6 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/rpc/HandshakeRequest.h>
 #include <bcos-rpc/Common.h>

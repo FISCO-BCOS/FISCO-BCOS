@@ -19,7 +19,6 @@
  */
 
 #include "CallRequest.h"
-#include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-task/Wait.h"
 #include <algorithm>

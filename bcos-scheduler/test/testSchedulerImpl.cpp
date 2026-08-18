@@ -1,30 +1,20 @@
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-scheduler/src/BlockExecutive.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
 #include "bcos-utilities/IOServicePool.h"
-#include "bcos-table/src/KeyPageStorage.h"
-#include "bcos-table/src/StateStorage.h"
-#include "bcos-table/src/StateStorageInterface.h"
-#include "mock/MockBlockExecutive.h"
 #include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutorForCall.h"
-#include "mock/MockExecutorForCreate.h"
 #include "mock/MockLedger3.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-framework/storage/Table.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -34,11 +24,8 @@
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <rocksdb/write_batch.h>
-#include <boost/test/unit_test.hpp>
-#include <filesystem>
 #include <future>
-#include <optional>
+#include <boost/test/unit_test.hpp>
 
 
 using namespace std;
@@ -94,7 +81,16 @@ struct schedulerImplFixture
         scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
     };
 
-    ~schedulerImplFixture() {}
+    // Release the shared IOServicePool before any member is destroyed: dropping
+    // the fixture's references lets ~IOServicePool() stop and join the worker
+    // threads up front, so a pending scheduler task (which captures `this`) cannot
+    // run against already-freed members/schedulers (intermittent "memory access
+    // violation at fixture dtor").
+    ~schedulerImplFixture()
+    {
+        scheduler = nullptr;      // release the scheduler's pool reference
+        ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
+    }
     bcos::IOServicePool::Ptr ioServicePool;
     boost::asio::io_context ioService;
     bcos::test::MockLedger3::Ptr ledger;

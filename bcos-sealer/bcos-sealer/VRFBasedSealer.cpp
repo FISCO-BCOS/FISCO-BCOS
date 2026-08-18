@@ -26,7 +26,6 @@
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-txpool/TxPool.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <boost/endian/conversion.hpp>

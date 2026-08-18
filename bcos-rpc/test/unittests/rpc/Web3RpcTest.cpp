@@ -21,31 +21,21 @@
 
 #include "../common/RPCFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <ostream>
+#include <chrono>
 #include <bcos-framework/engine/AnyEngineService.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
-#include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
-#include <bcos-rpc/tarsRPC/RPCServer.h>
-#include <bcos-rpc/validator/CallValidator.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <atomic>
-#include <chrono>
 #include <filesystem>
 #include <memory>
-#include <ostream>
 #include <string_view>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

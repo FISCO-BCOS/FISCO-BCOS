@@ -25,10 +25,9 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/filesystem.hpp>
-#include <boost/test/tools/old/interface.hpp>
-#include <boost/test/unit_test.hpp>
 #include <chrono>
+#include <boost/test/unit_test.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <memory>
 #include <thread>
 

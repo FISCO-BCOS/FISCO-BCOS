@@ -19,7 +19,6 @@
  */
 
 #include <bcos-rpc/validator/JsonValidator.h>
-#include <json/json.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

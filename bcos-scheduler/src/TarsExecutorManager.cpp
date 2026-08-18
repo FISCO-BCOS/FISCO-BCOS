@@ -20,6 +20,7 @@
  */
 
 #include "bcos-scheduler/src/TarsExecutorManager.h"
+#include <chrono>
 
 using namespace bcos;
 using namespace bcos::scheduler;

@@ -24,7 +24,6 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithV.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
-#include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>

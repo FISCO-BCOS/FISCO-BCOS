@@ -26,10 +26,7 @@
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
-#include <boost/endian/conversion.hpp>
 #include <boost/lexical_cast.hpp>
-#include <range/v3/view/any_view.hpp>
-#include <range/v3/view/transform.hpp>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 

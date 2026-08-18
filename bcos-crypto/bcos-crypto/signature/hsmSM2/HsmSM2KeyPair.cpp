@@ -20,7 +20,6 @@
  */
 #include "hsm-crypto/hsm/CryptoProvider.h"
 #include "hsm-crypto/hsm/SDFCryptoProvider.h"
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/Exceptions.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
 

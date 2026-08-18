@@ -30,12 +30,9 @@
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/BoostLog.h>
-#include <boost/endian/conversion.hpp>
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstring>
 #include <exception>
-#include <range/v3/view/any_view.hpp>
 #include <set>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);

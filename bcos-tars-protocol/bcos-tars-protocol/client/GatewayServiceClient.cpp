@@ -18,7 +18,6 @@
  * @date 2021-04-20
  */
 #include "GatewayServiceClient.h"
-#include "bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"

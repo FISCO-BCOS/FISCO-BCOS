@@ -29,15 +29,15 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
-#include <sys/time.h>
 #endif
 #include "Common.h"
 #include "Exceptions.h"
+#include <chrono>
 #include <csignal>
+#include <ctime>
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
-#include <chrono>
 
 namespace bcos
 {

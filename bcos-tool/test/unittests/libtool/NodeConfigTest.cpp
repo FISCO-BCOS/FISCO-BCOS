@@ -8,7 +8,6 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include <bcos-tool/Exceptions.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
 

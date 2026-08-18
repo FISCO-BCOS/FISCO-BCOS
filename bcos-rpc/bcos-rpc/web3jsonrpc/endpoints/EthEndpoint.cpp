@@ -26,7 +26,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
@@ -40,14 +39,11 @@
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
-#include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
-#include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
-#include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <boost/throw_exception.hpp>

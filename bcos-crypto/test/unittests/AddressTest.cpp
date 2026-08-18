@@ -39,10 +39,8 @@
  */
 #include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
-#include <string>
 
 using namespace bcos;
 using namespace crypto;

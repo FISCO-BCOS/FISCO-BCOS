@@ -22,7 +22,6 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/util.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/regex.hpp>
 #include <limits>
 #include <string_view>

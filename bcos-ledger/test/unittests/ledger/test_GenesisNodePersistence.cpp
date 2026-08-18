@@ -25,7 +25,6 @@
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-ledger/GenesisStateRoot.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/Account.h"
