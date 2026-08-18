@@ -1372,4 +1372,43 @@ BOOST_AUTO_TEST_CASE(ForkchoiceNoAttributesHeadAdvance)
     BOOST_CHECK_EQUAL(*finalized, number);
 }
 
+// ── B4-3: Engine API boundary tests (spec §6 P1, 08-18) ──
+
+// safe/finalized can advance independently from head: safe=block2, finalized=block1 (both
+// known) is VALID — only finalized > head is forbidden by the monotonicity check.
+BOOST_AUTO_TEST_CASE(ForkchoiceSafeFinalizedIndependent)
+{
+    auto [fixture, blockHash1, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
+    // Register block n1+1 so we can use two different known blocks.
+    bcos::h256 block2("0xaabbccdd00112233445566778899aabbccddeeff00112233445566778899aabb");
+    registerVerifiedBlock(fixture->multiLayerStorage, block2, n1 + 1);
+    // FCU: head=block2(n+1), safe=block2(n+1), finalized=block1(n) — valid, finalized < head.
+    auto [state1, pid1] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{block2, block2, blockHash1}, nullptr, /*version=*/3));
+    (void)pid1;
+    BOOST_CHECK_EQUAL(static_cast<int>(state1.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    auto safe = fixture->service.getSafeBlockNumber();
+    auto finalized = fixture->service.getFinalizedBlockNumber();
+    BOOST_REQUIRE(safe.has_value());
+    BOOST_REQUIRE(finalized.has_value());
+    BOOST_CHECK_EQUAL(*safe, n1 + 1);
+    BOOST_CHECK_EQUAL(*finalized, n1);
+}
+
+// safe < head is VALID (safe being behind head is normal during sync); only finalized > head
+// is invalid (monotonicity, tested by ForkchoiceMonotonicityRejected).
+BOOST_AUTO_TEST_CASE(ForkchoiceSafeBelowHeadIsValid)
+{
+    auto [fixture, blockHash, n1] = runVectorAndGetBlockHash("jovian_deposit_only");
+    bcos::h256 block0("0x0000000000000000000000000000000000000000000000000000000000000001");
+    registerVerifiedBlock(fixture->multiLayerStorage, block0, n1 - 1);
+    // head=block(n), safe=block(n-1), finalized=block(n-1) — safe and finalized below head = VALID.
+    auto [state, pid] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, block0, block0}, nullptr, /*version=*/3));
+    (void)pid;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
