@@ -81,16 +81,15 @@ struct schedulerImplFixture
         scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
     };
 
-    // Stop the shared IOServicePool before any member is destroyed. The tests post
-    // scheduler tasks (capturing `this`) onto this pool; without stopping it first,
-    // a pending task can run during teardown against already-freed members /
-    // schedulers (intermittent "memory access violation at fixture dtor").
+    // Release the shared IOServicePool before any member is destroyed: dropping
+    // the fixture's references lets ~IOServicePool() stop and join the worker
+    // threads up front, so a pending scheduler task (which captures `this`) cannot
+    // run against already-freed members/schedulers (intermittent "memory access
+    // violation at fixture dtor").
     ~schedulerImplFixture()
     {
-        if (ioServicePool)
-        {
-            ioServicePool->stop();
-        }
+        scheduler = nullptr;      // release the scheduler's pool reference
+        ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
     }
     bcos::IOServicePool::Ptr ioServicePool;
     boost::asio::io_context ioService;

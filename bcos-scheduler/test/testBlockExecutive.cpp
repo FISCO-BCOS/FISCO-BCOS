@@ -77,14 +77,14 @@ struct BlockExecutiveFixture
             hashImpl, false, false, false, 0, ioServicePool);
     }
 
-    // Stop the shared IOServicePool before any member is destroyed so that no
-    // pending scheduler task can run against freed members (flaky teardown UAF).
+    // Release the shared IOServicePool before any member is destroyed: dropping
+    // the fixture's references lets ~IOServicePool() stop and join the worker
+    // threads up front, so a pending scheduler task (which captures `this`) cannot
+    // run against already-freed members (flaky teardown UAF).
     ~BlockExecutiveFixture()
     {
-        if (ioServicePool)
-        {
-            ioServicePool->stop();
-        }
+        scheduler = nullptr;      // release the scheduler's pool reference
+        ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
     }
 
     boost::asio::io_context ioService;
