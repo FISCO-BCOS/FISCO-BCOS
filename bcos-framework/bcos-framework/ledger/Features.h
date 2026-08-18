@@ -7,11 +7,11 @@
 #include <bcos-utilities/Exceptions.h>
 #include <array>
 #include <bitset>
-// Raise reflection range for Flag values > 127. The #ifndef guard handles the
-// case where magic_enum was already included (e.g. via ConsensusNode.h) — in
-// that case the macro is already set internally by magic_enum and this is a
-// no-op. The per-enum specialization approach does not work in unity builds
-// because magic_enum instantiates the template before our specialization.
+// Raise reflection range for Flag values > 127. A per-enum specialization of
+// enum_range<Flag> would also work if placed before the class definition (after
+// this include), but the macro approach is simpler and avoids placement
+// sensitivity. When magic_enum is already included upstream, this #ifndef is a
+// no-op (magic_enum's own internal define takes effect).
 #ifndef MAGIC_ENUM_RANGE_MAX
 #define MAGIC_ENUM_RANGE_MAX 200
 #endif
