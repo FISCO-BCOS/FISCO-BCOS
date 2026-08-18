@@ -94,12 +94,6 @@ import json
 import sys
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover - dependency hint only
-    sys.stderr.write("error: pyyaml required (pip install pyyaml)\n")
-    raise
-
 
 def normalize_hex(value):
     """Return a lowercase 0x-prefixed hex string from a hex string or int."""
@@ -197,6 +191,14 @@ def main(argv=None):
                         help="bcos-l2-contracts dir (containing out/)")
     parser.add_argument("--out", help="output INI path (default: stdout)")
     args = parser.parse_args(argv)
+
+    # Deferred to the CLI path only: importing this module (for keccak256, e.g. from
+    # mpt_state_root.py / gen_eth_header_fixture.py) must not require pyyaml.
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - dependency hint only
+        sys.stderr.write("error: pyyaml required (pip install pyyaml)\n")
+        raise
 
     with open(args.config) as handle:
         config = yaml.safe_load(handle)

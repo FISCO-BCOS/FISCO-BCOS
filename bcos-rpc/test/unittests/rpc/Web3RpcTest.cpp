@@ -21,11 +21,11 @@
 
 #include "../common/RPCFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
@@ -40,11 +40,11 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <memory>
-#include <ostream>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <memory>
+#include <ostream>
 #include <string_view>
 
 using namespace bcos;
@@ -61,8 +61,7 @@ public:
     /// inside AnyEngineService's proxy share the same state via this pointer.
     struct State
     {
-        engine::PayloadStatus payloadStatusResult{
-            .latestValidHash = std::nullopt,
+        engine::PayloadStatus payloadStatusResult{.latestValidHash = std::nullopt,
             .validationError = std::nullopt,
             .status = engine::PayloadValidationStatus::Valid};
         engine::GetPayloadResult getPayloadResult = std::make_unique<engine::GetPayloadData>();
@@ -103,7 +102,10 @@ public:
     }
 
     std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
-    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
+    {
+        return std::nullopt;
+    }
 };
 
 class Web3TestFixture : public RPCFixture
@@ -123,7 +125,9 @@ public:
         {
             std::promise<bcos::bytes> promise;
             web3JsonRpc->onRPCRequest(
-                request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+                request, [&promise](bcos::bytes resp, boost::beast::http::status) {
+                    promise.set_value(std::move(resp));
+                });
             auto jsonBytes = promise.get_future().get();
             std::string_view json(
                 (char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
@@ -211,6 +215,18 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         validRespCheck(response);
         BOOST_TEST(response["id"].asInt64() == 3214);
         BOOST_TEST(fromQuantity(response["result"].asString()) == 0);
+    }
+
+    // method eth_gasPrice — config absent: no tx_gas_price entry in the (fresh-fixture)
+    // ledger, the handler must fall back to "0x0" (EthEndpoint::gasPrice). op-geth's
+    // gasPrice is head.baseFee + tip (>= 1e6 wei, never 0) — divergence D-GP-1,
+    // docs/2026-08-18-rpc-parity-gasprice-withdrawals.md.
+    {
+        const auto request =
+            R"({"jsonrpc":"2.0","id":541320, "method":"eth_gasPrice","params":[]})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_TEST(response["result"].asString() == "0x0");
     }
 
     // method eth_gasPrice
@@ -536,25 +552,24 @@ BOOST_AUTO_TEST_CASE(handleEngineNotAvailableTest)
     auto response = onRPCRequestWrapper(request);
     BOOST_TEST(response.isMember("error"));
     BOOST_TEST(response["error"]["code"].asInt() == MethodNotFound);
-    BOOST_TEST(
-        response["error"]["message"].asString() == "Method not found");
+    BOOST_TEST(response["error"]["message"].asString() == "Method not found");
 }
 
 BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 {
     TestEngineService testEngineService;
-    nodeService->engineService() = std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+    nodeService->engineService() =
+        std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
 
     // Create a separate Web3JsonRpcImpl with OP Engine enabled for engine API tests
-    auto engineRpc = std::make_shared<Web3JsonRpcImpl>(
-        groupId, 8, rpc->groupManager(), nullptr, false, true);
+    auto engineRpc =
+        std::make_shared<Web3JsonRpcImpl>(groupId, 8, rpc->groupManager(), nullptr, false, true);
 
     auto engineRequest = [&](std::string_view req) -> Json::Value {
         std::promise<bcos::bytes> promise;
-        engineRpc->onRPCRequest(req,
-            [&promise](bcos::bytes resp, boost::beast::http::status) {
-                promise.set_value(std::move(resp));
-            });
+        engineRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         Json::Value val;
         Json::Reader reader;
@@ -563,8 +578,8 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     };
 
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
-        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
-        chainId, groupId, static_cast<int64_t>(utcTime()));
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100, chainId,
+        groupId, static_cast<int64_t>(utcTime()));
     bytes encodedTx;
     tx->encode(encodedTx);
     auto encodedTxHex = toHexStringWithPrefix(encodedTx);
@@ -594,20 +609,27 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest.has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 2);
-    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions.size() == 1);
-    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals.has_value());
-    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front().amount ==
-               expectedLargeValue);
-    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed.has_value());
-    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas.has_value());
-    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
-               expectedLargeValue);
-    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas ==
-               expectedLargeValue);
+    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
+                   .size() == 1);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
+                      .has_value());
+    BOOST_TEST(
+        testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
+            .amount == expectedLargeValue);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
+                      .has_value());
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
+                      .excessBlobGas.has_value());
+    BOOST_TEST(
+        *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
+        expectedLargeValue);
+    BOOST_TEST(
+        *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas ==
+        expectedLargeValue);
 
     bytes decodedEncodedTx;
-    testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions.front()->encode(
-        decodedEncodedTx);
+    testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions.front()
+        ->encode(decodedEncodedTx);
     BOOST_TEST(toHexStringWithPrefix(decodedEncodedTx) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
@@ -623,9 +645,11 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "payload-id-1");
     BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"].size() == 1);
-    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"][0].asString() == encodedTxHex);
-    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
-               largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"][0].asString() ==
+               encodedTxHex);
+    BOOST_TEST(
+        getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
+        largeQuantity);
     BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
 }
 
@@ -895,9 +919,8 @@ BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
     auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch())
                   .count();
-    auto secretFile = tempDir /
-                      ("fisco-bcos-jwt-rpc-test-" + std::to_string(ns) + "-" +
-                          std::to_string(counter.fetch_add(1)) + ".hex");
+    auto secretFile = tempDir / ("fisco-bcos-jwt-rpc-test-" + std::to_string(ns) + "-" +
+                                    std::to_string(counter.fetch_add(1)) + ".hex");
     {
         std::ofstream ofs(secretFile);
         ofs << secretHex;
@@ -908,8 +931,8 @@ BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
     config->setClockSkewSecs(60);
     config->setAllowedAlgorithms("HS256");
 
-    auto engineRpc = std::make_shared<Web3JsonRpcImpl>(
-        groupId, 8, rpc->groupManager(), nullptr, false, true);
+    auto engineRpc =
+        std::make_shared<Web3JsonRpcImpl>(groupId, 8, rpc->groupManager(), nullptr, false, true);
     engineRpc->setJwtVerifier(std::make_shared<JwtVerifier>(config));
 
     auto secretBytes = fromHex(secretHex);
@@ -931,8 +954,8 @@ BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
         request.body() = R"({"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]})";
         request.prepare_payload();
 
-        engineRpc->onRPCRequest(request,
-            [&promise](bcos::bytes resp, boost::beast::http::status status) {
+        engineRpc->onRPCRequest(
+            request, [&promise](bcos::bytes resp, boost::beast::http::status status) {
                 promise.set_value({std::move(resp), status});
             });
         auto [resp, status] = promise.get_future().get();
@@ -955,8 +978,8 @@ BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
         request.body() = R"({"jsonrpc":"2.0","id":2,"method":"eth_chainId","params":[]})";
         request.prepare_payload();
 
-        engineRpc->onRPCRequest(request,
-            [&promise](bcos::bytes resp, boost::beast::http::status status) {
+        engineRpc->onRPCRequest(
+            request, [&promise](bcos::bytes resp, boost::beast::http::status status) {
                 promise.set_value({std::move(resp), status});
             });
         auto [resp, status] = promise.get_future().get();
@@ -974,8 +997,8 @@ BOOST_AUTO_TEST_CASE(jwtHttpRequestAuthTest)
         request.body() = R"({"jsonrpc":"2.0","id":3,"method":"eth_chainId","params":[]})";
         request.prepare_payload();
 
-        engineRpc->onRPCRequest(request,
-            [&promise](bcos::bytes resp, boost::beast::http::status status) {
+        engineRpc->onRPCRequest(
+            request, [&promise](bcos::bytes resp, boost::beast::http::status status) {
                 promise.set_value({std::move(resp), status});
             });
         auto [resp, status] = promise.get_future().get();

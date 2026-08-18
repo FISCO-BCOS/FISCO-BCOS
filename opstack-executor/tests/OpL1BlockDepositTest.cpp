@@ -31,6 +31,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpBlockSeal.h>
+#include <bcos-ledger/mpt/Constants.h>
 #include <opstack-executor/OpSchedulerImpl.h>
 #include <opstack-executor/Storage2State.h>
 #include <boost/test/unit_test.hpp>
@@ -758,6 +759,39 @@ BOOST_AUTO_TEST_CASE(MessagePasserStorageDrivesWithdrawalRoot)
                        << evmc::hex(evmc::bytes_view(expected.bytes, sizeof(expected.bytes))));
     BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot.bytes, expected.bytes,
                           sizeof(expected.bytes)),
+        0);
+}
+
+// ---- Item 4b: empty MessagePasser storage → the empty-trie root constant ----
+// Isthmus+ seals withdrawalsRoot = opStorageRoot(passer storage); with no slots written that
+// must be keccak256(RLP("")) = emptyRootHash() — byte-equal to op-geth's EmptyWithdrawalsHash
+// (Canyon+ empty-withdrawals-list root, core/types/hashes.go:41), the constant the genesis
+// getProof cross-check on the live node also pins (rpc_matrix genesis passer storageRoot).
+// Ties: opStorageRoot({}) == bcos-ledger literal EMPTY_ROOT_HASH_HEX == op-geth golden.
+BOOST_AUTO_TEST_CASE(EmptyPasserStorageSealsEmptyRootConstant)
+{
+    using namespace evmc::literals;
+    JovianShapeFixture fx;
+
+    // opStorageRoot over an empty slot map == the pinned empty-trie literal.
+    const auto emptyRoot = bcos::evm::opstack::opStorageRoot({});
+    const auto* expectedHex = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
+    BOOST_CHECK_EQUAL(evmc::hex(evmc::bytes_view(emptyRoot.bytes, sizeof(emptyRoot.bytes))),
+        expectedHex);
+    // ... and equals bcos-ledger's emptyRootHash() (Constants.h, itself pinned by
+    // bcos-ledger ConstantsTest): the pre-Isthmus seal branch and the empty Isthmus+ passer
+    // converge on the same bytes.
+    const auto& ledgerEmpty = bcos::ledger::mpt::emptyRootHash();
+    BOOST_CHECK_EQUAL(std::memcmp(emptyRoot.bytes, ledgerEmpty.data(), sizeof(emptyRoot.bytes)),
+        0);
+
+    // The seal agrees: a block on a virgin passer produces header withdrawalsRoot == the same
+    // constant (fresh fixture — no prior test wrote the passer in this instance).
+    auto result = fx.run({makeDepositEnvelope(makeJovianCalldataNonZero())},
+        static_cast<int64_t>(2000) * 1000 + 1000);
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 1u);
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot.bytes, ledgerEmpty.data(),
+                          sizeof(emptyRoot.bytes)),
         0);
 }
 

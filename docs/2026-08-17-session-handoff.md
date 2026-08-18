@@ -33,6 +33,13 @@
 - **回归修复**(`84b3be0`):`enable_single_node_consensus=true` 恢复(见 §3-4c 详解)
 - **scheduler 分支验证**:`docs/2026-08-18-opstack-scheduler-e2e-verification.md`(5 config 修复 + FCU V3 vs V4 差异)
 
+### 2f. B1/B3 RPC 对拍(2026-08-18,已交付全绿)
+- **B1 eth_gasPrice 对拍**:op-geth = `head.baseFee + tip`(≥1e6,本地算不查 GPO);FISCO = ledger 配置(恒 0x0)。分歧 D-GP-1/2/3 登记 + 两侧行为钉死(C++ 16/16 + 活链);对齐需生产改动,单独立案
+- **B3 withdrawalsRoot 全流程**:四层一致证据——op-geth golden(既有)→ C++ seal(含新增空态常数用例)→ Python trie 复算 golden `0x02dffd0c…` → 活链 seal↔RPC↔getProof。实测锚定 sentMessages slot0 = keccak(wh‖0);创世 getProof storageRoot == `0x56e81f…b421` == EmptyWithdrawalsHash
+- **新分歧登记**:D-WR-1/2(JSON 键形状)、D-WR-3(创世头缺 withdrawalsRoot 字段,单独立案)、getProof 仅创世可用(MPT 节点只在 genesis 导入写入)
+- 报告 `docs/2026-08-18-rpc-parity-gasprice-withdrawals.md`;工具解耦:build-allocs yaml 延迟到 CLI,mpt_state_root 可无 yaml 导入
+- **回归**:run_all ALL GREEN **160 断言**(149→+11:rpc 45→51、predeploy 30→35);opstack-executor-block-tests 137 用例绿;run_all.sh 头部计数同步
+
 ### 2e. 存档(被停代理产出,用户裁定保留,非经批准交付物)
 - `docs/2026-08-17-opstack-testmatrix-compare-design.md`(三端对比 spec)
 - `docs/2026-08-17-opstack-el-contract-plan.md`(EL 契约计划 v5 终版)
@@ -56,7 +63,7 @@
 
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
 5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件(扩现有 EEST runner)
-6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)——**可拆分**:eth_gasPrice 半天,reorg/withdrawalsRoot 各约 1 天,Fuzz 2 天+
+6. RPC 层 op-geth 对拍 / reorg / withdrawalsRoot 全流程 / Fuzz / eth_gasPrice / Karst(DIVERGENCES D-2 🔴)——✅ **eth_gasPrice + withdrawalsRoot 已完成**(08-18,§2f);剩 reorg(约 1 天)/ Fuzz(2 天+)/ Karst D-2(单独立案)
 7. **三端测试对比 spec(存档,非用户请求)**:`docs/2026-08-17-opstack-testmatrix-compare-design.md`。核心结论:最大硬缺口 = **op-node 集成 harness + 引擎 API V3 版本契约**。可作排期输入
 8. **op-node EL 契约实施计划(存档,v5 终版)**:`docs/2026-08-17-opstack-el-contract-plan.md`。瞄准生产改造,**须重新立项,不得直接执行**
 9. **`opstack-op-e2e-on-scheduler` 分支(保留)**:2 commits(`1d251f040` op-e2e 套件 + `f01285ed0` DA 矩阵),基于远程重构;计划 v5 行号在其上不成立

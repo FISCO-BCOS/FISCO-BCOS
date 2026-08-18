@@ -11,7 +11,7 @@ step() { echo "==== $1 ===="; }
 step "restart B3 (passive, storage preserved)"
 bash restart_b3.sh || fail=1
 
-step "A: rpc_matrix (45 asserts)"
+step "A: rpc_matrix (51 asserts)"
 python3 rpc_matrix.py || fail=1
 
 step "B.1/B.2: state_verify (12 asserts)"
@@ -26,7 +26,7 @@ python3 b4_persist.py || fail=1
 step "B.3: b3_contracts (12 asserts)"
 python3 b3_contracts.py || fail=1
 
-step "PREDEPLOY: predeploy_matrix (30 asserts)"
+step "PREDEPLOY: predeploy_matrix (35 asserts)"
 python3 predeploy_matrix.py || fail=1
 
 step "A.1+B4: a1_active on B3a (16 asserts)"

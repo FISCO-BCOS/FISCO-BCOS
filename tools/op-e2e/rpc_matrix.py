@@ -96,6 +96,12 @@ def a2_chain(rpc):
     check("chainId == net_version", cid == nv, f"{cid} vs {nv}")
     gp = rpc.call("eth_gasPrice")
     check("gasPrice returns 0x0 (FISCO hardcoded)", gp == "0x0", str(gp))
+    # B1 (08-18): pin the current eth_maxPriorityFeePerGas. op-geth's is dynamic
+    # (SuggestOptimismPriorityFee >= 1e6 wei, gasprice/optimism-gasprice.go:38);
+    # FISCO's is the constant 0x0 (EthEndpoint.cpp:943) — divergence D-GP-2, see
+    # docs/2026-08-18-rpc-parity-gasprice-withdrawals.md.
+    mpf = rpc.call("eth_maxPriorityFeePerGas")
+    check("maxPriorityFeePerGas returns 0x0 (FISCO constant)", mpf == "0x0", str(mpf))
     syncing = rpc.call("eth_syncing")
     check("syncing false", syncing is False, str(syncing))
 
@@ -121,6 +127,25 @@ def a2_blocks(rpc):
     txc = rpc.call("eth_getBlockTransactionCountByNumber", [num])
     txs = b.get("transactions", [])
     check("tx count matches", int(txc, 16) == len(txs), f"{txc} vs {len(txs)}")
+    # B3 (08-18): withdrawalsRoot shape. op-geth L2 blocks are always withdrawals:[]
+    # (system withdrawals are an L1-beacon concept; Isthmus+ hard-rejects non-empty,
+    # consensus/beacon/consensus.go:416-427) and the root is the L2ToL1MessagePasser
+    # storage root. See docs/2026-08-18-rpc-parity-gasprice-withdrawals.md.
+    check("withdrawals always [] (OP semantics)", b.get("withdrawals") == [], str(b.get("withdrawals")))
+    wr = b.get("withdrawalsRoot")
+    check("withdrawalsRoot present 32B (Isthmus+)", wr is not None and len(wr) == 66, str(wr))
+    # Genesis: the fixture does not set withdrawalsRoot on the genesis header, so the RPC
+    # renders the zero hash (op-geth Canyon+ would render the empty-trie root) — pinned as
+    # divergence D-WR-3. The passer's ACTUAL genesis storage root is cross-checked below
+    # via eth_getProof against the empty-trie constant (== op-geth EmptyWithdrawalsHash).
+    g = rpc.call("eth_getBlockByNumber", ["0x0", False])
+    check("genesis withdrawalsRoot zero (field absent, D-WR-3)",
+          g.get("withdrawalsRoot") == "0x" + "00" * 32, str(g.get("withdrawalsRoot")))
+    check("genesis withdrawals []", g.get("withdrawals") == [], str(g.get("withdrawals")))
+    proof = rpc.call("eth_getProof", ["0x4200000000000000000000000000000000000016", [], "0x0"])
+    check("genesis passer storageRoot == empty-trie root",
+          proof.get("storageHash") == "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+          str(proof.get("storageHash")))
 
 
 def a2_accounts(rpc, sender):
