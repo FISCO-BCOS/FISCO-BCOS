@@ -99,6 +99,34 @@ BOOST_AUTO_TEST_CASE(testQuantity)
     BOOST_CHECK(!safeFromQuantity("10000000000000000").has_value());
 }
 
+/// safeFromBigQuantity is the strict u256 counterpart of fromBigQuantity. The
+/// fromBigQuantity checks below are the baseline they exist to replace: hex2u catches
+/// every parse failure and answers 0, so on that path a malformed quantity is
+/// indistinguishable from a genuine zero.
+BOOST_AUTO_TEST_CASE(testBigQuantity)
+{
+    BOOST_CHECK_EQUAL(*safeFromBigQuantity("0x10"), u256(0x10));
+    BOOST_CHECK_EQUAL(*safeFromBigQuantity("0X10"), u256(0x10));
+    BOOST_CHECK_EQUAL(*safeFromBigQuantity("10"), u256(0x10));  // bare hex, not decimal
+    // Exactly 64 hex digits: the full u256 width, still accepted.
+    auto const widest = "0x" + std::string(64, 'f');
+    BOOST_CHECK_EQUAL(*safeFromBigQuantity(widest), std::numeric_limits<u256>::max());
+
+    // Malformed input is rejected instead of silently becoming 0.
+    BOOST_CHECK(!safeFromBigQuantity("0xnothex").has_value());
+    BOOST_CHECK_EQUAL(fromBigQuantity("0xnothex"), u256(0));
+    BOOST_CHECK(!safeFromBigQuantity("0x10zz").has_value());
+    BOOST_CHECK(!safeFromBigQuantity("-1").has_value());
+    BOOST_CHECK(!safeFromBigQuantity("0x").has_value());
+    BOOST_CHECK(!safeFromBigQuantity("").has_value());
+    BOOST_CHECK(!safeFromBigQuantity("0x0x1a").has_value());
+
+    // 65 hex digits overflows u256; hex2u truncates it to the low 32 bytes instead.
+    auto const tooWide = "0x1" + std::string(64, '0');
+    BOOST_CHECK(!safeFromBigQuantity(tooWide).has_value());
+    BOOST_CHECK_EQUAL(fromBigQuantity(tooWide), u256(0));
+}
+
 /// test asString && asBytes
 BOOST_AUTO_TEST_CASE(testStringTrans)
 {

@@ -38,9 +38,8 @@ class CallbackPromise
 public:
     void setValue(T value)
     {
-        std::call_once(m_once, [this, v = std::move(value)]() mutable {
-            m_promise.set_value(std::move(v));
-        });
+        std::call_once(
+            m_once, [this, v = std::move(value)]() mutable { m_promise.set_value(std::move(v)); });
     }
 
     T wait(std::atomic_bool const& _running,
@@ -65,11 +64,16 @@ private:
 
 namespace
 {
-/// Engine API version the built-in CL speaks. V1 keeps the driver minimal (no withdrawals /
-/// beacon-root bookkeeping); the produced blocks' execution semantics are governed by the
-/// ledger's executor version, not by the Engine API version.
-constexpr std::uint32_t c_engineApiVersion =
-    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1);
+/// Karst Engine dialect: the built-in CL speaks the same method versions op-node uses
+/// against a Karst chain (rollup/types.go version selection) — forkchoiceUpdated V3 to
+/// build, getPayload V5 to fetch, newPayload V4 to commit. The produced blocks' execution
+/// semantics are still governed by the ledger's executor version, not by these versions.
+constexpr std::uint32_t c_forkchoiceVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3);
+constexpr std::uint32_t c_getPayloadVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V5);
+constexpr std::uint32_t c_newPayloadVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4);
 }  // namespace
 
 SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
@@ -156,10 +160,9 @@ void SingleNodeConsensus::resolveInitialHead()
 {
     auto headPromise =
         std::make_shared<CallbackPromise<std::tuple<Error::Ptr, protocol::BlockNumber>>>();
-    m_ledger->asyncGetBlockNumber(
-        [headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
-            headPromise->setValue(std::make_tuple(std::move(_error), _number));
-        });
+    m_ledger->asyncGetBlockNumber([headPromise](Error::Ptr _error, protocol::BlockNumber _number) {
+        headPromise->setValue(std::make_tuple(std::move(_error), _number));
+    });
     auto [headError, headNumber] = headPromise->wait(m_running);
     if (headError || headNumber < 0)
     {
@@ -196,15 +199,30 @@ bool SingleNodeConsensus::produceBlock()
     // multiply by 1000, which would make the block timestamp ~1.786e15 -> year 58577 in the
     // EVM (block.timestamp / base fee schedules etc).
     auto const nowMs = static_cast<std::uint64_t>(utcTime());
-    std::uint64_t const timestamp = m_fixedTimestamp > 0 ?
-                                        m_fixedTimestamp * 1000 +
-                                            static_cast<std::uint64_t>(m_headNumber + 1) :
-                                        std::max(nowMs, m_lastTimestamp + 1);
+    std::uint64_t const timestamp =
+        m_fixedTimestamp > 0 ?
+            m_fixedTimestamp * 1000 + static_cast<std::uint64_t>(m_headNumber + 1) :
+            std::max(nowMs, m_lastTimestamp + 1);
     m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
     payloadAttributes.suggestedFeeRecipient = m_feeRecipient;
     payloadAttributes.timestamp = timestamp;
+    // V3 attributes require withdrawals and parentBeaconBlockRoot. This CL has no beacon
+    // chain and OP L2 has no withdrawals, so both are the fixed empty/zero values. The
+    // structs are passed in-process (behind the RPC boundary), so the timestamp above
+    // stays in the internal millisecond unit — the Engine wire's seconds<->ms conversion
+    // lives in the RPC serialization layer only.
+    //
+    // TODO(C4 header fields): the zero parentBeaconBlockRoot here, and the zero
+    // withdrawalsRoot the EngineService stamps onto the payload it builds from these
+    // attributes (see the placeholder note in EngineServiceImpl.h buildPayload), are
+    // built-in-CL stand-ins, NOT production semantics. Because they are zero, a payload
+    // produced by this driver is byte-indistinguishable from one a broken or malicious
+    // external CL would submit with zero roots. Do not read this file as evidence that
+    // zero roots are acceptable on a real chain.
+    payloadAttributes.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    payloadAttributes.parentBeaconBlockRoot = bcos::h256{};
 
     // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes
     // stale transactions, seals the in-process mempool (with the nonce-vs-state check) and
@@ -216,23 +234,22 @@ bool SingleNodeConsensus::produceBlock()
         .safeBlockHash = m_headHash,
         .finalizedBlockHash = m_headHash,
     };
-    auto fcResult = task::syncWait(m_engineService.updateForkchoice(
-        forkchoiceState, &payloadAttributes, c_engineApiVersion));
+    auto fcResult = task::syncWait(
+        m_engineService.updateForkchoice(forkchoiceState, &payloadAttributes, c_forkchoiceVersion));
     if (fcResult.payloadStatus.status != bcos::engine::PayloadValidationStatus::Valid ||
         !fcResult.payloadId)
     {
-        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("updateForkchoice failed to build a payload")
-                                    << LOG_KV("status",
-                                        static_cast<int>(fcResult.payloadStatus.status))
-                                    << LOG_KV("error",
-                                        fcResult.payloadStatus.validationError.value_or(
-                                            "no payloadId returned"));
+        SINGLE_CONSENSUS_LOG(ERROR)
+            << LOG_DESC("updateForkchoice failed to build a payload")
+            << LOG_KV("status", static_cast<int>(fcResult.payloadStatus.status))
+            << LOG_KV("error",
+                   fcResult.payloadStatus.validationError.value_or("no payloadId returned"));
         return false;
     }
 
     // getPayload: fetch the built block proposal (sealed transactions + header).
     auto payload =
-        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, c_engineApiVersion));
+        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, c_getPayloadVersion));
     if (!payload)
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("getPayload returned null");
@@ -255,15 +272,18 @@ bool SingleNodeConsensus::produceBlock()
     // and the eth_* RPC reads.
     bcos::engine::NewPayloadRequest request;
     request.executionPayload = std::move(executionPayload);
+    // newPayloadV4: echo the beacon root the payload was built with (as op-node does)
+    // and pass the required-empty blob-hash / executionRequests lists.
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bcos::bytes>{};
     auto newPayloadStatus =
-        task::syncWait(m_engineService.newPayload(request, c_engineApiVersion));
+        task::syncWait(m_engineService.newPayload(request, c_newPayloadVersion));
     if (newPayloadStatus.status != bcos::engine::PayloadValidationStatus::Valid)
     {
-        SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("newPayload failed")
-                                    << LOG_KV("status",
-                                        static_cast<int>(newPayloadStatus.status))
-                                    << LOG_KV("error",
-                                        newPayloadStatus.validationError.value_or(""));
+        SINGLE_CONSENSUS_LOG(ERROR)
+            << LOG_DESC("newPayload failed")
+            << LOG_KV("status", static_cast<int>(newPayloadStatus.status))
+            << LOG_KV("error", newPayloadStatus.validationError.value_or(""));
         return false;
     }
 
@@ -279,6 +299,6 @@ bool SingleNodeConsensus::produceBlock()
                                << LOG_KV("txs", request.executionPayload.transactions.size())
                                << LOG_KV("gasUsed", request.executionPayload.gasUsed.str())
                                << LOG_KV("stateRoot",
-                                   request.executionPayload.stateRoot.hexPrefixed());
+                                      request.executionPayload.stateRoot.hexPrefixed());
     return sealedTxBlock;
 }

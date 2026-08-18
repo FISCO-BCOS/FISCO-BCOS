@@ -1112,6 +1112,82 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
     }());
 }
 
+// The Karst method triple (FCU V3 -> getPayloadV5 -> newPayloadV4) on the SAME assembly a
+// production [op_engine_rpc] node runs: executor_version = 2, the real EthereumExecutor and
+// SchedulerSerialImpl. libinitializer's guard requires executor_version >= 2 for
+// op_engine_rpc, so this — not the v1 escape hatch the integration script drives — is the
+// configuration external CLs talk to.
+//
+// What it pins is a known defect, deliberately: buildPayload stamps withdrawalsRoot with a
+// zero PLACEHOLDER (EngineServiceImpl.h, TODO(C4 header fields)) instead of the
+// L2ToL1MessagePasser storage root, getPayloadV5 serves that zero, and newPayloadV4 accepts
+// it because validateExecutionPayload can only check presence. Nothing about the executor
+// version changes that — buildPayload has no executor-version branch. When C4 computes the
+// real root this test MUST fail and be rewritten to assert the computed value; until then it
+// keeps the gap visible instead of letting the v2 path look covered.
+BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEngineKarst");
+        SchedulerSerialImpl scheduler(ioServicePool);
+        bcos::txpool::MemPoolImpl memPool;
+
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEWriteBlockHash(backendStorage, 0, genesisHash);
+        {
+            storage::Entry entry;
+            entry.set("0");
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{
+                    ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(genesisHash)},
+                std::move(entry));
+        }
+        co_await EEWriteCurrentNumber(backendStorage, 0);
+        // executor_version = 2 is the whole point of this case; tx_gas_limit is left unset
+        // (getLedgerConfig defaults it to 0) because the payload here carries no
+        // transactions, so no gas bound is exercised.
+        {
+            storage::Entry entry;
+            entry.set(bcos::storage::serialize::encode(
+                ledger::SystemConfigEntry{std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION), 0}));
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{ledger::SYS_CONFIG,
+                    std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version))},
+                std::move(entry));
+        }
+
+        static auto blockFactory =
+            bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl, EEMultiLayerStorage,
+            EthereumExecutor, SchedulerSerialImpl>
+            engineService(memPool, multiLayerStorage, *executor, scheduler, blockFactory);
+
+        bcos::engine::ForkchoiceState fc{genesisHash, genesisHash, genesisHash};
+        bcos::engine::PayloadAttributes attrs;
+        attrs.prevRandao = cryptoSuite->hashImpl()->hash(std::string("randao"));
+        attrs.timestamp = 12345;
+        attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+        attrs.parentBeaconBlockRoot = bcos::h256{};
+        auto fcResult = co_await engineService.updateForkchoice(fc, &attrs, 3);
+        BOOST_REQUIRE(fcResult.payloadId.has_value());
+
+        auto payload = co_await engineService.getPayload(*fcResult.payloadId, 5);
+        BOOST_REQUIRE(payload);
+        // The zero placeholder, served verbatim to the CL by a v2 node.
+        BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
+        BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, bcos::h256{});
+
+        bcos::engine::NewPayloadRequest request;
+        request.executionPayload = payload->executionPayload;
+        request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+        request.executionRequests = std::vector<bcos::bytes>{};
+        auto status = co_await engineService.newPayload(request, 4);
+        // Rubber-stamped: presence is all newPayloadV4 can check today.
+        BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    }());
+}
+
 // Mechanism check: writes into a forked view's mutable layer must survive
 // pushView + mergeBackStorage into the backend (the EngineService's commit path).
 BOOST_AUTO_TEST_CASE(viewCommitMechanism)
