@@ -159,14 +159,18 @@ bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
     }
 
     // Like toTarsHeader's field writes but WITHOUT validateHeader — usable for FISCO-native/OP
-    // (NON_ETH) headers that validateHeader rejects. One DELIBERATE omission from toTarsHeader's
-    // writes: ethBlockVersion is pinned to NON_ETH here instead of copying ethHeader.version()
-    // (which is itself always NON_ETH — the RLP stream carries no version). Write it explicitly
-    // so the seconds↔milliseconds pairing below does not rest on header->clear() leaving the
-    // tars field at its default 0 happening to equal NON_ETH: rlpEncode's /1000 keys off
-    // ethBlockVersion == NON_ETH, and a header of any other version would encode the
-    // millisecond timestamp raw and silently change the block hash. For NON_ETH the RLP
-    // timestamp is SECONDS and the FISCO header stores MILLISECONDS, so ×1000.
+    // (NON_ETH) headers that validateHeader rejects. TWO DELIBERATE omissions from toTarsHeader:
+    //   1. ethBlockVersion is pinned to NON_ETH here instead of copying ethHeader.version()
+    //      (which is itself always NON_ETH — the RLP stream carries no version). Write it
+    //      explicitly so the seconds↔milliseconds pairing below does not rest on header->clear()
+    //      leaving the tars field at its default 0 happening to equal NON_ETH: rlpEncode's /1000
+    //      keys off ethBlockVersion == NON_ETH, and a header of any other version would encode
+    //      the millisecond timestamp raw and silently change the block hash.
+    //   2. rlpHash is NOT set (toTarsHeader writes it via rlpEncode+keccak256 at :140). Callers
+    //      that need the block hash should call computeHash() or calculateRLPHash() explicitly —
+    //      computing it here would force a full re-encode for every decode, even when the caller
+    //      only needs field access.
+    // For NON_ETH the RLP timestamp is SECONDS and the FISCO header stores MILLISECONDS, so ×1000.
     header->setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
     header->setParentInfo(ethHeader.data().parentInfo);
     header->setCoinbase(ethHeader.data().coinbase);
