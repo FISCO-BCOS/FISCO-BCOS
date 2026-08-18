@@ -7,14 +7,6 @@
 #include <bcos-utilities/Exceptions.h>
 #include <array>
 #include <bitset>
-// Raise reflection range for Flag values > 127. A per-enum specialization of
-// enum_range<Flag> would also work if placed before the class definition (after
-// this include), but the macro approach is simpler and avoids placement
-// sensitivity. When magic_enum is already included upstream, this #ifndef is a
-// no-op (magic_enum's own internal define takes effect).
-#ifndef MAGIC_ENUM_RANGE_MAX
-#define MAGIC_ENUM_RANGE_MAX 200
-#endif
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <ostream>
@@ -140,15 +132,15 @@ public:
                                      // feature_l2_ethereum_compat.
     };
 
-    // feature_flags bit = enum value. MAGIC_ENUM_RANGE_MAX is raised to 200
-    // (before the include) so flags up to 200 are reflected. magic_enum reflects
-    // values SORTED BY VALUE, so enum_value(count-1) is the max — check it directly.
+    // feature_flags bit = enum value. Pin the newest flag so a value beyond
+    // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
+    static_assert(magic_enum::enum_contains(Flag::feature_op_jovian),
+        "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
-        "max Flag value exceeds 127; bitset encoding (bit = enum value) requires "
-        "values 0..127. Raise MAGIC_ENUM_RANGE_MAX if the value is out of range.");
+        "max Flag value exceeds 127; bitset encoding (bit = enum value) requires values 0..127.");
     static_assert(static_cast<std::size_t>(magic_enum::enum_integer(magic_enum::enum_value<Flag>(
                       magic_enum::enum_count<Flag>() - 1))) == magic_enum::enum_count<Flag>() - 1,
         "Flag values must stay contiguous from zero: bit i of feature_flags means enum "
