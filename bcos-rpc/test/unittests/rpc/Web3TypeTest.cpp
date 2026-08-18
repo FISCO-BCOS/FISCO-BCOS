@@ -20,6 +20,8 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3TxHandler.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -128,6 +130,9 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
     BOOST_CHECK_EQUAL(tx.value, 2000000000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "6ebaf477f83e051589c1188bcc6ddccd");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
+    // C2 (W8 review): typed-tx signatureV is the raw y_parity, restricted to 0/1. This
+    // EIP-2930 sample carries yParity=0.
+    BOOST_CHECK_EQUAL(tx.signatureV, 0u);
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
@@ -161,6 +166,9 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
     BOOST_CHECK_EQUAL(tx.value, 2000000000000000000ull);
     BOOST_CHECK_EQUAL(toHex(tx.data), "6ebaf477f83e051589c1188bcc6ddccd");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35);
+    // C2 (W8 review): typed-tx signatureV is the raw y_parity, restricted to 0/1. This
+    // EIP-1559 sample carries yParity=0.
+    BOOST_CHECK_EQUAL(tx.signatureV, 0u);
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
@@ -239,6 +247,9 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     BOOST_CHECK_EQUAL(toHex(tx.blobVersionedHashes[1]),
         "8aaeccaf3873d07cef005aca28c39f8a9f8bdb1ec8d79ffc25afc0a4fa2ab736");
     BOOST_CHECK_EQUAL(tx.getSignatureV(), tx.chainId.value() * 2 + 35 + 1);
+    // C2 (W8 review): typed-tx signatureV is the raw y_parity, restricted to 0/1. This
+    // EIP-4844 sample carries yParity=1 (hence the +1 in getSignatureV above).
+    BOOST_CHECK_EQUAL(tx.signatureV, 1u);
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
@@ -249,6 +260,125 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     codec::rlp::encode(encoded, tx);
     auto rawTx2 = toHexStringWithPrefix(encoded);
     BOOST_CHECK_EQUAL(rawTx, rawTx2);
+}
+
+// C2 (W8 review): typed-tx yParity is restricted to 0/1 (Web3TxHandler rejects signatureV > 1 with
+// InvalidVInSignature). Flip the yParity wire byte of each legal typed-tx sample to 0x02
+// (single-byte self-encoding — same wire length, outer RLP prefix unaffected) and assert the
+// decoder rejects it. Wire offsets are RLP-decoding-verified: EIP-2930 field[8] at 178,
+// EIP-1559 field[9] at 184, EIP-4844 field[11] at 232.
+BOOST_AUTO_TEST_CASE(typedTxYParityOverOneRejected)
+{
+    auto byteAt = [](std::string_view hex, std::size_t byteOffset) -> int {
+        auto nibble = [](char c) -> int {
+            if (c >= '0' && c <= '9')
+            {
+                return c - '0';
+            }
+            if (c >= 'a' && c <= 'f')
+            {
+                return c - 'a' + 10;
+            }
+            return c - 'A' + 10;
+        };
+        auto pos = 2 + byteOffset * 2;  // skip "0x"
+        return nibble(hex[pos]) * 16 + nibble(hex[pos + 1]);
+    };
+    auto flipByteToTwo = [](std::string_view hex, std::size_t byteOffset) {
+        std::string out(hex);
+        auto pos = 2 + byteOffset * 2;  // skip "0x"
+        out[pos] = '0';
+        out[pos + 1] = '2';
+        return out;
+    };
+
+    // clang-format off
+    constexpr std::string_view kEIP2930RawTx = "0x01f8f205078506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7881bc16d674ec80000906ebaf477f83e051589c1188bcc6ddccdf872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842a00000000000000000000000000000000000000000000000000000000000000003a00000000000000000000000000000000000000000000000000000000000000007d694bb9bc244d798123fde783fcc1c72d3bb8c189413c080a036b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0a05edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094";
+    constexpr std::string_view kEIP1559RawTx = "0x02f8f805078502540be4008506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7881bc16d674ec80000906ebaf477f83e051589c1188bcc6ddccdf872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842a00000000000000000000000000000000000000000000000000000000000000003a00000000000000000000000000000000000000000000000000000000000000007d694bb9bc244d798123fde783fcc1c72d3bb8c189413c080a036b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0a05edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094";
+    constexpr std::string_view kEIP4844RawTx = "0x03f9012705078502540be4008506fc23ac008357b58494811a752c8cd697e3cb27279c330ed1ada745a8d7808204f7f872f85994de0b295669a9fd93d5f28d9ec85e40f4cb697baef842a00000000000000000000000000000000000000000000000000000000000000003a00000000000000000000000000000000000000000000000000000000000000007d694bb9bc244d798123fde783fcc1c72d3bb8c189413c07bf842a0c6bdd1de713471bd6cfa62dd8b5a5b42969ed09e26212d3377f3f8426d8ec210a08aaeccaf3873d07cef005aca28c39f8a9f8bdb1ec8d79ffc25afc0a4fa2ab73601a036b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0a05edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094";
+    // clang-format on
+
+    struct Sample
+    {
+        std::string_view rawTx;
+        std::size_t yParityOffset;
+        int expectedYParityByte;  // the RLP-encoded yParity currently at the offset
+    };
+    const Sample samples[] = {
+        {kEIP2930RawTx, 178, 0x80},
+        {kEIP1559RawTx, 184, 0x80},
+        {kEIP4844RawTx, 232, 0x01},
+    };
+    for (const auto& sample : samples)
+    {
+        // Guard: fail loudly if a wire offset is stale — never silently test the wrong byte.
+        BOOST_CHECK_MESSAGE(
+            byteAt(sample.rawTx, sample.yParityOffset) == sample.expectedYParityByte,
+            "yParity wire byte mismatch at offset " << sample.yParityOffset);
+
+        auto bytes = fromHexWithPrefix(flipByteToTwo(sample.rawTx, sample.yParityOffset));
+        auto bRef = bcos::ref(bytes);
+        Web3Transaction tx{};
+        auto e = codec::rlp::decode(bRef, tx);
+        BOOST_REQUIRE_MESSAGE(
+            e != nullptr, "yParity=2 must be rejected (offset " << sample.yParityOffset << ')');
+        if (e != nullptr)
+        {
+            BOOST_CHECK_EQUAL(e->errorCode(),
+                static_cast<int64_t>(codec::rlp::DecodingError::InvalidVInSignature));
+        }
+    }
+}
+
+// EIP-2 canonical-s: a malleable (high-s) signature must be rejected at decode. decode() is the
+// single funnel for both OP paths — eth_sendRawTransaction (EthEndpoint) and engine newPayload
+// (opEnvelopeToTars) — so this covers admission AND block processing, matching op-geth. Flipping
+// s -> n - s recovers the same sender and would otherwise execute byte-for-byte identically.
+BOOST_AUTO_TEST_CASE(highSsignatureRejectedAtDecode)
+{
+    const u256 kSecpOrder("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+    const u256 kSecpHalfOrder = kSecpOrder / 2;
+
+    Web3Transaction tx;
+    tx.value = 1000000000000000000;
+    tx.type = rpc::TransactionType::Legacy;
+    tx.data = {};
+    tx.to = Address("0x1e58529dAA467406645d0f4B63dec96CA0b87d70");
+    tx.nonce = 19;
+    tx.gasLimit = 210000;
+    tx.maxFeePerGas = 20000000000;
+    tx.maxPriorityFeePerGas = 20000000000;
+    tx.chainId = 31337;
+
+    auto signData = tx.encodeForSign();
+    std::string priv = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+    auto key = std::make_shared<KeyImpl>(fromHex(priv));
+    auto newHash = crypto::keccak256Hash(ref(signData));
+    auto signatureImpl = bcos::crypto::Secp256k1Crypto();
+    auto keyPair = std::make_unique<Secp256k1KeyPair>(key);
+    auto signature = signatureImpl.sign(*keyPair, newHash, false);
+    tx.signatureR = {signature->begin(), signature->begin() + 32};
+    tx.signatureS = {signature->begin() + 32, signature->begin() + 64};
+    tx.signatureV = signature->back();
+
+    // Guard: libsecp256k1 signs canonical low-s — confirm before flipping, so a future
+    // libsecp256k1 behavior change fails loudly instead of silently weakening the test.
+    const u256 s = u256("0x" + toHex(tx.signatureS));
+    BOOST_REQUIRE(s <= kSecpHalfOrder);
+
+    // Malleability flip: s' = n - s is high-s but recovers the same sender.
+    tx.signatureS = toBigEndian(kSecpOrder - s);
+    const u256 flipped = u256("0x" + toHex(tx.signatureS));
+    BOOST_REQUIRE(flipped > kSecpHalfOrder);
+
+    bcos::bytes encoded;
+    codec::rlp::encode(encoded, tx);
+    auto bRef = bcos::ref(encoded);
+    Web3Transaction decoded;
+    auto e = codec::rlp::decode(bRef, decoded);
+    BOOST_REQUIRE(e != nullptr);
+    BOOST_CHECK_EQUAL(
+        e->errorCode(), static_cast<int64_t>(codec::rlp::DecodingError::InvalidVInSignature));
 }
 
 BOOST_AUTO_TEST_CASE(testEIP7702Transaction)
@@ -444,6 +574,165 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     BOOST_CHECK(re);
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xc1b634853cb333d3ad8663715b08f41a3aec47cc");
+}
+
+// Deposit encode→decode roundtrip locks the uint32_t isSystemTransaction workaround
+// (see Web3TxHandler.h header comment) — when the underlying ODR defect is fixed and
+// the field switches back to uint8_t, this test ensures the encoded byte does not
+// silently regress.
+BOOST_AUTO_TEST_CASE(depositRoundtrip)
+{
+    Web3Transaction deposit;
+    deposit.type = rpc::TransactionType::Deposit;
+    deposit.sourceHash = h256("6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    deposit.from = Address("0xdead000000000000000000000000000000000011");
+    deposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+    deposit.mint = u256("0x16345785d8a0000");
+    deposit.value = u256(0);
+    deposit.gasLimit = 1000000;
+    deposit.isSystemTx = true;
+    deposit.data = bcos::bytes{};
+
+    // Encode → decode roundtrip
+    auto encoded = deposit.encode();
+    auto ref = bcos::ref(encoded);
+    Web3Transaction decoded;
+    auto err = decoded.decode(ref, false);  // withSig=false, deposit has no signature
+    BOOST_REQUIRE(err == nullptr);
+
+    BOOST_CHECK(decoded.type == rpc::TransactionType::Deposit);
+    BOOST_CHECK(decoded.isSystemTx);
+    BOOST_CHECK_EQUAL(decoded.sourceHash.hex(), deposit.sourceHash.hex());
+    BOOST_CHECK_EQUAL(decoded.from.hexPrefixed(), deposit.from.hexPrefixed());
+    BOOST_CHECK(decoded.to.has_value());
+    BOOST_CHECK_EQUAL(decoded.to->hexPrefixed(), deposit.to->hexPrefixed());
+    BOOST_CHECK_EQUAL(decoded.mint, deposit.mint);
+    BOOST_CHECK_EQUAL(decoded.value, deposit.value);
+    BOOST_CHECK_EQUAL(decoded.gasLimit, deposit.gasLimit);
+
+    // Also round-trip the system-tx=false case
+    Web3Transaction nonSysDeposit;
+    nonSysDeposit.type = rpc::TransactionType::Deposit;
+    nonSysDeposit.sourceHash =
+        h256("7bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8");
+    nonSysDeposit.from = Address("0xdead000000000000000000000000000000000011");
+    nonSysDeposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+    nonSysDeposit.mint = u256(100);
+    nonSysDeposit.value = u256(0);
+    nonSysDeposit.gasLimit = 500000;
+    nonSysDeposit.isSystemTx = false;
+    nonSysDeposit.data = bcos::bytes{};
+
+    auto encoded2 = nonSysDeposit.encode();
+    auto ref2 = bcos::ref(encoded2);
+    Web3Transaction decoded2;
+    err = decoded2.decode(ref2, false);
+    BOOST_REQUIRE(err == nullptr);
+
+    BOOST_CHECK(decoded2.type == rpc::TransactionType::Deposit);
+    BOOST_CHECK(!decoded2.isSystemTx);
+    BOOST_CHECK_EQUAL(decoded2.mint, nonSysDeposit.mint);
+}
+
+// The sendRawTransaction guard in EthEndpoint.cpp checks web3Tx.type == Deposit after decoding the
+// raw bytes. The guard itself is a simple `if` + throw; the decode → type-detection path is the
+// test that verifies a valid 0x7E envelope is correctly identified. An RPC-level test would need
+// the full EthEndpoint fixture (future work).
+BOOST_AUTO_TEST_CASE(decodeDepositIdentifiesTypeForSendRawGuard)
+{
+    Web3Transaction deposit;
+    deposit.type = rpc::TransactionType::Deposit;
+    deposit.sourceHash = h256("0xabcd000000000000000000000000000000000000000000000000000000000000");
+    deposit.from = Address("0xdead000000000000000000000000000000000099");
+    deposit.to.emplace(Address("0x4200000000000000000000000000000000000011"));
+    deposit.mint = u256(1);
+    deposit.value = u256(0);
+    deposit.gasLimit = 21000;
+    deposit.isSystemTx = false;
+    deposit.data = bcos::bytes{};
+
+    auto encoded = deposit.encode();
+    BOOST_REQUIRE(!encoded.empty());
+
+    // The raw envelope must start with 0x7E (EIP-2718 type byte)
+    BOOST_CHECK_EQUAL(
+        static_cast<uint8_t>(encoded[0]), static_cast<uint8_t>(rpc::TransactionType::Deposit));
+
+    // Decode through the public codec entry point — this is the path EthEndpoint calls
+    // (codec::rlp::decode → Web3Transaction::decode) before the type-guard check.
+    auto ref = bcos::ref(encoded);
+    Web3Transaction decoded;
+    auto err = bcos::codec::rlp::decode(ref, decoded);
+    BOOST_REQUIRE(err == nullptr);
+    BOOST_CHECK(decoded.type == rpc::TransactionType::Deposit);
+    // A real sendRawTransaction call would now hit: if (web3Tx.type == Deposit) → throw
+    // InvalidParams
+}
+
+// Golden-vector deposit encoding: encode known deposit txs and compare byte-for-byte
+// against independently-verified RLP output (cross-validated against the OP Stack deposit
+// spec: 0x7E || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction, data])).
+// The golden hex strings were verified against an independent oracle and op-geth-shaped
+// vectors. If a future change alters the deposit encoding, this test breaks — that's
+// intentional. The 0x80 vs 0x01 isSystemTx distinction is the op-geth convention the
+// uint32_t workaround (see Web3TxHandler.h header comment) exists to preserve.
+BOOST_AUTO_TEST_CASE(depositGoldenEncoding)
+{
+    // isSystemTx=true: 0x7E || rlp([33b sourceHash, 21b from, 21b to, 9b mint,
+    //                          1b value(0), 4b gas, 1b isSystemTx(0x01), 1b data(empty)])
+    // gas = 0x0f4240 = 1000000
+    {
+        Web3Transaction deposit;
+        deposit.type = rpc::TransactionType::Deposit;
+        deposit.sourceHash =
+            h256("6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+        deposit.from = Address("0xdead000000000000000000000000000000000011");
+        deposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+        deposit.mint = u256("0x16345785d8a0000");
+        deposit.value = u256(0);
+        deposit.gasLimit = 1000000;
+        deposit.isSystemTx = true;
+        deposit.data = bcos::bytes{};
+
+        auto encoded = deposit.encode();
+        BOOST_CHECK_EQUAL(toHex(encoded),
+            "7ef85ba06ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7"
+            "94dead000000000000000000000000000000000011"
+            "944200000000000000000000000000000000000022"
+            "88016345785d8a0000"
+            "80"
+            "830f4240"
+            "01"
+            "80");
+    }
+
+    // isSystemTx=false: 0x7E || rlp([33b sourceHash, 21b from, 21b to, 1b mint(0x64=100),
+    //                              1b value(0), 4b gas, 1b isSystemTx(0x80), 1b data(empty)])
+    // gas = 0x07a120 = 500000, list header 0xf853 (shorter: mint is 1 byte vs 9)
+    {
+        Web3Transaction deposit;
+        deposit.type = rpc::TransactionType::Deposit;
+        deposit.sourceHash =
+            h256("7bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8");
+        deposit.from = Address("0xdead000000000000000000000000000000000011");
+        deposit.to.emplace(Address("0x4200000000000000000000000000000000000022"));
+        deposit.mint = u256(100);
+        deposit.value = u256(0);
+        deposit.gasLimit = 500000;
+        deposit.isSystemTx = false;
+        deposit.data = bcos::bytes{};
+
+        auto encoded = deposit.encode();
+        BOOST_CHECK_EQUAL(toHex(encoded),
+            "7ef853a07bc967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d8"
+            "94dead000000000000000000000000000000000011"
+            "944200000000000000000000000000000000000022"
+            "64"
+            "80"
+            "8307a120"
+            "80"
+            "80");
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
