@@ -69,6 +69,8 @@ public:
         std::optional<std::uint32_t> capturedNewPayloadVersion;
         std::optional<engine::PayloadID> capturedPayloadId;
         std::optional<std::uint32_t> capturedGetPayloadVersion;
+        std::optional<bcos::protocol::BlockNumber> safeBlockNumber;
+        std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber;
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -101,10 +103,13 @@ public:
         co_return m_state->payloadStatusResult;
     }
 
-    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
+    {
+        return m_state->safeBlockNumber;
+    }
     std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
     {
-        return std::nullopt;
+        return m_state->finalizedBlockNumber;
     }
 };
 
@@ -623,6 +628,52 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
         getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
         largeQuantity);
     BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
+}
+
+// D2 U3-U6: safe/finalized tag routing at the EthEndpoint layer.
+// - engine service absent (PBFT): tags keep the historical latest aliasing
+// - engine present + untracked: strict op-geth semantics -> null block
+// - engine present + tracked: routes to the tracked number (distinguished from the
+//   latest-fallback by a tracked number the ledger cannot serve -> null)
+BOOST_AUTO_TEST_CASE(safeFinalizedTagRoutingTest)
+{
+    // Self-calibrate: what "latest" resolves to on this fixture.
+    auto latestResp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",false]})");
+    BOOST_REQUIRE(!latestResp["result"].isNull());
+    auto const latestNumber = latestResp["result"]["number"].asString();
+    auto const latestNumeric = std::stoll(latestNumber.substr(2), nullptr, 16);
+
+    // U5+U6: no engine service wired (fixture default) -> safe/finalized/pending alias latest
+    for (auto tag : {"safe", "finalized", "pending"})
+    {
+        auto resp = onRPCRequestWrapper(
+            R"({"jsonrpc":"2.0","id":2,"method":"eth_getBlockByNumber","params":[")" +
+            std::string(tag) + R"(",false]})");
+        BOOST_CHECK_MESSAGE(
+            !resp["result"].isNull() && resp["result"]["number"].asString() == latestNumber,
+            tag + std::string(" aliases latest when no engine service is wired"));
+    }
+
+    // Engine wired, untracked -> null block (op-geth "safe head not known" -> NotFound)
+    TestEngineService testEngineService;
+    nodeService->engineService() =
+        std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+    for (auto tag : {"safe", "finalized"})
+    {
+        auto resp = onRPCRequestWrapper(
+            R"({"jsonrpc":"2.0","id":3,"method":"eth_getBlockByNumber","params":[")" +
+            std::string(tag) + R"(",false]})");
+        BOOST_CHECK_MESSAGE(resp["result"].isNull(),
+            tag + std::string(" returns null when untracked (strict op-geth semantics)"));
+    }
+
+    // Engine wired, tracked to a number the ledger cannot serve -> null (proves routing:
+    // a latest-fallback would return the latest block instead)
+    testEngineService.m_state->safeBlockNumber = latestNumeric + 1000;
+    auto resp = onRPCRequestWrapper(
+        R"({"jsonrpc":"2.0","id":4,"method":"eth_getBlockByNumber","params":["safe",false]})");
+    BOOST_CHECK(resp["result"].isNull());
 }
 
 BOOST_AUTO_TEST_CASE(logMatcherTest)

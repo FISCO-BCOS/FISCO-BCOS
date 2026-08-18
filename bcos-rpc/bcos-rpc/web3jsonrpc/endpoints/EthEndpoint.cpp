@@ -43,6 +43,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-utilities/Exceptions.h>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
 #include <span>
@@ -947,6 +948,27 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
+    // D2: safe/finalized route to the engine's FCU-tracked numbers (op-node
+    // L2BlockRefByLabel contract). With an engine service present but nothing tracked yet,
+    // op-geth semantics are "not found": getBlockByNumber's catch turns the throw into a
+    // JSON null result, tag-taking state endpoints surface it as an error (geth's
+    // "header not found"). Nodes without an engine service (PBFT) keep the historical
+    // latest aliasing.
+    if (blockTag == SafeBlock || blockTag == FinalizedBlock)
+    {
+        auto& engineService = m_nodeService->engineService();
+        if (engineService)
+        {
+            auto tracked = (blockTag == SafeBlock) ? engineService->getSafeBlockNumber() :
+                                                     engineService->getFinalizedBlockNumber();
+            if (tracked.has_value())
+            {
+                co_return std::make_tuple(*tracked, *tracked == latest);
+            }
+            BOOST_THROW_EXCEPTION(bcos::Exception{} << bcos::errinfo_comment(
+                                      std::string(blockTag) + " block head is not tracked yet"));
+        }
+    }
     auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag);
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }
