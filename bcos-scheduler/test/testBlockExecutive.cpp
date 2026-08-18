@@ -77,7 +77,15 @@ struct BlockExecutiveFixture
             hashImpl, false, false, false, 0, ioServicePool);
     }
 
-    ~BlockExecutiveFixture() {}
+    // Stop the shared IOServicePool before any member is destroyed so that no
+    // pending scheduler task can run against freed members (flaky teardown UAF).
+    ~BlockExecutiveFixture()
+    {
+        if (ioServicePool)
+        {
+            ioServicePool->stop();
+        }
+    }
 
     boost::asio::io_context ioService;
     bcos::IOServicePool::Ptr ioServicePool;
