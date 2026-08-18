@@ -455,9 +455,14 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     //
     // NOTE (morebtcg #5434): integer division is lossy for sub-second precision (1001 ms → 1 s).
     // Real OP block timestamps are whole seconds today; if sub-second timestamps are ever fed,
-    // the RLP hash would not be reproducible from the decoded form. Assert the invariant:
-    assert((m_version != EthBlockVersion::NON_ETH || m_data.timestamp % 1000 == 0) &&
-           "NON_ETH timestamp must be a whole number of seconds (ms divisible by 1000)");
+    // the RLP hash would not be reproducible from the decoded form. Guard with a throw (not
+    // assert — assert is compiled out under NDEBUG, which every shipped build defines; kyonRay
+    // #5434 round-3).
+    if (m_version == EthBlockVersion::NON_ETH && m_data.timestamp % 1000 != 0)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "NON_ETH timestamp must be a whole number of seconds (ms divisible by 1000)"));
+    }
     const auto rlpTimestamp =
         m_version == EthBlockVersion::NON_ETH ? m_data.timestamp / 1000 : m_data.timestamp;
     codec::rlp::encode(out, m_data.parentInfo.blockHash, m_data.uncleHash, m_data.coinbase,

@@ -569,12 +569,13 @@ public:
     /// (m_storages.back(), FIFO). If mergeBackStorage throws, the pushed layer stays queued for
     /// retry (degraded semantics, exception propagation decided by caller). No-op on empty mutable.
     ///
-    /// NOTE (morebtcg #5434): the name "mergeView" is slightly misleading — the view
-    /// passed in is PUSHED (queued) but the merge targets the OLDEST pending layer
-    /// (m_storages.back()), not the one just pushed. Callers expecting "flush my view
-    /// to the backend now" should be aware of this one-block-lag semantics. The empty-
-    /// mutable no-op (co_return without merge) means a view with no writes does NOT
-    /// advance the merge pipeline.
+    /// NOTE (morebtcg #5434, kyonRay #5434 round-3): two caveats:
+    /// 1. The view passed in is PUSHED (queued) but the merge targets the OLDEST pending
+    ///    layer (m_storages.back()), not the one just pushed — one-block-lag semantics.
+    /// 2. This function is NOT atomic: pushView acquires/releases m_listMutex, then
+    ///    mergeBackStorage re-acquires m_mergeMutex + m_listMutex. Two independent critical
+    ///    sections with a window between them. The empty-mutable no-op (co_return without
+    ///    merge) means a view with no writes does NOT advance the merge pipeline.
     task::Task<void> mergeView(ViewType view)
     {
         if (!view.m_mutableStorage)
