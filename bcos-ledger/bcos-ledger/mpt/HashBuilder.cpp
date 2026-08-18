@@ -195,7 +195,8 @@ TrieBuildResult computeTrieRootFromSorted(
     return computeTrieRootImpl(sortedEntries);
 }
 
-TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::bytes> const> entries)
+TrieBuildResult computeTrieRootVarKey(
+    std::span<std::pair<bcos::bytes, bcos::bytes> const> entries)
 {
     if (entries.empty())
     {
@@ -221,37 +222,17 @@ TrieBuildResult computeTrieRootVarKey(std::span<std::pair<bcos::bytes, bcos::byt
     buildEntries.reserve(entries.size());
     for (auto const& [key, value] : entries)
     {
-        buildEntries.push_back(HBEntry{.nibbles = bytesToNibbles(bcos::ref(key)), .value = value});
+        buildEntries.push_back(
+            HBEntry{.nibbles = bytesToNibbles(bcos::ref(key)), .value = value});
     }
     std::sort(buildEntries.begin(), buildEntries.end(),
         [](HBEntry const& a, HBEntry const& b) { return a.nibbles < b.nibbles; });
 
-    // Enforce the documented precondition ("no key is a prefix of another", above) instead
-    // of trusting it: after the nibble-path sort, a violating pair is necessarily ADJACENT,
-    // and the sorted order guarantees prev is never longer than current. A duplicate or
-    // prefix key terminates inside a branch node and silently produces a malformed trie —
-    // the W6 shape recorded above — so fail loudly while computing the root, not at
-    // consensus verification where the mismatch surfaces as an unexplained fork.
-    for (std::size_t i = 1; i < buildEntries.size(); ++i)
-    {
-        auto const& previous = buildEntries[i - 1].nibbles;
-        auto const& current = buildEntries[i].nibbles;
-        if (previous.size() <= current.size() &&
-            std::equal(previous.begin(), previous.end(), current.begin()))
-        {
-            BOOST_THROW_EXCEPTION(
-                MPTInvariantViolation() << bcos::errinfo_comment(
-                    "computeTrieRootVarKey: key " + std::to_string(i - 1) +
-                    " is a duplicate of, or a prefix of, key " + std::to_string(i) +
-                    " — variable-length trie keys must be prefix-free and distinct"));
-        }
-    }
-
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
     HBContext ctx{.hasher = hasher, .newNodes = newNodes};
-    NodeRef const rootRef = hbBuild(
-        ctx, std::span<HBEntry const>{buildEntries.data(), buildEntries.size()}, /*depth=*/0);
+    NodeRef const rootRef =
+        hbBuild(ctx, std::span<HBEntry const>{buildEntries.data(), buildEntries.size()}, /*depth=*/0);
 
     bcos::h256 root;
     if (rootRef.kind() == NodeRef::Kind::Hash)

@@ -23,6 +23,7 @@
     "./ports/blst",
     "./ports/ittapi",
     "./ports/group-sig",
+    "./ports/gmp",
     "./ports/paillier",
     "./ports/tikv-client-cpp",
     "./ports/benchmark",
