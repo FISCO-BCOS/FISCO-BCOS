@@ -6,8 +6,7 @@
 /// finalization) is ported from bcos-evm and integrated here so that it reads
 /// and writes BCOS storage directly through ledger::account::EVMAccount +
 /// storage2 — there is no evmone::state::StateView / BlockHashes / StateDiff
-/// adapter layer (StorageStateView / StorageBlockHashes / applyStateDiff are
-/// gone), transactions are the bcos protocol::Transaction directly, and block
+/// adapter layer, transactions are the bcos protocol::Transaction directly, and block
 /// headers are the bcos protocol::BlockHeader directly (see the
 /// Rollbackable / EthereumState / EthereumHost / EthereumTransition headers).
 ///

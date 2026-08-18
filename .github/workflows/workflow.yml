@@ -132,6 +132,12 @@ jobs:
         run: |
           cd build
           cmake --build .
+      - name: Regenerate opstack t8n vectors
+        # The opstack t8n tests (opstack-executor-block-tests) read reference vectors
+        # from the source tree at runtime; the JSON is git-ignored and regenerated here
+        # from pinned op-geth before `ctest`. Windows builds with -DTESTS=OFF, so no tests.
+        if: matrix.os != 'windows-2025'
+        uses: ./.github/actions/opstack-t8n-regen
       - name: Test
         if: matrix.os != 'windows-2025'
         run: |
@@ -376,6 +382,10 @@ jobs:
         run: |
           cd build
           cmake --build . --parallel 3
+      - name: Regenerate opstack t8n vectors
+        # ctest below includes opstack-executor-block-tests, which needs the t8n vectors
+        # in the source tree at runtime (git-ignored, regenerated from pinned op-geth).
+        uses: ./.github/actions/opstack-t8n-regen
       - name: Run tests
         run: |
           cd build
