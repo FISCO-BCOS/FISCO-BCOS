@@ -9,10 +9,10 @@ set -u
 # transactions sealed into blocks fails until OP-mode payload building lands (Tier-2,
 # shared prerequisite with C2's sequencer path). They still RUN (output visible) but do
 # not fail this gate. Remove names as Tier-2 restores them.
-# state_verify: the CURRENT /tmp chain mixes blocks built across the Tier-2 development
-# iterations (three hash-derivation eras), so its parentHash chain-link check fails on the
-# seams — re-init the chain (Phase B verification step) and move it back to gating.
-KNOWN_RED_TIER2="chain_driver b4_persist b3_contracts predeploy_matrix state_verify"
+# Tier-2 Phase B closeout (08-19): state_verify/chain_driver/b4_persist/b3_contracts all
+# green on the freshly-initialized chain (canonical-hash override + receipt fixes) — restored
+# to gating. predeploy_matrix keeps 3 reds: withdrawalsRoot propagation (Phase B remainder).
+KNOWN_RED_TIER2="predeploy_matrix"
 
 run_step() {  # run_step <script-name-without-.py>
     local name="$1"
@@ -39,13 +39,13 @@ step "B.1/B.2: state_verify (12 asserts)"
 run_step state_verify
 
 step "A.2/B.3: chain_driver (31 asserts)"
-run_step chain_driver
+python3 chain_driver.py || fail=1
 
 step "B.4: b4_persist (3 asserts)"
-run_step b4_persist
+python3 b4_persist.py || fail=1
 
 step "B.3: b3_contracts (12 asserts)"
-run_step b3_contracts
+python3 b3_contracts.py || fail=1
 
 step "PREDEPLOY: predeploy_matrix (35 asserts)"
 run_step predeploy_matrix

@@ -256,3 +256,31 @@ geth 单一 trie 表示、reth plain/hashed 双表均由导入一次填满且读
   接缝断开），Phase B 首步 = 全新 init 链后恢复 gating。
 - run_all 门禁 **ALL GREEN**（chain_driver 4 败 / predeploy 3 败 = Phase B 缺口：tx/receipt
   检索 + withdrawalsRoot 传播；state_verify 2 败 = 混合链接缝）。
+
+## Tier-2 Phase B 三项完成（08-19，C2 硬前置全就绪）
+
+**P②（tx/receipt 检索，8c5e75e）**——诊断收窄为字段级而非检索级：
+- `cumulativeGasUsed`：OP 线写 hex（hexCumulative）而 tars 通用约定/RPC 读侧（lexical_cast）为十进制
+  → 存储改 `decimalCumulative`；receipts-root 解析器 `parseHexUint64` 按前缀分流（0x→hex，裸数字→
+  decimal——safeFromQuantity 会把裸十进制当 hex 解析，"22760"→0x22760，这是中途 557 个 golden 失败
+  的根因）；t8n 对拍改按值比较。
+- `transactionIndex`：全库生产代码无 setter → OP 管线三处补设（OpBlockExecute 两分支 + OpstackExecutor
+  上下文）。
+- 附带：FCU-with-attrs 补 V4 门（与 newPayload 的 c_opIsthmusPayloadVersion 对齐）。
+- 验证：chain_driver **31/31**、opstack 套件 4/4。
+
+**P①（V4 端点 + 通告，9a6fee4f）**：FCU/getPayload/newPayloadV4 三桩接线到版本参数化 handler；
+`combineGetPayloadResponse` 补 V4 `executionRequests`（空数组）；`supportedOpCapabilities` 恢复 V4 三件套。
+验证：exchangeCapabilities 返回 V4 trio；**a1_active 11/11 自动切 V4 驱动**（RPC 面构建全通）。
+
+**P③（全新链 + 重定基线）**——揪出并修复**真根因**：链本身自洽（注册表/parentHash 全对），
+`eth_getBlockByNumber/ByHash` 的 hash 字段用 tars 头重算哈希 ≠ OP 规范（announced/注册表）哈希——
+两端点改为以 `s_number_2_hash` 注册值覆写（`result["hash"]`）。验证：parent 链路 ✓、roundtrip ✓、
+**state_verify 12/12（干净链）**。
+
+**回归终态**：rpc_matrix **58/0/1**（唯一 known-red = withdrawalsRoot 传播，Phase B 真实剩余）、
+state_verify/chain_driver/b4_persist/b3_contracts **全绿恢复 gating**、predeploy 35/38（3 败同
+withdrawalsRoot）、a1_active 11/11、**run_all ALL GREEN（gating 面从 5 脚本恢复到全量）**。
+
+**C2 前置清单终态**：V4 RPC ✓ / tx 检索 ✓ / 干净 genesis ✓ / payload 构建 ✓（Phase A）——
+**全部就绪**。剩余 Phase B 项：withdrawalsRoot 传播（唯一 known-red）、deposit 实值化、层泄漏。

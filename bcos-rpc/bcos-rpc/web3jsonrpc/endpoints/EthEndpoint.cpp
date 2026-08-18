@@ -705,6 +705,13 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, number, flag);
         combineBlockResponse(result, *block, fullTransaction);
+        // Same canonical-hash override as getBlockByNumber: OP blocks' hash is the announced
+        // (registered) one, not the stored tars header's own derivation.
+        if (auto canonicalHash = co_await ledger::getBlockHash(*ledger, number);
+            canonicalHash != crypto::HashType{})
+        {
+            result["hash"] = canonicalHash.hexPrefixed();
+        }
     }
     catch (std::exception const& e)
     {
@@ -729,6 +736,14 @@ task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json:
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, blockNumber, flag);
         combineBlockResponse(result, *block, fullTransaction);
+        // OP blocks' canonical hash is the announced one (keccak of the 21-field RLP header)
+        // registered in s_number_2_hash; the stored tars header's hash() is a different
+        // derivation and would break parentHash chains and byHash round-trips at the RPC.
+        if (auto canonicalHash = co_await ledger::getBlockHash(*ledger, blockNumber);
+            canonicalHash != crypto::HashType{})
+        {
+            result["hash"] = canonicalHash.hexPrefixed();
+        }
     }
     catch (std::exception const& e)
     {
