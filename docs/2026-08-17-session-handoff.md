@@ -204,3 +204,17 @@ geth 单一 trie 表示、reth plain/hashed 双表均由导入一次填满且读
   D1 生成 base-allocs → 重跑 build-allocs → 重生成 genesis → 重init 链后复查。
 - **预存失败登记**：OpstackExecutorTests 的 decodeDepositEnvelope "body must be an RLP list" 1 例
   在干净 HEAD 同样失败（stash 对照验证），与本次改动无关，待查。
+
+### Bug C 勘误 + W1 定性（08-19 凌晨）
+- **"SystemConfig/L1Block getter revert 系探错地址/selector 的误判**：FISCO SystemConfig 在
+  0x42..c0（Ownable 面，owner() 非其函数）、真 L1Block 在 0x42..15 且其 number() selector 为
+  **0x8381f58a**（Ecotone 版自定义 selector，非标准 0x3fa4f245）。正确探法下：L1Block number()
+  返回零值 ✓、WETH9 name() ✓、predeploy_matrix 的 L1Block getter 组全通。
+- **predeploy_matrix 现状**：Bug B 修复后推进到 tx 上链步骤（no receipt）——纯 Tier-2 依赖，非新问题。
+- **overlay storage 缺失**（旧 allocs.ini 无 storage 段）确认为 parity 差距（与今日 build-allocs
+  的 feature_flags/OZ 槽合成相比），不阻塞任何现有 e2e；链语义正确。
+- **W1 残余 = D1 CI 项**：base-allocs 重生成需 op-deployer L1 运行（secrets），本地不可替代
+  （/tmp 早期产物已丢失）。CI 首跑后：重跑 build-allocs（今日版会带 storage）→ 重生成 genesis →
+  重 init 链 → 复查 state-root parity。
+- **decodeDepositEnvelope 预存失败已修**（d5a5cae25）：测试的 envelopeFromItems lambda 漏拼 RLP
+  body 载荷——(a)-(f) 截断信封"碰巧"抛对类型、(g) happy path 炸 fatal。补一行 body 拼接后 19/19 绿。
