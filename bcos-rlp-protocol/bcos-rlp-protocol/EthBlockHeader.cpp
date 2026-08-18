@@ -453,11 +453,10 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // the Ethereum RLP field is SECONDS — /1000 applies only to those (ETH-version headers
     // already carry seconds, e.g. via EthBlockHeader::toTarsHeader's passthrough).
     //
-    // NOTE (morebtcg #5434): integer division is lossy for sub-second precision (1001 ms → 1 s).
-    // Real OP block timestamps are whole seconds today; if sub-second timestamps are ever fed,
-    // the RLP hash would not be reproducible from the decoded form. Guard with a throw (not
-    // assert — assert is compiled out under NDEBUG, which every shipped build defines; kyonRay
-    // #5434 round-3).
+    // Integer division is lossy for sub-second precision (1001 ms → 1 s). Real OP
+    // timestamps are whole seconds today; sub-second input would produce an RLP hash
+    // not reproducible from the decoded form. Throw (not assert — assert is compiled
+    // out under NDEBUG).
     if (m_version == EthBlockVersion::NON_ETH && m_data.timestamp % 1000 != 0)
     {
         BOOST_THROW_EXCEPTION(std::invalid_argument(
