@@ -260,11 +260,14 @@ public:
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
         std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
-        bool writeNonces = true) override
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         (void)storage;
         (void)block;
+        (void)writeTxsAndReceipts;
+        (void)features;
+        (void)blockHashOverride;
+        (void)writeNonces;
         callback("", nullptr);
     }
 

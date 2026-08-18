@@ -35,8 +35,7 @@ public:
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
         std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
-        bool writeNonces = true) override
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         auto blockNumber = block->blockHeader()->number();
         if (blockNumber == 1024)
