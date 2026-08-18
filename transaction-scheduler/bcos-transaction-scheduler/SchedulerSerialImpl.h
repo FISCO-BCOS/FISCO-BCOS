@@ -133,18 +133,16 @@ public:
                                 }
                                 else
                                 {
-                                    // Executor defines a BlockContext type but createExecuteContext
-                                    // does not accept it — the per-block context is silently
-                                    // dropped. This is a design trap (morebtcg #5434).
-                                    if constexpr (!std::same_as<typename BlockContextOf<
-                                                                    TransactionExecutor>::type,
-                                                      EmptyBlockContext>)
-                                    {
-                                        SERIAL_SCHEDULER_LOG(WARNING)
-                                            << "Executor defines BlockContext but "
-                                               "createExecuteContext does not accept it; "
-                                               "per-block context will be dropped";
-                                    }
+                                    // If an executor declares BlockContext but its
+                                    // createExecuteContext does not accept it, the per-block
+                                    // context would be silently dropped — catch at compile time
+                                    // (kyonRay #5434 round-2 finding 4, morebtcg #5434).
+                                    static_assert(std::same_as<typename BlockContextOf<
+                                                                   TransactionExecutor>::type,
+                                                      EmptyBlockContext>,
+                                        "executor declares a BlockContext but "
+                                        "createExecuteContext does not accept it; "
+                                        "the context would be silently dropped");
                                     contexts.emplace_back(
                                         co_await executor.createExecuteContext(storage, blockHeader,
                                             transactions[i], i, ledgerConfig, false));

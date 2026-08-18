@@ -9,9 +9,11 @@
 #include <bitset>
 // Raise this before adding a Flag value > 200. The static_assert below checks
 // that the max reflected value stays ≤ 127 (bitset encoding constraint); with
-// the default range [-128,128] a flag > 128 is silently excluded from reflection
+// the default range [-128,127] a flag > 127 is silently excluded from reflection
 // BEFORE the assert runs, making the guard a tautology (morebtcg #5434).
+#ifndef MAGIC_ENUM_RANGE_MAX
 #define MAGIC_ENUM_RANGE_MAX 200
+#endif
 #include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <ostream>

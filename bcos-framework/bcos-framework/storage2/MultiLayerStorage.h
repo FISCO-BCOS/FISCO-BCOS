@@ -578,8 +578,7 @@ public:
     task::Task<void> mergeView(ViewType view)
     {
         if (!view.m_mutableStorage)
-            co_return;  // review fix: coroutine must use co_return (return; fails to compile) —
-                        // avoid merging an empty stack
+            co_return;
         pushView(std::move(view));
         co_await mergeBackStorage();
     }
