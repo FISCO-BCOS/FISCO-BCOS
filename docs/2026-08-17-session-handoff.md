@@ -72,6 +72,7 @@
 
 ### e2e 设计(用户问过未定)
 7. FISCO opstack e2e 分层设计(Layer 1 单节点语义强化 + Layer 2 跨域 mock L1 + Layer 3 op-node)——**未定是否实施**
+8. **跑通 L1↔L2 完整闭环依赖 op-node 集成(08-18 确认)**：跨域测试的反向路径(L2 withdrawal → op-node 证明 → L1 验证)必须有 op-node 参与。Layer 2 (mock L1)只能做 L2 侧原语验证(deposit parsing、withdrawal 证明计算、OutputV0 本地复算)，无法跑通真正的 L1→L2 deposit 派生和 L2→L1 withdrawal finalize。完整闭环 = D2(op-node EL 契约) + D3(op-node 集成 harness)。Layer 2 作为中间层的价值：验证 L2 侧跨域原语正确性，为 D2/D3 的集成测试打基础。D4(reorg)也是完整闭环的前置——L1 reorg 传导到 L2 依赖 EL 的状态回退能力。
 
 ### 其它线程
 8. **PR #5429 拆分**(pr5429-split worktree):剩余 infra-rebuilt/initializer/RPC/eth-executor-remainder/**engine LAST**;清理 superseded 分支
