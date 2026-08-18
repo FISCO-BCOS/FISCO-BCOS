@@ -320,8 +320,9 @@ NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPaylo
 {
     NewPayloadRequest request;
     request.executionPayload = executionPayload;
-    request.expectedBlobVersionedHashes = {
-        h256("3333333333333333333333333333333333333333333333333333333333333333")};
+    // expectedBlobVersionedHashes stays empty: L2 forbids blob transactions, so a real CL
+    // never sends any and a non-empty list is INVALID from V3 up
+    // (new_payload_v3_rejects_blob_versioned_hashes below).
     // Deliberately different from makePayloadAttributesV3()'s beacon root (0x2222...):
     // tests must be able to tell whether newPayload really overwrites the cached value
     // with the request's, not just re-reads what the attributes stored.
@@ -615,6 +616,76 @@ BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
     auto thirdResult = task::syncWait(engineService.updateForkchoice(thirdForkchoice, nullptr, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(thirdResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+/// A V3 payload that carries transactions and no blob hashes must be VALIDATED and
+/// COMMITTED, not waved through with ACCEPTED. The old branch answered ACCEPTED on exactly
+/// this shape: the CL saw its block taken while nothing was stored, so the next
+/// forkchoiceUpdated naming that block as head could never succeed. op-geth's only
+/// ACCEPTED is the parent-state-missing case (eth/catalyst/api.go:904-907), which here is
+/// the SYNCING branch.
+BOOST_AUTO_TEST_CASE(new_payload_v3_with_transactions_is_validated_not_accepted)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.executionPayload.transactions.push_back(
+        {.raw = bytes{0x7e, 0x01, 0x02}, .decoded = nullptr});
+    BOOST_REQUIRE(request.expectedBlobVersionedHashes.empty());
+    BOOST_REQUIRE(!request.executionPayload.transactions.empty());
+
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    // Stored, not merely acknowledged: the transactions came back out of the cache.
+    auto committed = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_EQUAL(committed->executionPayload.transactions.size(),
+        request.executionPayload.transactions.size());
+}
+
+/// Non-empty expectedBlobVersionedHashes is INVALID from V3 up, not ACCEPTED: op-geth
+/// compares the list against the payload's own transactions' blob hashes and answers
+/// INVALID on a mismatch (beacon/engine/types.go:311-322 -> api.invalid), and an L2
+/// payload never carries blob transactions.
+BOOST_AUTO_TEST_CASE(new_payload_v3_rejects_blob_versioned_hashes)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    // An otherwise perfectly valid payload — only the blob-hash list is non-empty.
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.expectedBlobVersionedHashes = {
+        h256("3333333333333333333333333333333333333333333333333333333333333333")};
+
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_NE(status.validationError->find("expectedBlobVersionedHashes"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(payload_carries_parent_beacon_block_root_and_withdrawals_root)

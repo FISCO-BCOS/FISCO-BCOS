@@ -463,23 +463,31 @@ private:
                 std::string(
                     "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and later"));
         }
-        if (version == 3 && request.expectedBlobVersionedHashes.empty() &&
-            !request.executionPayload.transactions.empty())
+        if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
         {
-            co_return makeStatus(PayloadValidationStatus::Accepted, std::nullopt, std::nullopt);
+            // op-geth checks expectedBlobVersionedHashes against the blob hashes carried by
+            // the payload's OWN transactions and answers INVALID on any length or element
+            // mismatch (beacon/engine/types.go:311-322, whose error reaches
+            // eth/catalyst/api.go:867 api.invalid -> Status: engine.INVALID). No blob
+            // sidecar lookup is involved, so "the EL cannot verify these" is not a state
+            // this check can be in. L2 (Ecotone onwards) forbids blob transactions
+            // entirely, so the payload side is always empty and any non-empty list is a
+            // mismatch.
+            //
+            // There is deliberately no ACCEPTED escape. op-geth returns ACCEPTED from
+            // exactly one place — "State not available, ignoring new payload",
+            // eth/catalyst/api.go:904-907, the parent-block-known-but-state-missing case —
+            // which on this stack is the parentKnown -> SYNCING branch below. Answering
+            // ACCEPTED here (as the V3 path used to, whenever a payload carried
+            // transactions but no blob hashes) neither validated nor stored the payload,
+            // so the CL took the block as accepted while no later forkchoiceUpdated could
+            // ever make it head.
+            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
+                            "transactions)"));
         }
         if (version >= 4)
         {
-            // L2 (Ecotone onwards) forbids blob transactions, so the CL can never
-            // legitimately expect blob hashes; and Karst carries no execution-layer
-            // requests. Unlike V3 there is no unverifiable-blob ACCEPTED escape: with
-            // both lists required-empty the payload is fully checkable.
-            if (!request.expectedBlobVersionedHashes.empty())
-            {
-                co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                    std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
-                                "transactions)"));
-            }
             // Present-but-empty, not "absent or empty": op-geth's NewPayloadV4 rejects a
             // nil executionRequests outright ("nil executionRequests post-prague",
             // eth/catalyst/api.go:755) and only then requires the list to be empty for

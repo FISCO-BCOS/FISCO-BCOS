@@ -765,6 +765,109 @@ BOOST_AUTO_TEST_CASE(newPayloadV4RejectsWrongTypedPayloadFields)
     BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
 }
 
+// expectedBlobVersionedHashes elements were shape-checked only at the array level: a
+// non-string element reached parseH256's asString(), which stringifies a number and throws
+// Json::LogicError (-32603) on an array/object.
+BOOST_AUTO_TEST_CASE(newPayloadRejectsMalformedBlobVersionedHashElements)
+{
+    auto expectInvalidParams = [&](Json::Value blobHashes) {
+        Json::Value params(Json::arrayValue);
+        params.append(makeV4ExecutionPayloadJson());
+        params.append(std::move(blobHashes));
+        params.append(c_beaconRootHex);
+        params.append(Json::Value(Json::arrayValue));
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV4, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    };
+
+    Json::Value numeric(Json::arrayValue);
+    numeric.append(123);
+    expectInvalidParams(numeric);
+
+    Json::Value nested(Json::arrayValue);
+    nested.append(Json::Value(Json::arrayValue));
+    expectInvalidParams(nested);
+
+    Json::Value object(Json::arrayValue);
+    object.append(Json::Value(Json::objectValue));
+    expectInvalidParams(object);
+
+    BOOST_CHECK(!mockService.m_state->capturedNewPayloadVersion.has_value());
+}
+
+// engine_forkchoiceUpdatedV3 is the live entry point op-node drives, and its
+// payloadAttributes parse used to read timestamp / gasLimit / minBaseFee through
+// asString(): a JSON number was stringified and then read as HEX (123 -> 0x123), and
+// malformed hex escaped as -32603 rather than -32602.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3RejectsMalformedPayloadAttributes)
+{
+    auto makeAttrs = []() {
+        Json::Value attrs;
+        attrs["timestamp"] = "0x1";
+        attrs["prevRandao"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+        attrs["suggestedFeeRecipient"] = "0x5555555555555555555555555555555555555555";
+        attrs["parentBeaconBlockRoot"] = c_beaconRootHex;
+        return attrs;
+    };
+    auto expectInvalidParams = [&](Json::Value attrs) {
+        Json::Value fc;
+        fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+        fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+        fc["finalizedBlockHash"] =
+            "0x3333333333333333333333333333333333333333333333333333333333333333";
+        Json::Value params(Json::arrayValue);
+        params.append(fc);
+        params.append(std::move(attrs));
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    };
+
+    for (auto const* field : {"timestamp", "gasLimit", "minBaseFee"})
+    {
+        auto numeric = makeAttrs();
+        numeric[field] = 123;
+        expectInvalidParams(numeric);
+
+        auto badHex = makeAttrs();
+        badHex[field] = "0xnothex";
+        expectInvalidParams(badHex);
+    }
+
+    // Hash / address / bytes fields: a number would be stringified, an array/object throws
+    // Json::LogicError out of asString().
+    for (auto const* field :
+        {"prevRandao", "suggestedFeeRecipient", "parentBeaconBlockRoot", "eip1559Params"})
+    {
+        auto numeric = makeAttrs();
+        numeric[field] = 123;
+        expectInvalidParams(numeric);
+
+        auto arrayValued = makeAttrs();
+        arrayValued[field] = Json::Value(Json::arrayValue);
+        expectInvalidParams(arrayValued);
+    }
+
+    // withdrawals is iterated, and jsoncpp iterates a non-array as an empty range.
+    auto stringWithdrawals = makeAttrs();
+    stringWithdrawals["withdrawals"] = "garbage";
+    expectInvalidParams(stringWithdrawals);
+
+    // The attributes object itself, and the forkchoiceState object.
+    expectInvalidParams("not-an-object");
+    {
+        Json::Value params(Json::arrayValue);
+        params.append("not-an-object");
+        params.append(Json::Value(Json::nullValue));
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == InvalidParams; });
+    }
+
+    BOOST_CHECK(!mockService.m_state->capturedForkchoiceVersion.has_value());
+}
+
 BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
 {
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,

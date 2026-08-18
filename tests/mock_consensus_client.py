@@ -64,7 +64,8 @@ EXPECTED_CAPABILITIES = {
 # Routable but not implemented: the endpoints answer -38005 and must not be advertised.
 UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4", "engine_getPayloadV4")
 
-# The gas limit sent in payloadAttributes.
+# The gas limit sent in payloadAttributes. See test_negative_cases / the note below: this
+# node currently IGNORES it and takes the gas limit from its own SystemConfig.
 ATTRS_GAS_LIMIT = "0x1c9c380"
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----
@@ -406,6 +407,55 @@ def run_v2_block_flow() -> None:
     _log_pass()
 
 
+def test_attributes_gas_limit_is_ignored() -> None:
+    """KNOWN GAP pin: payloadAttributes.gasLimit does not reach the built block.
+
+    On OP Stack the CL relays the L1 SystemConfig gas limit in this attribute and op-geth
+    honours it verbatim (miner/worker.go prepareWork), rejecting the FCU outright when it
+    is absent (api_optimism.go checkOptimismPayloadAttributes). This node instead always
+    takes the gas limit from its own SystemConfig, so two builds that differ ONLY in the
+    attribute come out with the same gasLimit. Wiring the attribute in changes block
+    production and is left to the header-fields work; this check turns red the day it
+    happens, so the gap cannot be forgotten.
+    """
+    _log_test("payloadAttributes.gasLimit is ignored (known gap)")
+
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+
+    def build_with(gas_limit: str) -> str:
+        attrs = {
+            "timestamp": next_timestamp(),
+            "prevRandao": PREV_RANDAO,
+            "suggestedFeeRecipient": FEE_RECIPIENT,
+            "withdrawals": [],
+            "parentBeaconBlockRoot": ZERO_HASH,
+            "noTxPool": True,
+            "gasLimit": gas_limit,
+        }
+        fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, attrs])
+        payload_id = fcu.get("payloadId")
+        if not payload_id:
+            raise RuntimeError(f"FCU built no payload: {fcu}")
+        result = rpc_result("engine_getPayloadV5", [payload_id])
+        return result["executionPayload"]["gasLimit"]
+
+    first = build_with(ATTRS_GAS_LIMIT)
+    second = build_with("0x2faf080")
+    if first != second:
+        _log_fail(
+            "payloadAttributes.gasLimit now affects the built block "
+            f"({first} vs {second}) — the known gap is closed, update this test"
+        )
+        return
+    _log_info(f"built gasLimit = {first} for both attribute values (from SystemConfig)")
+    _log_pass()
+
+
 def test_negative_cases() -> None:
     """Error semantics: -38005 for unimplemented versions, -38001 unknown payload, -32602 shape."""
     fc_state_head = get_head_hash()
@@ -426,6 +476,32 @@ def test_negative_cases() -> None:
     # Missing/malformed params -> -32602 InvalidParams.
     expect_error_code("engine_getPayloadV5", [], -32602)
     expect_error_code("engine_newPayloadV4", [], -32602)
+
+    # forkchoiceUpdatedV3 payloadAttributes are parsed strictly: a JSON-number timestamp
+    # used to be stringified and then read as HEX (123 -> 0x123), and malformed hex
+    # escaped as -32603 InternalError.
+    def attrs_with(**overrides: Any) -> Dict[str, Any]:
+        attrs = {
+            "timestamp": next_timestamp(),
+            "prevRandao": PREV_RANDAO,
+            "suggestedFeeRecipient": FEE_RECIPIENT,
+            "withdrawals": [],
+            "parentBeaconBlockRoot": ZERO_HASH,
+        }
+        attrs.update(overrides)
+        return attrs
+
+    expect_error_code("engine_forkchoiceUpdatedV3", [fc_state, attrs_with(timestamp=123)], -32602)
+    expect_error_code(
+        "engine_forkchoiceUpdatedV3", [fc_state, attrs_with(timestamp="0xnothex")], -32602
+    )
+    expect_error_code("engine_forkchoiceUpdatedV3", [fc_state, attrs_with(gasLimit=123)], -32602)
+    expect_error_code("engine_forkchoiceUpdatedV3", [fc_state, attrs_with(prevRandao=[])], -32602)
+    expect_error_code("engine_forkchoiceUpdatedV3", [fc_state, "not-an-object"], -32602)
+
+    # newPayloadV4 blob-hash elements are type-checked, not just the array itself.
+    expect_error_code("engine_newPayloadV4", [{}, [123], ZERO_HASH, []], -32602)
+    expect_error_code("engine_newPayloadV4", [{}, [[]], ZERO_HASH, []], -32602)
 
     # Unknown method -> -32601 MethodNotFound.
     expect_error_code("engine_unknownMethod", [], -32601)
@@ -482,7 +558,10 @@ def main() -> int:
         # 6. The pre-Karst surface is still live.
         run_v2_block_flow()
 
-        # 7. Error semantics.
+        # 7. Known gap: attributes.gasLimit does not reach the built block.
+        test_attributes_gas_limit_is_ignored()
+
+        # 8. Error semantics.
         test_negative_cases()
 
     except requests.ConnectionError:
