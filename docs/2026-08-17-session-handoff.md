@@ -93,3 +93,21 @@
 
 - **已通过的测试或测试集合不能变的无法通过**;测试可加强不可退步。
 - 本会话全部改动纯增补;唯一生产改动 `computeChargedOperatorCost`(additive)。**`84b3be0` 修复了 `3ea2285` 引入的配置回归(恢复已通过的 e2e 测试)**。
+
+## D2 基线(08-18,HEAD 重建后)
+
+- 二进制:本 worktree HEAD(`7f027b2b1`)重建成功(mtime 20:16,`cmake --build build --target fisco-bcos` + 全量;此前运行二进制含未合并分支 76c750860 代码,旧"167 全绿"作废)。**构建坑(后续任务必读)**:
+  - 链接失败 `ld: library 'blst' not found`(fisco-bcos 主目标与 bcos-evm-eth-tests 均中招):本 worktree 共享 vcpkg 布局下 link line 带 bare `-lblst` 但无 `-L` vcpkg lib 路径(bcos-evm/test/CMakeLists.txt 注释即此已知坑,opstack-tests 有 target_link_directories 修法、主目标没有)。**绕过:构建命令前加 `LIBRARY_PATH=/Users/octopus/octo/code/FISCO-BCOS/build/vcpkg_installed/arm64-osx/lib`**
+  - 预存无关失败:`tools/archive-tool`(缺 tikv_client.h,老代码 #5388,与本链路无关);失败的链接会删掉旧 fisco-bcos 产物,重建前先留副本
+- 环境适配(仅 /tmp 运行时配置,非源码):①HEAD 新增对称互斥 guard(NodeConfig.cpp:`enable_single_node_consensus` 与 `op_engine_rpc.enable` 互斥,5ba55e943 R2 修复)——/tmp/op-spike 旧 config 两者同 true 被拒启,已按 setup_op_node.sh 头注释的新契约调整:B3 = consensus true + engine false,B3a = 反之(rpc_matrix --engine-port 帮助文本即"B3a has op_engine_rpc; B3 has consensus-only");②旧链数据无 ETH_GENESIS_DATA 系统键,Ledger.cpp:2065 拒启 → setup_op_node.sh 全新重建两链(注意:该脚本 `-s/-e` 参数不生效——无 getopts,直接调用会全链路 1-9 步全跑)
+- B3 现状:链停 genesis(eth_blockNumber@8553 = 0x0,B3a@8563 亦 0x0)。日志确认:每秒一条 `error|[SINGLE_CONSENSUS]produceBlock iteration threw`,msg 含 `Payload attributes are not supported in OP mode (block building is not OP-ized; JSON-RPC -38003)`(UnsupportedOpPayloadAttributes,驱动 loop 捕获后继续 tick,累计 1400+)——Tier-2 已知
+- 脚本红绿(输出全文 /tmp/d2-baseline.txt;无 hang,全部脚本均正常退出):
+  - [rpc_matrix]: 红(43 绿 / 6 败)。失败断言:①`gasLimit == 3e9 (B3 tx_gas_limit)` 得 30000000(genesis 工件 30M)②`timestamp sane` 1755143(genesis 时间戳工件)③`getProof block 1 returns MPT-limited error code` → -32603 Get block failed(块 1 不存在)④`outputv0 withdrawalsRoot present 32B` 得 0x000…0(genesis 零值)⑤`getBalance nonzero` 得 0x0(SENDER 创世预资 10^24 在 latest/0x0 均不可见)⑥`eth_call` lambda → -32603 Invalid argument(创世上 eth_call,与 predeploy 首步同根)
+  - [state_verify]: 绿(exit 0;4 检查过;s_number_2_* 过,B.2 header pairs "no pairs checked" —— 链停 genesis 无块对,脚本按绿处理)
+  - [chain_driver]: 红(1 过 / 4 败):`tx[0] receipt`、`tx[1] receipt`、`nonce advanced`(0+2=0)、`balance exact`(got=0 want=-2e15);过:`head advanced`
+  - [b4_persist]: 红(2 过 / 1 败):`production resumes (head advanced)` 0 vs 0;过:node back up、head not reset(重启保存储语义本身正常)
+  - [b3_contracts]: 红(0 过 / 2 败):`storage deploy receipt`、`revert deploy receipt`(sender nonce 0,tx 不上链)
+  - [predeploy_matrix]: 红(崩溃,0 断言输出):首步 L1Block.number() `eth_call` latest → -32603 Invalid argument 直接 traceback
+  - [a1_active]: 红(2 过后崩溃):过 `caps have a coherent trio (V3)`、`head queryable`;随后 `engine_forkchoiceUpdatedV3`(带 attrs)→ -38003 UnsupportedOpPayloadAttributes 崩溃
+- 归因:Tier-2 已知红 = chain_driver、b4_persist(production resumes)、b3_contracts、predeploy_matrix、a1_active、rpc_matrix 的 timestamp sane / getProof block1 / outputv0 withdrawalsRoot / getBalance nonzero / eth_call(全部依赖链推进或创世上调用,OP 模式拒绝 attrs 构建所致);**D2 目标红(D2 实施后应转绿)= rpc_matrix 的 `gasLimit == 3e9` 断言**(D2 Task 2 combineBlockResponse 读 header 真实值 3e9,不依赖链推进)。注意:getBalance nonzero 在旧二进制(链推进下)曾绿,此处红是"链停 genesis"暴露的创世 flat-state 读问题,D2 后需复查(若仍红则另立 Tier-2 项)
+- ctest 单测目标存在性:**Web3ResponseTest 存在**(10 用例:combineBlockResponseGenesisBlock / NonGenesisComputesMiner / FullTxsEmptyList、combineTxResponse* 4、combineReceiptResponse* 3);**Web3RpcTest 不存在**(ctest -N 全量 1988 项中无此名;现有 Web3* 套件:Web3ConfigTest / Web3ConsensusTest / Web3EthCallBlockTagTest / Web3EthMethodsTest / Web3NamespaceValidTest / Web3NodeStatusTest / Web3NonceTest / Web3ResponseTest)——Task 2 的用例落点是 Web3ResponseTest.cpp,目标存在,无需补配
