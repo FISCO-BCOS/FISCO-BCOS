@@ -22,6 +22,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 #include <cstring>
+#include <stdexcept>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;
@@ -43,6 +44,9 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
     return nullptr;
 }
 
+// Precondition: for NON_ETH headers, utcTime() must be a whole number of seconds
+// (ms divisible by 1000). Sub-second timestamps produce an RLP hash that cannot
+// be reproduced from the decoded form. Throws std::invalid_argument on violation.
 bcos::crypto::HashType EthBlockHeader::computeHash(const bcos::protocol::BlockHeader& header)
 {
     EthBlockHeader ethHeader(header);
