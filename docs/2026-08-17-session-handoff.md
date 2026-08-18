@@ -1,13 +1,12 @@
-# 会话交接 — 2026-08-17(FISCO-BCOS opstack 测试体系)
+# 会话交接 — 2026-08-18(FISCO-BCOS opstack 测试体系)
 
-> 交接对象:下一会话/代理。本会话完成 op-e2e 节点重建 + DA 矩阵计划交付 + 预部署行为矩阵设计。以下为可续接的完整状态。
+> 交接对象:下一会话/代理。本会话完成 op-e2e 节点重建 + DA 矩阵 + 预部署矩阵 + **e2e CI 接入(进行中)**。以下为可续接的完整状态。
 
 ## 1. 分支与工作区
 
-- **当前分支**:`worktree-op-alignment`(隔离 worktree:`.claude/worktrees/op-alignment`),HEAD `c9baf5f`
-- 本会话提交:`783f883fa..HEAD` 共 **14 提交**(op-e2e 1 + spec/plan 4 + DA 实现 9)
-- 相关 worktree:`pr5429-split`(PR #5429 拆分,后台暂停)、`opstack-executor` 等(其它线程)
-- op-e2e 节点:B3 + B3a 各 1 个进程在跑(eth RPC 8553/8563)
+- **当前分支**:`worktree-op-alignment`(隔离 worktree:`.claude/worktrees/op-alignment`),HEAD `3ea2285`
+- 相关分支:`opstack-op-e2e-on-scheduler`(基于远程 tip `174d8e4c2`,被停代理自主创建,用户裁定保留;含 EmptyEnvelope 修复 + 2 文档 + 可配置化 + CI job)
+- op-e2e 节点:本地 `/tmp/op-spike/{b3,b3a}`(已重建,ALL GREEN);CI 模拟 `/tmp/op-e2e-ci-sim{2,3}`(验证用)
 
 ## 2. 已完成 ✅
 
@@ -27,8 +26,19 @@
 - 回归:ctest 1934/1935 + op-e2e ALL GREEN;最终整支审查 **MERGE-READY**
 - 计划/审查台账:`.superpowers/sdd/2026-08-17-opstack-da-matrix-plan/progress.md`(全部 deferred minors + parked)
 
-### 2c. 预部署行为矩阵设计(刚完成 spec,待计划)
-- `docs/2026-08-17-opstack-predeploy-matrix-design.md`(提交 `c9baf5f`):核心 5 合约(L1Block/L2ToL1MessagePasser/L2CrossDomainMessenger/L2StandardBridge/SystemConfig)行为矩阵,真实节点为主 + t8n 差分共识项
+### 2c. 预部署行为矩阵(已交付)
+- spec + plan(`docs/2026-08-17-opstack-predeploy-matrix-{design,plan}.md`),SDD 6 Task 全绿;t8n 差分向量 + `predeploy_matrix.py` 30 断言挂 run_all;ctest 1935/1935 + op-e2e ALL GREEN;MERGE-READY
+
+### 2d. e2e CI 接入(2026-08-18,进行中)
+- **CI op-e2e job**:`workflow.yml` 追加(ubuntu-24.04 + macos-15 矩阵,装 foundry → 编译 fisco-bcos-air → setup_op_node.sh → run_all)。每次 push/PR 跑。
+- **op-e2e 脚本可配置化**(commit `440a497`):`/tmp/op-spike` 硬编码 → env(SIGN_SECP/B3A_JWT/B3_JWT/B3_DB/OP_STATE_READ/B3A_START);restart_b3 BINARY repo-relative;run_all 修正陈旧断言数。默认值保持。
+- **eth_genesis_header 生成**(commit `3ea2285`):`gen_eth_header_fixture.py` 加 `--toml` 模式;`build-allocs.py` 补纯 Python keccak256;setup step 5 生成 header 段;`enable_single_node_consensus=false`(与 op_engine_rpc 互斥修复)。
+- **scheduler 分支验证**:`docs/2026-08-18-opstack-scheduler-e2e-verification.md`(5 config 修复 + FCU V3 vs V4 差异)。
+
+### 2e. 存档(被停代理产出,用户裁定保留,非经批准交付物)
+- `docs/2026-08-17-opstack-testmatrix-compare-design.md`(三端对比 spec,4b03673+2791b07)
+- `docs/2026-08-17-opstack-el-contract-plan.md`(EL 契约计划 v2→v5,159c130 终版,瞄准生产改造须重新立项)
+- `opstack-op-e2e-on-scheduler` 分支(被停代理建)
 
 ## 3. 待办/决策 ⏳
 
@@ -37,8 +47,14 @@
 2. ✅ **EmptyEnvelopeFails 已修**(2026-08-17):改名 `EmptyEnvelopeAccepted`,断言空 envelope 被接受且 l1_cost=0(对齐 OpTransition.cpp:376-379 有意语义);`bcos-evm-opstack-tests` 112 全绿,ctest 唯一红消除
 3. **计划文档 2 处笔误**:DA 计划 `contract_call_tx` 例 312B 截断(实现用权威 345B)、brief `...ull` 超 uint64——顺手修
 
-### 预部署矩阵下一步
-4. ✅ `docs/2026-08-17-opstack-predeploy-matrix-design.md` 已获批 → **实施计划已写**(`docs/2026-08-17-opstack-predeploy-matrix-plan.md`,6 Task;selector/topic 全 keccak 重算并逐条对过节点字节码;发现 spec 勘误:MessagePasser 无 getSentMessage,用 sentMessages(bytes32))。**SDD 已全部交付**(Task 1-6):t8n 差分向量 + `tools/op-e2e/predeploy_matrix.py`(30 断言)已挂 `run_all.sh`(chain_driver 之后、a1_active 之前);全量回归 ctest 1935/1935 + op-e2e ALL GREEN。Divergence 登记:`l1block_deposit_reverts_ecotone_vs_jovian`(genesis L1Block 为 Ecotone 版,节点注入 Jovian deposit 每块 revert→getter 返回 0,断言仅要求可读+格式正确)、`bridge_deposit_l2_only_mint_unverified`/`bridge_withdraw_l2_only_burn_unverified`(bridge 预部署未初始化,messenger()=0→桥内 sendMessage 落到 address(0) revert,断言降级为回执可查)。**Deferred(两层均不可构造,spec 表保留待基建修复)**:L1Block「sequenceNumber 跨块递增 + blockhash 写入」——t8n 146B 码不写 slot0/2,真实节点因 deposit 恒 revert 只能走 DIVERGENCE;待 genesis L1Block 升级为 Isthmus/Jovian 版后补正断言。
+### 预部署矩阵 ✅
+4. ✅ 预部署矩阵 spec+plan 已交付(SDD 6 Task 全绿,MERGE-READY),详见 2c。
+
+### e2e CI 接入(进行中,当前主线)
+4a. ✅ CI op-e2e job + 脚本可配置化(commit `440a497`)
+4b. ✅ eth_genesis_header 生成 + 单节点配置修复(commit `3ea2285`)
+4c. 🔴 **eth_genesis_header.state_root 必须匹配 allocs 的 MPT root**(`computeGenesisStateTrie`)——当前 empty root 不匹配(`artifact=56e81f... vs derived=0f4dbf6c...`)。**MPT 子代理在跑**(opus),交付:Python 复现 MPT root + 接入 gen_eth_header_fixture + setup。完成后旧分支 CI 可全自动跑通。
+4d. ⏳ scheduler 分支 Karst base-allocs 缺口(task 104):`base_allocs_sha256=""`,需 op-deployer 生成 terminal allocs。若 CI 也要在 scheduler 分支跑,需补此缺口。
 
 ### 测试体系(对照 op-geth/op-reth 差距,待排期)
 5. **EF 官方语料接入**(P0):ethereum/tests blockchain/state 套件
@@ -56,8 +72,10 @@
 
 ## 4. 关键路径
 
-- 节点工作区:`/tmp/op-spike/{b3,b3a}`(config.genesis 合并文件、conf/、jwt.hex、node.pem)
-- op-e2e 套件:`tools/op-e2e/`(run_all.sh / restart_b3.sh / predeploy_matrix.py)
+- 节点工作区:本地 `/tmp/op-spike/{b3,b3a}`(ALL GREEN);CI 模拟 `/tmp/op-e2e-ci-sim{2,3}`(验证 genesis 装配)
+- op-e2e 套件:`tools/op-e2e/`(run_all.sh / restart_b3.sh / predeploy_matrix.py / setup_op_node.sh)
+- genesis 工具:`tools/opstack-genesis/`(build-allocs.py / gen_eth_header_fixture.py --toml / chain-config 模板)
+- CI:`.github/workflows/workflow.yml`(op-e2e job)
 - DA 矩阵:`opstack-executor/tests/da-matrix/`
 - t8n harness:`opstack-executor/tests/t8n/`(generator/cases.go、regen.sh、OpT8nReplayTest)
 - 预部署合约:FISCO 自研 `bcos-l2-contracts/src/{SystemConfig,L2ValidatorSet}.sol`;OP-fork 11 个字节码在 `bcos-l2-contracts/out/`,源码在 `/tmp/op-spike/op-pinned`(33f06d2d)
