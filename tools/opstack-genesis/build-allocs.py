@@ -22,6 +22,73 @@ If a predeploy artifact still carries immutableReferences (unfilled immutables),
 the build aborts naming the contract, unless that predeploy opts in via
 `allow_unpatched_immutables: true` (accepting zero-valued immutables, Phase A).
 """
+
+# ---------------------------------------------------------------------------
+# keccak256 (pure python, no dependency).
+#
+# hashlib.sha3_256 is NIST SHA-3 (0x06 domain padding) and produces DIFFERENT
+# digests from Ethereum's keccak256 (0x01 padding), so it cannot be used here.
+# Imported by gen_eth_header_fixture.py to compute the eth-genesis-header hash.
+# ---------------------------------------------------------------------------
+
+_KECCAK_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+]
+_KECCAK_ROTC = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14,
+                27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44]
+_KECCAK_PILN = [10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4,
+                15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1]
+_MASK64 = (1 << 64) - 1
+
+
+def _rotl64(value, shift):
+    return ((value << shift) | (value >> (64 - shift))) & _MASK64
+
+
+def _keccak_f1600(state):
+    for round_index in range(24):
+        # theta
+        parity = [state[i] ^ state[i + 5] ^ state[i + 10] ^ state[i + 15] ^ state[i + 20]
+                  for i in range(5)]
+        for i in range(5):
+            effect = parity[(i + 4) % 5] ^ _rotl64(parity[(i + 1) % 5], 1)
+            for j in range(0, 25, 5):
+                state[j + i] ^= effect
+        # rho + pi
+        lane = state[1]
+        for i in range(24):
+            j = _KECCAK_PILN[i]
+            lane, state[j] = state[j], _rotl64(lane, _KECCAK_ROTC[i])
+        # chi
+        for j in range(0, 25, 5):
+            row = state[j:j + 5]
+            for i in range(5):
+                state[j + i] = row[i] ^ ((row[(i + 1) % 5] ^ _MASK64) & row[(i + 2) % 5])
+        # iota
+        state[0] ^= _KECCAK_RC[round_index]
+
+
+def keccak256(data):
+    """Ethereum keccak256 of `data` (bytes) -> 32-byte digest."""
+    rate = 136  # 1088-bit rate for 256-bit output
+    state = [0] * 25
+    padded = bytearray(data)
+    padded.append(0x01)
+    while len(padded) % rate:
+        padded.append(0x00)
+    padded[-1] |= 0x80
+    for offset in range(0, len(padded), rate):
+        for i in range(rate // 8):
+            state[i] ^= int.from_bytes(padded[offset + i * 8:offset + (i + 1) * 8], "little")
+        _keccak_f1600(state)
+    return b"".join(state[i].to_bytes(8, "little") for i in range(4))
+
+
 import argparse
 import json
 import sys
