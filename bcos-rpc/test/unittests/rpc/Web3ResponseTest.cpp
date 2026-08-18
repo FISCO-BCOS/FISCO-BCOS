@@ -77,6 +77,47 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseGenesisBlock)
     BOOST_CHECK(result.isMember("logsBloom"));
 }
 
+// D2 U1/U2: gasLimit / parentBeaconBlockRoot read from the header with PBFT-compat fallbacks
+BOOST_AUTO_TEST_CASE(combineBlockResponseGasLimitAndParentBeaconBlockRoot)
+{
+    // Unset header fields (PBFT-style: no production path writes them) -> legacy fallbacks
+    {
+        auto block = m_blockFactory->createBlock();
+        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(1);
+        header->setGasUsed(u256(0));
+        header->setTimestamp(1000);
+        header->calculateHash(*hashImpl);
+        block->setBlockHeader(header);
+
+        Json::Value result(Json::objectValue);
+        combineBlockResponse(result, *block, /*fullTxs=*/false);
+        BOOST_CHECK_EQUAL(result["gasLimit"].asString(), "0x1c9c380");  // 30M fallback
+        BOOST_CHECK_EQUAL(result["parentBeaconBlockRoot"].asString(),
+            "0x0000000000000000000000000000000000000000000000000000000000000000");
+    }
+    // Set header fields (engine-built block: rebuildOpEthHeader / applyEthGenesisHeader)
+    // -> exact round-trip
+    {
+        auto block = m_blockFactory->createBlock();
+        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        header->setNumber(2);
+        header->setGasUsed(u256(21000));
+        header->setTimestamp(2000);
+        header->setGasLimit(u256(3000000000));
+        header->setParentBeaconBlockRoot(
+            crypto::HashType("0x1111111111111111111111111111111111111111111111111111111111111111"));
+        header->calculateHash(*hashImpl);
+        block->setBlockHeader(header);
+
+        Json::Value result(Json::objectValue);
+        combineBlockResponse(result, *block, /*fullTxs=*/false);
+        BOOST_CHECK_EQUAL(result["gasLimit"].asString(), "0xb2d05e00");  // 3e9 round-trip
+        BOOST_CHECK_EQUAL(result["parentBeaconBlockRoot"].asString(),
+            "0x1111111111111111111111111111111111111111111111111111111111111111");
+    }
+}
+
 BOOST_AUTO_TEST_CASE(combineBlockResponseNonGenesisComputesMiner)
 {
     auto block = m_blockFactory->createBlock();

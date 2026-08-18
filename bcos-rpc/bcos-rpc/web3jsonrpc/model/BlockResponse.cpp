@@ -54,8 +54,11 @@ void bcos::rpc::combineBlockResponse(
     result["totalDifficulty"] = "0x0";
     result["extraData"] = toHexStringWithPrefix(blockHeader->extraData());
     result["size"] = toQuantity(block.size());
-    // TODO: change it wen block gas limit apply
-    result["gasLimit"] = toQuantity(30000000ULL);
+    // gasLimit: engine-built/genesis blocks carry the real limit in the header (OP newPayload
+    // via rebuildOpEthHeader, genesis via applyEthGenesisHeader); PBFT blocks never write it
+    // (tars field empty -> u256(0)) and keep the legacy 30M so their output is byte-identical.
+    auto gasLimit = blockHeader->gasLimit();
+    result["gasLimit"] = (gasLimit == 0) ? toQuantity(30000000ULL) : toQuantity(gasLimit);
     result["gasUsed"] = toQuantity((uint64_t)blockHeader->gasUsed());
     result["timestamp"] = toQuantity(blockHeader->timestamp() / 1000);  // to seconds
     if (fullTxs)
@@ -86,5 +89,14 @@ void bcos::rpc::combineBlockResponse(
     result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
     result["blobGasUsed"] = "0x0";
     result["excessBlobGas"] = "0x0";
-    result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
+    // EIP-4788: pre-Cancun/PBFT headers have no PBBR (accessor returns nullopt when the
+    // tars field is < 32 bytes) -> zero, symmetric with withdrawalsRoot above.
+    if (auto parentBeaconRoot = blockHeader->parentBeaconBlockRoot(); parentBeaconRoot.has_value())
+    {
+        result["parentBeaconBlockRoot"] = parentBeaconRoot->hexPrefixed();
+    }
+    else
+    {
+        result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
+    }
 }
