@@ -139,9 +139,6 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
-    /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). Single authoritative
-    /// carrier for both generic and OP engine paths.
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -158,9 +155,20 @@ struct ExecutionPayload
     std::optional<u256> excessBlobGas;
 
     // Required by ExecutionPayloadV4.
-    std::optional<bytes> blockAccessList = std::nullopt;
-    std::optional<std::uint64_t> slotNumber = std::nullopt;
+    std::optional<bytes> blockAccessList;
+    std::optional<std::uint64_t> slotNumber;
 
+    /// OP-mode carrier fields (op-validator-loop design §4.2/§5.2). Both are optional and unread
+    /// by the generic (non-OP) engine path — zero behavioral change for existing callers.
+    /// - rawTransactions: the block's transactions as raw EIP-2718 envelope bytes (typed tx
+    ///   MarshalBinary() output, including the OP 0x7E deposit envelope). This is the OP path's
+    ///   only transaction carrier consumed by `bcos::evm::engine::OpSchedulerSeam::executeOpBlock`
+    ///   (via its `rawTxBytes` parameter) — `transactions` above (bcos::protocol::Transactions)
+    ///   is the generic-path carrier and is not populated/read on the OP path.
+    /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root field
+    ///   (= MessagePasser storage root) that cannot be derived from the (always-empty)
+    ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains (design §5.2).
+    std::optional<std::vector<bytes>> rawTransactions;
     // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
     // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
     // header wiring lands.

@@ -36,8 +36,9 @@ public:
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
         std::function<void(std::string, bcos::Error::Ptr&&)>, bool,
-        std::optional<bcos::ledger::Features>, std::optional<bcos::crypto::HashType>,
-        bool writeNonces) override;
+        std::optional<bcos::ledger::Features>,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) override;
 
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
         bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>) override;

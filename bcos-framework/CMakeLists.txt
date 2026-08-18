@@ -22,6 +22,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(TBB REQUIRED)
+# LedgerConfig.h includes <evmc/evmc.hpp> (evmc::bytes32 / evmc_uint256be / evmc_revision).
+# evmone::evmone is the vcpkg package that installs the evmc headers; its
+# INTERFACE_INCLUDE_DIRECTORIES is what makes `#include <evmc/evmc.hpp>` resolve.
+# Linux/macOS builds get the include path transitively through vcpkg's global
+# -isystem; MSVC builds need the dependency declared on the target (C1083 otherwise).
+find_package(evmone CONFIG REQUIRED)
+find_package(blst CONFIG REQUIRED)
+set_target_properties(blst PROPERTIES IMPORTED_GLOBAL TRUE)
 
 # LedgerConfig.h includes <evmc/evmc.hpp> — evmone installs evmc headers. PUBLIC link removed
 # (5cc25670d: macOS exception handling); include propagates PUBLIC-ly only, link PRIVATE.
@@ -54,7 +62,8 @@ target_link_libraries(bcos-framework PUBLIC
     bcos-crypto
     Microsoft.GSL::GSL
     fmt::fmt
-    TBB::tbb)
+    TBB::tbb
+    evmone::evmone)
 set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
 # Entry.cpp uses namespace bcos::storage which conflicts with unity build
 # namespace stacking from other translation units in the same batch.

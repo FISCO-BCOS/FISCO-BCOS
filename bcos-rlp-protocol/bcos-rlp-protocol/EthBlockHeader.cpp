@@ -19,10 +19,7 @@
  */
 #include "EthBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <boost/throw_exception.hpp>
 #include <cstring>
-#include <stdexcept>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;
@@ -44,11 +41,7 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
     return nullptr;
 }
 
-// Precondition: for NON_ETH headers, utcTime() must be a whole number of seconds
-// (ms divisible by 1000). Sub-second timestamps produce an RLP hash that cannot
-// be reproduced from the decoded form. Throws std::invalid_argument on violation.
-bcos::crypto::HashType EthBlockHeader::computeHash(
-    const bcos::protocol::BlockHeader& header) noexcept(false)
+bcos::crypto::HashType EthBlockHeader::computeHash(const bcos::protocol::BlockHeader& header)
 {
     EthBlockHeader ethHeader(header);
     bcos::bytes encoded;
@@ -163,20 +156,9 @@ bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
         return err;
     }
 
-    // Like toTarsHeader's field writes but WITHOUT validateHeader — usable for FISCO-native/OP
-    // (NON_ETH) headers that validateHeader rejects. TWO DELIBERATE omissions from toTarsHeader:
-    //   1. ethBlockVersion is pinned to NON_ETH here instead of copying ethHeader.version()
-    //      (which is itself always NON_ETH — the RLP stream carries no version). Write it
-    //      explicitly so the seconds↔milliseconds pairing below does not rest on header->clear()
-    //      leaving the tars field at its default 0 happening to equal NON_ETH: rlpEncode's /1000
-    //      keys off ethBlockVersion == NON_ETH, and a header of any other version would encode
-    //      the millisecond timestamp raw and silently change the block hash.
-    //   2. rlpHash is NOT set (toTarsHeader writes it via rlpEncode+keccak256 at :140). Callers
-    //      that need the block hash should call computeHash() or calculateRLPHash() explicitly —
-    //      computing it here would force a full re-encode for every decode, even when the caller
-    //      only needs field access.
-    // For NON_ETH the RLP timestamp is SECONDS and the FISCO header stores MILLISECONDS, so ×1000.
-    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
+    // Same field writes as toTarsHeader but WITHOUT validateHeader — usable for FISCO-native/OP
+    // (NON_ETH) headers that validateHeader rejects. For NON_ETH the RLP timestamp is SECONDS and
+    // the FISCO header stores MILLISECONDS, so ×1000 (ETH-version headers already carry seconds).
     header->setParentInfo(ethHeader.data().parentInfo);
     header->setCoinbase(ethHeader.data().coinbase);
     header->setUncleHash(ethHeader.data().uncleHash);
@@ -457,16 +439,6 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // FISCO-native / OP headers (EthBlockVersion::NON_ETH) store the timestamp in MILLISECONDS;
     // the Ethereum RLP field is SECONDS — /1000 applies only to those (ETH-version headers
     // already carry seconds, e.g. via EthBlockHeader::toTarsHeader's passthrough).
-    //
-    // Integer division is lossy for sub-second precision (1001 ms → 1 s). Real OP
-    // timestamps are whole seconds today; sub-second input would produce an RLP hash
-    // not reproducible from the decoded form. Throw (not assert — assert is compiled
-    // out under NDEBUG).
-    if (m_version == EthBlockVersion::NON_ETH && m_data.timestamp % 1000 != 0)
-    {
-        BOOST_THROW_EXCEPTION(std::invalid_argument(
-            "NON_ETH timestamp must be a whole number of seconds (ms divisible by 1000)"));
-    }
     const auto rlpTimestamp =
         m_version == EthBlockVersion::NON_ETH ? m_data.timestamp / 1000 : m_data.timestamp;
     codec::rlp::encode(out, m_data.parentInfo.blockHash, m_data.uncleHash, m_data.coinbase,

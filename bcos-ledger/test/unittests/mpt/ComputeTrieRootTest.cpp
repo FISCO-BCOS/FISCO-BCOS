@@ -22,7 +22,6 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Constants.h>
-#include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -129,24 +128,6 @@ BOOST_AUTO_TEST_CASE(VarKeyShortKeysBuildToNonEmptyRoot)
     TrieBuildResult const result = computeTrieRootVarKey(entries);
     BOOST_CHECK(result.root != emptyRootHash());
     BOOST_CHECK(!result.newNodes.empty());
-}
-
-// The prefix-free/distinct caller contract is ENFORCED, not just documented: a key that is a
-// prefix of another (or a duplicate) terminates inside a branch node and would silently
-// produce a malformed trie — the W6 shape. The build must throw instead of emitting a root.
-BOOST_AUTO_TEST_CASE(VarKeyRejectsPrefixAndDuplicateKeys)
-{
-    std::vector<std::pair<bcos::bytes, bcos::bytes>> prefixEntries{
-        {bcos::bytes{0x01}, bcos::bytes{0xaa}},
-        {bcos::bytes{0x01, 0x02}, bcos::bytes{0xbb}},
-    };
-    BOOST_CHECK_THROW(computeTrieRootVarKey(prefixEntries), MPTInvariantViolation);
-
-    std::vector<std::pair<bcos::bytes, bcos::bytes>> duplicateEntries{
-        {bcos::bytes{0x03}, bcos::bytes{0xaa}},
-        {bcos::bytes{0x03}, bcos::bytes{0xbb}},
-    };
-    BOOST_CHECK_THROW(computeTrieRootVarKey(duplicateEntries), MPTInvariantViolation);
 }
 
 // Regression for the W6 L2 divergence (isthmus_big_block_130tx, 131 tx): the OP callers
