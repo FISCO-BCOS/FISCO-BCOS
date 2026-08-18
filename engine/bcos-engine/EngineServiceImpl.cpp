@@ -24,6 +24,8 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 
 namespace
 {
@@ -457,4 +459,63 @@ std::optional<std::string> bcos::engine::detail::compareWithBuiltPayload(
             "submitted blockHash");
     }
     return std::nullopt;
+}
+
+bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(std::uint32_t version)
+{
+    switch (version)
+    {
+    case static_cast<std::uint32_t>(ApiVersion::V1):
+        return bcos::protocol::EthBlockVersion::LONDON;
+    case static_cast<std::uint32_t>(ApiVersion::V2):
+        return bcos::protocol::EthBlockVersion::SHANGHAI;
+    case static_cast<std::uint32_t>(ApiVersion::V3):
+        return bcos::protocol::EthBlockVersion::CANCUN;
+    default:
+        return bcos::protocol::EthBlockVersion::PRAGUE;  // V4+
+    }
+}
+
+void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
+    const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
+    std::uint32_t version)
+{
+    // Post-merge constants: the empty-ommers hash (keccak256(rlp([]))), difficulty 0 and nonce 0
+    // are fixed on every PoS Ethereum block.
+    static const auto kEmptyOmmersHash = bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
+    header.setUncleHash(kEmptyOmmersHash);
+    header.setDifficulty(bcos::u256(0));
+    header.setNonce(bcos::h64(0));
+
+    // The header itself must carry the 256-byte bloom: calculateRLPHash reads it from the header
+    // (handleNewPayload sets it on the block wrapper separately).
+    header.setLogsBloom(bcos::bytesConstRef(payload.logsBloom.data(), payload.logsBloom.size()));
+
+    // EIP-1559 base fee (LONDON+). FISCO-BCOS does not compute a real base fee yet, so this is
+    // whatever buildPayload placed in the payload (currently 0).
+    header.setBaseFee(payload.baseFeePerGas);
+
+    // SHANGHAI+ (V2): withdrawalsRoot. The withdrawals trie root is not computed yet, so the
+    // empty-trie root is used as a placeholder.
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
+    {
+        header.setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
+    }
+
+    // CANCUN+ (V3): blob gas fields and parent beacon block root.
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        header.setBlobGasUsed(payload.blobGasUsed.value_or(bcos::u256(0)));
+        header.setExcessBlobGas(payload.excessBlobGas.value_or(bcos::u256(0)));
+        header.setParentBeaconBlockRoot(parentBeaconBlockRoot.value_or(bcos::h256{}));
+    }
+
+    // Mark the header as an Eth header, then compute and inject its RLP hash.
+    header.setEthBlockVersion(ethBlockVersionFor(version));
+    if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error{
+            "EngineService: failed to compute Eth RLP hash: " + error->errorMessage()});
+    }
 }
