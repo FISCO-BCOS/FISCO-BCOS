@@ -31,6 +31,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include <bcos-ledger/mpt/Constants.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -78,6 +79,18 @@ std::optional<std::string> validatePayloadAttributes(
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
+
+// Map an Engine API version to the Ethereum fork era of the blocks it produces.
+bcos::protocol::EthBlockVersion ethBlockVersionFor(std::uint32_t version);
+
+// Fill the Ethereum header fields on a locally built header, mark it as an Eth header
+// (setEthBlockVersion), and compute + inject its RLP hash. Throws on validation/hash failure.
+void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
+    const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
+    std::uint32_t version);
+
+// The internal timestamp carrier is milliseconds (Types.h); the Eth header stores seconds.
+inline constexpr std::uint64_t c_millisPerSecond = 1000;
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -762,11 +775,12 @@ private:
         co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
         auto blockVersion = ledgerConfig.compatibilityVersion();
 
-        // Fill gasLimit from ledger config (FISCO-BCOS does not use EIP-1559 baseFeePerGas,
-        // and logsBloom is not part of BlockHeader hash computation in FISCO-BCOS).
+        // Fill gasLimit from ledger config. baseFeePerGas is carried in the payload (currently
+        // 0 — FISCO-BCOS does not compute a real EIP-1559 base fee yet) and copied onto the Eth
+        // header by finalizeEthBlockHeader.
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
 
-        // Real EVM execution: execute transactions and compute real hashes.
+        // Execute transactions (if any) and finalize the Eth header with its RLP hash.
         if (executionPayload.transactions.empty())
         {
             auto emptyHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
@@ -775,17 +789,24 @@ private:
             emptyHeader->setParentInfo(parentInfo);
             emptyHeader->setNumber(nextBlockNumber);
             emptyHeader->setVersion(blockVersion);
-            emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+            // Eth headers carry the timestamp in SECONDS (Types.h keeps the internal carrier in
+            // milliseconds); convert once here since an empty block never passes through the
+            // executor's millisecond-consuming path.
+            emptyHeader->setTimestamp(static_cast<int64_t>(
+                payloadAttributes.timestamp / detail::c_millisPerSecond));
             emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
             emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
             emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
-            emptyHeader->setReceiptsRoot(h256{});
-            emptyHeader->setTxsRoot(h256{});
+            // An empty block's transaction/receipt tries are the canonical empty-trie root, not
+            // the all-zero hash (validateHeader rejects a zero receiptsRoot/txsRoot).
+            emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
+            emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
-            emptyHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+            detail::finalizeEthBlockHeader(
+                *emptyHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot, version);
             executionPayload.stateRoot = emptyHeader->stateRoot();
-            executionPayload.receiptsRoot = h256{};
+            executionPayload.receiptsRoot = bcos::ledger::mpt::emptyRootHash();
             executionPayload.gasUsed = 0;
             executionPayload.blockHash = emptyHeader->hash();
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
@@ -823,8 +844,9 @@ private:
         // Step 2d: Compute transaction root (Merkle over tx hashes)
         // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
         // once MPTStorage is available. The current tx->hash() call lacks exception
-        // handling for malformed transactions.
-        h256 txRoot;
+        // handling for malformed transactions. An empty transaction list maps to the
+        // canonical empty-trie root (validateHeader rejects an all-zero txsRoot).
+        h256 txRoot = bcos::ledger::mpt::emptyRootHash();
         {
             auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
             auto hasher = hashImpl.hasher();
@@ -849,8 +871,10 @@ private:
             }
         }
 
-        // Step 2e: Compute receipt root (Merkle over receipt hashes)
-        h256 receiptRoot;
+        // Step 2e: Compute receipt root (Merkle over receipt hashes). An empty receipt list
+        // maps to the canonical empty-trie root (validateHeader rejects an all-zero
+        // receiptsRoot).
+        h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
         {
             // Validate receipts are non-null before computing hashes
             if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
@@ -896,12 +920,21 @@ private:
         // Step 2g: Compute state root (MPT over state storage)
         h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
 
-        // Step 2h: Set computed values in the block header and calculate block hash
+        // Step 2h: Set computed values in the block header and calculate the block hash.
+        // The executor consumed the header timestamp in milliseconds; the Eth header stores it in
+        // seconds, so switch units after execution and before the RLP hash is computed.
         blockHeader->setStateRoot(stateRoot);
         blockHeader->setReceiptsRoot(receiptRoot);
         blockHeader->setTxsRoot(txRoot);
         blockHeader->setGasUsed(totalGasUsed);
-        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+        blockHeader->setTimestamp(static_cast<int64_t>(
+            payloadAttributes.timestamp / detail::c_millisPerSecond));
+
+        // Copy the block bloom onto the payload before finalizeEthBlockHeader, which reads it
+        // onto the header (the header's logsBloom is part of the RLP hash).
+        executionPayload.logsBloom = logsBloom;
+        detail::finalizeEthBlockHeader(
+            *blockHeader, executionPayload, payloadAttributes.parentBeaconBlockRoot, version);
 
         // Step 2i: Fill the execution payload with real values
         executionPayload.stateRoot = stateRoot;
@@ -909,7 +942,6 @@ private:
         executionPayload.gasUsed = totalGasUsed;
         executionPayload.blockHash = blockHeader->hash();
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
-        executionPayload.logsBloom = logsBloom;
 
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(blockHeader),
