@@ -139,7 +139,7 @@ import json, urllib.request
 req = urllib.request.Request('http://127.0.0.1:$ANVIL_PORT',
     data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"latest\",false],\"id\":1}',
     headers={'Content-Type':'application/json'})
-d = json.loads(urllib.request.urlopen(req).read())
+d = json.loads(urllib.request.urlopen(req, timeout=10).read())
 print(int(d['result']['timestamp'], 16))
 ")
   python3 -c "
@@ -247,12 +247,30 @@ EOF
   kill "$(cat "$C2/fisco/node.pid" 2>/dev/null)" 2>/dev/null || true
   sleep 1
   ulimit -s 65520
-  cd "$C2/fisco" && nohup "$FISCO_BIN" -c config.genesis -g config.genesis > nohup.out 2>&1 &
+  pushd "$C2/fisco" > /dev/null
+  nohup "$FISCO_BIN" -c config.genesis -g config.genesis > nohup.out 2>&1 &
   echo $! > "$C2/fisco/node.pid"
+  popd > /dev/null
   sleep 5
-  curl -s -o /dev/null -X POST http://127.0.0.1:$FISCO_WEB3 \
-    -H 'Content-Type: application/json' \
-    -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' || die "FISCO 启动失败(见 nohup.out)"
+  if ! curl -s -o /dev/null -X POST http://127.0.0.1:$FISCO_WEB3 \
+       -H 'Content-Type: application/json' \
+       -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'; then
+    # genesis 与已存 data 不一致(op-deployer 重新部署后哈希变化)→ 清 data 重来
+    log "genesis hash 与 data 不一致,清 data 重启"
+    kill "$(cat "$C2/fisco/node.pid")" 2>/dev/null || true
+    sleep 1
+    rm -rf "$C2/fisco/data"
+    ulimit -s 65520
+    pushd "$C2/fisco" > /dev/null
+  nohup "$FISCO_BIN" -c config.genesis -g config.genesis > nohup.out 2>&1 &
+  echo $! > "$C2/fisco/node.pid"
+  popd > /dev/null
+    sleep 5
+    curl -s -o /dev/null -X POST http://127.0.0.1:$FISCO_WEB3 \
+      -H 'Content-Type: application/json' \
+      -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' || \
+      die "FISCO 启动失败(见 nohup.out)"
+  fi
   log "FISCO 运行中(PID $(cat "$C2/fisco/node.pid"),web3 $FISCO_WEB3 / engine $FISCO_ENGINE)"
 fi
 
@@ -265,7 +283,7 @@ import json, urllib.request
 req = urllib.request.Request('http://127.0.0.1:$ANVIL_PORT',
     data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x0\",false],\"id\":1}',
     headers={'Content-Type':'application/json'})
-print(json.loads(urllib.request.urlopen(req).read())['result']['hash'])
+print(json.loads(urllib.request.urlopen(req, timeout=10).read())['result']['hash'])
 ")
   # L2 genesis = FISCO 实际创世哈希
   L2_HASH=$(python3 -c "
@@ -273,7 +291,7 @@ import json, urllib.request
 req = urllib.request.Request('http://127.0.0.1:$FISCO_WEB3',
     data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x0\",false],\"id\":1}',
     headers={'Content-Type':'application/json'})
-print(json.loads(urllib.request.urlopen(req).read())['result']['hash'])
+print(json.loads(urllib.request.urlopen(req, timeout=10).read())['result']['hash'])
 ")
   python3 -c "
 import json
@@ -331,7 +349,7 @@ import json, urllib.request
 req = urllib.request.Request('http://127.0.0.1:$FISCO_WEB3',
     data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}',
     headers={'Content-Type':'application/json'})
-print(json.loads(urllib.request.urlopen(req).read())['result'])
+print(json.loads(urllib.request.urlopen(req, timeout=10).read())['result'])
 ")
   log "op-node 启动(PID $(cat "$C2/op-node.pid"),L2 block=$BN)"
   [ "$BN" != "0x0" ] && log "✅ C2 出块中!deposit/withdraw 闭环可用"
