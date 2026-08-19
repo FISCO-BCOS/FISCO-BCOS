@@ -76,6 +76,16 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
 
+/// Encodes the OP-Stack block-header extraData from the CL-supplied payload attributes.
+/// Attribute presence is the fork signal (op-node sends eip1559Params iff Holocene is
+/// active, and minBaseFee iff Jovian is active — op-node/rollup/attributes/
+/// engine_consolidate.go checkExtraDataParamsMatch): no eip1559Params -> empty
+/// (pre-Holocene), eip1559Params only -> 9-byte Holocene form, eip1559Params +
+/// minBaseFee -> 17-byte Jovian form (op-core/eip1559/eip1559.go
+/// EncodeHoloceneExtraData / EncodeJovianExtraData). Requires attributes that passed
+/// validatePayloadAttributes (8-byte params, valid zero-pairing).
+bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
+
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 }  // namespace detail
@@ -699,6 +709,14 @@ private:
             });
         }
 
+        // OP-Stack extraData derived from the attributes' eip1559Params / minBaseFee
+        // (Jovian 17-byte form on our chains). Stamped identically on the returned
+        // payload AND on the persisted block header below — op-node re-reads the header
+        // via eth_getBlockByNumber (BlockResponse serves blockHeader->extraData()) and
+        // re-validates it (op-core/eip1559/eip1559.go ValidateJovianExtraData), so the
+        // two must match byte for byte.
+        bytes extraData = detail::encodeOptimismExtraData(payloadAttributes);
+
         ExecutionPayload executionPayload{
             .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
@@ -710,7 +728,7 @@ private:
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
             .transactions = std::move(engineTransactions),
-            .extraData = {},
+            .extraData = extraData,
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,
@@ -779,6 +797,9 @@ private:
             emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
             emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
             emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+            // Must precede calculateHash: extraData is part of the Tars header hash
+            // (bcos-tars-protocol/impl/TarsHashable.h).
+            emptyHeader->setExtraData(std::move(extraData));
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
             emptyHeader->setReceiptsRoot(h256{});
             emptyHeader->setTxsRoot(h256{});
@@ -804,6 +825,9 @@ private:
         blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
+        // Must precede calculateHash: extraData is part of the Tars header hash
+        // (bcos-tars-protocol/impl/TarsHashable.h).
+        blockHeader->setExtraData(std::move(extraData));
 
         // Step 2c: Execute transactions via the scheduler, over the decoded executable
         // forms. Raw-only entries (forced transactions from the OP attributes list) have

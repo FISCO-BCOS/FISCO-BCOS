@@ -21,6 +21,7 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -1126,6 +1127,46 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
     auto status = task::syncWait(engineService.newPayload(request, 4));
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+// Round-5 op-node breakpoint: a Jovian CL sends eip1559Params + minBaseFee and expects
+// the built block to carry the 17-byte Jovian extraData, re-validated when it reads the
+// header back (op-core/eip1559/eip1559.go ValidateJovianExtraData). The payload and the
+// header the block hash was computed over must agree: buildPayload stamps the same bytes
+// on both before calculateHash.
+BOOST_AUTO_TEST_CASE(build_payload_stamps_jovian_extra_data_on_payload)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    // What op-node actually sent in round 5: all-zero params (SystemConfig defaults),
+    // minBaseFee 0. The EL must translate 0,0 to the Canyon constants (250, 6).
+    payloadAttributes.eip1559Params = bytes(8, 0);
+    payloadAttributes.minBaseFee = 0;
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(payload->executionPayload.extraData),
+        "0x01000000fa000000060000000000000000");
+
+    // minBaseFee absent -> Holocene 9-byte form, version byte 0x00.
+    auto holoceneAttributes = makeKarstPayloadAttributes();
+    holoceneAttributes.eip1559Params = fromHexWithPrefix("0x000000fa00000006");
+    auto holoceneResult =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &holoceneAttributes, 3));
+    BOOST_REQUIRE(holoceneResult.payloadId.has_value());
+    auto holocenePayload = task::syncWait(engineService.getPayload(*holoceneResult.payloadId, 3));
+    BOOST_REQUIRE(holocenePayload);
+    BOOST_CHECK_EQUAL(
+        toHexStringWithPrefix(holocenePayload->executionPayload.extraData), "0x00000000fa00000006");
 }
 
 BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
