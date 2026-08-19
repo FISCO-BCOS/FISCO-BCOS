@@ -45,11 +45,11 @@ using namespace std;
 BcosKmsKeyEncryption::BcosKmsKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_nodeConfig = nodeConfig;
-    m_compatibilityVersion = m_nodeConfig->compatibilityVersion();
+    m_compatibilityVersion = m_nodeConfig->genesisConfig.m_compatibilityVersion;
 
     std::vector<std::string> values;
     boost::split(
-        values, nodeConfig->keyEncryptionUrl(), boost::is_any_of(":"), boost::token_compress_on);
+        values, nodeConfig->security.keyEncryptionUrl, boost::is_any_of(":"), boost::token_compress_on);
     if (2 != values.size())
     {
         BOOST_THROW_EXCEPTION(
@@ -66,17 +66,17 @@ BcosKmsKeyEncryption::BcosKmsKeyEncryption(const bcos::tool::NodeConfig::Ptr nod
                 "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
     }
 
-    std::string cipherDataKey = m_nodeConfig->bcosKmsKeySecurityCipherDataKey();
+    std::string cipherDataKey = m_nodeConfig->security.bcosKmsKeySecurityCipherDataKey;
 
     BcosKms keyClient;
     keyClient.setIpPort(keyCenterIp, keyCenterPort);
-    m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->smCryptoType()));
+    m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->genesisConfig.m_smCrypto));
 
     BCOS_LOG(INFO) << LOG_BADGE("BcosKmsKeyEncryption::init")
                    << LOG_KV("key_center_ip:", keyCenterIp)
                    << LOG_KV("key_center_port:", keyCenterPort);
 
-    if (!m_nodeConfig->smCryptoType())
+    if (!m_nodeConfig->genesisConfig.m_smCrypto)
     {
         m_symmetricEncrypt = std::make_shared<AESCrypto>();
     }

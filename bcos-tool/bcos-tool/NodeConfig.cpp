@@ -112,14 +112,32 @@ void requireDecimalField(
                 "[" + section + "]." + field + " must be decimal digits: " + value));
     }
 }
+
+// Note: make sure the consensus param checker is consistent with the precompiled param checker
+// Parses a config value as int64 with a default; throws InvalidConfig on a
+// non-numeric value.
+int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
+    std::string const& _key, std::string const& _defaultValue)
+{
+    auto value = _pt.get<std::string>(_key, _defaultValue);
+    try
+    {
+        return boost::lexical_cast<int64_t>(value);
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Invalid value " + value + " for configuration " + _key +
+                                  ", please set the value with a valid number"));
+    }
+}
 }  // namespace
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
-  : m_keyFactory(std::move(_keyFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
+  : keyFactory(std::move(_keyFactory)), ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
-NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
-
+NodeConfig::NodeConfig() : ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
 void NodeConfig::loadConfig(std::string const& _configPath, bool _enforceMemberID,
     bool enforceChainConfig, bool enforceGroupId)
@@ -156,9 +174,9 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
-    if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
+    if (_enforceChainConfig || (genesisConfig.m_compatibilityVersion <
                                        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION &&
-                                   m_genesisConfig.m_compatibilityVersion >=
+                                   genesisConfig.m_compatibilityVersion >=
                                        (uint32_t)bcos::protocol::BlockVersion::MIN_VERSION))
     {
         loadChainConfig(_pt, _enforceGroupId);
@@ -188,8 +206,8 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     // if version >= 3.1.0, genesisBlock include chainConfig
     auto compatibilityVersion = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
-    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
-    if (m_genesisConfig.m_compatibilityVersion >=
+    genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
+    if (genesisConfig.m_compatibilityVersion >=
         (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         loadChainConfig(_genesisConfig, true);
@@ -215,7 +233,7 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
     // "alloc.0.storage". Because get_child treats '.' as a path separator,
     // the storage sub-tree must be fetched with a NUL ('\0') path separator
     // so the literal dotted key is matched.
-    m_genesisConfig.m_allocs.clear();
+    genesisConfig.m_allocs.clear();
     std::set<std::string> seen;
     for (auto const& kv : _genesisConfig)
     {
@@ -297,13 +315,13 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
         NodeConfig_LOG(INFO) << LOG_DESC("loadAllocs") << LOG_KV("section", kv.first)
                              << LOG_KV("address", alloc.address)
                              << LOG_KV("storageSlots", alloc.storage.size());
-        m_genesisConfig.m_allocs.push_back(std::move(alloc));
+        genesisConfig.m_allocs.push_back(std::move(alloc));
     }
 }
 
 void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig)
 {
-    m_genesisConfig.m_ethGenesisHeader.reset();
+    genesisConfig.m_ethGenesisHeader.reset();
     auto section = _genesisConfig.get_child_optional("eth_genesis_header");
     if (!section)
     {
@@ -392,15 +410,15 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     // stale or hand-edited section cannot silently mint a different B0.
     header.m_hash = hashField("hash");
 
-    m_genesisConfig.m_ethGenesisHeader = std::move(header);
+    genesisConfig.m_ethGenesisHeader = std::move(header);
     NodeConfig_LOG(INFO) << LOG_DESC("loadEthGenesisHeader")
-                         << LOG_KV("hash", m_genesisConfig.m_ethGenesisHeader->m_hash.hex())
-                         << LOG_KV("timestamp", m_genesisConfig.m_ethGenesisHeader->m_timestamp);
+                         << LOG_KV("hash", genesisConfig.m_ethGenesisHeader->m_hash.hex())
+                         << LOG_KV("timestamp", genesisConfig.m_ethGenesisHeader->m_timestamp);
 }
 
 void NodeConfig::validateL2Invariants()
 {
-    auto const& genesis = m_genesisConfig;
+    auto const& genesis = genesisConfig;
     // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
     // there is no separate chain_mode. allocs and the flag must agree.
     bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
@@ -821,16 +839,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("finalizedBlockDepth", web3Rpc.finalizedBlockDepth);
 }
 
-uint32_t NodeConfig::web3SafeBlockDepth() const
-{
-    return web3Rpc.safeBlockDepth;
-}
-
-uint32_t NodeConfig::web3FinalizedBlockDepth() const
-{
-    return web3Rpc.finalizedBlockDepth;
-}
-
 void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
 {
     /*
@@ -1043,12 +1051,12 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
 {
     try
     {
-        m_genesisConfig.m_smCrypto = _pt.get<bool>("chain.sm_crypto", false);
+        genesisConfig.m_smCrypto = _pt.get<bool>("chain.sm_crypto", false);
         if (_enforceGroupId)
         {
-            m_genesisConfig.m_groupID = _pt.get<std::string>("chain.group_id", "group");
+            genesisConfig.m_groupID = _pt.get<std::string>("chain.group_id", "group");
         }
-        m_genesisConfig.m_chainID = _pt.get<std::string>("chain.chain_id", "chain");
+        genesisConfig.m_chainID = _pt.get<std::string>("chain.chain_id", "chain");
     }
     catch (std::exception const& e)
     {
@@ -1058,7 +1066,7 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                 " if compatibility_version in genesis block >= 3.1.0,"
                 " 'chain' config should appear in config.genesis, else in config.ini."));
     }
-    if (!isalNumStr(m_genesisConfig.m_chainID))
+    if (!isalNumStr(genesisConfig.m_chainID))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("The chainId must be number or digit"));
@@ -1071,22 +1079,22 @@ void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _e
                                   std::to_string(MAX_BLOCK_LIMIT) + " !"));
     }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadChainConfig")
-                         << LOG_KV("smCrypto", m_genesisConfig.m_smCrypto)
-                         << LOG_KV("chainId", m_genesisConfig.m_chainID)
-                         << LOG_KV("groupId", m_genesisConfig.m_groupID)
+                         << LOG_KV("smCrypto", genesisConfig.m_smCrypto)
+                         << LOG_KV("chainId", genesisConfig.m_chainID)
+                         << LOG_KV("groupId", genesisConfig.m_groupID)
                          << LOG_KV("blockLimit", chain.blockLimit);
 }
 
 void NodeConfig::NodeConfig::loadWeb3ChainConfig(boost::property_tree::ptree const& _pt)
 {
-    m_genesisConfig.m_web3ChainID = _pt.get<std::string>("web3.chain_id", "0");
-    if (!isNumStr(m_genesisConfig.m_web3ChainID))
+    genesisConfig.m_web3ChainID = _pt.get<std::string>("web3.chain_id", "0");
+    if (!isNumStr(genesisConfig.m_web3ChainID))
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("The web3ChainId must be number string"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3ChainConfig")
-                         << LOG_KV("web3ChainID", m_genesisConfig.m_web3ChainID);
+                         << LOG_KV("web3ChainID", genesisConfig.m_web3ChainID);
 }
 
 void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
@@ -1217,7 +1225,6 @@ void NodeConfig::loadSecurityConfig(boost::property_tree::ptree const& _pt)
                                   "Please set kms_type to DEFAULT or HSM or CLOUDKMS or BCOSKMS!"));
     }
 
-
     NodeConfig_LOG(INFO) << LOG_DESC("loadSecurityConfig")
                          << LOG_KV("privateKeyPath", security.privateKeyPath)
                          << LOG_KV("keyEncryptionType",
@@ -1317,7 +1324,6 @@ void NodeConfig::loadStorageSecurityConfig(boost::property_tree::ptree const& _p
     }
     /* TODO: Remove in version future around here */
 
-
     storageSecurity.cipherDataKey = _pt.get<std::string>("storage_security.cipher_data_key", "");
     if (storageSecurity.cipherDataKey.empty())
     {
@@ -1346,7 +1352,7 @@ void NodeConfig::loadSyncConfig(const boost::property_tree::ptree& _pt)
 
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
-    storage.dataPath = _pt.get<std::string>("storage.data_path", "data/" + m_genesisConfig.m_groupID);
+    storage.dataPath = _pt.get<std::string>("storage.data_path", "data/" + genesisConfig.m_groupID);
     storage.type = _pt.get<std::string>("storage.type", "RocksDB");
     storage.keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
     storage.maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
@@ -1523,7 +1529,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     // consensus type
     try
     {
-        m_genesisConfig.m_consensusType =
+        genesisConfig.m_consensusType =
             _genesisConfig.get<std::string>("consensus.consensus_type", "pbft");
     }
     catch (std::exception const& e)
@@ -1531,8 +1537,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("consensus.consensus_type is null, please set it!"));
     }
-    if (m_genesisConfig.m_consensusType != bcos::ledger::PBFT_CONSENSUS_TYPE &&
-        m_genesisConfig.m_consensusType != bcos::ledger::RPBFT_CONSENSUS_TYPE)
+    if (genesisConfig.m_consensusType != bcos::ledger::PBFT_CONSENSUS_TYPE &&
+        genesisConfig.m_consensusType != bcos::ledger::RPBFT_CONSENSUS_TYPE)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -1546,8 +1552,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set consensus.block_tx_count_limit to positive!"));
     }
-    m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
-    m_genesisConfig.m_txCountLimit = blockTxCountLimit;
+    ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
+    genesisConfig.m_txCountLimit = blockTxCountLimit;
 
     // txGasLimit
     auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
@@ -1564,38 +1570,38 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         // operator setting a tiny limit by accident sees it in the boot log.
         NodeConfig_LOG(WARNING) << LOG_DESC("low tx.gas_limit") << LOG_KV("gasLimit", txGasLimit);
     }
-    m_genesisConfig.m_txGasLimit = txGasLimit;
+    genesisConfig.m_txGasLimit = txGasLimit;
     // txGasPrice (base fee per gas; consumed by the v2 Ethereum executor as base_fee).
     // Seeded into SYS_CONFIG/tx_gas_price at genesis so EEST fixtures can reproduce their
     // environment's currentBaseFee.
-    m_genesisConfig.m_txGasPrice = _genesisConfig.get<std::string>("tx.gas_price", "0x0");
+    genesisConfig.m_txGasPrice = _genesisConfig.get<std::string>("tx.gas_price", "0x0");
     // txExcessBlobGas (EIP-4844 blob base-fee state; consumed by the v2 Ethereum executor).
     // Seeded into SYS_CONFIG/excess_blob_gas at genesis so EEST fixtures can reproduce their
     // environment's currentExcessBlobGas.
     auto excessBlobGasStr = _genesisConfig.get<std::string>("tx.excess_blob_gas", "");
     if (!excessBlobGasStr.empty())
     {
-        m_genesisConfig.m_excessBlobGas = boost::lexical_cast<uint64_t>(excessBlobGasStr);
+        genesisConfig.m_excessBlobGas = boost::lexical_cast<uint64_t>(excessBlobGasStr);
     }
     // the compatibility version
     auto compatibilityVersion = _genesisConfig.get<std::string>(
         "version.compatibility_version", bcos::protocol::RC4_VERSION_STR);
     // must call here to check the compatibility_version
-    m_genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
+    genesisConfig.m_compatibilityVersion = toVersionNumber(compatibilityVersion);
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (consensusNodeList.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment("Must set sealerList!"));
     }
-    m_ledgerConfig->setConsensusNodeList(consensusNodeList);
+    ledgerConfig->setConsensusNodeList(consensusNodeList);
 
     // rpbft
-    if (m_genesisConfig.m_consensusType == RPBFT_CONSENSUS_TYPE)
+    if (genesisConfig.m_consensusType == RPBFT_CONSENSUS_TYPE)
     {
-        m_genesisConfig.m_epochSealerNum =
+        genesisConfig.m_epochSealerNum =
             _genesisConfig.get<std::uint32_t>("consensus.epoch_sealer_num", 4);
-        m_genesisConfig.m_epochBlockNum =
+        genesisConfig.m_epochBlockNum =
             _genesisConfig.get<std::uint32_t>("consensus.epoch_block_num", 1000);
     }
 
@@ -1606,15 +1612,15 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set consensus.leader_period to positive!"));
     }
-    m_ledgerConfig->setLeaderSwitchPeriod(consensusLeaderPeriod);
+    ledgerConfig->setLeaderSwitchPeriod(consensusLeaderPeriod);
     NodeConfig_LOG(INFO)
-        << LOG_DESC("loadLedgerConfig") << LOG_KV("consensus_type", m_genesisConfig.m_consensusType)
-        << LOG_KV("block_tx_count_limit", m_ledgerConfig->blockTxCountLimit())
-        << LOG_KV("gas_limit", m_genesisConfig.m_txGasLimit)
-        << LOG_KV("leader_period", m_ledgerConfig->leaderSwitchPeriod())
+        << LOG_DESC("loadLedgerConfig") << LOG_KV("consensus_type", genesisConfig.m_consensusType)
+        << LOG_KV("block_tx_count_limit", ledgerConfig->blockTxCountLimit())
+        << LOG_KV("gas_limit", genesisConfig.m_txGasLimit)
+        << LOG_KV("leader_period", ledgerConfig->leaderSwitchPeriod())
         << LOG_KV("minSealTime", sealer.minSealTime)
         << LOG_KV("compatibilityVersion",
-               (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion);
+               (bcos::protocol::BlockVersion)genesisConfig.m_compatibilityVersion);
 }
 
 ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree const& _pt,
@@ -1663,7 +1669,7 @@ ConsensusNodeList NodeConfig::parseConsensusNodeList(boost::property_tree::ptree
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "Please set weight for " + nodeId + " to positive!"));
         }
-        ConsensusNode consensusNode{.nodeID = m_keyFactory->createKey(fromHex(nodeId)),
+        ConsensusNode consensusNode{.nodeID = keyFactory->createKey(fromHex(nodeId)),
             .type = consensus::Type::consensus_sealer,
             .voteWeight = static_cast<uint64_t>(voteWeight),
             .termWeight = static_cast<uint64_t>(termWeight),
@@ -1685,10 +1691,10 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
 {
     try
     {
-        m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
-        m_genesisConfig.m_isSerialExecute =
+        genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
+        genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
-        m_genesisConfig.m_executorVersion = _genesisConfig.get<int>("executor.version", 0);
+        genesisConfig.m_executorVersion = _genesisConfig.get<int>("executor.version", 0);
     }
     catch (std::exception const& e)
     {
@@ -1716,7 +1722,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                             "semantics for it change between versions, which would tie consensus "
                             "to the binary"));
                 }
-                m_genesisConfig.m_evmcRevision = *rev;
+                genesisConfig.m_evmcRevision = *rev;
             }
             else
             {
@@ -1788,7 +1794,7 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
                             "released fork (evmone semantics change between versions); entry: " +
                             std::string(entry)));
                 }
-                m_genesisConfig.m_evmcRevisionForks[block] = *rev;
+                genesisConfig.m_evmcRevisionForks[block] = *rev;
             }
         }
     }
@@ -1808,8 +1814,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // hard fork (replay/resync would diverge and a mixed-version network could split, without
     // either side erroring). Requiring it here makes the effective revision part of the
     // genesis config and therefore of the on-chain state.
-    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
-        !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty())
+    if (genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
+        !genesisConfig.m_evmcRevision && genesisConfig.m_evmcRevisionForks.empty())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
@@ -1824,8 +1830,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     // ignored (the chain runs the binary default); below 3.15.0 executor_version is not
     // persisted either, so getLedgerConfig never injects a revision and every transaction
     // throws EvmcRevisionNotConfigured. Reject both ranges up front.
-    if (m_genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
-        m_genesisConfig.m_compatibilityVersion <
+    if (genesisConfig.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION &&
+        genesisConfig.m_compatibilityVersion <
             static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION))
     {
         BOOST_THROW_EXCEPTION(
@@ -1845,11 +1851,11 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     try
     {
-        m_genesisConfig.m_authAdminAccount =
+        genesisConfig.m_authAdminAccount =
             _genesisConfig.get<std::string>("executor.auth_admin_account", "");
-        if (m_genesisConfig.m_authAdminAccount.empty() &&
-            (m_genesisConfig.m_isAuthCheck ||
-                m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
+        if (genesisConfig.m_authAdminAccount.empty() &&
+            (genesisConfig.m_isAuthCheck ||
+                genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is empty, "
@@ -1858,8 +1864,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     }
     catch (std::exception const& e)
     {
-        if (m_genesisConfig.m_isAuthCheck ||
-            m_genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)
+        if (genesisConfig.m_isAuthCheck ||
+            genesisConfig.m_compatibilityVersion >= BlockVersion::V3_3_VERSION)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("executor.auth_admin_account is null, "
@@ -1867,10 +1873,10 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         }
     }
     NodeConfig_LOG(INFO) << METRIC << LOG_DESC("loadExecutorConfig")
-                         << LOG_KV("isWasm", m_genesisConfig.m_isWasm)
-                         << LOG_KV("isAuthCheck", m_genesisConfig.m_isAuthCheck)
-                         << LOG_KV("authAdminAccount", m_genesisConfig.m_authAdminAccount)
-                         << LOG_KV("ismSerialExecute", m_genesisConfig.m_isSerialExecute);
+                         << LOG_KV("isWasm", genesisConfig.m_isWasm)
+                         << LOG_KV("isAuthCheck", genesisConfig.m_isAuthCheck)
+                         << LOG_KV("authAdminAccount", genesisConfig.m_authAdminAccount)
+                         << LOG_KV("ismSerialExecute", genesisConfig.m_isSerialExecute);
 }
 
 // load config.ini
@@ -1882,38 +1888,9 @@ void NodeConfig::loadExecutorNormalConfig(boost::property_tree::ptree const& _co
                          << LOG_KV("enableDag", enableDag);
 }
 
-// Note: make sure the consensus param checker is consistent with the precompiled param checker
-int64_t NodeConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
-    std::string const& _key, std::string const& _defaultValue)
-{
-    auto value = _pt.get<std::string>(_key, _defaultValue);
-    try
-    {
-        return boost::lexical_cast<int64_t>(value);
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Invalid value " + value + " for configuration " + _key +
-                                  ", please set the value with a valid number"));
-    }
-}
 
-int64_t NodeConfig::checkAndGetValue(
-    boost::property_tree::ptree const& _pt, std::string const& _key)
-{
-    try
-    {
-        auto value = _pt.get<std::string>(_key);
-        return boost::lexical_cast<int64_t>(value);
-    }
-    catch (std::exception const& e)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("Invalid value for configuration " + _key +
-                                               ", please set the value with a valid number"));
-    }
-}
+
+
 
 bool NodeConfig::isValidPort(int port)
 {
@@ -1928,7 +1905,7 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
         {
             auto flag = it.first;
             auto enableNumber = it.second.get_value<bool>();
-            m_genesisConfig.m_features.emplace_back(
+            genesisConfig.m_features.emplace_back(
                 ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
                     .enable = static_cast<int>(enableNumber)});
         }
@@ -1938,397 +1915,7 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
 std::string bcos::tool::NodeConfig::getDefaultServiceName(
     std::string const& _nodeName, std::string const& _serviceName) const
 {
-    return m_genesisConfig.m_chainID + "." + _nodeName + _serviceName;
-}
-
-size_t NodeConfig::txpoolLimit() const
-{
-    return txpool.limit;
-}
-
-int64_t NodeConfig::txsExpirationTime() const
-{
-    return txpool.txsExpirationTime;
-}
-
-bool NodeConfig::checkBlockLimit() const
-{
-    return txpool.checkBlockLimit;
-}
-
-bool NodeConfig::smCryptoType() const
-{
-    return m_genesisConfig.m_smCrypto;
-}
-
-std::string const& NodeConfig::chainId() const
-{
-    return m_genesisConfig.m_chainID;
-}
-
-std::string const& NodeConfig::groupId() const
-{
-    return m_genesisConfig.m_groupID;
-}
-
-size_t NodeConfig::blockLimit() const
-{
-    return chain.blockLimit;
-}
-
-std::string const& NodeConfig::privateKeyPath() const
-{
-    return security.privateKeyPath;
-}
-
-std::string const& NodeConfig::hsmLibPath() const
-{
-    return security.hsmLibPath;
-}
-
-int const& NodeConfig::keyIndex() const
-{
-    return security.keyIndex;
-}
-
-int const& NodeConfig::encKeyIndex() const
-{
-    return m_encKeyIndex;
-}
-
-std::string const& NodeConfig::password() const
-{
-    return security.password;
-}
-
-size_t NodeConfig::minSealTime() const
-{
-    return sealer.minSealTime;
-}
-
-bool NodeConfig::allowFreeNodeSync() const
-{
-    return sealer.allowFreeNode;
-}
-
-size_t NodeConfig::checkPointTimeoutInterval() const
-{
-    return consensus.checkPointTimeoutInterval;
-}
-
-size_t NodeConfig::pipelineSize() const
-{
-    return consensus.pipelineSize;
-}
-
-std::string const& NodeConfig::storagePath() const
-{
-    return storage.dataPath;
-}
-
-std::string const& NodeConfig::stateDBPath() const
-{
-    return storage.stateDBPath;
-}
-
-std::string const& NodeConfig::blockDBPath() const
-{
-    return storage.blockDBPath;
-}
-
-std::string const& NodeConfig::storageType() const
-{
-    return storage.type;
-}
-
-size_t NodeConfig::keyPageSize() const
-{
-    return storage.keyPageSize;
-}
-
-int NodeConfig::maxWriteBufferNumber() const
-{
-    return storage.maxWriteBufferNumber;
-}
-
-bool NodeConfig::enableStatistics() const
-{
-    return storage.enableStatistics;
-}
-
-int NodeConfig::maxBackgroundJobs() const
-{
-    return storage.maxBackgroundJobs;
-}
-
-size_t NodeConfig::writeBufferSize() const
-{
-    return storage.writeBufferSize;
-}
-
-int NodeConfig::minWriteBufferNumberToMerge() const
-{
-    return storage.minWriteBufferNumberToMerge;
-}
-
-size_t NodeConfig::blockCacheSize() const
-{
-    return storage.blockCacheSize;
-}
-
-bool NodeConfig::enableRocksDBBlob() const
-{
-    return storage.enableRocksDBBlob;
-}
-
-std::vector<std::string> const& NodeConfig::pdAddrs() const
-{
-    return storage.pdAddrs;
-}
-
-std::string const& NodeConfig::pdCaPath() const
-{
-    return storage.pdCaPath;
-}
-
-std::string const& NodeConfig::pdCertPath() const
-{
-    return storage.pdCertPath;
-}
-
-std::string const& NodeConfig::pdKeyPath() const
-{
-    return storage.pdKeyPath;
-}
-
-std::string const& NodeConfig::storageDBName() const
-{
-    return storage.dbName;
-}
-
-std::string const& NodeConfig::stateDBName() const
-{
-    return storage.stateDBName;
-}
-
-bool NodeConfig::enableArchive() const
-{
-    return storage.enableArchive;
-}
-
-bool NodeConfig::syncArchivedBlocks() const
-{
-    return storage.syncArchivedBlocks;
-}
-
-bool NodeConfig::enableSeparateBlockAndState() const
-{
-    return storage.enableSeparateBlockAndState;
-}
-
-std::string const& NodeConfig::archiveListenIP() const
-{
-    return storage.archiveListenIP;
-}
-
-uint16_t NodeConfig::archiveListenPort() const
-{
-    return storage.archiveListenPort;
-}
-
-bcos::crypto::KeyFactory::Ptr NodeConfig::keyFactory()
-{
-    return m_keyFactory;
-}
-
-bcos::ledger::LedgerConfig::Ptr NodeConfig::ledgerConfig()
-{
-    return m_ledgerConfig;
-}
-
-std::string const& NodeConfig::consensusType() const
-{
-    return m_genesisConfig.m_consensusType;
-}
-
-size_t NodeConfig::txGasLimit() const
-{
-    return m_genesisConfig.m_txGasLimit;
-}
-
-std::string const& NodeConfig::genesisData() const
-{
-    return m_genesisData;
-}
-
-std::int64_t NodeConfig::epochSealerNum() const
-{
-    return m_genesisConfig.m_epochSealerNum;
-}
-
-std::int64_t NodeConfig::epochBlockNum() const
-{
-    return m_genesisConfig.m_epochBlockNum;
-}
-
-bool NodeConfig::isAuthCheck() const
-{
-    return m_genesisConfig.m_isAuthCheck;
-}
-
-bool NodeConfig::isSerialExecute() const
-{
-    return m_genesisConfig.m_isSerialExecute;
-}
-
-size_t NodeConfig::vmCacheSize() const
-{
-    return executor.vmCacheSize;
-}
-
-std::string const& NodeConfig::authAdminAddress() const
-{
-    return m_genesisConfig.m_authAdminAccount;
-}
-
-std::string const& NodeConfig::rpcServiceName() const
-{
-    return service.rpcServiceName;
-}
-
-std::string const& NodeConfig::gatewayServiceName() const
-{
-    return service.gatewayServiceName;
-}
-
-std::string const& NodeConfig::schedulerServiceName() const
-{
-    return service.schedulerServiceName;
-}
-
-std::string const& NodeConfig::executorServiceName() const
-{
-    return service.executorServiceName;
-}
-
-std::string const& NodeConfig::txpoolServiceName() const
-{
-    return service.txpoolServiceName;
-}
-
-std::string const& NodeConfig::nodeName() const
-{
-    return service.nodeName;
-}
-
-const std::string& NodeConfig::rpcListenIP() const
-{
-    return rpc.listenIP;
-}
-
-uint16_t NodeConfig::rpcListenPort() const
-{
-    return rpc.listenPort;
-}
-
-uint32_t NodeConfig::rpcFilterTimeout() const
-{
-    return rpc.filterTimeout;
-}
-
-uint32_t NodeConfig::rpcMaxProcessBlock() const
-{
-    return rpc.maxProcessBlock;
-}
-
-bool NodeConfig::rpcSmSsl() const
-{
-    return rpc.smSsl;
-}
-
-bool NodeConfig::rpcDisableSsl() const
-{
-    return rpc.disableSsl;
-}
-
-bool NodeConfig::enableWeb3Rpc() const
-{
-    return web3Rpc.enable;
-}
-
-const std::string& NodeConfig::web3RpcListenIP() const
-{
-    return web3Rpc.listenIP;
-}
-
-uint16_t NodeConfig::web3RpcListenPort() const
-{
-    return web3Rpc.listenPort;
-}
-
-uint32_t NodeConfig::web3FilterTimeout() const
-{
-    return web3Rpc.filterTimeout;
-}
-
-uint32_t NodeConfig::web3MaxProcessBlock() const
-{
-    return web3Rpc.maxProcessBlock;
-}
-
-uint32_t NodeConfig::web3BatchRequestSizeLimit() const
-{
-    return web3Rpc.batchRequestSizeLimit;
-}
-
-uint32_t NodeConfig::web3HttpBodySizeLimit() const
-{
-    return web3Rpc.httpBodySizeLimit;
-}
-
-bool NodeConfig::web3EnableCors() const
-{
-    return web3Rpc.enableCors;
-}
-
-std::string NodeConfig::web3CorsAllowedOrigins() const
-{
-    return web3Rpc.corsAllowedOrigins;
-}
-
-std::string NodeConfig::web3CorsAllowedMethods() const
-{
-    return web3Rpc.corsAllowedMethods;
-}
-
-std::string NodeConfig::web3CorsAllowedHeaders() const
-{
-    return web3Rpc.corsAllowedHeaders;
-}
-
-int32_t NodeConfig::web3CorsMaxAge() const
-{
-    return web3Rpc.corsMaxAge;
-}
-
-bool NodeConfig::web3CorsAllowCredentials() const
-{
-    return web3Rpc.corsAllowCredentials;
-}
-
-bool NodeConfig::web3SyncTransaction() const
-{
-    return web3Rpc.syncTransaction;
-}
-
-bool NodeConfig::enableOpEngineRpc() const
-{
-    return opEngineRpc.enable;
-}
-
-bool NodeConfig::enableSingleNodeConsensus() const
-{
-    return singleNodeConsensus.enable;
+    return genesisConfig.m_chainID + "." + _nodeName + _serviceName;
 }
 
 bool NodeConfig::engineDrivenBlockProduction() const
@@ -2336,342 +1923,14 @@ bool NodeConfig::engineDrivenBlockProduction() const
     return singleNodeConsensus.enable || opEngineRpc.enable;
 }
 
-uint64_t NodeConfig::singleNodeConsensusBlockInterval() const
-{
-    return singleNodeConsensus.blockInterval;
-}
-
-bool NodeConfig::singleNodeConsensusProduceEmptyBlocks() const
-{
-    return singleNodeConsensus.produceEmptyBlocks;
-}
-
-const std::string& NodeConfig::singleNodeConsensusFeeRecipient() const
-{
-    return singleNodeConsensus.feeRecipient;
-}
-
-const std::string& NodeConfig::singleNodeConsensusPrevRandao() const
-{
-    return singleNodeConsensus.prevRandao;
-}
-
-std::uint64_t NodeConfig::singleNodeConsensusFixedTimestamp() const
-{
-    return singleNodeConsensus.fixedTimestamp;
-}
-
-const std::string& NodeConfig::opEngineRpcListenIP() const
-{
-    return opEngineRpc.listenIP;
-}
-
-uint16_t NodeConfig::opEngineRpcListenPort() const
-{
-    return opEngineRpc.listenPort;
-}
-
-uint32_t NodeConfig::opEngineHttpBodySizeLimit() const
-{
-    return opEngineRpc.httpBodySizeLimit;
-}
-
-uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
-{
-    return opEngineRpc.batchRequestSizeLimit;
-}
-
-const std::string& NodeConfig::opEngineJwtSecretFile() const
-{
-    return opEngineRpc.jwtSecretFile;
-}
-
-bool NodeConfig::opEngineAllowV1Executor() const
-{
-    return opEngineRpc.allowV1Executor;
-}
-
-int32_t NodeConfig::opEngineClockSkewSecs() const
-{
-    return opEngineRpc.clockSkewSecs;
-}
-
-const std::string& NodeConfig::p2pListenIP() const
-{
-    return gateway.listenIP;
-}
-
-uint16_t NodeConfig::p2pListenPort() const
-{
-    return gateway.listenPort;
-}
-
-bool NodeConfig::p2pSmSsl() const
-{
-    return gateway.smSsl;
-}
-
-const std::string& NodeConfig::p2pNodeDir() const
-{
-    return gateway.nodeDir;
-}
-
-const std::string& NodeConfig::p2pNodeFileName() const
-{
-    return gateway.nodeFileName;
-}
-
-const std::string& NodeConfig::certPath()
-{
-    return cert.path;
-}
-
-void NodeConfig::setCertPath(const std::string& _certPath)
-{
-    cert.path = _certPath;
-}
-
-const std::string& NodeConfig::caCert()
-{
-    return cert.caCert;
-}
-
-void NodeConfig::setCaCert(const std::string& _caCert)
-{
-    cert.caCert = _caCert;
-}
-
-const std::string& NodeConfig::nodeCert()
-{
-    return cert.nodeCert;
-}
-
-void NodeConfig::setNodeCert(const std::string& _nodeCert)
-{
-    cert.nodeCert = _nodeCert;
-}
-
-const std::string& NodeConfig::nodeKey()
-{
-    return cert.nodeKey;
-}
-
-void NodeConfig::setNodeKey(const std::string& _nodeKey)
-{
-    cert.nodeKey = _nodeKey;
-}
-
-const std::string& NodeConfig::smCaCert() const
-{
-    return cert.smCaCert;
-}
-
-void NodeConfig::setSmCaCert(const std::string& _smCaCert)
-{
-    cert.smCaCert = _smCaCert;
-}
-
-const std::string& NodeConfig::smNodeCert() const
-{
-    return cert.smNodeCert;
-}
-
-void NodeConfig::setSmNodeCert(const std::string& _smNodeCert)
-{
-    cert.smNodeCert = _smNodeCert;
-}
-
-const std::string& NodeConfig::smNodeKey() const
-{
-    return cert.smNodeKey;
-}
-
-void NodeConfig::setSmNodeKey(const std::string& _smNodeKey)
-{
-    cert.smNodeKey = _smNodeKey;
-}
-
-const std::string& NodeConfig::enSmNodeCert() const
-{
-    return cert.enSmNodeCert;
-}
-
-void NodeConfig::setEnSmNodeCert(const std::string& _enSmNodeCert)
-{
-    cert.enSmNodeCert = _enSmNodeCert;
-}
-
-const std::string& NodeConfig::enSmNodeKey() const
-{
-    return cert.enSmNodeKey;
-}
-
-void NodeConfig::setEnSmNodeKey(const std::string& _enSmNodeKey)
-{
-    cert.enSmNodeKey = _enSmNodeKey;
-}
-
-bool NodeConfig::enableLRUCacheStorage() const
-{
-    return storage.enableLRUCacheStorage;
-}
-
-ssize_t NodeConfig::cacheSize() const
-{
-    return storage.cacheSize;
-}
-
-uint32_t NodeConfig::compatibilityVersion() const
-{
-    return m_genesisConfig.m_compatibilityVersion;
-}
-
 std::string NodeConfig::compatibilityVersionStr() const
 {
     std::stringstream ss;
-    ss << (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion;
+    ss << (bcos::protocol::BlockVersion)genesisConfig.m_compatibilityVersion;
     return ss.str();
 }
 
-std::string const& NodeConfig::memberID() const
-{
-    return failOver.memberID;
-}
 
-unsigned NodeConfig::leaseTTL() const
-{
-    return failOver.leaseTTL;
-}
-
-bool NodeConfig::enableFailOver() const
-{
-    return failOver.enable;
-}
-
-std::string const& NodeConfig::failOverClusterUrl() const
-{
-    return failOver.clusterUrl;
-}
-
-bool NodeConfig::storageSecurityEnable() const
-{
-    return storageSecurity.enable;
-}
-
-std::string NodeConfig::storageSecuirtyKeyCenterUrl() const
-{
-    return storageSecurity.keyCenterUrl;
-}
-
-std::string NodeConfig::storageSecurityCipherDataKey() const
-{
-    return storageSecurity.cipherDataKey;
-}
-
-security::KeyEncryptionType NodeConfig::keyEncryptionType() const
-{
-    return security.keyEncryptionType;
-}
-
-security::StorageEncryptionType NodeConfig::storageEncryptionType() const
-{
-    return storageSecurity.encryptionType;
-}
-
-security::CloudKmsType NodeConfig::cloudKmsType() const
-{
-    return security.cloudKmsType;
-}
-
-std::string NodeConfig::bcosKmsKeySecurityCipherDataKey() const
-{
-    return security.bcosKmsKeySecurityCipherDataKey;
-}
-
-std::string NodeConfig::keyEncryptionUrl() const
-{
-    return security.keyEncryptionUrl;
-}
-
-bool NodeConfig::enableSendBlockStatusByTree() const
-{
-    return sync.enableSendBlockStatusByTree;
-}
-
-bool NodeConfig::enableSendTxByTree() const
-{
-    return sync.enableSendTxByTree;
-}
-
-std::int64_t NodeConfig::treeWidth() const
-{
-    return sync.treeWidth;
-}
-
-int NodeConfig::sendTxTimeout() const
-{
-    return others.sendTxTimeout;
-}
-
-bool NodeConfig::withoutTarsFramework() const
-{
-    return service.withoutTarsFramework;
-}
-
-void NodeConfig::setWithoutTarsFramework(bool _withoutTarsFramework)
-{
-    service.withoutTarsFramework = _withoutTarsFramework;
-}
-
-NodeConfig::BaselineSchedulerConfig const& NodeConfig::baselineSchedulerConfig() const
-{
-    return executor.baselineScheduler;
-}
-
-NodeConfig::TarsRPCConfig const& NodeConfig::tarsRPCConfig() const
-{
-    return tarsRPC;
-}
-
-bool NodeConfig::enableTxsFromFreeNode() const
-{
-    return txpool.enableTxsFromFreeNode;
-}
-
-bool NodeConfig::preStoreBackpressureEnabled() const
-{
-    return txpool.preStoreBackpressureEnabled;
-}
-
-size_t NodeConfig::preStoreMaxInflight() const
-{
-    return txpool.preStoreMaxInflight;
-}
-
-size_t NodeConfig::ioThreadCount() const
-{
-    return threadPool.ioThreadCount;
-}
-
-size_t NodeConfig::tbbThreadCount() const
-{
-    return threadPool.tbbThreadCount;
-}
-
-void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)
-{
-    if (auto node = ptree.get_child_optional("alloc"))
-    {
-        for (const auto& it : *node)
-        {
-            auto flag = it.first;
-            auto enableNumber = it.second.get_value<bool>();
-            m_genesisConfig.m_features.emplace_back(
-                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
-                    .enable = static_cast<int>(enableNumber)});
-        }
-    }
-}
 
 std::string bcos::tool::generateGenesisData(
     ledger::GenesisConfig const& genesisConfig, ledger::LedgerConfig const& ledgerConfig)
@@ -2796,37 +2055,4 @@ std::string bcos::tool::generateGenesisData(
     NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData") << LOG_KV("genesisData", genesisdata);
 
     return genesisdata;
-}
-bcos::ledger::GenesisConfig const& bcos::tool::NodeConfig::genesisConfig() const
-{
-    return m_genesisConfig;
-}
-bool bcos::tool::NodeConfig::checkTransactionSignature() const
-{
-    return others.checkTransactionSignature;
-}
-bool bcos::tool::NodeConfig::checkParallelConflict() const
-{
-    return others.checkParallelConflict;
-}
-int bcos::tool::NodeConfig::executorVersion() const
-{
-    return m_genesisConfig.m_executorVersion;
-}
-std::optional<evmc_revision> bcos::tool::NodeConfig::evmcRevision() const
-{
-    return m_genesisConfig.m_evmcRevision;
-}
-std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::evmcRevisionForks()
-    const
-{
-    return m_genesisConfig.m_evmcRevisionForks;
-}
-bool bcos::tool::NodeConfig::singlePointConsensus() const
-{
-    return others.singlePointConsensus;
-}
-const bytes& bcos::tool::NodeConfig::forceSender() const
-{
-    return others.forceSender;
 }

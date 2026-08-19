@@ -60,15 +60,15 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>(nodeConfig->ioThreadCount(), "io");
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(nodeConfig->threadPool.ioThreadCount, "io");
     m_nodeInitializer->setIOServicePool(ioServicePool);
 
     // create gateway
     // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
     // otherwise keyEncryption() will return nullptr
-    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
+    GatewayFactory gatewayFactory(nodeConfig->genesisConfig.m_chainID, "localRpc",
         m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
-            nodeConfig->keyEncryptionType()));
+            nodeConfig->security.keyEncryptionType));
     gatewayFactory.setIOServicePool(ioServicePool);
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
@@ -100,23 +100,23 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // blockTag semantics ([web3_rpc] safe_block_depth / finalized_block_depth): how many
     // blocks behind "latest" the safe/finalized tags point to.
-    nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
-    nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
+    nodeService->setSafeBlockDepth(nodeConfig->web3Rpc.safeBlockDepth);
+    nodeService->setFinalizedBlockDepth(nodeConfig->web3Rpc.finalizedBlockDepth);
 
     // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
     // route sendRawTransaction to the in-process mempool instead of txpool — the
     // EngineService seals these txs into blocks (driven by the built-in single-node timer
     // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
     // in these modes.
-    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus())
+    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->singleNodeConsensus.enable)
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
     }
 
     // create rpc
-    RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,
+    RpcFactory rpcFactory(nodeConfig->genesisConfig.m_chainID, m_gateway, keyFactory,
         m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
-            nodeConfig->keyEncryptionType()));
+            nodeConfig->security.keyEncryptionType));
     rpcFactory.setNodeConfig(nodeConfig);
     rpcFactory.setIOServicePool(ioServicePool);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
@@ -132,12 +132,12 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer->initSysContract();
 
     // tars rpc
-    if (!nodeConfig->tarsRPCConfig().host.empty() && nodeConfig->tarsRPCConfig().port > 0 &&
-        nodeConfig->ioThreadCount() > 0)
+    if (!nodeConfig->tarsRPC.host.empty() && nodeConfig->tarsRPC.port > 0 &&
+        nodeConfig->threadPool.ioThreadCount > 0)
     {
         m_tarsApplication.emplace(nodeService);
-        m_tarsConfig.emplace(RPCApplication::generateTarsConfig(nodeConfig->tarsRPCConfig().host,
-            nodeConfig->tarsRPCConfig().port, nodeConfig->ioThreadCount()));
+        m_tarsConfig.emplace(RPCApplication::generateTarsConfig(
+            nodeConfig->tarsRPC.host, nodeConfig->tarsRPC.port, nodeConfig->threadPool.ioThreadCount));
     }
 }
 

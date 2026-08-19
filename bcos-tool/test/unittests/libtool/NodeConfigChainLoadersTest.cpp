@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(txPoolConfigValidAndInvalid)
     LoaderProbe a;
     a.loadTxPoolConfig(
         fromIni("[txpool]\nlimit=15000\nnotify_worker_num=2\nverify_worker_num=2\n"));
-    BOOST_CHECK_EQUAL(a.txpoolLimit(), 15000);
+    BOOST_CHECK_EQUAL(a.txpool.limit, 15000);
 
     LoaderProbe b;
     BOOST_CHECK_THROW(
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(chainConfigValidAndInvalid)
 {
     LoaderProbe a;
     a.loadChainConfig(fromIni("[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=123\n"), true);
-    BOOST_CHECK_EQUAL(a.chainId(), "123");
+    BOOST_CHECK_EQUAL(a.genesisConfig.m_chainID, "123");
 
     LoaderProbe b;  // non-alnum chainId rejected
     BOOST_CHECK_THROW(
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(sealerConfigValidAndInvalid)
 {
     LoaderProbe a;
     a.loadSealerConfig(fromIni("[consensus]\nmin_seal_time=500\n"));
-    BOOST_CHECK_EQUAL(a.minSealTime(), 500);
+    BOOST_CHECK_EQUAL(a.sealer.minSealTime, 500);
     LoaderProbe b;
     BOOST_CHECK_THROW(
         b.loadSealerConfig(fromIni("[consensus]\nmin_seal_time=0\n")), bcos::tool::InvalidConfig);
@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE(ledgerConfigValidAndInvalid)
         fromIni("[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
                 "leader_period=1\nnode.0=" +
                 node + ":1:0\n[tx]\ngas_limit=3000000000\n"));
-    BOOST_CHECK_EQUAL(a.ledgerConfig()->blockTxCountLimit(), 1000);
+    BOOST_CHECK_EQUAL(a.ledgerConfig->blockTxCountLimit(), 1000);
 
     LoaderProbe b(keyFactory);  // illegal consensus type
     BOOST_CHECK_THROW(b.loadLedgerConfig(fromIni("[consensus]\nconsensus_type=foobar\n")),
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(genesisConfigFromStringFull)
         "auth_admin_account=0x0000000000000000000000000000000000000001\n";
     NodeConfig cfg(keyFactory);
     BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-    BOOST_CHECK_EQUAL(cfg.chainId(), "1");
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_chainID, "1");
 }
 
 
@@ -221,18 +221,17 @@ BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
     NodeConfig cfg(keyFactory);
     cfg.loadGenesisConfigFromString(genesis);
 
-    // genesis-derived getters (set by loadLedgerConfig/loadExecutorConfig rpbft path)
-    BOOST_CHECK_EQUAL(cfg.consensusType(), "rpbft");
-    BOOST_CHECK_EQUAL(cfg.epochSealerNum(), 4);
-    BOOST_CHECK_EQUAL(cfg.epochBlockNum(), 1000);
+    // genesis-derived fields (set by loadLedgerConfig/loadExecutorConfig rpbft path)
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_consensusType, "rpbft");
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_epochSealerNum, 4);
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_epochBlockNum, 1000);
     // isWasm() went away with WASM/Liquid execution support (#5348).
-    BOOST_CHECK(!cfg.isAuthCheck());
-    BOOST_CHECK(!cfg.isSerialExecute());
-    BOOST_CHECK_GT(cfg.txGasLimit(), 0U);
-    BOOST_CHECK_GT(cfg.compatibilityVersion(), 0U);
+    BOOST_CHECK(!cfg.genesisConfig.m_isAuthCheck);
+    BOOST_CHECK(!cfg.genesisConfig.m_isSerialExecute);
+    BOOST_CHECK_GT(cfg.genesisConfig.m_txGasLimit, 0U);
+    BOOST_CHECK_GT(cfg.genesisConfig.m_compatibilityVersion, 0U);
     BOOST_CHECK(!cfg.compatibilityVersionStr().empty());
-    BOOST_CHECK_NO_THROW(cfg.genesisData());
-    BOOST_CHECK_NO_THROW(cfg.pdAddrs());
+    (void)cfg.storage.pdAddrs;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

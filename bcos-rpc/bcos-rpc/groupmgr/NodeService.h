@@ -200,7 +200,7 @@ public:
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig,
         const Args&... _args)
     {
-        auto withoutTarsFramework = _nodeConfig->withoutTarsFramework();
+        auto withoutTarsFramework = _nodeConfig->service.withoutTarsFramework;
         auto serviceName = _nodeInfo->serviceName(_type);
         if (serviceName.size() == 0)
         {

@@ -27,7 +27,7 @@ BOOST_AUTO_TEST_CASE(securityConfigLegacyAndKmsError)
 {
     LoaderProbe a;
     a.loadSecurityConfig(fromIni("[security]\nprivate_key_path=node.pem\nkms_type=LEGACY\n"));
-    BOOST_CHECK_EQUAL(a.privateKeyPath(), "node.pem");
+    BOOST_CHECK_EQUAL(a.security.privateKeyPath, "node.pem");
 
     LoaderProbe b;  // bad kms_type → throws
     BOOST_CHECK_THROW(
@@ -65,11 +65,18 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaultsAndTikv)
 {
     LoaderProbe a;
     a.loadStorageConfig({});  // pure defaults — covers the bulk of the loader
-    BOOST_CHECK_EQUAL(a.storageType(), "RocksDB");
+    BOOST_CHECK_EQUAL(a.storage.type, "RocksDB");
+    // Pin the RocksDB numeric defaults: the struct declaration is the single
+    // source and load() falls back to it, so a future edit to either side
+    // must fail this test instead of silently drifting.
+    BOOST_CHECK_EQUAL(a.storage.maxWriteBufferNumber, 4);
+    BOOST_CHECK_EQUAL(a.storage.maxBackgroundJobs, 4);
+    BOOST_CHECK_EQUAL(a.storage.writeBufferSize, 64U << 20);
+    BOOST_CHECK_EQUAL(a.storage.minWriteBufferNumberToMerge, 1);
 
     LoaderProbe b;  // TiKV branch disables separate block/state
     b.loadStorageConfig(fromIni("[storage]\ntype=TiKV\nenable_separate_block_state=true\n"));
-    BOOST_CHECK(!b.enableSeparateBlockAndState());
+    BOOST_CHECK(!b.storage.enableSeparateBlockAndState);
 }
 
 
@@ -98,7 +105,7 @@ BOOST_AUTO_TEST_CASE(securityConfigHsmCloudKmsBcosKms)
     LoaderProbe hsm;  // explicit HSM type → reads key_index (no default)
     hsm.loadSecurityConfig(
         fromIni("[security]\nkms_type=HSM\nkey_index=1\nhsm_lib_path=/tmp/x.so\npassword=p\n"));
-    BOOST_CHECK_EQUAL(hsm.keyIndex(), 1);
+    BOOST_CHECK_EQUAL(hsm.security.keyIndex, 1);
 
     LoaderProbe cloud;  // CLOUDKMS with valid AWS type
     BOOST_CHECK_NO_THROW(

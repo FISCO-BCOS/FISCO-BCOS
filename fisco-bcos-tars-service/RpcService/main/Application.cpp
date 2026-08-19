@@ -67,7 +67,7 @@ protected:
         auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>(
             std::make_shared<bcos::crypto::KeyFactoryImpl>());
         nodeConfig->loadConfig(m_iniConfigPath, false, true, false);
-        if (nodeConfig->rpcSmSsl())
+        if (nodeConfig->rpc.smSsl)
         {
             addConfig("sm_ca.crt");
             addConfig("sm_ssl.crt");
@@ -89,7 +89,7 @@ protected:
         nodeConfig->loadWithoutTarsFrameworkConfig(pt);
 
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-        if (!nodeConfig->withoutTarsFramework())
+        if (!nodeConfig->service.withoutTarsFramework)
         {
             m_logInitializer->setLogPath(getLogPath());
         }

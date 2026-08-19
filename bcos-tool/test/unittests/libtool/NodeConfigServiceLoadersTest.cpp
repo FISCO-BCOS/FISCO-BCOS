@@ -27,16 +27,16 @@ BOOST_AUTO_TEST_CASE(rpcConfigDefaultsAndPopulated)
 {
     LoaderProbe a;
     a.loadRpcConfig({});  // all defaults
-    BOOST_CHECK_EQUAL(a.rpcListenIP(), "0.0.0.0");
+    BOOST_CHECK_EQUAL(a.rpc.listenIP, "0.0.0.0");
 
     LoaderProbe b;
     auto pt = fromIni(
         "[rpc]\nlisten_ip=1.2.3.4\nlisten_port=12345\nthread_count=4\nsm_ssl=true\n"
         "enable_ssl=true\nfilter_timeout=10\nreturn_input_params=false\n");
     b.loadRpcConfig(pt);
-    BOOST_CHECK_EQUAL(b.rpcListenIP(), "1.2.3.4");
-    BOOST_CHECK_EQUAL(b.rpcListenPort(), 12345);
-    BOOST_CHECK(!b.rpcDisableSsl());  // enable_ssl=true → disableSsl=false
+    BOOST_CHECK_EQUAL(b.rpc.listenIP, "1.2.3.4");
+    BOOST_CHECK_EQUAL(b.rpc.listenPort, 12345);
+    BOOST_CHECK(!b.rpc.disableSsl);  // enable_ssl=true → disableSsl=false
 }
 
 
@@ -44,10 +44,10 @@ BOOST_AUTO_TEST_CASE(web3RpcConfigDefaultsAndPopulated)
 {
     LoaderProbe a;
     a.loadWeb3RpcConfig({});
-    BOOST_CHECK(!a.enableWeb3Rpc());
+    BOOST_CHECK(!a.web3Rpc.enable);
     // blockTag depth defaults: 0 (= "latest") — PBFT has no finalization window.
-    BOOST_CHECK_EQUAL(a.web3SafeBlockDepth(), 0U);
-    BOOST_CHECK_EQUAL(a.web3FinalizedBlockDepth(), 0U);
+    BOOST_CHECK_EQUAL(a.web3Rpc.safeBlockDepth, 0U);
+    BOOST_CHECK_EQUAL(a.web3Rpc.finalizedBlockDepth, 0U);
 
     LoaderProbe b;
     auto pt = fromIni(
@@ -55,9 +55,9 @@ BOOST_AUTO_TEST_CASE(web3RpcConfigDefaultsAndPopulated)
         "cors_allowed_origins=http://x\nsync_transaction=true\n"
         "safe_block_depth=3\nfinalized_block_depth=5\n");
     b.loadWeb3RpcConfig(pt);
-    BOOST_CHECK(b.enableWeb3Rpc());
-    BOOST_CHECK_EQUAL(b.web3SafeBlockDepth(), 3U);
-    BOOST_CHECK_EQUAL(b.web3FinalizedBlockDepth(), 5U);
+    BOOST_CHECK(b.web3Rpc.enable);
+    BOOST_CHECK_EQUAL(b.web3Rpc.safeBlockDepth, 3U);
+    BOOST_CHECK_EQUAL(b.web3Rpc.finalizedBlockDepth, 5U);
 }
 
 
@@ -103,7 +103,7 @@ BOOST_AUTO_TEST_CASE(tarsProxyConfigFromFile)
                "[gateway]\nproxy.0=127.0.0.1:1236\n";
     }
     LoaderProbe cfg;
-    cfg.setWithoutTarsFramework(true);
+    cfg.service.withoutTarsFramework = true;
     cfg.loadTarsProxyConfig(path.string());  // parses sections → string2TarsEndPoint
 
     std::vector<tars::TC_Endpoint> eps;
@@ -160,21 +160,21 @@ BOOST_AUTO_TEST_CASE(getServiceNameRequireAndNot)
 BOOST_AUTO_TEST_CASE(certSettersRoundTrip)
 {
     LoaderProbe cfg;
-    cfg.setCertPath("/p");
-    cfg.setCaCert("ca");
-    cfg.setNodeCert("nc");
-    cfg.setNodeKey("nk");
-    cfg.setSmCaCert("smca");
-    cfg.setSmNodeCert("smnc");
-    cfg.setSmNodeKey("smnk");
-    cfg.setEnSmNodeCert("ensmnc");
-    cfg.setEnSmNodeKey("ensmnk");
-    cfg.setWithoutTarsFramework(true);
-    BOOST_CHECK_EQUAL(cfg.caCert(), "ca");
-    BOOST_CHECK_EQUAL(cfg.nodeKey(), "nk");
-    BOOST_CHECK_EQUAL(cfg.smCaCert(), "smca");
-    BOOST_CHECK_EQUAL(cfg.enSmNodeKey(), "ensmnk");
-    BOOST_CHECK(cfg.withoutTarsFramework());
+    cfg.cert.path = "/p";
+    cfg.cert.caCert = "ca";
+    cfg.cert.nodeCert = "nc";
+    cfg.cert.nodeKey = "nk";
+    cfg.cert.smCaCert = "smca";
+    cfg.cert.smNodeCert = "smnc";
+    cfg.cert.smNodeKey = "smnk";
+    cfg.cert.enSmNodeCert = "ensmnc";
+    cfg.cert.enSmNodeKey = "ensmnk";
+    cfg.service.withoutTarsFramework = true;
+    BOOST_CHECK_EQUAL(cfg.cert.caCert, "ca");
+    BOOST_CHECK_EQUAL(cfg.cert.nodeKey, "nk");
+    BOOST_CHECK_EQUAL(cfg.cert.smCaCert, "smca");
+    BOOST_CHECK_EQUAL(cfg.cert.enSmNodeKey, "ensmnk");
+    BOOST_CHECK(cfg.service.withoutTarsFramework);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

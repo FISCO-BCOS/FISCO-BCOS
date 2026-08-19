@@ -33,24 +33,26 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     bcos::concepts::transacton_pool::TransactionPool auto transactionPool,
     bcos::concepts::scheduler::Scheduler auto scheduler)
 {
-    bcos::rpc::RpcFactory rpcFactory(nodeConfig->chainId(), gateway, keyFactory, nullptr);
+    bcos::rpc::RpcFactory rpcFactory(
+        nodeConfig->genesisConfig.m_chainID, gateway, keyFactory, nullptr);
     bcos::rpc::JsonRpcInterface::Ptr jsonrpc;
     auto wsConfig = rpcFactory.initConfig(nodeConfig);
     auto wsService = rpcFactory.buildWsService(wsConfig);
-    if (nodeConfig->smCryptoType())
+    if (nodeConfig->genesisConfig.m_smCrypto)
     {
         jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
             decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>>(localLedger, remoteLedger,
-            transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId(),
-            bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{});
+            transactionPool, scheduler, nodeConfig->genesisConfig.m_chainID,
+            nodeConfig->genesisConfig.m_groupID, bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{});
     }
     else
     {
         jsonrpc = std::make_shared<bcos::rpc::LightNodeRPC<decltype(localLedger),
             decltype(remoteLedger), decltype(transactionPool), decltype(scheduler),
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>>(localLedger, remoteLedger,
-            transactionPool, scheduler, nodeConfig->chainId(), nodeConfig->groupId(),
+            transactionPool, scheduler, nodeConfig->genesisConfig.m_chainID,
+            nodeConfig->genesisConfig.m_groupID,
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{});
     }
 
@@ -65,17 +67,18 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             auto status = bcos::task::syncWait(bcos::concepts::getRef(localLedger).getStatus());
 
             handshakeResponse.mutableGroupBlockNumber().insert(
-                std::make_pair(nodeConfig->groupId(), status.blockNumber));
+                std::make_pair(nodeConfig->genesisConfig.m_groupID, status.blockNumber));
 
             // Generate genesis info
             Json::Value genesisConfig;
-            genesisConfig["consensusType"] = nodeConfig->consensusType();
-            genesisConfig["blockTxCountLimit"] = nodeConfig->ledgerConfig()->blockTxCountLimit();
-            genesisConfig["txGasLimit"] = (int64_t)(nodeConfig->txGasLimit());
+            genesisConfig["consensusType"] = nodeConfig->genesisConfig.m_consensusType;
+            genesisConfig["blockTxCountLimit"] =
+                nodeConfig->ledgerConfig->blockTxCountLimit();
+            genesisConfig["txGasLimit"] = (int64_t)(nodeConfig->genesisConfig.m_txGasLimit);
             genesisConfig["consensusLeaderPeriod"] =
-                nodeConfig->ledgerConfig()->leaderSwitchPeriod();
+                nodeConfig->ledgerConfig->leaderSwitchPeriod();
             Json::Value sealerList(Json::arrayValue);
-            auto consensusNodeList = nodeConfig->ledgerConfig()->consensusNodeList();
+            auto consensusNodeList = nodeConfig->ledgerConfig->consensusNodeList();
             for (auto const& node : consensusNodeList)
             {
                 Json::Value sealer;
@@ -89,37 +92,37 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             // Generate genesis info end
 
             auto groupInfo = std::make_shared<bcos::group::GroupInfo>();
-            groupInfo->setChainID(nodeConfig->chainId());
+            groupInfo->setChainID(nodeConfig->genesisConfig.m_chainID);
             groupInfo->setGenesisConfig(genesisConfigStr);
-            groupInfo->setGroupID(nodeConfig->groupId());
+            groupInfo->setGroupID(nodeConfig->genesisConfig.m_groupID);
             groupInfo->setWasm(false);
             groupInfo->setIniConfig("");
-            groupInfo->setSmCryptoType(nodeConfig->smCryptoType());
+            groupInfo->setSmCryptoType(nodeConfig->genesisConfig.m_smCrypto);
 
             auto nodeInfo = std::make_shared<bcos::group::ChainNodeInfo>();
 
             Json::Value iniConfig;
             iniConfig["isWasm"] = false;
-            iniConfig["smCryptoType"] = nodeConfig->smCryptoType();
-            iniConfig["chainID"] = nodeConfig->chainId();
+            iniConfig["smCryptoType"] = nodeConfig->genesisConfig.m_smCrypto;
+            iniConfig["chainID"] = nodeConfig->genesisConfig.m_chainID;
             std::string iniStr = fastWriter.write(iniConfig);
 
             nodeInfo->setWasm(false);
-            nodeInfo->setSmCryptoType(nodeConfig->smCryptoType());
+            nodeInfo->setSmCryptoType(nodeConfig->genesisConfig.m_smCrypto);
 
             nodeInfo->setIniConfig(iniStr);
             nodeInfo->setMicroService(false);
-            nodeInfo->setNodeName(nodeConfig->nodeName());
+            nodeInfo->setNodeName(nodeConfig->service.nodeName);
             nodeInfo->setNodeID(nodeID);
             nodeInfo->setNodeCryptoType(
-                (nodeConfig->smCryptoType() ? group::NodeCryptoType::SM_NODE :
-                                              group::NodeCryptoType::NON_SM_NODE));
+                (nodeConfig->genesisConfig.m_smCrypto ? group::NodeCryptoType::SM_NODE :
+                                                        group::NodeCryptoType::NON_SM_NODE));
 
 
             auto protocol = bcos::protocol::ProtocolInfo();
             protocol.setMinVersion(4);
             protocol.setMaxVersion(1);
-            protocol.setVersion(nodeConfig->compatibilityVersion());
+            protocol.setVersion(nodeConfig->genesisConfig.m_compatibilityVersion);
             nodeInfo->setNodeProtocol(std::move(protocol));
             nodeInfo->setNodeType(bcos::protocol::NodeType::NONE);
             groupInfo->appendNodeInfo(std::move(nodeInfo));

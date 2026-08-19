@@ -41,7 +41,7 @@ public:
 
         auto transaction = _protocol->blockFactory()->transactionFactory()->createTransaction(0,
             std::string(precompiled::BFS_ADDRESS), input, u256(_number).str(), 500,
-            _nodeConfig->chainId(), _nodeConfig->groupId(), utcTime());
+            _nodeConfig->genesisConfig.m_chainID, _nodeConfig->genesisConfig.m_groupID, utcTime());
         _block->appendTransaction(std::move(transaction));
     }
 };

@@ -94,7 +94,7 @@ int main(int argc, char** argv)
     boost::property_tree::read_ini(configFilePath, pt);
     logInitializer->initLog(pt);
 
-    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localClient", nullptr);
+    GatewayFactory gatewayFactory(nodeConfig->genesisConfig.m_chainID, "localClient", nullptr);
     auto gateway = gatewayFactory.buildGateway(configFilePath, true, nullptr, "localClient");
     auto service = std::dynamic_pointer_cast<Service>(gateway->p2pInterface());
 

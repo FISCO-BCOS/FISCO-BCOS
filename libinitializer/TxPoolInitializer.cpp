@@ -43,17 +43,17 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     auto cryptoSuite = m_protocolInitializer->cryptoSuite();
     m_txpoolFactory = std::make_shared<TxPoolFactory>(keyPair->publicKey(), cryptoSuite,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->blockFactory(),
-        m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
-        m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit(),
-        m_nodeConfig->checkTransactionSignature());
+        m_frontService, m_ledger, m_nodeConfig->genesisConfig.m_groupID,
+        m_nodeConfig->genesisConfig.m_chainID, m_nodeConfig->chain.blockLimit,
+        m_nodeConfig->txpool.limit, m_nodeConfig->others.checkTransactionSignature);
 
-    auto ioThreadCount = m_nodeConfig->ioThreadCount();
+    auto ioThreadCount = m_nodeConfig->threadPool.ioThreadCount;
     m_txpool = m_txpoolFactory->createTxPool(_ioContext, m_ioServicePool,
-        ioThreadCount, ioThreadCount, m_nodeConfig->txsExpirationTime());
-    m_txpool->setCheckBlockLimit(m_nodeConfig->checkBlockLimit());
-    m_txpool->setPreStoreBackpressureEnabled(m_nodeConfig->preStoreBackpressureEnabled());
-    m_txpool->setPreStoreMaxInflight(m_nodeConfig->preStoreMaxInflight());
-    if (m_nodeConfig->enableSendTxByTree())
+        ioThreadCount, ioThreadCount, m_nodeConfig->txpool.txsExpirationTime);
+    m_txpool->setCheckBlockLimit(m_nodeConfig->txpool.checkBlockLimit);
+    m_txpool->setPreStoreBackpressureEnabled(m_nodeConfig->txpool.preStoreBackpressureEnabled);
+    m_txpool->setPreStoreMaxInflight(m_nodeConfig->txpool.preStoreMaxInflight);
+    if (m_nodeConfig->sync.enableSendTxByTree)
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("enableSendTxByTree");
         auto treeRouter =

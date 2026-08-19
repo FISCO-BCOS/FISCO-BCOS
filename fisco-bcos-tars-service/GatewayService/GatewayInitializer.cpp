@@ -54,16 +54,18 @@ void GatewayInitializer::init(std::string const& _configPath)
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
 #ifdef WITH_LEDGER_ELECTION
-    if (nodeConfig->enableFailOver())
+    if (nodeConfig->failOver.enable)
     {
         GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");
         auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
         auto leaderEntryPointFactory =
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
-        auto watchDir = "/" + nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
+        auto watchDir =
+            "/" + nodeConfig->genesisConfig.m_chainID + bcos::election::CONSENSUS_LEADER_DIR;
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange", nodeConfig->pdCaPath(),
-            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
+            nodeConfig->failOver.clusterUrl, watchDir, "watchLeaderChange",
+            nodeConfig->storage.pdCaPath, nodeConfig->storage.pdCertPath,
+            nodeConfig->storage.pdKeyPath);
     }
 #endif
 
@@ -76,8 +78,9 @@ void GatewayInitializer::init(std::string const& _configPath)
     m_ioServicePool = std::make_shared<bcos::IOServicePool>(
         std::thread::hardware_concurrency(), "gateway-io");
 
-    bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName(),
-        protocolInitializer->getKeyEncryptionByType(nodeConfig->keyEncryptionType()));
+    bcos::gateway::GatewayFactory factory(nodeConfig->genesisConfig.m_chainID,
+        nodeConfig->service.rpcServiceName,
+        protocolInitializer->getKeyEncryptionByType(nodeConfig->security.keyEncryptionType));
     factory.setIOServicePool(m_ioServicePool);
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")

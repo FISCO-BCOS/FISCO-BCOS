@@ -50,16 +50,16 @@ ProtocolInitializer::ProtocolInitializer()
 {}
 void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 {
-    m_keyEncryptionType = _nodeConfig->keyEncryptionType();
+    m_keyEncryptionType = _nodeConfig->security.keyEncryptionType;
 
     // TODO: ed25519
-    if (_nodeConfig->smCryptoType())
+    if (_nodeConfig->genesisConfig.m_smCrypto)
     {
         if (m_keyEncryptionType == KeyEncryptionType::HSM)
         {
-            m_hsmLibPath = _nodeConfig->hsmLibPath();
-            m_keyIndex = _nodeConfig->keyIndex();
-            m_password = _nodeConfig->password();
+            m_hsmLibPath = _nodeConfig->security.hsmLibPath;
+            m_keyIndex = _nodeConfig->security.keyIndex;
+            m_password = _nodeConfig->security.password;
             createHsmSMCryptoSuite();
             INITIALIZER_LOG(INFO) << LOG_DESC("begin init hsm sm crypto suite");
         }
@@ -101,10 +101,10 @@ void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
                                       std::string(magic_enum::enum_name((m_keyEncryptionType))));
         throw std::runtime_error("keyEncryptionType not support");
     }
-    if (_nodeConfig->storageSecurityEnable())
+    if (_nodeConfig->storageSecurity.enable)
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("storage security enable");
-        if (_nodeConfig->storageEncryptionType() != security::StorageEncryptionType::BCOSKMS)
+        if (_nodeConfig->storageSecurity.encryptionType != security::StorageEncryptionType::BCOSKMS)
         {
             INITIALIZER_LOG(ERROR) << LOG_DESC("storage security only support BCOSKMS");
             throw std::runtime_error("storage security only support BCOSKMS");

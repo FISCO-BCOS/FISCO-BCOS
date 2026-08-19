@@ -268,6 +268,11 @@ public:
         std::string nodeName;
     } service;
 
+    // core objects (genesis-derived state, key factory, ledger config)
+    bcos::crypto::KeyFactory::Ptr keyFactory;
+    bcos::ledger::LedgerConfig::Ptr ledgerConfig;
+    ledger::GenesisConfig genesisConfig;
+
     NodeConfig();
 
     NodeConfig(const NodeConfig&) = default;
@@ -304,230 +309,17 @@ public:
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
-    // the txpool configurations
-    size_t txpoolLimit() const;
-    int64_t txsExpirationTime() const;
-    bool checkBlockLimit() const;
-
-    bool smCryptoType() const;
-    std::string const& chainId() const;
-    std::string const& groupId() const;
-    size_t blockLimit() const;
-
-    std::string const& privateKeyPath() const;
-    std::string const& hsmLibPath() const;
-    int const& keyIndex() const;
-    int const& encKeyIndex() const;
-    std::string const& password() const;
-
-    size_t minSealTime() const;
-    bool allowFreeNodeSync() const;
-    size_t checkPointTimeoutInterval() const;
-    size_t pipelineSize() const;
-    bool pipelineAdmissionEnabled() const { return consensus.pipelineAdmissionEnabled; }
-    size_t pipelinePerPeerCapacity() const { return consensus.pipelinePerPeerCapacity; }
-    size_t pipelineLruCapacity() const { return consensus.pipelineLruCapacity; }
-    size_t pipelineMaxPeers() const { return consensus.pipelineMaxPeers; }
-
-    std::string const& storagePath() const;
-    std::string const& stateDBPath() const;
-    std::string const& blockDBPath() const;
-    std::string const& storageType() const;
-    size_t keyPageSize() const;
-    int maxWriteBufferNumber() const;
-    bool enableStatistics() const;
-    int maxBackgroundJobs() const;
-    size_t writeBufferSize() const;
-    int minWriteBufferNumberToMerge() const;
-    size_t blockCacheSize() const;
-    bool enableRocksDBBlob() const;
-    std::vector<std::string> const& pdAddrs() const;
-    std::string const& pdCaPath() const;
-    std::string const& pdCertPath() const;
-    std::string const& pdKeyPath() const;
-    std::string const& storageDBName() const;
-    std::string const& stateDBName() const;
-    bool enableArchive() const;
-    bool syncArchivedBlocks() const;
-    bool enableSeparateBlockAndState() const;
-    std::string const& archiveListenIP() const;
-    uint16_t archiveListenPort() const;
-
-    bcos::crypto::KeyFactory::Ptr keyFactory();
-
-    bcos::ledger::LedgerConfig::Ptr ledgerConfig();
-
-    std::string const& consensusType() const;
-    size_t txGasLimit() const;
-    std::string const& genesisData() const;
-
-    std::int64_t epochSealerNum() const;
-    std::int64_t epochBlockNum() const;
-
-    bool isAuthCheck() const;
-    bool isSerialExecute() const;
-    size_t vmCacheSize() const;
-
-    std::string const& authAdminAddress() const;
-
-    std::string const& rpcServiceName() const;
-    std::string const& gatewayServiceName() const;
-
-    std::string const& schedulerServiceName() const;
-    std::string const& executorServiceName() const;
-    std::string const& txpoolServiceName() const;
-
-    std::string const& nodeName() const;
-
+    // derived helpers (not plain field access)
     std::string getDefaultServiceName(
         std::string const& _nodeName, std::string const& _serviceName) const;
-
-    // the rpc configurations
-    const std::string& rpcListenIP() const;
-    uint16_t rpcListenPort() const;
-    uint32_t rpcFilterTimeout() const;
-    uint32_t rpcMaxProcessBlock() const;
-    bool rpcSmSsl() const;
-    bool rpcDisableSsl() const;
-
-    // the web3 rpc configurations
-    bool enableWeb3Rpc() const;
-    const std::string& web3RpcListenIP() const;
-    uint16_t web3RpcListenPort() const;
-    uint32_t web3FilterTimeout() const;
-    uint32_t web3MaxProcessBlock() const;
-    uint32_t web3BatchRequestSizeLimit() const;
-    uint32_t web3HttpBodySizeLimit() const;
-    bool web3EnableCors() const;
-    std::string web3CorsAllowedOrigins() const;
-    std::string web3CorsAllowedMethods() const;
-    std::string web3CorsAllowedHeaders() const;
-    int32_t web3CorsMaxAge() const;
-    bool web3CorsAllowCredentials() const;
-    bool web3SyncTransaction() const;
-
-    // blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
-    // point to. Default 0 — PBFT has no finalization window (a committed block is already
-    // final), so safe/finalized equal "latest" unless an operator opts into a lag.
-    uint32_t web3SafeBlockDepth() const;
-    uint32_t web3FinalizedBlockDepth() const;
-
-    // thread pool configuration
-    size_t ioThreadCount() const;
-    size_t tbbThreadCount() const;
-
-    // op engine rpc configurations
-    bool enableOpEngineRpc() const;
-    const std::string& opEngineRpcListenIP() const;
-    uint16_t opEngineRpcListenPort() const;
-    uint32_t opEngineHttpBodySizeLimit() const;
-    uint32_t opEngineBatchRequestSizeLimit() const;
-    const std::string& opEngineJwtSecretFile() const;
-    int32_t opEngineClockSkewSecs() const;
-    // test-only escape hatch: allow [op_engine_rpc] to serve the v1 EngineService on
-    // executor_version < 2 (the v1 Engine API integration harness drives it over this
-    // endpoint); production configs must never set it
-    bool opEngineAllowV1Executor() const;
-
-    // single-node consensus configurations
-    bool enableSingleNodeConsensus() const;
+    void getTarsClientProxyEndpoints(
+        const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
+    std::string compatibilityVersionStr() const;
     // true when block production is driven through the EngineService — by the built-in
     // single-node driver or by an external op-node over [op_engine_rpc] — and the legacy
     // txpool/PBFT pipeline must therefore stay dormant (sole-producer discipline)
     bool engineDrivenBlockProduction() const;
-    uint64_t singleNodeConsensusBlockInterval() const;
-    bool singleNodeConsensusProduceEmptyBlocks() const;
-    const std::string& singleNodeConsensusFeeRecipient() const;
-    const std::string& singleNodeConsensusPrevRandao() const;
-    std::uint64_t singleNodeConsensusFixedTimestamp() const;
-
-    // the gateway configurations
-    const std::string& p2pListenIP() const;
-    uint16_t p2pListenPort() const;
-    bool p2pSmSsl() const;
-    const std::string& p2pNodeDir() const;
-    const std::string& p2pNodeFileName() const;
-
-    // config for cert
-    const std::string& certPath();
-    void setCertPath(const std::string& _certPath);
-
-    const std::string& caCert();
-    void setCaCert(const std::string& _caCert);
-
-    const std::string& nodeCert();
-    void setNodeCert(const std::string& _nodeCert);
-
-    const std::string& nodeKey();
-    void setNodeKey(const std::string& _nodeKey);
-
-    const std::string& smCaCert() const;
-    void setSmCaCert(const std::string& _smCaCert);
-
-    const std::string& smNodeCert() const;
-    void setSmNodeCert(const std::string& _smNodeCert);
-
-    const std::string& smNodeKey() const;
-    void setSmNodeKey(const std::string& _smNodeKey);
-
-    const std::string& enSmNodeCert() const;
-    void setEnSmNodeCert(const std::string& _enSmNodeCert);
-
-    const std::string& enSmNodeKey() const;
-    void setEnSmNodeKey(const std::string& _enSmNodeKey);
-
-    bool enableLRUCacheStorage() const;
-    ssize_t cacheSize() const;
-
-    uint32_t compatibilityVersion() const;
-    std::string compatibilityVersionStr() const;
-
-    std::string const& memberID() const;
-    unsigned leaseTTL() const;
-    bool enableFailOver() const;
-    std::string const& failOverClusterUrl() const;
-
-    bool storageSecurityEnable() const;
-    std::string storageSecuirtyKeyCenterUrl() const;
-    std::string storageSecurityCipherDataKey() const;
-
-    security::KeyEncryptionType keyEncryptionType() const;
-    security::StorageEncryptionType storageEncryptionType() const;
-    security::CloudKmsType cloudKmsType() const;
-    std::string bcosKmsKeySecurityCipherDataKey() const;
-    std::string keyEncryptionUrl() const;
-
-    bool enableSendBlockStatusByTree() const;
-    bool enableSendTxByTree() const;
-    std::int64_t treeWidth() const;
-
-    int sendTxTimeout() const;
-
-    bool withoutTarsFramework() const;
-    void setWithoutTarsFramework(bool _withoutTarsFramework);
-    void getTarsClientProxyEndpoints(
-        const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
-
-    bool checkTransactionSignature() const;
-    bool checkParallelConflict() const;
-    bool singlePointConsensus() const;
-    const bytes& forceSender() const;
-
-    BaselineSchedulerConfig const& baselineSchedulerConfig() const;
-    TarsRPCConfig const& tarsRPCConfig() const;
-
-    ledger::GenesisConfig const& genesisConfig() const;
-
     bool isValidPort(int port);
-
-    bool enableTxsFromFreeNode() const;
-    bool preStoreBackpressureEnabled() const;
-    size_t preStoreMaxInflight() const;
-    int executorVersion() const;
-    /// EVMC revision config (ethereum-executor, executor_version=2): explicit single
-    /// revision applied to all blocks, plus block-height fork transitions.
-    std::optional<evmc_revision> evmcRevision() const;
-    std::map<protocol::BlockNumber, evmc_revision> const& evmcRevisionForks() const;
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId);
@@ -566,7 +358,6 @@ protected:
 
 private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
-    void loadAlloc(boost::property_tree::ptree const& ptree);
 
     // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
@@ -576,81 +367,6 @@ private:
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
-
-    virtual int64_t checkAndGetValue(boost::property_tree::ptree const& _pt,
-        std::string const& _value, std::string const& _defaultValue);
-
-
-    bcos::crypto::KeyFactory::Ptr m_keyFactory;
-    // txpool related configuration
-    // permit txs from free node or not
-    // pre-store backpressure tunables
-    // TODO: the block sync module need some configurations?
-
-    // chain configuration
-
-    // sealer configuration
-
-    // for security
-
-    int m_encKeyIndex{};
-
-    // for security cloudkms bcoskms hsm configuration
-    // key url
-    // cloude kms type, 0: AWS, 1: Aliyun...
-    // bcos kms data key
-
-    // storage security configuration
-    // unsigned short m_storageSecurityKeyCenterPort{};
-
-    // ledger configuration
-    bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;
-    std::string m_genesisData;
-
-    // Genesis config
-    ledger::GenesisConfig m_genesisConfig;
-
-    // storage configuration
-
-
-
-    // executor config
-
-    // Pro and Max versions run do not apply to tars admin site
-
-    // service name to tars endpoints
-
-
-    // the serviceName of other modules
-
-    // config for rpc
-
-    // config fro web3 rpc
-    // cors config for web3 rpc
-    // blockTag semantics: "safe"/"finalized" point latest - depth blocks behind. Default 0
-    // (= "latest"): PBFT commits are final, so no lag unless the operator configures one.
-
-    // thread pool configuration
-
-    // config for op engine rpc
-
-    // config for single-node consensus
-    // 32-byte hex prevRandao; empty means derive deterministically from a seed.
-    // fixed block timestamp in seconds; 0 = wall clock.
-
-    // config for gateway
-
-    // config for sync
-
-    // config for cert
-
-    // failover config
-    // etcd/zookeeper/consual url
-
-    // others config
-    int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
-
-    // experimental
 };
 
 std::string generateGenesisData(
