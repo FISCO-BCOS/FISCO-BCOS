@@ -55,7 +55,7 @@ jobs:
       - name: Build fisco-bcos-air
         run: cmake --build build --target fisco-bcos-air
 
-      - name: Build op-deployer from optimism monorepo
+      - name: Clone optimism monorepo (pinned commit)
         # Pin to op_contracts_commit from op-fork-pin.toml so builds are
         # deterministic instead of tracking latest main.  The commit
         # a7c88c8d636ceb9944ea0edaf7d033da258778ab is the op-contracts/v7.0.0
@@ -64,10 +64,12 @@ jobs:
         run: |
           git clone --filter=blob:none --no-checkout \
             https://github.com/ethereum-optimism/optimism /tmp/optimism
-          cd /tmp/optimism
-          git fetch --depth 1 origin a7c88c8d636ceb9944ea0edaf7d033da258778ab
-          git checkout FETCH_HEAD
-          cd op-deployer
+          git -C /tmp/optimism fetch --depth 1 origin a7c88c8d636ceb9944ea0edaf7d033da258778ab
+          git -C /tmp/optimism checkout FETCH_HEAD
+
+      - name: Build op-deployer from optimism monorepo
+        run: |
+          cd /tmp/optimism/op-deployer
           go build -o "$C2/op-deployer" ./cmd/op-deployer
 
       - name: Build op-node from optimism monorepo
