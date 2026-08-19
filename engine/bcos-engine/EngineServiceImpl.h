@@ -388,8 +388,9 @@ public:
             // (c_opIsthmusPayloadVersion). An attrs-carrying FCU BUILDS a payload, so the gate
             // belongs here too: a V3 build would produce a payload the OP newPayload path then
             // refuses with -38005 (a build/submit version skew).
-            constexpr std::uint32_t c_opIsthmusFcuVersion = 4;
-            if (payloadAttributes != nullptr && version != c_opIsthmusFcuVersion)
+            // op-node (geth engine kind) sends FCU V3 with attrs for Isthmus+ builds;
+            // accept V3+ when attrs are present (V3 attrs are ABI-compatible with V4).
+            if (payloadAttributes != nullptr && version < 3)
             {
                 BOOST_THROW_EXCEPTION(
                     UnsupportedFork{} << bcos::errinfo_comment{
@@ -746,6 +747,15 @@ private:
             std::copy(executedBloom.begin(), executedBloom.end(), payload.logsBloom.begin());
         }
         payload.withdrawalsRoot = executedHeader->withdrawalsRoot();
+        // Jovian repurposes the blobGasUsed header slot as the DA footprint (Σ over non-deposit
+        // receipts): a block carrying user transactions has footprint > 0, so the announced 0
+        // from the payload constructor would fail the canonical pass's six-way comparison.
+        // Fill it from the probe execution, exactly like withdrawalsRoot. Pre-Jovian keeps the
+        // executed side unset (no seal value) and the announced 0 — comparison is skipped.
+        if (auto executedBlobGas = executedHeader->blobGasUsed())
+        {
+            payload.blobGasUsed = *executedBlobGas;
+        }
         auto finalHeader = detail::rebuildOpEthHeader(
             m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
         payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
