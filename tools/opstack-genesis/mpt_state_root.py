@@ -215,7 +215,7 @@ def compute_state_root(allocs):
     state_entries = []
     for alloc in allocs:
         storage_root = compute_storage_root(alloc.get("storage", []))
-        code_bytes = bytes.fromhex(strip0x(alloc["code"]))
+        code_bytes = bytes.fromhex(strip0x(alloc.get("code", "")))
         code_hash = EMPTY_CODE_HASH if not code_bytes else keccak256(code_bytes)
         account_rlp = rlp_list_payload(b"".join([
             rlp_int(int(alloc.get("nonce", 0))),

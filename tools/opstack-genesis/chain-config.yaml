@@ -64,3 +64,5 @@ predeploys:
   - name: OptimismMintableERC20Factory
     address: "0x4200000000000000000000000000000000000012"
     sol_file: OptimismMintableERC20Factory.sol
+
+base_allocs_sha256: "21412d4780fbec74f9fa7e7fca1411c19168f983e950fb9765c3a5b88fac7d17"
