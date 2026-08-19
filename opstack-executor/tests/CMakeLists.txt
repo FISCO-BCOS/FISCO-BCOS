@@ -8,18 +8,24 @@ cmake_path(NORMAL_PATH _evmone_inc_dir)
 set(EVMONE_TEST_UTILS_DIR "${_evmone_inc_dir}/test/utils")
 
 # opstack-executor-tests was the repo's only GTest target; converted to Boost.Test to drop the
-# gtest dependency (not in vcpkg.json, broke CI configure). BOOST_TEST_MODULE is defined in the TU.
-# Web3Transaction + tars aggregate init are not unity-build friendly here.
-add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
-
+# gtest dependency (not in vcpkg.json, broke CI configure). BOOST_TEST_MODULE is defined in
+# TestMain.cpp (the single main for the whole suite — the earlier three-target split left the
+# add_test entries dangling with no add_executable; this restores the wiring with one target).
 find_package(jsoncpp CONFIG REQUIRED)
-
-# 与既有 GTest target 同因：Web3Transaction + tars aggregate init 不宜 unity-build
-# Vendored evmone test util — same -Wno-missing-field-initializers as the upstream build.
+add_executable(opstack-executor-tests
+    TestMain.cpp
+    OpRlpDecodeTest.cpp
+    Storage2StateHelpersTest.cpp
+    Storage2StatePoisonTest.cpp
+    support/SeedPreStateTest.cpp
+    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+)
+target_link_libraries(opstack-executor-tests PRIVATE
+    opstack-executor
+    ledger
+    jsoncpp_static
+    Boost::unit_test_framework
+)
 set_source_files_properties(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
-add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
-
-# Extracted pure-function layer (OpRlpDecode.h / Storage2StateHelpers.h): direct unit tests
-# over the decode primitives and state-bridge helpers, no class-template instantiation.
-add_test(NAME OpstackExecutorDetailTests COMMAND opstack-executor-detail-tests)
+add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
