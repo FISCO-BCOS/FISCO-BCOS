@@ -284,3 +284,12 @@ withdrawalsRoot）、a1_active 11/11、**run_all ALL GREEN（gating 面从 5 脚
 
 **C2 前置清单终态**：V4 RPC ✓ / tx 检索 ✓ / 干净 genesis ✓ / payload 构建 ✓（Phase A）——
 **全部就绪**。剩余 Phase B 项：withdrawalsRoot 传播（唯一 known-red）、deposit 实值化、层泄漏。
+
+### C2-2 allocs 转换成功（08-19 上午）
+
+- **chain-config-c2.yaml**：proxy_admin=OP ProxyAdmin(0x18)、governance_owner=dev1(0x7099...)、
+  proxy_code_source=L1Block proxy(0x15, universal Proxy runtime)、FISCO SystemConfig@0x1000 + 
+  L2ValidatorSet@0x1001（**移出 OP 保留 namespace 0x00-0x7FF**，避免与 OP 未来 predeploy 冲突）
+- **build-allocs.py 输出**：/tmp/c2/allocs-new.ini——2345 个账户、**2069 个带完整 storage**（op-deployer
+  base 的全部 predeploy proxy storage + FISCO overlay 的 4 个 proxy/impl 账户）、9.4MB
+- **下一步**：生成 eth_genesis_header + config.genesis + init FISCO 链
