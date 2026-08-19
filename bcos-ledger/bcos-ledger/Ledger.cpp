@@ -735,8 +735,9 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 if ((_blockFlag & RECEIPTS) != 0)
                 {
                     asyncBatchGetReceipts(
-                        hashesPtr, [block, finally](Error::Ptr&& error,
-                                       std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
+                        hashesPtr,
+                        [block, finally](Error::Ptr&& error,
+                            std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
                             for (auto& it : receipts)
                             {
                                 block->appendReceipt(it);
@@ -761,7 +762,8 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                             block->setLogsBloom(
                                 bcos::bytesConstRef(logsBloom.data(), logsBloom.size()));
                             finally(std::move(error));
-                        });
+                        },
+                        /*allowMissing=*/true);
                 }
                 if ((_blockFlag & TRANSACTIONS_HASH) != 0)
                 {
@@ -1585,10 +1587,12 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
 }
 
 void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
-    std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)> callback)
+    std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)> callback,
+    bool allowMissing)
 {
     getBlockStorage()->asyncGetRows(SYS_HASH_2_RECEIPT, *hashes,
-        [this, hashes, callback](auto&& error, std::vector<std::optional<Entry>>&& entries) {
+        [this, hashes, callback, allowMissing](
+            auto&& error, std::vector<std::optional<Entry>>&& entries) {
             if (error)
             {
                 LEDGER_LOG(DEBUG) << "Batch get receipt failed!"
@@ -1607,6 +1611,15 @@ void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> has
             {
                 if (!entry.has_value())
                 {
+                    if (allowMissing)
+                    {
+                        // TEMPORARY (op-node interop breakpoint #3): unexecuted deposit
+                        // transactions are persisted without receipts; skip the hole so
+                        // the surrounding block fetch still succeeds.
+                        LEDGER_LOG(DEBUG) << "Skip missing receipt entry: " << toHex((*hashes)[i]);
+                        ++i;
+                        continue;
+                    }
                     LEDGER_LOG(DEBUG) << "Get receipt with empty entry: " << toHex((*hashes)[i]);
                     callback(BCOS_ERROR_PTR(
                                  LedgerError::GetStorageError, "Batch get transaction failed"),

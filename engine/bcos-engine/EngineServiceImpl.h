@@ -22,6 +22,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -78,6 +79,11 @@ std::optional<std::string> validatePayloadAttributes(
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
+
+/// TEMPORARY (op-node interop breakpoint #3): wrap raw 0x7E deposit bytes into a ledger
+/// transaction carrier without decoding its fields. Replaced when deposit execution
+/// wiring (runDeposit + receipts) lands. See the commit-path comment in newPayload().
+bcos::protocol::Transaction::Ptr makeDepositLedgerTransaction(bcos::bytesConstRef raw);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -576,28 +582,37 @@ private:
                 // this restores parity with that path (eth_getLogs uses it as a filter).
                 auto const& bloom = it->second.executionPayload.logsBloom;
                 block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-                // Raw-only entries (forced transactions) carry no decoded form and are
-                // not modeled as ledger transactions until execution wiring lands; the
-                // persisted transaction list therefore matches the receipts list, which
-                // also only covers the executed (decoded) subset.
+                // TEMPORARY (op-node interop breakpoint #3, smoke run 2026-08-19):
+                // forced raw-only 0x7E deposits ARE persisted as ledger transactions so
+                // eth_getBlockByHash/ByNumber (full) can serve them. op-node reads block
+                // N's tx[0] (the L1-info deposit) before building block N+1 and without
+                // this it stalls forever at block 1 ("missing L1 info deposit tx", 633
+                // retries observed). The deposit is stored but NOT executed: no receipt
+                // is generated and state does not advance, so the block's receipt list is
+                // shorter than its transaction list (deposits form a prefix — OP payload
+                // ordering — which the ledger's receipt/tx pairing relies on). The
+                // execution-lane wiring (runDeposit + receipts) replaces this hook.
+                // Non-deposit raw-only entries stay unmodeled until then.
+                auto blockTxs = std::make_shared<protocol::ConstTransactions>();
                 for (auto const& tx : it->second.executionPayload.transactions)
                 {
-                    if (tx.decoded)
+                    protocol::Transaction::Ptr ledgerTx = tx.decoded;
+                    if (!ledgerTx)
                     {
-                        block->appendTransaction(tx.decoded);
+                        if (dispatchRawTransaction(bcos::ref(tx.raw)) !=
+                            RawTransactionKind::Deposit)
+                        {
+                            continue;
+                        }
+                        ledgerTx = detail::makeDepositLedgerTransaction(bcos::ref(tx.raw));
                     }
+                    block->appendTransaction(ledgerTx);
+                    blockTxs->emplace_back(std::move(ledgerTx));
                 }
                 for (auto const& receipt : it->second.receipts)
                 {
                     block->appendReceipt(receipt);
                 }
-                auto blockTxs = std::make_shared<protocol::ConstTransactions>(
-                    it->second.executionPayload.transactions |
-                    ::ranges::views::filter([](auto const& tx) { return tx.decoded != nullptr; }) |
-                    ::ranges::views::transform([](auto const& tx) {
-                        return protocol::Transaction::ConstPtr(tx.decoded);
-                    }) |
-                    ::ranges::to<std::vector>());
                 co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
                 co_await m_globalStateStorage.get().mergeBackStorage(prewriteStorage);
             }

@@ -283,8 +283,7 @@ static std::string storageValueToData(std::string_view value)
 {
     bcos::bytes word(32, 0);
     auto const copyLen = (std::min)(value.size(), word.size());
-    std::copy_n(
-        value.data(), copyLen, word.end() - static_cast<std::ptrdiff_t>(copyLen));
+    std::copy_n(value.data(), copyLen, word.end() - static_cast<std::ptrdiff_t>(copyLen));
     return toHex(word, "0x");
 }
 
@@ -301,8 +300,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     boost::algorithm::to_lower(addressStr);
     auto position = toView(request[1u]);
     std::string positionStr = std::string(
-        (position.starts_with("0x") || position.starts_with("0X")) ? position.substr(2) :
-                                                                    position);
+        (position.starts_with("0x") || position.starts_with("0X")) ? position.substr(2) : position);
     if (position.size() % 2 != 0)
     {
         positionStr.insert(0, "0");
@@ -1043,10 +1041,41 @@ task::Task<void> EthEndpoint::getTransactionByHash(
     try
     {
         auto const txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
-        auto receipt = co_await ledger::getReceipt(*ledger, hash);
-        if (!receipt || !txs || txs->empty())
+        if (!txs || txs->empty())
         {
             result = Json::nullValue;
+            buildJsonContent(result, response);
+            co_return;
+        }
+        protocol::TransactionReceipt::Ptr receipt;
+        try
+        {
+            receipt = co_await ledger::getReceipt(*ledger, hash);
+        }
+        catch (std::exception const&)
+        {
+            receipt = nullptr;
+        }
+        if (!receipt)
+        {
+            // TEMPORARY (op-node interop breakpoint #3): a persisted-but-unexecuted
+            // 0x7E deposit has no receipt yet, so no block context can be resolved
+            // through it. Render the geth deposit shape with null block fields (the
+            // shape geth uses for pending transactions). Non-deposit receiptless
+            // hashes keep answering null.
+            auto const& tx = *txs->at(0);
+            if (engine::dispatchRawTransaction(tx.extraTransactionBytes()) ==
+                engine::RawTransactionKind::Deposit)
+            {
+                combineTxResponse(result, tx, 0, 0, crypto::HashType{});
+                result["blockHash"] = Json::nullValue;
+                result["blockNumber"] = Json::nullValue;
+                result["transactionIndex"] = Json::nullValue;
+            }
+            else
+            {
+                result = Json::nullValue;
+            }
             buildJsonContent(result, response);
             co_return;
         }
@@ -1088,8 +1117,25 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     }
     auto transactions = block->transactions();
     auto tx = transactions.at(transactionIndex);
-    auto receipt = co_await ledger::getReceipt(*ledger, tx->hash());
-    combineTxResponse(result, *tx, *receipt, hash);
+    protocol::TransactionReceipt::Ptr receipt;
+    try
+    {
+        receipt = co_await ledger::getReceipt(*ledger, tx->hash());
+    }
+    catch (std::exception const&)
+    {
+        receipt = nullptr;
+    }
+    if (receipt)
+    {
+        combineTxResponse(result, *tx, *receipt, hash);
+    }
+    else
+    {
+        // TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted deposits
+        // carry no receipt; the block context is already known here, so render from it.
+        combineTxResponse(result, *tx, transactionIndex, number, hash);
+    }
     buildJsonContent(result, response);
 }
 
@@ -1120,9 +1166,26 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
-        auto receipt = co_await ledger::getReceipt(*ledger, txHash);
         auto blockHash = block->blockHeader()->hash();
-        combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
+        protocol::TransactionReceipt::Ptr receipt;
+        try
+        {
+            receipt = co_await ledger::getReceipt(*ledger, txHash);
+        }
+        catch (std::exception const&)
+        {
+            receipt = nullptr;
+        }
+        if (receipt)
+        {
+            combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
+        }
+        else
+        {
+            // TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted
+            // deposits carry no receipt; the block context is already known here.
+            combineTxResponse(result, *(*tx)[0], transactionIndex, blockNumber, blockHash);
+        }
     }
     catch (std::exception const& e)
     {
@@ -1185,8 +1248,8 @@ task::Task<void> EthEndpoint::newFilter(const Json::Value& request, Json::Value&
     auto const ledger = m_nodeService->ledger();
     auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
-        m_nodeService->finalizedBlockDepth());
+    params->fromJson(
+        jParams, latest, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     Json::Value result = co_await m_filterSystem->newFilter(params);
     buildJsonContent(result, response);
 }
@@ -1234,8 +1297,8 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& r
     auto const ledger = m_nodeService->ledger();
     auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
-        m_nodeService->finalizedBlockDepth());
+    params->fromJson(
+        jParams, latest, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     Json::Value result = co_await m_filterSystem->getLogs(params);
     buildJsonContent(result, response);
 }
@@ -1244,8 +1307,8 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
-    auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
-        m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
+    auto [number, _] = bcos::rpc::getBlockNumberByTag(
+        latest, blockTag, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }
 
