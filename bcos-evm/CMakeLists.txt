@@ -5,6 +5,9 @@ if(NOT DEFINED PROJECT_NAME)
 else()
     set(BCOS_EVM_STANDALONE OFF)
 endif()
+if(NOT BCOS_EVM_STANDALONE)
+    set(BCOS_EVM_STATE_ROOT_SOURCES bcos-evm/adapter/StateRootCompute.cpp)
+endif()
 
 project(bcos-evm LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
@@ -58,10 +61,7 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    # StateRootCompute 是状态根引擎（AccountVisitor 建根，用 FISCO bcos-ledger/mpt
-    # computeTrieRoot，不再依赖 evmone 的 MPT/mpt_hash）。
-    # MemoryState（自研内存账本，evmone test_state 的替换品）已移到 bcos-evm/test/testutils/。
-    bcos-evm/adapter/StateRootCompute.cpp
+    ${BCOS_EVM_STATE_ROOT_SOURCES}
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #

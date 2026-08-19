@@ -52,13 +52,18 @@ inline std::optional<std::string_view> liveContent(const RawValue& rawValue)
 /// Whether fieldKey is one of the ACCOUNT_TABLE_FIELDS full set
 /// (CODE_HASH/CODE/BALANCE/ABI/NONCE/ALIVE/FROZEN/SHARD) — these rows are already read by
 /// fetchAccount (or, for CODE, intentionally never read) and must not be misclassified as a
-/// 32-byte storage slot key during the account-table range scan.
+/// 32-byte storage slot key during the account-table range scan. BCOS extension fields
+/// (status/last_update/last_status, written by AccountPrecompiled) are also not slots: the
+/// mainline MPT classifier treats them as BcosExtension rows and skips them, so the bridge
+/// must do the same or fetchAllStorage throws "unknown key in account table" and the whole
+/// OP block poisons.
 inline bool isKnownAccountField(std::string_view fieldKey)
 {
     using Fields = bcos::ledger::ACCOUNT_TABLE_FIELDS;
     return fieldKey == Fields::CODE_HASH || fieldKey == Fields::CODE ||
            fieldKey == Fields::BALANCE || fieldKey == Fields::ABI || fieldKey == Fields::NONCE ||
-           fieldKey == Fields::ALIVE || fieldKey == Fields::FROZEN || fieldKey == Fields::SHARD;
+           fieldKey == Fields::ALIVE || fieldKey == Fields::FROZEN || fieldKey == Fields::SHARD ||
+           bcos::ledger::mpt::isKnownBcosExtensionField(fieldKey);
 }
 
 /// Zero-valued slot rule: under Ethereum semantics "slot value == 0 ≡ slot does not exist",
