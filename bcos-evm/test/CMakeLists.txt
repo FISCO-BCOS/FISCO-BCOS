@@ -26,6 +26,7 @@ add_executable(bcos-evm-opstack-tests
     opstack/Op7702Test.cpp
     opstack/OpFloorGasTest.cpp
     opstack/OpZeroFeeSpikeTest.cpp
+    opstack/StateRootComputeTest.cpp
     testutils/MemoryState.cpp
 )
 target_link_libraries(bcos-evm-opstack-tests PRIVATE
@@ -33,6 +34,7 @@ target_link_libraries(bcos-evm-opstack-tests PRIVATE
     protocol-tars
     bcos-crypto
     bcos-utilities
+    ledger
     Boost::unit_test_framework
 )
 add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)

@@ -99,6 +99,20 @@ BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(props));
 }
 
+// 3b) Negative: zero-balance sender (not inserted) is rejected by the same balance check —
+// pins that the check actually exists (a regression that deletes it would turn 3b red
+// while 3 stays green).
+BOOST_AUTO_TEST_CASE(opValidate_zero_balance_sender_rejected)
+{
+    evmone::test::TestState ts;  // no sender inserted → get_account balance=0
+    auto isthmus = isthmusConfig();
+    auto block = blk();
+    auto tx = baseTx();
+    evmc::bytes envelope{0x02};
+    auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(props));
+}
+
 // 4) End-to-end: opTransition executes + .apply(diff) write-back + post assertions — only here does
 // the gate truly verify the spike premise
 BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)

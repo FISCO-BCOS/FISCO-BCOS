@@ -344,7 +344,7 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     // second source of truth left to get this wrong.
     auto meta = deriveOpReceiptMeta(props, opAtUsed, /*fill_operator_scalars=*/true);
 
-    outStateDiff = receipt.state_diff;
+    outStateDiff = std::move(receipt.state_diff);
     auto out = makeFiscoReceipt(receiptFactory, receipt, block,
         bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size},
         !tx.to.has_value() ? toFiscoContractAddress(tx.sender, tx.nonce) : std::string{});
@@ -560,7 +560,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
     receipt.state_diff = bcos::evm::sanitizeStateDiff(view, state.build_diff(cfg.rev));
 
-    outStateDiff = receipt.state_diff;
+    outStateDiff = std::move(receipt.state_diff);
     auto out = makeFiscoReceipt(receiptFactory, receipt, block,
         bcos::bytesConstRef{outputBytes.data(), outputBytes.size()},
         !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{});
