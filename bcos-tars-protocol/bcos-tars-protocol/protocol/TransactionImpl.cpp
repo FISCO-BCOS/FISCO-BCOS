@@ -441,10 +441,6 @@ bcos::u256 bcostars::protocol::TransactionImpl::mint() const
     try
     {
         auto const& s = m_inner()->mint;
-        if (s.empty())
-        {
-            return 0;
-        }
         // bcos::u256 (boost unchecked backend) silently truncates >256-bit values rather
         // than throwing — catch over-wide hex explicitly before the parse: with a 0x/0X
         // prefix, valid is at most 66 chars (2 prefix + 64 hex digits); without, at most 64.

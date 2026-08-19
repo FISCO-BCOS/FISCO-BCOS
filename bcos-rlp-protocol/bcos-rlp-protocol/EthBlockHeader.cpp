@@ -47,7 +47,8 @@ bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHea
 // Precondition: for NON_ETH headers, utcTime() must be a whole number of seconds
 // (ms divisible by 1000). Sub-second timestamps produce an RLP hash that cannot
 // be reproduced from the decoded form. Throws std::invalid_argument on violation.
-bcos::crypto::HashType EthBlockHeader::computeHash(const bcos::protocol::BlockHeader& header)
+bcos::crypto::HashType EthBlockHeader::computeHash(
+    const bcos::protocol::BlockHeader& header) noexcept(false)
 {
     EthBlockHeader ethHeader(header);
     bcos::bytes encoded;

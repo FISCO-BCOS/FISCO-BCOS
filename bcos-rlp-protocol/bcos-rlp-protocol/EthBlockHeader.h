@@ -116,7 +116,11 @@ public:
     /// Compute keccak256(rlp(header)) WITHOUT validation or state mutation — usable for
     /// FISCO-native/OP headers (EthBlockVersion::NON_ETH, timestamp ms → rlpEncode /1000) that
     /// calculateRLPHash's validateHeader rejects. Returns the 32-byte Ethereum block hash.
-    static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header);
+    /// Throws std::invalid_argument if a NON_ETH header's timestamp is not a whole number
+    /// of seconds (ms not divisible by 1000) — callers that cannot tolerate exceptions
+    /// should use calculateRLPHash (which returns Error::UniquePtr) instead.
+    static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header) noexcept(
+        false);
 
     const EthBlockHeaderData& data() const { return m_data; }
 
