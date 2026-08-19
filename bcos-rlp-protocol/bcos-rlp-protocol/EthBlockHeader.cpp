@@ -90,8 +90,7 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     header->setGasLimit(ethHeader.data().gasLimit);
     header->setGasUsed(ethHeader.data().gasUsed);
     header->setNumber(ethHeader.data().number);
-    // rlpDecode already converted the wire's seconds into internal milliseconds.
-    header->setTimestamp(ethHeader.data().timestamp);
+    header->setTimestamp(ethHeader.data().timestamp * 1000);
     header->setPrevRandao(ethHeader.data().prevRandao);
     header->setNonce(ethHeader.data().nonce);
     header->setExtraData(ethHeader.data().extraData);
@@ -419,7 +418,7 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     m_data.gasLimit = _header.gasLimit();
     m_data.gasUsed = _header.gasUsed();
     m_data.number = _header.number();
-    m_data.timestamp = _header.timestamp();
+    m_data.timestamp = _header.timestamp() / 1000;
     m_data.prevRandao = _header.prevRandao();
     m_data.nonce = _header.nonce();
 

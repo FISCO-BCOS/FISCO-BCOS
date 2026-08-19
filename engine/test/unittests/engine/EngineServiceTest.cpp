@@ -1241,4 +1241,159 @@ BOOST_AUTO_TEST_CASE(per_method_version_windows_and_unknown_payload)
         task::syncWait(engineService.getPayload("0x01", 6)), UnsupportedEngineApiVersion);
 }
 
+/// Build a BlockHeader carrying every field EthBlockHeader::validateHeader requires for a
+/// CANCUN header, so finalizeEthBlockHeader's calculateRLPHash succeeds.
+static bcos::protocol::BlockHeader::Ptr makeValidCuncunHeader(
+    bcos::protocol::BlockFactory::Ptr blockFactory, bcos::crypto::HashType parentHash)
+{
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setParentInfo(bcos::protocol::ParentInfo{
+        .blockNumber = 9, .blockHash = parentHash});
+    header->setNumber(10);
+    header->setTimestamp(1700000000);
+    header->setCoinbase(bcos::Address("1234567890abcdef1234567890abcdef12345678"));
+    header->setPrevRandao(
+        bcos::h256("1111111111111111111111111111111111111111111111111111111111111111"));
+    header->setGasLimit(bcos::u256(30000000));
+    header->setGasUsed(bcos::u256(21000));
+    header->setStateRoot(
+        bcos::h256("4444444444444444444444444444444444444444444444444444444444444444"));
+    header->setTxsRoot(
+        bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
+    header->setReceiptsRoot(
+        bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
+    bcos::Bloom bloom;
+    bloom[0] = 0xab;
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    return header;
+}
+
+BOOST_AUTO_TEST_CASE(ethBlockVersionForMapsEngineVersions)
+{
+    using bcos::protocol::EthBlockVersion;
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(1)),
+        static_cast<int>(EthBlockVersion::LONDON));
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(2)),
+        static_cast<int>(EthBlockVersion::SHANGHAI));
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(3)),
+        static_cast<int>(EthBlockVersion::CANCUN));
+    // V4+ falls back to the newest known fork.
+    BOOST_CHECK_EQUAL(static_cast<int>(bcos::engine::detail::ethBlockVersionFor(4)),
+        static_cast<int>(EthBlockVersion::PRAGUE));
+}
+
+BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
+{
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    auto parentHash = bcos::crypto::HashType(
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    auto header = makeValidCuncunHeader(blockFactory, parentHash);
+
+    bcos::engine::ExecutionPayload payload;
+    payload.logsBloom = bcos::Bloom{};
+    payload.baseFeePerGas = bcos::u256(1000);
+    payload.blobGasUsed = bcos::u256(0);
+    payload.excessBlobGas = bcos::u256(0);
+
+    auto beaconRoot = bcos::h256(
+        "3333333333333333333333333333333333333333333333333333333333333333");
+    bcos::engine::detail::finalizeEthBlockHeader(*header, payload, beaconRoot, 3);
+
+    // The header is marked as an Eth CANCUN header.
+    BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::CANCUN);
+    // Post-merge constants.
+    BOOST_CHECK_EQUAL(header->uncleHash().hexPrefixed(),
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
+    BOOST_CHECK_EQUAL(header->difficulty(), bcos::u256(0));
+    BOOST_CHECK_EQUAL(header->nonce(), bcos::h64(0));
+    // Base fee taken from the payload.
+    BOOST_REQUIRE(header->baseFee().has_value());
+    BOOST_CHECK_EQUAL(*header->baseFee(), bcos::u256(1000));
+    // SHANGHAI+ withdrawals root is the empty-trie root placeholder.
+    BOOST_REQUIRE(header->withdrawalsRoot().has_value());
+    BOOST_CHECK_EQUAL(*header->withdrawalsRoot(), bcos::ledger::mpt::emptyRootHash());
+    // CANCUN blob fields + beacon root.
+    BOOST_REQUIRE(header->blobGasUsed().has_value());
+    BOOST_REQUIRE(header->excessBlobGas().has_value());
+    BOOST_REQUIRE(header->parentBeaconBlockRoot().has_value());
+    BOOST_CHECK_EQUAL(*header->parentBeaconBlockRoot(), beaconRoot);
+    // The RLP hash was computed and injected (not a synthetic / zero hash).
+    BOOST_CHECK_NE(header->hash(), bcos::crypto::HashType{});
+}
+
+BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderVersionGatesFields)
+{
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    auto parentHash = bcos::crypto::HashType(
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+    bcos::engine::ExecutionPayload payload;
+    payload.logsBloom = bcos::Bloom{};
+    payload.baseFeePerGas = bcos::u256(1000);
+
+    // V1/LONDON: baseFee present, no withdrawalsRoot / blob fields / beacon root.
+    {
+        auto header = makeValidCuncunHeader(blockFactory, parentHash);
+        bcos::engine::detail::finalizeEthBlockHeader(*header, payload, std::nullopt, 1);
+        BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::LONDON);
+        BOOST_REQUIRE(header->baseFee().has_value());
+        BOOST_CHECK(!header->withdrawalsRoot().has_value());
+        BOOST_CHECK(!header->blobGasUsed().has_value());
+        BOOST_CHECK(!header->excessBlobGas().has_value());
+        BOOST_CHECK(!header->parentBeaconBlockRoot().has_value());
+    }
+
+    // V2/SHANGHAI: + withdrawalsRoot, no blob fields / beacon root.
+    {
+        auto header = makeValidCuncunHeader(blockFactory, parentHash);
+        bcos::engine::detail::finalizeEthBlockHeader(*header, payload, std::nullopt, 2);
+        BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::SHANGHAI);
+        BOOST_REQUIRE(header->withdrawalsRoot().has_value());
+        BOOST_CHECK(!header->blobGasUsed().has_value());
+        BOOST_CHECK(!header->excessBlobGas().has_value());
+        BOOST_CHECK(!header->parentBeaconBlockRoot().has_value());
+    }
+
+    // V3/CANCUN: everything present.
+    {
+        auto header = makeValidCuncunHeader(blockFactory, parentHash);
+        auto beaconRoot = bcos::h256(
+            "3333333333333333333333333333333333333333333333333333333333333333");
+        payload.blobGasUsed = bcos::u256(0);
+        payload.excessBlobGas = bcos::u256(0);
+        bcos::engine::detail::finalizeEthBlockHeader(*header, payload, beaconRoot, 3);
+        BOOST_CHECK(header->ethBlockVersion() == bcos::protocol::EthBlockVersion::CANCUN);
+        BOOST_REQUIRE(header->withdrawalsRoot().has_value());
+        BOOST_REQUIRE(header->blobGasUsed().has_value());
+        BOOST_REQUIRE(header->excessBlobGas().has_value());
+        BOOST_REQUIRE(header->parentBeaconBlockRoot().has_value());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    // Empty block: no transactions, no mempool seeding.
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE(payload);
+    // The block hash must be the injected RLP hash — deterministic and not the synthetic
+    // placeholder (which would have been derived from just the payloadId).
+    auto const& blockHash = payload->executionPayload.blockHash;
+    BOOST_CHECK_NE(blockHash, bcos::engine::detail::syntheticHash(*result.payloadId));
+    BOOST_CHECK_NE(blockHash, bcos::crypto::HashType{});
+}
+
 BOOST_AUTO_TEST_SUITE_END()
