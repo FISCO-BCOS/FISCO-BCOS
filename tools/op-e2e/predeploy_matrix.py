@@ -29,7 +29,10 @@ L1_BLOCK = "0x4200000000000000000000000000000000000015"
 MESSAGE_PASSER = "0x4200000000000000000000000000000000000016"
 MESSENGER = "0x4200000000000000000000000000000000000007"
 BRIDGE = "0x4200000000000000000000000000000000000010"
-SYSTEM_CONFIG = "0x42000000000000000000000000000000000000c0"
+# FISCO self-written SystemConfig predeploy (chain-config-c2.yaml overlay at 0x1000+,
+# outside the OP reserved 0x0000-0x7FF namespace). The legacy 0xC0 address was the
+# self-written path of the pre-op-deployer B3 config and is no longer populated.
+SYSTEM_CONFIG = "0x4200000000000000000000000000000000001000"
 
 # Task 4:最小 ERC20 部署 init bytecode(solc 0.8.15 + optimizer 200 编译,1939B)。
 # 有 balanceOf(0x70a08231)/mint(0x40c10f19)/approve(0x095ea7b3)/transferFrom(0x23b872dd)/
@@ -516,24 +519,27 @@ def main():
               f"DIVERGENCE: event unverified (bridge reverts); logs={len(r2.get('logs', []))}")
 
     # ═══ SystemConfig group (Task 5) ═══
-    # getValueByKey(key) selector 0x1258a93a;未 set 前读默认 (0, 0)。
+    # FISCO self-written SystemConfig (chain-config-c2.yaml 0x1000 overlay):
+    # getValueByKey(string) selector 0x1258a93a;未 set 前读默认 (0, 0)。
     # ⚠️ 返回 uint192 value | uint64 enable 两词(0x + 128 hex);out[2:66]=value,out[66:130]=enable。
     out = rpc.eth("eth_call",
                   [{"to": SYSTEM_CONFIG, "data": "0x" + abi_encode_call("1258a93a", "scalar").hex()}, "latest"])
     value, enable = out[2:66], out[66:130]
     check("syscfg_get_default", int(value, 16) == 0 and int(enable, 16) == 0,
           f"value={value} enable={enable}")
-    # owner()=0x0(genesis 未播种)→ onlyOwner 恒 revert。本断言替代 brief 的 syscfg_revert_reason
-    # (B3 回执无 revertData 字段,实测——见 probe_syscfg.py 回执 keys),记录 owner 前置补足第 3 条。
+    # owner()= governance_owner (chain-config-c2.yaml, dev1 0x7099...)— genesis 工具
+    # 写入 owner slot (OZ OwnableUpgradeable slot 51),不同于旧 B3 的未播种 owner=0。
     owner = rpc.eth("eth_call", [{"to": SYSTEM_CONFIG, "data": "0x8da5cb5b"}, "latest"])
-    check("syscfg_owner_zero", owner == "0x" + "0" * 64, f"owner={owner}")
-    # setValueByKey(key, value, enableNumber) selector 0x86ff19b9(keccak 已对字节码);
-    # 预期: onlyOwner(owner=0x0) => revert,回执 status=0x0。
+    check("syscfg_owner_governance",
+          owner == "0x" + "0" * 24 + "70997970c51812dc3a010c7d01b50e0d17dc79c8",
+          f"owner={owner}")
+    # setValueByKey("scalar", ...) — scalar 不在运行时可写白名单(仅 block_tx_count_limit)
+    # ⇒ require(_isWritableKey) revert,回执 status=0x0。
     nonce = int(rpc.eth("eth_getTransactionCount", [SENDER, "latest"]), 16)
     raw = make_eip1559_tx(PRIVKEY, nonce, SYSTEM_CONFIG,
                           abi_encode_call("86ff19b9", "scalar", 1000, 1), 200_000)
     r = wait_receipt(rpc, rpc.eth("eth_sendRawTransaction", [raw]))
-    check("syscfg_set_reverts_noowner", r.get("status") == "0x0", f"status={r.get('status')}")
+    check("syscfg_set_reverts_unwritable", r.get("status") == "0x0", f"status={r.get('status')}")
 
     print(f"\n{'ALL' if not FAILED else 'SOME'} PASSED {len(PASSED)} FAILED {len(FAILED)}")
     sys.exit(0 if not FAILED else 1)
