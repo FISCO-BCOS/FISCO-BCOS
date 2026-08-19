@@ -157,7 +157,7 @@ if step_run 4; then
     [ -f "$BASE_ALLOCS" ] || die "base-allocs JSON not found: $BASE_ALLOCS
   Run op-deployer pipeline to generate it (see .github/workflows/workflow.yml op-genesis job)"
     "$VENV/bin/python" "$OPGEN/build-allocs.py" \
-        --config "$OPGEN/chain-config.yaml" \
+        --config "$OPGEN/chain-config-c2.yaml" \
         --contracts "$L2CONTRACTS" \
         --base-allocs "$BASE_ALLOCS" \
         --out "$WORK/allocs.ini" || die "build-allocs 失败"
@@ -174,7 +174,7 @@ if step_run 5; then
   # 5.0 eth_genesis_header: L2 模式必需(22 字段 + hash,NodeConfig fail-fast)。
   # 用 gen_eth_header_fixture.py 生成(独立 RLP+keccak,hash 与 C++ 测试一致)。
   # state_root 必须等于 Ledger::computeGenesisStateTrie 对 config.genesis 合并后
-  # 完整 alloc 集合(含下方 [alloc.13] SENDER)算出的 MPT root,否则
+  # 完整 alloc 集合(含下方 [alloc.N] SENDER,动态索引)算出的 MPT root,否则
   # applyEthGenesisHeader 报 "state_root does not match" 拒绝启动。
   ETH_HEADER="$WORK/eth_genesis_header.ini"
   if [ -f "$WORK/allocs.ini" ]; then
@@ -182,8 +182,9 @@ if step_run 5; then
     {
       cat "$WORK/allocs.ini"
       # SENDER alloc 与下方 config.genesis 合并处的 [alloc.N] 字段保持一致
+      # (count only [alloc.N] sections, not [alloc.N.storage] subsections)
       printf '\n[alloc.%d]\naddress=%s\nbalance=%s\nnonce=0\ncode=\n' \
-        "$(grep -c '^\[alloc\.' "$WORK/allocs.ini")" "$SENDER" "$SENDER_BAL"
+        "$(grep -cE '^\[alloc\.[0-9]+\]$' "$WORK/allocs.ini")" "$SENDER" "$SENDER_BAL"
     } > "$HEADER_ALLOCS"
     "$VENV/bin/python" "$OPGEN/gen_eth_header_fixture.py" --toml --allocs "$HEADER_ALLOCS" \
       > "$ETH_HEADER" || die "eth_genesis_header 生成失败"
@@ -285,7 +286,7 @@ $(cat "$ETH_HEADER")
     log_path=./log
     level=info
 $(cat "$WORK/allocs.ini")
-[alloc.13]
+[alloc.$(grep -cE '^\[alloc\.[0-9]+\]$' "$WORK/allocs.ini")]
 address=$SENDER
 balance=$SENDER_BAL
 nonce=0
