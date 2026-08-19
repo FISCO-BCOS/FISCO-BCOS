@@ -681,7 +681,12 @@ private:
             .stateRoot = h256{},
             .receiptsRoot = h256{},
             .prevRandao = payloadAttributes.prevRandao,
-            .gasLimit = u256(std::get<0>(ledgerConfig.gasLimit())),
+            // Prefer the gasLimit the CL (op-node) passes via payload attributes — it
+            // reflects the L1-derived SystemConfig value.  Fall back to ledger config
+            // only when the attribute is absent (local/legacy path).
+            .gasLimit = payloadAttributes.gasLimit.has_value() ?
+                            u256(*payloadAttributes.gasLimit) :
+                            u256(std::get<0>(ledgerConfig.gasLimit())),
             .gasUsed = 0,
             .baseFeePerGas = baseFee,
             .blockHash = h256{},

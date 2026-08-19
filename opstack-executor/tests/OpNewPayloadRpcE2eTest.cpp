@@ -998,6 +998,15 @@ BOOST_AUTO_TEST_CASE(JovianChainedAB)
 {
     runChainedPair("jovianChainA", "jovianChainB");
 }
+
+// Scalar-change pair: proves cross-block scalar propagation (baseFeeScalar
+// changes from 1368 to 2736 between block A and block B). The generator's
+// self-check already asserts L1 fee difference; this test verifies FISCO's
+// execution engine reproduces the same golden.
+BOOST_AUTO_TEST_CASE(ScalarChangeAB)
+{
+    runChainedPair("scalarChangeA", "scalarChangeB");
+}
 // ── Precompile matrix completion: 24 vectors ──
 // The 5 probes (bn256pair_norm/bls_pairing_overcap/wrap_eip7702/wrap_value_overcap/ecrecover)
 // covered the five risk faces; this section completes the remaining 24, totaling 29 precompile

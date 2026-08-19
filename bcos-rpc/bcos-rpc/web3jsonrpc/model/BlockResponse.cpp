@@ -95,7 +95,17 @@ void bcos::rpc::combineBlockResponse(
     }
     result["uncles"] = Json::Value(Json::arrayValue);
     result["mixHash"] = crypto::HashType().hexPrefixed();
-    result["baseFeePerGas"] = "0x0";
+    // baseFeePerGas: OP headers (engine-built / newPayload-rebuilt) carry the real EIP-1559
+    // value; PBFT headers never write the tars field (nullopt, or 0) and keep the legacy 0x0
+    // so their output stays byte-identical — same pattern as gasLimit above.
+    if (auto baseFee = blockHeader->baseFee(); baseFee.has_value() && *baseFee != 0)
+    {
+        result["baseFeePerGas"] = toQuantity(*baseFee);
+    }
+    else
+    {
+        result["baseFeePerGas"] = "0x0";
+    }
     result["withdrawals"] = Json::Value(Json::arrayValue);
     // Isthmus+: the header carries the MessagePasser storage root as withdrawalsRoot (the OP
     // semantic — set by the executed seal and rebuilt by the engine); pre-Isthmus/PBFT headers
@@ -108,7 +118,18 @@ void bcos::rpc::combineBlockResponse(
     {
         result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
     }
-    result["blobGasUsed"] = "0x0";
+    // blobGasUsed: pre-Jovian OP headers store 0 (identical output); Jovian reuses the header
+    // slot for the DA footprint, which the RPC must surface. PBFT headers never write the
+    // tars field (nullopt) and keep the legacy 0x0. excessBlobGas stays the constant 0: OP
+    // Stack chains serve no blobs and no header field carries it.
+    if (auto blobGasUsed = blockHeader->blobGasUsed(); blobGasUsed.has_value())
+    {
+        result["blobGasUsed"] = toQuantity(*blobGasUsed);
+    }
+    else
+    {
+        result["blobGasUsed"] = "0x0";
+    }
     result["excessBlobGas"] = "0x0";
     // EIP-4788: pre-Cancun/PBFT headers have no PBBR (accessor returns nullopt when the
     // tars field is < 32 bytes) -> zero, symmetric with withdrawalsRoot above.
