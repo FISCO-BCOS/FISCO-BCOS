@@ -203,3 +203,16 @@ jobs:
             exit 1
           fi
           echo "WITHDRAWAL OK (MessagePassed nonce advanced)"
+
+      - name: Upload diagnostic logs on failure
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: c2-logs-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/c2-setup.log
+            ${{ runner.temp }}/c2/anvil.log
+            ${{ runner.temp }}/c2/op-node.log
+            ${{ runner.temp }}/c2/fisco/nohup.out
+          retention-days: 7
