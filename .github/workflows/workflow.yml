@@ -534,35 +534,25 @@ jobs:
 
   op-e2e:
     name: OP-Stack e2e (real node)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15]
+    runs-on: ubuntu-24.04
+    # Reuse the C++ build artifact from the 5-OS build matrix (uploaded for
+    # ubuntu-24.04 only) instead of recompiling here — L2 mode is a runtime
+    # feature flag, not a compile-time variant, so the binary is identical.
+    needs: build
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           clean: false
-      - name: Initialize vcpkg submodule
-        run: git submodule update --init --recursive -- vcpkg
-      - name: Set up JDK 11
-        run: |
-          if command -v apt-get >/dev/null; then
-            sudo apt-get install -y --no-install-recommends openjdk-11-jdk
-          elif command -v brew >/dev/null; then
-            brew install --quiet openjdk@11 || true
-          fi
-      - name: Install linux dependencies (foundry + clang + secp)
-        if: matrix.os == 'ubuntu-24.04'
+      - name: Download fisco-bcos-air artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fisco-bcos-ubuntu-24-x86_64
+          path: build/fisco-bcos-air/
+      - name: Fix binary permissions
+        run: chmod +x build/fisco-bcos-air/fisco-bcos
+      - name: Install linux dependencies (foundry + clang)
         run: |
           sudo apt-get install -y --no-install-recommends clang
-          curl -L https://foundry.paradigm.xyz | bash
-          export PATH="$HOME/.foundry/bin:$PATH"
-          foundryup
-      - name: Install macOS dependencies (foundry + clang + secp)
-        if: matrix.os == 'macos-15'
-        run: |
-          brew install --quiet llvm libomp
           curl -L https://foundry.paradigm.xyz | bash
           export PATH="$HOME/.foundry/bin:$PATH"
           foundryup
@@ -571,81 +561,40 @@ jobs:
           python3 -m pip install --quiet pyyaml 2>/dev/null || \
           pip3 install --quiet pyyaml 2>/dev/null || \
           pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
-      - name: Configure
-        run: |
-          mkdir -p build
-          cd build
-          if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
-            CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
-          else
-            export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
-            ARCH=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DWITH_VCPKG_FALLBACK=OFF -DVCPKG_TARGET_TRIPLET=${ARCH}-osx-release ..
-          fi
-      - name: Build fisco-bcos-air
-        run: |
-          cd build
-          cmake --build . --target fisco-bcos-air
       - name: Build sign_secp helper
+        # vcpkg secp256k1 is built in the build job; link sign_secp here against
+        # the vcpkg tree that setup_op_node.sh expects (or skip — scripts detect
+        # its absence and degrade gracefully).
         run: |
-          # vcpkg secp256k1 is built during configure; sign_secp links against it.
           cd build
           SECP_PKG=$(find vcpkg_installed -name "libsecp256k1.a" 2>/dev/null | head -1 | xargs dirname | xargs dirname)
           if [ -z "$SECP_PKG" ]; then
-            echo "libsecp256k1.a not found; sign_secp skipped — node still starts, scripts may need it"
+            echo "libsecp256k1.a not found in artifact; sign_secp skipped — node still starts"
           else
             mkdir -p /tmp/op-e2e-sign
             clang -O2 -I"$SECP_PKG/include" "${{ github.workspace }}/tools/op-e2e/sign_secp.c" \
               -o /tmp/op-e2e-sign/sign_secp "$SECP_PKG/lib/libsecp256k1.a" \
               "$SECP_PKG/lib/libsecp256k1_precomputed.a" -lssl -lcrypto 2>&1 | tail -5 || true
           fi
-      - name: Set up Go (for op-deployer genesis pipeline, D1)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      - name: Generate OP-deployer terminal allocs (genesis base, D1)
-        # op-deployer v0.7.1 requires L1 RPC + deployer key. Secrets provide
-        # Sepolia testnet access for CI; locally the committed op-fork-base-allocs.json
-        # is used (setup step 4 skips regeneration if allocs.ini exists).
-        # On first successful run, commit op-fork-base-allocs.json to pin the artifact
-        # and compute base_allocs_sha256 in op-fork-pin.toml.
-        if: ${{ env.DEPLOYER_L1_RPC_URL != '' && env.DEPLOYER_PRIVATE_KEY != '' }}
-        env:
-          DEPLOYER_L1_RPC_URL: ${{ secrets.OP_DEPLOYER_L1_RPC_URL }}
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.OP_DEPLOYER_PRIVATE_KEY }}
-        run: |
-          OPD="${{ github.workspace }}/tools/opstack-genesis/op-deployer"
-          if [ ! -x "$OPD" ]; then
-            echo "Building op-deployer v0.7.1 from optimism monorepo..."
-            OPTIMISM_DIR=$(mktemp -d)
-            git clone --depth 1 --branch op-deployer/v0.7.1 \
-              https://github.com/ethereum-optimism/optimism "$OPTIMISM_DIR"
-            cd "$OPTIMISM_DIR/op-deployer"
-            go build -o "$OPD" ./cmd/...
-            cd "$OPTIMISM_DIR" && rm -rf "$OPTIMISM_DIR"
-          fi
-          WORKD=$(mktemp -d)
-          "$OPD" init --l1-chain-id 11155111 --l2-chain-ids 11155111 --workdir "$WORKD"
-          "$OPD" bootstrap implementations --workdir "$WORKD" \
-            --l1-rpc-url "$DEPLOYER_L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
-          "$OPD" apply --workdir "$WORKD" \
-            --l1-rpc-url "$DEPLOYER_L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
-          OUT="${{ github.workspace }}/tools/opstack-genesis/op-fork-base-allocs.json"
-          "$OPD" inspect genesis 11155111 --workdir "$WORKD" --outfile "$OUT"
-          echo "base-allocs.json generated ($(wc -c < "$OUT") bytes)"
-          SHA=$(sha256sum "$OUT" | cut -d' ' -f1)
-          echo "sha256: $SHA"
-          echo "TODO: commit this file and update base_allocs_sha256 in op-fork-pin.toml"
-          rm -rf "$WORKD"
       - name: Rebuild B3/B3a nodes + run e2e suite
         env:
           WORK: ${{ runner.temp }}/op-spike
           BINARY: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
+          BASE_ALLOCS: ${{ github.workspace }}/tools/opstack-genesis/op-fork-base-allocs.json
         run: |
           export PATH="$HOME/.foundry/bin:$PATH"
-          bash tools/op-e2e/setup_op_node.sh 2>&1 | tail -80
+          # Full log to a file (for the gate assertion) + tail to the step output.
+          bash tools/op-e2e/setup_op_node.sh > "${{ runner.temp }}/op-spike-setup.log" 2>&1
+          tail -120 "${{ runner.temp }}/op-spike-setup.log"
       - name: Assert ALL OP-E2E GREEN
+        # run_all.sh prints ALL OP-E2E GREEN and exits 0 only when every suite
+        # passes (it exits 1 with OP-E2E FAILED otherwise). The setup script
+        # swallows run_all's exit code, so the gate must grep the captured log.
         run: |
-          tail -50 "${{ runner.temp }}/op-spike"/*/nohup.out 2>/dev/null || true
-          echo "e2e job complete — see step output for ALL OP-E2E GREEN"
-
+          if grep -q "ALL OP-E2E GREEN" "${{ runner.temp }}/op-spike-setup.log"; then
+            echo "OP-E2E gate: ALL GREEN"
+          else
+            echo "::error::OP-E2E gate failed — see 'Rebuild B3/B3a nodes' step log"
+            grep -E "FAIL|failed|passed" "${{ runner.temp }}/op-spike-setup.log" | tail -20 || true
+            exit 1
+          fi
