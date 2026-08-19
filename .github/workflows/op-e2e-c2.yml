@@ -39,6 +39,14 @@ jobs:
       - name: Initialize vcpkg submodule
         run: git submodule update --init --recursive -- vcpkg
 
+      - name: Cache Foundry
+        uses: actions/cache@v4
+        with:
+          path: ~/.foundry
+          key: foundry-${{ runner.os }}-2025-03
+          restore-keys: |
+            foundry-${{ runner.os }}-
+
       - name: Install linux deps (foundry + clang + JDK)
         run: |
           sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk
@@ -92,6 +100,16 @@ jobs:
           git -C /tmp/optimism fetch --depth 1 origin a7c88c8d636ceb9944ea0edaf7d033da258778ab
           git -C /tmp/optimism checkout FETCH_HEAD
 
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-build-a7c88c8d
+          restore-keys: |
+            go-${{ runner.os }}-build-
+
       - name: Build op-deployer from optimism monorepo
         run: |
           cd /tmp/optimism/op-deployer
@@ -107,6 +125,14 @@ jobs:
           python3 -m pip install --quiet pyyaml 2>/dev/null || \
           pip3 install --quiet pyyaml 2>/dev/null || \
           pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
+
+      - name: Cache Solc (svm)
+        uses: actions/cache@v4
+        with:
+          path: ~/.svm
+          key: svm-${{ runner.os }}-v0.5.17
+          restore-keys: |
+            svm-${{ runner.os }}-
 
       - name: Run setup_c2.sh (full pipeline)
         env:
