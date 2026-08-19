@@ -47,12 +47,6 @@ public:
 
     using Ptr = std::shared_ptr<NodeConfig>;
 
-    // ================================================================
-    // Config domains — public fields grouped per config domain (mostly 1:1
-    // with INI sections; a few load()s read across sections, and
-    // ServiceConfig is populated by the loadXxxServiceConfig methods).
-    // Phase 1 of a staged refactor: these structs are populated from the
-    // legacy members by syncConfigStructs() after loading; the getters/
     // setters still expose the legacy members until the cutover phase.
     // ================================================================
 
@@ -330,10 +324,10 @@ public:
     bool allowFreeNodeSync() const;
     size_t checkPointTimeoutInterval() const;
     size_t pipelineSize() const;
-    bool pipelineAdmissionEnabled() const { return m_pipelineAdmissionEnabled; }
-    size_t pipelinePerPeerCapacity() const { return m_pipelinePerPeerCapacity; }
-    size_t pipelineLruCapacity() const { return m_pipelineLruCapacity; }
-    size_t pipelineMaxPeers() const { return m_pipelineMaxPeers; }
+    bool pipelineAdmissionEnabled() const { return consensus.pipelineAdmissionEnabled; }
+    size_t pipelinePerPeerCapacity() const { return consensus.pipelinePerPeerCapacity; }
+    size_t pipelineLruCapacity() const { return consensus.pipelineLruCapacity; }
+    size_t pipelineMaxPeers() const { return consensus.pipelineMaxPeers; }
 
     std::string const& storagePath() const;
     std::string const& stateDBPath() const;
@@ -569,9 +563,6 @@ protected:
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
-    // Phase 1 of a staged refactor: copies the legacy members into the new
-    // config-domain structs after loading (removed in the cutover phase).
-    void syncConfigStructs();
 
 private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
@@ -592,53 +583,25 @@ private:
 
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
-    size_t m_txpoolLimit{};
-    int64_t m_txsExpirationTime{};
-    bool m_checkBlockLimit = true;
     // permit txs from free node or not
-    bool m_enableTxsFromFreeNode = false;
     // pre-store backpressure tunables
-    bool m_preStoreBackpressureEnabled = true;
-    size_t m_preStoreMaxInflight = 1024;
     // TODO: the block sync module need some configurations?
 
     // chain configuration
-    size_t m_blockLimit{};
 
     // sealer configuration
-    size_t m_minSealTime = 0;
-    bool m_allowFreeNode = false;
-    size_t m_checkPointTimeoutInterval{};
-    size_t m_pipelineSize = 50;
-    bool m_pipelineAdmissionEnabled = true;
-    size_t m_pipelinePerPeerCapacity = 64;
-    size_t m_pipelineLruCapacity = 256;
-    size_t m_pipelineMaxPeers = 1024;
 
     // for security
-    std::string m_privateKeyPath;
 
-    std::string m_hsmLibPath;
-    int m_keyIndex{};
     int m_encKeyIndex{};
-    std::string m_password;
 
     // for security cloudkms bcoskms hsm configuration
-    security::KeyEncryptionType m_keyEncryptionType = security::KeyEncryptionType::LEGACY;
-    security::StorageEncryptionType m_storageEncryptionType =
-        security::StorageEncryptionType::LEGACY;
     // key url
-    std::string m_KeyEncryptionUrl;
     // cloude kms type, 0: AWS, 1: Aliyun...
-    security::CloudKmsType m_cloudKmsType = security::CloudKmsType::AWS;
     // bcos kms data key
-    std::string m_bcosKmsKeySecurityCipherDataKey;
 
     // storage security configuration
-    bool m_storageSecurityEnable{};
-    std::string m_storageSecurityUrl;
     // unsigned short m_storageSecurityKeyCenterPort{};
-    std::string m_storageSecurityCipherDataKey;
 
     // ledger configuration
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;
@@ -648,149 +611,46 @@ private:
     ledger::GenesisConfig m_genesisConfig;
 
     // storage configuration
-    std::string m_storagePath;
-    std::string m_storageType = "RocksDB";
-    size_t m_keyPageSize = 10240;
-    std::vector<std::string> m_pd_addrs;
-    std::string m_pdCaPath;
-    std::string m_pdCertPath;
-    std::string m_pdKeyPath;
-    bool m_enableDBStatistics = false;
-    int m_maxWriteBufferNumber = 3;
-    int m_maxBackgroundJobs = 3;
-    size_t m_writeBufferSize = 64 << 21;
-    int m_minWriteBufferNumberToMerge = 2;
-    size_t m_blockCacheSize = 128 << 20;
-    bool m_enableRocksDBBlob = false;
 
-    bool m_enableArchive = false;
-    bool m_syncArchivedBlocks = false;
-    bool m_enableSeparateBlockAndState = false;
-    std::string m_stateDBPath;
-    std::string m_blockDBPath;
-    std::string m_archiveListenIP;
-    uint16_t m_archiveListenPort = 0;
 
-    std::string m_storageDBName = "storage";
-    std::string m_stateDBName = "state";
 
     // executor config
-    size_t m_vmCacheSize = 1024;
-    BaselineSchedulerConfig m_baselineSchedulerConfig;
-    TarsRPCConfig m_tarsRPCConfig;
 
     // Pro and Max versions run do not apply to tars admin site
-    bool m_withoutTarsFramework = {false};
 
     // service name to tars endpoints
-    std::unordered_map<std::string, std::vector<tars::TC_Endpoint>> m_tarsSN2EndPoints;
 
-    std::string m_rpcServiceName;
-    std::string m_gatewayServiceName;
 
     // the serviceName of other modules
-    std::string m_schedulerServiceName;
-    std::string m_executorServiceName;
-    std::string m_txpoolServiceName;
-    std::string m_nodeName;
 
     // config for rpc
-    std::string m_rpcListenIP;
-    uint16_t m_rpcListenPort{};
-    uint32_t m_rpcFilterTimeout{};
-    uint32_t m_rpcMaxProcessBlock{};
-    bool m_rpcSmSsl{};
-    bool m_rpcDisableSsl = false;
 
     // config fro web3 rpc
-    bool m_enableWeb3Rpc = false;
-    std::string m_web3RpcListenIP;
-    uint16_t m_web3RpcListenPort{};
-    uint32_t m_web3FilterTimeout{};
-    uint32_t m_web3MaxProcessBlock{};
-    uint32_t m_web3BatchRequestSizeLimit{};
-    uint32_t m_web3HttpBodySizeLimit{};
     // cors config for web3 rpc
-    bool m_web3EnableCors = true;
-    std::string m_web3CorsAllowedOrigins = "*";
-    std::string m_web3CorsAllowedMethods = "GET, POST, OPTIONS";
-    std::string m_web3CorsAllowedHeaders = "Content-Type, Authorization, X-Requested-With";
-    int32_t m_web3CorsMaxAge = 86400;
-    bool m_web3CorsAllowCredentials = true;
-    bool m_web3SyncTransaction = false;
     // blockTag semantics: "safe"/"finalized" point latest - depth blocks behind. Default 0
     // (= "latest"): PBFT commits are final, so no lag unless the operator configures one.
-    uint32_t m_web3SafeBlockDepth = 0;
-    uint32_t m_web3FinalizedBlockDepth = 0;
 
     // thread pool configuration
-    size_t m_ioThreadCount{};
-    size_t m_tbbThreadCount{};
 
     // config for op engine rpc
-    bool m_enableOpEngineRpc = false;
-    std::string m_opEngineRpcListenIP = "127.0.0.1";
-    uint16_t m_opEngineRpcListenPort{};
-    uint32_t m_opEngineHttpBodySizeLimit{};
-    uint32_t m_opEngineBatchRequestSizeLimit{};
-    std::string m_opEngineJwtSecretFile;
-    int32_t m_opEngineClockSkewSecs{60};
-    bool m_opEngineAllowV1Executor = false;
 
     // config for single-node consensus
-    bool m_enableSingleNodeConsensus = false;
-    uint64_t m_singleNodeConsensusBlockInterval = 1000;
-    bool m_singleNodeConsensusProduceEmptyBlocks = true;
-    std::string m_singleNodeConsensusFeeRecipient = "0x0000000000000000000000000000000000000000";
     // 32-byte hex prevRandao; empty means derive deterministically from a seed.
-    std::string m_singleNodeConsensusPrevRandao;
     // fixed block timestamp in seconds; 0 = wall clock.
-    std::uint64_t m_singleNodeConsensusFixedTimestamp = 0;
 
     // config for gateway
-    std::string m_p2pListenIP;
-    uint16_t m_p2pListenPort{};
-    bool m_p2pSmSsl{};
-    std::string m_p2pNodeDir;
-    std::string m_p2pNodeFileName;
 
     // config for sync
-    bool m_enableSendBlockStatusByTree = false;
-    bool m_enableSendTxByTree = false;
-    std::uint32_t m_treeWidth = 3;
 
     // config for cert
-    std::string m_certPath;
-
-    std::string m_caCert;
-    std::string m_nodeCert;
-    std::string m_nodeKey;
-
-    std::string m_smCaCert;
-    std::string m_smNodeCert;
-    std::string m_smNodeKey;
-    std::string m_enSmNodeCert;
-    std::string m_enSmNodeKey;
-
-    bool m_enableLRUCacheStorage = true;
-    ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
 
     // failover config
-    std::string m_memberID;
-    unsigned m_leaseTTL = 0;
-    bool m_enableFailOver = false;
     // etcd/zookeeper/consual url
-    std::string m_failOverClusterUrl;
 
     // others config
-    int m_sendTxTimeout = -1;
     int64_t checkAndGetValue(const boost::property_tree::ptree& _pt, const std::string& _key);
 
     // experimental
-    bool m_checkTransactionSignature = true;
-    bool m_checkParallelConflict = true;
-    bool m_singlePointConsensus = false;
-    bytes m_forceSender;
 };
 
 std::string generateGenesisData(
