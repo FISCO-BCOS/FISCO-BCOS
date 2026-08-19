@@ -96,6 +96,16 @@ BOOST_AUTO_TEST_CASE(min_base_fee_without_params_is_rejected)
     BOOST_CHECK_NE(error->find("eip1559Params"), std::string::npos);
 }
 
+// The 8-byte params precondition is enforced by the validation gate itself, not only
+// by the RPC parse layer, so in-process PayloadAttributes producers are covered too.
+BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
+{
+    BOOST_CHECK(
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(7, 0), 0), 1).has_value());
+    BOOST_CHECK(
+        engine::detail::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 1).has_value());
+}
+
 // ValidateHolocene1559Params (eip1559.go:89-100): a zero denominator with a non-zero
 // elasticity (or vice versa) is invalid attribute input.
 BOOST_AUTO_TEST_CASE(mixed_zero_eip1559_params_are_rejected)

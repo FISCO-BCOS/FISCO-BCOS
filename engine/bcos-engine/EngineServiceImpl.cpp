@@ -188,14 +188,14 @@ bcos::bytes bcos::engine::detail::encodeOptimismExtraData(
     bool jovian = payloadAttributes.minBaseFee.has_value();
     bcos::bytes extraData(jovian ? c_jovianExtraDataBytes : c_holoceneExtraDataBytes, 0);
     extraData[0] = jovian ? c_jovianExtraDataVersion : c_holoceneExtraDataVersion;
-    auto span = std::span(extraData);
-    auto denominatorOut = span.subspan(1, 4);
+    auto out = std::span(extraData);
+    auto denominatorOut = out.subspan(1, 4);
     bcos::toBigEndian(denominator, denominatorOut);
-    auto elasticityOut = span.subspan(5, 4);
+    auto elasticityOut = out.subspan(5, 4);
     bcos::toBigEndian(elasticity, elasticityOut);
     if (jovian)
     {
-        auto minBaseFeeOut = span.subspan(9, 8);
+        auto minBaseFeeOut = out.subspan(9, 8);
         bcos::toBigEndian(*payloadAttributes.minBaseFee, minBaseFeeOut);
     }
     return extraData;
@@ -253,6 +253,13 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     }
     if (payloadAttributes.eip1559Params.has_value())
     {
+        // The RPC parse layer already enforces exactly 8 bytes (EngineHelper.cpp), but
+        // this gate is the precondition encodeOptimismExtraData and the decode below
+        // rely on, so enforce it here too for in-process PayloadAttributes producers.
+        if (payloadAttributes.eip1559Params->size() != 8)
+        {
+            return std::string("eip1559Params must be exactly 8 bytes");
+        }
         // ValidateHolocene1559Params (op-core/eip1559/eip1559.go:89-100): denominator
         // and elasticity must be both zero or both non-zero. 0,0 is valid attribute
         // input and is translated to the Canyon constants by encodeOptimismExtraData.
