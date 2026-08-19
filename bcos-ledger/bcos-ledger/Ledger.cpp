@@ -1794,7 +1794,13 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                 return;
             }
 
-            asyncBatchGetReceipts(std::make_shared<std::vector<std::string>>(_hashList),
+            // TEMPORARY (op-node interop breakpoint #3): allowMissing tolerates the
+            // receipt holes of persisted-but-unexecuted deposits. The compacted list
+            // (executed receipts in block order) is exactly the receiptsRoot preimage,
+            // so the merkle below stays correct; for fully-executed blocks the list is
+            // unchanged.
+            asyncBatchGetReceipts(
+                std::make_shared<std::vector<std::string>>(_hashList),
                 [this, cryptoSuite = this->m_blockFactory->cryptoSuite(), _onGetProof,
                     receiptHash = receiptHash, blockNumber](Error::Ptr&& _error,
                     std::vector<protocol::TransactionReceipt::Ptr>&& _receiptList) {
@@ -1822,7 +1828,8 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         << LOG_BADGE("getReceiptProof") << LOG_DESC("get merkle proof success")
                         << LOG_KV("receiptHash", receiptHash.hex());
                     _onGetProof(nullptr, std::move(merkleProofPtr));
-                });
+                },
+                /*allowMissing=*/true);
         });
 }
 

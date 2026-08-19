@@ -12,11 +12,21 @@ uint32_t LogMatcher::matches(
 {
     uint32_t count = 0;
     auto receipts = _block->receipts();
-    for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
+    // TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted 0x7E deposits
+    // have no receipt, and the block fetch compacts the receipt list to the executed
+    // subset, so a deposit-bearing block has fewer receipts than transaction hashes.
+    // Deposits form a prefix (OP payload ordering), so receipt i belongs to transaction
+    // i + (txCount - receiptCount). Iterating transactionsMetaDataSize here would read
+    // receipts[] out of bounds AND attribute logs to the wrong transaction. The offset
+    // is 0 for every block whose transactions all executed (legacy behavior unchanged).
+    auto const receiptCount = _block->receiptsSize();
+    auto const metaCount = _block->transactionsMetaDataSize();
+    auto const offset = metaCount >= receiptCount ? metaCount - receiptCount : 0;
+    for (std::size_t index = 0; index < receiptCount; index++)
     {
         auto receipt = receipts[index];
         count += matches(_params, _block->blockHeader()->hash(), *receipt,
-            _block->transactionHash(index), index, _result);
+            _block->transactionHash(index + offset), index + offset, _result);
     }
 
     return count;
