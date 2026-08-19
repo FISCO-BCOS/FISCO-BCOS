@@ -50,6 +50,18 @@ void bcos::rpc::combineBlockResponse(
         result["miner"] = "0x0000000000000000000000000000000000000000";
         result["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000";
     }
+    // Engine-built blocks (OP sequencer path) have an empty sealerList — the miner/coinbase
+    // is the execution payload's feeRecipient, which is stored in the header's coinbase()
+    // field (set by rebuildOpEthHeader from the payload attributes). Clients like alloy/cast
+    // require this field for deserialization; without it eth_getBlockByNumber fails.
+    if (!result.isMember("miner"))
+    {
+        auto coinbase = blockHeader->coinbase();
+        auto coinbaseString = coinbase.hex();
+        auto coinbaseHash = crypto::keccak256Hash(bytesConstRef(coinbaseString)).hex();
+        toChecksumAddress(coinbaseString, coinbaseHash);
+        result["miner"] = "0x" + coinbaseString;
+    }
     result["difficulty"] = "0x0";
     result["totalDifficulty"] = "0x0";
     result["extraData"] = toHexStringWithPrefix(blockHeader->extraData());
