@@ -1,6 +1,7 @@
 #include "BlockResponse.h"
 #include "Log.h"
 
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
@@ -11,12 +12,48 @@ void bcos::rpc::combineBlockResponse(
     auto blockHeader = block.blockHeader();
     auto blockHash = blockHeader->hash();
     auto blockNumber = blockHeader->number();
+    auto const ethVersion = blockHeader->ethBlockVersion();
+    auto const isEth = ethVersion != bcos::protocol::EthBlockVersion::NON_ETH;
+
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();
     result["parentHash"] = blockHeader->parentInfo().blockHash.hexPrefixed();
-    result["nonce"] = "0x0000000000000000";
-    // empty uncle hash: keccak256(RLP([]))
-    result["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
+
+    if (isEth)
+    {
+        // Ethereum header: every field is taken verbatim from the header.
+        result["nonce"] = blockHeader->nonce().hexPrefixed();
+        result["sha3Uncles"] = blockHeader->uncleHash().hexPrefixed();
+        result["miner"] = blockHeader->coinbase().hexPrefixed();
+        result["difficulty"] = toQuantity(blockHeader->difficulty());
+        result["mixHash"] = blockHeader->prevRandao().hexPrefixed();
+    }
+    else
+    {
+        // FISCO-BCOS header: fixed Ethereum-compatible empty values, miner derived from
+        // the sealer list (FISCO headers carry no coinbase).
+        result["nonce"] = "0x0000000000000000";
+        // empty uncle hash: keccak256(RLP([]))
+        result["sha3Uncles"] =
+            "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
+        result["difficulty"] = "0x0";
+        result["mixHash"] = crypto::HashType().hexPrefixed();
+        if (blockNumber == 0)
+        {
+            result["miner"] = "0x0000000000000000000000000000000000000000";
+        }
+        else if (std::cmp_greater(blockHeader->sealerList().size(), blockHeader->sealer()))
+        {
+            auto pk = blockHeader->sealerList()[blockHeader->sealer()];
+            auto hash = crypto::keccak256Hash(bcos::ref(pk));
+            Address address = right160(hash);
+            auto addrString = address.hex();
+            auto addrHash = crypto::keccak256Hash(bytesConstRef(addrString)).hex();
+            toChecksumAddress(addrString, addrHash);
+            result["miner"] = "0x" + addrString;
+        }
+    }
+
     rpc::Logs logs;
     for (auto receipt : block.receipts())
     {
@@ -30,34 +67,62 @@ void bcos::rpc::combineBlockResponse(
             logs.push_back(std::move(logObj));
         }
     }
-    result["logsBloom"] = toPaddingHexStringWithPrefix(BloomBytesSize, block.logsBloom());
+    result["logsBloom"] = toPaddingHexStringWithPrefix(
+        BloomBytesSize, isEth ? blockHeader->logsBloom() : block.logsBloom());
     result["transactionsRoot"] = blockHeader->txsRoot().hexPrefixed();
     result["stateRoot"] = blockHeader->stateRoot().hexPrefixed();
     result["receiptsRoot"] = blockHeader->receiptsRoot().hexPrefixed();
-    if (std::cmp_greater(blockHeader->sealerList().size(), blockHeader->sealer()))
-    {
-        auto pk = blockHeader->sealerList()[blockHeader->sealer()];
-        auto hash = crypto::keccak256Hash(bcos::ref(pk));
-        Address address = right160(hash);
-        auto addrString = address.hex();
-        auto addrHash = crypto::keccak256Hash(bytesConstRef(addrString)).hex();
-        toChecksumAddress(addrString, addrHash);
-        result["miner"] = "0x" + addrString;
-    }
-    // genesis block
-    if (blockHeader->number() == 0)
-    {
-        result["miner"] = "0x0000000000000000000000000000000000000000";
-        result["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000";
-    }
-    result["difficulty"] = "0x0";
     result["totalDifficulty"] = "0x0";
     result["extraData"] = toHexStringWithPrefix(blockHeader->extraData());
     result["size"] = toQuantity(block.size());
-    // TODO: change it wen block gas limit apply
-    result["gasLimit"] = toQuantity(30000000ULL);
-    result["gasUsed"] = toQuantity((uint64_t)blockHeader->gasUsed());
-    result["timestamp"] = toQuantity(blockHeader->timestamp() / 1000);  // to seconds
+    result["gasLimit"] = toQuantity(blockHeader->gasLimit());
+    result["gasUsed"] = toQuantity(static_cast<uint64_t>(blockHeader->gasUsed()));
+    // Eth headers carry the timestamp in seconds already; FISCO headers in milliseconds.
+    result["timestamp"] = toQuantity(
+        isEth ? blockHeader->timestamp() : blockHeader->timestamp() / 1000);
+
+    // Fork-gated Ethereum fields: only defined for the fork that introduced them.
+    auto versionAtLeast = [&](bcos::protocol::EthBlockVersion fork) {
+        return isEth && static_cast<uint8_t>(ethVersion) >= static_cast<uint8_t>(fork);
+    };
+    if (versionAtLeast(bcos::protocol::EthBlockVersion::LONDON))
+    {
+        result["baseFeePerGas"] = toQuantity(blockHeader->baseFee().value_or(bcos::u256(0)));
+    }
+    if (versionAtLeast(bcos::protocol::EthBlockVersion::SHANGHAI))
+    {
+        // The withdrawals operation list is a block-body field and is not persisted in the
+        // header (only its trie root is); emit the always-empty list so Shanghai-shaped
+        // clients keep working, and the root verbatim from the header.
+        result["withdrawals"] = Json::Value(Json::arrayValue);
+        if (auto root = blockHeader->withdrawalsRoot())
+        {
+            result["withdrawalsRoot"] = root->hexPrefixed();
+        }
+    }
+    if (versionAtLeast(bcos::protocol::EthBlockVersion::CANCUN))
+    {
+        if (auto blobGasUsed = blockHeader->blobGasUsed())
+        {
+            result["blobGasUsed"] = toQuantity(*blobGasUsed);
+        }
+        if (auto excessBlobGas = blockHeader->excessBlobGas())
+        {
+            result["excessBlobGas"] = toQuantity(*excessBlobGas);
+        }
+        if (auto beaconRoot = blockHeader->parentBeaconBlockRoot())
+        {
+            result["parentBeaconBlockRoot"] = beaconRoot->hexPrefixed();
+        }
+    }
+    if (versionAtLeast(bcos::protocol::EthBlockVersion::PRAGUE))
+    {
+        if (auto requestsHash = blockHeader->requestsHash())
+        {
+            result["requestsHash"] = requestsHash->hexPrefixed();
+        }
+    }
+
     if (fullTxs)
     {
         Json::Value txList = Json::arrayValue;
@@ -79,12 +144,4 @@ void bcos::rpc::combineBlockResponse(
         result["transactions"] = std::move(txHashesList);
     }
     result["uncles"] = Json::Value(Json::arrayValue);
-    result["mixHash"] = crypto::HashType().hexPrefixed();
-    result["baseFeePerGas"] = "0x0";
-    result["withdrawals"] = Json::Value(Json::arrayValue);
-    // empty withdrawals trie root hash
-    result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
-    result["blobGasUsed"] = "0x0";
-    result["excessBlobGas"] = "0x0";
-    result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
 }

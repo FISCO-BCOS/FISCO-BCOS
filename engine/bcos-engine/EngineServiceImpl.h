@@ -867,7 +867,7 @@ private:
             // milliseconds); convert once here since an empty block never passes through the
             // executor's millisecond-consuming path.
             emptyHeader->setTimestamp(static_cast<int64_t>(
-                payloadAttributes.timestamp / detail::c_millisPerSecond));
+                payloadAttributes.timestamp * detail::c_millisPerSecond));
             emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
             emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
             emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
@@ -898,7 +898,8 @@ private:
         blockHeader->setParentInfo(parentInfo);
         blockHeader->setNumber(nextBlockNumber);
         blockHeader->setVersion(blockVersion);
-        blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+        blockHeader->setTimestamp(static_cast<int64_t>(
+            payloadAttributes.timestamp * detail::c_millisPerSecond));
         blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
@@ -1007,8 +1008,6 @@ private:
         blockHeader->setReceiptsRoot(receiptRoot);
         blockHeader->setTxsRoot(txRoot);
         blockHeader->setGasUsed(totalGasUsed);
-        blockHeader->setTimestamp(static_cast<int64_t>(
-            payloadAttributes.timestamp / detail::c_millisPerSecond));
 
         // Copy the block bloom onto the payload before finalizeEthBlockHeader, which reads it
         // onto the header (the header's logsBloom is part of the RLP hash).
