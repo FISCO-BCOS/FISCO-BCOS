@@ -110,10 +110,8 @@ struct OpReceiptMeta
     // DA footprint (Jovian+; op-geth receipt BlobGasUsed semantics)
     std::optional<uint64_t> da_footprint_gas_scalar;
     std::optional<uint64_t> da_footprint;
-    // Effective gas price (base_fee + priority_gas_price). NOT serialized into opStackMeta —
-    // carried on the tars effectiveGasPrice base field instead (op-geth api.go:1775, RPC layer
-    // top-level output).
-    std::optional<intx::uint256> effective_gas_price;
+    // Effective gas price (base_fee + priority_gas_price) is deliberately NOT here: it is carried
+    // on the tars effectiveGasPrice base field instead (op-geth api.go:1775, RPC top-level output).
 };
 
 /// Build the non-consensus receipt metadata. Deliberately takes NO OpForkConfig: the receipt has

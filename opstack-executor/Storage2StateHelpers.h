@@ -11,9 +11,7 @@
 #include <bcos-ledger/mpt/Classify.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Overloaded.h>
-#include <boost/algorithm/hex.hpp>
 #include <algorithm>
-#include <array>
 #include <cstring>
 #include <evmc/evmc.hpp>
 #include <optional>
@@ -93,8 +91,9 @@ inline std::optional<evmc::address> addressFromTableName(std::string_view tableK
     return addr;
 }
 
-/// Account table path: unconditionally "/apps/" + hex_lower(addr). Verbatim same shape as the
-/// mainline MPT's `accountTableName` (Classify.h) and strictly inverse to `parseAccountTable`.
+/// Account table path: unconditionally "/apps/" + hex_lower(addr). Delegates to the mainline MPT
+/// classifier (Classify.h) so the `/apps/` prefix rule has a single home — same shape as the
+/// mainline `accountTableName` and strictly inverse to `parseAccountTable`.
 ///
 /// The 8 `c_systemTxsAddress` addresses are ORDINARY accounts here and must be collected
 /// unconditionally — ordinary addresses on the Ethereum side. Current semantics (three answers,
@@ -104,16 +103,7 @@ inline std::optional<evmc::address> addressFromTableName(std::string_view tableK
 /// the OP execution world.
 inline std::string accountTableName(const evmc::address& addr)
 {
-    std::array<char, sizeof(addr.bytes) * 2> hex{};  // NOLINT
-    boost::algorithm::hex_lower(
-        std::string_view(reinterpret_cast<const char*>(addr.bytes), sizeof(addr.bytes)),
-        hex.data());
-    std::string_view hexView(hex.data(), hex.size());
-
-    std::string tableName;
-    tableName.reserve(bcos::ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
-    tableName.append(bcos::ledger::SYS_DIRECTORY::USER_APPS);
-    tableName.append(hexView);
-    return tableName;
+    return bcos::ledger::mpt::accountTableName(bcos::Address{
+        bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}, bcos::DataAlignType::AlignRight});
 }
 }  // namespace bcos::evm::evmstate

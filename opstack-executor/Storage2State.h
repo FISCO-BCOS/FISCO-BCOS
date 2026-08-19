@@ -4,8 +4,10 @@
 
 // Storage2State — the real-ledger read bridge. Implements evmone::state::StateView over the
 // storage2 (MultiLayerStorage/StateKey/EVMAccount) key space: each read is
-// cache -> task::syncWait fetch -> normalize -> refill cache. One instance per block (no reset),
-// single-threaded only (mutable caches, no locks).
+// cache -> task::syncWait fetch -> normalize -> refill cache. One instance PER TX (no reset;
+// per-instance caches are not shared across txs), single-threaded only (mutable caches, no
+// locks). Instances of the same block share a block-wide error slot (see constructor) so a read
+// error in any per-tx instance poisons the whole block's check.
 //
 // Core invariants:
 //   * “exists but empty” accounts return Account{defaults}, never nullopt (EIP-7610 create
@@ -187,6 +189,12 @@ public:
     /// deletion go via storage2 removeOne/range); each step write-throughs the three read caches
     /// (deleting an account invalidates all three for that address). Not noexcept: strict
     /// tripwire — a deleted_accounts entry missing on the ledger throws.
+    ///
+    /// PRECONDITION: @p diff must already be sanitized (sanitizeStateDiff) — evmone's diff model
+    /// routinely emits phantom deleted_accounts entries (zero-value CALL touch of a never-created
+    /// address, access-list/EIP-7702 get_or_insert with erase_if_empty), and the ghost-delete
+    /// tripwire below turns an unsanitized diff into a hard block failure on ordinary tx
+    /// patterns. opTransition/runDeposit always sanitize before calling; part-3 callers must too.
     ///
     /// Any write-back failure ALSO sets the poison flag before rethrowing. This is error
     /// CLASSIFICATION, not style: OpSchedulerSeam maps poisoned() -> OpStorageError (-32603) and

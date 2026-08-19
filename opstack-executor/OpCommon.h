@@ -57,7 +57,8 @@ struct OpBlockSeal
     return static_cast<int64_t>(gasUsed);
 }
 
-/// "0x" + lowercase hex (op-geth hexutil.Uint64); parsed back by encodeReceiptForRoot.
+/// "0x" + lowercase hex (op-geth hexutil.Uint64); the value later feeds the receipts-root leaf
+/// encoding that returns with the block-seal wiring (part 3).
 [[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
 {
     return bcos::toQuantity(cumulative);  // reuse the library quantity formatter (review #5429 R)
