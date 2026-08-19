@@ -887,12 +887,18 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3RejectsMalformedPayloadAttributes)
             [](JsonRpcException const& e) { return e.code() == InvalidParams; });
     };
 
-    for (auto const* field : {"timestamp", "gasLimit", "minBaseFee"})
+    // timestamp / gasLimit are hexutil.Uint64 on the op-node wire, so a bare JSON number
+    // stays malformed for them. minBaseFee is deliberately absent from the numeric loop:
+    // op-node serializes it as a plain *uint64 (op-service/eth/types.go:523), so the bare
+    // number form is VALID there — accepted-path coverage lives in EngineProtoAlignB1Test.
+    for (auto const* field : {"timestamp", "gasLimit"})
     {
         auto numeric = makeAttrs();
         numeric[field] = 123;
         expectInvalidParams(numeric);
-
+    }
+    for (auto const* field : {"timestamp", "gasLimit", "minBaseFee"})
+    {
         auto badHex = makeAttrs();
         badHex[field] = "0xnothex";
         expectInvalidParams(badHex);
