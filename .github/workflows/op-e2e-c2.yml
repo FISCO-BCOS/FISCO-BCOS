@@ -71,7 +71,10 @@ jobs:
           gh run download "$RUN_ID" \
             -n fisco-bcos-ubuntu-24-x86_64 \
             -D build/fisco-bcos-air/
-          echo "fisco_downloaded=1" >> "$GITHUB_OUTPUT"
+          [ -x build/fisco-bcos-air/fisco-bcos ] || {
+            echo "::warning::Download succeeded but fisco-bcos binary is missing or not executable"
+            exit 1
+          }
 
       - name: Build fisco-bcos-air
         if: steps.download-fisco.outcome != 'success'
