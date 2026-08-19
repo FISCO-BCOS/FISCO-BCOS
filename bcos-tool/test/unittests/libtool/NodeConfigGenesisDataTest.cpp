@@ -49,9 +49,9 @@ BOOST_AUTO_TEST_CASE(modernSectionedFormat)
 
     NodeConfig cfg(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-    BOOST_REQUIRE(cfg.ledgerConfig());
+    BOOST_REQUIRE(cfg.ledgerConfig);
 
-    auto data = bcos::tool::generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
+    auto data = bcos::tool::generateGenesisData(cfg.genesisConfig, *cfg.ledgerConfig);
     BOOST_CHECK(!data.empty());
     BOOST_CHECK(data.find("[chain]") != std::string::npos);
     BOOST_CHECK(data.find("consensus_type: rpbft") != std::string::npos);
@@ -85,16 +85,16 @@ BOOST_AUTO_TEST_CASE(evmcRevisionConfig)
 
     NodeConfig cfg(keyFactory);
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-    BOOST_REQUIRE(cfg.ledgerConfig());
+    BOOST_REQUIRE(cfg.ledgerConfig);
 
-    auto const& gc = cfg.genesisConfig();
+    auto const& gc = cfg.genesisConfig;
     BOOST_REQUIRE(gc.m_evmcRevision.has_value());
     BOOST_CHECK_EQUAL(*gc.m_evmcRevision, EVMC_CANCUN);
     BOOST_REQUIRE_EQUAL(gc.m_evmcRevisionForks.size(), 2u);
     BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(0), EVMC_CANCUN);
     BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(100000), EVMC_OSAKA);
 
-    auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
+    auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig);
     BOOST_CHECK(data.find("evmRevision:0:cancun,100000:osaka") != std::string::npos);
 }
 
@@ -218,11 +218,11 @@ BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
         NodeConfig cfg(keyFactory);
         std::string genesis = base + "evm_revision_forks=100000:osaka, 0:cancun\n";
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
-        auto const& gc = cfg.genesisConfig();
+        auto const& gc = cfg.genesisConfig;
         BOOST_REQUIRE_EQUAL(gc.m_evmcRevisionForks.size(), 2u);
         BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(0), EVMC_CANCUN);
         BOOST_CHECK_EQUAL(gc.m_evmcRevisionForks.at(100000), EVMC_OSAKA);
-        auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig());
+        auto data = bcos::tool::generateGenesisData(gc, *cfg.ledgerConfig);
         BOOST_CHECK(data.find("0:cancun,100000:osaka") != std::string::npos);
     }
 

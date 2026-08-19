@@ -64,8 +64,8 @@ void SchedulerServiceApp::createAndInitSchedulerService()
     // for stat the nodeVersion
     bcos::initializer::showNodeVersionMetric();
 
-    auto rpcServiceName = m_nodeConfig->rpcServiceName();
-    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+    auto rpcServiceName = m_nodeConfig->service.rpcServiceName;
+    auto withoutTarsFramework = m_nodeConfig->service.withoutTarsFramework;
 
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create RpcServiceClient")
                                 << LOG_KV("rpcServiceName", rpcServiceName)
@@ -79,7 +79,7 @@ void SchedulerServiceApp::createAndInitSchedulerService()
 
     m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
 
-    auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
+    auto txpoolServiceName = m_nodeConfig->service.txpoolServiceName;
 
     SCHEDULER_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
                                 << LOG_KV("txpoolServiceName", txpoolServiceName);
@@ -127,7 +127,7 @@ void SchedulerServiceApp::initConfig()
     m_nodeConfig->loadWithoutTarsFrameworkConfig(pt);
 
     m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    if (!m_nodeConfig->withoutTarsFramework())
+    if (!m_nodeConfig->service.withoutTarsFramework)
     {
         m_logInitializer->setLogPath(getLogPath());
     }
@@ -138,7 +138,7 @@ void SchedulerServiceApp::initConfig()
     m_nodeConfig->loadGenesisConfig(genesisPt);
     m_nodeConfig->loadConfig(pt);
     m_nodeConfig->loadServiceConfig(pt);
-    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
+    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->service.nodeName, pt, true);
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
     m_protocolInitializer->init(m_nodeConfig);
@@ -150,26 +150,28 @@ void SchedulerServiceApp::createScheduler()
     auto blockFactory = m_protocolInitializer->blockFactory();
 
     auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory,
-        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->pdCaPath(),
-            m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath()),
-        m_nodeConfig->blockLimit(), nullptr);
+        StorageInitializer::build(m_nodeConfig->storage.pdAddrs, getLogPath(),
+            m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+            m_nodeConfig->storage.pdKeyPath),
+        m_nodeConfig->chain.blockLimit, nullptr);
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
     auto executorManager = std::make_shared<bcos::scheduler::RemoteExecutorManager>(
-        m_nodeConfig->executorServiceName());
+        m_nodeConfig->service.executorServiceName);
 
     m_scheduler = SchedulerInitializer::build(executorManager, ledger,
-        StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->pdCaPath(),
-            m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath()),
+        StorageInitializer::build(m_nodeConfig->storage.pdAddrs, getLogPath(),
+            m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+            m_nodeConfig->storage.pdKeyPath),
         executionMessageFactory, blockFactory, m_protocolInitializer->txResultFactory(),
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck());
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->genesisConfig.m_isAuthCheck);
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
     // handler for notify block number
     scheduler->registerBlockNumberReceiver([this](bcos::protocol::BlockNumber number) {
         BCOS_LOG(DEBUG) << "Notify blocknumber: " << number;
         // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
-        m_rpc->asyncNotifyBlockNumber(
-            m_nodeConfig->groupId(), m_nodeConfig->nodeName(), number, [](bcos::Error::Ptr) {});
+        m_rpc->asyncNotifyBlockNumber(m_nodeConfig->genesisConfig.m_groupID,
+            m_nodeConfig->service.nodeName, number, [](bcos::Error::Ptr) {});
     });
     // handler for notify transactions
     scheduler->registerTransactionNotifier([this](bcos::protocol::BlockNumber _blockNumber,

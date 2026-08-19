@@ -36,8 +36,8 @@ using namespace std;
 HsmKeyEncryption::HsmKeyEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_nodeConfig = nodeConfig;
-    m_hsmLibPath = m_nodeConfig->hsmLibPath();
-    m_encKeyIndex = m_nodeConfig->encKeyIndex();
+    m_hsmLibPath = m_nodeConfig->security.hsmLibPath;
+    m_encKeyIndex = 0;  // legacy encKeyIndex was never configurable and always 0
     m_symmetricEncrypt = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
 }
 

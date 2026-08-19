@@ -140,7 +140,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto nod
 {
     LIGHTNODE_LOG(INFO) << "Init lightnode p2p client...";
     auto p2pClient = std::make_shared<bcos::p2p::P2PClientImpl>(
-        front, gateway, keyFactory, nodeConfig->groupId());
+        front, gateway, keyFactory, nodeConfig->genesisConfig.m_groupID);
     auto remoteLedger = std::make_shared<bcos::ledger::LedgerClientImpl>(p2pClient);
     auto remoteTransactionPool =
         std::make_shared<bcos::transaction_pool::TransactionPoolClientImpl>(p2pClient);
@@ -159,7 +159,7 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto nod
         LIGHTNODE_LOG(INFO) << "get genesis block failed, genesisBlock maybe not exist, prepare "
                                "buildGenesisBlock, error:"
                             << boost::diagnostic_information(e);
-        nodeLedger->buildGenesisBlock(nodeConfig->genesisConfig(), *nodeConfig->ledgerConfig());
+        nodeLedger->buildGenesisBlock(nodeConfig->genesisConfig, *nodeConfig->ledgerConfig);
     }
 
 
@@ -181,8 +181,8 @@ void starLightnode(bcos::tool::NodeConfig::Ptr nodeConfig, auto ledger, auto nod
 
     LIGHTNODE_LOG(INFO) << "Init lightnode block syner...";
     auto stopToken = std::make_shared<std::atomic_bool>(false);
-    auto syncer = startSyncerThread(
-        remoteLedger, ledger, wsService, nodeConfig->groupId(), nodeConfig->nodeName(), stopToken);
+    auto syncer = startSyncerThread(remoteLedger, ledger, wsService,
+        nodeConfig->genesisConfig.m_groupID, nodeConfig->service.nodeName, stopToken);
     syncer.join();
 }
 
@@ -210,7 +210,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 
     auto protocolInitializer = bcos::initializer::ProtocolInitializer();
     protocolInitializer.init(nodeConfig);
-    protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
+    protocolInitializer.loadKeyPair(nodeConfig->security.privateKeyPath);
     auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(std::thread::hardware_concurrency() + 1, "lightNode");
 
@@ -219,12 +219,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     bcos::gateway::Gateway::Ptr gateway;
     try
     {
-        bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
+        bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->genesisConfig.m_chainID, "local", nullptr);
         gatewayFactory.setIOServicePool(ioServicePool);
         gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
         auto protocolInfo = bcos::protocol::g_BCOSConfig.protocolInfo(
             bcos::protocol::ProtocolModuleID::GatewayService);
-        gateway->gatewayNodeManager()->registerNode(nodeConfig->groupId(),
+        gateway->gatewayNodeManager()->registerNode(nodeConfig->genesisConfig.m_groupID,
             protocolInitializer.keyPair()->publicKey(), bcos::protocol::NodeType::LIGHT_NODE, front,
             protocolInfo);
         gateway->start();
@@ -240,7 +240,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 
 
     // front
-    front->setGroupID(nodeConfig->groupId());
+    front->setGroupID(nodeConfig->genesisConfig.m_groupID);
     front->setNodeID(protocolInitializer.keyPair()->publicKey());
     front->setIOServicePool(ioServicePool);
     front->setIoService(ioServicePool->getIOService());
@@ -252,19 +252,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     front->start();
 
     // local ledger
-    auto storage = newStorage(nodeConfig->storagePath());
+    auto storage = newStorage(nodeConfig->storage.dataPath);
     bcos::storage::StorageImpl storageWrapper(storage);
     std::shared_ptr<bcos::ledger::Ledger> nodeLedger;
-    if (nodeConfig->smCryptoType())
+    if (nodeConfig->genesisConfig.m_smCrypto)
     {
         auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImplLightnode<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
+            protocolInitializer.blockFactory(), storage, nodeConfig->chain.blockLimit);
         nodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
+            protocolInitializer.blockFactory(), storage, nodeConfig->chain.blockLimit);
 
         LIGHTNODE_LOG(INFO) << "start sm light node...";
         starLightnode(nodeConfig, lightNodeLedger, nodeLedger, front, gateway, keyFactory, nodeID);
@@ -274,12 +274,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
         auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImplLightnode<
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
+            protocolInitializer.blockFactory(), storage, nodeConfig->chain.blockLimit);
 
         nodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
-            protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
+            protocolInitializer.blockFactory(), storage, nodeConfig->chain.blockLimit);
 
         LIGHTNODE_LOG(INFO) << "start light node...";
         starLightnode(nodeConfig, lightNodeLedger, nodeLedger, front, gateway, keyFactory, nodeID);

@@ -57,7 +57,7 @@ protected:
 
         // init the log
         m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-        if (!nodeConfig.withoutTarsFramework())
+        if (!nodeConfig.service.withoutTarsFramework)
         {
             m_logInitializer->setLogPath(getLogPath());
         }

@@ -40,10 +40,10 @@ using namespace std;
 BcosKmsDataEncryption::BcosKmsDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_nodeConfig = nodeConfig;
-    m_compatibilityVersion = m_nodeConfig->compatibilityVersion();
+    m_compatibilityVersion = m_nodeConfig->genesisConfig.m_compatibilityVersion;
 
     std::vector<std::string> values;
-    boost::split(values, nodeConfig->storageSecuirtyKeyCenterUrl(), boost::is_any_of(":"),
+    boost::split(values, nodeConfig->storageSecurity.keyCenterUrl, boost::is_any_of(":"),
         boost::token_compress_on);
     if (2 != values.size())
     {
@@ -62,17 +62,17 @@ BcosKmsDataEncryption::BcosKmsDataEncryption(const bcos::tool::NodeConfig::Ptr n
     }
 
 
-    std::string cipherDataKey = m_nodeConfig->storageSecurityCipherDataKey();
+    std::string cipherDataKey = m_nodeConfig->storageSecurity.cipherDataKey;
 
     BcosKms keyClient;
     keyClient.setIpPort(keyCenterIp, keyCenterPort);
-    m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->smCryptoType()));
+    m_dataKey = asString(keyClient.getDataKey(cipherDataKey, m_nodeConfig->genesisConfig.m_smCrypto));
 
     BCOS_LOG(INFO) << LOG_BADGE("BcosKmsDataEncryption:init") << LOG_KV("key_center_ip:", keyCenterIp)
                    << LOG_KV("key_center_port:", keyCenterPort);
 
 
-    if (!m_nodeConfig->smCryptoType())
+    if (!m_nodeConfig->genesisConfig.m_smCrypto)
     {
         m_symmetricEncrypt = std::make_shared<AESCrypto>();
     }

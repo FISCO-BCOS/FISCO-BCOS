@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(AllFieldsParsed)
 {
     auto cfg = makeEthNodeConfig();
     cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection())));
-    auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
+    auto const& header = cfg->genesisConfig.m_ethGenesisHeader;
     BOOST_REQUIRE(header.has_value());
 
     BOOST_CHECK_EQUAL(header->m_parentHash.hex(), std::string(64, '0'));
@@ -214,7 +214,7 @@ BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)
     auto cfg = makeEthNodeConfig();
     cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection())));
     bcos::ledger::LedgerConfig emptyLedgerConfig;
-    auto withHeader = generateGenesisData(cfg->genesisConfig(), emptyLedgerConfig);
+    auto withHeader = generateGenesisData(cfg->genesisConfig, emptyLedgerConfig);
     BOOST_CHECK(withHeader.find("[ethGenesisHeader]") != std::string::npos);
     BOOST_CHECK(withHeader.find("0xb153f41d2651441ace825becbfe2f2b6bf89092864a0ae04b7e0d40a5cf64"
                                 "cc1") != std::string::npos);
@@ -223,13 +223,13 @@ BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)
     boost::replace_first(tampered, "gas_limit=0x1c9c380\n", "gas_limit=0x1c9c381\n");
     auto cfg2 = makeEthNodeConfig();
     cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(tampered)));
-    BOOST_CHECK(withHeader != generateGenesisData(cfg2->genesisConfig(), emptyLedgerConfig));
+    BOOST_CHECK(withHeader != generateGenesisData(cfg2->genesisConfig, emptyLedgerConfig));
 
     // A non-L2 chain (no feature, no allocs, no section) must not mention
     // the section in its genesis pin at all.
     auto cfg3 = makeEthNodeConfig();
     cfg3->loadGenesisConfig(parseEthIni(std::string(kEthBase)));
-    auto withoutHeader = generateGenesisData(cfg3->genesisConfig(), emptyLedgerConfig);
+    auto withoutHeader = generateGenesisData(cfg3->genesisConfig, emptyLedgerConfig);
     BOOST_CHECK(withoutHeader.find("[ethGenesisHeader]") == std::string::npos);
 }
 

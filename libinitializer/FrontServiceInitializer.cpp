@@ -49,7 +49,7 @@ FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _no
     frontServiceFactory->setIOServicePool(m_ioServicePool);
 
     m_front = frontServiceFactory->buildFrontService(
-        m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());
+        m_nodeConfig->genesisConfig.m_groupID, m_protocolInitializer->keyPair()->publicKey());
 }
 
 void FrontServiceInitializer::start()
@@ -185,7 +185,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
     m_front->registerModuleMessageDispatcher(protocol::SYNC_PUSH_TRANSACTION,
         [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
             const std::string& messageID, bytesConstRef data) {
-            if (!m_nodeConfig->enableTxsFromFreeNode() && !txpool->existsInGroup(nodeID))
+            if (!m_nodeConfig->txpool.enableTxsFromFreeNode && !txpool->existsInGroup(nodeID))
                 [[unlikely]]
             {
                 if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -235,7 +235,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                                   << LOG_KV("tx", transaction ? transaction->hash().hex() : "")
                                   << LOG_KV("messageID", messageID);
             }
-            if (!m_nodeConfig->enableTxsFromFreeNode() && !txpool->existsInGroup(nodeID))
+            if (!m_nodeConfig->txpool.enableTxsFromFreeNode && !txpool->existsInGroup(nodeID))
             {
                 if (c_fileLogLevel == TRACE) [[unlikely]]
                 {

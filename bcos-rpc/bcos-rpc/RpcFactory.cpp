@@ -67,32 +67,32 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     auto wsConfig = std::make_shared<boostssl::ws::WsConfig>();
     wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
 
-    wsConfig->setListenIP(_nodeConfig->rpcListenIP());
-    wsConfig->setListenPort(_nodeConfig->rpcListenPort());
-    wsConfig->setDisableSsl(_nodeConfig->rpcDisableSsl());
-    if (_nodeConfig->rpcDisableSsl())
+    wsConfig->setListenIP(_nodeConfig->rpc.listenIP);
+    wsConfig->setListenPort(_nodeConfig->rpc.listenPort);
+    wsConfig->setDisableSsl(_nodeConfig->rpc.disableSsl);
+    if (_nodeConfig->rpc.disableSsl)
     {
         RPC_LOG(INFO) << LOG_BADGE("initConfig") << LOG_DESC("rpc work in disable ssl model")
                       << LOG_KV("listenIP", wsConfig->listenIP())
                       << LOG_KV("listenPort", wsConfig->listenPort())
-                      << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
+                      << LOG_KV("ioThreadCount", _nodeConfig->threadPool.ioThreadCount)
                       << LOG_KV("asServer", wsConfig->asServer());
         return wsConfig;
     }
 
     auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
-    if (!_nodeConfig->rpcSmSsl())
+    if (!_nodeConfig->rpc.smSsl)
     {  //  ssl
         boostssl::context::ContextConfig::CertConfig certConfig;
 
         std::shared_ptr<bytes> keyContent;
 
         // caCert
-        if (!_nodeConfig->caCert().empty())
+        if (!_nodeConfig->cert.caCert.empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->caCert()));
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.caCert));
                 if (nullptr != keyContent)
                 {
                     certConfig.caCert.resize(keyContent->size());
@@ -102,19 +102,19 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open caCert failed")
-                                << LOG_KV("file", _nodeConfig->caCert());
+                                << LOG_KV("file", _nodeConfig->cert.caCert);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->caCert()));
+                                          _nodeConfig->cert.caCert));
             }
         }
 
         // nodeCert
-        if (!_nodeConfig->nodeCert().empty())
+        if (!_nodeConfig->cert.nodeCert.empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeCert()));
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.nodeCert));
                 if (nullptr != keyContent)
                 {
                     certConfig.nodeCert.resize(keyContent->size());
@@ -124,34 +124,34 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeCert failed")
-                                << LOG_KV("file", _nodeConfig->nodeCert());
+                                << LOG_KV("file", _nodeConfig->cert.nodeCert);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->nodeCert()));
+                                          _nodeConfig->cert.nodeCert));
             }
         }
 
         // nodeKey
-        if (!_nodeConfig->nodeKey().empty())
+        if (!_nodeConfig->cert.nodeKey.empty())
         {
             try
             {
                 if (nullptr == m_dataEncrypt) [[likely]]  // storage_security.enable = false
                 {
-                    keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.nodeKey));
                 }
                 else
                 {
-                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->nodeKey());
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->cert.nodeKey);
                 }
             }
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeKey failed")
-                                << LOG_KV("file", _nodeConfig->nodeKey());
+                                << LOG_KV("file", _nodeConfig->cert.nodeKey);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->nodeKey()));
+                                          _nodeConfig->cert.nodeKey));
             }
         }
         certConfig.nodeKey.resize(keyContent->size());
@@ -165,11 +165,11 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         RPC_LOG(INFO) << LOG_DESC("rpc work in ssl model")
                       << LOG_KV("listenIP", wsConfig->listenIP())
                       << LOG_KV("listenPort", wsConfig->listenPort())
-                      << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
+                      << LOG_KV("ioThreadCount", _nodeConfig->threadPool.ioThreadCount)
                       << LOG_KV("asServer", wsConfig->asServer())
-                      << LOG_KV("caCert", _nodeConfig->caCert())
-                      << LOG_KV("nodeCert", _nodeConfig->nodeCert())
-                      << LOG_KV("nodeKey", _nodeConfig->nodeKey());
+                      << LOG_KV("caCert", _nodeConfig->cert.caCert)
+                      << LOG_KV("nodeCert", _nodeConfig->cert.nodeCert)
+                      << LOG_KV("nodeKey", _nodeConfig->cert.nodeKey);
     }
     else
     {  // sm ssl
@@ -178,11 +178,11 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         std::shared_ptr<bytes> keyContent;
 
         // caCert
-        if (!_nodeConfig->smCaCert().empty())
+        if (!_nodeConfig->cert.smCaCert.empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->smCaCert()));
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.smCaCert));
                 if (nullptr != keyContent)
                 {
                     certConfig.caCert.resize(keyContent->size());
@@ -192,19 +192,19 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smCaCert failed")
-                                << LOG_KV("file", _nodeConfig->caCert());
+                                << LOG_KV("file", _nodeConfig->cert.caCert);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->caCert()));
+                                          _nodeConfig->cert.caCert));
             }
         }
 
         // nodeCert
-        if (!_nodeConfig->smNodeCert().empty())
+        if (!_nodeConfig->cert.smNodeCert.empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeCert()));
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.smNodeCert));
                 if (nullptr != keyContent)
                 {
                     certConfig.nodeCert.resize(keyContent->size());
@@ -214,45 +214,45 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeCert failed")
-                                << LOG_KV("file", _nodeConfig->nodeCert());
+                                << LOG_KV("file", _nodeConfig->cert.nodeCert);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->nodeCert()));
+                                          _nodeConfig->cert.nodeCert));
             }
         }
 
         // nodeKey
-        if (!_nodeConfig->smNodeKey().empty())
+        if (!_nodeConfig->cert.smNodeKey.empty())
         {
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                 {
-                    keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.smNodeKey));
                 }
                 else
                 {
-                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->smNodeKey());
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->cert.smNodeKey);
                 }
             }
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeKey failed")
-                                << LOG_KV("file", _nodeConfig->nodeKey());
+                                << LOG_KV("file", _nodeConfig->cert.nodeKey);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->nodeKey()));
+                                          _nodeConfig->cert.nodeKey));
             }
         }
         certConfig.nodeKey.resize(keyContent->size());
         memcpy(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
 
         // enNodeCert
-        if (!_nodeConfig->enSmNodeCert().empty())
+        if (!_nodeConfig->cert.enSmNodeCert.empty())
         {
             try
             {
-                keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeCert()));
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.enSmNodeCert));
                 if (nullptr != keyContent)
                 {
                     certConfig.enNodeCert.resize(keyContent->size());
@@ -262,34 +262,34 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeCert failed")
-                                << LOG_KV("file", _nodeConfig->nodeCert());
+                                << LOG_KV("file", _nodeConfig->cert.nodeCert);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->nodeCert()));
+                                          _nodeConfig->cert.nodeCert));
             }
         }
 
         // enNodeKey
-        if (!_nodeConfig->enSmNodeKey().empty())
+        if (!_nodeConfig->cert.enSmNodeKey.empty())
         {
             try
             {
                 if (nullptr == m_dataEncrypt)  // storage_security.enable = false
                 {
-                    keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
+                    keyContent = readContents(boost::filesystem::path(_nodeConfig->cert.enSmNodeKey));
                 }
                 else
                 {
-                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->enSmNodeKey());
+                    keyContent = m_dataEncrypt->decryptFile(_nodeConfig->cert.enSmNodeKey);
                 }
             }
             catch (std::exception& e)
             {
                 BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeKey failed")
-                                << LOG_KV("file", _nodeConfig->nodeKey());
+                                << LOG_KV("file", _nodeConfig->cert.nodeKey);
                 BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                           "RpcFactory::initConfig: unable read content of key:" +
-                                          _nodeConfig->nodeKey()));
+                                          _nodeConfig->cert.nodeKey));
             }
         }
         certConfig.enNodeKey.resize(keyContent->size());
@@ -303,13 +303,13 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         RPC_LOG(INFO) << LOG_DESC("rpc work in sm ssl model")
                       << LOG_KV("listenIP", wsConfig->listenIP())
                       << LOG_KV("listenPort", wsConfig->listenPort())
-                      << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
+                      << LOG_KV("ioThreadCount", _nodeConfig->threadPool.ioThreadCount)
                       << LOG_KV("asServer", wsConfig->asServer())
-                      << LOG_KV("caCert", _nodeConfig->smCaCert())
-                      << LOG_KV("nodeCert", _nodeConfig->smNodeCert())
-                      << LOG_KV("nodeKey", _nodeConfig->smNodeKey())
-                      << LOG_KV("enNodeCert", _nodeConfig->enSmNodeCert())
-                      << LOG_KV("enNodeKey", _nodeConfig->enSmNodeKey());
+                      << LOG_KV("caCert", _nodeConfig->cert.smCaCert)
+                      << LOG_KV("nodeCert", _nodeConfig->cert.smNodeCert)
+                      << LOG_KV("nodeKey", _nodeConfig->cert.smNodeKey)
+                      << LOG_KV("enNodeCert", _nodeConfig->cert.enSmNodeCert)
+                      << LOG_KV("enNodeKey", _nodeConfig->cert.enSmNodeKey);
     }
 
     wsConfig->setContextConfig(contextConfig);
@@ -328,9 +328,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
 
     if (_enableOPEngine) 
     {
-        wsConfig->setListenIP(_nodeConfig->opEngineRpcListenIP());
-        wsConfig->setListenPort(_nodeConfig->opEngineRpcListenPort());
-        wsConfig->setMaxMsgSize(_nodeConfig->opEngineHttpBodySizeLimit());
+        wsConfig->setListenIP(_nodeConfig->opEngineRpc.listenIP);
+        wsConfig->setListenPort(_nodeConfig->opEngineRpc.listenPort);
+        wsConfig->setMaxMsgSize(_nodeConfig->opEngineRpc.httpBodySizeLimit);
         // The engine API port is machine-to-machine (op-node / consensus clients),
         // not browser-facing, so CORS provides no functionality and would only
         // expose the port to cross-origin pages. Disable it explicitly.
@@ -342,21 +342,21 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
     }
     else
     {
-        wsConfig->setListenIP(_nodeConfig->web3RpcListenIP());
-        wsConfig->setListenPort(_nodeConfig->web3RpcListenPort());
-        wsConfig->setMaxMsgSize(_nodeConfig->web3HttpBodySizeLimit());
+        wsConfig->setListenIP(_nodeConfig->web3Rpc.listenIP);
+        wsConfig->setListenPort(_nodeConfig->web3Rpc.listenPort);
+        wsConfig->setMaxMsgSize(_nodeConfig->web3Rpc.httpBodySizeLimit);
         wsConfig->setCorsConfig(
-        bcos::boostssl::http::CorsConfig{.enableCORS = _nodeConfig->web3EnableCors(),
-            .allowCredentials = _nodeConfig->web3CorsAllowCredentials(),
-            .allowedOrigins = _nodeConfig->web3CorsAllowedOrigins(),
-            .allowedMethods = _nodeConfig->web3CorsAllowedMethods(),
-            .allowedHeaders = _nodeConfig->web3CorsAllowedHeaders(),
-            .maxAge = _nodeConfig->web3CorsMaxAge()});
+        bcos::boostssl::http::CorsConfig{.enableCORS = _nodeConfig->web3Rpc.enableCors,
+            .allowCredentials = _nodeConfig->web3Rpc.corsAllowCredentials,
+            .allowedOrigins = _nodeConfig->web3Rpc.corsAllowedOrigins,
+            .allowedMethods = _nodeConfig->web3Rpc.corsAllowedMethods,
+            .allowedHeaders = _nodeConfig->web3Rpc.corsAllowedHeaders,
+            .maxAge = _nodeConfig->web3Rpc.corsMaxAge});
     }
     RPC_LOG(INFO) << LOG_BADGE("initWeb3RpcServiceConfig")
                   << LOG_KV("listenIP", wsConfig->listenIP())
                   << LOG_KV("listenPort", wsConfig->listenPort())
-                  << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
+                  << LOG_KV("ioThreadCount", _nodeConfig->threadPool.ioThreadCount)
                   << LOG_KV("asServer", wsConfig->asServer())
                   << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
                   << LOG_KV("corsConfig", wsConfig->corsConfig().toString())
@@ -396,10 +396,10 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 {
     // JsonRpcImpl_2_0
     auto filterSystem = std::make_shared<JsonRpcFilterSystem>(*m_ioServicePool->getIOService(),
-        _groupManager, m_nodeConfig->groupId(), m_nodeConfig->rpcFilterTimeout(),
-        m_nodeConfig->rpcMaxProcessBlock());
+        _groupManager, m_nodeConfig->genesisConfig.m_groupID, m_nodeConfig->rpc.filterTimeout,
+        m_nodeConfig->rpc.maxProcessBlock);
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
-        _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
+        _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->others.forceSender);
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
 
     if (auto httpServer = _wsService->httpServer())
@@ -421,21 +421,21 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     // cannot be removed from the other), and the internal static RNG used by
     // FilterSystem::insertFilter is not shared concurrently.
     auto filterSystem = std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(),
-        _groupManager, m_nodeConfig->groupId(), m_nodeConfig->web3FilterTimeout(),
-        m_nodeConfig->web3MaxProcessBlock());
+        _groupManager, m_nodeConfig->genesisConfig.m_groupID, m_nodeConfig->web3Rpc.filterTimeout,
+        m_nodeConfig->web3Rpc.maxProcessBlock);
 
-    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
-        _enableOPEngine ? m_nodeConfig->opEngineBatchRequestSizeLimit()
-                        : m_nodeConfig->web3BatchRequestSizeLimit(),
+    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->genesisConfig.m_groupID,
+        _enableOPEngine ? m_nodeConfig->opEngineRpc.batchRequestSizeLimit
+                        : m_nodeConfig->web3Rpc.batchRequestSizeLimit,
         std::move(_groupManager),
-        std::move(filterSystem), m_nodeConfig->web3SyncTransaction(), _enableOPEngine);
+        std::move(filterSystem), m_nodeConfig->web3Rpc.syncTransaction, _enableOPEngine);
 
     // if enable op engine, set jwt verifier and register op engine json http request handler
     if (_enableOPEngine)
     {
         auto jwtConfig = std::make_shared<bcos::rpc::JwtConfig>();
-        jwtConfig->setSecretFile(m_nodeConfig->opEngineJwtSecretFile());
-        jwtConfig->setClockSkewSecs(m_nodeConfig->opEngineClockSkewSecs());
+        jwtConfig->setSecretFile(m_nodeConfig->opEngineRpc.jwtSecretFile);
+        jwtConfig->setClockSkewSecs(m_nodeConfig->opEngineRpc.clockSkewSecs);
         jwtConfig->setAllowedAlgorithms("HS256");
         web3JsonRpc->setJwtVerifier(
             std::make_shared<bcos::rpc::JwtVerifier>(std::move(jwtConfig)));
@@ -506,9 +506,9 @@ Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
 
     RPC_LOG(INFO) << LOG_KV("listenIP", config->listenIP())
                   << LOG_KV("listenPort", config->listenPort())
-                  << LOG_KV("ioThreadCount", m_nodeConfig->ioThreadCount())
+                  << LOG_KV("ioThreadCount", m_nodeConfig->threadPool.ioThreadCount)
                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
-    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
+    auto rpc = buildRpc(m_nodeConfig->others.sendTxTimeout, wsService, groupManager, amopClient);
     return rpc;
 }
 
@@ -519,27 +519,27 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto wsService = buildWsService(config);
     auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildAirAMOPClient(wsService);
-    auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
+    auto rpc = buildRpc(m_nodeConfig->others.sendTxTimeout, wsService, groupManager, amopClient);
 
-    if (m_nodeConfig->enableOpEngineRpc())
+    if (m_nodeConfig->opEngineRpc.enable)
     {
         auto opEngineConfig = initWeb3RpcServiceConfig(m_nodeConfig, true);
         auto opEngineWsService = buildWsService(std::move(opEngineConfig));
         // buildWeb3JsonRpc creates a dedicated FilterSystem for this port, so
         // filter stores are isolated between the OP Engine (8551) and web3 (8545).
         auto opEngineJsonRpc = buildWeb3JsonRpc(
-            m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, true);
+            m_nodeConfig->others.sendTxTimeout, opEngineWsService, groupManager, true);
 
         rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
         rpc->setOpEngineService(std::move(opEngineWsService));
     }
-    if (m_nodeConfig->enableWeb3Rpc())
+    if (m_nodeConfig->web3Rpc.enable)
     {
         auto web3Config = initWeb3RpcServiceConfig(m_nodeConfig);
         auto web3WsService = buildWsService(std::move(web3Config));
 
         auto web3JsonRpc = buildWeb3JsonRpc(
-            m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
+            m_nodeConfig->others.sendTxTimeout, web3WsService, groupManager);
 
         auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
 

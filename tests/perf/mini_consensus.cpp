@@ -87,8 +87,9 @@ void createTxs(bcos::initializer::Initializer::Ptr const& init)
 {
     bytes input = {0};
     auto tx = init->protocolInitializer()->blockFactory()->transactionFactory()->createTransaction(
-        0, precompiled::AUTH_COMMITTEE_ADDRESS, input, "", 1000, init->nodeConfig()->chainId(),
-        init->nodeConfig()->groupId(), utcSteadyTime());
+        0, precompiled::AUTH_COMMITTEE_ADDRESS, input, "", 1000,
+        init->nodeConfig()->genesisConfig.m_chainID, init->nodeConfig()->genesisConfig.m_groupID,
+        utcSteadyTime());
     auto sender = Address(precompiled::AUTH_COMMITTEE_ADDRESS);
     tx->forceSender(sender.asBytes());
     while (true)
@@ -117,8 +118,8 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
     auto nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
-    GatewayFactory gatewayFactory(
-        nodeConfig->chainId(), "localRpc", nodeInitializer->protocolInitializer()->keyEncryption());
+    GatewayFactory gatewayFactory(nodeConfig->genesisConfig.m_chainID, "localRpc",
+        nodeInitializer->protocolInitializer()->keyEncryption());
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
 
     auto frontServiceInitializer = std::make_shared<FrontServiceInitializer>(
@@ -127,8 +128,8 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
-    auto storage = StorageInitializer::build(nodeConfig->storagePath(),
-        nodeInitializer->protocolInitializer()->dataEncryption(), nodeConfig->keyPageSize());
+    auto storage = StorageInitializer::build(nodeConfig->storage.dataPath,
+        nodeInitializer->protocolInitializer()->dataEncryption(), nodeConfig->storage.keyPageSize);
     auto ledger = LedgerInitializer::build(
         nodeInitializer->protocolInitializer()->blockFactory(), storage, nodeConfig);
 
@@ -139,7 +140,7 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
         *ioServicePool->getIOService());
 
     auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
-    auto consensusStoragePath = nodeConfig->storagePath() + "/consensus_log";
+    auto consensusStoragePath = nodeConfig->storage.dataPath + "/consensus_log";
     auto consensusStorage = StorageInitializer::build(
         consensusStoragePath, nodeInitializer->protocolInitializer()->dataEncryption());
     auto scheduler = std::make_shared<MockScheduler>();

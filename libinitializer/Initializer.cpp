@@ -110,8 +110,8 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
     // get gateway client
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
-    auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
-    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+    auto gatewayServiceName = m_nodeConfig->service.gatewayServiceName;
+    auto withoutTarsFramework = m_nodeConfig->service.withoutTarsFramework;
 
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::GATEWAY_NAME, endPoints);
@@ -120,7 +120,7 @@ void Initializer::initMicroServiceNode(bcos::protocol::NodeArchitectureType _nod
         withoutTarsFramework, gatewayServiceName, endPoints);
 
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
-        gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
+        gatewayPrx, m_nodeConfig->service.gatewayServiceName, keyFactory);
     init(_nodeArchType, _configFilePath, _genesisFile, gateWay, false, _logPath);
 }
 
@@ -134,7 +134,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
     m_protocolInitializer->init(m_nodeConfig);
-    auto privateKeyPath = m_nodeConfig->privateKeyPath();
+    auto privateKeyPath = m_nodeConfig->security.privateKeyPath;
     if (!_airVersion)
     {
         privateKeyPath = _privateKeyPath;
@@ -155,14 +155,14 @@ RocksDBOption getRocksDBOption(
     const tool::NodeConfig::Ptr& nodeConfig, bool optimizeLevelStyleCompaction = false)
 {
     RocksDBOption option;
-    option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
-    option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
-    option.writeBufferSize = nodeConfig->writeBufferSize();
-    option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
-    option.blockCacheSize = nodeConfig->blockCacheSize();
+    option.maxWriteBufferNumber = nodeConfig->storage.maxWriteBufferNumber;
+    option.maxBackgroundJobs = nodeConfig->storage.maxBackgroundJobs;
+    option.writeBufferSize = nodeConfig->storage.writeBufferSize;
+    option.minWriteBufferNumberToMerge = nodeConfig->storage.minWriteBufferNumberToMerge;
+    option.blockCacheSize = nodeConfig->storage.blockCacheSize;
     option.optimizeLevelStyleCompaction = optimizeLevelStyleCompaction;
-    option.enableBlobFiles = nodeConfig->enableRocksDBBlob();
-    option.enableDBStatistics = nodeConfig->enableStatistics();
+    option.enableBlobFiles = nodeConfig->storage.enableRocksDBBlob;
+    option.enableDBStatistics = nodeConfig->storage.enableStatistics;
     return option;
 }
 
@@ -192,7 +192,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     // TBB global thread control
-    auto tbbThreadCount = m_nodeConfig->tbbThreadCount();
+    auto tbbThreadCount = m_nodeConfig->threadPool.tbbThreadCount;
     if (tbbThreadCount > 0)
     {
         m_tbbGlobalControl.emplace(
@@ -212,8 +212,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto consensusStoragePath = getConsensusStorageDBPath(_airVersion);
     INITIALIZER_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("stateDBPath", stateDBPath)
                           << LOG_KV("enableSeparateBlockAndState",
-                                 m_nodeConfig->enableSeparateBlockAndState())
-                          << LOG_KV("storageType", m_nodeConfig->storageType())
+                                 m_nodeConfig->storage.enableSeparateBlockAndState)
+                          << LOG_KV("storageType", m_nodeConfig->storage.type)
                           << LOG_KV("consensusStoragePath", consensusStoragePath);
 
     bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
@@ -225,9 +225,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // can share the same underlying ::rocksdb::DB.
     auto rocksDBOption = getRocksDBOption(m_nodeConfig);
     m_globalStateStorageInitializer =
-        GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
+        GlobalStateStorageInitializer::build(m_nodeConfig->storage.dataPath, rocksDBOption);
 
-    if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+    if (boost::iequals(m_nodeConfig->storage.type, "RocksDB"))
     {
         // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
         // Ownership stays with GlobalStateStorage (MultiLayerStorage::m_latestBackend).
@@ -241,7 +241,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             StorageInitializer::createRocksDB(consensusStoragePath, rocksDBOption),
             m_protocolInitializer->dataEncryption());
         airExecutorStorage = m_storage;
-        if (m_nodeConfig->enableSeparateBlockAndState())
+        if (m_nodeConfig->storage.enableSeparateBlockAndState)
         {
             m_blockStorage = StorageInitializer::build(
                 StorageInitializer::createRocksDB(blockDBPath, rocksDBOption),
@@ -249,27 +249,32 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
     }
 #ifdef WITH_TIKV
-    else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+    else if (boost::iequals(m_nodeConfig->storage.type, "TiKV"))
     {
-        m_storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+        m_storage = StorageInitializer::build(m_nodeConfig->storage.pdAddrs, _logPath,
+            m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+            m_nodeConfig->storage.pdKeyPath);
         if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
         {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
            // storage to read, the storage which ledger use should not trigger the switch when the
            // scheduler is committing block
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->storage.pdAddrs, _logPath,
+                m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+                m_nodeConfig->storage.pdKeyPath);
             consensusStorage = m_storage;
             airExecutorStorage = m_storage;
         }
         else
         {  // in AIR/PRO node, scheduler and executor in one process so need different storage
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            airExecutorStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->storage.pdAddrs, _logPath,
+                m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+                m_nodeConfig->storage.pdKeyPath);
+            consensusStorage = StorageInitializer::build(m_nodeConfig->storage.pdAddrs, _logPath,
+                m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+                m_nodeConfig->storage.pdKeyPath);
+            airExecutorStorage = StorageInitializer::build(m_nodeConfig->storage.pdAddrs, _logPath,
+                m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+                m_nodeConfig->storage.pdKeyPath);
         }
     }
 #endif
@@ -281,7 +286,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // build ledger
     auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
         m_nodeConfig, m_blockStorage, m_ioServicePool);
-    ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
+    ledger->setKeyPageSize(m_nodeConfig->storage.keyPageSize);
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
@@ -310,7 +315,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
 
-    auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
+    auto baselineSchedulerConfig = m_nodeConfig->executor.baselineScheduler;
 
     // Create shared PrecompiledManager and TransactionExecutorImpl
     // NOTE: The same scheduler and transactionExecutor shared_ptr is passed to both
@@ -358,7 +363,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // by the boot refusal below (no on-chain evmc_revision row), not by a per-block
     // validator. Genesis is already built (LedgerInitializer), so m_ledger is readable at
     // this point.
-    auto executorVersion = m_nodeConfig->executorVersion();
+    auto executorVersion = m_nodeConfig->genesisConfig.m_executorVersion;
     if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
             *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
     {
@@ -382,9 +387,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // explicit test-only escape hatch unsafe_allow_v1_executor, which the v1 Engine API
     // integration harness (tools/engine_integration_test.sh, driving the v1 EngineService
     // over this endpoint with a mock CL / Lodestar) sets; production configs must not.
-    if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
+    if (m_nodeConfig->opEngineRpc.enable && engineApiForV1Only)
     {
-        if (!m_nodeConfig->opEngineAllowV1Executor())
+        if (!m_nodeConfig->opEngineRpc.allowV1Executor)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
@@ -449,7 +454,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // producer — the legacy txpool/PBFT pipeline is never initialized or started (see
         // engineDrivenBlockProduction() guards below and in start()).
         if (!engineApiForV1Only &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
+            (m_nodeConfig->singleNodeConsensus.enable || m_nodeConfig->opEngineRpc.enable))
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
@@ -482,7 +487,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
         if (!engineApiForV1Only &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
+            (m_nodeConfig->singleNodeConsensus.enable || m_nodeConfig->opEngineRpc.enable))
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
@@ -491,12 +496,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
-        *m_ioServicePool->getIOService(), m_nodeConfig->executorServiceName(), m_nodeConfig);
+        *m_ioServicePool->getIOService(), m_nodeConfig->service.executorServiceName, m_nodeConfig);
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->genesisConfig.m_isAuthCheck,
+        m_nodeConfig->genesisConfig.m_isSerialExecute, m_nodeConfig->storage.keyPageSize);
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
@@ -546,7 +551,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // Set scheduler to TxPoolInitializer after scheduler is created
     m_txpoolInitializer->setScheduler(m_scheduler);
 
-    if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+    if (boost::iequals(m_nodeConfig->storage.type, "TiKV"))
     {
 #ifdef WITH_TIKV
         std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr =
@@ -568,12 +573,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
-    if (m_nodeConfig->enableLRUCacheStorage())
+    if (m_nodeConfig->storage.enableLRUCacheStorage)
     {
         cacheFactory = std::make_shared<bcos::storage::CacheStorageFactory>(
-            m_storage, m_nodeConfig->cacheSize());
+            m_storage, m_nodeConfig->storage.cacheSize);
         INITIALIZER_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
-                              << m_nodeConfig->cacheSize();
+                              << m_nodeConfig->storage.cacheSize;
     }
     else
     {
@@ -597,13 +602,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
         // Note: ensure that there has at least one executor before pbft/sync execute block
         auto storageFactory =
-            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
+            std::make_shared<storage::StateStorageFactory>(m_nodeConfig->storage.keyPageSize);
         std::string executorName = "executor-local";
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
             executionMessageFactory, storageFactory,
-            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->vmCacheSize(),
-            m_nodeConfig->isAuthCheck(), executorName, m_ioServicePool);
+            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->executor.vmCacheSize,
+            m_nodeConfig->genesisConfig.m_isAuthCheck, executorName, m_ioServicePool);
         auto switchExecutorManager = std::make_shared<bcos::executor::SwitchExecutorManager>(
             executorFactory, m_ioServicePool);
         executorManager->addExecutor(executorName, switchExecutorManager);
@@ -622,7 +627,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
-        auto groupID = m_nodeConfig->groupId();
+        auto groupID = m_nodeConfig->genesisConfig.m_groupID;
         auto blockSync =
             std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
 
@@ -701,12 +706,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // ledger (to resolve the initial head). It is always built in this mode — for
     // executor_version < 2 on the v1 scheduler, and for executor_version >= 2 on the
     // EthereumExecutor scheduler — so this is also the in-process CL path for the Engine API.
-    if (m_nodeConfig->enableSingleNodeConsensus())
+    if (m_nodeConfig->singleNodeConsensus.enable)
     {
         // prevRandao: explicit 32-byte hex from config ([consensus] prev_randao), else a
         // deterministic hash of a fixed seed (for EEST the harness pins it to the fixture's
         // currentRandom so block.prevrandao matches).
-        auto const& prevRandaoCfg = m_nodeConfig->singleNodeConsensusPrevRandao();
+        auto const& prevRandaoCfg = m_nodeConfig->singleNodeConsensus.prevRandao;
         auto prevRandao = [&]() -> bcos::crypto::HashType {
             if (!prevRandaoCfg.empty())
             {
@@ -724,18 +729,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
         m_singleNodeConsensus = std::make_shared<single_consensus::SingleNodeConsensus>(
             *m_engineServiceInitializer->engineService(), m_ledger,
-            m_nodeConfig->singleNodeConsensusBlockInterval(),
-            m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
-            m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp());
+            m_nodeConfig->singleNodeConsensus.blockInterval,
+            m_nodeConfig->singleNodeConsensus.produceEmptyBlocks, prevRandao,
+            m_nodeConfig->singleNodeConsensus.feeRecipient,
+            m_nodeConfig->singleNodeConsensus.fixedTimestamp);
     }
 
 #ifdef TOOLS
-    if (m_nodeConfig->enableArchive())
+    if (m_nodeConfig->storage.enableArchive)
     {
         INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
         m_archiveService = std::make_shared<bcos::archive::ArchiveService>(m_storage, ledger,
-            m_blockStorage, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
+            m_blockStorage, m_nodeConfig->storage.archiveListenIP,
+            m_nodeConfig->storage.archiveListenPort);
     }
 #endif
 
@@ -747,8 +753,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto lightNodeLedger =
         std::make_shared<bcos::ledger::LedgerImpl<Hasher, decltype(storageWrapper)>>(hasher.clone(),
             std::move(storageWrapper), m_protocolInitializer->blockFactory(), m_storage,
-            m_nodeConfig->blockLimit());
-    lightNodeLedger->setKeyPageSize(m_nodeConfig->keyPageSize());
+            m_nodeConfig->chain.blockLimit);
+    lightNodeLedger->setKeyPageSize(m_nodeConfig->storage.keyPageSize);
 
     auto txpool = m_txpoolInitializer->txpool();
     auto transactionPool =
@@ -768,8 +774,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
 {
     // init handlers
-    auto nodeName = m_nodeConfig->nodeName();
-    auto groupID = m_nodeConfig->groupId();
+    auto nodeName = m_nodeConfig->service.nodeName;
+    auto groupID = m_nodeConfig->genesisConfig.m_groupID;
 
     auto schedulerFactory =
         dynamic_cast<scheduler::SchedulerManager&>(m_scheduler->scheduler(0)).getFactory();
@@ -839,18 +845,20 @@ void Initializer::initSysContract()
     }
     auto block = m_protocolInitializer->blockFactory()->createBlock();
     block->blockHeader()->setNumber(SYS_CONTRACT_DEPLOY_NUMBER);
-    block->blockHeader()->setVersion(m_nodeConfig->compatibilityVersion());
+    block->blockHeader()->setVersion(m_nodeConfig->genesisConfig.m_compatibilityVersion);
     block->blockHeader()->calculateHash(
         *m_protocolInitializer->blockFactory()->cryptoSuite()->hashImpl());
 
-    if (m_nodeConfig->compatibilityVersion() >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
+    if (m_nodeConfig->genesisConfig.m_compatibilityVersion >=
+        static_cast<uint32_t>(BlockVersion::V3_1_VERSION))
     {
         BfsInitializer::init(
             SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
     }
 
-    if (m_nodeConfig->isAuthCheck() ||
-        versionCompareTo(m_nodeConfig->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
+    if (m_nodeConfig->genesisConfig.m_isAuthCheck ||
+        versionCompareTo(
+            m_nodeConfig->genesisConfig.m_compatibilityVersion, BlockVersion::V3_3_VERSION) >= 0)
     {
         // add auth deploy func here
         AuthInitializer::init(
@@ -1036,7 +1044,7 @@ protocol::BlockNumber Initializer::getCurrentBlockNumber(
 
 void Initializer::prune()
 {
-    auto blockLimit = (protocol::BlockNumber)m_nodeConfig->blockLimit();
+    auto blockLimit = (protocol::BlockNumber)m_nodeConfig->chain.blockLimit;
     bcos::protocol::BlockNumber currentBlockNumber = getCurrentBlockNumber();
 
     if (currentBlockNumber <= blockLimit)
@@ -1054,7 +1062,7 @@ void Initializer::prune()
     }
     std::cout << std::endl;
     // rocksDB compaction
-    if (boost::iequals("rocksdb", m_nodeConfig->storageType()))
+    if (boost::iequals("rocksdb", m_nodeConfig->storage.type))
     {
         auto storage = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
         auto& rocksDB = storage->rocksDB();
@@ -1123,19 +1131,19 @@ bcos::Error::Ptr checkOrCreateDir(const fs::path& dir)
 bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
     bool withTxAndReceipts, const tool::NodeConfig::Ptr& nodeConfig)
 {
-    if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
+    if (!boost::iequals(nodeConfig->storage.type, "RocksDB"))
     {  // TODO: support TiKV
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
-    auto separatedBlockAndState = nodeConfig->enableSeparateBlockAndState();
+    auto separatedBlockAndState = nodeConfig->storage.enableSeparateBlockAndState;
 
-    auto stateDBPath = nodeConfig->storagePath();
+    auto stateDBPath = nodeConfig->storage.dataPath;
     if (separatedBlockAndState)
     {
-        stateDBPath = nodeConfig->stateDBPath();
+        stateDBPath = nodeConfig->storage.stateDBPath;
     }
-    auto blockDBPath = nodeConfig->blockDBPath();
+    auto blockDBPath = nodeConfig->storage.blockDBPath;
     auto snapshotRoot = snapshotPath + "/snapshot";
     fs::path stateSstPath = snapshotRoot + "/state";
     fs::path blockSstPath = snapshotRoot + "/block";
@@ -1157,8 +1165,8 @@ bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
         return BCOS_ERROR_PTR(-1, "Failed to open meta file");
     }
     metaFile << "snapshot.withTxAndReceipts = " << withTxAndReceipts << std::endl;
-    metaFile << "snapshot.separatedBlockAndState = " << nodeConfig->enableSeparateBlockAndState()
-             << std::endl;
+    metaFile << "snapshot.separatedBlockAndState = "
+             << nodeConfig->storage.enableSeparateBlockAndState << std::endl;
 
     auto db = createReadOnlyRocksDB(stateDBPath);
     if (!db)
@@ -1167,7 +1175,7 @@ bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
     }
     auto stateStorage =
         StorageInitializer::build(std::move(db), m_protocolInitializer->dataEncryption());
-    auto blockLimit = (protocol::BlockNumber)nodeConfig->blockLimit();
+    auto blockLimit = (protocol::BlockNumber)nodeConfig->chain.blockLimit;
     bcos::protocol::BlockNumber currentBlockNumber = getCurrentBlockNumber(stateStorage);
     stateStorage.reset();
     metaFile << "snapshot.blockNumber = " << currentBlockNumber << std::endl;
@@ -1396,7 +1404,7 @@ bcos::Error::Ptr bcos::initializer::traverseRocksDB(const std::string& rockDBPat
 bcos::Error::Ptr Initializer::importSnapshot(
     const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig)
 {
-    if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
+    if (!boost::iequals(nodeConfig->storage.type, "RocksDB"))
     {  // TODO: support TiKV
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
@@ -1518,7 +1526,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
     }
     auto rocksdbOption = getRocksDBOption(nodeConfig, true);
     auto rocksDB =
-        StorageInitializer::createRocksDB(stateDBPath, rocksdbOption, nodeConfig->keyPageSize());
+        StorageInitializer::createRocksDB(stateDBPath, rocksdbOption, nodeConfig->storage.keyPageSize);
     ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);
     bcos::storage::TransactionalStorageInterface::Ptr stateStorage = nullptr;
     // import tx and receipt
@@ -1550,7 +1558,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
             }
             blockSstFiles.emplace_back(sstFileName.string());
         }
-        if (nodeConfig->enableSeparateBlockAndState())
+        if (nodeConfig->storage.enableSeparateBlockAndState)
         {
             auto blockDBPath = getBlockDBPath(true);
             auto blockRocksDB = StorageInitializer::createRocksDB(blockDBPath, rocksdbOption);
@@ -1602,28 +1610,28 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
 
 std::string Initializer::getStateDBPath(bool _airVersion) const
 {
-    std::string stateDBPath = m_nodeConfig->enableSeparateBlockAndState() ?
-                                  m_nodeConfig->stateDBPath() :
-                                  m_nodeConfig->storagePath();
+    std::string stateDBPath = m_nodeConfig->storage.enableSeparateBlockAndState ?
+                                  m_nodeConfig->storage.stateDBPath :
+                                  m_nodeConfig->storage.dataPath;
     if (_airVersion)
     {
         return stateDBPath;
     }
     // if the stateDBPath is absolute path, the result stateDBPath will deep
-    return tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
-           c_fileSeparator + stateDBPath;
+    return tars::ServerConfig::BasePath + ".." + c_fileSeparator +
+           m_nodeConfig->genesisConfig.m_groupID + c_fileSeparator + stateDBPath;
 }
 
 std::string Initializer::getBlockDBPath(bool _airVersion) const
 {
-    std::string blockDBPath = m_nodeConfig->blockDBPath();
+    std::string blockDBPath = m_nodeConfig->storage.blockDBPath;
     if (_airVersion)
     {
         return blockDBPath;
     }
     // if the stateDBPath is absolute path, the result stateDBPath will deep
-    return tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
-           c_fileSeparator + blockDBPath;
+    return tars::ServerConfig::BasePath + ".." + c_fileSeparator +
+           m_nodeConfig->genesisConfig.m_groupID + c_fileSeparator + blockDBPath;
 }
 
 std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer::mptNodeReader()
@@ -1666,12 +1674,12 @@ Initializer::stateStorageProvider()
 std::string Initializer::getConsensusStorageDBPath(bool _airVersion) const
 {
     std::string consensusStorageDBPath =
-        m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
+        m_nodeConfig->storage.dataPath + c_fileSeparator + c_consensusStorageDBName;
     if (_airVersion)
     {
         return consensusStorageDBPath;
     }
     // if the stateDBPath is absolute path, the result stateDBPath will deep
-    return tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
-           c_fileSeparator + c_consensusStorageDBName;
+    return tars::ServerConfig::BasePath + ".." + c_fileSeparator +
+           m_nodeConfig->genesisConfig.m_groupID + c_fileSeparator + c_consensusStorageDBName;
 }

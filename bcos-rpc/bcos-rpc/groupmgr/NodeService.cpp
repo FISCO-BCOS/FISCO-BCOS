@@ -104,8 +104,8 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
     // blockTag semantics ([web3_rpc] safe_block_depth / finalized_block_depth): without this,
     // a MAX/pro deployment's NodeService keeps the default 0 and the operator's configured
     // depths would be parsed and logged by NodeConfig but silently ignored.
-    nodeService->setSafeBlockDepth(_nodeConfig->web3SafeBlockDepth());
-    nodeService->setFinalizedBlockDepth(_nodeConfig->web3FinalizedBlockDepth());
+    nodeService->setSafeBlockDepth(_nodeConfig->web3Rpc.safeBlockDepth);
+    nodeService->setFinalizedBlockDepth(_nodeConfig->web3Rpc.finalizedBlockDepth);
 
     // Finding J (round-2): a tars-built NodeService has NO local MPT node reader — only
     // AirNodeInitializer wires one. So any non-zero safe/finalized depth routes every
@@ -113,7 +113,7 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
     // -32603 "MPT not enabled on this node". That is a silent capability mismatch for an
     // operator who configures a depth here (the config is the same shared config.ini AIR
     // uses, where it works) — warn prominently at startup.
-    if (_nodeConfig->web3SafeBlockDepth() > 0 || _nodeConfig->web3FinalizedBlockDepth() > 0)
+    if (_nodeConfig->web3Rpc.safeBlockDepth > 0 || _nodeConfig->web3Rpc.finalizedBlockDepth > 0)
     {
         BCOS_LOG(WARNING) << LOG_BADGE("NodeService") << LOG_DESC(
                                  "safe/finalized blockTag depth configured but this node has "
@@ -123,8 +123,8 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
                                  "only served by AIR nodes (which wire an MPT node reader). "
                                  "Set the depths to 0 to keep safe/finalized on the latest "
                                  "plane.")
-                          << LOG_KV("safeBlockDepth", _nodeConfig->web3SafeBlockDepth())
-                          << LOG_KV("finalizedBlockDepth", _nodeConfig->web3FinalizedBlockDepth());
+                          << LOG_KV("safeBlockDepth", _nodeConfig->web3Rpc.safeBlockDepth)
+                          << LOG_KV("finalizedBlockDepth", _nodeConfig->web3Rpc.finalizedBlockDepth);
     }
 
     return nodeService;

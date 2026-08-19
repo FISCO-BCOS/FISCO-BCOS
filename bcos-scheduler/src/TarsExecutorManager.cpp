@@ -66,7 +66,7 @@ void TarsExecutorManager::start()
 
     std::string executorServiceName = m_executorServiceName;
 
-    if (m_nodeConfig->withoutTarsFramework())
+    if (m_nodeConfig->service.withoutTarsFramework)
     {
         std::vector<tars::TC_Endpoint> endpoints;
         m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::EXECUTOR_NAME, endpoints);

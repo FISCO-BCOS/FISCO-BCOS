@@ -25,10 +25,10 @@ BOOST_AUTO_TEST_CASE(opEngineRpcDefaults)
 {
     LoaderProbe probe;
     probe.loadOpEngineRpcConfig({});
-    BOOST_CHECK(!probe.enableOpEngineRpc());
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenIP(), "127.0.0.1");
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenPort(), 8551);
-    BOOST_CHECK_EQUAL(probe.opEngineJwtSecretFile(), "conf/op-engine/jwt.hex");
+    BOOST_CHECK(!probe.opEngineRpc.enable);
+    BOOST_CHECK_EQUAL(probe.opEngineRpc.listenIP, "127.0.0.1");
+    BOOST_CHECK_EQUAL(probe.opEngineRpc.listenPort, 8551);
+    BOOST_CHECK_EQUAL(probe.opEngineRpc.jwtSecretFile, "conf/op-engine/jwt.hex");
 }
 
 BOOST_AUTO_TEST_CASE(opEngineRpcPopulated)
@@ -38,11 +38,11 @@ BOOST_AUTO_TEST_CASE(opEngineRpcPopulated)
         "[op_engine_rpc]\nenable=true\nlisten_ip=0.0.0.0\nlisten_port=9551\n"
         "jwt_secret_file=conf/custom-jwt.hex\nclock_skew_secs=30\n");
     probe.loadOpEngineRpcConfig(pt);
-    BOOST_CHECK(probe.enableOpEngineRpc());
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenIP(), "0.0.0.0");
-    BOOST_CHECK_EQUAL(probe.opEngineRpcListenPort(), 9551);
-    BOOST_CHECK_EQUAL(probe.opEngineJwtSecretFile(), "conf/custom-jwt.hex");
-    BOOST_CHECK_EQUAL(probe.opEngineClockSkewSecs(), 30);
+    BOOST_CHECK(probe.opEngineRpc.enable);
+    BOOST_CHECK_EQUAL(probe.opEngineRpc.listenIP, "0.0.0.0");
+    BOOST_CHECK_EQUAL(probe.opEngineRpc.listenPort, 9551);
+    BOOST_CHECK_EQUAL(probe.opEngineRpc.jwtSecretFile, "conf/custom-jwt.hex");
+    BOOST_CHECK_EQUAL(probe.opEngineRpc.clockSkewSecs, 30);
 }
 
 BOOST_AUTO_TEST_CASE(singleNodeConsensusAloneAccepted)
@@ -51,8 +51,8 @@ BOOST_AUTO_TEST_CASE(singleNodeConsensusAloneAccepted)
     auto pt = fromIni("[consensus]\nenable_single_node_consensus=true\n");
     probe.loadOpEngineRpcConfig(pt);
     BOOST_CHECK_NO_THROW(probe.loadSingleNodeConsensusConfig(pt));
-    BOOST_CHECK(probe.enableSingleNodeConsensus());
-    BOOST_CHECK(!probe.enableOpEngineRpc());
+    BOOST_CHECK(probe.singleNodeConsensus.enable);
+    BOOST_CHECK(!probe.opEngineRpc.enable);
 }
 
 BOOST_AUTO_TEST_CASE(opEngineRpcAloneAccepted)
@@ -61,8 +61,8 @@ BOOST_AUTO_TEST_CASE(opEngineRpcAloneAccepted)
     auto pt = fromIni("[op_engine_rpc]\nenable=true\n");
     probe.loadOpEngineRpcConfig(pt);
     BOOST_CHECK_NO_THROW(probe.loadSingleNodeConsensusConfig(pt));
-    BOOST_CHECK(!probe.enableSingleNodeConsensus());
-    BOOST_CHECK(probe.enableOpEngineRpc());
+    BOOST_CHECK(!probe.singleNodeConsensus.enable);
+    BOOST_CHECK(probe.opEngineRpc.enable);
 }
 
 BOOST_AUTO_TEST_CASE(bothDriversEnabledRejectedAtStartup)
@@ -93,12 +93,12 @@ BOOST_AUTO_TEST_CASE(allowV1ExecutorDefaultsOff)
 {
     LoaderProbe probe;
     probe.loadOpEngineRpcConfig(fromIni("[op_engine_rpc]\nenable=true\n"));
-    BOOST_CHECK(!probe.opEngineAllowV1Executor());
+    BOOST_CHECK(!probe.opEngineRpc.allowV1Executor);
 
     LoaderProbe probe2;
     probe2.loadOpEngineRpcConfig(
         fromIni("[op_engine_rpc]\nenable=true\nunsafe_allow_v1_executor=true\n"));
-    BOOST_CHECK(probe2.opEngineAllowV1Executor());
+    BOOST_CHECK(probe2.opEngineRpc.allowV1Executor);
 }
 
 BOOST_AUTO_TEST_CASE(engineDrivenBlockProduction)

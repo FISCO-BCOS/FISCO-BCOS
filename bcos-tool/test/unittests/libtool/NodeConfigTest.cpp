@@ -34,48 +34,47 @@ BOOST_AUTO_TEST_CASE(defaultsAreReadableWithoutLoad)
 {
     NodeConfig cfg;
     // None of these should crash on a freshly-constructed NodeConfig.
-    BOOST_CHECK_NO_THROW(cfg.smCryptoType());
-    BOOST_CHECK_NO_THROW(cfg.compatibilityVersion());
-    BOOST_CHECK_NO_THROW(cfg.chainId());
-    BOOST_CHECK_NO_THROW(cfg.groupId());
-    BOOST_CHECK_NO_THROW(cfg.txpoolLimit());
+    (void)cfg.genesisConfig.m_smCrypto;
+    (void)cfg.genesisConfig.m_compatibilityVersion;
+    (void)cfg.genesisConfig.m_chainID;
+    (void)cfg.genesisConfig.m_groupID;
+    (void)cfg.txpool.limit;
     // notifyWorkerNum() / verifierWorkerNum() were removed with the per-module worker-pool knobs
     // (thread_pool.io_thread_count now sizes the shared pool), so there is nothing to probe here.
-    BOOST_CHECK_NO_THROW(cfg.checkBlockLimit());
-    BOOST_CHECK_NO_THROW(cfg.blockLimit());
-    BOOST_CHECK_NO_THROW(cfg.privateKeyPath());
-    BOOST_CHECK_NO_THROW(cfg.hsmLibPath());
-    BOOST_CHECK_NO_THROW(cfg.keyIndex());
-    BOOST_CHECK_NO_THROW(cfg.encKeyIndex());
-    BOOST_CHECK_NO_THROW(cfg.password());
-    BOOST_CHECK_NO_THROW(cfg.minSealTime());
-    BOOST_CHECK_NO_THROW(cfg.allowFreeNodeSync());
-    BOOST_CHECK_NO_THROW(cfg.checkPointTimeoutInterval());
-    BOOST_CHECK_NO_THROW(cfg.pipelineSize());
-    BOOST_CHECK_NO_THROW(cfg.storagePath());
-    BOOST_CHECK_NO_THROW(cfg.stateDBPath());
-    BOOST_CHECK_NO_THROW(cfg.blockDBPath());
-    BOOST_CHECK_NO_THROW(cfg.storageType());
-    BOOST_CHECK_NO_THROW(cfg.keyPageSize());
-    BOOST_CHECK_NO_THROW(cfg.maxWriteBufferNumber());
-    BOOST_CHECK_NO_THROW(cfg.enableStatistics());
-    BOOST_CHECK_NO_THROW(cfg.maxBackgroundJobs());
-    BOOST_CHECK_NO_THROW(cfg.writeBufferSize());
-    BOOST_CHECK_NO_THROW(cfg.minWriteBufferNumberToMerge());
-    BOOST_CHECK_NO_THROW(cfg.blockCacheSize());
-    BOOST_CHECK_NO_THROW(cfg.enableRocksDBBlob());
-    BOOST_CHECK_NO_THROW(cfg.pdCaPath());
-    BOOST_CHECK_NO_THROW(cfg.pdCertPath());
-    BOOST_CHECK_NO_THROW(cfg.pdKeyPath());
-    BOOST_CHECK_NO_THROW(cfg.storageDBName());
-    BOOST_CHECK_NO_THROW(cfg.stateDBName());
-    BOOST_CHECK_NO_THROW(cfg.enableArchive());
-    BOOST_CHECK_NO_THROW(cfg.syncArchivedBlocks());
-    BOOST_CHECK_NO_THROW(cfg.enableSeparateBlockAndState());
-    BOOST_CHECK_NO_THROW(cfg.archiveListenIP());
-    BOOST_CHECK_NO_THROW(cfg.archiveListenPort());
-    BOOST_CHECK_NO_THROW(cfg.consensusType());
-    BOOST_CHECK_NO_THROW(cfg.txGasLimit());
+    (void)cfg.txpool.checkBlockLimit;
+    (void)cfg.chain.blockLimit;
+    (void)cfg.security.privateKeyPath;
+    (void)cfg.security.hsmLibPath;
+    (void)cfg.security.keyIndex;
+    (void)cfg.security.password;
+    (void)cfg.sealer.minSealTime;
+    (void)cfg.sealer.allowFreeNode;
+    (void)cfg.consensus.checkPointTimeoutInterval;
+    (void)cfg.consensus.pipelineSize;
+    (void)cfg.storage.dataPath;
+    (void)cfg.storage.stateDBPath;
+    (void)cfg.storage.blockDBPath;
+    (void)cfg.storage.type;
+    (void)cfg.storage.keyPageSize;
+    (void)cfg.storage.maxWriteBufferNumber;
+    (void)cfg.storage.enableStatistics;
+    (void)cfg.storage.maxBackgroundJobs;
+    (void)cfg.storage.writeBufferSize;
+    (void)cfg.storage.minWriteBufferNumberToMerge;
+    (void)cfg.storage.blockCacheSize;
+    (void)cfg.storage.enableRocksDBBlob;
+    (void)cfg.storage.pdCaPath;
+    (void)cfg.storage.pdCertPath;
+    (void)cfg.storage.pdKeyPath;
+    (void)cfg.storage.dbName;
+    (void)cfg.storage.stateDBName;
+    (void)cfg.storage.enableArchive;
+    (void)cfg.storage.syncArchivedBlocks;
+    (void)cfg.storage.enableSeparateBlockAndState;
+    (void)cfg.storage.archiveListenIP;
+    (void)cfg.storage.archiveListenPort;
+    (void)cfg.genesisConfig.m_consensusType;
+    (void)cfg.genesisConfig.m_txGasLimit;
 }
 
 BOOST_AUTO_TEST_CASE(loadConfigFromStringEmptyDoesNotLoseInvariant)
@@ -89,7 +88,7 @@ BOOST_AUTO_TEST_CASE(loadConfigFromStringEmptyDoesNotLoseInvariant)
     }
     catch (...)
     {}
-    BOOST_CHECK_NO_THROW(cfg.chainId());
+    (void)cfg.genesisConfig.m_chainID;
 }
 
 BOOST_AUTO_TEST_CASE(loadConfigFromStringPartialDocumentDispatchesSubLoaders)
@@ -110,57 +109,57 @@ BOOST_AUTO_TEST_CASE(loadConfigFromStringPartialDocumentDispatchesSubLoaders)
     }
     // Concrete post-condition: the [txpool] block was dispatched and applied.
     // (notifyWorkerNum() was the second post-condition; the getter no longer exists.)
-    BOOST_CHECK_EQUAL(cfg.txpoolLimit(), 15000U);
+    BOOST_CHECK_EQUAL(cfg.txpool.limit, 15000U);
 }
 
-// The cert/key material has direct setters (used when certs are injected
+// The cert/key material is directly assignable (used when certs are injected
 // rather than read from disk); check each round-trips.
 BOOST_AUTO_TEST_CASE(certMaterialSettersRoundTrip)
 {
     NodeConfig cfg;
-    cfg.setCertPath("/etc/certs");
-    BOOST_CHECK_EQUAL(cfg.certPath(), "/etc/certs");
-    cfg.setCaCert("ca-pem");
-    BOOST_CHECK_EQUAL(cfg.caCert(), "ca-pem");
-    cfg.setNodeCert("node-pem");
-    BOOST_CHECK_EQUAL(cfg.nodeCert(), "node-pem");
-    cfg.setNodeKey("node-key");
-    BOOST_CHECK_EQUAL(cfg.nodeKey(), "node-key");
-    cfg.setSmCaCert("sm-ca");
-    BOOST_CHECK_EQUAL(cfg.smCaCert(), "sm-ca");
-    cfg.setSmNodeCert("sm-node");
-    BOOST_CHECK_EQUAL(cfg.smNodeCert(), "sm-node");
-    cfg.setSmNodeKey("sm-key");
-    BOOST_CHECK_EQUAL(cfg.smNodeKey(), "sm-key");
-    cfg.setEnSmNodeCert("en-sm-node");
-    BOOST_CHECK_EQUAL(cfg.enSmNodeCert(), "en-sm-node");
-    cfg.setEnSmNodeKey("en-sm-key");
-    BOOST_CHECK_EQUAL(cfg.enSmNodeKey(), "en-sm-key");
-    cfg.setWithoutTarsFramework(true);
-    BOOST_CHECK(cfg.withoutTarsFramework());
+    cfg.cert.path = "/etc/certs";
+    BOOST_CHECK_EQUAL(cfg.cert.path, "/etc/certs");
+    cfg.cert.caCert = "ca-pem";
+    BOOST_CHECK_EQUAL(cfg.cert.caCert, "ca-pem");
+    cfg.cert.nodeCert = "node-pem";
+    BOOST_CHECK_EQUAL(cfg.cert.nodeCert, "node-pem");
+    cfg.cert.nodeKey = "node-key";
+    BOOST_CHECK_EQUAL(cfg.cert.nodeKey, "node-key");
+    cfg.cert.smCaCert = "sm-ca";
+    BOOST_CHECK_EQUAL(cfg.cert.smCaCert, "sm-ca");
+    cfg.cert.smNodeCert = "sm-node";
+    BOOST_CHECK_EQUAL(cfg.cert.smNodeCert, "sm-node");
+    cfg.cert.smNodeKey = "sm-key";
+    BOOST_CHECK_EQUAL(cfg.cert.smNodeKey, "sm-key");
+    cfg.cert.enSmNodeCert = "en-sm-node";
+    BOOST_CHECK_EQUAL(cfg.cert.enSmNodeCert, "en-sm-node");
+    cfg.cert.enSmNodeKey = "en-sm-key";
+    BOOST_CHECK_EQUAL(cfg.cert.enSmNodeKey, "en-sm-key");
+    cfg.service.withoutTarsFramework = true;
+    BOOST_CHECK(cfg.service.withoutTarsFramework);
 }
 
-// All read-only accessors must be queryable on a default-constructed config
-// (they return the documented defaults, never throw).
+// All config fields must be queryable on a default-constructed config
+// (they carry the documented defaults, never throw).
 BOOST_AUTO_TEST_CASE(readOnlyAccessorsQueryableOnDefault)
 {
     NodeConfig cfg;
-    BOOST_CHECK_NO_THROW(cfg.p2pListenIP());
-    BOOST_CHECK_NO_THROW(cfg.p2pListenPort());
-    BOOST_CHECK_NO_THROW(cfg.p2pSmSsl());
-    BOOST_CHECK_NO_THROW(cfg.p2pNodeDir());
-    BOOST_CHECK_NO_THROW(cfg.p2pNodeFileName());
-    BOOST_CHECK_NO_THROW(cfg.baselineSchedulerConfig());
-    BOOST_CHECK_NO_THROW(cfg.tarsRPCConfig());
-    BOOST_CHECK_NO_THROW(cfg.enableTxsFromFreeNode());
-    BOOST_CHECK_NO_THROW(cfg.preStoreBackpressureEnabled());
-    BOOST_CHECK_NO_THROW(cfg.preStoreMaxInflight());
-    BOOST_CHECK_NO_THROW(cfg.genesisConfig());
-    BOOST_CHECK_NO_THROW(cfg.checkTransactionSignature());
-    BOOST_CHECK_NO_THROW(cfg.checkParallelConflict());
-    BOOST_CHECK_NO_THROW(cfg.executorVersion());
-    BOOST_CHECK_NO_THROW(cfg.singlePointConsensus());
-    BOOST_CHECK_NO_THROW(cfg.forceSender());
+    (void)cfg.gateway.listenIP;
+    (void)cfg.gateway.listenPort;
+    (void)cfg.gateway.smSsl;
+    (void)cfg.gateway.nodeDir;
+    (void)cfg.gateway.nodeFileName;
+    (void)cfg.executor.baselineScheduler;
+    (void)cfg.tarsRPC;
+    (void)cfg.txpool.enableTxsFromFreeNode;
+    (void)cfg.txpool.preStoreBackpressureEnabled;
+    (void)cfg.txpool.preStoreMaxInflight;
+    (void)cfg.genesisConfig;
+    (void)cfg.others.checkTransactionSignature;
+    (void)cfg.others.checkParallelConflict;
+    (void)cfg.genesisConfig.m_executorVersion;
+    (void)cfg.others.singlePointConsensus;
+    (void)cfg.others.forceSender;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

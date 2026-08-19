@@ -81,7 +81,7 @@ void NodeServiceApp::initLog()
     nodeConfig.loadWithoutTarsFrameworkConfig(pt);
 
     m_logInitializer = std::make_shared<BoostLogInitializer>();
-    if (!nodeConfig.withoutTarsFramework())
+    if (!nodeConfig.service.withoutTarsFramework)
     {
         m_logInitializer->setLogPath(getLogPath());
     }
@@ -94,9 +94,9 @@ void NodeServiceApp::initNodeService()
     m_nodeInitializer = std::make_shared<Initializer>();
     m_nodeInitializer->initMicroServiceNode(
         m_nodeArchType, m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath, getLogPath());
-    auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
+    auto rpcServiceName = m_nodeInitializer->nodeConfig()->service.rpcServiceName;
 
-    auto withoutTarsFramework = m_nodeInitializer->nodeConfig()->withoutTarsFramework();
+    auto withoutTarsFramework = m_nodeInitializer->nodeConfig()->service.withoutTarsFramework;
 
     std::vector<tars::TC_Endpoint> endPoints;
     m_nodeInitializer->nodeConfig()->getTarsClientProxyEndpoints(

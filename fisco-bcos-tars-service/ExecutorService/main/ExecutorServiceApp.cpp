@@ -75,7 +75,7 @@ void ExecutorServiceApp::createAndInitExecutor()
     m_nodeConfig->loadWithoutTarsFrameworkConfig(pt);
 
     m_logInitializer = std::make_shared<bcos::BoostLogInitializer>();
-    if (!m_nodeConfig->withoutTarsFramework())
+    if (!m_nodeConfig->service.withoutTarsFramework)
     {
         m_logInitializer->setLogPath(getLogPath());
     }
@@ -89,7 +89,7 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     m_nodeConfig->loadGenesisConfig(genesisPt);
     m_nodeConfig->loadConfig(pt);
-    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->nodeName(), pt, true);
+    m_nodeConfig->loadNodeServiceConfig(m_nodeConfig->service.nodeName, pt, true);
     // init the protocol
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
     m_protocolInitializer->init(m_nodeConfig);
@@ -97,10 +97,10 @@ void ExecutorServiceApp::createAndInitExecutor()
     // for stat the nodeVersion
     bcos::initializer::showNodeVersionMetric();
 
-    auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
+    auto withoutTarsFramework = m_nodeConfig->service.withoutTarsFramework;
 
     // create txpool client
-    auto txpoolServiceName = m_nodeConfig->txpoolServiceName();
+    auto txpoolServiceName = m_nodeConfig->service.txpoolServiceName;
     EXECUTOR_SERVICE_LOG(INFO) << LOG_DESC("create TxPoolServiceClient")
                                << LOG_KV("txpoolServiceName", txpoolServiceName)
                                << LOG_KV("withoutTarsFramework", withoutTarsFramework);
@@ -114,7 +114,7 @@ void ExecutorServiceApp::createAndInitExecutor()
     m_txpool = std::make_shared<bcostars::TxPoolServiceClient>(txpoolServicePrx,
         m_protocolInitializer->cryptoSuite(), m_protocolInitializer->blockFactory());
 
-    auto schedulerServiceName = m_nodeConfig->schedulerServiceName();
+    auto schedulerServiceName = m_nodeConfig->service.schedulerServiceName;
 
     m_nodeConfig->getTarsClientProxyEndpoints(bcos::protocol::SCHEDULER_NAME, endPoints);
 
@@ -128,16 +128,18 @@ void ExecutorServiceApp::createAndInitExecutor()
         schedulerPrx, m_protocolInitializer->cryptoSuite());
 
     // create executor
-    auto storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(),
-        m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+    auto storage = StorageInitializer::build(m_nodeConfig->storage.pdAddrs, getLogPath(),
+        m_nodeConfig->storage.pdCaPath, m_nodeConfig->storage.pdCertPath,
+        m_nodeConfig->storage.pdKeyPath);
 
     bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
-    if (m_nodeConfig->enableLRUCacheStorage())
+    if (m_nodeConfig->storage.enableLRUCacheStorage)
     {
         cacheFactory = std::make_shared<bcos::storage::CacheStorageFactory>(
-            storage, m_nodeConfig->cacheSize());
+            storage, m_nodeConfig->storage.cacheSize);
         EXECUTOR_SERVICE_LOG(INFO)
-            << "createAndInitExecutor: enableLRUCacheStorage, size: " << m_nodeConfig->cacheSize();
+            << "createAndInitExecutor: enableLRUCacheStorage, size: "
+            << m_nodeConfig->storage.cacheSize;
     }
     else
     {
@@ -147,11 +149,11 @@ void ExecutorServiceApp::createAndInitExecutor()
     auto executionMessageFactory =
         std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
     auto stateStorageFactory =
-        std::make_shared<bcos::storage::StateStorageFactory>(m_nodeConfig->keyPageSize());
+        std::make_shared<bcos::storage::StateStorageFactory>(m_nodeConfig->storage.keyPageSize);
 
     auto blockFactory = m_protocolInitializer->blockFactory();
     auto ledger = std::make_shared<bcos::ledger::Ledger>(
-        blockFactory, storage, m_nodeConfig->blockLimit(), nullptr);
+        blockFactory, storage, m_nodeConfig->chain.blockLimit, nullptr);
 
     // Create IOServicePool for the MAX/TARS executor service.
     // In AIR mode this pool is shared across all modules; here the executor
@@ -161,8 +163,8 @@ void ExecutorServiceApp::createAndInitExecutor()
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
         m_txpool, cacheFactory, storage, executionMessageFactory, stateStorageFactory,
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->vmCacheSize(),
-        m_nodeConfig->isAuthCheck(), "executor", m_ioServicePool);
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->executor.vmCacheSize,
+        m_nodeConfig->genesisConfig.m_isAuthCheck, "executor", m_ioServicePool);
 
     m_executor =
         std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory, m_ioServicePool);

@@ -100,17 +100,17 @@ BOOST_AUTO_TEST_CASE(DefaultNoFeatureNoAllocs)
 {
     auto cfg = makeNodeConfig();
     cfg->loadGenesisConfig(parseIni(kBase));
-    BOOST_CHECK(cfg->genesisConfig().m_allocs.empty());
+    BOOST_CHECK(cfg->genesisConfig.m_allocs.empty());
 }
 
 BOOST_AUTO_TEST_CASE(FeatureL2WithAllocsParsed)
 {
     auto cfg = makeNodeConfig();
     cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2 + kAlloc0 + kAllocsEthHeader));
-    BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs.size(), 1U);
-    BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].address,
+    BOOST_CHECK_EQUAL(cfg->genesisConfig.m_allocs.size(), 1U);
+    BOOST_CHECK_EQUAL(cfg->genesisConfig.m_allocs[0].address,
         "0x43000000000000000000000000000000000000c0");  // forced lowercase
-    BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].code, "0x6080604052");
+    BOOST_CHECK_EQUAL(cfg->genesisConfig.m_allocs[0].code, "0x6080604052");
 }
 
 BOOST_AUTO_TEST_CASE(FeatureL2RejectsEmptyAllocs)
@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
                       "0x0000000000000000000000000000000000000000000000000000000000000001\n";
     auto cfg = makeNodeConfig();
     cfg->loadGenesisConfig(parseIni(ini));
-    auto const& allocs = cfg->genesisConfig().m_allocs;
+    auto const& allocs = cfg->genesisConfig.m_allocs;
     BOOST_CHECK_EQUAL(allocs.size(), 1U);
     BOOST_CHECK_EQUAL(allocs[0].storage.size(), 1U);
     BOOST_CHECK_EQUAL(allocs[0].storage[0].first,
