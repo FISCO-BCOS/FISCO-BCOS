@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+# setup_c2.sh — C2 devnet 一键搭建:anvil L1 + op-deployer 部署 + FISCO L2 + op-node sequencer
+#
+# 串起完整链路(op-deployer terminal allocs → FISCO overlay → config.genesis →
+# FISCO 启动 → op-node 出块)。幂等:已完成的步骤跳过(标志文件)。
+#
+# 依赖:anvil(foundry) / op-deployer(monorepo 构建) / op-node(monorepo 构建) /
+#       python3(pyyaml) / forge(bcos-l2-contracts 编译) / openssl
+#
+# 用法:
+#   bash setup_c2.sh                     # 全链路
+#   bash setup_c2.sh -s 2                # 从第 2 步开始(跳过已完成步骤)
+#   C2=~/c2 bash setup_c2.sh             # 自定义工作区(默认 /tmp/c2)
+#
+# 关键配置(踩坑后固化,见 docs/2026-08-19-session-handoff-final.md):
+#   - anvil L1: 8549,chain 900900,块时间 12s;op-deployer live 部署 L1 合约
+#   - FISCO L2: 8555(web3) / 8566(engine),chain 914901
+#   - rollup.json 的 L1 genesis 必须 = anvil block 0 哈希(非部署块)
+#   - rollup.json 的 L2 genesis 必须 = FISCO 实际创世哈希(非 op-deployer 计算值)
+#   - eth_genesis_header.timestamp 用毫秒(L1 时间戳 * 1000)
+#   - [features] feature_op_jovian=true(否则 9B extraData,op-node 拒绝)
+#   - op-node: --l1.beacon.ignore + --rollup.l1-chain-config(anvil 需 cancunTime)
+set -eu
+
+# ---------- 可调参数 ----------
+C2="${C2:-/tmp/c2}"
+MONOREPO="${MONOREPO:-/Users/octopus/octo/code/blockchain-impl/optimism}"
+FISCO_BIN="${FISCO_BIN:-/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/build/fisco-bcos-air/fisco-bcos}"
+OPGEN="${OPGEN:-/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/tools/opstack-genesis}"
+L2CONTRACTS="${L2CONTRACTS:-/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/bcos-l2-contracts}"
+
+# 端口(套件硬编码,勿改)
+ANVIL_PORT=8549; ANVIL_CHAIN=900900
+FISCO_WEB3=8555; FISCO_ENGINE=8566; FISCO_RPC=20213; FISCO_P2P=31400
+L2_CHAIN=914901
+
+# 账户(anvil 标准助记词)
+DEV0=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80   # deployer/owner
+DEV1=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d   # signer/proposer
+AUTH_ADMIN=0x70997970C51812dc3A010C7d01b50e0d17dc79C8                     # governance owner
+
+START="${START:-1}"; END="${END:-6}"
+step() { echo; echo "==== [$1/6] $2 ===="; }
+log() { echo "  >> $*"; }
+die() { echo "  !! $*" >&2; exit 1; }
+step_run() { [ "$1" -ge "$START" ] && [ "$1" -le "$END" ]; }
+
+mkdir -p "$C2/fisco/conf"
+cd "$C2"
+
+# ---------- 1. anvil L1 ----------
+if step_run 1; then
+  step 1 "anvil L1 (chain $ANVIL_CHAIN, port $ANVIL_PORT)"
+  if curl -s -o /dev/null -X POST http://127.0.0.1:$ANVIL_PORT \
+       -H 'Content-Type: application/json' \
+       -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_chainId\",\"params\":[],\"id\":1}"; then
+    log "anvil 已在运行,跳过"
+  else
+    anvil --port $ANVIL_PORT --chain-id $ANVIL_CHAIN \
+      --mnemonic "test test test test test test test test test test test junk" \
+      --block-time 12 > "$C2/anvil.log" 2>&1 &
+    echo $! > "$C2/anvil.pid"
+    sleep 2
+    log "anvil 启动(PID $(cat "$C2/anvil.pid"))"
+  fi
+fi
+
+# ---------- 2. op-deployer live 部署 ----------
+if step_run 2; then
+  step 2 "op-deployer 部署 L1 合约(live)"
+  [ -x "$C2/op-deployer" ] || die "op-deployer 不存在: $C2/op-deployer(需 monorepo 构建)"
+  rm -f "$C2/state.json"
+  "$C2/op-deployer" init --l1-chain-id $ANVIL_CHAIN --l2-chain-ids $L2_CHAIN \
+    --workdir "$C2" --intent-type custom || die "op-deployer init 失败"
+  cat > "$C2/intent.toml" <<EOF
+configType = "custom"
+opDeployerVersion = "v0.0.0-dev"
+l1ChainID = $ANVIL_CHAIN
+fundDevAccounts = true
+l1ContractsLocator = "embedded"
+l2ContractsLocator = "embedded"
+useInterop = false
+
+[superchainRoles]
+  SuperchainProxyAdminOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  SuperchainGuardian = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  Challenger = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+
+[[chains]]
+  id = "0x00000000000000000000000000000000000000000000000000000000000df5d5"
+  baseFeeVaultRecipient = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  l1FeeVaultRecipient = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  sequencerFeeVaultRecipient = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  operatorFeeVaultRecipient = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  eip1559DenominatorCanyon = 250
+  eip1559Denominator = 8
+  eip1559Elasticity = 2
+  gasLimit = 30000000
+  operatorFeeScalar = 0
+  operatorFeeConstant = 0
+  minBaseFee = 1000000000
+  daFootprintGasScalar = 312
+  [chains.roles]
+    l1ProxyAdminOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    l2ProxyAdminOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    systemConfigOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    unsafeBlockSigner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    batcher = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293bc"
+    proposer = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    challenger = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+EOF
+  "$C2/op-deployer" --log.level info apply \
+    --l1-rpc-url http://127.0.0.1:$ANVIL_PORT \
+    --private-key $DEV0 \
+    --workdir "$C2" || die "op-deployer apply 失败"
+  "$C2/op-deployer" inspect rollup $L2_CHAIN --workdir "$C2" > "$C2/rollup.json" 2>/dev/null || \
+    die "inspect rollup 失败"
+  "$C2/op-deployer" inspect genesis $L2_CHAIN --workdir "$C2" > "$C2/l2genesis.json" 2>/dev/null || \
+    die "inspect genesis 失败"
+  log "rollup.json + l2genesis.json 就绪"
+fi
+
+# ---------- 3. allocs + eth_genesis_header ----------
+if step_run 3; then
+  step 3 "allocs.ini + eth_genesis_header"
+  python3 -c "import yaml" 2>/dev/null || die "pyyaml 未安装"
+  NEW_HASH=$(sha256sum "$C2/l2genesis.json" | awk '{print $1}')
+  sed -i '' "s/base_allocs_sha256:.*/base_allocs_sha256: \"$NEW_HASH\"/" "$OPGEN/chain-config-c2.yaml"
+  python3 "$OPGEN/build-allocs.py" \
+    --config "$OPGEN/chain-config-c2.yaml" \
+    --contracts "$L2CONTRACTS" \
+    --base-allocs "$C2/l2genesis.json" \
+    --out "$C2/allocs-new.ini" || die "build-allocs 失败"
+  log "$(grep -c '^\[alloc' "$C2/allocs-new.ini") 个 alloc"
+
+  # L1 时间戳(秒)→ header 用毫秒(FISCO 内部毫秒存储)
+  L1_TS=$(python3 -c "
+import json, urllib.request
+req = urllib.request.Request('http://127.0.0.1:$ANVIL_PORT',
+    data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"latest\",false],\"id\":1}',
+    headers={'Content-Type':'application/json'})
+d = json.loads(urllib.request.urlopen(req).read())
+print(int(d['result']['timestamp'], 16))
+")
+  python3 -c "
+import json
+json.dump({'timestamp': hex($L1_TS * 1000)}, open('$C2/header_override.json', 'w'))
+"
+  python3 "$OPGEN/gen_eth_header_fixture.py" --toml --allocs "$C2/allocs-new.ini" \
+    "$C2/header_override.json" > "$C2/eth_genesis_header.ini" || die "gen_eth_header 失败"
+  log "eth_genesis_header 就绪(state_root=$(grep '^state_root=' "$C2/eth_genesis_header.ini" | cut -d= -f2 | head -c 18)...)"
+fi
+
+# ---------- 4. FISCO config.genesis + 启动 ----------
+if step_run 4; then
+  step 4 "FISCO L2 装配 + 启动"
+  [ -x "$FISCO_BIN" ] || die "FISCO 二进制不存在: $FISCO_BIN"
+  # 节点密钥/证书(幂等:已存在跳过)
+  OPENSSL=$(command -v openssl)
+  [ -f "$C2/fisco/node.pem" ] || "$OPENSSL" ecparam -genkey -name secp256k1 -noout -out "$C2/fisco/node.pem"
+  NODE_ID=$("$OPENSSL" ec -in "$C2/fisco/node.pem" -pubout -conv_form uncompressed 2>/dev/null \
+    | grep -v "PUBLIC KEY" | tr -d '\n' | base64 -d | tail -c 64 | xxd -p -c 64 | tr -d '\n')
+  if [ ! -f "$C2/fisco/conf/ssl.crt" ]; then
+    ( cd "$C2/fisco/conf" && \
+      "$OPENSSL" genrsa -out ca.key 2048 2>/dev/null && \
+      "$OPENSSL" req -new -x509 -days 3650 -subj "/CN=c2-ca/O=fisco-bcos/OU=chain" \
+        -key ca.key -out ca.crt 2>/dev/null && \
+      "$OPENSSL" genrsa -out ssl.key 2048 2>/dev/null && \
+      "$OPENSSL" req -new -sha256 -subj "/CN=c2-node/O=fisco-bcos/OU=agency" \
+        -key ssl.key -out node.csr 2>/dev/null && \
+      "$OPENSSL" x509 -req -days 3650 -in node.csr -CA ca.crt -CAkey ca.key \
+        -CAcreateserial -sha256 -out ssl.crt 2>/dev/null ) || die "证书生成失败"
+  fi
+  [ -f "$C2/fisco/conf/tars_proxy.ini" ] || echo "# in-process services" > "$C2/fisco/conf/tars_proxy.ini"
+  printf '{"nodes":["127.0.0.1:%d"]}' $FISCO_P2P > "$C2/fisco/nodes.json"
+  [ -f "$C2/fisco/jwt.hex" ] || "$OPENSSL" rand -hex 32 > "$C2/fisco/jwt.hex"
+
+  cat > "$C2/fisco/config.genesis" <<EOF
+[chain]
+    sm_crypto=false
+    chain_id=$L2_CHAIN
+    group_id=1
+    isthmus_time=0
+    jovian_time=0
+[consensus]
+    consensus_type=pbft
+    block_tx_count_limit=1000
+    leader_period=1
+    node.0=$NODE_ID
+    enable_single_node_consensus=false
+    block_interval=1000
+    produce_empty_blocks=false
+    fee_recipient=0x4200000000000000000000000000000000000011
+[version]
+    compatibility_version=3.18.0
+[tx]
+    gas_limit=3000000000
+[executor]
+    is_auth_check=false
+    is_serial_execute=true
+    version=3
+    evm_revision_forks=0:prague
+    auth_admin_account=$AUTH_ADMIN
+[features]
+    feature_l2_ethereum_compat=true
+    feature_op_jovian=true
+$(cat "$C2/eth_genesis_header.ini")
+[web3]
+    chain_id=$L2_CHAIN
+[service]
+    without_tars_framework=true
+[rpc]
+    listen_ip=127.0.0.1
+    listen_port=$FISCO_RPC
+[web3_rpc]
+    enable=true
+    listen_ip=127.0.0.1
+    listen_port=$FISCO_WEB3
+[op_engine_rpc]
+    enable=true
+    listen_ip=127.0.0.1
+    listen_port=$FISCO_ENGINE
+    jwt_secret_file=jwt.hex
+[storage]
+    enable_cache=true
+[p2p]
+    listen_ip=0.0.0.0
+    listen_port=$FISCO_P2P
+    nodes_path=./
+    nodes_file=nodes.json
+[cert]
+    ca_path=./conf
+    ca_cert=ca.crt
+    node_cert=ssl.crt
+    node_key=ssl.key
+[security]
+    private_key_path=node.pem
+[log]
+    enable=true
+    log_path=./log
+    level=info
+$(cat "$C2/allocs-new.ini")
+EOF
+  log "config.genesis 就绪($(wc -l < "$C2/fisco/config.genesis") 行)"
+
+  # 启动 FISCO(ulimit 解除 RocksDB 栈溢出)
+  kill "$(cat "$C2/fisco/node.pid" 2>/dev/null)" 2>/dev/null || true
+  sleep 1
+  ulimit -s 65520
+  cd "$C2/fisco" && nohup "$FISCO_BIN" -c config.genesis -g config.genesis > nohup.out 2>&1 &
+  echo $! > "$C2/fisco/node.pid"
+  sleep 5
+  curl -s -o /dev/null -X POST http://127.0.0.1:$FISCO_WEB3 \
+    -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' || die "FISCO 启动失败(见 nohup.out)"
+  log "FISCO 运行中(PID $(cat "$C2/fisco/node.pid"),web3 $FISCO_WEB3 / engine $FISCO_ENGINE)"
+fi
+
+# ---------- 5. rollup.json 对齐 + L1 chain config ----------
+if step_run 5; then
+  step 5 "rollup.json 对齐(实际创世哈希) + L1 chain config"
+  # L1 genesis = anvil block 0 哈希(不是部署块)
+  L1_HASH=$(python3 -c "
+import json, urllib.request
+req = urllib.request.Request('http://127.0.0.1:$ANVIL_PORT',
+    data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x0\",false],\"id\":1}',
+    headers={'Content-Type':'application/json'})
+print(json.loads(urllib.request.urlopen(req).read())['result']['hash'])
+")
+  # L2 genesis = FISCO 实际创世哈希
+  L2_HASH=$(python3 -c "
+import json, urllib.request
+req = urllib.request.Request('http://127.0.0.1:$FISCO_WEB3',
+    data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBlockByNumber\",\"params\":[\"0x0\",false],\"id\":1}',
+    headers={'Content-Type':'application/json'})
+print(json.loads(urllib.request.urlopen(req).read())['result']['hash'])
+")
+  python3 -c "
+import json
+r = json.load(open('$C2/rollup.json'))
+r['genesis']['l1']['hash'] = '$L1_HASH'
+r['genesis']['l1']['number'] = 0
+r['genesis']['l2']['hash'] = '$L2_HASH'
+json.dump(r, open('$C2/rollup.json', 'w'), indent=2)
+print('rollup.json 对齐:L1=' + '$L1_HASH'[:16] + '... L2=' + '$L2_HASH'[:16] + '...')
+"
+
+  # L1 chain config(anvil:cancunTime=0 + blobSchedule)
+  python3 -c "
+import json
+cfg = {'config': {
+    'chainId': $ANVIL_CHAIN,
+    'homesteadBlock': 0, 'eip150Block': 0, 'eip155Block': 0, 'eip158Block': 0,
+    'byzantiumBlock': 0, 'constantinopleBlock': 0, 'petersburgBlock': 0,
+    'istanbulBlock': 0, 'muirGlacierBlock': 0, 'berlinBlock': 0, 'londonBlock': 0,
+    'arrowGlacierBlock': 0, 'grayGlacierBlock': 0, 'cancunTime': 0,
+    'clique': {'period': 0, 'epoch': 30000},
+    'blobSchedule': {'cancun': {'target': 3, 'max': 6, 'baseFeeUpdateFraction': 332827}},
+}}
+json.dump(cfg, open('$C2/l1_chain_config.json', 'w'), indent=2)
+"
+  echo "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" > "$C2/sequencer.key"
+  log "rollup.json + l1_chain_config.json + sequencer.key 就绪"
+fi
+
+# ---------- 6. op-node 启动 ----------
+if step_run 6; then
+  step 6 "op-node sequencer 启动"
+  [ -x "$C2/op-node" ] || die "op-node 不存在: $C2/op-node(需 monorepo 构建)"
+  pgrep -f "op-node.*rollup.config $C2/rollup.json" | xargs kill 2>/dev/null || true
+  sleep 1
+  nohup "$C2/op-node" \
+    --rollup.config "$C2/rollup.json" \
+    --rollup.l1-chain-config "$C2/l1_chain_config.json" \
+    --l1 http://127.0.0.1:$ANVIL_PORT \
+    --l2 http://127.0.0.1:$FISCO_ENGINE \
+    --l2.jwt-secret "$C2/fisco/jwt.hex" \
+    --l2.enginekind geth \
+    --l1.beacon.ignore \
+    --sequencer.enabled \
+    --sequencer.l1-confs 1 \
+    --p2p.sequencer.key "$(cat "$C2/sequencer.key")" \
+    --log.level info \
+    --log.format json \
+    > "$C2/op-node.log" 2>&1 &
+  echo $! > "$C2/op-node.pid"
+  disown
+  sleep 10
+  BN=$(python3 -c "
+import json, urllib.request
+req = urllib.request.Request('http://127.0.0.1:$FISCO_WEB3',
+    data=b'{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}',
+    headers={'Content-Type':'application/json'})
+print(json.loads(urllib.request.urlopen(req).read())['result'])
+")
+  log "op-node 启动(PID $(cat "$C2/op-node.pid"),L2 block=$BN)"
+  [ "$BN" != "0x0" ] && log "✅ C2 出块中!deposit/withdraw 闭环可用"
+fi
+
+echo
+echo "=== C2 devnet 就绪 ==="
+echo "  anvil L1 : http://127.0.0.1:$ANVIL_PORT (chain $ANVIL_CHAIN)"
+echo "  FISCO L2 : web3 $FISCO_WEB3 / engine $FISCO_ENGINE (chain $L2_CHAIN)"
+echo "  常用操作 :"
+echo "    存款  : cast send <deposit_contract> \"depositTransaction(address,uint256,uint64,bool,bytes)\" <to> <amt> 100000 false 0x --value <amt>"
+echo "    提款  : cast send 0x4200000000000000000000000000000000000010 \"withdraw(address,uint256,uint32,bytes)\" 0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000 <amt> 100000 0x --value <amt> --legacy"
