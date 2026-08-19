@@ -33,10 +33,13 @@
 #include <boost/endian/conversion.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <array>
 #include <cstring>
 #include <exception>
 #include <range/v3/view/any_view.hpp>
 #include <set>
+#include <utility>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
@@ -153,6 +156,47 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         {
             throwDecode("typed body");
         }
+        // Dual layout: the stored bytes are the signing preimage (type || fields) or — for
+        // sealed OP blocks, whose extraTransactionBytes the engine overwrote with the full
+        // envelope — the wire form (type || fields || yParity,r,s). The per-type field
+        // count is fixed, so counting the list items discriminates unambiguously; a wire
+        // payload is already the assembled form and is returned verbatim.
+        {
+            static constexpr std::array<std::pair<uint8_t, std::size_t>, 4> c_typedFieldCounts{{
+                {0x01, 8},   // EIP-2930
+                {0x02, 9},   // EIP-1559
+                {0x03, 10},  // EIP-4844
+                {0x04, 11},  // EIP-7702
+            }};
+            auto const* expected =
+                std::find_if(c_typedFieldCounts.begin(), c_typedFieldCounts.end(),
+                    [txType](auto const& entry) { return entry.first == txType; });
+            if (!expected) [[unlikely]]
+            {
+                throwDecode("typed unknown type");
+            }
+            std::size_t itemCount = 0;
+            bcos::bytesRef counter(cursor.data(), header.payloadLength);
+            while (!counter.empty())
+            {
+                auto [countError, itemHeader] = bcos::codec::rlp::decodeHeader(counter);
+                if (countError || itemHeader.payloadLength > counter.size()) [[unlikely]]
+                {
+                    throwDecode("typed item count");
+                }
+                counter = counter.getCroppedData(itemHeader.payloadLength);
+                ++itemCount;
+            }
+            if (itemCount == expected->second + 3) [[unlikely]]
+            {
+                // wire form: already signed
+                return buffer;
+            }
+            if (itemCount != expected->second) [[unlikely]]
+            {
+                throwDecode("typed item count");
+            }
+        }
         bcos::bytesConstRef fields(cursor.data(), header.payloadLength);
 
         bcos::bytes sig;
@@ -204,30 +248,42 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         }
         else
         {
-            // EIP-155: item 7 is the signed chainId (items 8,9 are the 0,0 placeholders). Read
-            // chainId from the preimage itself -- that is the value the sender actually signed, so
-            // it is authoritative even though the whole tx arrived from an untrusted peer.
-            uint64_t chainId = 0;
-            if (auto chainIdError = bcos::codec::rlp::decode(walker, chainId)) [[unlikely]]
+            // Dual layout: the trailer is either the preimage's (chainId, 0, 0) or — for
+            // sealed OP blocks, whose extraTransactionBytes the engine overwrote with the
+            // full envelope — the wire (v, r, s). RLP encodes the integer 0 as an empty
+            // payload while secp256k1 r/s never are, so emptiness of items 8/9
+            // discriminates the two shapes unambiguously.
+            uint64_t item7 = 0;
+            bcos::bytes item8, item9;
+            if (auto trailerError = bcos::codec::rlp::decodeItems(walker, item7, item8, item9);
+                trailerError) [[unlikely]]
             {
-                throwDecode("legacy chainId");
-            }
-            // The preimage must end with exactly chainId,0,0 -- reject 7/8-item lists and
-            // non-zero trailers rather than misreading item 7 of some other shape as a chainId.
-            for (int i = 0; i < 2; ++i)
-            {
-                uint64_t zero = 0;
-                if (auto zeroError = bcos::codec::rlp::decode(walker, zero); zeroError || zero != 0)
-                    [[unlikely]]
-                {
-                    throwDecode("legacy trailing zeros");
-                }
+                throwDecode("legacy trailer");
             }
             if (!walker.empty()) [[unlikely]]
             {
                 throwDecode("legacy trailing garbage");
             }
-            v = chainId * 2 + 35 + yParity;
+            if (item8.empty() && item9.empty())
+            {
+                // preimage: item7 is the signed chainId (items 8,9 are the 0,0
+                // placeholders). It is what the sender actually signed, so it is
+                // authoritative even though the whole tx arrived from an untrusted peer.
+                v = item7 * 2 + 35 + yParity;
+            }
+            else
+            {
+                // wire: item7 is the EIP-155 v. Cross-check the trailer's r/s against the
+                // tars signature before adopting its v — the reassembled form must be the
+                // canonical assembly of (fields, tars signature), not just any stored
+                // bytes that happen to end in a signature-shaped trailer.
+                if (!std::equal(item8.begin(), item8.end(), r.begin(), r.end()) ||
+                    !std::equal(item9.begin(), item9.end(), s.begin(), s.end())) [[unlikely]]
+                {
+                    throwDecode("legacy signature mismatch");
+                }
+                v = item7;
+            }
         }
 
         bcos::bytes sig;

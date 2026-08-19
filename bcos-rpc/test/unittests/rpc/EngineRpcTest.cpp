@@ -208,6 +208,9 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
 
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 {
+    // Tier-2 (08-19): the OP face serves V4 (Isthmus+ payloads are V4-only on the build
+    // path). Mirror the V3 assertions: no-attrs FCU is VALID and the version reaches the
+    // service untouched.
     Json::Value params(Json::arrayValue);
     Json::Value fc;
     fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
@@ -218,8 +221,10 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     Json::Value response;
     CALL_ENGINE(forkchoiceUpdatedV4, params, response);
 
-    BOOST_CHECK(response.isMember("error"));
-    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(response["result"].isMember("payloadStatus"));
+    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
+    BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 4);
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV1)
@@ -268,14 +273,27 @@ BOOST_AUTO_TEST_CASE(getPayloadV3)
 
 BOOST_AUTO_TEST_CASE(getPayloadV4)
 {
+    // V4 is served on the OP face (Tier-2); mirror the V3 assertions plus the V4-only
+    // executionRequests member.
+    mockService.m_state->getPayloadResult->executionPayload.parentHash =
+        h256("1111111111111111111111111111111111111111111111111111111111111111");
+    mockService.m_state->getPayloadResult->executionPayload.blockHash =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
+    mockService.m_state->getPayloadResult->blockValue = u256(100);
+
     Json::Value params(Json::arrayValue);
     params.append("0x0000000021f32cc1");
 
     Json::Value response;
     CALL_ENGINE(getPayloadV4, params, response);
 
-    BOOST_CHECK(response.isMember("error"));
-    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(response["result"].isMember("executionPayload"));
+    BOOST_CHECK(response["result"].isMember("blockValue"));
+    BOOST_CHECK(response["result"].isMember("blobsBundle"));
+    BOOST_CHECK(response["result"].isMember("shouldOverrideBuilder"));
+    BOOST_CHECK(response["result"].isMember("executionRequests"));
+    BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 4);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV1)
@@ -412,12 +430,32 @@ BOOST_AUTO_TEST_CASE(newPayloadV3)
 
 BOOST_AUTO_TEST_CASE(newPayloadV4)
 {
+    // V4 is served on the OP face (Tier-2); mirror the V1 minimal-payload assertions.
     Json::Value params(Json::arrayValue);
+    Json::Value ep;
+    ep["parentHash"] = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    ep["feeRecipient"] = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    ep["stateRoot"] = "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    ep["receiptsRoot"] = "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    ep["logsBloom"] = "0x" + std::string(512, '0');
+    ep["prevRandao"] = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    ep["blockNumber"] = "0x1";
+    ep["gasLimit"] = "0x5208";
+    ep["gasUsed"] = "0x0";
+    ep["timestamp"] = "0x1";
+    ep["extraData"] = "0x1234";
+    ep["baseFeePerGas"] = "0x1";
+    ep["blockHash"] = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    ep["transactions"] = Json::Value(Json::arrayValue);
+    params.append(ep);
+
     Json::Value response;
     CALL_ENGINE(newPayloadV4, params, response);
 
-    BOOST_CHECK(response.isMember("error"));
-    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
+    BOOST_CHECK(response["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 4);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
