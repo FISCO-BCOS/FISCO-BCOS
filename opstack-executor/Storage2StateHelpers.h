@@ -103,7 +103,8 @@ inline std::optional<evmc::address> addressFromTableName(std::string_view tableK
 /// the OP execution world.
 inline std::string accountTableName(const evmc::address& addr)
 {
-    return bcos::ledger::mpt::accountTableName(bcos::Address{
-        bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}, bcos::DataAlignType::AlignRight});
+    // bytesConstRef 构造默认 AlignRight——20 字节地址恰为 20 字节，对齐不影响结果。
+    return bcos::ledger::mpt::accountTableName(
+        bcos::Address{bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}});
 }
 }  // namespace bcos::evm::evmstate
