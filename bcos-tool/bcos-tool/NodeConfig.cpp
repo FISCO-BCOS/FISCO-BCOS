@@ -1566,8 +1566,11 @@ void NodeConfig::StorageConfig::load(
     dataPath = _pt.get<std::string>("storage.data_path", "data/" + _groupID);
     type = _pt.get<std::string>("storage.type", "RocksDB");
     keyPageSize = _pt.get<int32_t>("storage.key_page_size", 10240);
-    maxWriteBufferNumber = _pt.get<int32_t>("storage.max_write_buffer_number", 4);
-    maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", 4);
+    // Fall back to the struct declaration: it is the single source of the
+    // effective defaults, so the two can never diverge again.
+    maxWriteBufferNumber =
+        _pt.get<int32_t>("storage.max_write_buffer_number", maxWriteBufferNumber);
+    maxBackgroundJobs = _pt.get<int32_t>("storage.max_background_jobs", maxBackgroundJobs);
     writeBufferSize = _pt.get<size_t>("storage.write_buffer_size", 64 << 20);
     minWriteBufferNumberToMerge = _pt.get<int32_t>("storage.min_write_buffer_number_to_merge", 1);
     blockCacheSize = _pt.get<size_t>("storage.block_cache_size", 128 << 20);
@@ -1586,6 +1589,9 @@ void NodeConfig::StorageConfig::load(
                              << LOG_KV("separateBlockAndState", enableSeparateBlockAndState)
                              << LOG_KV("storageType", type);
     }
+    // Derived paths: stateDBPath/blockDBPath are derived from dataPath at load
+    // time; a direct post-load write to dataPath would desync them (documented
+    // here rather than enforced — the struct keeps plain public fields).
     stateDBPath = dataPath + "/state";
     blockDBPath = dataPath + "/block";
 

@@ -66,6 +66,13 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaultsAndTikv)
     LoaderProbe a;
     a.loadStorageConfig({});  // pure defaults — covers the bulk of the loader
     BOOST_CHECK_EQUAL(a.storage.type, "RocksDB");
+    // Pin the RocksDB numeric defaults: the struct declaration is the single
+    // source and load() falls back to it, so a future edit to either side
+    // must fail this test instead of silently drifting.
+    BOOST_CHECK_EQUAL(a.storage.maxWriteBufferNumber, 4);
+    BOOST_CHECK_EQUAL(a.storage.maxBackgroundJobs, 4);
+    BOOST_CHECK_EQUAL(a.storage.writeBufferSize, 64U << 20);
+    BOOST_CHECK_EQUAL(a.storage.minWriteBufferNumberToMerge, 1);
 
     LoaderProbe b;  // TiKV branch disables separate block/state
     b.loadStorageConfig(fromIni("[storage]\ntype=TiKV\nenable_separate_block_state=true\n"));

@@ -33,48 +33,50 @@ BOOST_AUTO_TEST_CASE(isValidPortRejectsReservedAndOutOfRange)
 BOOST_AUTO_TEST_CASE(defaultsAreReadableWithoutLoad)
 {
     NodeConfig cfg;
-    // None of these should crash on a freshly-constructed NodeConfig.
-    (void)cfg.genesisConfig.m_smCrypto;
-    (void)cfg.genesisConfig.m_compatibilityVersion;
-    (void)cfg.genesisConfig.m_chainID;
-    (void)cfg.genesisConfig.m_groupID;
-    (void)cfg.txpool.limit;
+    // Defaults on a freshly-constructed NodeConfig — the struct declarations in
+    // NodeConfig.h are the single source (load() falls back to them), so these
+    // assertions pin them and catch any future header/load divergence.
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_smCrypto, false);
+    BOOST_CHECK_GT(cfg.genesisConfig.m_compatibilityVersion, 0U);
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_chainID, "");
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_groupID, "");
+    BOOST_CHECK_EQUAL(cfg.txpool.limit, 15000U);
     // notifyWorkerNum() / verifierWorkerNum() were removed with the per-module worker-pool knobs
     // (thread_pool.io_thread_count now sizes the shared pool), so there is nothing to probe here.
-    (void)cfg.txpool.checkBlockLimit;
-    (void)cfg.chain.blockLimit;
-    (void)cfg.security.privateKeyPath;
-    (void)cfg.security.hsmLibPath;
-    (void)cfg.security.keyIndex;
-    (void)cfg.security.password;
-    (void)cfg.sealer.minSealTime;
-    (void)cfg.sealer.allowFreeNode;
-    (void)cfg.consensus.checkPointTimeoutInterval;
-    (void)cfg.consensus.pipelineSize;
-    (void)cfg.storage.dataPath;
-    (void)cfg.storage.stateDBPath;
-    (void)cfg.storage.blockDBPath;
-    (void)cfg.storage.type;
-    (void)cfg.storage.keyPageSize;
-    (void)cfg.storage.maxWriteBufferNumber;
-    (void)cfg.storage.enableStatistics;
-    (void)cfg.storage.maxBackgroundJobs;
-    (void)cfg.storage.writeBufferSize;
-    (void)cfg.storage.minWriteBufferNumberToMerge;
-    (void)cfg.storage.blockCacheSize;
-    (void)cfg.storage.enableRocksDBBlob;
-    (void)cfg.storage.pdCaPath;
-    (void)cfg.storage.pdCertPath;
-    (void)cfg.storage.pdKeyPath;
-    (void)cfg.storage.dbName;
-    (void)cfg.storage.stateDBName;
-    (void)cfg.storage.enableArchive;
-    (void)cfg.storage.syncArchivedBlocks;
-    (void)cfg.storage.enableSeparateBlockAndState;
-    (void)cfg.storage.archiveListenIP;
-    (void)cfg.storage.archiveListenPort;
-    (void)cfg.genesisConfig.m_consensusType;
-    (void)cfg.genesisConfig.m_txGasLimit;
+    BOOST_CHECK_EQUAL(cfg.txpool.checkBlockLimit, true);
+    BOOST_CHECK_EQUAL(cfg.chain.blockLimit, 1000U);
+    BOOST_CHECK_EQUAL(cfg.security.privateKeyPath, "node.pem");
+    BOOST_CHECK_EQUAL(cfg.security.hsmLibPath, "");
+    BOOST_CHECK_EQUAL(cfg.security.keyIndex, 0);
+    BOOST_CHECK_EQUAL(cfg.security.password, "");
+    BOOST_CHECK_EQUAL(cfg.sealer.minSealTime, 500U);
+    BOOST_CHECK_EQUAL(cfg.sealer.allowFreeNode, false);
+    BOOST_CHECK_EQUAL(cfg.consensus.checkPointTimeoutInterval,
+        (size_t)NodeConfig::DEFAULT_MIN_CONSENSUS_TIME_MS);
+    BOOST_CHECK_EQUAL(cfg.consensus.pipelineSize, (size_t)NodeConfig::DEFAULT_PIPELINE_SIZE);
+    BOOST_CHECK_EQUAL(cfg.storage.dataPath, "");
+    BOOST_CHECK_EQUAL(cfg.storage.stateDBPath, "");
+    BOOST_CHECK_EQUAL(cfg.storage.blockDBPath, "");
+    BOOST_CHECK_EQUAL(cfg.storage.type, "RocksDB");
+    BOOST_CHECK_EQUAL(cfg.storage.keyPageSize, 10240U);
+    BOOST_CHECK_EQUAL(cfg.storage.maxWriteBufferNumber, 4);
+    BOOST_CHECK_EQUAL(cfg.storage.maxBackgroundJobs, 4);
+    BOOST_CHECK_EQUAL(cfg.storage.writeBufferSize, 64U << 20);
+    BOOST_CHECK_EQUAL(cfg.storage.minWriteBufferNumberToMerge, 1);
+    BOOST_CHECK_EQUAL(cfg.storage.blockCacheSize, 128U << 20);
+    BOOST_CHECK_EQUAL(cfg.storage.enableRocksDBBlob, false);
+    BOOST_CHECK_EQUAL(cfg.storage.pdCaPath, "");
+    BOOST_CHECK_EQUAL(cfg.storage.pdCertPath, "");
+    BOOST_CHECK_EQUAL(cfg.storage.pdKeyPath, "");
+    BOOST_CHECK_EQUAL(cfg.storage.dbName, "storage");
+    BOOST_CHECK_EQUAL(cfg.storage.stateDBName, "state");
+    BOOST_CHECK_EQUAL(cfg.storage.enableArchive, false);
+    BOOST_CHECK_EQUAL(cfg.storage.syncArchivedBlocks, false);
+    BOOST_CHECK_EQUAL(cfg.storage.enableSeparateBlockAndState, false);
+    BOOST_CHECK_EQUAL(cfg.storage.archiveListenIP, "");
+    BOOST_CHECK_EQUAL(cfg.storage.archiveListenPort, 0);
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_consensusType, "");
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_txGasLimit, 3000000000U);
 }
 
 BOOST_AUTO_TEST_CASE(loadConfigFromStringEmptyDoesNotLoseInvariant)
@@ -144,22 +146,23 @@ BOOST_AUTO_TEST_CASE(certMaterialSettersRoundTrip)
 BOOST_AUTO_TEST_CASE(readOnlyAccessorsQueryableOnDefault)
 {
     NodeConfig cfg;
-    (void)cfg.gateway.listenIP;
-    (void)cfg.gateway.listenPort;
-    (void)cfg.gateway.smSsl;
-    (void)cfg.gateway.nodeDir;
-    (void)cfg.gateway.nodeFileName;
-    (void)cfg.executor.baselineScheduler;
-    (void)cfg.tarsRPC;
-    (void)cfg.txpool.enableTxsFromFreeNode;
-    (void)cfg.txpool.preStoreBackpressureEnabled;
-    (void)cfg.txpool.preStoreMaxInflight;
-    (void)cfg.genesisConfig;
-    (void)cfg.others.checkTransactionSignature;
-    (void)cfg.others.checkParallelConflict;
-    (void)cfg.genesisConfig.m_executorVersion;
-    (void)cfg.others.singlePointConsensus;
-    (void)cfg.others.forceSender;
+    BOOST_CHECK_EQUAL(cfg.gateway.listenIP, "");
+    BOOST_CHECK_EQUAL(cfg.gateway.listenPort, 0);
+    BOOST_CHECK_EQUAL(cfg.gateway.smSsl, false);
+    BOOST_CHECK_EQUAL(cfg.gateway.nodeDir, "./");
+    BOOST_CHECK_EQUAL(cfg.gateway.nodeFileName, "nodes.json");
+    BOOST_CHECK_EQUAL(cfg.executor.baselineScheduler.parallel, false);
+    BOOST_CHECK_EQUAL(cfg.executor.baselineScheduler.grainSize, 0);
+    BOOST_CHECK_EQUAL(cfg.tarsRPC.host, "");
+    BOOST_CHECK_EQUAL(cfg.tarsRPC.port, 0);
+    BOOST_CHECK_EQUAL(cfg.txpool.enableTxsFromFreeNode, false);
+    BOOST_CHECK_EQUAL(cfg.txpool.preStoreBackpressureEnabled, true);
+    BOOST_CHECK_EQUAL(cfg.txpool.preStoreMaxInflight, 1024U);
+    BOOST_CHECK_EQUAL(cfg.others.checkTransactionSignature, true);
+    BOOST_CHECK_EQUAL(cfg.others.checkParallelConflict, true);
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_executorVersion, 0);
+    BOOST_CHECK_EQUAL(cfg.others.singlePointConsensus, false);
+    BOOST_CHECK(cfg.others.forceSender.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

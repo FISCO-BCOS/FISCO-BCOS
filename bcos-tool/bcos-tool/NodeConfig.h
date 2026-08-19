@@ -47,8 +47,9 @@ public:
 
     using Ptr = std::shared_ptr<NodeConfig>;
     // ================================================================
-    // Config domains — public fields, grouped per INI section, each with
-    // a self-contained load() that parses and validates its own section.
+    // Config domains — public fields grouped per config domain (mostly 1:1
+    // with INI sections; a few load()s read across sections, and
+    // ServiceConfig is populated by the loadXxxServiceConfig methods).
     // ================================================================
 
     struct BaselineSchedulerConfig
@@ -131,8 +132,10 @@ public:
         std::string pdCertPath;
         std::string pdKeyPath;
         bool enableStatistics = false;
-        int maxWriteBufferNumber = 3;
-        int maxBackgroundJobs = 3;
+        // Effective defaults are 4/4/64MB/1 (matching load()); the struct is the
+        // single source and load() falls back to these members.
+        int maxWriteBufferNumber = 4;
+        int maxBackgroundJobs = 4;
         size_t writeBufferSize = 64 << 20;
         int minWriteBufferNumberToMerge = 1;
         size_t blockCacheSize = 128 << 20;
@@ -213,6 +216,11 @@ public:
         std::string feeRecipient = "0x0000000000000000000000000000000000000000";
         std::string prevRandao;
         uint64_t fixedTimestamp = 0;
+
+    private:
+        // load() stays behind the guarded NodeConfig::loadSingleNodeConsensusConfig
+        // so the op-engine / single-node mutual-exclusion check cannot be bypassed.
+        friend class NodeConfig;
         void load(boost::property_tree::ptree const& _pt);
     } singleNodeConsensus;
 
