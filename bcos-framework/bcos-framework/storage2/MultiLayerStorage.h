@@ -569,10 +569,17 @@ public:
     /// (m_storages.back(), FIFO). If mergeBackStorage throws, the pushed layer stays queued for
     /// retry (degraded semantics, exception propagation decided by caller). No-op on empty mutable.
     ///
+    /// ⚠️ WARNING — FIFO merge target, NOT the pushed layer:
+    /// The push adds the view to the FRONT of the deque, but mergeBackStorage merges the BACK
+    /// (oldest pending). So the layer just pushed is NOT the one that gets merged this call —
+    /// it will be merged by a FUTURE mergeView/mergeBackStorage call when it becomes the oldest.
+    /// If the deque already has N pending layers, this call merges the Nth-oldest, not the (N+1)th
+    /// just pushed. Callers that need the pushed layer's writes to reach the backend immediately
+    /// must drain the deque first (call mergeBackStorage in a loop until empty).
+    ///
     /// Caveats:
-    /// 1. Merge targets the OLDEST pending layer (FIFO), not the one just pushed — one-block lag.
-    /// 2. NOT atomic: pushView and mergeBackStorage are independent critical sections.
-    /// Empty-mutable no-op: a view with no writes does NOT advance the merge pipeline.
+    /// 1. NOT atomic: pushView and mergeBackStorage are independent critical sections.
+    /// 2. Empty-mutable no-op: a view with no writes does NOT advance the merge pipeline.
     task::Task<void> mergeView(ViewType view)
     {
         if (!view.m_mutableStorage)
