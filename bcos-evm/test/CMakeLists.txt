@@ -27,8 +27,12 @@ add_executable(bcos-evm-opstack-tests
     opstack/OpFloorGasTest.cpp
     opstack/OpZeroFeeSpikeTest.cpp
     opstack/StateRootComputeTest.cpp
+    opstack/OpCommonTest.cpp
+    opstack/Storage2StateBridgeTest.cpp
     testutils/MemoryState.cpp
 )
+target_include_directories(bcos-evm-opstack-tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/opstack-executor)
 target_link_libraries(bcos-evm-opstack-tests PRIVATE
     bcosevm::opstack
     protocol-tars
