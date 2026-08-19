@@ -149,34 +149,35 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
 {
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr blockStorage = nullptr;
-    std::string stateDBPath = nodeConfig->storagePath();
-    if (nodeConfig->enableSeparateBlockAndState())
+    std::string stateDBPath = nodeConfig->storage.dataPath;
+    if (nodeConfig->storage.enableSeparateBlockAndState)
     {
-        stateDBPath = nodeConfig->stateDBPath();
+        stateDBPath = nodeConfig->storage.stateDBPath;
     }
-    if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
+    if (boost::iequals(nodeConfig->storage.type, "RocksDB"))
     {
         bcos::security::StorageEncryptInterface::Ptr dataEncryption = nullptr;
-        if (nodeConfig->storageSecurityEnable())
+        if (nodeConfig->storageSecurity.enable)
         {
             dataEncryption = std::make_shared<bcos::security::BcosKmsDataEncryption>(nodeConfig);
         }
         if (write)
         {
             RocksDBOption option;
-            option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
-            option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
-            option.writeBufferSize = nodeConfig->writeBufferSize();
-            option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
-            option.blockCacheSize = nodeConfig->blockCacheSize();
-            option.enableDBStatistics = nodeConfig->enableStatistics();
-            storage = StorageInitializer::build(
-                StorageInitializer::createRocksDB(stateDBPath, option, nodeConfig->keyPageSize()),
+            option.maxWriteBufferNumber = nodeConfig->storage.maxWriteBufferNumber;
+            option.maxBackgroundJobs = nodeConfig->storage.maxBackgroundJobs;
+            option.writeBufferSize = nodeConfig->storage.writeBufferSize;
+            option.minWriteBufferNumberToMerge = nodeConfig->storage.minWriteBufferNumberToMerge;
+            option.blockCacheSize = nodeConfig->storage.blockCacheSize;
+            option.enableDBStatistics = nodeConfig->storage.enableStatistics;
+            storage = StorageInitializer::build(StorageInitializer::createRocksDB(
+                                                    stateDBPath, option, nodeConfig->storage.keyPageSize),
                 dataEncryption);
             blockStorage = storage;
-            if (nodeConfig->enableSeparateBlockAndState())
+            if (nodeConfig->storage.enableSeparateBlockAndState)
             {
-                auto blockDB = StorageInitializer::createRocksDB(nodeConfig->blockDBPath(), option);
+                auto blockDB =
+                    StorageInitializer::createRocksDB(nodeConfig->storage.blockDBPath, option);
                 blockStorage = StorageInitializer::build(std::move(blockDB), dataEncryption);
             }
         }
@@ -186,20 +187,21 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
             storage = std::make_shared<RocksDBStorage>(
                 std::unique_ptr<rocksdb::DB>(rocksdb), dataEncryption);
             blockStorage = storage;
-            if (nodeConfig->enableSeparateBlockAndState())
+            if (nodeConfig->storage.enableSeparateBlockAndState)
             {
                 auto* blockRocksDB =
-                    createSecondaryRocksDB(nodeConfig->blockDBPath(), secondaryPath);
+                    createSecondaryRocksDB(nodeConfig->storage.blockDBPath, secondaryPath);
                 blockStorage = std::make_shared<RocksDBStorage>(
                     std::unique_ptr<rocksdb::DB>(blockRocksDB), dataEncryption);
             }
         }
     }
-    else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
+    else if (boost::iequals(nodeConfig->storage.type, "TiKV"))
     {
 #ifdef WITH_TIKV
-        storage = StorageInitializer::build(nodeConfig->pdAddrs(), logPath, nodeConfig->pdCaPath(),
-            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
+        storage = StorageInitializer::build(nodeConfig->storage.pdAddrs, logPath,
+            nodeConfig->storage.pdCaPath, nodeConfig->storage.pdCertPath,
+            nodeConfig->storage.pdKeyPath);
 #endif
     }
     else
@@ -288,7 +290,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
 {
     // auto receiptFlag = bcos::ledger::RECEIPTS;
     bcos::crypto::Hash::Ptr hashImpl = nullptr;
-    if (nodeConfig->smCryptoType())
+    if (nodeConfig->genesisConfig.m_smCrypto)
     {
         hashImpl = std::make_shared<bcos::crypto::SM3>();
     }
@@ -367,11 +369,11 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
     auto ledger = std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(),
-        localStorage, nodeConfig->blockLimit(), localBlockStorage);
+        localStorage, nodeConfig->chain.blockLimit, localBlockStorage);
     auto blockFactory = protocolInitializer->blockFactory();
     auto transactionFactory = blockFactory->transactionFactory();
     auto receiptFactory = blockFactory->receiptFactory();
-    if (!nodeConfig->enableSendBlockStatusByTree())
+    if (!nodeConfig->sync.enableSendBlockStatusByTree)
     {
         localBlockStorage = localStorage;
     }
@@ -721,12 +723,12 @@ int main(int argc, const char* argv[])
     if (boost::iequals(archiveType, "RocksDB"))
     {  // create archive rocksDB storage
         RocksDBOption option;
-        option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
-        option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
-        option.writeBufferSize = nodeConfig->writeBufferSize();
-        option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
-        option.blockCacheSize = nodeConfig->blockCacheSize();
-        option.enableDBStatistics = nodeConfig->enableStatistics();
+        option.maxWriteBufferNumber = nodeConfig->storage.maxWriteBufferNumber;
+        option.maxBackgroundJobs = nodeConfig->storage.maxBackgroundJobs;
+        option.writeBufferSize = nodeConfig->storage.writeBufferSize;
+        option.minWriteBufferNumberToMerge = nodeConfig->storage.minWriteBufferNumberToMerge;
+        option.blockCacheSize = nodeConfig->storage.blockCacheSize;
+        option.enableDBStatistics = nodeConfig->storage.enableStatistics;
         archiveStorage = StorageInitializer::build(
             StorageInitializer::createRocksDB(archivePath, option), nullptr);
     }

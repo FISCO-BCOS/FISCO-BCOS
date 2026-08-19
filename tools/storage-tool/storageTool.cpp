@@ -244,38 +244,39 @@ TransactionalStorageInterface::Ptr createBackendStorage(
     bool write = false, const std::string& secondaryPath = "./rocksdb_secondary/")
 {
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
-    if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
+    if (boost::iequals(nodeConfig->storage.type, "RocksDB"))
     {
         bcos::security::StorageEncryptInterface::Ptr dataEncryption = nullptr;
-        if (nodeConfig->storageSecurityEnable())
+        if (nodeConfig->storageSecurity.enable)
         {
             dataEncryption = std::make_shared<bcos::security::BcosKmsDataEncryption>(nodeConfig);
         }
         if (write)
         {
             RocksDBOption option;
-            option.maxWriteBufferNumber = nodeConfig->maxWriteBufferNumber();
-            option.maxBackgroundJobs = nodeConfig->maxBackgroundJobs();
-            option.writeBufferSize = nodeConfig->writeBufferSize();
-            option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
-            option.blockCacheSize = nodeConfig->blockCacheSize();
+            option.maxWriteBufferNumber = nodeConfig->storage.maxWriteBufferNumber;
+            option.maxBackgroundJobs = nodeConfig->storage.maxBackgroundJobs;
+            option.writeBufferSize = nodeConfig->storage.writeBufferSize;
+            option.minWriteBufferNumberToMerge = nodeConfig->storage.minWriteBufferNumberToMerge;
+            option.blockCacheSize = nodeConfig->storage.blockCacheSize;
 
             storage = StorageInitializer::build(
-                StorageInitializer::createRocksDB(nodeConfig->storagePath(), option),
+                StorageInitializer::createRocksDB(nodeConfig->storage.dataPath, option),
                 dataEncryption);
         }
         else
         {
-            auto* rocksdb = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+            auto* rocksdb = createSecondaryRocksDB(nodeConfig->storage.dataPath, secondaryPath);
             storage = std::make_shared<RocksDBStorage>(
                 std::unique_ptr<rocksdb::DB>(rocksdb), dataEncryption);
         }
     }
-    else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
+    else if (boost::iequals(nodeConfig->storage.type, "TiKV"))
     {
 #ifdef WITH_TIKV
-        storage = StorageInitializer::build(nodeConfig->pdAddrs(), logPath, nodeConfig->pdCaPath(),
-            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
+        storage = StorageInitializer::build(nodeConfig->storage.pdAddrs, logPath,
+            nodeConfig->storage.pdCaPath, nodeConfig->storage.pdCertPath,
+            nodeConfig->storage.pdKeyPath);
 #endif
     }
     else
@@ -460,13 +461,14 @@ int main(int argc, const char* argv[])
 
     nodeConfig->loadConfig(configPath);
     bcos::security::StorageEncryptInterface::Ptr dataEncryption = nullptr;
-    if (nodeConfig->storageSecurityEnable())
+    if (nodeConfig->storageSecurity.enable)
     {
         dataEncryption = std::make_shared<bcos::security::BcosKmsDataEncryption>(nodeConfig);
     }
 
-    auto keyPageSize = nodeConfig->keyPageSize();
-    auto keyPageIgnoreTables = getKeyPageIgnoreTables(nodeConfig->compatibilityVersion());
+    auto keyPageSize = nodeConfig->storage.keyPageSize;
+    auto keyPageIgnoreTables =
+        getKeyPageIgnoreTables(nodeConfig->genesisConfig.m_compatibilityVersion);
     std::string secondaryPath = "./rocksdb_secondary/";
     std::string remoteSecondaryPath = "./rocksdb_secondary/";
     if (params.count("read"))
@@ -493,8 +495,8 @@ int main(int argc, const char* argv[])
         StorageInterface::Ptr storage = createBackendStorage(nodeConfig, logInitializer->logPath());
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            auto keyPageStorage =
-                createKeyPageStorage(storage, keyPageSize, nodeConfig->compatibilityVersion());
+            auto keyPageStorage = createKeyPageStorage(
+                storage, keyPageSize, nodeConfig->genesisConfig.m_compatibilityVersion);
             keyPageStorage->setReadOnly(true);
             storage = keyPageStorage;
         }
@@ -554,8 +556,8 @@ int main(int argc, const char* argv[])
         StorageInterface::Ptr storage = rocksdbStorage;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            storage =
-                createKeyPageStorage(storage, keyPageSize, nodeConfig->compatibilityVersion());
+            storage = createKeyPageStorage(
+                storage, keyPageSize, nodeConfig->genesisConfig.m_compatibilityVersion);
         }
         // std::promise<std::pair<Error::UniquePtr, std::optional<Entry>>> getPromise;
         // storage->asyncGetRow(
@@ -622,13 +624,14 @@ int main(int argc, const char* argv[])
         StorageInterface::Ptr storage = createBackendStorage(nodeConfig, logInitializer->logPath());
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {
-            storage =
-                createKeyPageStorage(storage, keyPageSize, nodeConfig->compatibilityVersion());
+            storage = createKeyPageStorage(
+                storage, keyPageSize, nodeConfig->genesisConfig.m_compatibilityVersion);
         }
         auto outputFileName = tableName + ".txt";
         boost::replace_all(outputFileName, "/", "_");
         ofstream outfile("./" + outputFileName);
-        outfile << "db path : " << nodeConfig->storagePath() << ", table : " << tableName << endl;
+        outfile << "db path : " << nodeConfig->storage.dataPath << ", table : " << tableName
+                << endl;
         if (keyPageSize > 0 && !keyPageIgnoreTables->count(tableName))
         {  // keypage
             size_t batchSize = 1000;
@@ -667,10 +670,11 @@ int main(int argc, const char* argv[])
         }
         else
         {
-            if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
+            if (boost::iequals(nodeConfig->storage.type, "RocksDB"))
             {
                 // rocksdb
-                auto* rocksdb = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+                auto* rocksdb =
+                    createSecondaryRocksDB(nodeConfig->storage.dataPath, secondaryPath);
                 rocksdb::Iterator* it = rocksdb->NewIterator(rocksdb::ReadOptions());
                 it->Seek(tableName);
                 while (it->Valid())
@@ -690,12 +694,13 @@ int main(int argc, const char* argv[])
                 }
                 delete it;
             }
-            else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
+            else if (boost::iequals(nodeConfig->storage.type, "TiKV"))
             {
 #ifdef WITH_TIKV
                 std::shared_ptr<tikv_client::TransactionClient> cluster = nullptr;
-                cluster = storage::newTiKVClient(nodeConfig->pdAddrs(), logInitializer->logPath(),
-                    nodeConfig->pdCaPath(), nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
+                cluster = storage::newTiKVClient(nodeConfig->storage.pdAddrs,
+                    logInitializer->logPath(), nodeConfig->storage.pdCaPath,
+                    nodeConfig->storage.pdCertPath, nodeConfig->storage.pdKeyPath);
                 auto snapshot = cluster->snapshot();
                 bool finished = false;
                 uint32_t batch = 256;
@@ -738,11 +743,11 @@ int main(int argc, const char* argv[])
     else if (params.count("stateSize") || params.count("S") || params.count("statistic") ||
              params.count("s"))
     {
-        if (boost::iequals(nodeConfig->storageType(), "RocksDB"))
+        if (boost::iequals(nodeConfig->storage.type, "RocksDB"))
         {
             if (params.count("statistic") || params.count("s"))
             {  // statistics
-                auto* db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+                auto* db = createSecondaryRocksDB(nodeConfig->storage.dataPath, secondaryPath);
                 getTableSize(db, storage::StorageInterface::SYS_TABLES);
                 getTableSize(db, ledger::SYS_CONSENSUS);
                 getTableSize(db, ledger::SYS_CONFIG);
@@ -761,7 +766,7 @@ int main(int argc, const char* argv[])
             }
             if (params.count("stateSize") || params.count("S"))
             {  // calculate contract data size
-                auto* db = createSecondaryRocksDB(nodeConfig->storagePath(), secondaryPath);
+                auto* db = createSecondaryRocksDB(nodeConfig->storage.dataPath, secondaryPath);
                 getTableSize(db, storage::FS_ROOT);
                 getTableSize(db, storage::FS_APPS);
                 getTableSize(db, storage::FS_USER);
@@ -769,7 +774,7 @@ int main(int argc, const char* argv[])
                 getTableSize(db, storage::FS_USER_TABLE);
             }
         }
-        else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
+        else if (boost::iequals(nodeConfig->storage.type, "TiKV"))
         {
 #ifdef WITH_TIKV
             // TODO: add TiKV support

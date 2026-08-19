@@ -47,7 +47,9 @@ public:
 
     using Ptr = std::shared_ptr<NodeConfig>;
 
-    // setters still expose the legacy members until the cutover phase.
+    // Config domains — public fields grouped per config domain; each
+    // domain is populated by the matching loadXxxConfig method and the
+    // struct fields are the single source (no getters/setters).
     // ================================================================
 
     struct BaselineSchedulerConfig
