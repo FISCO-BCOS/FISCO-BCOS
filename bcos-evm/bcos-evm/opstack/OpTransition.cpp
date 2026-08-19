@@ -164,6 +164,8 @@ inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     const evmone::state::TransactionReceipt& evmoneReceipt, const evmone::state::BlockInfo& block,
     bcos::bytesConstRef output, std::string contractAddress = {})
 {
+    // gas_used 是 int64_t，断言非负防 cast 回绕（evmone 保证；负值仅理论可达）。
+    assert(evmoneReceipt.gas_used >= 0);
     auto out = receiptFactory->createReceipt(
         bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)}, std::move(contractAddress),
         mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status), output,
@@ -553,8 +555,13 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
             receipt.logs = host.take_logs();
             // The attributes deposit's own return data (normally empty: it CALLs L1Block with a
             // void return). Copied into a buffer because outcome.result is scoped to this branch.
-            outputBytes.assign(outcome.result.output_data,
-                outcome.result.output_data + outcome.result.output_size);
+            // Guard the null-pointer case: evmone sets output_data=nullptr/output_size=0 for a
+            // void-return call; `nullptr + 0` is UB (harmless in practice, ill-formed).
+            if (outcome.result.output_size != 0)
+            {
+                outputBytes.assign(outcome.result.output_data,
+                    outcome.result.output_data + outcome.result.output_size);
+            }
         }
     }
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
