@@ -117,6 +117,22 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
+        // Legacy transactions encode v as the EIP-155 value chainId*2+35+parity (27+parity
+        // pre-EIP-155); typed transactions use the plain y-parity. Clients like op-geth's
+        // types.NewTx reject a legacy v < 35 when chainId is set, so the full value must be
+        // reconstructed from the stored parity byte — the storage layer keeps only the parity.
+        if (web3Tx.type == TransactionType::Legacy)
+        {
+            if (web3Tx.chainId.has_value() && web3Tx.chainId.value() != 0)
+            {
+                result["v"] =
+                    toQuantity(u256(web3Tx.chainId.value()) * 2 + 35 + tx.signatureData()[64]);
+            }
+            else
+            {
+                result["v"] = toQuantity(27 + tx.signatureData()[64]);
+            }
+        }
         if (web3Tx.type == TransactionType::EIP4844)
         {
             result["maxFeePerBlobGas"] = web3Tx.maxFeePerBlobGas.str();
@@ -131,5 +147,10 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
-    result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    // v: set for legacy transactions above (EIP-155 reconstruction); everything else
+    // reports the stored y-parity byte directly.
+    if (!result.isMember("v"))
+    {
+        result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    }
 }
