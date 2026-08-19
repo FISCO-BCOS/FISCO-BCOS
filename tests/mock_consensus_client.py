@@ -268,6 +268,12 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         # *uint64 without hexutil (op-service/eth/types.go:523, v1.19.3), so the mock
         # must put the same wire shape on the wire ("minBaseFee": 0).
         "minBaseFee": 0,
+        # Holocene Bytes8 wire shape: an 8-byte hex string, u32 BE denominator in
+        # [0:4] and u32 BE elasticity in [4:8] (op-service/eth/types.go:521,
+        # EIP1559Params *Bytes8, v1.19.3). All-zero means "SystemConfig has not set
+        # the params"; the EL translates 0,0 to the Canyon constants (250, 6) in the
+        # built extraData.
+        "eip1559Params": "0x0000000000000000",
     }
 
     fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
