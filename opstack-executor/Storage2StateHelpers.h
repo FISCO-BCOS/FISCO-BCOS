@@ -11,9 +11,9 @@
 #include <bcos-ledger/mpt/Classify.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Overloaded.h>
+#include <boost/algorithm/hex.hpp>
 #include <algorithm>
 #include <array>
-#include <boost/algorithm/hex.hpp>
 #include <cstring>
 #include <evmc/evmc.hpp>
 #include <optional>
@@ -57,9 +57,8 @@ inline bool isKnownAccountField(std::string_view fieldKey)
 {
     using Fields = bcos::ledger::ACCOUNT_TABLE_FIELDS;
     return fieldKey == Fields::CODE_HASH || fieldKey == Fields::CODE ||
-           fieldKey == Fields::BALANCE || fieldKey == Fields::ABI ||
-           fieldKey == Fields::NONCE || fieldKey == Fields::ALIVE ||
-           fieldKey == Fields::FROZEN || fieldKey == Fields::SHARD;
+           fieldKey == Fields::BALANCE || fieldKey == Fields::ABI || fieldKey == Fields::NONCE ||
+           fieldKey == Fields::ALIVE || fieldKey == Fields::FROZEN || fieldKey == Fields::SHARD;
 }
 
 /// Zero-valued slot rule: under Ethereum semantics "slot value == 0 ≡ slot does not exist",

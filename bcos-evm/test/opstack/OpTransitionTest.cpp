@@ -79,8 +79,8 @@ BOOST_AUTO_TEST_CASE(RoutesFeesToFourVaults)
     const auto& props = std::get<OpTxProperties>(v);
 
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
@@ -139,8 +139,8 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta)
     const auto& props = std::get<OpTxProperties>(v);
 
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
 
     const auto& meta = txR->opStackMeta();
@@ -200,8 +200,8 @@ BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula)
     const auto& props = std::get<OpTxProperties>(v);
 
     evmone::state::StateDiff diff;
-    const auto txR = opTransition(
-        ts, block, hashes, tx, cfg, vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR =
+        opTransition(ts, block, hashes, tx, cfg, vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
 
     const auto gasUsedInt = static_cast<uint64_t>(txR->gasUsed());
@@ -210,9 +210,8 @@ BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula)
     BOOST_REQUIRE(meta.has_value());
     BOOST_REQUIRE(meta->operator_fee.has_value());
     BOOST_CHECK_EQUAL(*meta->operator_fee, bcosU256FromIntx(expectedOp));
-    BOOST_CHECK_EQUAL(expectedOp, intx::uint256{gasUsedInt} * intx::uint256{1} *
-                                          intx::uint256{100} +
-                                      intx::uint256{500});
+    BOOST_CHECK_EQUAL(expectedOp,
+        intx::uint256{gasUsedInt} * intx::uint256{1} * intx::uint256{100} + intx::uint256{500});
 
     BOOST_REQUIRE(meta->da_footprint_gas_scalar.has_value());
     BOOST_CHECK_EQUAL(*meta->da_footprint_gas_scalar, 2u);
@@ -267,9 +266,8 @@ BOOST_AUTO_TEST_CASE(AccessListKeepsStorageWarm)
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     evmone::state::StateDiff diff;
-    const auto txR = opTransition(
-        ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234,
-        kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm,
+        std::get<OpTxProperties>(v), 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(txR->gasUsed()), 25405u);
 }
@@ -317,16 +315,15 @@ BOOST_AUTO_TEST_CASE(AccessListWithOverridePrecompileStorageKey)
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     evmone::state::StateDiff diff;
-    const auto txR = opTransition(
-        ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234,
-        kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm,
+        std::get<OpTxProperties>(v), 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     // 纯转账 21000 + accessList(2400 地址 + 1900 槽) = 25300
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(txR->gasUsed()), 25300u);
 
     // 幽灵删除必须已被 sanitizeStateDiff 剥离
-    BOOST_CHECK_MESSAGE((std::count(diff.deleted_accounts.begin(), diff.deleted_accounts.end(),
-                            kP256)) == (0),
+    BOOST_CHECK_MESSAGE(
+        (std::count(diff.deleted_accounts.begin(), diff.deleted_accounts.end(), kP256)) == (0),
         "override-table precompile must not enter deleted_accounts as a ghost");
     bcos::evm::applyStateDiffStrict(ts, diff);
 }

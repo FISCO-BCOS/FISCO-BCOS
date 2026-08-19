@@ -88,8 +88,11 @@ RunWithAuthResult runWithAuth(
     BOOST_CHECK(std::holds_alternative<OpTxProperties>(v));
     if (!std::holds_alternative<OpTxProperties>(v))
     {
-        // 返回失败 receipt 以免崩溃，由调用方 BOOST_CHECK 捕获
-        return RunWithAuthResult{nullptr, {}};
+        // 返回失败 receipt 以免崩溃，由调用方 BOOST_CHECK 捕获（与 base 的静态空 receipt
+        // 守卫同形态）：status=1 使调用方的 BOOST_REQUIRE_EQUAL(r.receipt->status(), 0)
+        // 干净失败而不是解引用 nullptr。
+        auto failed = kOpTestReceiptFactory->createReceipt2(0, "", {}, 1, {}, 0);
+        return RunWithAuthResult{std::move(failed), {}};
     }
     const auto& props = std::get<OpTxProperties>(v);
     evmone::state::StateDiff diff;
@@ -324,8 +327,8 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1, kOpTestReceiptFactory, diff);
 
     // 委托调用应成功执行 kDelegate 代码；SSTORE 在 authority 上下文中落槽
     BOOST_CHECK_EQUAL(txR->status(), 0);

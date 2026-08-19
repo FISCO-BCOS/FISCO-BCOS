@@ -23,9 +23,9 @@ namespace bcos::evm::opstack
 //   Granite      | Cancun        | EVMC_CANCUN       | modeled; 8 precompile size limits
 //   Holocene     | Cancun        | EVMC_CANCUN       | modeled; EIP-1559 via 9B extraData
 //   Isthmus      | Prague/Pectra | EVMC_PRAGUE       | modeled; EIP-7702/7623/2935/2537 + OP
-//   deposit changes Jovian       | Prague        | EVMC_PRAGUE       | modeled; +DA footprint,
-//   operator fee ×100 Karst        | TBD           | EVMC_PRAGUE (alias)| placeholder = Jovian
-//   (op-reth only)
+//                 |               |                   | deposit changes
+//   Jovian        | Prague        | EVMC_PRAGUE       | modeled; +DA footprint, operator fee ×100
+//   Karst         | TBD           | EVMC_PRAGUE (alias)| placeholder = Jovian (op-reth only)
 //
 // Key facts:
 //   * Isthmus = all Prague/Pectra features that apply to L2s (optimism docs

@@ -23,6 +23,13 @@ find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 
+# LedgerConfig.h includes <evmc/evmc.hpp> — evmone installs evmc headers. PUBLIC link removed
+# (5cc25670d: macOS exception handling); include propagates PUBLIC-ly only, link PRIVATE.
+if(FULLNODE)
+    find_package(evmone CONFIG REQUIRED)
+    find_package(blst CONFIG REQUIRED)
+    set_target_properties(blst PROPERTIES IMPORTED_GLOBAL TRUE)
+endif()
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
     bcos-framework/ledger/L2ConfigLoader.cpp
@@ -33,6 +40,11 @@ set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/storage/Entry.cpp)
 
 add_library(bcos-framework STATIC ${BCOS_FRAMEWORK_SOURCES})
+if(FULLNODE)
+    target_link_libraries(bcos-framework PRIVATE evmone::evmone)
+    target_include_directories(bcos-framework PUBLIC
+        $<TARGET_PROPERTY:evmone::evmone,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
 target_include_directories(bcos-framework PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)

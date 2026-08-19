@@ -65,9 +65,9 @@ add_library(bcos-evm-eth STATIC
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
-    # rlp_encode: removed from the production lib (zero production callers, grep+nm verified).
-    # Its only consumer is OpReceiptEncodeTest (ADL into evmone::state::rlp_encode), now compiled
-    # directly in the opstack-executor test target (opstack-executor/tests/CMakeLists.txt).
+    # rlp_encode: removed from the production lib (zero production callers). Its only consumer
+    # was OpReceiptEncodeTest (ADL into evmone::state::rlp_encode), removed with the retired
+    # OpReceipt.h; the receiptsRoot leaf encoding returns with block-seal wiring (part 3).
     #
     # DEBT(eth-utils-removal): test_state is evmone's in-memory test ledger; all 11 reference
     # points are under bcos-evm/test/, and neither production lib references it (nm-verified),
@@ -100,7 +100,9 @@ target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles int
 if(TARGET codec)
     target_link_libraries(bcos-evm-eth PUBLIC codec)
 endif()
-target_link_libraries(bcos-evm-eth PUBLIC ledger)
+if(TARGET ledger)
+    target_link_libraries(bcos-evm-eth PUBLIC ledger)
+endif()
 target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_SOURCE_DIR}/bcos-ledger)
 
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
@@ -126,7 +128,7 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpTransition.cpp)
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
+target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth bcos-framework)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     # kyonRay review #5429 K5: OP modules deliberately use skipped-field designated initializers
     # and GCC-13 reference-returning helpers; downgrade only here, not repository-wide (the global
