@@ -151,11 +151,13 @@ if step_run 4; then
     step 4 "build-allocs.py → allocs.ini"
     [ -f "$OPGEN/chain-config.yaml" ] || cp "$OPGEN/chain-config.template.yaml" "$OPGEN/chain-config.yaml"
     # --base-allocs: provide via BASE_ALLOCS env var (CI) or default committed path.
-    # On first CI run, generate via: op-deployer init → bootstrap → apply → inspect genesis
-    # (see .github/workflows/workflow.yml op-genesis job for the full pipeline).
+    # The frozen artifact is regenerated with zero secrets by setup_c2.sh:
+    # anvil L1 → op-deployer init/bootstrap/apply → inspect genesis → l2genesis.json,
+    # whose sha256 is pinned in chain-config-c2.yaml base_allocs_sha256.
     BASE_ALLOCS="${BASE_ALLOCS:-$OPGEN/op-fork-base-allocs.json}"
     [ -f "$BASE_ALLOCS" ] || die "base-allocs JSON not found: $BASE_ALLOCS
-  Run op-deployer pipeline to generate it (see .github/workflows/workflow.yml op-genesis job)"
+  Regenerate it via tools/op-e2e/setup_c2.sh (local anvil, no secrets) and copy
+  \$C2/l2genesis.json to tools/opstack-genesis/op-fork-base-allocs.json"
     "$VENV/bin/python" "$OPGEN/build-allocs.py" \
         --config "$OPGEN/chain-config-c2.yaml" \
         --contracts "$L2CONTRACTS" \
