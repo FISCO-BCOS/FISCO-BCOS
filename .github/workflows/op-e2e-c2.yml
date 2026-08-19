@@ -16,6 +16,10 @@ on:
       - "tools/opstack-genesis/**"
       - "bcos-l2-contracts/**"
       - ".github/workflows/op-e2e-c2.yml"
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -52,7 +56,25 @@ jobs:
             -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
             -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
 
+      - name: Download fisco-bcos-air artifact (fallback build from source)
+        id: download-fisco
+        continue-on-error: true
+        run: |
+          RUN_ID=$(gh run list --workflow=workflow.yml --branch=main \
+            --status=success --limit=1 --json databaseId \
+            --jq '.[0].databaseId' 2>/dev/null) || true
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No successful workflow.yml run found on main; will build locally"
+            exit 1
+          fi
+          echo "Downloading fisco-bcos-air from workflow.yml run $RUN_ID"
+          gh run download "$RUN_ID" \
+            -n fisco-bcos-ubuntu-24-x86_64 \
+            -D build/fisco-bcos-air/
+          echo "fisco_downloaded=1" >> "$GITHUB_OUTPUT"
+
       - name: Build fisco-bcos-air
+        if: steps.download-fisco.outcome != 'success'
         run: cmake --build build --target fisco-bcos-air
 
       - name: Clone optimism monorepo (pinned commit)
