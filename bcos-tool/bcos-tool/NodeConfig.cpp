@@ -120,6 +120,180 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
+// Phase 1 of a staged refactor: copy the legacy members into the new
+// config-domain structs after loading. The getters/setters still read the
+// legacy members; the cutover phase removes them and migrates callers to the
+// struct fields directly.
+void NodeConfig::syncConfigStructs()
+{
+    // txpool
+    txpool.limit = m_txpoolLimit;
+    txpool.txsExpirationTime = m_txsExpirationTime;
+    txpool.checkBlockLimit = m_checkBlockLimit;
+    txpool.enableTxsFromFreeNode = m_enableTxsFromFreeNode;
+    txpool.preStoreBackpressureEnabled = m_preStoreBackpressureEnabled;
+    txpool.preStoreMaxInflight = m_preStoreMaxInflight;
+
+    // chain
+    chain.blockLimit = m_blockLimit;
+
+    // sealer
+    sealer.minSealTime = m_minSealTime;
+    sealer.allowFreeNode = m_allowFreeNode;
+
+    // consensus
+    consensus.checkPointTimeoutInterval = m_checkPointTimeoutInterval;
+    consensus.pipelineSize = m_pipelineSize;
+    consensus.pipelineAdmissionEnabled = m_pipelineAdmissionEnabled;
+    consensus.pipelinePerPeerCapacity = m_pipelinePerPeerCapacity;
+    consensus.pipelineLruCapacity = m_pipelineLruCapacity;
+    consensus.pipelineMaxPeers = m_pipelineMaxPeers;
+
+    // security
+    security.privateKeyPath = m_privateKeyPath;
+    security.hsmLibPath = m_hsmLibPath;
+    security.keyIndex = m_keyIndex;
+    security.password = m_password;
+    security.keyEncryptionType = m_keyEncryptionType;
+    security.keyEncryptionUrl = m_KeyEncryptionUrl;
+    security.cloudKmsType = m_cloudKmsType;
+    security.bcosKmsKeySecurityCipherDataKey = m_bcosKmsKeySecurityCipherDataKey;
+
+    // storage security
+    storageSecurity.enable = m_storageSecurityEnable;
+    storageSecurity.keyCenterUrl = m_storageSecurityUrl;
+    storageSecurity.cipherDataKey = m_storageSecurityCipherDataKey;
+    storageSecurity.encryptionType = m_storageEncryptionType;
+
+    // storage
+    storage.dataPath = m_storagePath;
+    storage.type = m_storageType;
+    storage.keyPageSize = m_keyPageSize;
+    storage.pdAddrs = m_pd_addrs;
+    storage.pdCaPath = m_pdCaPath;
+    storage.pdCertPath = m_pdCertPath;
+    storage.pdKeyPath = m_pdKeyPath;
+    storage.enableStatistics = m_enableDBStatistics;
+    storage.maxWriteBufferNumber = m_maxWriteBufferNumber;
+    storage.maxBackgroundJobs = m_maxBackgroundJobs;
+    storage.writeBufferSize = m_writeBufferSize;
+    storage.minWriteBufferNumberToMerge = m_minWriteBufferNumberToMerge;
+    storage.blockCacheSize = m_blockCacheSize;
+    storage.enableRocksDBBlob = m_enableRocksDBBlob;
+    storage.enableArchive = m_enableArchive;
+    storage.syncArchivedBlocks = m_syncArchivedBlocks;
+    storage.enableSeparateBlockAndState = m_enableSeparateBlockAndState;
+    storage.stateDBPath = m_stateDBPath;
+    storage.blockDBPath = m_blockDBPath;
+    storage.archiveListenIP = m_archiveListenIP;
+    storage.archiveListenPort = m_archiveListenPort;
+    storage.dbName = m_storageDBName;
+    storage.stateDBName = m_stateDBName;
+    storage.enableLRUCacheStorage = m_enableLRUCacheStorage;
+    storage.cacheSize = m_cacheSize;
+
+    // executor
+    executor.vmCacheSize = m_vmCacheSize;
+    executor.baselineScheduler = m_baselineSchedulerConfig;
+
+    // rpc
+    rpc.listenIP = m_rpcListenIP;
+    rpc.listenPort = m_rpcListenPort;
+    rpc.filterTimeout = m_rpcFilterTimeout;
+    rpc.maxProcessBlock = m_rpcMaxProcessBlock;
+    rpc.smSsl = m_rpcSmSsl;
+    rpc.disableSsl = m_rpcDisableSsl;
+
+    // web3 rpc
+    web3Rpc.enable = m_enableWeb3Rpc;
+    web3Rpc.listenIP = m_web3RpcListenIP;
+    web3Rpc.listenPort = m_web3RpcListenPort;
+    web3Rpc.filterTimeout = m_web3FilterTimeout;
+    web3Rpc.maxProcessBlock = m_web3MaxProcessBlock;
+    web3Rpc.batchRequestSizeLimit = m_web3BatchRequestSizeLimit;
+    web3Rpc.httpBodySizeLimit = m_web3HttpBodySizeLimit;
+    web3Rpc.enableCors = m_web3EnableCors;
+    web3Rpc.corsAllowedOrigins = m_web3CorsAllowedOrigins;
+    web3Rpc.corsAllowedMethods = m_web3CorsAllowedMethods;
+    web3Rpc.corsAllowedHeaders = m_web3CorsAllowedHeaders;
+    web3Rpc.corsMaxAge = m_web3CorsMaxAge;
+    web3Rpc.corsAllowCredentials = m_web3CorsAllowCredentials;
+    web3Rpc.syncTransaction = m_web3SyncTransaction;
+    web3Rpc.safeBlockDepth = m_web3SafeBlockDepth;
+    web3Rpc.finalizedBlockDepth = m_web3FinalizedBlockDepth;
+
+    // op engine rpc
+    opEngineRpc.enable = m_enableOpEngineRpc;
+    opEngineRpc.listenIP = m_opEngineRpcListenIP;
+    opEngineRpc.listenPort = m_opEngineRpcListenPort;
+    opEngineRpc.httpBodySizeLimit = m_opEngineHttpBodySizeLimit;
+    opEngineRpc.batchRequestSizeLimit = m_opEngineBatchRequestSizeLimit;
+    opEngineRpc.jwtSecretFile = m_opEngineJwtSecretFile;
+    opEngineRpc.clockSkewSecs = m_opEngineClockSkewSecs;
+    opEngineRpc.allowV1Executor = m_opEngineAllowV1Executor;
+
+    // single-node consensus
+    singleNodeConsensus.enable = m_enableSingleNodeConsensus;
+    singleNodeConsensus.blockInterval = m_singleNodeConsensusBlockInterval;
+    singleNodeConsensus.produceEmptyBlocks = m_singleNodeConsensusProduceEmptyBlocks;
+    singleNodeConsensus.feeRecipient = m_singleNodeConsensusFeeRecipient;
+    singleNodeConsensus.prevRandao = m_singleNodeConsensusPrevRandao;
+    singleNodeConsensus.fixedTimestamp = m_singleNodeConsensusFixedTimestamp;
+
+    // gateway
+    gateway.listenIP = m_p2pListenIP;
+    gateway.listenPort = m_p2pListenPort;
+    gateway.smSsl = m_p2pSmSsl;
+    gateway.nodeDir = m_p2pNodeDir;
+    gateway.nodeFileName = m_p2pNodeFileName;
+
+    // sync
+    sync.enableSendBlockStatusByTree = m_enableSendBlockStatusByTree;
+    sync.enableSendTxByTree = m_enableSendTxByTree;
+    sync.treeWidth = m_treeWidth;
+
+    // cert
+    cert.path = m_certPath;
+    cert.caCert = m_caCert;
+    cert.nodeCert = m_nodeCert;
+    cert.nodeKey = m_nodeKey;
+    cert.smCaCert = m_smCaCert;
+    cert.smNodeCert = m_smNodeCert;
+    cert.smNodeKey = m_smNodeKey;
+    cert.enSmNodeCert = m_enSmNodeCert;
+    cert.enSmNodeKey = m_enSmNodeKey;
+
+    // failover
+    failOver.enable = m_enableFailOver;
+    failOver.clusterUrl = m_failOverClusterUrl;
+    failOver.memberID = m_memberID;
+    failOver.leaseTTL = m_leaseTTL;
+
+    // thread pool
+    threadPool.ioThreadCount = m_ioThreadCount;
+    threadPool.tbbThreadCount = m_tbbThreadCount;
+
+    // tars rpc
+    tarsRPC = m_tarsRPCConfig;
+
+    // others
+    others.sendTxTimeout = m_sendTxTimeout;
+    others.checkTransactionSignature = m_checkTransactionSignature;
+    others.checkParallelConflict = m_checkParallelConflict;
+    others.singlePointConsensus = m_singlePointConsensus;
+    others.forceSender = m_forceSender;
+
+    // service
+    service.withoutTarsFramework = m_withoutTarsFramework;
+    service.tarsSN2EndPoints = m_tarsSN2EndPoints;
+    service.rpcServiceName = m_rpcServiceName;
+    service.gatewayServiceName = m_gatewayServiceName;
+    service.schedulerServiceName = m_schedulerServiceName;
+    service.executorServiceName = m_executorServiceName;
+    service.txpoolServiceName = m_txpoolServiceName;
+    service.nodeName = m_nodeName;
+}
+
 void NodeConfig::loadConfig(std::string const& _configPath, bool _enforceMemberID,
     bool enforceChainConfig, bool enforceGroupId)
 {
@@ -180,6 +354,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadConsensusConfig(_pt);
     loadSyncConfig(_pt);
     loadOthersConfig(_pt);
+    syncConfigStructs();
 }
 
 void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig)
@@ -204,6 +379,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     // === A3: B0 full Ethereum genesis header from the merged genesis artifact ===
     loadEthGenesisHeader(_genesisConfig);
     validateL2Invariants();
+    syncConfigStructs();
 }
 
 void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)

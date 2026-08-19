@@ -46,6 +46,234 @@ public:
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
 
     using Ptr = std::shared_ptr<NodeConfig>;
+
+    // ================================================================
+    // Config domains — public fields grouped per config domain (mostly 1:1
+    // with INI sections; a few load()s read across sections, and
+    // ServiceConfig is populated by the loadXxxServiceConfig methods).
+    // Phase 1 of a staged refactor: these structs are populated from the
+    // legacy members by syncConfigStructs() after loading; the getters/
+    // setters still expose the legacy members until the cutover phase.
+    // ================================================================
+
+    struct BaselineSchedulerConfig
+    {
+        bool parallel = false;
+        int grainSize = 0;
+    };
+
+    struct TarsRPCConfig
+    {
+        std::string host;
+        uint16_t port = 0;
+    } tarsRPC;
+
+    struct ChainConfig
+    {
+        size_t blockLimit = 1000;
+    } chain;
+
+    struct TxPoolConfig
+    {
+        size_t limit = 15000;
+        int64_t txsExpirationTime = 600'000;
+        bool checkBlockLimit = true;
+        bool enableTxsFromFreeNode = false;
+        bool preStoreBackpressureEnabled = true;
+        size_t preStoreMaxInflight = 1024;
+    } txpool;
+
+    struct SealerConfig
+    {
+        size_t minSealTime = 500;
+        bool allowFreeNode = false;
+    } sealer;
+
+    struct ConsensusConfig
+    {
+        size_t checkPointTimeoutInterval = DEFAULT_MIN_CONSENSUS_TIME_MS;
+        size_t pipelineSize = DEFAULT_PIPELINE_SIZE;
+        bool pipelineAdmissionEnabled = true;
+        size_t pipelinePerPeerCapacity = 64;
+        size_t pipelineLruCapacity = 256;
+        size_t pipelineMaxPeers = 1024;
+    } consensus;
+
+    struct SecurityConfig
+    {
+        std::string privateKeyPath = "node.pem";
+        std::string hsmLibPath;
+        int keyIndex{};
+        std::string password;
+        security::KeyEncryptionType keyEncryptionType = security::KeyEncryptionType::LEGACY;
+        security::CloudKmsType cloudKmsType = security::CloudKmsType::AWS;
+        std::string keyEncryptionUrl;
+        std::string bcosKmsKeySecurityCipherDataKey;
+    } security;
+
+    struct StorageSecurityConfig
+    {
+        bool enable = false;
+        security::StorageEncryptionType encryptionType = security::StorageEncryptionType::LEGACY;
+        std::string keyCenterUrl;
+        std::string cipherDataKey;
+    } storageSecurity;
+
+    struct StorageConfig
+    {
+        std::string dataPath;
+        std::string type = "RocksDB";
+        size_t keyPageSize = 10240;
+        std::vector<std::string> pdAddrs;
+        std::string pdCaPath;
+        std::string pdCertPath;
+        std::string pdKeyPath;
+        bool enableStatistics = false;
+        // Effective defaults are 4/4/64MB/1 (matching load()); the struct is the
+        // single source and load() falls back to these members.
+        int maxWriteBufferNumber = 4;
+        int maxBackgroundJobs = 4;
+        size_t writeBufferSize = 64 << 20;
+        int minWriteBufferNumberToMerge = 1;
+        size_t blockCacheSize = 128 << 20;
+        bool enableRocksDBBlob = false;
+        bool enableArchive = false;
+        bool syncArchivedBlocks = false;
+        bool enableSeparateBlockAndState = false;
+        std::string stateDBPath;
+        std::string blockDBPath;
+        std::string archiveListenIP;
+        uint16_t archiveListenPort = 0;
+        std::string dbName = "storage";
+        std::string stateDBName = "state";
+        bool enableLRUCacheStorage = true;
+        ssize_t cacheSize = DEFAULT_CACHE_SIZE;
+    } storage;
+
+    struct ExecutorConfig
+    {
+        size_t vmCacheSize = 1024;
+        BaselineSchedulerConfig baselineScheduler;
+    } executor;
+
+    struct RpcConfig
+    {
+        std::string listenIP = "0.0.0.0";
+        uint16_t listenPort = 20200;
+        uint32_t filterTimeout = 300'000;  // ms
+        uint32_t maxProcessBlock = 10;
+        bool smSsl = false;
+        bool disableSsl = false;
+    } rpc;
+
+    struct Web3RpcConfig
+    {
+        bool enable = false;
+        std::string listenIP = "127.0.0.1";
+        uint16_t listenPort = 8545;
+        uint32_t filterTimeout = 300'000;  // ms
+        uint32_t maxProcessBlock = 10;
+        uint32_t batchRequestSizeLimit = 8;
+        uint32_t httpBodySizeLimit = 10'240'000;
+        bool enableCors = true;
+        std::string corsAllowedOrigins = "*";
+        std::string corsAllowedMethods = "GET, POST, OPTIONS";
+        std::string corsAllowedHeaders = "Content-Type, Authorization, X-Requested-With";
+        int32_t corsMaxAge = 86400;
+        bool corsAllowCredentials = true;
+        bool syncTransaction = false;
+        // "safe"/"finalized" point latest - depth blocks behind; 0 = latest
+        uint32_t safeBlockDepth = 0;
+        uint32_t finalizedBlockDepth = 0;
+    } web3Rpc;
+
+    struct OpEngineRpcConfig
+    {
+        bool enable = false;
+        std::string listenIP = "127.0.0.1";
+        uint16_t listenPort = 8551;
+        uint32_t httpBodySizeLimit = 10'485'760;
+        uint32_t batchRequestSizeLimit = 8;
+        std::string jwtSecretFile = "conf/op-engine/jwt.hex";
+        int32_t clockSkewSecs = 60;
+        // test-only escape hatch, see Initializer's executor-version guard
+        bool allowV1Executor = false;
+    } opEngineRpc;
+
+    struct SingleNodeConsensusConfig
+    {
+        bool enable = false;
+        uint64_t blockInterval = 1000;
+        bool produceEmptyBlocks = true;
+        std::string feeRecipient = "0x0000000000000000000000000000000000000000";
+        std::string prevRandao;
+        uint64_t fixedTimestamp = 0;
+    } singleNodeConsensus;
+
+    struct GatewayConfig
+    {
+        std::string listenIP;
+        uint16_t listenPort{};
+        bool smSsl = false;
+        std::string nodeDir = "./";
+        std::string nodeFileName = "nodes.json";
+    } gateway;
+
+    struct SyncConfig
+    {
+        bool enableSendBlockStatusByTree = false;
+        bool enableSendTxByTree = false;
+        uint32_t treeWidth = 3;
+    } sync;
+
+    struct CertConfig
+    {
+        std::string path = "./";
+        std::string caCert;
+        std::string nodeCert;
+        std::string nodeKey;
+        std::string smCaCert;
+        std::string smNodeCert;
+        std::string smNodeKey;
+        std::string enSmNodeCert;
+        std::string enSmNodeKey;
+    } cert;
+
+    struct FailOverConfig
+    {
+        bool enable = false;
+        std::string clusterUrl = "127.0.0.1:2379";
+        std::string memberID;
+        unsigned leaseTTL = 0;
+    } failOver;
+
+    struct ThreadPoolConfig
+    {
+        size_t ioThreadCount{};
+        size_t tbbThreadCount{};
+    } threadPool;
+
+    struct OthersConfig
+    {
+        int sendTxTimeout = -1;
+        bool checkTransactionSignature = true;
+        bool checkParallelConflict = true;
+        bool singlePointConsensus = false;
+        bytes forceSender;
+    } others;
+
+    struct ServiceConfig
+    {
+        bool withoutTarsFramework = false;
+        std::unordered_map<std::string, std::vector<tars::TC_Endpoint>> tarsSN2EndPoints;
+        std::string rpcServiceName;
+        std::string gatewayServiceName;
+        std::string schedulerServiceName;
+        std::string executorServiceName;
+        std::string txpoolServiceName;
+        std::string nodeName;
+    } service;
+
     NodeConfig();
 
     NodeConfig(const NodeConfig&) = default;
@@ -286,24 +514,13 @@ public:
     void getTarsClientProxyEndpoints(
         const std::string& _clientPrx, std::vector<tars::TC_Endpoint>& _endPoints);
 
-    struct BaselineSchedulerConfig
-    {
-        bool parallel = false;
-        int grainSize = 0;
-    };
-    BaselineSchedulerConfig const& baselineSchedulerConfig() const;
-
-    struct TarsRPCConfig
-    {
-        std::string host;
-        uint16_t port = 0;
-    };
-    TarsRPCConfig const& tarsRPCConfig() const;
-
     bool checkTransactionSignature() const;
     bool checkParallelConflict() const;
     bool singlePointConsensus() const;
     const bytes& forceSender() const;
+
+    BaselineSchedulerConfig const& baselineSchedulerConfig() const;
+    TarsRPCConfig const& tarsRPCConfig() const;
 
     ledger::GenesisConfig const& genesisConfig() const;
 
@@ -351,6 +568,10 @@ protected:
         std::string const& _configSection, std::string const& _objName,
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
+
+    // Phase 1 of a staged refactor: copies the legacy members into the new
+    // config-domain structs after loading (removed in the cutover phase).
+    void syncConfigStructs();
 
 private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
