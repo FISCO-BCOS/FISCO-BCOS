@@ -645,8 +645,8 @@ private:
             co_await ledger::getLedgerConfig(
                 view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
         }
-        // Parent baseFee carried forward (EIP-1559 field of the payload/header; no L1-driven
-        // baseFee recalculation on this chain -- Phase A keeps the parent's value).
+        // Compute baseFee from parent header using Holocene/Jovian EIP-1559 rules.
+        // calcOpBaseFee mirrors op-geth CalcBaseFee (Consensus/misc/eip1559/eip1559.go).
         u256 baseFee{1'000'000'000};
         {
             auto view = m_globalStateStorage.get().fork();
@@ -659,10 +659,7 @@ private:
                 bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
                 auto parentHeader =
                     m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-                if (auto parentBaseFee = parentHeader->baseFee(); parentBaseFee.has_value())
-                {
-                    baseFee = *parentBaseFee;
-                }
+                baseFee = detail::calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
             }
         }
 
