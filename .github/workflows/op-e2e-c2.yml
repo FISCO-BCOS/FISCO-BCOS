@@ -7,15 +7,12 @@ name: OP-Stack C2 devnet e2e
 # schedule + manual dispatch + on op-e2e changes rather than every PR.
 # The B3/B3a gate in workflow.yml remains the per-PR regression floor.
 on:
+  workflow_run:
+    workflows: ["FISCO-BCOS GitHub Actions"]
+    types: [completed]
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
-  push:
-    paths:
-      - "tools/op-e2e/setup_c2.sh"
-      - "tools/opstack-genesis/**"
-      - "bcos-l2-contracts/**"
-      - ".github/workflows/op-e2e-c2.yml"
 
 jobs:
   c2-devnet:
@@ -37,6 +34,15 @@ jobs:
             exit 1
           fi
           echo "Runner is x86_64 — OK"
+
+      - name: Check workflow_run status
+        if: github.event_name == 'workflow_run'
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "::error::workflow.yml did not succeed (conclusion=${{ github.event.workflow_run.conclusion }})"
+            exit 1
+          fi
+          echo "workflow.yml succeeded — artifact available"
 
       - name: Cache Foundry
         uses: actions/cache@v4
