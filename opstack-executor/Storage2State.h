@@ -195,23 +195,24 @@ public:
     /// Records only the first error; per-instance unless a shared slot is present (then the
     /// block-wide first error is returned — the slot's first-write-wins message, read under its
     /// mutex). Returns std::string, not a view: a view into the shared slot's message would
-    /// dangle as soon as the lock is released.
+    /// dangle as soon as the lock is released. The string copies are guarded so a bad_alloc
+    /// degrades to {} instead of std::terminate on the noexcept path.
     [[nodiscard]] std::string firstError() const noexcept
     {
-        if (m_sharedError)
+        try
         {
-            try
+            if (m_sharedError)
             {
                 std::lock_guard lock(m_sharedError->mutex);
                 if (!m_sharedError->message.empty())
                     return m_sharedError->message;
             }
-            catch (...)
-            {
-                return {};
-            }
+            return m_firstError;
         }
-        return m_firstError;
+        catch (...)
+        {
+            return {};
+        }
     }
 
     /// Write-back (single strict form): every modified entry is unconditionally ensure-existed
