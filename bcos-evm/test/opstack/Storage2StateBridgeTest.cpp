@@ -106,6 +106,11 @@ BOOST_AUTO_TEST_CASE(eip161_empty_account_creation_throws)
         .modified_accounts = {{kAddr, 0, intx::uint256{0}, std::nullopt, {}}},
         .deleted_accounts = {}};
     BOOST_CHECK_THROW(bridge.applyDiff(diff), std::runtime_error);
+    // 错误分类契约的另一半：写回失败必须同时置 poison（OpSchedulerSeam 依此把故障分类为
+    // OpStorageError/-32603 而非 INVALID）——只断言 throw 无法发现"rethrow 前 poison 被回归掉"。
+    BOOST_CHECK(bridge.poisoned());
+    BOOST_CHECK_MESSAGE(bridge.firstError().find("EIP-161-empty account") != std::string::npos,
+        "poison message must name the EIP-161 guard: " + bridge.firstError());
     // seeding=true 豁免 guard（SeedPreState 快照路径）。
     bcos::evm::evmstate::Storage2State<MutableStorage> seedBridge(storage);
     BOOST_CHECK_NO_THROW(seedBridge.applyDiff(diff, /*seeding=*/true));
@@ -246,6 +251,36 @@ BOOST_AUTO_TEST_CASE(read_paths_return_correct_values)
     BOOST_CHECK(!bridge.poisoned());
 }
 
+/// fetchCode 对"codeHash 存在但 SYS_CODE_BINARY 缺 blob"→ throw + poison（账本数据损坏
+/// 不得静默当无码账户执行）；keccak(empty) 是唯一的"无码"标记，缺行是正常路径。
+BOOST_AUTO_TEST_CASE(missing_code_blob_poisons)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
+    evmone::state::StateDiff seedDiff;
+    seedDiff.modified_accounts.push_back(
+        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{0}, std::nullopt, {}});
+    seeder.applyDiff(seedDiff, /*seeding=*/true);
+
+    // 对照组 1：codeHash = keccak(empty)、无 blob → 空码，不 poison（正常无码账户）。
+    const auto emptyCodeHash = evmone::keccak256(evmc::bytes_view{});
+    seedField(storage, kAddr, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH,
+        std::string(
+            reinterpret_cast<const char*>(emptyCodeHash.bytes), sizeof(emptyCodeHash.bytes)));
+    bcos::evm::evmstate::Storage2State<MutableStorage> emptyBridge(storage);
+    BOOST_CHECK(emptyBridge.get_account_code(kAddr).empty());
+    BOOST_CHECK(!emptyBridge.poisoned());
+
+    // 对照组 2：非空 codeHash、无 blob → poison（损坏账本，不得静默当无码账户）。
+    const std::string corruptHash(32, '\xcd');
+    seedField(storage, kAddr, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, corruptHash);
+    bcos::evm::evmstate::Storage2State<MutableStorage> corruptBridge(storage);
+    BOOST_CHECK(corruptBridge.get_account_code(kAddr).empty());
+    BOOST_CHECK(corruptBridge.poisoned());
+    BOOST_CHECK_MESSAGE(corruptBridge.firstError().find("code blob missing") != std::string::npos,
+        "poison message must name the missing blob: " + corruptBridge.firstError());
+}
+
 /// TC-1 补充：含代码的 account → get_account_code 返回正确 bytecode，codeHash 正确。
 BOOST_AUTO_TEST_CASE(read_path_with_code)
 {
@@ -322,7 +357,7 @@ BOOST_AUTO_TEST_CASE(cache_write_through_after_applyDiff)
 /// report poisoned()=true。
 BOOST_AUTO_TEST_CASE(shared_error_propagates_poison)
 {
-    auto sharedErr = std::make_shared<std::string>();
+    auto sharedErr = std::make_shared<bcos::evm::evmstate::SharedErrorSlot>();
     MutableStorage storage;
 
     // 写入 SYS_TABLES 标记（fetchAccount 需要它）+ 一个畸形 codeHash（长度 ≠ 32 字节）
@@ -342,7 +377,7 @@ BOOST_AUTO_TEST_CASE(shared_error_propagates_poison)
     // bridge1 读取畸形 codeHash → length_error → poison
     bridge1.get_account(kAddr);
     BOOST_CHECK(bridge1.poisoned());
-    BOOST_CHECK(!sharedErr->empty());
+    BOOST_CHECK(!sharedErr->message.empty());
     BOOST_CHECK(
         bridge1.firstError().find("codeHash field size mismatch") != std::string_view::npos);
 

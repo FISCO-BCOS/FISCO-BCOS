@@ -235,6 +235,9 @@ BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_nonce5),
         .v = intx::uint256{kV_nonce5}};
     const auto r = runWithAuth(ts, vm, auth);
+    // 交易本身必须成功（nonce 不匹配只 skip 该条 authorization）——否则"无委托"断言会把
+    // opValidate 拒绝交易（status=1 空 diff 兜底 receipt）误判为"正确跳过"。
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // kAuthority 不应有委托代码，nonce 不应被 bump
@@ -268,6 +271,9 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/1);
+    // 交易本身必须成功（chain_id 不匹配只 skip 该条 authorization）——否则"无委托"断言
+    // 会把 opValidate 拒绝交易误判为"正确跳过"。
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // 必须全量扫描，不能只看 kAuthority：chain_id=999 时签名恢复出的是另一个（垃圾）地址，

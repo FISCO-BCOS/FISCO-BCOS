@@ -322,6 +322,9 @@ BOOST_AUTO_TEST_CASE(RevertedDepositHasEmptyLogsAndZeroBloom)
     const auto r = runDeposit(
         ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_NE(r->status(), 0);
+    // 钉住"代码确实执行到 LOG 后再 REVERT"而非入口级失败：入口失败收满 gasLimit(100000)，
+    // LOG 后 REVERT 的实际消耗远低于此（对照 EvmRevertKeepsMintAndChargesActualGas）。
+    BOOST_CHECK_LT(receiptGasUsed(*r), 100000);
     BOOST_CHECK(r->logEntries().empty());
     const auto bloom = r->logsBloom();
     BOOST_CHECK((evmc::bytes_view{bloom.data(), bloom.size()} ==

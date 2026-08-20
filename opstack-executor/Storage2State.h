@@ -3,9 +3,10 @@
 #pragma once
 
 // Storage2State — evmone::state::StateView over the storage2 (StateKey/EVMAccount) key space.
-// One instance per block, single-threaded (mutable caches, no locks); shared block-wide error
-// slot (dbErr analogue) must therefore also be confined to one thread per block — parallelizing
-// tx execution needs a per-instance error slot or synchronization.
+// One instance per block, single-threaded (mutable caches, no locks). The shared block-wide
+// error slot (dbErr analogue) is the one cross-instance state and is deliberately mutex-guarded
+// (SharedErrorSlot): part-3 parallel execution shares one slot across per-tx instances, and
+// every access to it (poison write, poisoned()/firstError() read) takes the lock.
 //
 // Core invariants:
 //   * exists-but-empty accounts return Account{defaults}, never nullopt (EIP-7610 collision
@@ -36,6 +37,7 @@
 #include <intx/intx.hpp>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -46,6 +48,16 @@
 namespace bcos::evm::evmstate
 {
 
+/// Block-wide error slot shared by per-tx execution instances (op-geth's dbErr analogue), safe
+/// for the part-3 parallel-execution sharing pattern: every access is mutex-guarded, and the
+/// stored message is first-write-wins so the block-level check observes the FIRST error across
+/// all instances. Constructed once per block by the scheduler, shared via shared_ptr.
+struct SharedErrorSlot
+{
+    std::mutex mutex;
+    std::string message;
+};
+
 
 template <class Storage>
 class Storage2State final : public evmone::state::StateView
@@ -53,9 +65,11 @@ class Storage2State final : public evmone::state::StateView
 public:
     /// One instance per block; no reset().
     /// @param sharedError optional block-wide error slot (op-geth's dbErr analogue): every
-    /// Storage2State constructed with the same shared slot reports poison to it, so a read error
-    /// in ANY per-tx execution instance is visible to the block-level check that owns the slot.
-    explicit Storage2State(Storage& storage, std::shared_ptr<std::string> sharedError = {}) noexcept
+    /// Storage2State constructed with the same shared slot reports poison to it (mutex-guarded,
+    /// first-write-wins), so a read error in ANY per-tx execution instance is visible to the
+    /// block-level check that owns the slot.
+    explicit Storage2State(
+        Storage& storage, std::shared_ptr<SharedErrorSlot> sharedError = {}) noexcept
       : m_storage(storage), m_sharedError(std::move(sharedError))
     {}
 
@@ -167,17 +181,45 @@ public:
 
     /// Consumer contract: check after block execution; once set the whole block must fail.
     /// Also true when the shared block error slot (if any) has been poisoned by ANOTHER instance
-    /// over the same view — op-geth's dbErr accumulating across the block.
+    /// over the same view — op-geth's dbErr accumulating across the block. The shared-slot read
+    /// takes its mutex; a lock failure (unreachable in correct usage) degrades to false rather
+    /// than terminating the noexcept path.
     [[nodiscard]] bool poisoned() const noexcept
     {
-        return m_poisoned || (m_sharedError && !m_sharedError->empty());
+        if (m_poisoned)
+            return true;
+        if (!m_sharedError)
+            return false;
+        try
+        {
+            std::lock_guard lock(m_sharedError->mutex);
+            return !m_sharedError->message.empty();
+        }
+        catch (...)
+        {
+            return false;
+        }
     }
     /// Records only the first error; per-instance unless a shared slot is present (then the
-    /// block-wide first error is returned).
-    [[nodiscard]] std::string_view firstError() const noexcept
+    /// block-wide first error is returned — the slot's first-write-wins message, read under its
+    /// mutex). Returns std::string, not a view: a view into the shared slot's message would
+    /// dangle as soon as the lock is released.
+    [[nodiscard]] std::string firstError() const noexcept
     {
-        return (m_sharedError && !m_sharedError->empty()) ? std::string_view(*m_sharedError) :
-                                                            m_firstError;
+        if (m_sharedError)
+        {
+            try
+            {
+                std::lock_guard lock(m_sharedError->mutex);
+                if (!m_sharedError->message.empty())
+                    return m_sharedError->message;
+            }
+            catch (...)
+            {
+                return {};
+            }
+        }
+        return m_firstError;
     }
 
     /// Write-back (single strict form): every modified entry is unconditionally ensure-existed
@@ -251,8 +293,8 @@ public:
     /// getter (state-root computation never calls it — avoids an unconditional SYS_CODE_BINARY
     /// read per account) + the account's already-materialized, tombstone-filtered,
     /// poison-checked live storage slot map (see fetchAllStorage). Field names mirror
-    /// MemoryState::AccountView exactly so bcos::evm::stateRootOf<Ledger> works unmodified
-    /// against either backend.
+    /// MemoryState::AccountView exactly, and code() returns by value on both backends, so
+    /// bcos::evm::stateRootOf<Ledger> and generic visitors work unmodified against either.
     struct AccountView
     {
         const evmc::address& addr;
@@ -387,11 +429,63 @@ private:
             }
         }
 
-        // Write-through: refresh caches via fetchAccount/fetchCode (one set of field-default/
-        // has_storage rules); slot cache gets this round's exact written value (zero ->
-        // all-zero bytes32, matching read-path normalization of deleted slots).
-        m_accountCache.insert_or_assign(entry.addr, co_await fetchAccount(tableName));
-        m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));
+        // Write-through: rebuild caches from this round's writes instead of re-reading the ledger
+        // (fetchAccount's probeHasStorage is a full range scan per modified account, and
+        // fetchCode re-reads SYS_CODE_BINARY — both repeat per tx in a block). has_storage is
+        // derived locally where unambiguous:
+        //   * a non-zero slot written this round → true (a live slot exists);
+        //   * a fresh account (createdNew) with no non-zero slot → false (a new table holds no
+        //     live slot; zero-valued deletes on it are no-ops);
+        //   * no storage change this round and a cached account exists → the cached has_storage
+        //     is still valid;
+        //   * otherwise (zero-valued deletions, or no cached account) → the probe is the only
+        //     way to know whether OTHER live slots remain — a stale true would wrongly fail
+        //     CREATE2 collision checks, so probe exactly like fetchAccount would.
+        Account newAccount;
+        const bool hasCachedAccount = [&]() {
+            if (auto it = m_accountCache.find(entry.addr);
+                it != m_accountCache.end() && it->second.has_value())
+            {
+                newAccount = *it->second;
+                return true;
+            }
+            // No usable cached account (never read, or read-and-missing): start from
+            // fetchAccount's field defaults — code_hash = keccak(empty) normalization included.
+            newAccount.code_hash = evmone::keccak256(evmc::bytes_view{});
+            return false;
+        }();
+        newAccount.nonce = entry.nonce;
+        newAccount.balance = entry.balance;
+        if (entry.code.has_value())
+        {
+            newAccount.code_hash = evmone::keccak256(*entry.code);
+            // This round's code write is authoritative for the code cache too (setCode stored
+            // the blob in SYS_CODE_BINARY keyed by the same hash).
+            m_codeCache.insert_or_assign(entry.addr, *entry.code);
+        }
+        else if (m_codeCache.find(entry.addr) == m_codeCache.end())
+        {
+            // Code untouched and uncached: cold read — only fetchCode knows the stored blob.
+            m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));
+        }
+        bool nonZeroSlotWritten = false;
+        bool zeroSlotDeleted = false;
+        for (const auto& [key, value] : entry.modified_storage)
+        {
+            if (evmc::is_zero(value))
+                zeroSlotDeleted = true;
+            else
+                nonZeroSlotWritten = true;
+        }
+        if (nonZeroSlotWritten)
+            newAccount.has_storage = true;
+        else if (createdNew)
+            newAccount.has_storage = false;
+        else if (zeroSlotDeleted || !hasCachedAccount)
+            newAccount.has_storage = co_await probeHasStorage(tableName);
+        // else: no storage change this round and a cached account exists — cached has_storage
+        // stays valid.
+        m_accountCache.insert_or_assign(entry.addr, newAccount);
         for (const auto& [key, value] : entry.modified_storage)
         {
             m_storageCache.insert_or_assign(
@@ -581,7 +675,13 @@ private:
         {
             m_firstError.assign(reason);
             if (m_sharedError)
-                m_sharedError->assign(m_firstError);
+            {
+                std::lock_guard lock(m_sharedError->mutex);
+                // First-write-wins: the block-wide slot keeps the FIRST poison across all
+                // instances, not the last poisoner's message.
+                if (m_sharedError->message.empty())
+                    m_sharedError->message.assign(m_firstError);
+            }
         }
         catch (...)
         {
@@ -719,10 +819,33 @@ private:
         if (!codeHashEntry || codeHashEntry->get().empty())
             co_return evmc::bytes{};
 
-        auto codeEntry = co_await storage2::readOne(m_storage.get(),
-            executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashEntry->get()});
-        if (!codeEntry)
+        auto codeHashView = codeHashEntry->get();
+        if (codeHashView.size() != sizeof(evmc::bytes32::bytes))
+            throw std::length_error(
+                "Storage2State::fetchCode: codeHash field size mismatch in account table '" +
+                tableName + "'");
+
+        // keccak(empty) is the canonical "no code" marker: fetchAccount normalizes an absent
+        // CODE_HASH row to exactly this value, SYS_CODE_BINARY holds no blob for it, and an
+        // empty code must not trip the corruption tripwire below.
+        evmc::bytes32 codeHash{};
+        std::memcpy(codeHash.bytes, codeHashView.data(), codeHashView.size());
+        if (codeHash == evmone::keccak256(evmc::bytes_view{}))
             co_return evmc::bytes{};
+
+        // A non-empty CODE_HASH with no matching blob is ledger data corruption (setCode writes
+        // the blob and the CODE_HASH row together). Silently returning empty would run a
+        // code-bearing contract as a CODELESS account — "executed successfully" with a wrong
+        // state and poisoned()==false, invisible to the block-level check. Throw instead: the
+        // read path's catch ladder poisons, and the block fails as -32603 (OpStorageError) —
+        // never a silent wrong state.
+        auto codeEntry = co_await storage2::readOne(m_storage.get(),
+            executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashView});
+        if (!codeEntry)
+            throw std::runtime_error("Storage2State::fetchCode: account table '" + tableName +
+                                     "' has a non-empty CODE_HASH but no matching blob in " +
+                                     std::string(bcos::ledger::SYS_CODE_BINARY) +
+                                     " (ledger data corruption: code blob missing)");
 
         auto view = codeEntry->get();
         co_return evmc::bytes(view.begin(), view.end());
@@ -761,7 +884,8 @@ private:
 
     mutable bool m_poisoned{false};
     mutable std::string m_firstError;
-    std::shared_ptr<std::string> m_sharedError;  // optional block-wide error slot (op-geth dbErr)
+    std::shared_ptr<SharedErrorSlot> m_sharedError;  // optional block-wide error slot (op-geth
+                                                     // dbErr)
 };
 
 }  // namespace bcos::evm::evmstate

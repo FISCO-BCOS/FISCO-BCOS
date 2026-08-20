@@ -67,7 +67,28 @@ BOOST_AUTO_TEST_CASE(narrowU256ToU64_bounds)
     BOOST_CHECK(threw);
 }
 
-// toEvmcAddress/toEvmcBytes32：20/32 字节 memcpy 保序（bcos 小端存储 → evmc 字节序一致）。
+// narrowU256ToI64：int64 界内直通（含 UINT64 中段 (INT64_MAX, UINT64_MAX]——该区间能被
+// narrowU256ToU64 放行却在赋给 int64_t 字段时回绕成负数，正是本 helper 要挡的）。
+BOOST_AUTO_TEST_CASE(narrowU256ToI64_bounds)
+{
+    BOOST_CHECK_EQUAL(narrowU256ToI64(bcos::u256{42}, "field"), 42);
+    BOOST_CHECK_EQUAL(narrowU256ToI64(bcos::u256{std::numeric_limits<int64_t>::max()}, "field"),
+        std::numeric_limits<int64_t>::max());
+    // int64 上界 + 1 = 2^63：字符串构造。narrowU256ToI64 带 [[nodiscard]]——if 消费。
+    const bcos::u256 overI64 = bcos::u256{"9223372036854775808"};
+    bool threw = false;
+    try
+    {
+        if (narrowU256ToI64(overI64, "field") != 0)
+        {
+        }
+    }
+    catch (const OpConsensusError&)
+    {
+        threw = true;
+    }
+    BOOST_CHECK(threw);
+}
 BOOST_AUTO_TEST_CASE(fixed_size_conversions_preserve_bytes)
 {
     const bcos::Address addr = bcos::Address("00112233445566778899aabbccddeeff00112233");
@@ -93,9 +114,10 @@ BOOST_AUTO_TEST_CASE(classifyTxType_branches)
     BOOST_CHECK_EQUAL(classifyTxType(0x01), 0x01);  // EIP-2930
     BOOST_CHECK_EQUAL(classifyTxType(0x02), 0x02);  // EIP-1559
     BOOST_CHECK_EQUAL(classifyTxType(0x04), 0x04);  // EIP-7702
-    // Unknown type byte — passthrough (caller decides)
+    // Unknown type byte — passthrough (caller decides); 0x7e 两侧边界都钉住
     BOOST_CHECK_EQUAL(classifyTxType(0x05), 0x05);
-    BOOST_CHECK_EQUAL(classifyTxType(0x7f), 0x7f);  // just below deposit
+    BOOST_CHECK_EQUAL(classifyTxType(0x7f), 0x7f);  // just above deposit
+    BOOST_CHECK_EQUAL(classifyTxType(0x7d), 0x7d);  // just below deposit
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -13,6 +13,7 @@
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <map>
+#include <stdexcept>
 
 namespace bcos::evm
 {
@@ -41,26 +42,37 @@ inline bcos::bytes trimmedBigEndian(bcos::bytesConstRef v)
 /// the whole trie per call (correctness-first). The lazy code() getter is never invoked —
 /// state-root computation needs codeHash only. Empty state → keccak256(RLP("")).
 ///
-/// Poison contract: does not inspect ledger.poisoned(); the caller (block-seal driver) must check
-/// poisoned() after this returns and discard the result wholesale if set. A no-op for MemoryState
-/// (its poisoned() is always false).
+/// Poison contract: does not inspect ledger.poisoned(); a mid-traversal failure surfaces as an
+/// exception instead — Storage2State poisons and returns false, which stateRootOf turns into an
+/// explicit std::runtime_error (a partially-built trie must never be returned). The poison flag
+/// stays set, so the caller (block-seal driver) can still classify via poisoned() (-32603) or
+/// the exception type. A no-op for MemoryState (its poisoned() is always false). The visitor
+/// must not throw: MemoryState::visitAccounts is noexcept and an exception would escape as
+/// std::terminate.
 template <class Ledger>
 [[nodiscard]] evmone::hash256 stateRootOf(const Ledger& ledger)
 {
     std::map<bcos::h256, bcos::bytes> entries;
-    ledger.visitAccounts([&](const auto& account) {
-        // Secure-trie leaf: rlp(nonce, balance-be-trimmed, storageRoot, codeHash); balance is intx
-        // big-endian 32 bytes trimmed of leading zeros (evmone rlp::encode(intx) semantics).
-        auto const balanceBe = intx::be::store<evmc::uint256be>(account.balance);
-        bcos::bytes leaf;
-        bcos::codec::rlp::encode(leaf, account.nonce,
-            trimmedBigEndian(bcos::bytesConstRef{balanceBe.bytes, sizeof(balanceBe.bytes)}),
-            bcos::bytesConstRef{
-                accountStorageRoot(account.storage).bytes, sizeof(evmone::hash256::bytes)},
-            bcos::bytesConstRef{account.codeHash.bytes, sizeof(evmc::bytes32)});
-        entries[bcos::h256{evmone::keccak256(account.addr).bytes, 32}] = std::move(leaf);
-        return true;
-    });
+    // The visitor never aborts (always returns true), so false can only mean the traversal
+    // failed mid-way — fail the root at that point instead of computing a partial state root.
+    if (!ledger.visitAccounts([&](const auto& account) {
+            // Secure-trie leaf: rlp(nonce, balance-be-trimmed, storageRoot, codeHash); balance is
+            // intx big-endian 32 bytes trimmed of leading zeros (evmone rlp::encode(intx)
+            // semantics).
+            auto const balanceBe = intx::be::store<evmc::uint256be>(account.balance);
+            bcos::bytes leaf;
+            bcos::codec::rlp::encode(leaf, account.nonce,
+                trimmedBigEndian(bcos::bytesConstRef{balanceBe.bytes, sizeof(balanceBe.bytes)}),
+                bcos::bytesConstRef{
+                    accountStorageRoot(account.storage).bytes, sizeof(evmone::hash256::bytes)},
+                bcos::bytesConstRef{account.codeHash.bytes, sizeof(evmc::bytes32)});
+            entries[bcos::h256{evmone::keccak256(account.addr).bytes, 32}] = std::move(leaf);
+            return true;
+        }))
+    {
+        throw std::runtime_error(
+            "stateRootOf: account traversal incomplete (visitAccounts failed or was aborted)");
+    }
     auto result = bcos::ledger::mpt::computeTrieRoot(entries);
     evmone::hash256 root{};
     std::memcpy(root.bytes, result.root.data(), sizeof(root.bytes));

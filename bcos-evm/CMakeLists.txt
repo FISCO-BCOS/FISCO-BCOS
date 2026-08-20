@@ -95,9 +95,10 @@ target_include_directories(bcos-evm-eth PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
 # 自研建根(替代退役 evmone mpt/mpt_hash):StateRootCompute.h 用 bcos-codec RLP + bcos-ledger
-# computeTrieRoot。codec/ledger 均用 genex 解析(standalone 为空)。
+# computeTrieRoot。codec/ledger 均用 genex 解析(standalone 为空)；bcos-ledger 的头路径由
+# ledger 目标的 PUBLIC include 传递（BUILD_INTERFACE 指向 <repo>/bcos-ledger），无需单独
+# 添加——且 standalone 下 CMAKE_SOURCE_DIR 指向 bcos-evm 自身，该路径并不存在。
 target_link_libraries(bcos-evm-eth PUBLIC $<$<TARGET_EXISTS:codec>:codec> $<$<TARGET_EXISTS:ledger>:ledger>)
-target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_SOURCE_DIR}/bcos-ledger)
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
 # （cmake/CompilerSettings.cmake），AppleClang 对上游代码报 missing-field-initializers。
 # vendored 代码不受本仓告警策略约束——抑制仅限移植源文件，FISCO 自有代码保持全 -Werror。

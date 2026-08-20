@@ -156,9 +156,11 @@ inline std::string toFiscoContractAddress(const evmc::address& sender, uint64_t 
 
 /// Project one executed transaction onto a bcos::protocol::TransactionReceipt: gasUsed/status/logs
 /// come from the evmone receipt, blockNumber from the executing block info, and the 256-byte
-/// logsBloom is copied onto the FISCO receipt's own logsBloom field (sealOpBlock's block-level
-/// bloom and encodeReceiptForRoot's leaf both read it back). contractAddress is derived by the
-/// caller (toFiscoContractAddress) for creation txs, else empty.
+/// logsBloom is copied onto the FISCO receipt's own logsBloom field (the block-level bloom is
+/// rebuilt from receipts at seal time in part 3; the receipts-root leaf encoding likewise
+/// returns with the block-seal wiring — encodeReceiptForRoot was removed with OpReceipt.h).
+/// contractAddress is derived by the caller (toFiscoContractAddress) for creation txs, else
+/// empty.
 inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const evmone::state::TransactionReceipt& evmoneReceipt, const evmone::state::BlockInfo& block,

@@ -156,6 +156,30 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
     return static_cast<uint64_t>(v);
 }
 
+/// Bounds-checked u256→int64 narrowing — BlockInfo::gas_limit is int64_t, so narrowU256ToU64's
+/// uint64_t ceiling is NOT sufficient: a value in (INT64_MAX, UINT64_MAX] would wrap negative
+/// through the uint64_t→int64_t conversion, silently defeating the guard on the signed field.
+inline int64_t narrowU256ToI64(const bcos::u256& v, const char* fieldName)
+{
+    static const bcos::u256 kMaxI64(std::numeric_limits<int64_t>::max());
+    if (v > kMaxI64)
+        throw OpConsensusError(
+            std::string("OpSchedulerSeam: field exceeds int64_t range: ") + fieldName);
+    return static_cast<int64_t>(v);
+}
+
+/// Strict-path optional header-field unwrap. `.value()` would throw std::bad_optional_access,
+/// which is neither OpConsensusError nor OpStorageError and would escape the INVALID/-32603
+/// classification; a missing header field is an input error and must classify as INVALID.
+template <class T>
+[[nodiscard]] T requireHeaderField(const std::optional<T>& opt, const char* fieldName)
+{
+    if (!opt.has_value())
+        throw OpConsensusError(
+            std::string("OpSchedulerSeam: missing required header field: ") + fieldName);
+    return *opt;
+}
+
 /// Build the OP block context from a FISCO header. `gasLimitOverride` injects the head block's
 /// gasLimit as blockGasLeft (a minimal test header may leave gasLimit==0); `lenientOptionals`
 /// tolerates unset optional header fields as 0 (eth_call path), while block execution uses
@@ -177,19 +201,22 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
     // — never remove this division.
     blk.timestamp = static_cast<uint64_t>(env.timestamp()) / 1000;
     blk.gas_limit = gasLimitOverride.has_value() ?
-                        static_cast<int64_t>(*gasLimitOverride) :
-                        narrowU256ToU64(env.gasLimit(), "BlockInfo::gasLimit");
-    blk.base_fee = narrowU256ToU64(
-        lenientOptionals ? env.baseFee().value_or(bcos::u256{0}) : env.baseFee().value(),
-        "BlockInfo::baseFee");
+                        narrowU256ToI64(bcos::u256(*gasLimitOverride), "BlockInfo::gasLimit") :
+                        narrowU256ToI64(env.gasLimit(), "BlockInfo::gasLimit");
+    blk.base_fee =
+        narrowU256ToU64(lenientOptionals ? env.baseFee().value_or(bcos::u256{0}) :
+                                           requireHeaderField(env.baseFee(), "BlockInfo::baseFee"),
+            "BlockInfo::baseFee");
     blk.coinbase = toEvmcAddress(env.coinbase());
     blk.prev_randao = toEvmcBytes32(env.prevRandao());
-    blk.parent_beacon_block_root =
-        toEvmcBytes32(lenientOptionals ? env.parentBeaconBlockRoot().value_or(bcos::h256{}) :
-                                         env.parentBeaconBlockRoot().value());
+    blk.parent_beacon_block_root = toEvmcBytes32(
+        lenientOptionals ?
+            env.parentBeaconBlockRoot().value_or(bcos::h256{}) :
+            requireHeaderField(env.parentBeaconBlockRoot(), "BlockInfo::parentBeaconBlockRoot"));
     blk.extra_data = evmc::bytes(env.extraData().begin(), env.extraData().end());
     blk.blob_gas_used = narrowU256ToU64(
-        lenientOptionals ? env.blobGasUsed().value_or(bcos::u256{0}) : env.blobGasUsed().value(),
+        lenientOptionals ? env.blobGasUsed().value_or(bcos::u256{0}) :
+                           requireHeaderField(env.blobGasUsed(), "BlockInfo::blobGasUsed"),
         "BlockInfo::blobGasUsed");
     return blk;
 }

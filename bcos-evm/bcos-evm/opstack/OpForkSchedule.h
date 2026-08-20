@@ -71,8 +71,9 @@ const OpForkConfig& isthmusConfig() noexcept;
 const OpForkConfig& jovianConfig() noexcept;
 const OpForkConfig& karstConfig() noexcept;
 
-/// Fork-activation timestamps for the OP validator loop (op-validator-minimal-loop design §4.2,
-/// decision A5). Injected via OpSchedulerSeam's constructor (same channel as chainId) rather than
+/// Fork-activation flags for the OP validator loop (op-validator-minimal-loop design §4.2,
+/// decision A5): no timestamp dimension — FISCO activates forks by feature flag, not by header
+/// timestamp. Injected via OpSchedulerSeam's constructor (same channel as chainId) rather than
 /// read from SystemConfigs — the minimal loop only distinguishes Isthmus/Jovian. Isthmus is the
 /// OP-mode baseline (the engine -38005 gate admits only Isthmus+ payloads), so a single boolean
 /// switch — `feature_op_jovian` (Features::Flag, read from genesis [features]) — selects Jovian
