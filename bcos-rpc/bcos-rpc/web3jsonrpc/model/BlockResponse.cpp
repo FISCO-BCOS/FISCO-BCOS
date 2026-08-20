@@ -77,9 +77,8 @@ void bcos::rpc::combineBlockResponse(
     result["size"] = toQuantity(block.size());
     result["gasLimit"] = toQuantity(blockHeader->gasLimit());
     result["gasUsed"] = toQuantity(static_cast<uint64_t>(blockHeader->gasUsed()));
-    // Eth headers carry the timestamp in seconds already; FISCO headers in milliseconds.
-    result["timestamp"] = toQuantity(
-        isEth ? blockHeader->timestamp() : blockHeader->timestamp() / 1000);
+    // BlockHeader stores the timestamp in milliseconds; the eth_* RPC emits seconds.
+    result["timestamp"] = toQuantity(blockHeader->timestamp() / 1000);
 
     // Fork-gated Ethereum fields: only defined for the fork that introduced them.
     auto versionAtLeast = [&](bcos::protocol::EthBlockVersion fork) {

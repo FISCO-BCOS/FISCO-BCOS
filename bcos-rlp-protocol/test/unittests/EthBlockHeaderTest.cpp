@@ -41,7 +41,9 @@ static bcos::protocol::BlockHeader::Ptr makeEthHeader(
     auto tars = std::make_shared<bcostars::BlockHeader>();
     auto& data = tars->data;
     data.blockNumber = 77;
-    data.timestamp = 1700000000000LL;  // internal domain: milliseconds (whole seconds)
+    // BlockHeader stores the timestamp in MILLISECONDS; EthBlockHeaderData (the RLP
+    // domain) stores seconds. The bridge converts at construction (ms -> s).
+    data.timestamp = 1700000000 * 1000LL;
     data.gasLimit = "30000000";
     data.gasUsed = "21000";
     data.coinbase.assign(20, static_cast<char>(0xab));
@@ -140,12 +142,13 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     decodedEth.rlpEncode(rlpReencoded);
     BOOST_CHECK(rlp == rlpReencoded);
 
-    // Static: decode RLP into a caller-provided base-class header
+    // Static: decode RLP into a caller-provided base-class header. The RLP carries seconds,
+    // the bridge converts to BlockHeader milliseconds.
     auto decodedHeader = makeEthHeader();
     ethError = EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
     BOOST_CHECK(!ethError);
     BOOST_CHECK_EQUAL(decodedHeader->number(), 77);
-    BOOST_CHECK_EQUAL(decodedHeader->timestamp(), 1700000000000LL);
+    BOOST_CHECK_EQUAL(decodedHeader->timestamp(), 1700000000 * 1000LL);
     BOOST_CHECK_EQUAL(decodedHeader->gasLimit(), u256(30000000));
     BOOST_CHECK_EQUAL(decodedHeader->gasUsed(), u256(21000));
     // The converted header must be marked as an Eth header
@@ -438,9 +441,9 @@ BOOST_AUTO_TEST_CASE(goldenMainnetCancunHeader)
     BOOST_REQUIRE(impl != nullptr);
     auto& data = impl->inner().data;
     data.blockNumber = 19800000;
-    // On-chain seconds 1714865051, stored in the internal millisecond domain; the RLP
-    // bridge divides back to seconds, so the golden hash/bytes below stay byte-identical.
-    data.timestamp = 1714865051000LL;
+    // BlockHeader milliseconds; the bridge converts to seconds for the RLP encoding, which
+    // must reproduce the on-chain 1714865051 second timestamp.
+    data.timestamp = 1714865051 * 1000LL;
     data.gasLimit = "30000000";
     data.gasUsed = "8020412";
     data.baseFee = "5007423601";

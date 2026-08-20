@@ -122,9 +122,6 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(std::uint32_t version);
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header,
     const ExecutionPayload& payload, std::optional<bcos::h256> parentBeaconBlockRoot,
     std::uint32_t version);
-
-// The internal timestamp carrier is milliseconds (Types.h); the Eth header stores seconds.
-inline constexpr std::uint64_t c_millisPerSecond = 1000;
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -863,11 +860,10 @@ private:
             emptyHeader->setParentInfo(parentInfo);
             emptyHeader->setNumber(nextBlockNumber);
             emptyHeader->setVersion(blockVersion);
-            // Eth headers carry the timestamp in SECONDS (Types.h keeps the internal carrier in
-            // milliseconds); convert once here since an empty block never passes through the
-            // executor's millisecond-consuming path.
-            emptyHeader->setTimestamp(static_cast<int64_t>(
-                payloadAttributes.timestamp * detail::c_millisPerSecond));
+            // BlockHeader stores the timestamp in milliseconds (matching the internal carrier
+            // and the executor's ms-consuming path); EthBlockHeader converts to seconds at the
+            // RLP boundary.
+            emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
             emptyHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
             emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
             emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
@@ -898,8 +894,9 @@ private:
         blockHeader->setParentInfo(parentInfo);
         blockHeader->setNumber(nextBlockNumber);
         blockHeader->setVersion(blockVersion);
-        blockHeader->setTimestamp(static_cast<int64_t>(
-            payloadAttributes.timestamp * detail::c_millisPerSecond));
+        // BlockHeader stores milliseconds; EthBlockHeader converts to seconds at the RLP
+        // boundary (the executor consumes this header in milliseconds).
+        blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
         blockHeader->setCoinbase(payloadAttributes.suggestedFeeRecipient);
         blockHeader->setPrevRandao(payloadAttributes.prevRandao);
         blockHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
@@ -1002,8 +999,8 @@ private:
         h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
 
         // Step 2h: Set computed values in the block header and calculate the block hash.
-        // The executor consumed the header timestamp in milliseconds; the Eth header stores it in
-        // seconds, so switch units after execution and before the RLP hash is computed.
+        // The header timestamp stays in milliseconds throughout (the executor consumed it in
+        // milliseconds above); EthBlockHeader converts to seconds at the RLP boundary.
         blockHeader->setStateRoot(stateRoot);
         blockHeader->setReceiptsRoot(receiptRoot);
         blockHeader->setTxsRoot(txRoot);
