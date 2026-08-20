@@ -22,7 +22,7 @@ jobs:
     name: C2 full loop (deposit/withdraw)
     runs-on: ubuntu-24.04
     env:
-      C2: ${{ runner.temp }}/c2
+      C2: /tmp/c2
       FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
     steps:
       - uses: actions/checkout@v4
@@ -134,8 +134,8 @@ jobs:
           OPGEN: ${{ github.workspace }}/tools/opstack-genesis
         run: |
           export PATH="$HOME/.foundry/bin:$PATH"
-          bash tools/op-e2e/setup_c2.sh > "${{ runner.temp }}/c2-setup.log" 2>&1
-          tail -60 "${{ runner.temp }}/c2-setup.log"
+          bash tools/op-e2e/setup_c2.sh > "/tmp/c2-setup.log" 2>&1
+          tail -60 "/tmp/c2-setup.log"
 
       - name: Assert C2 devnet producing blocks
         run: |
@@ -204,8 +204,8 @@ jobs:
         with:
           name: c2-logs-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/c2-setup.log
-            ${{ runner.temp }}/c2/anvil.log
-            ${{ runner.temp }}/c2/op-node.log
-            ${{ runner.temp }}/c2/fisco/nohup.out
+            /tmp/c2-setup.log
+            /tmp/c2/anvil.log
+            /tmp/c2/op-node.log
+            /tmp/c2/fisco/nohup.out
           retention-days: 7
