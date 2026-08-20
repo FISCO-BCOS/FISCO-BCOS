@@ -9,6 +9,7 @@
 
 #include <opstack-executor/OpCommon.h>  // OpBlockSeal / OpExecuteBlockResult
 
+#include <bcos-framework/ledger/Account.h>  // bcos::ledger::account::toH256
 #include <bcos-utilities/FixedBytes.h>
 #include <array>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
@@ -21,10 +22,11 @@ namespace bcos::evm::engine
 {
 namespace detail
 {
-/// evmc::bytes32 -> bcos::h256.
+/// evmc::bytes32 -> bcos::h256. Delegates to the ledger-account home of the same conversion
+/// (bcos::ledger::account::toH256) instead of keeping a byte-level duplicate.
 inline bcos::h256 toBcosH256(const evmc::bytes32& hash)
 {
-    return bcos::h256(reinterpret_cast<const bcos::byte*>(hash.bytes), sizeof(hash.bytes));
+    return bcos::ledger::account::toH256(hash);
 }
 
 /// evmone::state::BloomFilter (256 raw bytes) -> bcos::h2048.
@@ -80,8 +82,10 @@ inline bcos::h2048 payloadBloomToH2048(const std::array<bcos::byte, 256>& bloom)
 }
 
 /// Compare the executed block's commitments against the payload's announced commitments; returns
-/// the first mismatching field name (txRoot slot reports "transactionsRoot"), or nullopt. blobGas
-/// Used / requestsHash are compared only when the computed side has a value.
+/// the first mismatching field name (txRoot slot reports "transactionsRoot"), or nullopt.
+/// blobGasUsed / requestsHash compare presence AND value bidirectionally (optional != optional):
+/// an announced-only field (peer ahead of the local fork config) is rejected just as a
+/// computed-only one is — op-geth's engine API rejects fork-field asymmetry in both directions.
 inline std::optional<std::string> mismatchedFieldOf(
     const OpBlockCommitments& computed, const OpBlockCommitments& announced)
 {
@@ -97,14 +101,11 @@ inline std::optional<std::string> mismatchedFieldOf(
         return "gasUsed";
     if (computed.txRoot != announced.txRoot)
         return "transactionsRoot";
-    // Compared only when the computed side has a value (the fork gate decides whether the field
-    // exists at all). A present computed value paired with a MISSING announced one is a real
-    // mismatch (report it) rather than a bad_optional_access crash.
-    if (computed.blobGasUsed.has_value() &&
-        (!announced.blobGasUsed.has_value() || *computed.blobGasUsed != *announced.blobGasUsed))
+    // Presence asymmetry is a real mismatch (fork-config divergence between the peers), reported
+    // rather than crashing with bad_optional_access or silently passing.
+    if (computed.blobGasUsed != announced.blobGasUsed)
         return "blobGasUsed";
-    if (computed.requestsHash.has_value() &&
-        (!announced.requestsHash.has_value() || *computed.requestsHash != *announced.requestsHash))
+    if (computed.requestsHash != announced.requestsHash)
         return "requestsHash";
     return std::nullopt;
 }

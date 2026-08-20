@@ -62,16 +62,15 @@ BOOST_AUTO_TEST_SUITE(SeedPreStateSuite)
 
 BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
 {
-    // A minimal pre: 3 accounts (incl. a contract account with storage + a fully empty account)
+    // A minimal pre: 2 accounts (a contract account with a storage slot + a plain EOA)
     Json::Value pre(Json::objectValue);
-    // 0x4200000000000000000000000000000000000015 — L1 block contract with 2 storage slots
+    // 0x4200000000000000000000000000000000000015 — L1 block contract with 1 storage slot
     pre["0x4200000000000000000000000000000000000015"] = Json::objectValue;
     pre["0x4200000000000000000000000000000000000015"]["balance"] = "0x0";
     pre["0x4200000000000000000000000000000000000015"]["nonce"] = "0x1";
     pre["0x4200000000000000000000000000000000000015"]["code"] = "0x";
     // Warning: storage values must be full 32 bytes (66 hex) — jsonBytes32 throws
-    // runtime_error on short values (caught by R2-B: real vectors are all 66 chars; this
-    // test literal once used "0x1234", which made Step 5 go red).
+    // runtime_error on short values.
     pre["0x4200000000000000000000000000000000000015"]["storage"]
        ["0x0000000000000000000000000000000000000000000000000000000000000001"] =
            "0x0000000000000000000000000000000000000000000000000000000000001234";
@@ -80,7 +79,10 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     pre["0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"]["nonce"] = "0x0";
     pre["0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"]["code"] = "0x";
 
-    BackendMemStorage backendStorage;
+    // buckets=1: a multi-bucket CONCURRENT backend iterates range() bucket-by-bucket (not
+    // globally ordered), which breaks probeHasStorage's table-contiguity early-exit. The
+    // CONCURRENT flag must stay: MemoryStorage's cross-type merge() requires it on the target.
+    BackendMemStorage backendStorage{1};
     CheckpointBackend checkpointBackend(backendStorage);
     MLS multiLayerStorage(checkpointBackend);
 
@@ -97,6 +99,13 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     const auto l1 = w6test::jsonAddress("0x4200000000000000000000000000000000000015");
     const auto l1Acct = bridge.get_account(l1);
     BOOST_REQUIRE(l1Acct.has_value());
+    // Positive anchors: a seeding no-op would still pass the zero-valued checks above —
+    // pin the seeded nonce / storage-presence / empty code explicitly.
+    BOOST_CHECK_EQUAL(l1Acct->nonce, 1u);
+    BOOST_CHECK(l1Acct->has_storage);
+    BOOST_CHECK(!acct->has_storage);
+    BOOST_CHECK(bridge.get_account_code(l1).empty());
+    BOOST_CHECK(bridge.get_account_code(addr).empty());
     const auto slot =
         w6test::jsonBytes32("0x0000000000000000000000000000000000000000000000000000000000000001");
     BOOST_CHECK(
