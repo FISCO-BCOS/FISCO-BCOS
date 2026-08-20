@@ -4,10 +4,11 @@
 
 // Storage2State — the real-ledger read bridge. Implements evmone::state::StateView over the
 // storage2 (MultiLayerStorage/StateKey/EVMAccount) key space: each read is
-// cache -> task::syncWait fetch -> normalize -> refill cache. One instance PER TX (no reset;
-// per-instance caches are not shared across txs), single-threaded only (mutable caches, no
-// locks). Instances of the same block share a block-wide error slot (see constructor) so a read
-// error in any per-tx instance poisons the whole block's check.
+// cache -> task::syncWait fetch -> normalize -> refill cache. One instance per block (no reset;
+// per-block instance keeps caches warm across txs via the write-through applyDiff below),
+// single-threaded only (mutable caches, no locks). Instances of the same block share a
+// block-wide error slot (see constructor) so a read error in any instance poisons the whole
+// block's check.
 //
 // Core invariants:
 //   * “exists but empty” accounts return Account{defaults}, never nullopt (EIP-7610 create

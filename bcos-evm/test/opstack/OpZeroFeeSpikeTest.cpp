@@ -1,7 +1,7 @@
 // Task 4 gate 1: zero-fee spike feasibility. Under the premise "no L1Block predeploy ->
 // loadOpFeeParams reads zero slots", verifies the real opValidate/opTransition path works
 // on evmone test::TestState.
-// All four tests green -> spike holds (Task 5 entry condition); any failure -> spike does
+// All six tests green -> spike holds (Task 5 entry condition); any failure -> spike does
 // not hold (Phase 1 converges to a pure baseline).
 //
 // Note: this file is an independent TU; blk()/baseTx() are copied from OpValidateTest.cpp

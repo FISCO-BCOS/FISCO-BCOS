@@ -346,13 +346,19 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     // second source of truth left to get this wrong.
     auto meta = deriveOpReceiptMeta(props, opAtUsed, /*fill_operator_scalars=*/true);
 
-    outStateDiff = std::move(receipt.state_diff);
+    // Guard output_data nullptr (void-return calls), matching runDeposit: `nullptr + 0` is UB.
+    const bcos::bytes outputBytes{outcome.result.output_size != 0 ?
+                                      bcos::bytes{outcome.result.output_data,
+                                          outcome.result.output_data + outcome.result.output_size} :
+                                      bcos::bytes{}};
     auto out = makeFiscoReceipt(receiptFactory, receipt, block,
-        bcos::bytesConstRef{outcome.result.output_data, outcome.result.output_size},
+        bcos::bytesConstRef{outputBytes.data(), outputBytes.size()},
         !tx.to.has_value() ? toFiscoContractAddress(tx.sender, tx.nonce) : std::string{});
     out->setOpStackMeta(toOpStackMeta(meta));
     // op-geth hexutil.Big: "0x" + lowercase hex, no leading zeros (api.go:1775, RPC top-level).
     out->setEffectiveGasPrice("0x" + intx::to_string(effective_gas_price, 16));
+    // out-param written last: an exception in the projection above must not leave a diff to apply.
+    outStateDiff = std::move(receipt.state_diff);
     return out;
 }
 
@@ -567,7 +573,6 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
     receipt.state_diff = bcos::evm::sanitizeStateDiff(view, state.build_diff(cfg.rev));
 
-    outStateDiff = std::move(receipt.state_diff);
     auto out = makeFiscoReceipt(receiptFactory, receipt, block,
         bcos::bytesConstRef{outputBytes.data(), outputBytes.size()},
         !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{});
@@ -578,6 +583,8 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     meta.deposit_nonce = preNonce;
     meta.deposit_receipt_version = 1;
     out->setOpStackMeta(std::move(meta));
+    // Write the out-param only after the projection above has fully succeeded (see opTransition).
+    outStateDiff = std::move(receipt.state_diff);
     return out;
 }
 }  // namespace bcos::evm::opstack

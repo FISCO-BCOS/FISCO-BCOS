@@ -2,7 +2,9 @@
 #pragma once
 
 // Root building via FISCO bcos-ledger/mpt computeTrieRoot (retired evmone mpt_hash) —
-// byte-identical for the same key set (kept green by the 33-vector stateRoot comparison gate).
+// byte-identical for the same key set. Anchored by StateRootComputeTest's golden vectors
+// (empty-root canonical value + single-account leaf, cross-verified against go-ethereum);
+// the part-3 block-seal PR adds the 33-vector differential gate against op-geth state roots.
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/FixedBytes.h>
