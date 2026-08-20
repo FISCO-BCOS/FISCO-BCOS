@@ -157,7 +157,8 @@ public:
             .AlwaysDo([this](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
                           protocol::Block::ConstPtr,
                           std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>) {
+                          std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>,
+                          bool) {
                 if (prewriteBlockFails)
                 {
                     callback({},

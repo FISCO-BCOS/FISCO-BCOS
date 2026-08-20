@@ -551,9 +551,10 @@ private:
 
         // If this payload was built locally (via updateForkchoice), commit the view's
         // state changes to storage. Externally received payloads have no view to commit.
-        // TODO: merge pushView + mergeBackStorage into a single atomic mergeView()
-        // operation. This will eliminate the risk of leaking a mutable layer if
-        // mergeBackStorage throws, and avoid holding x_state across a co_await.
+        // NOTE: mergeView() exists (MultiLayerStorage.h) but is intentionally
+        // non-atomic (pushView and mergeBackStorage are independent critical
+        // sections). Using bare pushView here keeps the state change immediate;
+        // mergeBackStorage follows in the co_await block below.
         auto it = m_payloadCache.find(payloadId);
         if (it != m_payloadCache.end() && it->second.view)
         {

@@ -49,10 +49,17 @@ public:
      * @param block the block to commit
      * @param callback trigger this callback when write is finished
      */
+    // Default arguments live ONLY on this interface declaration. Virtual default arguments
+    // resolve by the STATIC type at the call site and the compiler does not check that an
+    // override's defaults agree — duplicating them per-override lets a later edit to one
+    // silently change behaviour depending on which pointer type the caller holds. Callers
+    // invoking through a concrete class must pass every argument explicitly.
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features) = 0;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
+        std::optional<bcos::ledger::Features> features = std::nullopt,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) = 0;
 
     /**
      * @brief async store txs in block when tx pool verify

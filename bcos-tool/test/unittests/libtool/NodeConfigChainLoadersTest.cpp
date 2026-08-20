@@ -235,5 +235,23 @@ BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
     BOOST_CHECK_NO_THROW(cfg.pdAddrs());
 }
 
+// OP-Stack Jovian fork selection is feature-flag driven: feature_op_jovian in [features]
+// (the FISCO-native mechanism) — replaces the former [chain].isthmus_time / jovian_time
+// timestamp thresholds.
+BOOST_AUTO_TEST_CASE(chainConfigOpJovianActiveByFeatureFlag)
+{
+    LoaderProbe p;
+    p.loadGenesisFeatures(fromIni("[features]\nfeature_op_jovian=true\n"));
+    BOOST_CHECK(p.opJovianActive());
+}
+
+// Absent feature_op_jovian defaults to Isthmus (feature off).
+BOOST_AUTO_TEST_CASE(chainConfigOpJovianDefaultsOff)
+{
+    LoaderProbe p;
+    p.loadGenesisFeatures(fromIni("[features]\nfeature_l2_ethereum_compat=true\n"));
+    BOOST_CHECK(!p.opJovianActive());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
