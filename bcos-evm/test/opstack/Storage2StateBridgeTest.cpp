@@ -39,6 +39,27 @@ void seedSlot(MutableStorage& storage, evmc::address const& addr, std::string co
     e.set(value);
     bcos::task::syncWait(bcos::storage2::writeOne(storage, StateKey{table, slotKey}, std::move(e)));
 }
+
+/// 写入一条账户表字段行（任意字段名，非 32 字节槽键）。
+void seedField(MutableStorage& storage, evmc::address const& addr, std::string_view field,
+    std::string const& value)
+{
+    const std::string table = bcos::evm::evmstate::accountTableName(addr);
+    bcos::storage::Entry e;
+    e.set(value);
+    bcos::task::syncWait(
+        bcos::storage2::writeOne(storage, StateKey{table, std::string{field}}, std::move(e)));
+}
+
+/// 写入 SYS_CODE_BINARY 表的一条记录（key=codeHash hex, value=bytecode）。
+void seedCodeBinary(
+    MutableStorage& storage, std::string const& codeHashHex, std::string const& code)
+{
+    bcos::storage::Entry e;
+    e.set(code);
+    bcos::task::syncWait(bcos::storage2::writeOne(
+        storage, StateKey{bcos::ledger::SYS_CODE_BINARY, codeHashHex}, std::move(e)));
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(Storage2StateBridgeTests)
@@ -178,6 +199,204 @@ BOOST_AUTO_TEST_CASE(unknown_short_key_row_throws)
     BOOST_CHECK_MESSAGE(
         bridge2.firstError().find("unknown key in account table") != std::string_view::npos,
         "poison message must name the unknown key: " + std::string(bridge2.firstError()));
+}
+
+/// TC-1: get_account / get_account_code / get_storage 读路径返回正确值。
+/// seed 含 nonce/balance/code/storage 的 account → 逐一断言返回值。
+BOOST_AUTO_TEST_CASE(read_paths_return_correct_values)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
+    evmone::state::StateDiff seedDiff;
+    // nonce=42, balance=0x1234
+    seedDiff.modified_accounts.push_back(
+        evmone::state::StateDiff::Entry{kAddr, 42, intx::uint256{0x1234}, std::nullopt, {}});
+    seeder.applyDiff(seedDiff, /*seeding=*/true);
+
+    // 手动写入 storage slot：key=0x01*32, value=0xaa*32
+    const std::string slotKey(32, '\x01');
+    seedSlot(storage, kAddr, slotKey, std::string(32, '\xaa'));
+
+    bcos::evm::evmstate::Storage2State<MutableStorage> bridge(storage);
+
+    // get_account: nonce, balance, has_storage
+    auto acc = bridge.get_account(kAddr);
+    BOOST_REQUIRE(acc.has_value());
+    BOOST_CHECK_EQUAL(acc->nonce, 42u);
+    BOOST_CHECK_EQUAL(intx::to_string(acc->balance), "4660");  // 0x1234 = 4660
+    BOOST_CHECK(acc->has_storage);
+
+    // get_account_code: 无 code → 空字节
+    auto code = bridge.get_account_code(kAddr);
+    BOOST_CHECK(code.empty());
+
+    // get_storage: 已 seed 的 slot → 正确值
+    evmc::bytes32 sKey{};
+    std::memcpy(sKey.bytes, slotKey.data(), sizeof(sKey.bytes));
+    auto val = bridge.get_storage(kAddr, sKey);
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(val.bytes[0]), 0xaa);
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(val.bytes[31]), 0xaa);
+
+    // get_storage: 未设置的 slot → 全零
+    evmc::bytes32 unsetKey{};
+    unsetKey.bytes[0] = 0xff;
+    auto unsetVal = bridge.get_storage(kAddr, unsetKey);
+    BOOST_CHECK(evmc::is_zero(unsetVal));
+
+    BOOST_CHECK(!bridge.poisoned());
+}
+
+/// TC-1 补充：含代码的 account → get_account_code 返回正确 bytecode，codeHash 正确。
+BOOST_AUTO_TEST_CASE(read_path_with_code)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
+    evmone::state::StateDiff seedDiff;
+    seedDiff.modified_accounts.push_back(
+        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{0}, std::nullopt, {}});
+    seeder.applyDiff(seedDiff, /*seeding=*/true);
+
+    // 手动写入 codeHash 字段（raw 32 bytes）+ SYS_CODE_BINARY（key=同一 raw bytes）。
+    // fetchCode 读 codeHash entry 的 value → 用作 SYS_CODE_BINARY 的 key。
+    const std::string codeHashRaw(32, '\xab');
+    seedField(storage, kAddr, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, codeHashRaw);
+    seedCodeBinary(storage, codeHashRaw, "hello");
+
+    bcos::evm::evmstate::Storage2State<MutableStorage> bridge(storage);
+    auto code = bridge.get_account_code(kAddr);
+    BOOST_CHECK_EQUAL(code.size(), 5u);
+    BOOST_CHECK_EQUAL(std::string(code.begin(), code.end()), "hello");
+
+    // codeHash 在 get_account 中正确传递
+    auto acc = bridge.get_account(kAddr);
+    BOOST_REQUIRE(acc.has_value());
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(acc->code_hash.bytes[0]), 0xab);
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(acc->code_hash.bytes[31]), 0xab);
+    BOOST_CHECK(!bridge.poisoned());
+}
+
+/// TC-2: applyDiff 后 cache write-through — get_account/get_storage 返回更新值。
+BOOST_AUTO_TEST_CASE(cache_write_through_after_applyDiff)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
+    evmone::state::StateDiff seedDiff;
+    seedDiff.modified_accounts.push_back(
+        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{100}, std::nullopt, {}});
+    seeder.applyDiff(seedDiff, /*seeding=*/true);
+
+    // seed 一个 storage slot
+    const std::string slotKey(32, '\x01');
+    seedSlot(storage, kAddr, slotKey, std::string(32, '\x11'));
+
+    bcos::evm::evmstate::Storage2State<MutableStorage> bridge(storage);
+
+    // applyDiff：更新 nonce/balance，删除旧 slot，写入新 slot
+    evmc::bytes32 sKey{};
+    std::memcpy(sKey.bytes, slotKey.data(), sizeof(sKey.bytes));
+    evmc::bytes32 newKey{};
+    newKey.bytes[0] = 0x02;
+    evmone::state::StateDiff diff;
+    evmone::state::StateDiff::Entry entry{kAddr, 5, intx::uint256{999}, std::nullopt, {}};
+    entry.modified_storage.emplace_back(sKey, evmc::bytes32{});        // 删除旧 slot
+    entry.modified_storage.emplace_back(newKey, evmc::bytes32{0x42});  // 新 slot
+    diff.modified_accounts.push_back(entry);
+    bridge.applyDiff(diff);
+
+    // 立即验证：cache 应已 write-through
+    auto acc = bridge.get_account(kAddr);
+    BOOST_REQUIRE(acc.has_value());
+    BOOST_CHECK_EQUAL(acc->nonce, 5u);
+    BOOST_CHECK_EQUAL(intx::to_string(acc->balance), "999");
+
+    auto oldSlot = bridge.get_storage(kAddr, sKey);
+    BOOST_CHECK(evmc::is_zero(oldSlot));  // 已删除
+
+    auto newSlot = bridge.get_storage(kAddr, newKey);
+    BOOST_CHECK_EQUAL(newSlot.bytes[31], 0x42);  // 新值
+
+    BOOST_CHECK(!bridge.poisoned());
+}
+
+/// TC-3: sharedError 块级毒化传播 — 一个实例 poison → 共享同一 error slot 的所有实例
+/// report poisoned()=true。
+BOOST_AUTO_TEST_CASE(shared_error_propagates_poison)
+{
+    auto sharedErr = std::make_shared<std::string>();
+    MutableStorage storage;
+
+    // 写入 SYS_TABLES 标记（fetchAccount 需要它）+ 一个畸形 codeHash（长度 ≠ 32 字节）
+    // → fetchAccount 抛 length_error → poison 传播到 shared slot。
+    const std::string table = bcos::evm::evmstate::accountTableName(kAddr);
+    {
+        bcos::storage::Entry marker;
+        marker.set("1");
+        bcos::task::syncWait(bcos::storage2::writeOne(
+            storage, StateKey{bcos::ledger::SYS_TABLES, table}, std::move(marker)));
+    }
+    seedField(storage, kAddr, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, "short");
+
+    bcos::evm::evmstate::Storage2State<MutableStorage> bridge1(storage, sharedErr);
+    bcos::evm::evmstate::Storage2State<MutableStorage> bridge2(storage, sharedErr);
+
+    // bridge1 读取畸形 codeHash → length_error → poison
+    bridge1.get_account(kAddr);
+    BOOST_CHECK(bridge1.poisoned());
+    BOOST_CHECK(!sharedErr->empty());
+    BOOST_CHECK(
+        bridge1.firstError().find("codeHash field size mismatch") != std::string_view::npos);
+
+    // bridge2 共享同一 error slot → 也 report poisoned
+    BOOST_CHECK(bridge2.poisoned());
+    BOOST_CHECK_EQUAL(bridge2.firstError(), bridge1.firstError());
+}
+
+/// TC-4: applyDiff deleted_accounts 路径 — 删除含 code+storage 的 account →
+/// get_account=nullopt, get_account_code=empty, get_storage=zero, visitAccounts 跳过。
+BOOST_AUTO_TEST_CASE(deleted_account_path)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
+
+    // seed account（含 nonce/balance/code/storage）
+    evmone::state::StateDiff seedDiff;
+    seedDiff.modified_accounts.push_back(
+        evmone::state::StateDiff::Entry{kAddr, 10, intx::uint256{500}, std::nullopt, {}});
+    seeder.applyDiff(seedDiff, /*seeding=*/true);
+    const std::string slotKey(32, '\xcc');
+    seedSlot(storage, kAddr, slotKey, std::string(32, '\xdd'));
+    const std::string codeHashRaw(32, '\xee');
+    seedField(storage, kAddr, bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH, codeHashRaw);
+    seedCodeBinary(storage, codeHashRaw, "bytecode");
+
+    // 删除 account
+    evmone::state::StateDiff delDiff;
+    delDiff.deleted_accounts.push_back(kAddr);
+    seeder.applyDiff(delDiff);
+
+    // 验证：get_account = nullopt
+    bcos::evm::evmstate::Storage2State<MutableStorage> bridge(storage);
+    auto acc = bridge.get_account(kAddr);
+    BOOST_CHECK(!acc.has_value());
+
+    // 验证：get_account_code = 空
+    auto code = bridge.get_account_code(kAddr);
+    BOOST_CHECK(code.empty());
+
+    // 验证：get_storage = zero
+    evmc::bytes32 sKey{};
+    std::memcpy(sKey.bytes, slotKey.data(), sizeof(sKey.bytes));
+    auto val = bridge.get_storage(kAddr, sKey);
+    BOOST_CHECK(evmc::is_zero(val));
+
+    // 验证：visitAccounts 跳过已删除 account（SYS_TABLES 标记已删除）
+    bool visited = false;
+    bridge.visitAccounts([&](const auto&) {
+        visited = true;
+        return true;
+    });
+    BOOST_CHECK(!visited);
+    BOOST_CHECK(!bridge.poisoned());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

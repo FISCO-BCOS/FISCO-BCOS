@@ -80,4 +80,22 @@ BOOST_AUTO_TEST_CASE(fixed_size_conversions_preserve_bytes)
     BOOST_CHECK_EQUAL(std::memcmp(evmcB32.bytes, h.data(), sizeof(evmcB32.bytes)), 0);
 }
 
+// classifyTxType：deposit(0x7e)→0x7e, legacy(>=0xc0)→0, typed(0x01/0x02/0x04)→passthrough。
+BOOST_AUTO_TEST_CASE(classifyTxType_branches)
+{
+    // Deposit
+    BOOST_CHECK_EQUAL(classifyTxType(0x7e), 0x7e);
+    // Legacy: RLP list prefix range
+    BOOST_CHECK_EQUAL(classifyTxType(0xc0), 0);
+    BOOST_CHECK_EQUAL(classifyTxType(0xf7), 0);
+    BOOST_CHECK_EQUAL(classifyTxType(0xff), 0);
+    // Typed transactions
+    BOOST_CHECK_EQUAL(classifyTxType(0x01), 0x01);  // EIP-2930
+    BOOST_CHECK_EQUAL(classifyTxType(0x02), 0x02);  // EIP-1559
+    BOOST_CHECK_EQUAL(classifyTxType(0x04), 0x04);  // EIP-7702
+    // Unknown type byte — passthrough (caller decides)
+    BOOST_CHECK_EQUAL(classifyTxType(0x05), 0x05);
+    BOOST_CHECK_EQUAL(classifyTxType(0x7f), 0x7f);  // just below deposit
+}
+
 BOOST_AUTO_TEST_SUITE_END()
