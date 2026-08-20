@@ -89,7 +89,7 @@ jobs:
 
       - name: Build fisco-bcos-air
         if: steps.download-fisco.outcome != 'success'
-        run: cmake --build build --target fisco-bcos-air
+        run: cmake --build build --target fisco-bcos
 
       - name: Clone optimism monorepo (pinned commit)
         # Pin to op_contracts_commit from op-fork-pin.toml so builds are
