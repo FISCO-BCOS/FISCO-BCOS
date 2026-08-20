@@ -5,6 +5,7 @@
 // Pure static helpers for the Storage2State block bridge (split out of Storage2State.h).
 // None of these touch the Storage template parameter — they are plain free functions in
 // `bcos::evm::evmstate`, resolvable by ordinary lookup from inside the class body.
+// Account field classification follows the same key set as the mainline MPT path.
 
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
