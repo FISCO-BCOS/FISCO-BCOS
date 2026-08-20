@@ -38,59 +38,37 @@ jobs:
           fi
           echo "Runner is x86_64 — OK"
 
-      - name: Initialize vcpkg submodule
-        run: git submodule update --init --recursive -- vcpkg
-
       - name: Cache Foundry
         uses: actions/cache@v4
         with:
           path: /usr/local/bin/forge
           key: foundry-${{ runner.os }}-${{ runner.arch }}-bin-v1
 
-      - name: Install linux deps (foundry + clang + JDK)
+      - name: Install foundry
         run: |
           set -eo pipefail
-          sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk mold
-          # Install foundry from GitHub releases (avoids foundryup installer pipe issue)
           FOUNDRY_VER=$(curl -fsSL "https://api.github.com/repos/foundry-rs/foundry/releases/latest" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")
           curl -fsSL "https://github.com/foundry-rs/foundry/releases/download/v${FOUNDRY_VER}/foundry_v${FOUNDRY_VER}_linux_amd64.tar.gz" \
             | tar xz -C /usr/local/bin
           forge --version && cast --version && anvil --version
 
-      - name: Configure
-        run: |
-          mkdir -p build
-          cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel \
-            -DLINKER=mold -DTESTS=OFF -DCOVERAGE=OFF \
-            -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
-            -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
-            -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
-
-      - name: Download fisco-bcos-air artifact (fallback build from source)
-        id: download-fisco
-        continue-on-error: true
+      - name: Download fisco-bcos-air from workflow.yml
         run: |
           RUN_ID=$(gh run list --workflow=workflow.yml --branch=main \
             --status=success --limit=1 --json databaseId \
-            --jq '.[0].databaseId' 2>/dev/null) || true
+            --jq '.[0].databaseId')
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful workflow.yml run found on main; will build locally"
+            echo "::error::No successful workflow.yml run found on main"
             exit 1
           fi
-          echo "Downloading fisco-bcos-air from workflow.yml run $RUN_ID"
+          echo "Downloading from workflow.yml run $RUN_ID"
+          mkdir -p build/fisco-bcos-air
           gh run download "$RUN_ID" \
             -n fisco-bcos-ubuntu-24-x86_64 \
             -D build/fisco-bcos-air/
-          [ -x build/fisco-bcos-air/fisco-bcos ] || {
-            echo "::warning::Download succeeded but fisco-bcos binary is missing or not executable"
-            exit 1
-          }
-
-      - name: Build fisco-bcos-air
-        if: steps.download-fisco.outcome != 'success'
-        run: cmake --build build --target fisco-bcos
+          chmod +x build/fisco-bcos-air/fisco-bcos
+          echo "fisco-bcos-air ready"
 
       - name: Clone optimism monorepo (pinned commit)
         # Pin to op_contracts_commit from op-fork-pin.toml so builds are
@@ -129,14 +107,6 @@ jobs:
           python3 -m pip install --quiet pyyaml 2>/dev/null || \
           pip3 install --quiet pyyaml 2>/dev/null || \
           pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
-
-      - name: Cache Solc (svm)
-        uses: actions/cache@v4
-        with:
-          path: ~/.svm
-          key: svm-${{ runner.os }}-${{ runner.arch }}-v0.5.17
-          restore-keys: |
-            svm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Run setup_c2.sh (full pipeline)
         env:
