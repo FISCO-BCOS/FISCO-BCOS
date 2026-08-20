@@ -34,7 +34,9 @@ target_link_libraries(bcos-evm-opstack-tests PRIVATE
 )
 # evmone_precompiles' bare -lblst needs the vcpkg lib dir on the search path (shared-vcpkg
 # worktree layout; same fix as opstack-executor/tests/CMakeLists.txt).
-find_library(BLST_EVM_LIBRARY NAMES blst REQUIRED)
+find_library(BLST_EVM_LIBRARY NAMES blst PATHS
+    "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib"
+    NO_DEFAULT_PATH REQUIRED)
 get_filename_component(BLST_EVM_LIB_DIR ${BLST_EVM_LIBRARY} DIRECTORY)
 target_link_directories(bcos-evm-opstack-tests PRIVATE ${BLST_EVM_LIB_DIR})
 

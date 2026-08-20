@@ -26,7 +26,9 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 # evmone_precompiles' interface adds a bare `-lblst`; with the shared-vcpkg worktree layout the
 # vcpkg lib dir is not on the linker search path, so resolve the library to a full path here.
-find_library(BLST_LIBRARY NAMES blst REQUIRED)
+find_library(BLST_LIBRARY NAMES blst PATHS
+    "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib"
+    NO_DEFAULT_PATH REQUIRED)
 get_filename_component(BLST_LIB_DIR ${BLST_LIBRARY} DIRECTORY)
 
 add_executable(opstack-executor-block-tests
