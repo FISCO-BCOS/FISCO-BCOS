@@ -121,7 +121,14 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
         {
             auto cacheProc = std::dynamic_pointer_cast<FakeCacheProcessor>(
                 otherNode.second->pbftEngine()->cacheProcessor());
-            if (cacheProc->caches().size() < 2)
+            // caches() is std::map<BlockNumber, PBFTCache::Ptr>: the loop below
+            // dereferences [expectedProposal] and [futureBlockIndex], so guard
+            // on key presence, not on the entry count (a size check passes even
+            // when both slots are unrelated blocks, and operator[] would then
+            // insert a null cache).
+            auto const& caches = cacheProc->caches();
+            if (caches.count(expectedProposal) == 0 ||
+                caches.count(futureBlockIndex) == 0)
             {
                 allInPrecommit = false;
                 break;

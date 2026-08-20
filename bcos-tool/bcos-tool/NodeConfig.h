@@ -75,6 +75,13 @@ public:
 
     struct TxPoolConfig
     {
+        // NOTE: this nested name collides with bcos::txpool::TxPoolConfig (and
+        // likewise ConsensusConfig/GatewayConfig/SyncConfig/CertConfig below).
+        // Different scopes, so no compile conflict today; a caller that does
+        // `using namespace bcos::txpool` would hit an ambiguity. Kept for
+        // symmetry with the config domains; rename before relying on the
+        // structs as the public read surface if the collision becomes a
+        // problem.
         size_t limit = 15000;
         int64_t txsExpirationTime = 600'000;
         bool checkBlockLimit = true;
