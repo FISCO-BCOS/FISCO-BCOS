@@ -99,4 +99,13 @@ const OpForkConfig& karstConfig() noexcept
     }();
     return cfg;
 }
+
+const OpForkConfig& configAt(const OpForkFlags& flags) noexcept
+{
+    // decision A5 (feature-flag variant): feature_op_jovian enabled -> Jovian, else Isthmus.
+    // Isthmus is the OP-mode baseline; there is no pre-Isthmus config in this minimal loop.
+    if (flags.jovianActive)
+        return jovianConfig();
+    return isthmusConfig();
+}
 }  // namespace bcos::evm::opstack
