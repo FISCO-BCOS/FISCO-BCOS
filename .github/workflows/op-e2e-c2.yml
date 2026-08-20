@@ -35,19 +35,17 @@ jobs:
       - name: Cache Foundry
         uses: actions/cache@v4
         with:
-          path: ~/.foundry
-          key: foundry-${{ runner.os }}-2025-03
-          restore-keys: |
-            foundry-${{ runner.os }}-
+          path: /usr/local/bin/forge
+          key: foundry-${{ runner.os }}-bin-v1
 
       - name: Install linux deps (foundry + clang + JDK)
         run: |
           set -eo pipefail
           sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk
-          curl -fsSL https://foundry.paradigm.xyz -o /tmp/foundry-install.sh
-          bash /tmp/foundry-install.sh
-          export PATH="$HOME/.foundry/bin:$PATH"
-          "$HOME/.foundry/bin/foundryup"
+          # Install foundry from GitHub releases (avoids foundryup installer pipe issue)
+          FOUNDRY_URL="https://github.com/foundry-rs/foundry/releases/latest/download/foundry_$(uname -s)_$(uname -m).tar.gz"
+          curl -fsSL "$FOUNDRY_URL" | tar xz -C /usr/local/bin
+          forge --version && cast --version && anvil --version
 
       - name: Configure
         run: |
@@ -135,7 +133,6 @@ jobs:
           L2CONTRACTS: ${{ github.workspace }}/bcos-l2-contracts
           OPGEN: ${{ github.workspace }}/tools/opstack-genesis
         run: |
-          export PATH="$HOME/.foundry/bin:$PATH"
           bash tools/op-e2e/setup_c2.sh > "/tmp/c2-setup.log" 2>&1
           tail -60 "/tmp/c2-setup.log"
 
