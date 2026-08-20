@@ -2,6 +2,7 @@
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <boost/test/unit_test.hpp>
+#include <evmc/evmc.hpp>
 #include <test/utils/test_state.hpp>
 
 using namespace bcos::evm::opstack;
@@ -175,6 +176,162 @@ BOOST_AUTO_TEST_CASE(MissingAllSlotsZero)
     BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, 0u);
     BOOST_CHECK_EQUAL(p.operator_fee_scalar, 0u);
     BOOST_CHECK_EQUAL(p.operator_fee_constant, 0u);
+}
+
+// ---- Ecotone calldata round-trip test ----
+// Constructs setL1BlockValuesEcotone calldata (spec §L1 Attributes) for known fee
+// params, simulates the storage writes L1Block.sol would perform, then calls
+// loadOpFeeParams and asserts all values match — closing the gap that no test
+// exercises real L1Block storage layout with real calldata encoding.
+namespace
+{
+// Build setL1BlockValuesEcotone calldata per spec (164 bytes total).
+evmc::bytes buildEcotoneCalldata(uint32_t baseFeeScalar, uint32_t blobBaseFeeScalar,
+    intx::uint256 basefee, intx::uint256 blobBaseFee)
+{
+    evmc::bytes calldata(164, 0x00);
+    // selector 0x440a5e20
+    calldata[0] = 0x44;
+    calldata[1] = 0x0a;
+    calldata[2] = 0x5e;
+    calldata[3] = 0x20;
+    // baseFeeScalar at [4:8)
+    calldata[4] = static_cast<uint8_t>(baseFeeScalar >> 24);
+    calldata[5] = static_cast<uint8_t>(baseFeeScalar >> 16);
+    calldata[6] = static_cast<uint8_t>(baseFeeScalar >> 8);
+    calldata[7] = static_cast<uint8_t>(baseFeeScalar);
+    // blobBaseFeeScalar at [8:12)
+    calldata[8] = static_cast<uint8_t>(blobBaseFeeScalar >> 24);
+    calldata[9] = static_cast<uint8_t>(blobBaseFeeScalar >> 16);
+    calldata[10] = static_cast<uint8_t>(blobBaseFeeScalar >> 8);
+    calldata[11] = static_cast<uint8_t>(blobBaseFeeScalar);
+    // basefee at [36:68)
+    for (int i = 0; i < 32; ++i)
+        calldata[36 + i] = static_cast<uint8_t>(basefee >> (8 * (31 - i)));
+    // blobBaseFee at [68:100)
+    for (int i = 0; i < 32; ++i)
+        calldata[68 + i] = static_cast<uint8_t>(blobBaseFee >> (8 * (31 - i)));
+    return calldata;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(EcotoneCalldataRoundTrip)
+{
+    using namespace evmone;
+    using namespace evmone::test;
+
+    constexpr uint32_t kBaseFeeScalar = 12345;
+    constexpr uint32_t kBlobBaseFeeScalar = 67890;
+    constexpr intx::uint256 kBasefee{42};
+    constexpr intx::uint256 kBlobBaseFee{99};
+
+    // Verify calldata layout matches spec §L1 Attributes.
+    auto calldata =
+        buildEcotoneCalldata(kBaseFeeScalar, kBlobBaseFeeScalar, kBasefee, kBlobBaseFee);
+    BOOST_CHECK_EQUAL(calldata.size(), 164u);
+    // selector
+    BOOST_CHECK_EQUAL(calldata[0], 0x44);
+    BOOST_CHECK_EQUAL(calldata[1], 0x0a);
+    BOOST_CHECK_EQUAL(calldata[2], 0x5e);
+    BOOST_CHECK_EQUAL(calldata[3], 0x20);
+
+    // Simulate L1Block.sol storage writes for slots 1, 3, 7.
+    TestState ts;
+    evmc::bytes32 key1{};
+    key1.bytes[31] = 1;
+    ts[OP_L1_BLOCK].storage[key1] = intx::be::store<evmc::bytes32>(kBasefee);
+
+    evmc::bytes32 key3{};
+    key3.bytes[31] = 3;
+    // op-geth layout: baseFeeScalar at [16:20), blobBaseFeeScalar at [20:24)
+    evmc::bytes32 slot3{};
+    slot3.bytes[16] = static_cast<uint8_t>(kBaseFeeScalar >> 24);
+    slot3.bytes[17] = static_cast<uint8_t>(kBaseFeeScalar >> 16);
+    slot3.bytes[18] = static_cast<uint8_t>(kBaseFeeScalar >> 8);
+    slot3.bytes[19] = static_cast<uint8_t>(kBaseFeeScalar);
+    slot3.bytes[20] = static_cast<uint8_t>(kBlobBaseFeeScalar >> 24);
+    slot3.bytes[21] = static_cast<uint8_t>(kBlobBaseFeeScalar >> 16);
+    slot3.bytes[22] = static_cast<uint8_t>(kBlobBaseFeeScalar >> 8);
+    slot3.bytes[23] = static_cast<uint8_t>(kBlobBaseFeeScalar);
+    ts[OP_L1_BLOCK].storage[key3] = slot3;
+
+    evmc::bytes32 key7{};
+    key7.bytes[31] = 7;
+    ts[OP_L1_BLOCK].storage[key7] = intx::be::store<evmc::bytes32>(kBlobBaseFee);
+
+    // Load and assert.
+    const auto p = loadOpFeeParams(ts);
+    BOOST_CHECK_EQUAL(p.l1_base_fee, kBasefee);
+    BOOST_CHECK_EQUAL(p.base_fee_scalar, kBaseFeeScalar);
+    BOOST_CHECK_EQUAL(p.blob_base_fee_scalar, kBlobBaseFeeScalar);
+    BOOST_CHECK_EQUAL(p.blob_base_fee, kBlobBaseFee);
+}
+
+// Isthmus variant: slots 1/3/7/8 with operator fee + DA scalar.
+BOOST_AUTO_TEST_CASE(IsthmusCalldataRoundTrip)
+{
+    using namespace evmone;
+    using namespace evmone::test;
+
+    constexpr uint32_t kBaseFeeScalar = 100;
+    constexpr uint32_t kBlobBaseFeeScalar = 200;
+    constexpr intx::uint256 kBasefee{5000000000ULL};
+    constexpr intx::uint256 kBlobBaseFee{3000000000ULL};
+    constexpr uint32_t kOpScalar = 1000;
+    constexpr uint64_t kOpConstant = 50000;
+    constexpr uint16_t kDaScalar = 400;
+
+    TestState ts;
+
+    // slot 1: basefee
+    evmc::bytes32 key1{};
+    key1.bytes[31] = 1;
+    ts[OP_L1_BLOCK].storage[key1] = intx::be::store<evmc::bytes32>(kBasefee);
+
+    // slot 3: scalars
+    evmc::bytes32 slot3{};
+    slot3.bytes[16] = static_cast<uint8_t>(kBaseFeeScalar >> 24);
+    slot3.bytes[17] = static_cast<uint8_t>(kBaseFeeScalar >> 16);
+    slot3.bytes[18] = static_cast<uint8_t>(kBaseFeeScalar >> 8);
+    slot3.bytes[19] = static_cast<uint8_t>(kBaseFeeScalar);
+    slot3.bytes[20] = static_cast<uint8_t>(kBlobBaseFeeScalar >> 24);
+    slot3.bytes[21] = static_cast<uint8_t>(kBlobBaseFeeScalar >> 16);
+    slot3.bytes[22] = static_cast<uint8_t>(kBlobBaseFeeScalar >> 8);
+    slot3.bytes[23] = static_cast<uint8_t>(kBlobBaseFeeScalar);
+    evmc::bytes32 key3{};
+    key3.bytes[31] = 3;
+    ts[OP_L1_BLOCK].storage[key3] = slot3;
+
+    // slot 7: blobBaseFee
+    evmc::bytes32 key7{};
+    key7.bytes[31] = 7;
+    ts[OP_L1_BLOCK].storage[key7] = intx::be::store<evmc::bytes32>(kBlobBaseFee);
+
+    // slot 8: operator fee + DA scalar (Isthmus/Jovian layout)
+    evmc::bytes32 slot8{};
+    // daScalar u16 at [18:20)
+    slot8.bytes[18] = static_cast<uint8_t>(kDaScalar >> 8);
+    slot8.bytes[19] = static_cast<uint8_t>(kDaScalar);
+    // opScalar u32 at [20:24)
+    slot8.bytes[20] = static_cast<uint8_t>(kOpScalar >> 24);
+    slot8.bytes[21] = static_cast<uint8_t>(kOpScalar >> 16);
+    slot8.bytes[22] = static_cast<uint8_t>(kOpScalar >> 8);
+    slot8.bytes[23] = static_cast<uint8_t>(kOpScalar);
+    // opConstant u64 at [24:32)
+    for (int i = 0; i < 8; ++i)
+        slot8.bytes[24 + i] = static_cast<uint8_t>(kOpConstant >> (8 * (7 - i)));
+    evmc::bytes32 key8{};
+    key8.bytes[31] = 8;
+    ts[OP_L1_BLOCK].storage[key8] = slot8;
+
+    const auto p = loadOpFeeParams(ts);
+    BOOST_CHECK_EQUAL(p.l1_base_fee, kBasefee);
+    BOOST_CHECK_EQUAL(p.base_fee_scalar, kBaseFeeScalar);
+    BOOST_CHECK_EQUAL(p.blob_base_fee_scalar, kBlobBaseFeeScalar);
+    BOOST_CHECK_EQUAL(p.blob_base_fee, kBlobBaseFee);
+    BOOST_CHECK_EQUAL(p.operator_fee_scalar, kOpScalar);
+    BOOST_CHECK_EQUAL(p.operator_fee_constant, kOpConstant);
+    BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, kDaScalar);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

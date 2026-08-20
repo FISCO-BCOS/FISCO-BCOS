@@ -50,6 +50,23 @@ elided — trie-equivalent — and addresses are lowercased).
 
 Dependencies: Python 3 stdlib + `pyyaml`. Tests also need `pytest`.
 
+## Fork activation: genesis feature flag (OP Stack divergence)
+
+OP Stack activates forks by L2 block timestamp (e.g. `chain.jovian_time`).
+FISCO selects the OP fork at **genesis time** via the `[features]` section
+instead — there is no timestamp-based activation mechanism in FISCO.
+
+- **Isthmus** is the OP-mode baseline (default when `executor_version >= 3`).
+- `feature_op_jovian=true` in `[features]` enables Jovian semantics
+  (DA footprint, operator fee ×100, minBaseFee, new calldata selector).
+- The fork is fixed at node start: **no mid-chain Isthmus→Jovian transition
+  is possible**.
+
+For new chains (genesis-activated Jovian), this is equivalent to the OP
+spec. For chains that need to upgrade from Isthmus to Jovian mid-life, this
+is a known limitation — a timestamp-based activation mechanism would be
+required.
+
 ## chain-config.yaml fields
 
 | field | meaning |
