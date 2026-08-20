@@ -82,7 +82,8 @@ BOOST_AUTO_TEST_CASE(eip161_empty_account_creation_throws)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> bridge(storage);
     evmone::state::StateDiff diff{
-        .modified_accounts = {{kAddr, 0, intx::uint256{0}, std::nullopt, {}}}};
+        .modified_accounts = {{kAddr, 0, intx::uint256{0}, std::nullopt, {}}},
+        .deleted_accounts = {}};
     BOOST_CHECK_THROW(bridge.applyDiff(diff), std::runtime_error);
     // seeding=true 豁免 guard（SeedPreState 快照路径）。
     bcos::evm::evmstate::Storage2State<MutableStorage> seedBridge(storage);
