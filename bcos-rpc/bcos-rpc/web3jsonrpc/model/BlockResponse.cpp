@@ -24,7 +24,11 @@ void bcos::rpc::combineBlockResponse(
         // Ethereum header: every field is taken verbatim from the header.
         result["nonce"] = blockHeader->nonce().hexPrefixed();
         result["sha3Uncles"] = blockHeader->uncleHash().hexPrefixed();
-        result["miner"] = blockHeader->coinbase().hexPrefixed();
+        // EIP-55 checksummed address, matching geth's eth_getBlock* output.
+        auto minerAddr = blockHeader->coinbase().hex();
+        auto minerAddrHash = crypto::keccak256Hash(bytesConstRef(minerAddr)).hex();
+        toChecksumAddress(minerAddr, minerAddrHash);
+        result["miner"] = "0x" + minerAddr;
         result["difficulty"] = toQuantity(blockHeader->difficulty());
         result["mixHash"] = blockHeader->prevRandao().hexPrefixed();
     }
@@ -75,20 +79,26 @@ void bcos::rpc::combineBlockResponse(
     result["totalDifficulty"] = "0x0";
     result["extraData"] = toHexStringWithPrefix(blockHeader->extraData());
     result["size"] = toQuantity(block.size());
-    result["gasLimit"] = toQuantity(blockHeader->gasLimit());
+    // Native FISCO-BCOS blocks never call setGasLimit, so the header field reads back as 0;
+    // keep the historical fixed value for NON_ETH blocks (the Ethereum-compatible gas limit),
+    // and the real header value for Eth blocks (where buildPayload always sets it).
+    result["gasLimit"] = toQuantity(
+        isEth ? blockHeader->gasLimit() : bcos::u256(30000000));
     result["gasUsed"] = toQuantity(static_cast<uint64_t>(blockHeader->gasUsed()));
     // BlockHeader stores the timestamp in milliseconds; the eth_* RPC emits seconds.
     result["timestamp"] = toQuantity(blockHeader->timestamp() / 1000);
 
-    // Fork-gated Ethereum fields: only defined for the fork that introduced them.
+    // Fork-gated Ethereum fields: only defined for the fork that introduced them. Eth blocks
+    // read the values from the header; native NON_ETH blocks keep the historical fixed mock
+    // values so their RPC shape is unchanged.
     auto versionAtLeast = [&](bcos::protocol::EthBlockVersion fork) {
-        return isEth && static_cast<uint8_t>(ethVersion) >= static_cast<uint8_t>(fork);
+        return static_cast<uint8_t>(ethVersion) >= static_cast<uint8_t>(fork);
     };
-    if (versionAtLeast(bcos::protocol::EthBlockVersion::LONDON))
+    if (isEth && versionAtLeast(bcos::protocol::EthBlockVersion::LONDON))
     {
         result["baseFeePerGas"] = toQuantity(blockHeader->baseFee().value_or(bcos::u256(0)));
     }
-    if (versionAtLeast(bcos::protocol::EthBlockVersion::SHANGHAI))
+    if (isEth && versionAtLeast(bcos::protocol::EthBlockVersion::SHANGHAI))
     {
         // The withdrawals operation list is a block-body field and is not persisted in the
         // header (only its trie root is); emit the always-empty list so Shanghai-shaped
@@ -99,7 +109,7 @@ void bcos::rpc::combineBlockResponse(
             result["withdrawalsRoot"] = root->hexPrefixed();
         }
     }
-    if (versionAtLeast(bcos::protocol::EthBlockVersion::CANCUN))
+    if (isEth && versionAtLeast(bcos::protocol::EthBlockVersion::CANCUN))
     {
         if (auto blobGasUsed = blockHeader->blobGasUsed())
         {
@@ -114,12 +124,23 @@ void bcos::rpc::combineBlockResponse(
             result["parentBeaconBlockRoot"] = beaconRoot->hexPrefixed();
         }
     }
-    if (versionAtLeast(bcos::protocol::EthBlockVersion::PRAGUE))
+    if (isEth && versionAtLeast(bcos::protocol::EthBlockVersion::PRAGUE))
     {
         if (auto requestsHash = blockHeader->requestsHash())
         {
             result["requestsHash"] = requestsHash->hexPrefixed();
         }
+    }
+    if (!isEth)
+    {
+        // Native FISCO-BCOS blocks keep their pre-existing Ethereum-compatible mock shape.
+        result["baseFeePerGas"] = "0x0";
+        result["withdrawals"] = Json::Value(Json::arrayValue);
+        // empty withdrawals trie root hash
+        result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
+        result["blobGasUsed"] = "0x0";
+        result["excessBlobGas"] = "0x0";
+        result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
     }
 
     if (fullTxs)
