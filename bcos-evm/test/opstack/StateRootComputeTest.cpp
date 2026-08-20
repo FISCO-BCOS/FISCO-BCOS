@@ -51,7 +51,8 @@ BOOST_AUTO_TEST_CASE(single_account_root_matches_golden)
     constexpr auto kValue =
         0x000000000000000000000000000000000000000000000000000000000000002a_bytes32;
     ledger.applyDiff(evmone::state::StateDiff{
-        .modified_accounts = {{kAddr, 1, 1000_u256, std::nullopt, {{kSlot, kValue}}}}});
+        .modified_accounts = {{kAddr, 1, 1000_u256, std::nullopt, {{kSlot, kValue}}}},
+        .deleted_accounts = {}});
     evmone::hash256 root;
     try
     {
