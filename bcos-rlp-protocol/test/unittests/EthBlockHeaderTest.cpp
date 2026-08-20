@@ -712,6 +712,8 @@ BOOST_AUTO_TEST_CASE(decodeTarsHeaderPinsNonEthVersion)
     error = EthBlockHeader::decodeTarsHeader(decoded, bcos::ref(rlp));
     BOOST_CHECK(!error);
     BOOST_CHECK(decoded->ethBlockVersion() == EthBlockVersion::NON_ETH);
+    // decodeTarsHeader writes the RLP seconds ×1000 into the header (milliseconds); source's
+    // header timestamp is already milliseconds, so the two must be equal — NOT ×1000 again.
     BOOST_CHECK_EQUAL(decoded->timestamp(), source->timestamp());
 
     // Re-encoding the decoded header must reproduce the input RLP: ×1000 on decode, /1000 on
