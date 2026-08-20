@@ -144,8 +144,10 @@ void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTrans
         // op-geth emits isSystemTx only when true.
         result["isSystemTx"] = true;
     }
-    // Deposits carry no nonce (the deposit nonce lives in the receipt), no gas price and
-    // no signature; op-geth emits zero quantities for these.
+    // Deposits carry no nonce field of their own (the deposit nonce lives in the receipt —
+    // combineTxResponse overwrites this 0x0 with the receipt's depositNonce for mined
+    // deposits, Regolith+ semantics), no gas price and no signature; op-geth emits zero
+    // quantities for these when the receipt is unavailable.
     result["nonce"] = "0x0";
     result["gasPrice"] = "0x0";
     result["v"] = "0x0";

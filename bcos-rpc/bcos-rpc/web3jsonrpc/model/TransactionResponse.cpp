@@ -13,6 +13,22 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         auto gasPrice = receipt.effectiveGasPrice();
         result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
     }
+
+    // OP Stack deposit (0x7e): the tx JSON nonce must reflect the deposit's actual
+    // execution nonce (Regolith+ semantics — the deposit nonce lives in the receipt,
+    // deposits carry no nonce field of their own). The base combineTxResponse above
+    // emits 0x0; overwrite it with the receipt's depositNonce when present, so
+    // contract-address derivation (keccak(rlp([sender, nonce]))[12:]) and wallets see
+    // the value op-geth reports. Without the meta the deposit was never executed (or is
+    // a pre-Regolith block) and 0x0 stands.
+    if (auto extraBytes = tx.extraTransactionBytes();
+        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    {
+        if (auto meta = receipt.opStackMeta(); meta.has_value() && meta->deposit_nonce)
+        {
+            result["nonce"] = toQuantity(*meta->deposit_nonce);
+        }
+    }
 }
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,

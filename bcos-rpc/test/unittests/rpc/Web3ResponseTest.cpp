@@ -184,6 +184,55 @@ BOOST_AUTO_TEST_CASE(combineTxResponseShapesTransaction)
     BOOST_CHECK(result.isMember("input"));
 }
 
+BOOST_AUTO_TEST_CASE(combineTxResponseDepositNonceFromReceiptMeta)
+{
+    // MJ-5: a deposit tx's JSON nonce must reflect the receipt's depositNonce
+    // (Regolith+ semantics — deposits carry no nonce field of their own; the value
+    // lives in the receipt and drives contract-address derivation). Without a meta
+    // the 0x0 default from combineDepositTxResponse stands.
+    auto txFactory = m_blockFactory->transactionFactory();
+
+    // Build a deposit tx whose extraTransactionBytes starts with the 0x7e type byte.
+    bcos::rpc::Web3Transaction web3Deposit;
+    web3Deposit.type = bcos::rpc::TransactionType::Deposit;
+    web3Deposit.from = bcos::Address("0xdead000000000000000000000000000000000011");
+    web3Deposit.sourceHash =
+        bcos::h256("6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7");
+    web3Deposit.mint = bcos::u256("0x16345785d8a0000");
+    web3Deposit.nonce = 0;
+    web3Deposit.isSystemTx = false;
+    auto tarsTx = web3Deposit.takeToTarsTransaction();
+    bcos::h256 arbitraryHash("0303030303030303030303030303030303030303030303030303030303030303");
+    tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+
+    auto receipt = makeReceipt(m_blockFactory);
+    protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = 18;
+    meta.deposit_receipt_version = 1;
+    receipt->setOpStackMeta(std::move(meta));
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x77;
+
+    Json::Value result(Json::objectValue);
+    combineTxResponse(result, *tx, *receipt, blockHash);
+    BOOST_CHECK_EQUAL(result["type"].asString(), "0x7e");
+    BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x12");  // 18 = depositNonce
+
+    // Without a meta (or without deposit_nonce) the 0x0 default stands.
+    auto receipt2 = makeReceipt(m_blockFactory);
+    Json::Value result2(Json::objectValue);
+    combineTxResponse(result2, *tx, *receipt2, blockHash);
+    BOOST_CHECK_EQUAL(result2["nonce"].asString(), "0x0");
+
+    // The no-receipt overload keeps the 0x0 default too.
+    Json::Value result3(Json::objectValue);
+    combineTxResponse(result3, *tx, /*transactionIndex=*/0, /*blockNumber=*/12, blockHash);
+    BOOST_CHECK_EQUAL(result3["nonce"].asString(), "0x0");
+}
+
 BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
 {
     auto txFactory = m_blockFactory->transactionFactory();
