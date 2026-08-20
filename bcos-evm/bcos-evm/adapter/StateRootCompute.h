@@ -51,6 +51,11 @@ inline bcos::bytes trimmedBigEndian(bcos::bytesConstRef v)
 /// the exception type. A no-op for MemoryState (its poisoned() is always false). The visitor
 /// must not throw: MemoryState::visitAccounts is noexcept and an exception would escape as
 /// std::terminate.
+///
+/// Exception-binding caveat (wedprcrypto issue, Storage2State.h's catch-ladder comment): this
+/// throw is runtime_error-family, which in affected binaries may escape a plain
+/// catch(const std::exception&). The part-3 driver must classify on poisoned() with catch(...)
+/// as the backstop — not on the exception type alone.
 template <class Ledger>
 [[nodiscard]] evmone::hash256 stateRootOf(const Ledger& ledger)
 {
