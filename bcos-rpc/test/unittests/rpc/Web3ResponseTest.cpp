@@ -187,9 +187,9 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
     auto block = m_blockFactory->createBlock();
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     // An Eth CANCUN header: all fork-gated fields come from the header, the timestamp is
-    // stored in seconds and emitted as-is.
+    // stored in BlockHeader milliseconds and emitted as seconds (/1000).
     header->setNumber(7);
-    header->setTimestamp(1700000000);  // already seconds
+    header->setTimestamp(1700000000 * 1000LL);  // BlockHeader milliseconds == 1700000000 s
     header->setEthBlockVersion(bcos::protocol::EthBlockVersion::CANCUN);
     header->setParentInfo(
         bcos::protocol::ParentInfo{.blockNumber = 6,
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
     BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x0000000000000000");
     BOOST_CHECK_EQUAL(result["mixHash"].asString(),
         "0x1111111111111111111111111111111111111111111111111111111111111111");
-    // Eth timestamp is already in seconds: emitted without /1000.
+    // Eth timestamp: header milliseconds /1000 = seconds.
     BOOST_CHECK_EQUAL(result["timestamp"].asString(), "0x6553f100");
     // gasLimit/gasUsed come from the header.
     BOOST_CHECK_EQUAL(result["gasLimit"].asString(), "0x1c9c380");  // 30000000
