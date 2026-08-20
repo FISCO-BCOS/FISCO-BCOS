@@ -62,7 +62,7 @@ target_link_libraries(opstack-executor-block-tests PRIVATE
     transaction-scheduler)  # OpSchedulerTest: SchedulerSkeleton::current() (BaselineScheduler.cpp)
 # evmone_precompiles' bare -lblst needs the vcpkg lib dir on the search path (shared-vcpkg
 # worktree layout does not put it in the implicit link directories).
-target_link_directories(opstack-executor-block-tests PRIVATE ${BLST_LIB_DIR})
+target_link_libraries(opstack-executor-block-tests PRIVATE ${BLST_LIBRARY})
 target_include_directories(opstack-executor-block-tests PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/bcos-ledger
@@ -83,8 +83,7 @@ add_executable(opstack-executor-detail-tests
 )
 set_target_properties(opstack-executor-detail-tests PROPERTIES UNITY_BUILD OFF)
 target_link_libraries(opstack-executor-detail-tests PRIVATE
-    opstack-executor codec evmone::evmone intx::intx Boost::unit_test_framework bcos-utilities protocol-tars)
-target_link_directories(opstack-executor-detail-tests PRIVATE ${BLST_LIB_DIR})  # bare -lblst (see above)
+    opstack-executor codec evmone::evmone intx::intx Boost::unit_test_framework bcos-utilities protocol-tars ${BLST_LIBRARY})
 add_test(NAME OpstackExecutorDetailTests COMMAND opstack-executor-detail-tests)
 
 # DA/operator-fee matrix runner (op-alignment line). Consumes da-matrix/da_matrix.json,
@@ -94,8 +93,7 @@ add_test(NAME OpstackExecutorDetailTests COMMAND opstack-executor-detail-tests)
 add_executable(opstack-da-matrix-runner da-matrix/run_fisco.cpp)
 set_target_properties(opstack-da-matrix-runner PROPERTIES UNITY_BUILD OFF)
 target_link_libraries(opstack-da-matrix-runner PRIVATE
-    opstack-executor bcosevm::opstack jsoncpp_static evmone::evmone intx::intx bcos-utilities)
-target_link_directories(opstack-da-matrix-runner PRIVATE ${BLST_LIB_DIR})  # bare -lblst (see above)
+    opstack-executor bcosevm::opstack jsoncpp_static evmone::evmone intx::intx bcos-utilities ${BLST_LIBRARY})
 add_test(NAME DaMatrixFiscoBaseline COMMAND opstack-da-matrix-runner
     --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
     --out ${CMAKE_CURRENT_BINARY_DIR}/out_fisco.json)
