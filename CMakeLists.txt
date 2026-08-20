@@ -64,9 +64,15 @@ if(FULLNODE)
     find_package(blst CONFIG REQUIRED)
     # Create blst::blst if not already defined (overlay port only creates 'blst')
     if(NOT TARGET blst::blst)
-        get_target_property(_blst_loc blst IMPORTED_LOCATION)
-        add_library(blst::blst STATIC IMPORTED)
-        set_target_properties(blst::blst PROPERTIES IMPORTED_LOCATION "${_blst_loc}")
+        find_library(_blst_lib NAMES blst PATHS
+            "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib"
+            NO_DEFAULT_PATH)
+        if(_blst_lib)
+            add_library(blst::blst STATIC IMPORTED)
+            set_target_properties(blst::blst PROPERTIES IMPORTED_LOCATION "${_blst_lib}")
+        else()
+            message(FATAL_ERROR "blst library not found in vcpkg installed directory")
+        endif()
     endif()
 
     add_subdirectory(bcos-evm)
