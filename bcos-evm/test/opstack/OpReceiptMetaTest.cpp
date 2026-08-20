@@ -39,8 +39,8 @@ BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa)
     fee.operator_fee_scalar = 11;
     fee.operator_fee_constant = 13;
     std::vector<uint8_t> env{0x02};
-    const auto m = deriveOpReceiptMeta(
-        props(fee, flzCompressLen({env.data(), env.size()}), 100_u256, isthmusConfig()),
+    const uint32_t flz = flzCompressLen({env.data(), env.size()});
+    const auto m = deriveOpReceiptMeta(props(fee, flz, 100_u256, isthmusConfig()),
         /*opUsed=*/50_u256, /*fill_operator_scalars=*/true);
     BOOST_REQUIRE(m.l1_fee.has_value());
     BOOST_CHECK_EQUAL(*m.l1_fee, 100_u256);
@@ -49,6 +49,10 @@ BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa)
     BOOST_CHECK_EQUAL(*m.l1_blob_base_fee, 2000_u256);
     BOOST_CHECK_EQUAL(*m.l1_base_fee_scalar, 7u);
     BOOST_CHECK_EQUAL(*m.l1_blob_base_fee_scalar, 9u);
+    // Isthmus（has_ecotone_l1_formula=false）下 l1_gas_used 必有值，走 Fjord 公式。
+    BOOST_REQUIRE(m.l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(
+        *m.l1_gas_used, static_cast<uint64_t>(estimatedDaSizeScaled(flz) * 16 / 1'000'000));
     BOOST_REQUIRE(m.operator_fee.has_value());
     BOOST_CHECK_EQUAL(*m.operator_fee, 50_u256);
     BOOST_CHECK(m.operator_fee_scalar.has_value());
