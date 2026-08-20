@@ -62,8 +62,9 @@ struct Alloc
 // every field is REQUIRED (NodeConfig fail-fasts on the first missing key).
 // m_hash is a checksum, not an input: Ledger::buildGenesisBlock recomputes
 // keccak256(rlp(header)) from the other 21 fields and refuses to start if it
-// differs. m_timestamp is in SECONDS (the Ethereum header domain) — B0 is
-// artifact-authoritative, unlike FISCO's millisecond block timestamps.
+// differs. m_timestamp is in SECONDS (the Ethereum header domain);
+// Ledger::applyEthGenesisHeader multiplies by 1000 when projecting it onto the
+// internal BlockHeader, which stores milliseconds like every other block.
 struct EthGenesisHeader
 {
     crypto::HashType m_parentHash;

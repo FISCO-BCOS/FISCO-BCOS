@@ -103,6 +103,32 @@ uint64_t parseQuantity(Json::Value const& value, std::string_view field)
         bcos::rpc::InvalidParams, std::string(field) + " must be a uint64 hex quantity string"));
 }
 
+/// minBaseFee-only reader. op-node declares PayloadAttributes.MinBaseFee as a plain
+/// `*uint64` with `json:"minBaseFee,omitempty"` (op-service/eth/types.go:523, v1.19.3) —
+/// unlike every sibling quantity field, it is NOT wrapped in hexutil, so op-node puts a
+/// bare JSON number on the wire ("minBaseFee": 0). Accept exactly that extra form here,
+/// on top of the usual hex quantity string. The number path must never go through
+/// asString(): jsoncpp stringifies the number 10 to "10", which the hex reader would
+/// then parse as 0x10 = 16 — a silently forged value. Reals (1.5, and 10.0 too) never
+/// carry the int/uint JSON types, so they fall through to the rejection.
+uint64_t parseQuantityOrUInt64Number(Json::Value const& value, std::string_view field)
+{
+    if (value.type() == Json::uintValue || (value.type() == Json::intValue && value.asInt64() >= 0))
+    {
+        return value.asUInt64();
+    }
+    if (value.isString())
+    {
+        if (auto parsed = bcos::safeFromQuantity(value.asString()))
+        {
+            return *parsed;
+        }
+    }
+    BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+        std::string(field) +
+            " must be a uint64 hex quantity string or a non-negative JSON integer"));
+}
+
 /// The owning object of a group of fields (executionPayload, payloadAttributes,
 /// forkchoiceState). jsoncpp's operator[](char const*) throws Json::LogicError when the
 /// value is not an object, and that would surface as -32603 InternalError for input that
@@ -576,7 +602,11 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     }
     if (pa.isMember("minBaseFee") && !pa["minBaseFee"].isNull())
     {
-        attrs.minBaseFee = parseQuantity(pa["minBaseFee"], "payloadAttributes.minBaseFee");
+        // Bare-number form accepted alongside hex: op-node serializes MinBaseFee
+        // without hexutil (op-service/eth/types.go:523), so every post-Jovian FCU
+        // carries e.g. "minBaseFee": 0 and a hex-only reader rejects it with -32602.
+        attrs.minBaseFee =
+            parseQuantityOrUInt64Number(pa["minBaseFee"], "payloadAttributes.minBaseFee");
     }
     return attrs;
 }

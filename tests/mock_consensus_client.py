@@ -264,6 +264,10 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         "transactions": [DEPOSIT_RAW],
         "noTxPool": no_tx_pool,
         "gasLimit": ATTRS_GAS_LIMIT,
+        # Bare JSON number, NOT a hex string: op-node serializes MinBaseFee as a plain
+        # *uint64 without hexutil (op-service/eth/types.go:523, v1.19.3), so the mock
+        # must put the same wire shape on the wire ("minBaseFee": 0).
+        "minBaseFee": 0,
     }
 
     fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
