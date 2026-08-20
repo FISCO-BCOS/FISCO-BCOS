@@ -88,8 +88,10 @@ BOOST_AUTO_TEST_CASE(zero_fee_params_produce_zero_costs)
 BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance};  // sender must be inserted; otherwise get_account
-                                                // returns balance=0 and the balance check rejects
+    ts[kSender] = {.balance = kSenderBalance,
+        .storage = {},
+        .code = {}};  // sender must be inserted; otherwise get_account
+                      // returns balance=0 and the balance check rejects
     auto isthmus = isthmusConfig();
     auto block = blk();
     auto tx = baseTx();
@@ -103,7 +105,7 @@ BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
 BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
 {
     evmone::test::TestState ts;
-    ts[kSender] = {.balance = kSenderBalance};
+    ts[kSender] = {.balance = kSenderBalance, .storage = {}, .code = {}};
     ts[kRecipient] = {};
     auto isthmus = isthmusConfig();
     auto vm = evmc::VM{evmc_create_evmone()};  // opTransition signature takes evmc::VM& (evmone::VM
