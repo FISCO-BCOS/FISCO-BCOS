@@ -16,6 +16,10 @@ namespace bcos::evm::opstack
 {
 class OpHost;
 
+// OP Stack block-transition types and helpers.
+// Split out of OpSchedulerSeam.h so dependent layers can reference types without
+// depending on the class template.
+
 // ---- tx validation (formerly OpValidate.h) ----
 
 struct OpTxProperties
