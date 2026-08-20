@@ -260,7 +260,8 @@ BloomEngineServiceImpl makeBloomEngineServiceImpl(
     StubExecutor executor;
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return BloomEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+    return BloomEngineServiceImpl(
+        memPool, storage, executor, scheduler, blockFactory, /*delegate=*/nullptr);
 }
 
 using TestEngineServiceImpl =
@@ -272,7 +273,8 @@ TestEngineServiceImpl makeEngineServiceImpl(MemPoolImpl& memPool, RealGlobalStat
     StubScheduler scheduler;
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return TestEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+    return TestEngineServiceImpl(
+        memPool, storage, executor, scheduler, blockFactory, /*delegate=*/nullptr);
 }
 
 ForkchoiceState makeForkchoiceState()
