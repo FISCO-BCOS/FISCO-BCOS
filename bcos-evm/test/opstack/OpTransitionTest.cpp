@@ -160,6 +160,10 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta)
     // Isthmus operator = gasUsed×scalar(1e6)/1e6 + 0 = gasUsed（纯转账 21000）。
     BOOST_CHECK_EQUAL(*meta->operator_fee, bcos::u256(static_cast<uint64_t>(txR->gasUsed())));
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(txR->gasUsed()), 21000u);
+    // effectiveGasPrice = base_fee(7) + priority(10) = 0x11（op-geth hexutil.Big 最小小写）；
+    // 转账型 tx 无 contractAddress。
+    BOOST_CHECK_EQUAL(txR->effectiveGasPrice(), "0x11");
+    BOOST_CHECK(txR->contractAddress().empty());
 }
 
 BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula)

@@ -164,8 +164,10 @@ inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     const evmone::state::TransactionReceipt& evmoneReceipt, const evmone::state::BlockInfo& block,
     bcos::bytesConstRef output, std::string contractAddress = {})
 {
-    // gas_used 是 int64_t，断言非负防 cast 回绕（evmone 保证；负值仅理论可达）。
-    assert(evmoneReceipt.gas_used >= 0);
+    // gas_used 是 int64_t，运行时检查非负防 cast 回绕（evmone 保证；负值仅理论可达，但
+    // NDEBUG 下 assert 会消失，共识面不容忍回绕）。
+    if (evmoneReceipt.gas_used < 0)
+        throw std::runtime_error("opTransition: negative gas_used");
     auto out = receiptFactory->createReceipt(
         bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)}, std::move(contractAddress),
         mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status), output,
@@ -235,13 +237,12 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
     m.l1_base_fee_scalar = fee.base_fee_scalar;
     m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
     m.l1_fee = props.l1_cost;
-    // L1 calldata gas used. Ecotone: op-geth reports bedrockCalldataGasUsed on the envelope
-    // (zeroes*4 + ones*16), snapped into props at validate time. Fjord+ (op-geth
-    // core/types/rollup_cost.go:623-624):
-    //   L1GasUsed = estimatedDASizeScaled(fastLzSize) * TxDataNonZeroGasEIP2028(16) / 1e6.
-    // deriveOPStackFields emits it on every non-deposit receipt; props.ecotone_calldata_gas_used
-    // is unset (nullopt) under Fjord+, where flz_len is the FastLZ length captured at validate
-    // time and the formula above applies.
+    // L1 calldata gas used. Ecotone: bedrockCalldataGasUsed on the envelope (zeroes*4 + ones*16),
+    // snapped into props at validate time. Fjord+ (op-geth rollup_cost.go:623-624):
+    //   L1GasUsed = estimatedDASizeScaled(fastLzSize) * 16 / 1e6.
+    // deriveOPStackFields emits it on every non-deposit receipt; ecotone_calldata_gas_used is
+    // unset under Fjord+, where flz_len drives the formula. Bounded: with uint32 flz the scaled
+    // term is ≤ 5.8e10, far below uint64 max, so the cast cannot wrap.
     if (props.ecotone_calldata_gas_used.has_value())
         m.l1_gas_used = *props.ecotone_calldata_gas_used;
     else
@@ -577,12 +578,13 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
         bcos::bytesConstRef{outputBytes.data(), outputBytes.size()},
         !dep.to.has_value() ? toFiscoContractAddress(dep.from, preNonce) : std::string{});
 
-    // Deposit nonce/version are carried on the receipt's opStackMeta (op-geth's deposit receipt
-    // has no L1/operator/DA fields, so nothing else to project).
+    // Deposit nonce/version on opStackMeta (op-geth deposit receipt has no L1/operator/DA
+    // fields); effectiveGasPrice is 0 for deposits (op-geth emits "0x0").
     bcos::protocol::OpStackReceiptMeta meta;
     meta.deposit_nonce = preNonce;
     meta.deposit_receipt_version = 1;
     out->setOpStackMeta(std::move(meta));
+    out->setEffectiveGasPrice("0x0");
     // Write the out-param only after the projection above has fully succeeded (see opTransition).
     outStateDiff = std::move(receipt.state_diff);
     return out;

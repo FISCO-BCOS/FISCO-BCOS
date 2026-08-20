@@ -121,4 +121,20 @@ BOOST_AUTO_TEST_CASE(DaFootprintFollowsSnapshotNotTransitionCfg)
         *pricedUnderJovian.da_footprint, estimatedDaSize({env.data(), env.size()}) * 2u);
 }
 
+// Ecotone 分支：ecotone_calldata_gas_used 快照（zeroes*4 + ones*16）直接成为 l1_gas_used，
+// 不走 Fjord 公式。此前该分支零覆盖（props 助手从不设置该字段）。
+BOOST_AUTO_TEST_CASE(EcotoneCalldataGasUsedBecomesL1GasUsed)
+{
+    OpFeeParams fee{};
+    auto p = props(fee, /*flzLen=*/0, 0_u256, ecotoneConfig());
+    // 50 字节 0x11 envelope：ones=50 → 50*16 = 800（zeroes=0）。
+    p.ecotone_calldata_gas_used = 800;
+    const auto m = deriveOpReceiptMeta(p, 0_u256, /*fill_operator_scalars=*/false);
+    BOOST_REQUIRE(m.l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*m.l1_gas_used, 800u);
+    // 对照：同 flz_len 下 Fjord 公式走 estimatedDaSizeScaled——若误走该分支值不同（50 字节
+    // 0x11 → flz≈11 → scaled=1e8 → 1600），断言可区分。
+    BOOST_CHECK_NE(*m.l1_gas_used, 1600u);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
