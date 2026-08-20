@@ -95,9 +95,15 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseGenesisBlock)
     BOOST_CHECK_EQUAL(result["uncles"].size(), 0U);
     // fullTxs=false → transactions is an array of hashes (empty here).
     BOOST_CHECK(result["transactions"].isArray());
-    // A FISCO (NON_ETH) header carries none of the Eth fork-gated fields.
-    BOOST_CHECK(!result.isMember("baseFeePerGas"));
-    BOOST_CHECK(!result.isMember("withdrawalsRoot"));
+    // Native FISCO (NON_ETH) blocks keep the historical Ethereum-compatible mock shape:
+    // baseFeePerGas / withdrawals / blob fields are present with fixed values, and gasLimit
+    // falls back to the fixed 30000000 (native headers never set it).
+    BOOST_CHECK_EQUAL(result["gasLimit"].asString(), "0x1c9c380");  // 30000000
+    BOOST_CHECK_EQUAL(result["baseFeePerGas"].asString(), "0x0");
+    BOOST_CHECK(result.isMember("withdrawalsRoot"));
+    BOOST_CHECK(result.isMember("blobGasUsed"));
+    BOOST_CHECK(result.isMember("excessBlobGas"));
+    BOOST_CHECK(result.isMember("parentBeaconBlockRoot"));
     BOOST_CHECK(result.isMember("logsBloom"));
 }
 
@@ -253,9 +259,12 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
     Json::Value result(Json::objectValue);
     combineBlockResponse(result, *block, /*fullTxs=*/false);
 
-    // Header-derived Eth fields, not mock constants.
-    BOOST_CHECK_EQUAL(result["miner"].asString(),
-        "0x1234567890abcdef1234567890abcdef12345678");
+    // Header-derived Eth fields, not mock constants. miner is the EIP-55 checksummed coinbase.
+    auto minerAddr = bcos::Address("1234567890abcdef1234567890abcdef12345678").hex();
+    auto minerAddrHash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(minerAddr)).hex();
+    toChecksumAddress(minerAddr, minerAddrHash);
+    BOOST_CHECK_EQUAL(result["miner"].asString(), "0x" + minerAddr);
+    BOOST_CHECK_NE(result["miner"].asString(), "0x1234567890abcdef1234567890abcdef12345678");
     BOOST_CHECK_EQUAL(result["sha3Uncles"].asString(),
         "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
     BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x0000000000000000");

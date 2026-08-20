@@ -405,6 +405,12 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     // Required fields — converted directly, with defensive defaults for empty fields so
     // constructing from an incomplete header never crashes (validation is the caller's job,
     // e.g. via calculateRLPHash -> validateHeader).
+    // ETH-version headers carry the timestamp in SECONDS in EthBlockHeaderData: the header
+    // (milliseconds) is divided by 1000. NON_ETH headers keep MILLISECONDS in
+    // EthBlockHeaderData — rlpEncode's /1000 then produces the seconds the RLP field carries,
+    // so the header timestamp is passed through unchanged. m_version must be set first since
+    // the conversion keys off it.
+    m_version = _header.ethBlockVersion();
     auto parent = _header.parentInfo();
     m_data.parentInfo.blockNumber = parent.blockNumber;
     m_data.parentInfo.blockHash = parent.blockHash;
@@ -418,7 +424,8 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     m_data.gasLimit = _header.gasLimit();
     m_data.gasUsed = _header.gasUsed();
     m_data.number = _header.number();
-    m_data.timestamp = _header.timestamp() / 1000;
+    m_data.timestamp = (m_version == EthBlockVersion::NON_ETH) ? _header.timestamp() :
+                                                                 _header.timestamp() / 1000;
     m_data.prevRandao = _header.prevRandao();
     m_data.nonce = _header.nonce();
 
@@ -458,8 +465,6 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     {
         m_data.requestsHash = _header.requestsHash();
     }
-
-    m_version = _header.ethBlockVersion();
 }
 
 void EthBlockHeader::rlpEncode(bcos::bytes& out) const

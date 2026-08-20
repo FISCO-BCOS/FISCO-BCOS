@@ -471,8 +471,15 @@ bcos::protocol::EthBlockVersion bcos::engine::detail::ethBlockVersionFor(std::ui
         return bcos::protocol::EthBlockVersion::SHANGHAI;
     case static_cast<std::uint32_t>(ApiVersion::V3):
         return bcos::protocol::EthBlockVersion::CANCUN;
+    case static_cast<std::uint32_t>(ApiVersion::V4):
+        return bcos::protocol::EthBlockVersion::PRAGUE;
     default:
-        return bcos::protocol::EthBlockVersion::PRAGUE;  // V4+
+        // A version beyond the known fork window must fail loudly here rather than being
+        // silently mapped to PRAGUE: the fork marker decides the RLP hash, so a wrong mapping
+        // would corrupt every block built under the unknown version.
+        BOOST_THROW_EXCEPTION(
+            UnsupportedEngineApiVersion{} << bcos::errinfo_comment{
+                "EngineService: unsupported Engine API version " + std::to_string(version)});
     }
 }
 
@@ -509,6 +516,15 @@ void bcos::engine::detail::finalizeEthBlockHeader(bcos::protocol::BlockHeader& h
         header.setBlobGasUsed(payload.blobGasUsed.value_or(bcos::u256(0)));
         header.setExcessBlobGas(payload.excessBlobGas.value_or(bcos::u256(0)));
         header.setParentBeaconBlockRoot(parentBeaconBlockRoot.value_or(bcos::h256{}));
+    }
+
+    // PRAGUE (V4): EIP-7685 execution-requests hash. FISCO-BCOS produces no execution
+    // requests, so the canonical empty-requests hash (sha256 of the empty input,
+    // 0xe3b0c442…) is used — the value the RLP hash must carry to validate as PRAGUE.
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
+    {
+        header.setRequestsHash(bcos::crypto::HashType(
+            "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
     }
 
     // Mark the header as an Eth header, then compute and inject its RLP hash.
