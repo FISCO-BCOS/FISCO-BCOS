@@ -27,6 +27,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <opstack-executor/Storage2StateHelpers.h>
 #include <bcos-evm/eth/state/hash_utils.hpp>
@@ -90,17 +91,16 @@ public:
             m_accountCache.emplace(addr, fetched);
             return fetched;
         }
-        // Four-level catch ladder shared by all read methods (and applyDiff): the repo's
-        // typed-catch discriminates by exception type family — std::runtime_error subclasses
-        // escape typed catch (falling to catch(...)) while std::logic_error subclasses bind
-        // normally, so both families are caught explicitly to preserve the original message
-        // in firstError() (read path is the main poison source; runtime_error used to degrade
-        // firstError() to "unknown exception").
+        // Exception-matching ladder shared by all read methods (and applyDiff): this repo's
+        // binaries have unreliable typed-catch behavior — bcos-crypto PUBLICly links
+        // wedprcrypto's Rust static libs, whose bundled runtime breaks libc++ exception matching
+        // binary-wide (documented at bcos-rpc/test/CMakeLists.txt:29-34). Empirically in the
+        // bcos-evm-opstack-tests binary, std::runtime_error-family throws only bind at an
+        // exact-type runtime_error handler (they escape catch(std::exception) into catch(...)),
+        // while std::logic_error-family throws do bind at catch(std::exception). Keep the
+        // runtime_error level so firstError() retains the original message for triage;
+        // catch(...) guarantees the poison flag is always set.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
         }
@@ -126,12 +126,8 @@ public:
             m_codeCache.emplace(addr, code);
             return code;
         }
-        // Four-level ladder; see get_account's comment.
+        // Exception-matching ladder; see get_account's comment.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
         }
@@ -159,12 +155,8 @@ public:
             m_storageCache.emplace(cacheKey, value);
             return value;
         }
-        // Four-level ladder; see get_account's comment.
+        // Exception-matching ladder; see get_account's comment.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
         }
@@ -241,8 +233,8 @@ public:
     /// itself) is a LOCAL fault, and the diff comes from evmone itself (malformed payloads were
     /// already rejected at decode/processOpBlock), so none must ever be answered INVALID. The
     /// whole body is wrapped in one try/catch so every present and future throw point inherits
-    /// that invariant; catch(...) guarantees the flag is set even when the known -fno-rtti
-    /// typed-catch bypass loses the message. `seeding` (true only for SeedPreState, a
+    /// that invariant; catch(...) guarantees the flag is set even when the standard exception
+    /// families cannot be matched. `seeding` (true only for SeedPreState, a
     /// genesis snapshot) exempts the new-EIP-161-empty-account guard, which is otherwise on for
     /// the execution path.
     void applyDiff(const evmone::state::StateDiff& diff, bool seeding = false)
@@ -254,22 +246,11 @@ public:
             for (const auto& addr : diff.deleted_accounts)
                 task::syncWait(applyDeletedEntry(addr));
         }
-        // The ladder's order is not stylistic: it is the measured behaviour of this repo's
-        // -fno-rtti typed-catch bypass. Experiments showed std::runtime_error subclasses escape
-        // typed catch (falling to catch(...)) while std::logic_error subclasses bind normally;
-        // the root cause is not yet identified, so do not reorder or drop levels on any other
-        // theory. Catch the concrete base classes first (runtime_error/logic_error cover every
-        // throw here: overflow_error and length_error respectively), keep std::exception (the
-        // only level the logic_error family binds, and the landing point for future standard
-        // exceptions outside both families), and keep catch(...) as the guarantee that the poison
-        // flag is always set. All four levels poison — classification only depends on the flag,
-        // not the message.
+        // Exception-matching ladder; see get_account's comment. Every write-back failure poisons
+        // AND rethrows (tripwire); catch(...) guarantees the flag is set even when the standard
+        // exception families cannot be matched. Classification only depends on the flag, not the
+        // message.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-            throw;
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
             throw;
@@ -281,10 +262,7 @@ public:
         }
         catch (...)
         {
-            poison(
-                "Storage2State::applyDiff: unknown exception on the write-back path (not derived "
-                "from std::runtime_error/std::logic_error, or typed catch bypassed by the known "
-                "-fno-rtti RTTI issue; message unavailable)");
+            poison("Storage2State::applyDiff: unknown exception on the write-back path");
             throw;
         }
     }
@@ -324,15 +302,10 @@ public:
         {
             return task::syncWait(visitAccountsImpl(visitor));
         }
-        // Four-level ladder; see get_account's comment. This is the most important of the four
-        // read methods: fetchAllStorage's runtime_error used to escape to catch(...) and degrade
-        // firstError() to "unknown exception", and visitAccounts is on the mandatory stateRootOf
-        // path — its poison message is the only clue for triaging a -32603.
+        // Exception-matching ladder; see get_account's comment. This is the most important of the
+        // four read methods: visitAccounts is on the mandatory stateRootOf path — its poison
+        // message is the only clue for triaging a -32603.
         catch (const std::runtime_error& e)
-        {
-            poison(e.what());
-        }
-        catch (const std::logic_error& e)
         {
             poison(e.what());
         }
@@ -383,7 +356,11 @@ private:
         if (createdNew)
             co_await account.create();
 
-        co_await account.setBalance(bcos::u256(intx::to_string(entry.balance)));
+        // intx → bcos balance via big-endian byte store + fromBigEndian (full-width, no decimal
+        // string round-trip) — same path as OpTransition.h's intxToBcosU256.
+        auto const balanceBe = intx::be::store<evmc::uint256be>(entry.balance);
+        co_await account.setBalance(bcos::fromBigEndian<bcos::u256>(bcos::bytesConstRef{
+            reinterpret_cast<const bcos::byte*>(balanceBe.bytes), sizeof(balanceBe.bytes)}));
         co_await account.setNonce(std::to_string(entry.nonce));
 
         // Contract ③: code written only when has_value(); codeHash = keccak(code) (StateDiff has

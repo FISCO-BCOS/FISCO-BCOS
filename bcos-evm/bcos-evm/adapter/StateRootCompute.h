@@ -2,9 +2,11 @@
 #pragma once
 
 // Root building via FISCO bcos-ledger/mpt computeTrieRoot (retired evmone mpt_hash) —
-// byte-identical for the same key set. Anchored by StateRootComputeTest's golden vectors
-// (empty-root canonical value + single-account leaf, cross-verified against go-ethereum);
-// the part-3 block-seal PR adds the 33-vector differential gate against op-geth state roots.
+// byte-identical for the same key set. Anchored by StateRootComputeTest's golden vectors: the
+// empty root is the canonical Ethereum emptyRootHash (keccak256(RLP(""))), and the single-
+// account leaf is a regression anchor frozen from this implementation's output with a
+// field-level cross-check against evmone's mpt_hash — the op-geth value-level differential
+// gate arrives with the part-3 block-seal PR (33 vectors).
 // Stateless helper — no per-block mutable state; safe to call from any execution context.
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
@@ -54,7 +56,8 @@ template <class Ledger>
 {
     std::map<bcos::h256, bcos::bytes> entries;
     // The visitor never aborts (always returns true), so false can only mean the traversal
-    // failed mid-way — fail the root at that point instead of computing a partial state root.
+    // failed mid-way — fail the root at that point instead of computing a partial state root
+    // (the poison flag stays set, so the caller can still classify via poisoned()).
     if (!ledger.visitAccounts([&](const auto& account) {
             // Secure-trie leaf: rlp(nonce, balance-be-trimmed, storageRoot, codeHash); balance is
             // intx big-endian 32 bytes trimmed of leading zeros (evmone rlp::encode(intx)
@@ -70,8 +73,7 @@ template <class Ledger>
             return true;
         }))
     {
-        throw std::runtime_error(
-            "stateRootOf: account traversal incomplete (visitAccounts failed or was aborted)");
+        throw std::runtime_error("stateRootOf: account traversal incomplete");
     }
     auto result = bcos::ledger::mpt::computeTrieRoot(entries);
     evmone::hash256 root{};

@@ -23,13 +23,12 @@ find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 
-# LedgerConfig.h includes <evmc/evmc.hpp> — evmone installs evmc headers. PUBLIC link removed
-# (5cc25670d: macOS exception handling); include propagates PUBLIC-ly only, link PRIVATE.
-if(FULLNODE)
-    find_package(evmone CONFIG REQUIRED)
-    find_package(blst CONFIG REQUIRED)
-    set_target_properties(blst PROPERTIES IMPORTED_GLOBAL TRUE)
-endif()
+# LedgerConfig.h includes <evmc/evmc.hpp> — evmone installs the evmc headers. Header-only usage:
+# the seven framework sources reference no evmone symbol, and linking evmone on a STATIC target
+# would land libevmone.a on every consumer's link line regardless of PUBLIC/PRIVATE — so no
+# evmone find_package/link at all; the include dirs propagate PUBLIC-ly from evmone's interface
+# (a generate-time genex; the target is created by bcos-evm's find_package(evmone) in FULLNODE
+# builds, and blst is created by the root's find_package(blst) — the first caller).
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
     bcos-framework/ledger/L2ConfigLoader.cpp
@@ -41,7 +40,6 @@ set(BCOS_FRAMEWORK_SOURCES
 
 add_library(bcos-framework STATIC ${BCOS_FRAMEWORK_SOURCES})
 if(FULLNODE)
-    target_link_libraries(bcos-framework PRIVATE evmone::evmone)
     target_include_directories(bcos-framework PUBLIC
         $<TARGET_PROPERTY:evmone::evmone,INTERFACE_INCLUDE_DIRECTORIES>)
 endif()
