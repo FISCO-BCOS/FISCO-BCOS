@@ -24,6 +24,7 @@
  *        the stray-"/mpt/"-row guard, and the no-XOR-fallback policy.
  */
 
+#include "SharedBaselineSchedulerMock.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"
@@ -32,6 +33,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/Errors.h"
@@ -46,7 +48,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "SharedBaselineSchedulerMock.h"
+#include "bcos-transaction-scheduler/MPTNodeStorage.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <map>
