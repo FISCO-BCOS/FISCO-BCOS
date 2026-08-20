@@ -18,7 +18,10 @@ set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     # OP modules deliberately use skipped-field designated initializers and GCC-13
     # reference-returning helpers (jAt); downgrade only here, not repository-wide.
-    target_compile_options(opstack-executor PRIVATE
+    # INTERFACE, not PRIVATE: opstack-executor is a header-only INTERFACE library — the
+    # -Wno-error flags must reach the consumers' translation units, where the templates
+    # are instantiated and the warnings fire.
+    target_compile_options(opstack-executor INTERFACE
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 
