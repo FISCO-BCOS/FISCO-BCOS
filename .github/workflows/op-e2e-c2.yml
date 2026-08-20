@@ -42,11 +42,10 @@ jobs:
 
       - name: Install linux deps (foundry + clang + JDK)
         run: |
+          set -eo pipefail
           sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk
-          curl -L https://foundry.paradigm.xyz | bash
+          curl -fsSL https://foundry.paradigm.xyz | bash
           export PATH="$HOME/.foundry/bin:$PATH"
-          echo "PATH=$PATH"
-          ls -la "$HOME/.foundry/bin/" 2>/dev/null || echo "foundry bin dir not found"
           "$HOME/.foundry/bin/foundryup"
 
       - name: Configure
