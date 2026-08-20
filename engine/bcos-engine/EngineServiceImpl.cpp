@@ -74,7 +74,6 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
 namespace
 {
 constexpr std::size_t c_hashBytes = 32;
-constexpr std::size_t c_payloadIdBytes = 8;
 
 // ---- ETH/OP header protocol constants ----
 //
@@ -104,11 +103,6 @@ void bcos::engine::detail::applyOpHeaderConstants(bcos::protocol::BlockHeader& h
     header.setUncleHash(c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
     header.setNonce(c_posNonce);
-}
-
-std::string bcos::engine::detail::encodePayloadSequence(std::uint64_t value)
-{
-    return bcos::toHex(value, "0x");
 }
 
 bcos::h256 bcos::engine::detail::syntheticHash(std::string_view seed)

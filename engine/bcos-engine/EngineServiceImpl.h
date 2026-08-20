@@ -25,6 +25,7 @@
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Errors.h"
+#include "bcos-framework/engine/PayloadId.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -98,8 +99,6 @@ DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
 
 namespace detail
 {
-std::string encodePayloadSequence(std::uint64_t value);
-
 bcos::h256 syntheticHash(std::string_view seed);
 
 std::vector<std::string> supportedCapabilities();
@@ -435,7 +434,21 @@ public:
             }
 
             // Step 3: Build the payload on the executed view (already mutable above).
-            auto payloadId = nextPayloadID();
+            // Deterministic payload ID (op-geth alignment): derived from the
+            // attributes + parent hash, NOT a sequence counter, so identical
+            // attributes yield the same ID across nodes and restarts.
+            auto payloadIdOpt = derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash,
+                static_cast<std::uint32_t>(version));
+            if (!payloadIdOpt.has_value())
+            {
+                ForkchoiceUpdatedResult result{
+                    .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                        std::string("payloadAttributes.transactions contains undecodable hex")),
+                    .payloadId = std::nullopt,
+                };
+                co_return result;
+            }
+            auto payloadId = *payloadIdOpt;
             auto nextBlockNumber = *headBlockNumber + 1;
             auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId,
                 version, nextBlockNumber, std::move(sealedTxs), view);
@@ -467,7 +480,12 @@ public:
                 // a requested payload. None of those reach handleNewPayload's eviction, so
                 // without a bound here each skipped tick would retain a live storage fork (the
                 // PayloadEntry::view) plus the block's transactions forever.
-                m_payloadOrder.push_back(payloadId);
+                // Deterministic payload IDs can repeat across builds with identical attributes;
+                // dedupe so a stale duplicate order entry cannot evict a live re-built entry.
+                if (!m_payloadCache.contains(payloadId))
+                {
+                    m_payloadOrder.push_back(payloadId);
+                }
                 while (m_payloadOrder.size() > c_maxPayloadEntries)
                 {
                     auto const evictedId = m_payloadOrder.front();
@@ -586,6 +604,18 @@ private:
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
         bcos::protocol::BlockNumber nextBlockNumber)
     {
+        // Deterministic payload ID, derived from the CL-provided attributes alone
+        // (op-geth alignment). Mempool-sealed txs and the synthesized deposit are
+        // deliberately excluded — op-geth hashes only args.Transactions.
+        auto payloadIdOpt =
+            derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version);
+        if (!payloadIdOpt.has_value())
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "buildOpPayload: payloadAttributes.transactions contains undecodable hex"});
+        }
+        auto payloadId = *payloadIdOpt;
         // Mempool hygiene + seal over a throwaway view (the delegate owns the real execution
         // view; this one only reads nonces to pick the gapless prefix, like the generic path).
         auto sealView = m_globalStateStorage.get().fork();
@@ -688,17 +718,36 @@ private:
             .baseFeePerGas = baseFee,
             .blockHash = h256{},
             .transactions = std::move(engineTransactions),
-            // Holocene+ header shape (op-geth eip1559_optimism.go): Isthmus = 9 bytes
-            // (0x00 version || u32 denominator || u32 elasticity, both non-zero); Jovian =
-            // 17 bytes (0x01 || the same 8 bytes || u64 minBaseFee). Neutral 1/1 parameters
-            // (denominator = elasticity = 1: baseFee unchanged per Holocene recalc).
+            // Holocene+ header shape (op-geth eip1559_optimism.go): version byte (0 = Holocene,
+            // 1 = Jovian) || u32 denominator || u32 elasticity.  Jovian appends u64 minBaseFee.
+            // Decode from attrs.eip1559Params (8 bytes from SystemConfig via op-node); neutral 1/1
+            // when absent/invalid so baseFee stays unchanged per Holocene recalculation.
             .extraData =
-                [jovian = m_scheduler.get().isJovianActive()]() {
-                    bcos::bytes extra{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01};
-                    if (jovian)
+                [this, &payloadAttributes]() {
+                    uint32_t denominator = 1, elasticity = 1;
+                    if (auto const& params = payloadAttributes.eip1559Params;
+                        params.has_value() && params->size() == 8)
+                    {
+                        denominator = (static_cast<uint32_t>((*params)[0]) << 24) |
+                                      (static_cast<uint32_t>((*params)[1]) << 16) |
+                                      (static_cast<uint32_t>((*params)[2]) << 8) |
+                                      static_cast<uint32_t>((*params)[3]);
+                        elasticity = (static_cast<uint32_t>((*params)[4]) << 24) |
+                                     (static_cast<uint32_t>((*params)[5]) << 16) |
+                                     (static_cast<uint32_t>((*params)[6]) << 8) |
+                                     static_cast<uint32_t>((*params)[7]);
+                    }
+                    // Holocene extraData: version=0 || denominator || elasticity (9 bytes).
+                    bcos::bytes extra{0x00, static_cast<uint8_t>(denominator >> 24),
+                        static_cast<uint8_t>(denominator >> 16),
+                        static_cast<uint8_t>(denominator >> 8), static_cast<uint8_t>(denominator),
+                        static_cast<uint8_t>(elasticity >> 24),
+                        static_cast<uint8_t>(elasticity >> 16),
+                        static_cast<uint8_t>(elasticity >> 8), static_cast<uint8_t>(elasticity)};
+                    if (m_scheduler.get().isJovianActive())
                     {
                         extra[0] = 0x01;
-                        extra.resize(17, 0x00);  // minBaseFee = 0 (arbitrary, not validated)
+                        extra.resize(17, 0x00);
                     }
                     return extra;
                 }(),
@@ -783,7 +832,8 @@ private:
                     (executeError ? executeError->errorMessage() : "no executed header")});
         }
 
-        auto payloadId = nextPayloadID();
+        // payloadId was derived at the top of buildOpPayload from the attributes;
+        // it is in scope here (the canonical pass does not change the attributes).
         PayloadEntry entry{
             .version = version,
             .executionPayload = std::move(payload),
@@ -803,7 +853,14 @@ private:
             std::unique_lock lock(x_state);
             m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
             m_payloadCache[payloadId] = std::move(entry);
-            m_payloadOrder.push_back(payloadId);
+            // Dedupe (see the generic-path insert above): identical attributes rebuild the
+            // same deterministic payload ID; a duplicate order entry would later evict the
+            // re-built live entry.
+            if (std::find(m_payloadOrder.begin(), m_payloadOrder.end(), payloadId) ==
+                m_payloadOrder.end())
+            {
+                m_payloadOrder.push_back(payloadId);
+            }
             while (m_payloadOrder.size() > c_maxPayloadEntries)
             {
                 auto const evictedId = m_payloadOrder.front();
@@ -940,7 +997,12 @@ private:
             PayloadID payloadId;
             if (payloadIdIt == m_blockHashToPayloadId.end())
             {
-                payloadId = nextPayloadID();
+                // Externally received payload: no attributes to derive from, so the ID is a
+                // deterministic function of the block hash (first 8 bytes of keccak256). This
+                // is an internal cache key only (never returned to the CL), and being
+                // deterministic means a re-delivered payload maps to the same ID.
+                auto hash = bcos::crypto::keccak256Hash(request.executionPayload.blockHash.ref());
+                payloadId = bcos::toHex(hash.ref().getCroppedData(0, 8), "0x");
                 m_blockHashToPayloadId.emplace(request.executionPayload.blockHash, payloadId);
             }
             else
@@ -1504,7 +1566,36 @@ private:
     }
 
 
-    PayloadID nextPayloadID() { return detail::encodePayloadSequence(m_nextPayloadSequence++); }
+    /// Deterministic payload-ID derivation (op-geth BuildPayloadArgs.Id()
+    /// byte-alignment; see bcos-framework/engine/PayloadId.h). Computes the
+    /// tx hashes from the CL-provided attribute transactions only — never the
+    /// mempool-sealed txs nor the synthesized L1-attributes deposit (op-geth
+    /// hashes args.Transactions, which come from the attributes alone).
+    /// @return the derived payload ID, or nullopt when an attribute
+    ///         transaction's hex cannot be decoded (caller rejects).
+    static std::optional<PayloadID> derivePayloadId(
+        PayloadAttributes const& payloadAttributes, h256 const& parentHash, std::uint32_t version)
+    {
+        std::vector<h256> txHashes;
+        if (payloadAttributes.transactions.has_value())
+        {
+            txHashes.reserve(payloadAttributes.transactions->size());
+            for (auto const& hexTx : *payloadAttributes.transactions)
+            {
+                try
+                {
+                    auto raw = bcos::fromHex(hexTx);
+                    txHashes.emplace_back(bcos::crypto::keccak256Hash(bcos::ref(raw)));
+                }
+                catch (bcos::BadHexCharacter const&)
+                {
+                    return std::nullopt;
+                }
+            }
+        }
+        return bcos::engine::derivePayloadId(
+            payloadAttributes, parentHash, txHashes, static_cast<uint8_t>(version));
+    }
 
     /// Result of building a payload: the ExecutionPayload handed to the CL plus the
     /// built-block artifacts (header + receipts) needed to persist the ledger block tables
@@ -1858,7 +1949,6 @@ private:
     /// Upper bound on retained payload entries (both m_payloadCache and m_blockHashToPayloadId
     /// rows). A payload is only needed between updateForkchoice / getPayload and newPayload.
     static constexpr size_t c_maxPayloadEntries = 64;
-    std::uint64_t m_nextPayloadSequence = 1;
 };
 
 }  // namespace bcos::engine
