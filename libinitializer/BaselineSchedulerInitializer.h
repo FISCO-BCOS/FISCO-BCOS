@@ -7,7 +7,26 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
+#include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include "ethereum-executor/EthereumExecutor.h"
 #include <memory>
+
+// The production BaselineScheduler specializations are explicitly instantiated once in
+// BaselineSchedulerInst.cpp; these extern template declarations keep every other TU (this
+// header's consumers) from re-instantiating the whole scheduler. A new specialization
+// (different executor / scheduler types) needs both another extern template declaration
+// here and another explicit instantiation in BaselineSchedulerInst.cpp.
+extern template class bcos::scheduler_v1::BaselineScheduler<bcos::initializer::GlobalStateStorage,
+    bcos::executor_v1::TransactionExecutorImpl,
+    bcos::scheduler_v1::SchedulerParallelImpl<bcos::initializer::GlobalStateMutableStorage>,
+    bcos::ledger::LedgerInterface>;
+extern template class bcos::scheduler_v1::BaselineScheduler<bcos::initializer::GlobalStateStorage,
+    bcos::executor_v1::TransactionExecutorImpl, bcos::scheduler_v1::SchedulerSerialImpl,
+    bcos::ledger::LedgerInterface>;
+extern template class bcos::scheduler_v1::BaselineScheduler<bcos::initializer::GlobalStateStorage,
+    bcos::executor_v1::eth::EthereumExecutor, bcos::scheduler_v1::SchedulerSerialImpl,
+    bcos::ledger::LedgerInterface>;
 
 namespace bcos::scheduler_v1
 {

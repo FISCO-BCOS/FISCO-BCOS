@@ -36,7 +36,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "SharedBaselineSchedulerMock.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 
@@ -51,80 +51,9 @@ using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
-using FIBMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
-using FIBBackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-    std::hash<StateKey>>;
-using FIBCheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, FIBBackendStorage>;
-using FIBMultiLayerStorage = MultiLayerStorage<FIBMutableStorage, void, FIBCheckpointBackend>;
-
-struct FIBMockExecutor
-{
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
-        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
-    {
-        co_return {};
-    }
-
-    template <class Storage>
-    struct ExecuteContext
-    {
-        task::Task<void> prepare() { co_return; }
-        task::Task<void> execute() { co_return; }
-        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
-    };
-
-    auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
-        protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig, bool call)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
-    {
-        co_return {};
-    }
-};
-
-struct FIBMockScheduler
-{
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
-        auto& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
-    {
-        auto receipts =
-            ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
-            ::ranges::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
-                auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-                constexpr static std::string_view str = "abc";
-                auto& inner = receipt->inner();
-                inner.dataHash.assign(str.begin(), str.end());
-                inner.data.gasUsed = "100";
-
-                bytes logAddress;
-                logAddress.assign(str.begin(), str.end());
-                bcos::protocol::LogEntry logEntry{
-                    logAddress, bcos::h256s{bcos::h256{}}, bcos::bytes{}};
-                std::vector<bcos::protocol::LogEntry> logs;
-                logs.emplace_back(std::move(logEntry));
-                receipt->setLogEntries(logs);
-                return receipt;
-            }) |
-            ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
-
-        co_return receipts;
-    }
-};
-
-// Storage-level getLedgerConfig stub for tests. Found via ADL when the
-// BaselineScheduler template is instantiated; clang's -Wunused-function can't
-// see indirect template uses, so [[maybe_unused]] silences a false positive.
-[[maybe_unused]] task::AwaitableValue<void> tag_invoke(
-    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/,
-    FIBMultiLayerStorage::ViewType& /*storage*/, bcos::ledger::LedgerConfig& /*ledgerConfig*/,
-    protocol::BlockNumber /*blockNumber*/, protocol::BlockFactory& /*blockFactory*/)
-{
-    return {};
-}
+using bcos::test::sharedmock::SharedBackendStorage;
+using bcos::test::sharedmock::SharedCheckpointBackend;
+using bcos::test::sharedmock::SharedMultiLayerStorage;
 
 bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>> emptyTxsTaskFIB()
 {
@@ -152,6 +81,11 @@ public:
         baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory,
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
+        // Shared mock configuration (SharedBaselineSchedulerMock.h): log-carrying
+        // receipts; trivial getLedgerConfig stub behaviour (default Features).
+        mockScheduler.m_receiptsWithLogs = true;
+        bcos::test::sharedmock::g_stubFeatures = ledger::Features{};
+
         // Ledger: asyncPrewriteBlock => invoke callback(success)
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
             .AlwaysDo([this](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
@@ -227,8 +161,8 @@ public:
         return executedHeader;
     }
 
-    FIBBackendStorage backendStorage;
-    FIBCheckpointBackend checkpointBackend;
+    SharedBackendStorage backendStorage;
+    SharedCheckpointBackend checkpointBackend;
     crypto::CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> blockHeaderFactory;
     std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> transactionFactory;
@@ -241,14 +175,12 @@ public:
     bool prewriteBlockFails = false;
     std::string prewriteFailure = "injected prewrite failure";
 
-    FIBMockScheduler mockScheduler;
+    bcos::test::sharedmock::SharedMockScheduler mockScheduler;
     fakeit::Mock<ledger::LedgerInterface> mockLedger;
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
-    FIBMultiLayerStorage multiLayerStorage;
-    FIBMockExecutor mockExecutor;
-    BaselineScheduler<decltype(multiLayerStorage), FIBMockExecutor, FIBMockScheduler,
-        ledger::LedgerInterface>
-        baselineScheduler;
+    SharedMultiLayerStorage multiLayerStorage;
+    bcos::test::sharedmock::SharedMockExecutor mockExecutor;
+    bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(FIB101_102_103_104_SchedulerTest, FIBSchedulerFixture)
