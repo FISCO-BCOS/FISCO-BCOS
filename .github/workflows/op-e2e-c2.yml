@@ -36,12 +36,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local/bin/forge
-          key: foundry-${{ runner.os }}-bin-v1
+          key: foundry-${{ runner.os }}-${{ runner.arch }}-bin-v1
 
       - name: Install linux deps (foundry + clang + JDK)
         run: |
           set -eo pipefail
-          sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk
+          sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk mold
           # Install foundry from GitHub releases (avoids foundryup installer pipe issue)
           ARCH=$(uname -m); case "$ARCH" in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; esac
           FOUNDRY_VER=$(curl -fsSL "https://api.github.com/repos/foundry-rs/foundry/releases/latest" \
@@ -53,6 +53,7 @@ jobs:
       - name: Configure
         run: |
           ARCH=$(uname -m); case "$ARCH" in x86_64) VCPKG_TRIPLET=x64-linux-release;; aarch64) VCPKG_TRIPLET=arm64-linux-release;; *) VCPKG_TRIPLET=x64-linux-release;; esac
+          echo "vcpkg triplet: $VCPKG_TRIPLET (arch=$ARCH)"
           mkdir -p build
           cd build
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel \
@@ -65,6 +66,11 @@ jobs:
         id: download-fisco
         continue-on-error: true
         run: |
+          # workflow.yml only uploads x86_64 artifact; skip on ARM64
+          if [ "$(uname -m)" = "aarch64" ]; then
+            echo "ARM64 runner — no pre-built artifact available, will build from source"
+            exit 1
+          fi
           RUN_ID=$(gh run list --workflow=workflow.yml --branch=main \
             --status=success --limit=1 --json databaseId \
             --jq '.[0].databaseId' 2>/dev/null) || true
@@ -103,9 +109,9 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: go-${{ runner.os }}-build-a7c88c8d
+          key: go-${{ runner.os }}-${{ runner.arch }}-build-a7c88c8d
           restore-keys: |
-            go-${{ runner.os }}-build-
+            go-${{ runner.os }}-${{ runner.arch }}-build-
 
       - name: Build op-deployer from optimism monorepo
         run: |
@@ -127,9 +133,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.svm
-          key: svm-${{ runner.os }}-v0.5.17
+          key: svm-${{ runner.os }}-${{ runner.arch }}-v0.5.17
           restore-keys: |
-            svm-${{ runner.os }}-
+            svm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Run setup_c2.sh (full pipeline)
         env:
