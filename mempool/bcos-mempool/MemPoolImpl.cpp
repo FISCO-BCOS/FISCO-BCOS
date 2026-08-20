@@ -55,16 +55,18 @@ void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
         bcos::throwTrace(InvalidTaintedTransaction{});
     }
 
-    // L2 never admits blob (type-3) transactions (OP Stack, Ecotone onwards). The RPC
-    // entry rejects them before decoding; this is the second gate for in-process callers.
-    // For Web3 transactions the signing payload (extraTransactionBytes) starts with the
-    // same EIP-2718 type byte as the raw envelope, so the shared dispatch table applies.
+    // L2 rejects blob (type-3), deposit (0x7E), and unsupported (unknown) transactions.
+    // The RPC entry rejects them before decoding; this is the second gate for in-process
+    // callers (mempool → engine block building). For non-Web3 (FISCO-native) transactions
+    // there is no EIP-2718 raw form to dispatch against.
     if (transaction->type() ==
-            static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction) &&
-        bcos::engine::dispatchRawTransaction(transaction->extraTransactionBytes()) ==
-            bcos::engine::RawTransactionKind::Blob) [[unlikely]]
+        static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction)) [[unlikely]]
     {
-        bcos::throwTrace(InvalidBlobTransaction{});
+        auto kind = bcos::engine::dispatchRawTransaction(transaction->extraTransactionBytes());
+        if (!bcos::engine::isRawTransactionPayloadAdmissible(kind))
+        {
+            bcos::throwTrace(InvalidBlobTransaction{});
+        }
     }
 
     auto& nonceIndex = m_transactions.get<0>();

@@ -20,6 +20,7 @@
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
@@ -387,6 +388,20 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         if (result != TransactionStatus::None)
         {
             return result;
+        }
+    }
+
+    // OP Stack type gate (classic txpool path — p2p sync, tars RPC).
+    // Deposit (0x7E), blob (type-3), and unknown EIP-2718 types are rejected here.
+    // The engine-mode path (MemPoolImpl::add) has its own gate; this is the only admission
+    // point for the classic txpool.
+    if (transaction->type() ==
+        static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        auto kind = bcos::engine::dispatchRawTransaction(transaction->extraTransactionBytes());
+        if (!bcos::engine::isRawTransactionPayloadAdmissible(kind))
+        {
+            return TransactionStatus::Malformed;
         }
     }
 
@@ -963,7 +978,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
-                    toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
+                         toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
                 {
                     transaction = toAccessor.value();
                 }
