@@ -139,6 +139,9 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
+    /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
+    /// encoded bytes (including the OP 0x7E deposit envelope). Single authoritative
+    /// carrier for both generic and OP engine paths.
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -153,6 +156,10 @@ struct ExecutionPayload
     // Required by ExecutionPayloadV3/V4.
     std::optional<u256> blobGasUsed;
     std::optional<u256> excessBlobGas;
+
+    // Required by ExecutionPayloadV4.
+    std::optional<bytes> blockAccessList = std::nullopt;
+    std::optional<std::uint64_t> slotNumber = std::nullopt;
 
     // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
     // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value

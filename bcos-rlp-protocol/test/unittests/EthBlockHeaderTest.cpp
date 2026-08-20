@@ -646,5 +646,32 @@ BOOST_AUTO_TEST_CASE(calculateHashClearsOnInvalid)
     BOOST_CHECK_THROW(header->hash(), std::exception);
 }
 
+// decodeTarsHeader pins ethBlockVersion to NON_ETH explicitly instead of relying on the tars
+// default 0 happening to equal it: the ×1000 timestamp write pairs with rlpEncode's
+// NON_ETH-only /1000, so the version decides the block hash. The pin holds even when the
+// destination header carried a real ETH version before the decode, and the seconds↔ms
+// round-trip through the pinned NON_ETH path reproduces the input RLP byte-for-byte.
+BOOST_AUTO_TEST_CASE(decodeTarsHeaderPinsNonEthVersion)
+{
+    auto source = makeEthHeader(EthBlockVersion::PRAGUE);
+    EthBlockHeader sourceBridge(*source);
+    bytes rlp;
+    sourceBridge.rlpEncode(rlp);
+
+    auto decoded = makeEthHeader(EthBlockVersion::PRAGUE);  // nonzero version pre-decode
+    bcos::Error::UniquePtr error;
+    error = EthBlockHeader::decodeTarsHeader(decoded, bcos::ref(rlp));
+    BOOST_CHECK(!error);
+    BOOST_CHECK(decoded->ethBlockVersion() == EthBlockVersion::NON_ETH);
+    BOOST_CHECK_EQUAL(decoded->timestamp(), source->timestamp() * 1000);
+
+    // Re-encoding the decoded header must reproduce the input RLP: ×1000 on decode, /1000 on
+    // the NON_ETH encode — the inverse pair the pin guarantees.
+    EthBlockHeader roundTrip(*decoded);
+    bytes reencoded;
+    roundTrip.rlpEncode(reencoded);
+    BOOST_CHECK(reencoded == rlp);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

@@ -177,10 +177,7 @@ struct MWExecutor
     {
         task::Task<void> prepare() { co_return; }
         task::Task<void> execute() { co_return; }
-        task::Task<protocol::TransactionReceipt::Ptr> finish()
-        {
-            co_return {};
-        }
+        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
     };
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,
         protocol::Transaction const& /*transaction*/, int32_t /*contextID*/,
@@ -285,7 +282,8 @@ public:
             .AlwaysDo([](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
                           protocol::Block::ConstPtr,
                           std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>) { callback({}, nullptr); });
+                          std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>,
+                          bool) { callback({}, nullptr); });
         using HashView =
             ::ranges::any_view<h256, ::ranges::category::mask | ::ranges::category::sized>;
         fakeit::When(Method(mockTxPool, getTransactions)).AlwaysDo([](HashView) {

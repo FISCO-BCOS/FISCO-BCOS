@@ -161,7 +161,8 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
     std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-    std::optional<bcos::ledger::Features> features)
+    std::optional<bcos::ledger::Features> features,
+    std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     if (!block)
     {
@@ -189,6 +190,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         return;
     }
     auto header = block->blockHeader();
+    // Short-circuit ternary (NOT value_or): value_or would evaluate header->hash()
+    // unconditionally, which throws for OP headers that rely on the override.
+    const auto blockHash = blockHashOverride ? *blockHashOverride : header->hash();
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
@@ -197,8 +201,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     {  // 9 storage callbacks and write hash=>tx
         TOTAL_CALLBACK = 9;
     }
-    auto primiaryKey = bcos::storage::toDBKey(
-        SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(header->hash()));
+    if (!writeNonces)
+    {  // skip the nonce write callback when nonces are not persisted
+        TOTAL_CALLBACK -= 1;
+    }
+    auto primiaryKey =
+        bcos::storage::toDBKey(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash));
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
                               failed = std::make_shared<bool>(false),
                               callback = std::move(callback), primiaryKey = std::move(primiaryKey)](
@@ -227,18 +235,21 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 hash
     Entry hashEntry;
-    hashEntry.set(header->hash().asBytes());
+    hashEntry.set(blockHash.asBytes());
     storage->asyncSetRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // hash 2 number
     Entry hash2NumberEntry;
     hash2NumberEntry.set(blockNumberStr);
-    storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(header->hash()),
+    storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash),
         std::move(hash2NumberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 header
+    // When blockHashOverride is set (OP path), the stored header's hash() differs
+    // from the override key in SYS_NUMBER_2_HASH. OP-aware readers must use the
+    // override hash, not header->hash().
     bytes headerBuffer;
     header->encode(headerBuffer);
 
@@ -248,33 +259,38 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 nonce
-    auto nonceBlock = m_blockFactory->createBlock();
-    protocol::NonceList nonceList;
-    // get nonce from _blockTxs
-    if (_blockTxs)
+    if (writeNonces)
     {
-        for (auto const& tx : *_blockTxs)
+        auto nonceBlock = m_blockFactory->createBlock();
+        protocol::NonceList nonceList;
+        // get nonce from _blockTxs
+        if (_blockTxs)
         {
-            nonceList.emplace_back(tx->nonce());
+            for (auto const& tx : *_blockTxs)
+            {
+                nonceList.emplace_back(tx->nonce());
+            }
         }
-    }
-    // get nonce from block txs
-    else
-    {
-        for (auto tx : block->transactions())
+        // get nonce from block txs
+        else
         {
-            nonceList.emplace_back(tx->nonce());
+            for (auto tx : block->transactions())
+            {
+                nonceList.emplace_back(tx->nonce());
+            }
         }
+
+        nonceBlock->setNonceList(nonceList);
+        bytes nonceBuffer;
+        nonceBlock->encode(nonceBuffer);
+
+        Entry number2NonceEntry;
+        number2NonceEntry.set(std::move(nonceBuffer));
+        storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr,
+            std::move(number2NonceEntry), [setRowCallback](auto&& error) {
+                setRowCallback(std::forward<decltype(error)>(error));
+            });
     }
-
-    nonceBlock->setNonceList(nonceList);
-    bytes nonceBuffer;
-    nonceBlock->encode(nonceBuffer);
-
-    Entry number2NonceEntry;
-    number2NonceEntry.set(std::move(nonceBuffer));
-    storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry),
-        [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // current number
     Entry numberEntry;
@@ -2326,8 +2342,8 @@ bool Ledger::buildGenesisBlock(
         if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
         {
             Entry gasPriceEntry;
-            gasPriceEntry.set(bcos::storage::serialize::encode(
-                SystemConfigEntry(genesis.m_txGasPrice, 0)));
+            gasPriceEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry(genesis.m_txGasPrice, 0)));
             sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
         }
 
@@ -2460,11 +2476,10 @@ bool Ledger::buildGenesisBlock(
         if (versionNumber >= BlockVersion::V3_18_0_VERSION && genesis.m_excessBlobGas.has_value())
         {
             Entry excessBlobGasEntry;
-            excessBlobGasEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{
-                std::to_string(*genesis.m_excessBlobGas), 0}));
+            excessBlobGasEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{std::to_string(*genesis.m_excessBlobGas), 0}));
             co_await storage2::writeOne(*m_stateStorage,
-                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS),
-                excessBlobGasEntry);
+                executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS), excessBlobGasEntry);
         }
 
         // write consensus node list

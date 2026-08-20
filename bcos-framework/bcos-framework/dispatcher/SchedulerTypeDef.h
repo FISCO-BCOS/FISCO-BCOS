@@ -70,6 +70,11 @@ enum SchedulerError
     BlockIsCommitting,
     InvalidTransactionVersion,
     BuildBlockError,
+    // OP-mode classification results (Task 4): OpScheduler::classifyException maps
+    // OpConsensusError -> OpConsensusRejected (engine -> INVALID) and OpStorageError ->
+    // OpStorageFault (engine -> JSON-RPC -32603, never INVALID).
+    OpConsensusRejected,
+    OpStorageFault,
 };
 }
 }  // namespace bcos
