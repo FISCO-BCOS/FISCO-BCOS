@@ -52,13 +52,14 @@ jobs:
 
       - name: Configure
         run: |
+          ARCH=$(uname -m); case "$ARCH" in x86_64) VCPKG_TRIPLET=x64-linux-release;; aarch64) VCPKG_TRIPLET=arm64-linux-release;; *) VCPKG_TRIPLET=x64-linux-release;; esac
           mkdir -p build
           cd build
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel \
             -DLINKER=mold -DTESTS=OFF -DCOVERAGE=OFF \
             -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
             -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
-            -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+            -DVCPKG_TARGET_TRIPLET=$VCPKG_TRIPLET ..
 
       - name: Download fisco-bcos-air artifact (fallback build from source)
         id: download-fisco
