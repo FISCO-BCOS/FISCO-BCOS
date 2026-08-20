@@ -103,11 +103,14 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     BOOST_CHECK(futureCache->index() == futureBlockIndex);
     BOOST_CHECK(futureCache->prePrepare());
 
-    // Poll until all nodes reach preCommit (2 caches each), with timeout
+    // Poll until all nodes reach preCommit (2 caches each), with timeout.
+    // The timeout is deliberately generous: on slow CI runners (e.g. ARM)
+    // ten fake nodes need longer to drive every cache into preCommit, and the
+    // loop below dereferences caches()[expectedProposal] unconditionally.
     auto precommitStartT = std::chrono::steady_clock::now();
     bool allInPrecommit = false;
     while (!allInPrecommit &&
-           std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(3))
+           std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(15))
     {
         for (auto const& otherNode : fakerMap)
         {
@@ -126,6 +129,12 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
         }
         if (!allInPrecommit)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    if (!allInPrecommit)
+    {
+        // caches()[expectedProposal] below would dereference a null cache and
+        // segfault on slow runners; fail cleanly so the timeout is visible.
+        BOOST_FAIL("nodes did not reach preCommit within the 15s timeout");
     }
     // assume five nodes into preCommit
     size_t precommitSize = 5;
