@@ -591,6 +591,14 @@ public:
                 {
                     throw;
                 }
+                catch (const OpEvmcRevisionNotConfigured&)
+                {
+                    throw;  // local misconfiguration, not a consensus rejection
+                }
+                catch (const OpForkRevisionMismatch&)
+                {
+                    throw;
+                }
                 catch (const std::exception& e)
                 {
                     // runDeposit's block-level errors arrive as bare std::runtime_error;
@@ -707,6 +715,14 @@ public:
             {
                 throw;
             }
+            catch (const OpEvmcRevisionNotConfigured&)
+            {
+                throw;  // local misconfiguration, not a consensus rejection
+            }
+            catch (const OpForkRevisionMismatch&)
+            {
+                throw;
+            }
             catch (const std::exception& e)
             {
                 // See ExecuteContext::execute's deposit branch: runDeposit's block-level
@@ -774,8 +790,22 @@ public:
         auto receipt = op::runDeposit(stateView, blockInfo, bh, dep, m_forkConfig, m_vm, chainId,
             blockGasLeft, m_receiptFactory, diff);
         // runDeposit sanitizes the diff at source (OpTransition.cpp), satisfying applyDiff's
-        // precondition. Write-back failures poison AND rethrow (tripwire).
-        stateView.applyDiff(diff);
+        // precondition. applyDiff poisons AND rethrows raw; every write-back failure is a local
+        // storage fault, so it must leave as OpStorageError (-32603), never INVALID.
+        try
+        {
+            stateView.applyDiff(diff);
+        }
+        catch (const std::exception& e)
+        {
+            throw bcos::evm::engine::OpStorageError(
+                std::string("deposit write-back failed: ") + e.what());
+        }
+        catch (...)
+        {
+            throw bcos::evm::engine::OpStorageError("deposit write-back failed: unknown exception");
+        }
+        // Read-path poison from runDeposit with applyDiff returning normally.
         if (stateView.poisoned())
             throw bcos::evm::engine::OpStorageError(
                 "deposit write-back poisoned: " + stateView.firstError());
@@ -894,10 +924,24 @@ private:
                                   << bcos::errinfo_comment("evmcRevision not configured"));
 
         // opTransition sanitizes the diff at source (OpTransition.cpp), satisfying applyDiff's
-        // precondition. Write-back failures poison AND rethrow (tripwire); a poisoned read
-        // during the transition surfaces here too (the shared slot aggregates per-tx instances).
+        // precondition. applyDiff poisons AND rethrows raw; every write-back failure is a local
+        // storage fault, so it must leave as OpStorageError (-32603), never INVALID.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
-        stateView.applyDiff(diff);
+        try
+        {
+            stateView.applyDiff(diff);
+        }
+        catch (const std::exception& e)
+        {
+            throw bcos::evm::engine::OpStorageError(
+                std::string("tx write-back failed: ") + e.what());
+        }
+        catch (...)
+        {
+            throw bcos::evm::engine::OpStorageError("tx write-back failed: unknown exception");
+        }
+        // Read-path poison from the transition with applyDiff returning normally (the shared
+        // slot aggregates per-tx instances).
         if (stateView.poisoned())
             throw bcos::evm::engine::OpStorageError(
                 "tx write-back poisoned: " + stateView.firstError());

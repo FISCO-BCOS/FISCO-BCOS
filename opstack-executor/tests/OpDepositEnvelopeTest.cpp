@@ -192,6 +192,17 @@ BOOST_AUTO_TEST_CASE(RejectsFieldFaults)
         p.insert(p.end(), fr.begin(), fr.end());
         expectReject(envelope(p));
     }
+    // missing mint field (list ends after to)
+    {
+        bcos::bytes p;
+        auto sh = item(bcos::bytes(32, 0x11));
+        auto fr = item(bcos::bytes(20, 0x22));
+        auto to = item(bcos::bytes(20, 0x33));
+        p.insert(p.end(), sh.begin(), sh.end());
+        p.insert(p.end(), fr.begin(), fr.end());
+        p.insert(p.end(), to.begin(), to.end());
+        expectReject(envelope(p));
+    }
     // to wrong length (19 bytes)
     {
         Fields f;
@@ -203,6 +214,27 @@ BOOST_AUTO_TEST_CASE(RejectsFieldFaults)
         auto p = payloadOf(Fields{});
         auto extra = intItem(1);
         p.insert(p.end(), extra.begin(), extra.end());
+        expectReject(envelope(p));
+    }
+    // data as an RLP list (0xc0) — not a byte string
+    {
+        const Fields base;
+        bcos::bytes p;
+        auto sh = item(base.sourceHash);
+        p.insert(p.end(), sh.begin(), sh.end());
+        auto fr = item(base.from);
+        p.insert(p.end(), fr.begin(), fr.end());
+        auto to = item(*base.to);
+        p.insert(p.end(), to.begin(), to.end());
+        auto mint = item(*base.mint);
+        p.insert(p.end(), mint.begin(), mint.end());
+        auto value = item(base.value);
+        p.insert(p.end(), value.begin(), value.end());
+        auto gas = intItem(base.gas);
+        p.insert(p.end(), gas.begin(), gas.end());
+        auto sys = intItem(base.isSystemTx);
+        p.insert(p.end(), sys.begin(), sys.end());
+        p.push_back(0xc0);  // data field is an empty list
         expectReject(envelope(p));
     }
 }

@@ -70,10 +70,22 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     bcos::evm::evmstate::Storage2State<Storage> stateView(view, executor.sharedError());
 
     // (1) Pre-block system call; write back through the bridge (the diff is sanitized first —
-    // applyDiff's precondition).
+    // applyDiff's precondition). applyDiff poisons AND rethrows raw; a write-back failure is a
+    // local storage fault, so it leaves as OpStorageError, never a bare runtime_error.
     auto sysDiff =
         evmone::state::system_call_block_start(stateView, blk, *hashes, cfg.rev, executor.vm());
-    stateView.applyDiff(bcos::evm::sanitizeStateDiff(stateView, std::move(sysDiff)));
+    try
+    {
+        stateView.applyDiff(bcos::evm::sanitizeStateDiff(stateView, std::move(sysDiff)));
+    }
+    catch (const std::exception& e)
+    {
+        throw OpStorageError(std::string("pre-block system-call write-back failed: ") + e.what());
+    }
+    catch (...)
+    {
+        throw OpStorageError("pre-block system-call write-back failed: unknown exception");
+    }
 
     // (2) deposit-first content check + Jovian shape (type-byte classification, no raw-tx parse).
     constexpr uint8_t kDepositTypeByte = 0x7e;
