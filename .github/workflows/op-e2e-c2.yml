@@ -55,7 +55,7 @@ jobs:
 
       - name: Download fisco-bcos-air from workflow.yml
         run: |
-          RUN_ID=$(gh run list --workflow=workflow.yml --branch=main \
+          RUN_ID=$(gh run list --workflow=workflow.yml --branch=master \
             --status=success --limit=1 --json databaseId \
             --jq '.[0].databaseId')
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
