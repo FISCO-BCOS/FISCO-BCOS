@@ -44,7 +44,8 @@ jobs:
         run: |
           set -eo pipefail
           sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk
-          curl -fsSL https://foundry.paradigm.xyz | bash
+          curl -fsSL https://foundry.paradigm.xyz -o /tmp/foundry-install.sh
+          bash /tmp/foundry-install.sh
           export PATH="$HOME/.foundry/bin:$PATH"
           "$HOME/.foundry/bin/foundryup"
 
