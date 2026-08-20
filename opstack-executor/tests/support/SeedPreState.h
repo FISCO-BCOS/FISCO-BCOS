@@ -13,6 +13,7 @@
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <iterator>  // std::begin/std::end
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -57,13 +58,17 @@ inline intx::uint256 jsonU256(std::string_view hex)
 
 inline uint64_t jsonU64(std::string_view hex)
 {
-    return static_cast<uint64_t>(intx::from_string<intx::uint256>(std::string(hex)));
+    // Bounds-checked: a vector nonce above uint64_t would otherwise silently truncate through
+    // the narrowing cast.
+    const auto v = intx::from_string<intx::uint256>(std::string(hex));
+    if (v > std::numeric_limits<uint64_t>::max())
+        throw std::overflow_error("jsonU64: value exceeds uint64_t: " + std::string(hex));
+    return static_cast<uint64_t>(v);
 }
 
 /// Seeds the vector pre (jsoncpp object, key=address hex, value={balance,nonce,code,storage})
-/// into MLS: fork -> Storage2State::applyDiff(seeding=true) -> mergeView.
-/// `Storage2State::applyDiff` (Storage2State.h:275) signature confirmed; seeding=true
-/// exempts the EIP-161 empty-account guard (same contract as SeedPreState.h).
+/// into MLS: fork -> Storage2State::applyDiff(seeding=true) -> mergeView. seeding=true exempts
+/// the EIP-161 empty-account guard (Storage2State::applyDiff contract).
 template <class MLS>
 void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
 {
@@ -76,9 +81,8 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
         entry.addr = jsonAddress(addrKey);
         entry.nonce = jsonU64(acct["nonce"].asString());
         entry.balance = jsonU256(acct["balance"].asString());
-        // Empty code ("0x" -> empty bytes) stays nullopt, aligning with SeedPreState.h's
-        // contract (R2-B: a has_value empty vector writes extra CODE_BINARY/ABI rows but is
-        // stateRoot-unobservable; still written per the contract here)
+        // Empty code ("0x" -> empty bytes) stays nullopt: a has_value empty vector would write
+        // extra CODE_BINARY/ABI rows (stateRoot-unobservable but needless).
         if (acct.isMember("code"))
         {
             auto const codeStr = acct["code"].asString();

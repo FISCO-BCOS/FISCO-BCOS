@@ -231,8 +231,8 @@ public:
     /// anything else -> OpConsensusError (INVALID); every failure here (ghost delete, system-
     /// address routing, contract-② zero-slot leak, nonce/width violations, the storage backend
     /// itself) is a LOCAL fault, and the diff comes from evmone itself (malformed payloads were
-    /// already rejected at decode/processOpBlock), so none must ever be answered INVALID. The
-    /// whole body is wrapped in one try/catch so every present and future throw point inherits
+    /// already rejected at the decode/block-shape gates), so none must ever be answered INVALID.
+    /// The whole body is wrapped in one try/catch so every present and future throw point inherits
     /// that invariant; catch(...) guarantees the flag is set even when the standard exception
     /// families cannot be matched. `seeding` (true only for SeedPreState, a
     /// genesis snapshot) exempts the new-EIP-161-empty-account guard, which is otherwise on for
@@ -409,7 +409,7 @@ private:
         // Write-through: refresh caches via fetchAccount/fetchCode (one set of field-default/
         // has_storage rules); slot cache gets this round's exact written value (zero ->
         // all-zero bytes32, matching read-path normalization of deleted slots).
-        // TODO(perf, review #5448): fetchAccount's probeHasStorage is a full range scan per
+        // TODO(perf): fetchAccount's probeHasStorage is a full range scan per
         // modified account and fetchCode re-reads SYS_CODE_BINARY — both repeat per tx in a
         // block. A local derivation is possible (rebuild the Account from this round's writes;
         // has_storage: non-zero slot written → true, fresh account without one → false, no
@@ -702,6 +702,9 @@ private:
 
     /// has_storage rule: range-seek the account table for the first live (non-tombstone) 32-byte
     /// raw key whose value is non-zero (distinct from the known short ACCOUNT_TABLE_FIELDS names).
+    /// PRECONDITION on the Storage parameter: range() must be globally ordered (production:
+    /// ordered memory layers over RocksDB). An unordered backend (MemoryStorage CONCURRENT
+    /// iterates hash buckets) interleaves foreign tables mid-range and defeats the early exit.
     /// Two cumulative filters, each fixing a real bug:
     ///   * tombstone layer: range scanning without value-variant discrimination would count a
     ///     logically-deleted (DELETED_TYPE) row as a live slot, so has_storage could not flip back

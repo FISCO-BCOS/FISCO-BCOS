@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Storage2StatePoisonTest — the shared poison sink added in the StorageStateView→Storage2State
-// merge (Part 2): every Storage2State constructed with the same shared_ptr<std::string> reports
-// poison to it, so a read error in ANY per-tx execution instance is visible to the block-level
-// finalize check that owns the slot (op-geth's dbErr accumulating across the block). Without a
-// shared slot the poison stays per-instance (the pre-merge behaviour).
+// merge (Part 2): every Storage2State constructed with the same shared_ptr<SharedErrorSlot>
+// reports poison to it (mutex-guarded, first-write-wins), so a read error in ANY per-tx execution
+// instance is visible to the block-level finalize check that owns the slot (op-geth's dbErr
+// accumulating across the block). Without a shared slot the poison stays per-instance (the
+// pre-merge behaviour).
 
 #include <opstack-executor/Storage2State.h>
 #include <opstack-executor/Storage2StateHelpers.h>
@@ -37,8 +38,8 @@ using evmc::literals::operator""_address;
 constexpr evmc::address kPoisonAddr = 0x00000000000000000000000000000000deadc0de_address;
 
 /// A 32-byte storage-slot key whose value is NOT 32 bytes. Storage2State::fetchStorage validates
-/// the slot value length (Storage2State.h:747-751) and throws std::length_error — a deterministic
-/// poison trigger needing no storage-backend fault injection.
+/// the slot value length and throws std::length_error — a deterministic poison trigger needing
+/// no storage-backend fault injection.
 void seedCorruptSlot(MutableStorage& storage, evmc::address const& addr)
 {
     const std::string table = bcos::evm::evmstate::accountTableName(addr);
@@ -59,7 +60,7 @@ BOOST_AUTO_TEST_CASE(SharedSinkAggregatesPoisonAcrossInstances)
     MutableStorage storage;
     seedCorruptSlot(storage, kPoisonAddr);
 
-    auto sharedError = std::make_shared<std::string>();
+    auto sharedError = std::make_shared<bcos::evm::evmstate::SharedErrorSlot>();
     bcos::evm::evmstate::Storage2State<MutableStorage> txInstance(storage, sharedError);
     bcos::evm::evmstate::Storage2State<MutableStorage> finalizeBridge(storage, sharedError);
 
@@ -71,7 +72,7 @@ BOOST_AUTO_TEST_CASE(SharedSinkAggregatesPoisonAcrossInstances)
     BOOST_CHECK(txInstance.poisoned());
 
     // Instance B has read nothing, yet the shared slot marks it poisoned — the block-level
-    // finalize check (OpBlockExecute.h:178-183) must fail the whole block.
+    // finalize check (Storage2State.h's poison-flag contract) must fail the whole block.
     BOOST_CHECK(finalizeBridge.poisoned());
     BOOST_CHECK(!finalizeBridge.firstError().empty());
     // firstError() prefers the shared slot — the block-wide first error.

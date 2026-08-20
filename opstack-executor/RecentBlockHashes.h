@@ -31,6 +31,11 @@ namespace bcos::evm::engine::detail
 /// Lazy-loading BlockHashes with op-geth GetHashFn semantics: seed {N-1: parentHash}, earlier
 /// ancestors looked up on demand from SYS_NUMBER_2_HASH; missing entries return zero; storage
 /// errors / bad value lengths record the poison flag and return zero.
+///
+/// Error channel note: this class reports through a bare `std::optional<std::string>*`, NOT
+/// Storage2State's SharedErrorSlot — the evmone BlockHashes interface is const+noexcept and the
+/// instance is constructed by preBlockOpSteps before any executor shared slot exists. The
+/// block-level check must read BOTH channels (hashErr here, poisoned() on the bridge).
 template <class Storage>
 class RecentBlockHashes final : public evmone::state::BlockHashes
 {
