@@ -45,7 +45,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk
           curl -L https://foundry.paradigm.xyz | bash
           export PATH="$HOME/.foundry/bin:$PATH"
-          foundryup
+          echo "PATH=$PATH"
+          ls -la "$HOME/.foundry/bin/" 2>/dev/null || echo "foundry bin dir not found"
+          "$HOME/.foundry/bin/foundryup"
 
       - name: Configure
         run: |
