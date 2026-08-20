@@ -27,8 +27,8 @@ find_package(TBB REQUIRED)
 # the seven framework sources reference no evmone symbol, and linking evmone on a STATIC target
 # would land libevmone.a on every consumer's link line regardless of PUBLIC/PRIVATE — so no
 # evmone find_package/link at all; the include dirs propagate PUBLIC-ly from evmone's interface
-# (a generate-time genex; the target is created by bcos-evm's find_package(evmone) in FULLNODE
-# builds, and blst is created by the root's find_package(blst) — the first caller).
+# (a generate-time genex; the target is created by the root's find_package(evmone) in FULLNODE
+# builds, which also creates blst via its config's find_dependency(blst) — later calls no-op).
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
     bcos-framework/ledger/L2ConfigLoader.cpp
