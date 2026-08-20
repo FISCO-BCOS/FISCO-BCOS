@@ -17,6 +17,7 @@
     "./ports/tarscpp",
     "./ports/rapidhash",
     "./ports/openssl",
+    "./ports/evmc",
     "./ports/evmone",
     "./ports/intx",
     "./ports/blst",

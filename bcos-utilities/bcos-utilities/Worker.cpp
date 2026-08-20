@@ -25,23 +25,40 @@
 #include <exception>
 #include <future>
 
+// windows.h -- dragged in by <boost/asio/...> above -- defines ERROR as 0, which turns the
+// BCOS_LOG(ERROR) calls below into bcos::LogLevel::0. BoostLog.h undefs it, but BoostLog.h is
+// #pragma once: in a unity build some earlier file in the same blob has already included it, back
+// when ERROR was still undefined, so its #undef ran as a no-op and cannot run again here. Undo it
+// after every include in this file, so no later asio header can re-introduce it before use.
+#ifdef ERROR
+#undef ERROR
+#endif
+
 using namespace bcos;
+
+namespace
+{
+// Upper bound on how long a stop/destroy will wait for the io_context to drain. Exceeding it is
+// always a bug (a wedged handler, or an io_context nobody runs), so it is logged rather than
+// silently tolerated -- but it is bounded so a wedge degrades into a stall, never a deadlock.
+constexpr auto c_drainTimeout = std::chrono::seconds(5);
+}  // namespace
 
 Worker::~Worker()
 {
     stopWorking();
-    // stopWorking() may return early when m_workerState is already
-    // Stopped (e.g. Sealer::stop() called stopWorking() before the
-    // destructor).  In that case pending [this]-capturing handlers
-    // (operation_aborted from cancel, notify() posts) may still be
-    // queued in the io_context.  Post a drain barrier and wait so
-    // that all such handlers are processed before *this is freed.
+    // stopWorking() now owns the main barrier; this one is the backstop for the cases it
+    // cannot cover: it returned early because m_workerState was already Stopped (e.g.
+    // Sealer::stop() ran first) and handlers landed afterwards; it took one of its two
+    // no-wait branches; or its own wait timed out. Pending [this]-capturing handlers
+    // (operation_aborted from cancel, notify() posts) may still be queued in those cases,
+    // so post a drain barrier and wait before *this is freed.
     if (!m_ioContext.stopped() && !m_ioContext.get_executor().running_in_this_thread())
     {
         auto drainPromise = std::make_shared<std::promise<void>>();
         auto drainFuture = drainPromise->get_future();
         boost::asio::post(m_ioContext, [drainPromise]() { drainPromise->set_value(); });
-        auto drainStatus = drainFuture.wait_for(std::chrono::seconds(5));
+        auto drainStatus = drainFuture.wait_for(c_drainTimeout);
         if (drainStatus != std::future_status::ready)
         {
             BCOS_LOG(ERROR) << LOG_DESC("Worker::~Worker() timed out waiting for handler drain")
@@ -96,19 +113,55 @@ void Worker::stopWorking()
         return;  // Not running, or another thread is already stopping
     }
 
-    // Cancel the timer.  If we are already on the io_context thread we
-    // can mutate m_timer directly; otherwise we post the cancel.
-    // No need to wait — ~Worker() drains all [this]-capturing handlers
-    // before the object can be freed, and any timer tick that fires
-    // between now and the cancel will early-return on !Started.
+    // Cancel the timer and WAIT until the io_context has drained, so that stopWorking()
+    // returning means "no timer-driven executeWorker() is in flight, and nothing this Worker
+    // queued is still pending".
+    //
+    // What this does NOT cover: notify() (below) reads m_workerState and posts in two separate
+    // steps, so a concurrent notify() that passed its check just before the CAS can still land a
+    // handler after this barrier has drained. Closing that needs the handlers to hold ownership
+    // of the object (weak_from_this in every posted lambda), which is a separate change.
+    //
+    // The wait is not optional. The CAS above only stops FUTURE ticks from entering
+    // executeWorker(); a tick that already entered keeps running on the io_context
+    // thread. ~Worker() does drain the queue, but by C++ destruction order it runs
+    // AFTER the derived class has destroyed its own members -- so a derived
+    // executeWorker() (e.g. Sealer's, which dereferences m_sealingManager) would be
+    // touching freed memory long before that drain is reached. The barrier has to be
+    // here, while the whole object is still intact.
     if (m_ioContext.get_executor().running_in_this_thread())
     {
+        // We ARE the io_context thread, so the only handler that could be in flight is the one
+        // calling us: there is nothing to wait for, and waiting would deadlock against
+        // ourselves. Cancelling here is safe precisely because we are on that thread.
         m_timer.cancel();
     }
-    else
+    else if (!m_ioContext.stopped())
     {
-        boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
+        auto drainPromise = std::make_shared<std::promise<void>>();
+        auto drainFuture = drainPromise->get_future();
+        // The barrier is posted from INSIDE the cancel handler on purpose. It is
+        // m_timer.cancel() that queues the outstanding async_wait's operation_aborted
+        // completion, so a barrier posted from this thread alongside the cancel would
+        // sit AHEAD of that completion and let stopWorking() return with a handler
+        // still queued. Posting it after the cancel call puts it behind.
+        boost::asio::post(m_ioContext, [this, drainPromise]() {
+            m_timer.cancel();
+            boost::asio::post(m_ioContext, [drainPromise]() { drainPromise->set_value(); });
+        });
+        // Deliberately wait_for() and never get(): if the outer handler is destroyed without
+        // running, the future is ready-with-broken_promise, and get() would rethrow that inside
+        // whoever is stopping us. Only readiness matters here.
+        if (drainFuture.wait_for(c_drainTimeout) != std::future_status::ready)
+        {
+            BCOS_LOG(ERROR) << LOG_DESC("Worker::stopWorking() timed out draining handlers")
+                            << LOG_KV("threadName", m_threadName);
+        }
     }
+    // else: the io_context is stopped. No handler is running, none ever will be, and the
+    // operation_aborted completion a cancel would queue could never be delivered either -- so
+    // there is nothing to cancel and nothing to drain. Touching m_timer from this thread would
+    // only add a cross-thread access to an object asio documents as unsafe to share.
 
     try
     {
@@ -179,6 +232,10 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
 
 void Worker::notify()
 {
+    // NOTE: this check and the post below are not atomic, so a caller that reads Started here can
+    // still land its handler after stopWorking() has drained and the object has been destroyed.
+    // stopWorking()'s barrier does NOT cover that window; closing it needs the posted lambdas to
+    // hold ownership (weak_from_this) rather than a raw this.
     if (m_workerState == WorkerState::Started)
     {
         // Cancel any pending timer and immediately trigger one worker cycle

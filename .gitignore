@@ -69,6 +69,15 @@ tools/BcosProBuilder/generated**
 tools/BcosAirBuilder/*
 *.log
 
+# t8n reference vectors: regenerated on demand (see t8n/generator/regen.sh) and by CI
+# (composite action .github/actions/opstack-t8n-regen). Only the non-generated contract
+# files (manifest.txt, *.md, SHA256SUMS) and the generator itself are tracked.
+bcos-evm/test/opstack/t8n/cases/
+opstack-executor/tests/t8n/cases/
+opstack-executor/tests/t8n/vectors/*.json
+opstack-executor/tests/t8n/golden/engine/*.golden.json
+opstack-executor/tests/t8n/golden/engine/chained/*.json
+
 test/*
 /CMakeSettings.json
 

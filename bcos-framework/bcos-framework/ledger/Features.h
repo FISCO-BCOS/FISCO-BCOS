@@ -46,8 +46,9 @@ public:
     // so each value is PERMANENT: never change or reuse a value, never delete a
     // flag's number. New flags take the next unused number — the declaration
     // position is free (you may group them anywhere), only the value matters.
-    // magic_enum reflects values in its default range [-128,128]; the
-    // static_assert below keeps the count within it.
+    // magic_enum reflects values in its default range [-128, 127]. The
+    // enum_contains assert catches any flag outside that range at compile time.
+    // The static_assert keeps the max value ≤ 127 (bitset encoding constraint).
     enum class Flag
     {
         bugfix_revert = 0,  // https://github.com/FISCO-BCOS/FISCO-BCOS/issues/3629
@@ -122,15 +123,29 @@ public:
         // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
         // renumber every feature_ flag after it and silently move their on-chain bits.
         bugfix_nonce_ordering = 59,  // web3 EOA nonce must be independent of intra-block tx order
+        feature_op_jovian = 60,      // OP-Stack: Jovian fork semantics (DA footprint in
+                                     // header.BlobGasUsed, operator fee ×100 formula, 17B Jovian
+                                     // extraData). OFF → Isthmus semantics. Replaces the former
+                                     // chain.jovian_time timestamp threshold (FISCO has no
+                                     // timestamp-based fork activation); read at startup from
+                                     // genesis [features], same channel as
+                                     // feature_l2_ethereum_compat.
     };
 
-    // feature_flags bit = enum value; magic_enum's default reflection range is
-    // [-128,128], so the flag count (and thus the max value, when assigned
-    // sequentially) must stay within it. Raise MAGIC_ENUM_RANGE_MAX before
-    // exceeding this.
-    static_assert(magic_enum::enum_count<Flag>() <= 128,
-        "Flag count exceeds magic_enum's default reflection range (128); flags beyond it would "
-        "be silently dropped from get/set/string2Flag/feature_flags");
+    // feature_flags bit = enum value. Pin the newest flag so a value beyond
+    // magic_enum's default reflection range [-128,127] is caught at compile time.
+    // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
+    // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
+    // (A contiguity static_assert is deliberately omitted: magic_enum only reflects
+    // contiguous values by default, so `enum_max == enum_count - 1` is a tautology
+    // and cannot catch gaps. The contiguous-from-zero rule is enforced by code review
+    // and the comment on Flag above — the two range asserts catch the other failure
+    // mode: a new flag pushed past magic_enum's reflection boundary.)
+    static_assert(magic_enum::enum_contains(Flag::feature_op_jovian),
+        "newest Flag fell outside magic_enum's reflection range — check enum values");
+    static_assert(magic_enum::enum_integer(
+                      magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
+        "max Flag value exceeds 127; bitset encoding (bit = enum value) requires values 0..127.");
 
 private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
@@ -203,11 +218,12 @@ public:
     }
 
     // Pack the enabled flags into a 256-bit number: bit = the flag's explicit
-    // enum value (see Flag). m_flags is indexed by declaration order, so map
-    // each set bit back to its flag and shift by that flag's value — the
-    // encoding stays stable even if flags are later grouped/reordered, as long
-    // as each flag keeps its value. Consumed by L2 genesis to seed
-    // SystemConfig's feature_flags entry.
+    // enum value (see Flag). m_flags is indexed by position in magic_enum's
+    // VALUE-SORTED reflection order (not by declaration order), so map each set
+    // bit back to its flag and shift by that flag's value — the encoding stays
+    // stable even if flags are later grouped/reordered, as long as each flag
+    // keeps its value. Consumed by L2 genesis to seed SystemConfig's
+    // feature_flags entry.
     u256 toFlagsNumber() const
     {
         u256 result = 0;

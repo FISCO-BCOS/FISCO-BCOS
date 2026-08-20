@@ -69,7 +69,8 @@ inline RawTransactionKind dispatchRawTransaction(bcos::bytesConstRef raw)
 }
 
 /// Whether a transaction of this kind may appear inside an Engine execution payload.
-/// L2 forbids blob transactions entirely (OP Stack, Ecotone onwards) — a single blob or
+/// FISCO's OP policy rejects blob (type-3) txs at the gate — op-geth's decodeTyped accepts
+/// them, so this is a deliberate acceptance divergence, not an op-geth check. A single blob or
 /// unsupported transaction invalidates the whole payload, it is not dropped individually.
 inline bool isRawTransactionPayloadAdmissible(RawTransactionKind kind)
 {

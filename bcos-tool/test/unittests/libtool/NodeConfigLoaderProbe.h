@@ -35,6 +35,7 @@ struct LoaderProbe : public bcos::tool::NodeConfig
     using bcos::tool::NodeConfig::loadExecutorNormalConfig;
     using bcos::tool::NodeConfig::loadFailOverConfig;
     using bcos::tool::NodeConfig::loadGatewayConfig;
+    using bcos::tool::NodeConfig::loadGenesisFeatures;
     using bcos::tool::NodeConfig::loadLedgerConfig;
     using bcos::tool::NodeConfig::loadOpEngineRpcConfig;
     using bcos::tool::NodeConfig::loadOthersConfig;

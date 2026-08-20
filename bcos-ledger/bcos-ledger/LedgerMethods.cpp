@@ -9,7 +9,8 @@
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage)
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     struct Awaitable
     {
@@ -18,6 +19,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
         decltype(storage) m_storage;
+        std::optional<bcos::crypto::HashType> m_blockHashOverride;
+        bool m_writeNonces{true};
         Error::Ptr m_error;
 
         constexpr static bool await_ready() noexcept { return false; }
@@ -32,7 +35,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
                     }
                     handle.resume();
                 },
-                m_withTransactionsAndReceipts, std::nullopt);
+                m_withTransactionsAndReceipts, std::nullopt, m_blockHashOverride, m_writeNonces);
         }
         void await_resume()
         {
@@ -48,6 +51,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         .m_block = std::move(block),
         .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
         .m_storage = std::move(storage),
+        .m_blockHashOverride = std::move(blockHashOverride),
+        .m_writeNonces = writeNonces,
         .m_error = {}};
     co_await awaitable;
 }
@@ -486,8 +491,7 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
     int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
-        versionConfig)
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
     {
         executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);

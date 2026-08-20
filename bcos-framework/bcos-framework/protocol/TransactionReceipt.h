@@ -24,10 +24,33 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <cstdint>
 #include <gsl/span>
+#include <optional>
 
 namespace bcos::protocol
 {
+// OP Stack (Isthmus/Jovian) receipt metadata, carried on the tars TransactionReceipt as field 8
+// (opStackMeta, an OpStackReceiptMeta tars struct). The C++ struct is the typed view over the
+// tars hex-string fields. Presence is per-field (std::optional): a field the execution layer did
+// not record stays nullopt. The tars layer stores 0 values as "0x0" so explicit zeros survive.
+struct OpStackReceiptMeta
+{
+    std::optional<bcos::u256> l1_gas_price;
+    std::optional<bcos::u256> l1_fee;
+    std::optional<bcos::u256> l1_blob_base_fee;
+    std::optional<uint64_t> l1_base_fee_scalar;
+    std::optional<uint64_t> l1_blob_base_fee_scalar;
+    std::optional<uint64_t> operator_fee_scalar;
+    std::optional<uint64_t> operator_fee_constant;
+    std::optional<uint64_t> da_footprint_gas_scalar;
+    std::optional<uint64_t> da_footprint;
+    std::optional<uint64_t> deposit_nonce;
+    std::optional<uint64_t> deposit_receipt_version;
+    std::optional<uint64_t> l1_gas_used;
+    std::optional<bcos::u256> operator_fee;
+};
+
 class LogEntry;
 class TransactionReceipt
 {
@@ -52,6 +75,13 @@ public:
     virtual std::string_view effectiveGasPrice() const = 0;
     virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
 
+    // OP Stack (Isthmus/Jovian) receipt metadata (13 OP-specific fields). nullopt means "not an
+    // OP receipt" -- legacy receipts never set this, and old serialized receipts decode to an
+    // empty opStackMeta (tars optional field). The tars layer stores every value as a hex string,
+    // including explicit zeros ("0x0"), so per-field presence survives serialization.
+    virtual std::optional<OpStackReceiptMeta> opStackMeta() const = 0;
+    virtual void setOpStackMeta(OpStackReceiptMeta meta) = 0;
+
     // additional information on transaction execution, no need to be involved in the hash
     // calculation
     virtual std::string const& message() const = 0;
@@ -70,12 +100,13 @@ public:
 
     friend std::ostream& operator<<(std::ostream& output, const TransactionReceipt& receipt)
     {
-        output << "TransactionReceipt{" << "hash=" << receipt.hash() << ", "
+        output << "TransactionReceipt{"
+               << "hash=" << receipt.hash() << ", "
                << "version=" << receipt.version() << ", "
                << "gasUsed=" << receipt.gasUsed() << ", "
                << "contractAddress=" << receipt.contractAddress() << ", "
-               << "status=" << receipt.status() << ", " << "output=" << toHex(receipt.output())
-               << ", "
+               << "status=" << receipt.status() << ", "
+               << "output=" << toHex(receipt.output()) << ", "
                << "logEntries=" << receipt.logEntries().size() << ", "
                << "blockNumber=" << receipt.blockNumber() << ", "
                << "effectiveGasPrice=" << receipt.effectiveGasPrice() << ", "
@@ -87,7 +118,7 @@ using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;
 using ReceiptsConstPtr = std::shared_ptr<const Receipts>;
 using AnyTransactionReceipt =
-    AnyHolder<TransactionReceipt, 104>;  // 多平台TransactionReceiptImpl的最大尺寸 (Maximum size of
+    AnyHolder<TransactionReceipt, 104>;  // (Maximum size of
                                          // TransactionReceiptImpl across platforms)
 
 }  // namespace bcos::protocol
