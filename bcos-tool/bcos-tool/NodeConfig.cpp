@@ -458,6 +458,18 @@ void NodeConfig::validateL2Invariants()
     }
 }
 
+bool NodeConfig::opJovianActive() const
+{
+    // OP-Stack Jovian fork semantics are selected by feature_op_jovian in [features] (the
+    // FISCO-native mechanism), replacing the former chain.isthmus_time/chain.jovian_time
+    // timestamp thresholds. OFF → Isthmus semantics (the OP-mode baseline).
+    return std::any_of(genesisConfig.m_features.begin(), genesisConfig.m_features.end(),
+        [](ledger::FeatureSet const& featureSet) {
+            return featureSet.flag == ledger::Features::Flag::feature_op_jovian &&
+                   featureSet.enable > 0;
+        });
+}
+
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
     std::string const& _configSection, std::string const& _objName,
     std::string const& _defaultValue, bool _require)

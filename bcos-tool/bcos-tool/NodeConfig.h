@@ -312,6 +312,11 @@ public:
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
     // derived helpers (not plain field access)
+    /// OP-Stack Jovian fork selection: enabled iff `feature_op_jovian` is set in the genesis
+    /// [features] section (the FISCO-native feature-flag mechanism — replaces the former
+    /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
+    /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
+    bool opJovianActive() const;
     std::string getDefaultServiceName(
         std::string const& _nodeName, std::string const& _serviceName) const;
     void getTarsClientProxyEndpoints(
@@ -358,7 +363,8 @@ protected:
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
 
-private:
+    // [features] section loader — exposed to the LoaderProbe test harness like the other
+    // per-section loaders (feature_op_jovian drives OP-Stack fork selection).
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
 
     // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)

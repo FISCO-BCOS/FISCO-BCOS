@@ -16,6 +16,25 @@ module bcostars {
         8 optional string           effectiveGasPrice;
     };
 
+    // OP Stack (Isthmus/Jovian) receipt metadata, serialized by the OP execution layer.
+    // All 13 fields are hex strings (0 values stored as "0x0") so explicit zero presence
+    // survives tars serialization (tars optional scalar has no presence semantics).
+    struct OpStackReceiptMeta {
+        0 optional string l1_gas_price;          // uint256 hex
+        1 optional string l1_fee;                // uint256 hex
+        2 optional string l1_blob_base_fee;      // uint256 hex
+        3 optional string l1_base_fee_scalar;    // hex (0 value stored as "0x0")
+        4 optional string l1_blob_base_fee_scalar;
+        5 optional string operator_fee_scalar;
+        6 optional string operator_fee_constant;
+        7 optional string da_footprint_gas_scalar;
+        8 optional string da_footprint;
+        9 optional string deposit_nonce;
+        10 optional string deposit_receipt_version;
+        11 optional string l1_gas_used;
+        12 optional string operator_fee;          // uint256 hex (FISCO extension)
+    };
+
     struct TransactionReceipt {
         1 optional TransactionReceiptData data;
         2 optional vector<byte>           dataHash;
@@ -25,5 +44,7 @@ module bcostars {
         5 optional vector<byte>           logsBloom;
         6 optional unsigned int           transactionIndex;
         7 optional unsigned int           logIndex;
+
+        8 optional OpStackReceiptMeta      opStackMeta;
     };
 };

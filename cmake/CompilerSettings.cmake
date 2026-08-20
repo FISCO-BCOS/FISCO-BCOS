@@ -114,6 +114,17 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-Wno-restrict)
         add_compile_options(-Wno-error=format-truncation)
         add_compile_options(-Wno-error=free-nonheap-object)
+        # The two OP-specific downgrades below are NOT applied repository-wide —
+        # `add_compile_options` would silence a real defect detector
+        # (-Wmissing-field-initializers) for all 25+ modules on behalf of one feature. In this
+        # repo's own code the aggregate carries default member initializers in Types.h
+        # (blockAccessList/slotNumber = std::nullopt), so omitting them is not a
+        # -Wmissing-field-initializers case; the per-target downgrade
+        # (`set_source_files_properties/set_target_properties ... COMPILE_OPTIONS
+        # -Wno-missing-field-initializers`) is reserved for vendored upstream code that cannot
+        # carry those initializers. bcos-evm/CMakeLists.txt applies it that way today; the OP
+        # executor modules (bcos-evm-opstack / opstack-executor) will add it where their
+        # upstream-derived code needs it when they land (part 3+).
 
         # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
         add_compile_options(-Wno-subobject-linkage)
