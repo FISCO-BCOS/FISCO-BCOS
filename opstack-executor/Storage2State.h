@@ -30,6 +30,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <opstack-executor/Storage2StateHelpers.h>
+#include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/state/state_view.hpp>
@@ -418,56 +419,38 @@ private:
         //   * otherwise (zero-valued deletions, or no cached account) → the probe is the only
         //     way to know whether OTHER live slots remain — a stale true would wrongly fail
         //     CREATE2 collision checks, so probe exactly like fetchAccount would.
-        Account newAccount;
-        const bool hasCachedAccount = [&]() {
-            if (auto it = m_accountCache.find(entry.addr);
-                it != m_accountCache.end() && it->second.has_value())
-            {
-                newAccount = *it->second;
-                return true;
-            }
-            // No usable cached account (never read, or read-and-missing): start from
-            // fetchAccount's field defaults — code_hash = keccak(empty) normalization included.
-            newAccount.code_hash = evmone::keccak256(evmc::bytes_view{});
-            return false;
-        }();
+        auto cachedIt = m_accountCache.find(entry.addr);
+        bool const hasCachedAccount =
+            cachedIt != m_accountCache.end() && cachedIt->second.has_value();
+        Account newAccount = hasCachedAccount ? *cachedIt->second : Account{};
+        if (!hasCachedAccount)
+            newAccount.code_hash = evmone::keccak256(evmc::bytes_view{});  // fetchAccount's default
         newAccount.nonce = entry.nonce;
         newAccount.balance = entry.balance;
         if (entry.code.has_value())
         {
             newAccount.code_hash = evmone::keccak256(*entry.code);
-            // This round's code write is authoritative for the code cache too (setCode stored
-            // the blob in SYS_CODE_BINARY keyed by the same hash).
-            m_codeCache.insert_or_assign(entry.addr, *entry.code);
+            m_codeCache.insert_or_assign(entry.addr, *entry.code);  // this round's write is
+                                                                    // authoritative
         }
         else if (m_codeCache.find(entry.addr) == m_codeCache.end())
         {
-            // Code untouched and uncached: cold read — only fetchCode knows the stored blob.
-            m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));
+            m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));  // cold read
         }
-        bool nonZeroSlotWritten = false;
-        bool zeroSlotDeleted = false;
-        for (const auto& [key, value] : entry.modified_storage)
-        {
-            if (evmc::is_zero(value))
-                zeroSlotDeleted = true;
-            else
-                nonZeroSlotWritten = true;
-        }
+        auto const nonZeroSlotWritten = std::any_of(entry.modified_storage.begin(),
+            entry.modified_storage.end(), [](const auto& kv) { return !evmc::is_zero(kv.second); });
+        auto const zeroSlotDeleted = std::any_of(entry.modified_storage.begin(),
+            entry.modified_storage.end(), [](const auto& kv) { return evmc::is_zero(kv.second); });
         if (nonZeroSlotWritten)
             newAccount.has_storage = true;
         else if (createdNew)
             newAccount.has_storage = false;
         else if (zeroSlotDeleted || !hasCachedAccount)
             newAccount.has_storage = co_await probeHasStorage(tableName);
-        // else: no storage change this round and a cached account exists — cached has_storage
-        // stays valid.
         m_accountCache.insert_or_assign(entry.addr, newAccount);
         for (const auto& [key, value] : entry.modified_storage)
-        {
             m_storageCache.insert_or_assign(
                 std::make_pair(entry.addr, key), evmc::is_zero(value) ? evmc::bytes32{} : value);
-        }
     }
 
     task::Task<void> applyDeletedEntry(const evmc::address& addr)
@@ -654,9 +637,7 @@ private:
             if (m_sharedError)
             {
                 std::lock_guard lock(m_sharedError->mutex);
-                // First-write-wins: the block-wide slot keeps the FIRST poison across all
-                // instances, not the last poisoner's message.
-                if (m_sharedError->message.empty())
+                if (m_sharedError->message.empty())  // first-write-wins across instances
                     m_sharedError->message.assign(m_firstError);
             }
         }
