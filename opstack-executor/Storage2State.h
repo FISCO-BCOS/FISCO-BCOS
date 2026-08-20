@@ -407,50 +407,24 @@ private:
             }
         }
 
-        // Write-through: rebuild caches from this round's writes instead of re-reading the ledger
-        // (fetchAccount's probeHasStorage is a full range scan per modified account, and
-        // fetchCode re-reads SYS_CODE_BINARY — both repeat per tx in a block). has_storage is
-        // derived locally where unambiguous:
-        //   * a non-zero slot written this round → true (a live slot exists);
-        //   * a fresh account (createdNew) with no non-zero slot → false (a new table holds no
-        //     live slot; zero-valued deletes on it are no-ops);
-        //   * no storage change this round and a cached account exists → the cached has_storage
-        //     is still valid;
-        //   * otherwise (zero-valued deletions, or no cached account) → the probe is the only
-        //     way to know whether OTHER live slots remain — a stale true would wrongly fail
-        //     CREATE2 collision checks, so probe exactly like fetchAccount would.
-        auto cachedIt = m_accountCache.find(entry.addr);
-        bool const hasCachedAccount =
-            cachedIt != m_accountCache.end() && cachedIt->second.has_value();
-        Account newAccount = hasCachedAccount ? *cachedIt->second : Account{};
-        if (!hasCachedAccount)
-            newAccount.code_hash = evmone::keccak256(evmc::bytes_view{});  // fetchAccount's default
-        newAccount.nonce = entry.nonce;
-        newAccount.balance = entry.balance;
-        if (entry.code.has_value())
-        {
-            newAccount.code_hash = evmone::keccak256(*entry.code);
-            m_codeCache.insert_or_assign(entry.addr, *entry.code);  // this round's write is
-                                                                    // authoritative
-        }
-        else if (m_codeCache.find(entry.addr) == m_codeCache.end())
-        {
-            m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));  // cold read
-        }
-        auto const nonZeroSlotWritten = std::any_of(entry.modified_storage.begin(),
-            entry.modified_storage.end(), [](const auto& kv) { return !evmc::is_zero(kv.second); });
-        auto const zeroSlotDeleted = std::any_of(entry.modified_storage.begin(),
-            entry.modified_storage.end(), [](const auto& kv) { return evmc::is_zero(kv.second); });
-        if (nonZeroSlotWritten)
-            newAccount.has_storage = true;
-        else if (createdNew)
-            newAccount.has_storage = false;
-        else if (zeroSlotDeleted || !hasCachedAccount)
-            newAccount.has_storage = co_await probeHasStorage(tableName);
-        m_accountCache.insert_or_assign(entry.addr, newAccount);
+        // Write-through: refresh caches via fetchAccount/fetchCode (one set of field-default/
+        // has_storage rules); slot cache gets this round's exact written value (zero ->
+        // all-zero bytes32, matching read-path normalization of deleted slots).
+        // TODO(perf, review #5448): fetchAccount's probeHasStorage is a full range scan per
+        // modified account and fetchCode re-reads SYS_CODE_BINARY — both repeat per tx in a
+        // block. A local derivation is possible (rebuild the Account from this round's writes;
+        // has_storage: non-zero slot written → true, fresh account without one → false, no
+        // storage change with a cached account → cached value stays valid, zero-valued
+        // deletions / no cached account → probe, the only safe answer — a stale true would
+        // wrongly fail CREATE2 collision checks). Deferred to keep the whole-PR valid-insertion
+        // count within the check-commit budget.
+        m_accountCache.insert_or_assign(entry.addr, co_await fetchAccount(tableName));
+        m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));
         for (const auto& [key, value] : entry.modified_storage)
+        {
             m_storageCache.insert_or_assign(
                 std::make_pair(entry.addr, key), evmc::is_zero(value) ? evmc::bytes32{} : value);
+        }
     }
 
     task::Task<void> applyDeletedEntry(const evmc::address& addr)
