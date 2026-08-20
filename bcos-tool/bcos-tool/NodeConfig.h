@@ -50,7 +50,6 @@ public:
     // Config domains — public fields grouped per config domain; each
     // domain is populated by the matching loadXxxConfig method and the
     // struct fields are the single source (no getters/setters).
-    // ================================================================
 
     struct BaselineSchedulerConfig
     {
@@ -285,6 +284,10 @@ public:
     // core objects (genesis-derived state, key factory, ledger config)
     bcos::crypto::KeyFactory::Ptr keyFactory;
     bcos::ledger::LedgerConfig::Ptr ledgerConfig;
+    // Load-time-only mutation contract: these three members are written
+    // exclusively by the loadXxxConfig / loadGenesisConfig methods; external
+    // writes are unsupported (they would bypass the loader invariants such as
+    // validateL2Invariants and the chainID/groupID character validation).
     ledger::GenesisConfig genesisConfig;
 
     NodeConfig();

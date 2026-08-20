@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(defaultsAreReadableWithoutLoad)
     // notifyWorkerNum() / verifierWorkerNum() were removed with the per-module worker-pool knobs
     // (thread_pool.io_thread_count now sizes the shared pool), so there is nothing to probe here.
     BOOST_CHECK_EQUAL(cfg.txpool.checkBlockLimit, true);
-    BOOST_CHECK_EQUAL(cfg.chain.blockLimit, 1000U);
+    BOOST_CHECK_EQUAL(cfg.chain.blockLimit, 0U);  // default until loadChainConfig runs
     BOOST_CHECK_EQUAL(cfg.security.privateKeyPath, "node.pem");
     BOOST_CHECK_EQUAL(cfg.security.hsmLibPath, "");
     BOOST_CHECK_EQUAL(cfg.security.keyIndex, 0);
@@ -90,7 +90,8 @@ BOOST_AUTO_TEST_CASE(loadConfigFromStringEmptyDoesNotLoseInvariant)
     }
     catch (...)
     {}
-    (void)cfg.genesisConfig.m_chainID;
+    // an empty load must leave the genesis fields at their defaults
+    BOOST_CHECK_EQUAL(cfg.genesisConfig.m_chainID, "");
 }
 
 BOOST_AUTO_TEST_CASE(loadConfigFromStringPartialDocumentDispatchesSubLoaders)

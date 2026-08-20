@@ -37,7 +37,8 @@ HsmDataEncryption::HsmDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfi
 {
     m_nodeConfig = nodeConfig;
     m_hsmLibPath = m_nodeConfig->security.hsmLibPath;
-    m_encKeyIndex = 0;  // legacy encKeyIndex was never configurable and always 0
+    m_encKeyIndex = 0;  // enc_key_index was configurable before the NodeConfig
+                        // split refactor (273888d7c); since then it is always 0
     m_symmetricEncrypt = std::make_shared<HsmSM4Crypto>(m_hsmLibPath);
 }
 

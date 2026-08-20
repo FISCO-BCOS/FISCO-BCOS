@@ -231,7 +231,8 @@ BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
     BOOST_CHECK_GT(cfg.genesisConfig.m_txGasLimit, 0U);
     BOOST_CHECK_GT(cfg.genesisConfig.m_compatibilityVersion, 0U);
     BOOST_CHECK(!cfg.compatibilityVersionStr().empty());
-    (void)cfg.storage.pdAddrs;
+    // this genesis has no [storage] section, so pdAddrs must stay empty
+    BOOST_CHECK(cfg.storage.pdAddrs.empty());
 }
 
 // OP-Stack Jovian fork selection is feature-flag driven: feature_op_jovian in [features]
