@@ -683,8 +683,8 @@ public:
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
-        bcos::evm::opstack::OpFeeParams fee = {}, int64_t blockGasLeft = 0, uint64_t chainId = 0,
-        evmone::state::BlockHashes const* blockHashes = nullptr)
+        bcos::evm::opstack::OpFeeParams const& fee = {}, int64_t blockGasLeft = 0,
+        uint64_t chainId = 0, evmone::state::BlockHashes const* blockHashes = nullptr)
     {
         (void)contextID;
 
@@ -749,7 +749,7 @@ public:
         try
         {  // M1 normalization (same as ExecuteContext::prepare): validation failure -> INVALID
             props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
-                blockGasLeft, call ? 0 : chainId, &blockInfo);
+                blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo);
         }
         catch (const OpTxValidationFailed& e)
         {
@@ -824,7 +824,7 @@ private:
         bcos::evm::evmstate::Storage2State<Storage>& stateView,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee = {},
-        int64_t blockGasLeft = 0, uint64_t chainId = 0,
+        int64_t blockGasLeft = 0, std::optional<uint64_t> chainId = std::nullopt,
         evmone::state::BlockInfo const* prebuiltBlockInfo = nullptr)
     {
         namespace op = bcos::evm::opstack;
@@ -852,27 +852,22 @@ private:
         // self-consistent chainId (the signature binds the tx's own chainId, so sender recovery
         // always succeeds). Only legacy UNPROTECTED txs (v=27/28, chain_id==0, Homestead) are
         // exempt; every other tx (EIP-155 protected legacy + ALL typed txs) must match.
-        // chainId == 0 here means the caller did not supply a node chainId (fail-open); the block
-        // path always passes m_ctx->chainId.
+        // chainId is nullopt only on the eth_call path (lenient, like op-geth eth_call). The
+        // block path always engages it — an engaged 0 (caller forgot the node chainId) rejects
+        // every real tx, so the omission is loud rather than silently disabling the check.
         // Known residual: chain_id==0 also arises from a v=35/36 EIP-155-protected legacy tx
         // (chain id 0), which the tars layer collapses onto the same "0" as v=27/28 — such a tx is
         // exempted here where op-geth's Protected() rejects it. Nil security impact (the signature
         // is re-encodable as v=27/28); full parity needs a protected flag in the tars Transaction.
-        if (chainId != 0)
+        if (chainId.has_value())
         {
-            if (evmTx.type == evmone::state::Transaction::Type::legacy)
-            {
-                if (evmTx.chain_id != 0 && evmTx.chain_id != chainId)  // EIP-155 protected legacy
-                    throw bcos::evm::engine::OpConsensusError(
-                        "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
-                        " does not match node chainId " + std::to_string(chainId));
-            }
-            else if (evmTx.chain_id != chainId)  // typed: chain_id==0 is NOT exempt
-            {
+            // Only legacy UNPROTECTED txs (v=27/28, chain_id==0, Homestead) are exempt.
+            bool const exempt =
+                evmTx.type == evmone::state::Transaction::Type::legacy && evmTx.chain_id == 0;
+            if (!exempt && evmTx.chain_id != *chainId)
                 throw bcos::evm::engine::OpConsensusError(
                     "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
-                    " does not match node chainId " + std::to_string(chainId));
-            }
+                    " does not match node chainId " + std::to_string(*chainId));
         }
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};

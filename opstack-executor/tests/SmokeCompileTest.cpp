@@ -40,8 +40,8 @@ template struct bcos::executor_v1::opstack::OpstackExecutor::ExecuteContext<Muta
 template bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr>
 bcos::executor_v1::opstack::OpstackExecutor::executeTransaction<MutableStorage>(MutableStorage&,
     bcos::protocol::BlockHeader const&, bcos::protocol::Transaction const&, int,
-    bcos::ledger::LedgerConfig const&, bool, bcos::evm::opstack::OpFeeParams, int64_t, uint64_t,
-    evmone::state::BlockHashes const*);
+    bcos::ledger::LedgerConfig const&, bool, bcos::evm::opstack::OpFeeParams const&, int64_t,
+    uint64_t, evmone::state::BlockHashes const*);
 template bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr>
 bcos::executor_v1::opstack::OpstackExecutor::executeDeposit<MutableStorage>(MutableStorage&,
     bcos::protocol::BlockHeader const&, bcos::evm::opstack::DepositTx const&, uint64_t, int64_t,
