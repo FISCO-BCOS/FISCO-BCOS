@@ -29,6 +29,15 @@ jobs:
         with:
           clean: false
 
+      - name: Check runner architecture
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" != "x86_64" ]; then
+            echo "::error::C2 requires x86_64 runner (got $ARCH). workflow.yml only uploads x86_64 artifacts."
+            exit 1
+          fi
+          echo "Runner is x86_64 — OK"
+
       - name: Initialize vcpkg submodule
         run: git submodule update --init --recursive -- vcpkg
 
@@ -43,34 +52,26 @@ jobs:
           set -eo pipefail
           sudo apt-get install -y --no-install-recommends clang openjdk-11-jdk mold
           # Install foundry from GitHub releases (avoids foundryup installer pipe issue)
-          ARCH=$(uname -m); case "$ARCH" in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; esac
           FOUNDRY_VER=$(curl -fsSL "https://api.github.com/repos/foundry-rs/foundry/releases/latest" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")
-          curl -fsSL "https://github.com/foundry-rs/foundry/releases/download/v${FOUNDRY_VER}/foundry_v${FOUNDRY_VER}_linux_${ARCH}.tar.gz" \
+          curl -fsSL "https://github.com/foundry-rs/foundry/releases/download/v${FOUNDRY_VER}/foundry_v${FOUNDRY_VER}_linux_amd64.tar.gz" \
             | tar xz -C /usr/local/bin
           forge --version && cast --version && anvil --version
 
       - name: Configure
         run: |
-          ARCH=$(uname -m); case "$ARCH" in x86_64) VCPKG_TRIPLET=x64-linux-release;; aarch64) VCPKG_TRIPLET=arm64-linux-release;; *) VCPKG_TRIPLET=x64-linux-release;; esac
-          echo "vcpkg triplet: $VCPKG_TRIPLET (arch=$ARCH)"
           mkdir -p build
           cd build
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel \
             -DLINKER=mold -DTESTS=OFF -DCOVERAGE=OFF \
             -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
             -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
-            -DVCPKG_TARGET_TRIPLET=$VCPKG_TRIPLET ..
+            -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
 
       - name: Download fisco-bcos-air artifact (fallback build from source)
         id: download-fisco
         continue-on-error: true
         run: |
-          # workflow.yml only uploads x86_64 artifact; skip on ARM64
-          if [ "$(uname -m)" = "aarch64" ]; then
-            echo "ARM64 runner — no pre-built artifact available, will build from source"
-            exit 1
-          fi
           RUN_ID=$(gh run list --workflow=workflow.yml --branch=main \
             --status=success --limit=1 --json databaseId \
             --jq '.[0].databaseId' 2>/dev/null) || true
