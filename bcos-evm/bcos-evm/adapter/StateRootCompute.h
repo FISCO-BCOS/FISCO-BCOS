@@ -5,6 +5,7 @@
 // byte-identical for the same key set. Anchored by StateRootComputeTest's golden vectors
 // (empty-root canonical value + single-account leaf, cross-verified against go-ethereum);
 // the part-3 block-seal PR adds the 33-vector differential gate against op-geth state roots.
+// Stateless helper — no per-block mutable state; safe to call from any execution context.
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-utilities/FixedBytes.h>
