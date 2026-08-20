@@ -74,8 +74,11 @@ BOOST_AUTO_TEST_CASE(zero_slot_write_deletes_row)
     // 再写一个非零槽，最后 applyDiff 写零值槽验证删除。
     bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
     evmone::state::StateDiff seedDiff;
-    seedDiff.modified_accounts.push_back(
-        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{0}, std::nullopt, {}});
+    seedDiff.modified_accounts.push_back(evmone::state::StateDiff::Entry{.addr = kAddr,
+        .nonce = 1,
+        .balance = intx::uint256{0},
+        .code = std::nullopt,
+        .modified_storage = {}});
     seeder.applyDiff(seedDiff, /*seeding=*/true);
     const std::string slotKey(32, '\x01');
     seedSlot(storage, kAddr, slotKey, std::string(32, '\x2a'));
@@ -86,7 +89,11 @@ BOOST_AUTO_TEST_CASE(zero_slot_write_deletes_row)
     std::memcpy(slotKey32.bytes, slotKey.data(), sizeof(slotKey32.bytes));
     evmone::state::StateDiff diff;
     // nonce=1：非 EIP-161 空账户（零值槽删除测试不能触发空账户 guard）。
-    evmone::state::StateDiff::Entry entry{kAddr, 1, intx::uint256{0}, std::nullopt, {}};
+    evmone::state::StateDiff::Entry entry{.addr = kAddr,
+        .nonce = 1,
+        .balance = intx::uint256{0},
+        .code = std::nullopt,
+        .modified_storage = {}};
     entry.modified_storage.emplace_back(slotKey32, evmc::bytes32{});
     diff.modified_accounts.push_back(entry);
     bridge.applyDiff(diff);
@@ -124,8 +131,11 @@ BOOST_AUTO_TEST_CASE(unknown_short_key_row_throws)
     // 先建账户（applyDiff seeding=true 写 SYS_TABLES 标记 + nonce=1 避免 EIP-161 guard）。
     bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
     evmone::state::StateDiff seedDiff;
-    seedDiff.modified_accounts.push_back(
-        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{0}, std::nullopt, {}});
+    seedDiff.modified_accounts.push_back(evmone::state::StateDiff::Entry{.addr = kAddr,
+        .nonce = 1,
+        .balance = intx::uint256{0},
+        .code = std::nullopt,
+        .modified_storage = {}});
     seeder.applyDiff(seedDiff, /*seeding=*/true);
     // 再写 status 扩展字段行（BCOS 扩展字段——应被 isKnownAccountField 白名单接受）。
     seedSlot(storage, kAddr, "status", "0");
@@ -214,8 +224,11 @@ BOOST_AUTO_TEST_CASE(read_paths_return_correct_values)
     bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
     evmone::state::StateDiff seedDiff;
     // nonce=42, balance=0x1234
-    seedDiff.modified_accounts.push_back(
-        evmone::state::StateDiff::Entry{kAddr, 42, intx::uint256{0x1234}, std::nullopt, {}});
+    seedDiff.modified_accounts.push_back(evmone::state::StateDiff::Entry{.addr = kAddr,
+        .nonce = 42,
+        .balance = intx::uint256{0x1234},
+        .code = std::nullopt,
+        .modified_storage = {}});
     seeder.applyDiff(seedDiff, /*seeding=*/true);
 
     // 手动写入 storage slot：key=0x01*32, value=0xaa*32
@@ -258,8 +271,11 @@ BOOST_AUTO_TEST_CASE(missing_code_blob_poisons)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
     evmone::state::StateDiff seedDiff;
-    seedDiff.modified_accounts.push_back(
-        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{0}, std::nullopt, {}});
+    seedDiff.modified_accounts.push_back(evmone::state::StateDiff::Entry{.addr = kAddr,
+        .nonce = 1,
+        .balance = intx::uint256{0},
+        .code = std::nullopt,
+        .modified_storage = {}});
     seeder.applyDiff(seedDiff, /*seeding=*/true);
 
     // 对照组 1：codeHash = keccak(empty)、无 blob → 空码，不 poison（正常无码账户）。
@@ -287,8 +303,11 @@ BOOST_AUTO_TEST_CASE(read_path_with_code)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
     evmone::state::StateDiff seedDiff;
-    seedDiff.modified_accounts.push_back(
-        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{0}, std::nullopt, {}});
+    seedDiff.modified_accounts.push_back(evmone::state::StateDiff::Entry{.addr = kAddr,
+        .nonce = 1,
+        .balance = intx::uint256{0},
+        .code = std::nullopt,
+        .modified_storage = {}});
     seeder.applyDiff(seedDiff, /*seeding=*/true);
 
     // 手动写入 codeHash 字段（raw 32 bytes）+ SYS_CODE_BINARY（key=同一 raw bytes）。
@@ -316,8 +335,11 @@ BOOST_AUTO_TEST_CASE(cache_write_through_after_applyDiff)
     MutableStorage storage;
     bcos::evm::evmstate::Storage2State<MutableStorage> seeder(storage);
     evmone::state::StateDiff seedDiff;
-    seedDiff.modified_accounts.push_back(
-        evmone::state::StateDiff::Entry{kAddr, 1, intx::uint256{100}, std::nullopt, {}});
+    seedDiff.modified_accounts.push_back(evmone::state::StateDiff::Entry{.addr = kAddr,
+        .nonce = 1,
+        .balance = intx::uint256{100},
+        .code = std::nullopt,
+        .modified_storage = {}});
     seeder.applyDiff(seedDiff, /*seeding=*/true);
 
     // seed 一个 storage slot
@@ -395,8 +417,11 @@ BOOST_AUTO_TEST_CASE(deleted_account_path)
 
     // seed account（含 nonce/balance/code/storage）
     evmone::state::StateDiff seedDiff;
-    seedDiff.modified_accounts.push_back(
-        evmone::state::StateDiff::Entry{kAddr, 10, intx::uint256{500}, std::nullopt, {}});
+    seedDiff.modified_accounts.push_back(evmone::state::StateDiff::Entry{.addr = kAddr,
+        .nonce = 10,
+        .balance = intx::uint256{500},
+        .code = std::nullopt,
+        .modified_storage = {}});
     seeder.applyDiff(seedDiff, /*seeding=*/true);
     const std::string slotKey(32, '\xcc');
     seedSlot(storage, kAddr, slotKey, std::string(32, '\xdd'));
