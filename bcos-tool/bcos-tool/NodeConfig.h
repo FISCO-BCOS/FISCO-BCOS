@@ -64,7 +64,9 @@ public:
 
     struct ChainConfig
     {
-        size_t blockLimit = 1000;
+        // effective default is provided by loadChainConfig; 0 = not configured
+        // (matches the pre-refactor member default)
+        size_t blockLimit = 0;
     } chain;
 
     struct TxPoolConfig
@@ -243,7 +245,10 @@ public:
     struct FailOverConfig
     {
         bool enable = false;
-        std::string clusterUrl = "127.0.0.1:2379";
+        // effective default is provided by loadFailOverConfig; empty = not
+        // configured (matches the pre-refactor member default, so a disabled
+        // failover reads "" rather than a never-configured etcd endpoint)
+        std::string clusterUrl;
         std::string memberID;
         unsigned leaseTTL = 0;
     } failOver;
