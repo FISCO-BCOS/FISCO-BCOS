@@ -16,17 +16,11 @@ on:
       - "tools/opstack-genesis/**"
       - "bcos-l2-contracts/**"
       - ".github/workflows/op-e2e-c2.yml"
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   c2-devnet:
     name: C2 full loop (deposit/withdraw)
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      actions: read
     env:
       C2: ${{ runner.temp }}/c2
       FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
