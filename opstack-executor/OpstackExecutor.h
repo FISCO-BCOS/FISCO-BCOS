@@ -404,14 +404,14 @@ public:
 /// Correctness relies on a serial driver (SchedulerSerialImpl).
 struct OpBlockExecutionContext
 {
-    mutable bcos::evm::opstack::OpFeeParams fee;        // lazy-load + DA scalar override (H1/H1c)
-    mutable bool feeLoaded = false;                     // fee lazy-load flag (H1)
-    mutable int64_t blockGasLeft = 0;                   // decremented per tx
-    mutable int64_t cumulativeGasUsed = 0;              // accumulated across txs (H4)
-    mutable bool seenNonDeposit = false;                // deposit-after-non-deposit gate (M2)
-    evmone::state::BlockHashes* blockHashes = nullptr;  // built once at block level (H3)
-    uint64_t chainId = 0;                               // constant (H3)
-    std::optional<uint16_t> daFootprintGasScalar;       // Jovian DA scalar (H1c)
+    mutable bcos::evm::opstack::OpFeeParams fee;  // lazy-loaded once per block + DA scalar override
+    mutable bool feeLoaded = false;               // fee lazy-load flag
+    mutable int64_t blockGasLeft = 0;             // decremented per tx
+    mutable int64_t cumulativeGasUsed = 0;        // accumulated across txs
+    mutable bool seenNonDeposit = false;          // deposit-after-non-deposit gate
+    evmone::state::BlockHashes* blockHashes = nullptr;  // built once at block level
+    uint64_t chainId = 0;                               // constant for the whole block
+    std::optional<uint16_t> daFootprintGasScalar;       // Jovian DA scalar
 };
 
 /// The OP transaction executor. Discard-writes contract: on any throw out of
@@ -526,7 +526,7 @@ public:
             if (transaction.isDepositTx())
             {
                 if (m_ctx->seenNonDeposit)
-                    // M2 order gate — demoted from a hard reject to an observable log:
+                    // Deposit order gate — demoted from a hard reject to an observable log:
                     // op-geth/op-reth enforce deposit-first only at the sequencer, not at
                     // validation, so both reference clients accept such a block.
                     BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK")
@@ -549,17 +549,17 @@ public:
             }
             m_ctx->seenNonDeposit = true;
             if (!m_ctx->feeLoaded)
-            {  // H1 fee lazy load (after the L1 attributes deposit has executed)
+            {  // Fee lazy load (after the L1 attributes deposit has executed)
                 namespace op = bcos::evm::opstack;
                 m_ctx->fee = op::loadOpFeeParams(*stateView);
-                if (m_ctx->daFootprintGasScalar)  // H1c DA scalar override
+                if (m_ctx->daFootprintGasScalar)  // DA scalar override
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
                 m_ctx->feeLoaded = true;
             }
             m_blockInfo = buildBlockInfo(blockHeader,
                 opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)));
             try
-            {  // M1 normalization: validation failure -> consensus rejection
+            {  // Error normalization: validation failure -> consensus rejection
                 m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
                     ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft, m_ctx->chainId, &*m_blockInfo);
             }
@@ -619,7 +619,7 @@ public:
             {
                 m_receipt = co_await executor.m_execute(*stateView, blockHeader, transaction,
                     ledgerConfig, m_props, m_diff, m_ctx->chainId, m_ctx->blockGasLeft,
-                    m_ctx->blockHashes,  // H3
+                    m_ctx->blockHashes,  // built once at block level
                     m_blockInfo.has_value() ? &*m_blockInfo : nullptr);
             }
         }
@@ -642,7 +642,7 @@ public:
                 receipt = co_await executor.m_finish(
                     storage, blockHeader, ledgerConfig, m_receipt, m_diff);
             }
-            // H4: sole owner of cumulative-gas backfill + blockGasLeft decrement (narrowGasUsed /
+            // Sole owner of cumulative-gas backfill + blockGasLeft decrement (narrowGasUsed /
             // hexCumulative live in OpCommon.h).
             auto gasUsed = op::narrowGasUsed(receipt->gasUsed());
             m_ctx->cumulativeGasUsed += gasUsed;
@@ -703,7 +703,7 @@ public:
             }
             catch (const OpTxValidationFailed& e)
             {
-                // Same M1 normalization as ExecuteContext::prepare: a malformed deposit
+                // Same error normalization as ExecuteContext::prepare: a malformed deposit
                 // envelope is a CONSENSUS rejection (INVALID), not an internal error.
                 throw bcos::evm::engine::OpConsensusError(
                     std::string("OpScheduler: deposit envelope validation failed: ") + e.what());
@@ -753,7 +753,7 @@ public:
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
         bcos::evm::opstack::OpTxProperties props;
         try
-        {  // M1 normalization (same as ExecuteContext::prepare): validation failure -> INVALID
+        {  // Error normalization (same as ExecuteContext::prepare): validation failure -> INVALID
             props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
                 blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo);
         }

@@ -13,9 +13,13 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
+#include <opstack-executor/Storage2State.h>
 
+#include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 
@@ -265,6 +269,36 @@ BOOST_AUTO_TEST_CASE(Jovian178ExtractsBigEndianScalar)
     BOOST_REQUIRE(f.scalar.has_value());
     BOOST_CHECK_EQUAL(*f.scalar, 0x1234u);  // data[176:178] big-endian
     BOOST_CHECK(!f.hashErr.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(PrePoisonedSharedSlotFailsAtSystemCallStep)
+{
+    Fixture f;
+    // Poison the block-wide slot the way an earlier per-tx read fault would (a corrupt 4-byte
+    // slot value trips the fetchStorage length check — same trigger as Storage2StatePoisonTest).
+    auto sharedError = std::make_shared<bcos::evm::evmstate::SharedErrorSlot>();
+    const evmc::address addr{};
+    const std::string table = bcos::evm::evmstate::accountTableName(addr);
+    bcos::storage::Entry e;
+    e.set(std::string("abcd"));
+    bcos::task::syncWait(bcos::storage2::writeOne(
+        f.storage, StateKey{table, std::string(32, '\x01')}, std::move(e)));
+    bcos::evm::evmstate::Storage2State<MutableStorage> prior(f.storage, sharedError);
+    evmc::bytes32 slotKey{};
+    std::memset(slotKey.bytes, 0x01, sizeof(slotKey.bytes));
+    (void)prior.get_storage(addr, slotKey);
+    BOOST_REQUIRE(prior.poisoned());
+
+    // The executor shares the pre-poisoned slot: step (1) must surface the storage fault as
+    // OpStorageError instead of executing on silently zero-valued reads.
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        nullptr, nullptr, op::jovianConfig(), sharedError};
+    auto dep = depositWithData(l1AttributesData(op::JovianL1AttributesLen));
+    const std::vector<bcos::bytes> rawTxs{kDepositEnvelope};
+    const std::vector<op::DepositTx> deps{dep};
+    BOOST_CHECK_THROW(engine::preBlockOpSteps(f.storage, f.header, op::jovianConfig(), rawTxs, deps,
+                          executor, f.hashes, f.hashErr, f.scalar),
+        engine::OpStorageError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

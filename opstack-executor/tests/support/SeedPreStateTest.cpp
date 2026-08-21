@@ -86,17 +86,17 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     CheckpointBackend checkpointBackend(backendStorage);
     MLS multiLayerStorage(checkpointBackend);
 
-    w6test::seedPreState(multiLayerStorage, pre);
+    opstack_test::seedPreState(multiLayerStorage, pre);
 
     // Verify: fork a new view and read back through the Storage2State bridge
     auto view = multiLayerStorage.fork();
     bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-    const auto addr = w6test::jsonAddress("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");
+    const auto addr = opstack_test::jsonAddress("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");
     const auto acct = bridge.get_account(addr);
     BOOST_REQUIRE(acct.has_value());
     BOOST_CHECK(acct->balance == intx::from_string<intx::uint256>("0x56bc75e2d63100000"));
     BOOST_CHECK_EQUAL(acct->nonce, 0u);
-    const auto l1 = w6test::jsonAddress("0x4200000000000000000000000000000000000015");
+    const auto l1 = opstack_test::jsonAddress("0x4200000000000000000000000000000000000015");
     const auto l1Acct = bridge.get_account(l1);
     BOOST_REQUIRE(l1Acct.has_value());
     // Positive anchors: a seeding no-op would still pass the zero-valued checks above —
@@ -106,11 +106,11 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
     BOOST_CHECK(!acct->has_storage);
     BOOST_CHECK(bridge.get_account_code(l1).empty());
     BOOST_CHECK(bridge.get_account_code(addr).empty());
-    const auto slot =
-        w6test::jsonBytes32("0x0000000000000000000000000000000000000000000000000000000000000001");
-    BOOST_CHECK(
-        bridge.get_storage(l1, slot) ==
-        w6test::jsonBytes32("0x0000000000000000000000000000000000000000000000000000000000001234"));
+    const auto slot = opstack_test::jsonBytes32(
+        "0x0000000000000000000000000000000000000000000000000000000000000001");
+    BOOST_CHECK(bridge.get_storage(l1, slot) ==
+                opstack_test::jsonBytes32(
+                    "0x0000000000000000000000000000000000000000000000000000000000001234"));
     BOOST_CHECK_MESSAGE(
         !bridge.poisoned(), "seeding poisoned: " << std::string(bridge.firstError()));
 }

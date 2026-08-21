@@ -1,5 +1,5 @@
 #pragma once
-// W6 in-house JSON(pre)->StateDiff seeding. This branch has no evmone
+// In-house JSON(pre)->StateDiff seeding. This branch has no evmone
 // test/utils/test_state.hpp; here we
 // parse the vector pre with jsoncpp and build StateDiff directly, applying it via
 // applyDiff(seeding=true).
@@ -20,7 +20,7 @@
 #include <utility>  // std::move
 #include <vector>   // std::vector
 
-namespace w6test
+namespace opstack_test
 {
 
 inline evmc::address jsonAddress(std::string_view hex)
@@ -52,7 +52,7 @@ inline evmc::bytes jsonBytes(std::string_view hex)
 inline intx::uint256 jsonU256(std::string_view hex)
 {
     // vendored intx::from_string takes const char*/std::string (no base param) and
-    // auto-detects the 0x prefix — equivalent to the brief's from_string(hex, 0).
+    // auto-detects the 0x prefix (base-0 semantics).
     return intx::from_string<intx::uint256>(std::string(hex));
 }
 
@@ -119,4 +119,4 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
-}  // namespace w6test
+}  // namespace opstack_test

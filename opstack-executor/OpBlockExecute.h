@@ -6,7 +6,7 @@
 #include <bcos-evm/opstack/OpTransition.h>  // DepositTx
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-utilities/BoostLog.h>  // BCOS_LOG (finding-D demoted-deposit-check observability)
+#include <bcos-utilities/BoostLog.h>  // BCOS_LOG (demoted-deposit-check observability)
 #include <bcos-utilities/Common.h>
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / payloadBloomToH2048
 #include <opstack-executor/OpCommon.h>       // toBlockInfo / narrowU256ToU64 / toEvmcBytes32
@@ -86,6 +86,11 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     {
         throw OpStorageError("pre-block system-call write-back failed: unknown exception");
     }
+    // Read-path poison from the system call with applyDiff returning normally — same check as
+    // the deposit/tx write-back paths in OpstackExecutor; without it a storage fault here would
+    // silently execute as zero-value reads and surface later as a stateRoot mismatch.
+    if (stateView.poisoned())
+        throw OpStorageError("pre-block system-call poisoned: " + stateView.firstError());
 
     // (2) deposit-first content check + Jovian shape (type-byte classification, no raw-tx parse).
     constexpr uint8_t kDepositTypeByte = 0x7e;
@@ -109,6 +114,13 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
         auto const& data = deposits[0].data;
         if (data.size() == op::IsthmusL1AttributesLen)
         {
+            // Jovian activation block must be deposits-only. Parity anchor: op-geth
+            // CalcDAFootprint (core/types/rollup_cost.go:563-577, v1.101701.0) makes the exact
+            // same last-tx-only check ("sufficient to check last transaction because deposits
+            // precede non-deposit txs") and likewise relies on — without enforcing — the
+            // deposit-prefix invariant, so with the deposit order gate demoted to a log our accept
+            // set still matches op-geth's; iterating all envelopes here would be stricter than the
+            // reference client and a consensus divergence.
             // Empty-envelope guard before back()[0] access (trailing empty tx -> same reject path).
             if (rawTxBytes.back().empty() || rawTxBytes.back()[0] != kDepositTypeByte)
                 throw OpConsensusError(
@@ -127,7 +139,7 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
         }
     }
 
-    // (3) DA scalar (H1c): Jovian extracts big-endian uint16 from deposits[0].data[176:178]; the
+    // (3) DA scalar: Jovian extracts big-endian uint16 from deposits[0].data[176:178]; the
     // 176B Isthmus activation attributes → 0.
     if (cfg.has_da_footprint)
     {
