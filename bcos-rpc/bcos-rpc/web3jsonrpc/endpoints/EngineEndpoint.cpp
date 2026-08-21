@@ -36,7 +36,12 @@ namespace
 /// catch(...) and came back as -32603; converting at the endpoint keeps Web3JsonRpcImpl generic.
 [[noreturn]] void rethrowAsJsonRpcError(bcos::Exception const& e)
 {
-    throw JsonRpcException(mapEngineErrorCode(e), e.what());
+    // bcos::Error stores its message in errorMessage() (not what()); fall back so a
+    // storage/service fault never surfaces as -32603 with an empty message.
+    auto message = dynamic_cast<bcos::Error const*>(&e) ?
+                       dynamic_cast<bcos::Error const*>(&e)->errorMessage() :
+                       std::string(e.what());
+    throw JsonRpcException(mapEngineErrorCode(e), std::move(message));
 }
 }  // namespace
 

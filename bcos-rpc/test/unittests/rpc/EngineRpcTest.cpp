@@ -266,6 +266,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedUnsupportedForkMapsTo38005)
     {
         threw = true;
         BOOST_CHECK_EQUAL(e.code(), EngineError::UnsupportedFork);
+        BOOST_CHECK_EQUAL(e.msg(), "fork mismatch");
     }
     BOOST_CHECK(threw);
 }
@@ -288,6 +289,45 @@ BOOST_AUTO_TEST_CASE(getPayloadUnknownPayloadMapsTo38001)
     {
         threw = true;
         BOOST_CHECK_EQUAL(e.code(), EngineError::UnknownPayload);
+        BOOST_CHECK_EQUAL(e.msg(), "no such id");
+    }
+    BOOST_CHECK(threw);
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->newPayloadThrower = [] {
+        BOOST_THROW_EXCEPTION(
+            bcos::engine::UnsupportedFork{} << bcos::errinfo_comment{"fork mismatch"});
+    };
+    Json::Value params(Json::arrayValue);
+    Json::Value ep;
+    ep["parentHash"] = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    ep["feeRecipient"] = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    ep["stateRoot"] = "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    ep["receiptsRoot"] = "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    ep["logsBloom"] = "0x" + std::string(512, '0');
+    ep["prevRandao"] = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    ep["blockNumber"] = "0x1";
+    ep["gasLimit"] = "0x5208";
+    ep["gasUsed"] = "0x0";
+    ep["timestamp"] = "0x1";
+    ep["extraData"] = "0x1234";
+    ep["baseFeePerGas"] = "0x1";
+    ep["blockHash"] = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    ep["transactions"] = Json::Value(Json::arrayValue);
+    params.append(ep);
+    Json::Value response;
+    bool threw = false;
+    try
+    {
+        CALL_ENGINE(newPayloadV4, params, response);
+    }
+    catch (JsonRpcException const& e)
+    {
+        threw = true;
+        BOOST_CHECK_EQUAL(e.code(), EngineError::UnsupportedFork);
+        BOOST_CHECK_EQUAL(e.msg(), "fork mismatch");
     }
     BOOST_CHECK(threw);
 }
