@@ -37,9 +37,7 @@
 #include <boost/thread/thread.hpp>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 namespace bcos::boostssl::ws
@@ -160,10 +158,9 @@ private:
     mutable boost::shared_mutex x_mutex;
     // all active sessions
     std::unordered_map<std::string, std::shared_ptr<WsSession>> m_sessions;
-    // type => handler, flat array indexed by packet type (types are small enums, except
-    // WS_RAW_MESSAGE_TYPE(0xffff) which grows the table to 64K slots, a bounded
-    // one-time allocation per raw ws service)
-    std::vector<MsgHandler> m_msgType2Method;
+    // type => handler, sparse map indexed by packet type: registered types are not dense
+    // (e.g. WS_RAW_MESSAGE_TYPE(0xffff)), a flat array would waste memory on empty slots
+    std::unordered_map<uint16_t, MsgHandler> m_msgType2Method;
     mutable SharedMutex x_msgTypeHandlers;
     // connected handlers, the handers will be called after ws protocol handshake
     // is complete

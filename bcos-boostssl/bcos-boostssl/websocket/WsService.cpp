@@ -26,7 +26,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <exception>
@@ -442,17 +441,13 @@ bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
         return false;
     }
     UpgradableGuard l(x_msgTypeHandlers);
-    if (_msgType < m_msgType2Method.size() && m_msgType2Method[_msgType])
+    if (m_msgType2Method.contains(_msgType))
     {
         return false;
     }
 
     UpgradeGuard ul(l);
-    if (_msgType >= m_msgType2Method.size())
-    {
-        m_msgType2Method.resize(_msgType + 1);
-    }
-    m_msgType2Method[_msgType] = std::move(_msgHandler);
+    m_msgType2Method.emplace(_msgType, std::move(_msgHandler));
     return true;
 }
 
@@ -622,19 +617,16 @@ void WsService::onRecvMessage(WsMessage message, std::shared_ptr<WsSession> sess
                              << LOG_KV("use_count", session.use_count());
 
     auto type = message.packetType();
-    // dispatch under the read lock: flat array lookup, no hash, no std::function copy.
+    // dispatch under the read lock: map lookup, no std::function copy.
     // Note: handlers must NOT call registerMsgHandler()/stop() (i.e. no runtime
     // re-registration) — all in-tree handlers only register at startup before start().
     {
         ReadGuard l(x_msgTypeHandlers);
-        if (type < m_msgType2Method.size())
+        auto it = m_msgType2Method.find(type);
+        if (it != m_msgType2Method.end())
         {
-            const auto& typeHandler = m_msgType2Method[type];
-            if (typeHandler)
-            {
-                typeHandler(std::move(message), std::move(session));
-                return;
-            }
+            it->second(std::move(message), std::move(session));
+            return;
         }
     }
 
