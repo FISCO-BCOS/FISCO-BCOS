@@ -20,6 +20,7 @@
 #include "../common/RPCFixture.h"
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
@@ -55,6 +56,9 @@ public:
         std::optional<std::uint32_t> capturedGetPayloadVersion;
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
         std::optional<std::uint32_t> capturedNewPayloadVersion;
+        std::function<void()> updateForkchoiceThrower;
+        std::function<void()> getPayloadThrower;
+        std::function<void()> newPayloadThrower;
     };
     std::shared_ptr<State> m_state = std::make_shared<State>();
 
@@ -70,6 +74,10 @@ public:
         const engine::ForkchoiceState& forkchoiceState, const engine::PayloadAttributes*,
         std::uint32_t version)
     {
+        if (m_state->updateForkchoiceThrower)
+        {
+            m_state->updateForkchoiceThrower();
+        }
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
         co_return m_state->forkchoiceUpdatedResult;
@@ -78,6 +86,10 @@ public:
     task::Task<engine::GetPayloadResult> getPayload(
         const engine::PayloadID& payloadId, std::uint32_t version)
     {
+        if (m_state->getPayloadThrower)
+        {
+            m_state->getPayloadThrower();
+        }
         m_state->capturedPayloadId = payloadId;
         m_state->capturedGetPayloadVersion = version;
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
@@ -86,6 +98,10 @@ public:
     task::Task<engine::PayloadStatus> newPayload(
         const engine::NewPayloadRequest& request, std::uint32_t version)
     {
+        if (m_state->newPayloadThrower)
+        {
+            m_state->newPayloadThrower();
+        }
         m_state->capturedNewPayloadRequest = request;
         m_state->capturedNewPayloadVersion = version;
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
@@ -225,6 +241,55 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 4);
+}
+
+// MJ-1: engine exceptions surface as the execution-apis codes, not -32603.
+BOOST_AUTO_TEST_CASE(forkchoiceUpdatedUnsupportedForkMapsTo38005)
+{
+    mockService.m_state->updateForkchoiceThrower = [] {
+        BOOST_THROW_EXCEPTION(
+            bcos::engine::UnsupportedFork{} << bcos::errinfo_comment{"fork mismatch"});
+    };
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    Json::Value response;
+    bool threw = false;
+    try
+    {
+        CALL_ENGINE(forkchoiceUpdatedV3, params, response);
+    }
+    catch (JsonRpcException const& e)
+    {
+        threw = true;
+        BOOST_CHECK_EQUAL(e.code(), EngineError::UnsupportedFork);
+    }
+    BOOST_CHECK(threw);
+}
+
+BOOST_AUTO_TEST_CASE(getPayloadUnknownPayloadMapsTo38001)
+{
+    mockService.m_state->getPayloadThrower = [] {
+        BOOST_THROW_EXCEPTION(
+            bcos::engine::UnknownPayload{} << bcos::errinfo_comment{"no such id"});
+    };
+    Json::Value params(Json::arrayValue);
+    params.append("0x0000000000000000");
+    Json::Value response;
+    bool threw = false;
+    try
+    {
+        CALL_ENGINE(getPayloadV3, params, response);
+    }
+    catch (JsonRpcException const& e)
+    {
+        threw = true;
+        BOOST_CHECK_EQUAL(e.code(), EngineError::UnknownPayload);
+    }
+    BOOST_CHECK(threw);
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV1)

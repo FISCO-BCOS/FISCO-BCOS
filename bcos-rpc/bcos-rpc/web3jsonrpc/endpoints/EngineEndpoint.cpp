@@ -21,6 +21,7 @@
 #include "EngineEndpoint.h"
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineErrorMapper.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -28,6 +29,16 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
+namespace
+{
+/// Convert an engine-service exception into the JSON-RPC error the Engine API assigns to the
+/// condition. bcos::Exception-derived engine errors previously escaped to Web3JsonRpcImpl's
+/// catch(...) and came back as -32603; converting at the endpoint keeps Web3JsonRpcImpl generic.
+[[noreturn]] void rethrowAsJsonRpcError(bcos::Exception const& e)
+{
+    throw JsonRpcException(mapEngineErrorCode(e), e.what());
+}
+}  // namespace
 
 EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService))
 {}
@@ -109,13 +120,16 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
 
     auto forkchoiceState = parseForkchoiceState(request);
     auto payloadAttrs = parsePayloadAttributes(request, version);
-    // TODO: engineService->updateForkchoice() MUST throw JsonRpcException in these cases:
-    //   -38002 InvalidForkchoiceState: headBlockHash is VALID but finalizedBlockHash/safeBlockHash
-    //   not in chain -38003 InvalidPayloadAttributes: payloadAttributes.timestamp <=
-    //   headBlockHash.timestamp -38005 UnsupportedFork: timestamp out of fork window (V2/V3
-    //   specific) -38006 TooDeepReorg: reorg depth exceeds limitation
-    auto engineResult = co_await engineService->updateForkchoice(forkchoiceState,
-        payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
+    bcos::engine::ForkchoiceUpdatedResult engineResult;
+    try
+    {
+        engineResult = co_await engineService->updateForkchoice(forkchoiceState,
+            payloadAttrs.has_value() ? &*payloadAttrs : nullptr, static_cast<uint32_t>(version));
+    }
+    catch (bcos::Exception const& e)
+    {
+        rethrowAsJsonRpcError(e);
+    }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
 }
@@ -151,8 +165,16 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
 
     engine::PayloadID payloadId = request[0u].asString();
-    auto engineResult =
-        co_await engineService->getPayload(payloadId, static_cast<uint32_t>(version));
+    bcos::engine::GetPayloadResult engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->getPayload(payloadId, static_cast<uint32_t>(version));
+    }
+    catch (bcos::Exception const& e)
+    {
+        rethrowAsJsonRpcError(e);
+    }
     if (!engineResult)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
@@ -195,11 +217,16 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     }
 
     auto newPayloadReq = parseNewPayloadRequest(request, version);
-    // TODO: engineService->newPayload() MUST throw JsonRpcException in these cases:
-    //   -32602 InvalidParams: wrong version of ExecutionPayload structure (V2)
-    //   -38005 UnsupportedFork: timestamp out of fork window (V2/V3)
-    auto engineResult =
-        co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    bcos::engine::PayloadStatus engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->newPayload(newPayloadReq, static_cast<uint32_t>(version));
+    }
+    catch (bcos::Exception const& e)
+    {
+        rethrowAsJsonRpcError(e);
+    }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);
 }

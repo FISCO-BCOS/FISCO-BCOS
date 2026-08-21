@@ -25,4 +25,24 @@ namespace bcos::engine
 /// a storage fault is not a consensus verdict on the payload. Lives in bcos-framework (not the
 /// engine library) so opstack-executor can throw it without depending on bcos-engine.
 DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
+
+// ---- Engine-API exceptions ----
+// Live in bcos-framework (not bcos-engine) so bcos-rpc can name them for the JSON-RPC error-code
+// mapping (EngineErrorMapper.h) without depending on the engine library.
+DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
+DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
+DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
+DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+DERIVE_BCOS_EXCEPTION(UnknownPayload);
+DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+
+/// JSON-RPC -38005 "Unsupported fork": the payload timestamp's fork and the called method version
+/// disagree -- Isthmus+ payloads may only arrive on V4, pre-Isthmus timestamps may not use V4.
+DERIVE_BCOS_EXCEPTION(UnsupportedFork);
+
+/// JSON-RPC -38003 "Invalid payload attributes": an OP-mode forkchoiceUpdated carried payload
+/// attributes the engine refuses.
+DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
+
+DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
 }  // namespace bcos::engine

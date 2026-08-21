@@ -68,35 +68,6 @@
 
 namespace bcos::engine
 {
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
-DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
-DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
-DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
-
-// ---- OP-mode exceptions ----
-// These carry the JSON-RPC error codes the Engine API assigns to these conditions. The mapping
-// exception-type -> code is intentionally not implemented yet: `engine_newPayloadV4` /
-// `engine_getPayloadV4` RPC endpoint registration is out of scope for this cycle, so the OP
-// branch is exercised by direct `EngineServiceImpl` calls and the code is
-// documentation-of-intent for whoever wires `bcos-rpc`'s EngineEndpoint later. The existing
-// generic exceptions above are in exactly the same position (no code mapping in-repo).
-
-/// JSON-RPC -38005 "Unsupported fork": the payload timestamp's fork and the called method version
-/// disagree -- Isthmus+ payloads may only arrive on V4, pre-Isthmus timestamps may not use V4.
-DERIVE_BCOS_EXCEPTION(UnsupportedFork);
-
-/// JSON-RPC -38003 "Invalid payload attributes": an OP-mode forkchoiceUpdated carried payload
-/// attributes. Attribute-driven block building is not supported this cycle; the forkchoice state
-/// update itself still takes effect (head advances), only the build is refused.
-DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
-
-/// `getPayload` in OP mode: block *building* is not OP-ized this cycle, so there is no OP payload
-/// to return and the failure is reported explicitly rather than as `UnknownPayload` (which would
-/// falsely suggest an expired/unknown id).
-DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
-
 namespace detail
 {
 bcos::h256 syntheticHash(std::string_view seed);
