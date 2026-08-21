@@ -145,6 +145,18 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     return nullptr;
 }
 
+bcos::Error::UniquePtr EthBlockHeader::toEthBlockHeader(
+    EthBlockHeader& ethHeader, bcos::bytesConstRef _data)
+{
+    auto err = ethHeader.rlpDecode(_data);
+    if (err)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
+            "EthBlockHeader: rlpDecode failed: " + err->errorMessage());
+    }
+    return nullptr;
+}
+
 bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
     bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
 {
@@ -223,18 +235,6 @@ bcos::Error::UniquePtr EthBlockHeader::decodeTarsHeader(
     // serves FISCO-native/OP headers, whose hashing stays on the Tars side, not the RLP
     // bridge. No RLP hash is injected for the same reason.
     header->setEthBlockVersion(EthBlockVersion::NON_ETH);
-    return nullptr;
-}
-
-bcos::Error::UniquePtr EthBlockHeader::toEthBlockHeader(
-    EthBlockHeader& ethHeader, bcos::bytesConstRef _data)
-{
-    auto err = ethHeader.rlpDecode(_data);
-    if (err)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
-            "EthBlockHeader: rlpDecode failed: " + err->errorMessage());
-    }
     return nullptr;
 }
 
@@ -474,6 +474,19 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // the RLP surface carries seconds directly — no conversion here. The ms->s conversion
     // happens only at the EthBlockHeader<->BlockHeader boundary (constructor /1000,
     // toTarsHeader/decodeTarsHeader ×1000).
+    //
+    // Defense-in-depth: a negative number/timestamp would wrap into a huge u64 on the
+    // static_cast below, silently corrupting the RLP. calculateRLPHash guards via
+    // validateHeader, but rlpEncode is public — reject here so a direct caller cannot
+    // produce a wrong encoding.
+    if (m_data.number < 0)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument("number must be non-negative"));
+    }
+    if (m_data.timestamp < 0)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument("timestamp must be non-negative"));
+    }
     codec::rlp::encode(out, m_data.parentInfo.blockHash, m_data.uncleHash, m_data.coinbase,
         m_data.stateRoot, m_data.txsRoot, m_data.receiptsRoot,
         bcos::bytesConstRef(m_data.logsBloom.data(), m_data.logsBloom.size()), m_data.difficulty,

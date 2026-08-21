@@ -250,6 +250,8 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
     // gasLimit/gasUsed come from the header.
     BOOST_CHECK_EQUAL(result["gasLimit"].asString(), "0x1c9c380");  // 30000000
     BOOST_CHECK_EQUAL(result["gasUsed"].asString(), "0x5208");      // 21000
+    // Eth blocks take logsBloom from the header (bloom[0] = 0xab), not from the block body.
+    BOOST_CHECK(result["logsBloom"].asString().starts_with("0xab"));
     // CANCUN fork-gated fields: present.
     BOOST_CHECK_EQUAL(result["baseFeePerGas"].asString(), "0x3b9aca00");  // 1000000000
     BOOST_CHECK_EQUAL(result["withdrawalsRoot"].asString(),
@@ -260,6 +262,14 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
         "0x3333333333333333333333333333333333333333333333333333333333333333");
     // PRAGUE-only field: not defined for a CANCUN header.
     BOOST_CHECK(!result.isMember("requestsHash"));
+
+    // Independent EIP-55 oracle: the checksum above recomputes via the same
+    // toChecksumAddress as the implementation, so pin one official EIP-55 spec vector
+    // (the spec's first example) to catch a wrong checksum algorithm.
+    std::string specAddr = "5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+    auto specHash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(specAddr)).hex();
+    toChecksumAddress(specAddr, specHash);
+    BOOST_CHECK_EQUAL(specAddr, "5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
 }
 
 BOOST_AUTO_TEST_CASE(combineTxResponseShapesTransaction)

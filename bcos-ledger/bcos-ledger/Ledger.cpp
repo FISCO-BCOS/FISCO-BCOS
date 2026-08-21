@@ -2188,6 +2188,10 @@ bool Ledger::buildGenesisBlock(
         // (asyncCreateTable rejects an existing table on the next attempt).
         auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
         header->setNumber(0);
+        // Genesis deliberately leaves parentInfo unset: parentInfo() reads back the default
+        // zero hash (BlockHeaderImpl returns {} for an empty list), which is exactly the
+        // value a genesis block must carry. Keeping it data-driven rather than forcing a
+        // zero here means the RLP genesis hash is invariant regardless of representation.
         if (versionNumber >= protocol::BlockVersion::V3_1_VERSION)
         {
             header->setVersion(versionNumber);

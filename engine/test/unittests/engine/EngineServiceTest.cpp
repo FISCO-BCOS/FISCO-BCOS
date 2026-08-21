@@ -5,6 +5,7 @@
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
 
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -30,7 +31,10 @@ using namespace bcos::engine;
 
 namespace
 {
-constexpr std::uint64_t c_timestamp = 123456;
+// Whole-second milliseconds (1700000000s): every Eth header produced by finalizeEthBlockHeader
+// must satisfy validateHeader's "timestamp is a whole number of seconds" check, so a fixture
+// timestamp with sub-second milliseconds would make every build path throw.
+constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
@@ -1250,7 +1254,8 @@ static bcos::protocol::BlockHeader::Ptr makeValidCancunHeader(
     header->setParentInfo(bcos::protocol::ParentInfo{
         .blockNumber = 9, .blockHash = parentHash});
     header->setNumber(10);
-    header->setTimestamp(1700000000);
+    // Internal BlockHeader timestamps are milliseconds: the whole-second value × 1000.
+    header->setTimestamp(1700000000 * 1000LL);
     header->setCoinbase(bcos::Address("1234567890abcdef1234567890abcdef12345678"));
     header->setPrevRandao(
         bcos::h256("1111111111111111111111111111111111111111111111111111111111111111"));
@@ -1413,6 +1418,47 @@ BOOST_AUTO_TEST_CASE(buildPayloadEmptyBlockInjectsRlpHash)
     auto const& blockHash = payload->executionPayload.blockHash;
     BOOST_CHECK_NE(blockHash, bcos::engine::detail::syntheticHash(*result.payloadId));
     BOOST_CHECK_NE(blockHash, bcos::crypto::HashType{});
+
+    // Strong anchor: recompute keccak256(rlp(header)) from the payload fields via the
+    // EthBlockHeader bridge and compare against the block hash. The old anchor (≠ synthetic
+    // hash, ≠ zero) stayed green even when finalizeEthBlockHeader hashed a wrong timestamp,
+    // so it could not catch the merge-broken unit conversion.
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
+    auto const& executionPayload = payload->executionPayload;
+    header->setParentInfo(bcos::protocol::ParentInfo{
+        .blockNumber = static_cast<int64_t>(executionPayload.blockNumber) - 1,
+        .blockHash = executionPayload.parentHash});
+    header->setNumber(static_cast<int64_t>(executionPayload.blockNumber));
+    // Internal BlockHeader milliseconds; the bridge converts to seconds at encode.
+    header->setTimestamp(static_cast<int64_t>(executionPayload.timestamp));
+    header->setCoinbase(executionPayload.feeRecipient);
+    header->setUncleHash(bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+    header->setPrevRandao(executionPayload.prevRandao);
+    header->setNonce(bcos::h64(0));
+    header->setDifficulty(bcos::u256(0));
+    header->setGasLimit(executionPayload.gasLimit);
+    header->setGasUsed(executionPayload.gasUsed);
+    header->setStateRoot(executionPayload.stateRoot);
+    header->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
+    header->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
+    header->setLogsBloom(bcos::bytesConstRef(
+        executionPayload.logsBloom.data(), executionPayload.logsBloom.size()));
+    header->setBaseFee(executionPayload.baseFeePerGas);
+    header->setWithdrawalsRoot(bcos::ledger::mpt::emptyRootHash());
+    header->setBlobGasUsed(executionPayload.blobGasUsed.value_or(bcos::u256(0)));
+    header->setExcessBlobGas(executionPayload.excessBlobGas.value_or(bcos::u256(0)));
+    header->setParentBeaconBlockRoot(
+        payloadAttributes.parentBeaconBlockRoot.value_or(bcos::h256{}));
+    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::CANCUN);
+
+    bcos::protocol::EthBlockHeader ethHeader(*header);
+    bcos::bytes rlp;
+    ethHeader.rlpEncode(rlp);
+    BOOST_CHECK_EQUAL(
+        blockHash.hex(), bcos::crypto::keccak256Hash(bcos::ref(rlp)).hex());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

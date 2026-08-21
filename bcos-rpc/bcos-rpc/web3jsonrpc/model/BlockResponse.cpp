@@ -21,7 +21,8 @@ void bcos::rpc::combineBlockResponse(
 
     if (isEth)
     {
-        // Ethereum header: every field is taken verbatim from the header.
+        // Ethereum header: header-carried fields are taken from the header. The block-body
+        // fields (withdrawals list, totalDifficulty) remain placeholders below.
         result["nonce"] = blockHeader->nonce().hexPrefixed();
         result["sha3Uncles"] = blockHeader->uncleHash().hexPrefixed();
         // EIP-55 checksummed address, matching geth's eth_getBlock* output.
