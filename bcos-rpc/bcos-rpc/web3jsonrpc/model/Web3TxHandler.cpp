@@ -1179,7 +1179,12 @@ Web3TxHandler& handlerFor(TransactionType type)
     // to Legacy (which would silently decode/encode as wrong transaction format producing
     // garbage fields). encode/encodeForSign return empty bytes (fail-safe), and decode
     // returns UnsupportedTransactionType error.
-    BCOS_LOG(FATAL) << "handlerFor: unhandled TransactionType " << static_cast<int>(type)
+    // ERROR, not FATAL: the fatal level makes the log sink call std::abort()
+    // (BoostLogInitializer), so a FATAL here would kill the process instead of degrading
+    // gracefully — contradicting the fail-safe sentinel this branch returns. In production
+    // this branch is unreachable (every type value passes magic_enum::enum_cast at the
+    // decode entry, which rejects unknown bytes), so ERROR is the honest severity.
+    BCOS_LOG(ERROR) << "handlerFor: unhandled TransactionType " << static_cast<int>(type)
                     << " — update the switch to handle the new type";
     static struct : Web3TxHandler
     {
