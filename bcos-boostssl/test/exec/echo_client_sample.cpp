@@ -56,8 +56,7 @@ void sendMessage(WsMessage& _msg, std::shared_ptr<WsService> _wsService,
         auto startT = utcTime();
         auto msgSize = _msg.payload().size();
         _wsService->asyncSendMessage(_msg, Options(-1),
-            [msgSize, startT](Error ::Ptr _error, WsMessage,
-                std::shared_ptr<WsSession> _session) {
+            [msgSize, startT](Error ::Ptr _error, WsMessage, std::shared_ptr<WsSession> _session) {
                 (void)_session;
                 if (_error && _error->errorCode() != 0)
                 {

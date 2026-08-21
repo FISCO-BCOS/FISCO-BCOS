@@ -29,8 +29,8 @@
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/dispatch.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
@@ -48,8 +48,6 @@ using WsSessions = std::vector<std::shared_ptr<WsSession>>;
 using MsgHandler = std::function<void(WsMessage, std::shared_ptr<WsSession>)>;
 using ConnectHandler = std::function<void(std::shared_ptr<WsSession>)>;
 using DisconnectHandler = std::function<void(std::shared_ptr<WsSession>)>;
-using HandshakeHandler = std::function<void(
-    bcos::Error::Ptr, WsMessage, std::shared_ptr<WsSession>)>;
 
 class WsService : public std::enable_shared_from_this<WsService>
 {
@@ -122,15 +120,9 @@ public:
 
     bool registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler);
 
-    MsgHandler getMsgHandler(uint16_t _type);
-
-    bool eraseMsgHandler(uint16_t _msgType);
-
     void registerConnectHandler(ConnectHandler _connectHandler);
 
     void registerDisconnectHandler(DisconnectHandler _disconnectHandler);
-
-    void registerHandshakeHandler(HandshakeHandler _handshakeHandler);
 
     void setReconnectedPeers(EndPointsPtr _reconnectedPeers);
     EndPointsPtr reconnectedPeers() const;
@@ -177,9 +169,6 @@ private:
     // disconnected handlers, the handers will be called when ws session
     // disconnected
     std::vector<DisconnectHandler> m_disconnectHandlers;
-    // handshake handlers, the handers will be called when ws session
-    // disconnected
-    std::vector<HandshakeHandler> m_handshakeHandlers;
 
     IOServicePool::Ptr m_ioservicePool;
 

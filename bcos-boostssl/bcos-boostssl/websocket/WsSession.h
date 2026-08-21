@@ -131,10 +131,7 @@ public:
 
     void onWsAccept(boost::beast::error_code _ec);
 
-    struct Message
-    {
-        bcos::bytes buffer;
-    };
+    struct Message;
 
     void asyncRead();
     void asyncWrite(std::shared_ptr<Message> _message);
@@ -144,6 +141,11 @@ public:
     // async read
     void onReadPacket();
     void onWritePacket();
+
+    struct Message
+    {
+        bcos::bytes buffer;
+    };
 
 protected:
     IOServicePool::Ptr m_ioServicePool;

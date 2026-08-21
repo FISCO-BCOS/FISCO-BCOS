@@ -167,8 +167,8 @@ void workAsClient(std::string serverIp, uint16_t serverPort, bool disableSsl, ui
         nLastSendCount++;
         msg.setSeq(newSeq());
         wsService->asyncSendMessage(msg, Options(-1),
-            [&nFailedC, &nSucC, &nLastFailedC, &nLastSucC](Error::Ptr _error,
-                WsMessage _msg, std::shared_ptr<WsSession> _session) {
+            [&nFailedC, &nSucC, &nLastFailedC, &nLastSucC](
+                Error::Ptr _error, WsMessage _msg, std::shared_ptr<WsSession> _session) {
                 (void)_error;
                 (void)_session;
                 (void)_msg;
@@ -222,9 +222,9 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl, ui
     std::atomic<uint64_t> totalRecvDataSize = {0};
     std::atomic<uint64_t> lastRecvDataCount = {0};
     std::atomic<uint64_t> lastSecTotalRecvDataSize = {0};
-    wsService->registerMsgHandler(DELAY_PERF_MSGTYPE,
-        [&totalRecvDataSize, &lastSecTotalRecvDataSize, &lastRecvDataCount](
-            WsMessage _msg, std::shared_ptr<WsSession> _session) {
+    wsService->registerMsgHandler(
+        DELAY_PERF_MSGTYPE, [&totalRecvDataSize, &lastSecTotalRecvDataSize, &lastRecvDataCount](
+                                WsMessage _msg, std::shared_ptr<WsSession> _session) {
             totalRecvDataSize += _msg.payload().size();
             lastSecTotalRecvDataSize += _msg.payload().size();
             lastRecvDataCount++;

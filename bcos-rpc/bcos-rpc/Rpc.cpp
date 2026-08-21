@@ -62,8 +62,8 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
 
     // handshake msgHandler
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
-        [this](bcos::boostssl::ws::WsMessage _msg,
-            std::shared_ptr<boostssl::ws::WsSession> _session) {
+        [this](
+            bcos::boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session) {
             onRecvHandshakeRequest(std::move(_msg), std::move(_session));
         });
 }

@@ -46,13 +46,11 @@ class WsMessage;
 // Note: messages are passed by value through the receive pipeline (move-only type,
 // no heap allocation per message); handlers that need to retain a message beyond
 // the synchronous call should move it into their own storage explicitly.
-using RespCallBack = std::function<void(
-    bcos::Error::Ptr, WsMessage, std::shared_ptr<WsSession>)>;
+using RespCallBack = std::function<void(bcos::Error::Ptr, WsMessage, std::shared_ptr<WsSession>)>;
 
 using WsConnectHandler = std::function<void(bcos::Error::Ptr, std::shared_ptr<WsSession>)>;
 using WsDisconnectHandler = std::function<void(bcos::Error::Ptr, std::shared_ptr<WsSession>)>;
-using WsRecvMessageHandler =
-    std::function<void(WsMessage, std::shared_ptr<WsSession>)>;
+using WsRecvMessageHandler = std::function<void(WsMessage, std::shared_ptr<WsSession>)>;
 using VerifyCallback = boost::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
 struct Options

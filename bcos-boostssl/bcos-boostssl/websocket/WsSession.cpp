@@ -474,8 +474,7 @@ void WsSession::send(std::shared_ptr<Message> message)
  * @param _respCallback: callback
  * @return void:
  */
-void WsSession::asyncSendMessage(
-    const WsMessage& _msg, Options _options, RespCallBack _respFunc)
+void WsSession::asyncSendMessage(const WsMessage& _msg, Options _options, RespCallBack _respFunc)
 {
     auto seq = _msg.seq();
 

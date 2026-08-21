@@ -52,7 +52,6 @@ class WsStream
 {
 public:
     using Ptr = std::shared_ptr<WsStream>;
-    using ConstPtr = std::shared_ptr<const WsStream>;
 
     explicit WsStream(boost::beast::websocket::stream<STREAM> _stream)
       : m_stream(std::move(_stream))
@@ -101,17 +100,8 @@ public:
         }
     }
 
-    //---------------  set opt params for websocket stream
-    // begin-----------------------------
     void setMaxReadMsgSize(uint32_t _maxValue) { m_stream.read_message_max(_maxValue); }
 
-    template <typename OPT>
-    void setOpt(OPT _opt)
-    {
-        m_stream.set_option(_opt);
-    }
-    //---------------  set opt params for websocket stream  end
-    //-------------------------------
     bool open() { return !m_closed.load() && m_stream.is_open(); }
 
     void close()
@@ -227,7 +217,6 @@ class WsStreamDelegate
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegate>;
-    using ConstPtr = std::shared_ptr<const WsStreamDelegate>;
 
 public:
     explicit WsStreamDelegate(RawWsStream::Ptr _rawStream);
@@ -264,14 +253,8 @@ class WsStreamDelegateBuilder
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegateBuilder>;
-    using ConstPtr = std::shared_ptr<const WsStreamDelegateBuilder>;
 
 public:
-    WsStreamDelegate::Ptr build(std::shared_ptr<boost::beast::tcp_stream> _tcpStream);
-
-    WsStreamDelegate::Ptr build(
-        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _sslStream);
-
     WsStreamDelegate::Ptr build(boost::beast::tcp_stream _tcpStream);
 
     WsStreamDelegate::Ptr build(boost::beast::ssl_stream<boost::beast::tcp_stream> _sslStream);

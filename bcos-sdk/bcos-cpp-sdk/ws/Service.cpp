@@ -86,22 +86,16 @@ void Service::wireEventHandlers()
     // the WsService adds the session before calling the connect handlers, which
     // keeps the same order as the previous WsService::onConnect base call
     m_wsService->registerConnectHandler([self](std::shared_ptr<WsSession> _session) {
-        auto service = self.lock();
-        if (service)
+        if (auto service = self.lock())
         {
             service->startHandshake(std::move(_session));
         }
     });
     m_wsService->registerDisconnectHandler([self](std::shared_ptr<WsSession> _session) {
         auto service = self.lock();
-        if (!service)
+        if (service && _session && !_session->endPoint().empty())
         {
-            return;
-        }
-        std::string endPoint = _session ? _session->endPoint() : std::string();
-        if (!endPoint.empty())
-        {
-            service->clearGroupInfoByEp(endPoint);
+            service->clearGroupInfoByEp(_session->endPoint());
         }
     });
 }
@@ -109,18 +103,15 @@ void Service::wireEventHandlers()
 bool Service::registerMsgHandler(uint16_t _type, bcos::boostssl::ws::MsgHandler _msgHandler)
 {
     auto self = std::weak_ptr<Service>(shared_from_this());
-    return m_wsService->registerMsgHandler(_type,
-        [self, handler = std::move(_msgHandler)](
-            WsMessage _msg, std::shared_ptr<WsSession> _session) mutable {
+    return m_wsService->registerMsgHandler(
+        _type, [self, handler = std::move(_msgHandler)](
+                   WsMessage _msg, std::shared_ptr<WsSession> _session) mutable {
             auto service = self.lock();
             if (service && !service->checkHandshakeDone(_session))
             {
                 // Note: The message is received before the handshake with the node is complete
                 RPC_WS_LOG(WARNING)
-                    << LOG_BADGE("onRecvMessage")
-                    << LOG_DESC(
-                           "websocket service unable to handler message before handshake"
-                           "with the node successfully")
+                    << LOG_BADGE("onRecvMessage") << LOG_DESC("recv message before handshake done")
                     << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
                     << LOG_KV("type", _msg.packetType()) << LOG_KV("seq", _msg.seq());
                 return;

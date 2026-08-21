@@ -96,21 +96,14 @@ int main(int argc, char** argv)
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
 
-    if (!wsService->registerMsgHandler(999,
-            [](WsMessage _msg, std::shared_ptr<WsSession> _session) {
+    if (!wsService->registerMsgHandler(
+            999, [](WsMessage _msg, std::shared_ptr<WsSession> _session) {
                 _msg.setRespPacket();
 
                 _session->asyncSendMessage(_msg);
             }))
     {
         BCOS_LOG(WARNING) << "registerMsgHandler failed";
-        return EXIT_SUCCESS;
-    }
-
-    auto handler = wsService->getMsgHandler(999);
-    if (!handler)
-    {
-        BCOS_LOG(WARNING) << "msg handler not found";
         return EXIT_SUCCESS;
     }
 

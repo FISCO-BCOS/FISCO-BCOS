@@ -41,11 +41,6 @@ public:
     explicit HttpStream(boost::beast::tcp_stream _stream);
     explicit HttpStream(boost::beast::ssl_stream<boost::beast::tcp_stream> _stream);
 
-    HttpStream(const HttpStream&) = delete;
-    HttpStream& operator=(const HttpStream&) = delete;
-    HttpStream(HttpStream&&) = delete;
-    HttpStream& operator=(HttpStream&&) = delete;
-
     ~HttpStream();
 
     boost::beast::tcp_stream& stream();

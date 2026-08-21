@@ -18,16 +18,13 @@
 
 using namespace bcos::boostssl::ws;
 
-WsStreamDelegate::WsStreamDelegate(RawWsStream::Ptr _rawStream) : m_stream(std::move(_rawStream))
-{}
+WsStreamDelegate::WsStreamDelegate(RawWsStream::Ptr _rawStream) : m_stream(std::move(_rawStream)) {}
 
-WsStreamDelegate::WsStreamDelegate(SslWsStream::Ptr _sslStream) : m_stream(std::move(_sslStream))
-{}
+WsStreamDelegate::WsStreamDelegate(SslWsStream::Ptr _sslStream) : m_stream(std::move(_sslStream)) {}
 
 void WsStreamDelegate::setMaxReadMsgSize(uint32_t _maxValue)
 {
-    std::visit([_maxValue](const auto& _stream) { _stream->setMaxReadMsgSize(_maxValue); },
-        m_stream);
+    std::visit([_maxValue](const auto& _s) { _s->setMaxReadMsgSize(_maxValue); }, m_stream);
 }
 
 bool WsStreamDelegate::open()
@@ -52,33 +49,26 @@ std::string WsStreamDelegate::remoteEndpoint()
 
 void WsStreamDelegate::asyncWrite(const bcos::bytes& _buffer, WsStreamRWHandler _handler)
 {
-    std::visit(
-        [&](const auto& _stream) { _stream->asyncWrite(_buffer, std::move(_handler)); }, m_stream);
+    std::visit([&](const auto& _s) { _s->asyncWrite(_buffer, std::move(_handler)); }, m_stream);
 }
 
 void WsStreamDelegate::asyncRead(boost::beast::flat_buffer& _buffer, WsStreamRWHandler _handler)
 {
-    std::visit(
-        [&](const auto& _stream) { _stream->asyncRead(_buffer, std::move(_handler)); }, m_stream);
+    std::visit([&](const auto& _s) { _s->asyncRead(_buffer, std::move(_handler)); }, m_stream);
 }
 
 void WsStreamDelegate::asyncWsHandshake(const std::string& _host, const std::string& _target,
     std::function<void(boost::beast::error_code)> _handler)
 {
     std::visit(
-        [&](const auto& _stream) {
-            _stream->asyncHandshake(_host, _target, std::move(_handler));
-        },
-        m_stream);
+        [&](const auto& _s) { _s->asyncHandshake(_host, _target, std::move(_handler)); }, m_stream);
 }
 
 void WsStreamDelegate::asyncAccept(
     bcos::boostssl::http::HttpRequest _httpRequest, WsStreamHandshakeHandler _handler)
 {
     std::visit(
-        [&](const auto& _stream) {
-            _stream->asyncAccept(std::move(_httpRequest), std::move(_handler));
-        },
+        [&](const auto& _s) { _s->asyncAccept(std::move(_httpRequest), std::move(_handler)); },
         m_stream);
 }
 
@@ -86,8 +76,8 @@ void WsStreamDelegate::asyncHandshake(std::function<void(boost::beast::error_cod
 {
     if (auto* sslStream = std::get_if<SslWsStream::Ptr>(&m_stream))
     {
-        (*sslStream)->stream().next_layer().async_handshake(
-            boost::asio::ssl::stream_base::client, std::move(_handler));
+        auto& nextLayer = (*sslStream)->stream().next_layer();
+        nextLayer.async_handshake(boost::asio::ssl::stream_base::client, std::move(_handler));
         return;
     }
     _handler(make_error_code(boost::system::errc::success));
@@ -96,32 +86,18 @@ void WsStreamDelegate::asyncHandshake(std::function<void(boost::beast::error_cod
 boost::beast::tcp_stream& WsStreamDelegate::tcpStream()
 {
     return std::visit(
-        [](const auto& _stream) -> boost::beast::tcp_stream& { return _stream->tcpStream(); },
-        m_stream);
+        [](const auto& _s) -> boost::beast::tcp_stream& { return _s->tcpStream(); }, m_stream);
 }
 
 void WsStreamDelegate::setVerifyCallback(bool _disableSsl, VerifyCallback callback, bool)
 {
-    if (_disableSsl)
+    if (!_disableSsl)
     {
-        return;
+        if (auto* sslStream = std::get_if<SslWsStream::Ptr>(&m_stream))
+        {
+            (*sslStream)->stream().next_layer().set_verify_callback(std::move(callback));
+        }
     }
-    if (auto* sslStream = std::get_if<SslWsStream::Ptr>(&m_stream))
-    {
-        (*sslStream)->stream().next_layer().set_verify_callback(std::move(callback));
-    }
-}
-
-WsStreamDelegate::Ptr WsStreamDelegateBuilder::build(
-    std::shared_ptr<boost::beast::tcp_stream> _tcpStream)
-{
-    return build(std::move(*_tcpStream));
-}
-
-WsStreamDelegate::Ptr WsStreamDelegateBuilder::build(
-    std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _sslStream)
-{
-    return build(std::move(*_sslStream));
 }
 
 WsStreamDelegate::Ptr WsStreamDelegateBuilder::build(boost::beast::tcp_stream _tcpStream)
@@ -148,10 +124,10 @@ WsStreamDelegate::Ptr WsStreamDelegateBuilder::build(bool _disableSsl,
 {
     if (_disableSsl)
     {
-        return build(std::move(_tcpStream));
+        return build(std::move(*_tcpStream));
     }
 
     auto sslStream = std::make_shared<boost::beast::ssl_stream<boost::beast::tcp_stream>>(
         std::move(*_tcpStream), *_ctx);
-    return build(std::move(sslStream));
+    return build(std::move(*sslStream));
 }

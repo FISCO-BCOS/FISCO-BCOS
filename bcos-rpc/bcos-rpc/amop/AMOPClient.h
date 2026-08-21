@@ -111,18 +111,18 @@ public:
 
 protected:
     /// for AMOP requests from SDK
-    virtual void onRecvSubTopics(boostssl::ws::WsMessage _msg,
-        std::shared_ptr<boostssl::ws::WsSession> _session);
+    virtual void onRecvSubTopics(
+        boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
     /**
      * @brief: receive amop request message from sdk
      */
-    virtual void onRecvAMOPRequest(boostssl::ws::WsMessage _msg,
-        std::shared_ptr<boostssl::ws::WsSession> _session);
+    virtual void onRecvAMOPRequest(
+        boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
     /**
      * @brief: receive amop broadcast message from sdk
      */
-    virtual void onRecvAMOPBroadcast(boostssl::ws::WsMessage _msg,
-        std::shared_ptr<boostssl::ws::WsSession> _session);
+    virtual void onRecvAMOPBroadcast(
+        boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
 
     std::shared_ptr<boostssl::ws::WsSession> randomChooseSession(std::string const& _topic);
 
@@ -166,8 +166,8 @@ protected:
 
     virtual void pingGatewayAndNotifyTopics();
 
-    virtual bool onGatewayInactivated(const boostssl::ws::WsMessage& _msg,
-        std::shared_ptr<boostssl::ws::WsSession> _session);
+    virtual bool onGatewayInactivated(
+        const boostssl::ws::WsMessage& _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
     std::string generateTopicInfo();
 
 protected:

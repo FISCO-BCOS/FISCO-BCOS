@@ -43,8 +43,8 @@ public:
 
     MockWeb3JsonRpcImpl()
       : Web3JsonRpcImpl("test-group", 1000,
-            std::make_shared<GroupManager>("test-group", "1", nullptr, nullptr), nullptr,
-            false, false)
+            std::make_shared<GroupManager>("test-group", "1", nullptr, nullptr), nullptr, false,
+            false)
     {}
 
     ~MockWeb3JsonRpcImpl() = default;
@@ -145,7 +145,8 @@ BOOST_AUTO_TEST_CASE(testOnHttpSubscribeRequest)
     BOOST_CHECK(strRequest1 == request.toStyledString());
 
     bcos::bytes respBytes1;
-    auto sender = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+    auto sender = [&respBytes1](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), nullptr, sender);
 
@@ -200,7 +201,8 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
     BOOST_CHECK(strRequest1 == request.toStyledString());
 
     bcos::bytes respBytes1;
-    auto sender = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+    auto sender = [&respBytes1](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), mockSession, sender);
 
@@ -228,7 +230,8 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
     request2["params"].append("newPendingTransactions");
 
     bcos::bytes respBytes2;
-    auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+    auto sender2 = [&respBytes2](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), mockSession, sender2);
 
@@ -259,7 +262,8 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeNewHeads)
     request["params"].append("newHeads");
 
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+    auto sender = [&respBytes](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
@@ -316,7 +320,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request1["params"].append("newHeads");
 
         bcos::bytes respBytes1;
-        auto sender1 = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+        auto sender1 = [&respBytes1](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request1.toStyledString(), session1, sender1);
 
         Json::Value responseJson1;
@@ -337,7 +342,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request2["params"].append("newHeads");
 
         bcos::bytes respBytes2;
-        auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+        auto sender2 = [&respBytes2](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), session2, sender2);
 
         Json::Value responseJson2;
@@ -357,7 +363,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request3["params"].append("newHeads");
 
         bcos::bytes respBytes3;
-        auto sender3 = [&respBytes3](bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
+        auto sender3 = [&respBytes3](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request3.toStyledString(), session1, sender3);
         Json::Value responseJson3;
         BOOST_CHECK(reader.parse(std::string(respBytes3.begin(), respBytes3.end()), responseJson3));
@@ -376,7 +383,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         request4["params"].append("newHeads");
 
         bcos::bytes respBytes4;
-        auto sender4 = [&respBytes4](bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
+        auto sender4 = [&respBytes4](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request4.toStyledString(), session2, sender4);
         Json::Value responseJson4;
         BOOST_CHECK(reader.parse(std::string(respBytes4.begin(), respBytes4.end()), responseJson4));
@@ -410,7 +418,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId1);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session1, sender);
 
@@ -442,7 +451,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId2);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session2, sender);
 
@@ -474,7 +484,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId3);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session1, sender);
 
@@ -506,7 +517,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId4);
 
         bcos::bytes respBytes;
-        auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+        auto sender = [&respBytes](
+                          bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session2, sender);
 
@@ -538,7 +550,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         unsubscribeRequest["params"].append(subscriptionId1);
 
         bcos::bytes respBytes2;
-        auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+        auto sender2 = [&respBytes2](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
 
         mockWeb3JsonRpcImpl->onRPCRequest(unsubscribeRequest.toStyledString(), session1, sender2);
 
@@ -590,7 +603,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request1["params"].append("newHeads");
 
         bcos::bytes respBytes1;
-        auto sender1 = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+        auto sender1 = [&respBytes1](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request1.toStyledString(), session1, sender1);
 
         Json::Value responseJson1;
@@ -611,7 +625,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request2["params"].append("newHeads");
 
         bcos::bytes respBytes2;
-        auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+        auto sender2 = [&respBytes2](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), session2, sender2);
 
         Json::Value responseJson2;
@@ -631,7 +646,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request3["params"].append("newHeads");
 
         bcos::bytes respBytes3;
-        auto sender3 = [&respBytes3](bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
+        auto sender3 = [&respBytes3](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request3.toStyledString(), session1, sender3);
         Json::Value responseJson3;
         BOOST_CHECK(reader.parse(std::string(respBytes3.begin(), respBytes3.end()), responseJson3));
@@ -650,7 +666,8 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
         request4["params"].append("newHeads");
 
         bcos::bytes respBytes4;
-        auto sender4 = [&respBytes4](bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
+        auto sender4 = [&respBytes4](
+                           bcos::bytes bytes, boost::beast::http::status) { respBytes4 = bytes; };
         mockWeb3JsonRpcImpl->onRPCRequest(request4.toStyledString(), session2, sender4);
         Json::Value responseJson4;
         BOOST_CHECK(reader.parse(std::string(respBytes4.begin(), respBytes4.end()), responseJson4));
@@ -705,8 +722,8 @@ BOOST_AUTO_TEST_CASE(testOnNewBlock)
     request["params"].append("newHeads");
 
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
-    mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
+    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes;
+    }; mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
     Json::Value responseJson;
     Json::Reader reader;
@@ -794,13 +811,16 @@ BOOST_AUTO_TEST_CASE(testConcurrentAccess)
 
     // Test concurrent subscriptions
     bcos::bytes respBytes1;
-    auto sender1 = [&respBytes1](bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
+    auto sender1 = [&respBytes1](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes1 = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request1.toStyledString(), session1, sender1);
     bcos::bytes respBytes2;
-    auto sender2 = [&respBytes2](bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
+    auto sender2 = [&respBytes2](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes2 = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request2.toStyledString(), session2, sender2);
     bcos::bytes respBytes3;
-    auto sender3 = [&respBytes3](bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
+    auto sender3 = [&respBytes3](
+                       bcos::bytes bytes, boost::beast::http::status) { respBytes3 = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request3.toStyledString(), session3, sender3);
 
     Json::Value responseJson1, responseJson2, responseJson3;
@@ -870,7 +890,8 @@ BOOST_AUTO_TEST_CASE(testMultiSubInOneRequest)
 
     // Test concurrent subscriptions
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+    auto sender = [&respBytes](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
     Json::Value responseJson;
@@ -935,7 +956,8 @@ BOOST_AUTO_TEST_CASE(testMultiRequestInOneRequest)
 
     // Test concurrent subscriptions
     bcos::bytes respBytes;
-    auto sender = [&respBytes](bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
+    auto sender = [&respBytes](
+                      bcos::bytes bytes, boost::beast::http::status) { respBytes = bytes; };
     mockWeb3JsonRpcImpl->onRPCRequest(request.toStyledString(), session, sender);
 
     Json::Value responseJson;

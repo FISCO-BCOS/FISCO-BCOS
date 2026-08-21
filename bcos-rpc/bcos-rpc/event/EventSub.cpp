@@ -77,8 +77,8 @@ void EventSub::stop()
     EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
 }
 
-void EventSub::onRecvSubscribeEvent(bcos::boostssl::ws::WsMessage _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void EventSub::onRecvSubscribeEvent(
+    bcos::boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg.seq();
     std::string request = std::string(_msg.payload().begin(), _msg.payload().end());
@@ -89,14 +89,16 @@ void EventSub::onRecvSubscribeEvent(bcos::boostssl::ws::WsMessage _msg,
     auto eventSubRequest = std::make_shared<EventSubRequest>();
     if (!eventSubRequest->fromJson(request))
     {
-        sendResponse(_session, std::move(_msg), eventSubRequest->id(), EP_STATUS_CODE::INVALID_PARAMS);
+        sendResponse(
+            _session, std::move(_msg), eventSubRequest->id(), EP_STATUS_CODE::INVALID_PARAMS);
         return;
     }
 
     auto nodeService = m_groupManager->getNodeService(eventSubRequest->group(), "");
     if (!nodeService)
     {
-        sendResponse(_session, std::move(_msg), eventSubRequest->id(), EP_STATUS_CODE::GROUP_NOT_EXIST);
+        sendResponse(
+            _session, std::move(_msg), eventSubRequest->id(), EP_STATUS_CODE::GROUP_NOT_EXIST);
         EVENT_SUB(ERROR) << LOG_BADGE("onRecvSubscribeEvent") << LOG_DESC("group not exist")
                          << LOG_KV("group", eventSubRequest->group());
         return;
@@ -127,8 +129,8 @@ void EventSub::onRecvSubscribeEvent(bcos::boostssl::ws::WsMessage _msg,
     return;
 }
 
-void EventSub::onRecvUnsubscribeEvent(bcos::boostssl::ws::WsMessage _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void EventSub::onRecvUnsubscribeEvent(
+    bcos::boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg.seq();
     std::string request = std::string(_msg.payload().begin(), _msg.payload().end());

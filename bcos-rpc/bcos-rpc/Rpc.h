@@ -139,11 +139,11 @@ public:
 protected:
     virtual void notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
-    virtual void onRecvHandshakeRequest(boostssl::ws::WsMessage _msg,
-        std::shared_ptr<boostssl::ws::WsSession> _session);
+    virtual void onRecvHandshakeRequest(
+        boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
 
-    virtual bool negotiatedVersion(const boostssl::ws::WsMessage& _msg,
-        std::shared_ptr<boostssl::ws::WsSession> _session);
+    virtual bool negotiatedVersion(
+        const boostssl::ws::WsMessage& _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
 
 private:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;

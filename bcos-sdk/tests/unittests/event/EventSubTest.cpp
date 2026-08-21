@@ -209,7 +209,6 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         BOOST_CHECK(!es->getTask(id));
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
-
 }
 
 BOOST_AUTO_TEST_SUITE_END()

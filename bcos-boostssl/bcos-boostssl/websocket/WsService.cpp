@@ -135,11 +135,6 @@ void WsService::registerDisconnectHandler(DisconnectHandler _disconnectHandler)
     m_disconnectHandlers.push_back(std::move(_disconnectHandler));
 }
 
-void WsService::registerHandshakeHandler(HandshakeHandler _handshakeHandler)
-{
-    m_handshakeHandlers.push_back(std::move(_handshakeHandler));
-}
-
 void WsService::setReconnectedPeers(EndPointsPtr _reconnectedPeers)
 {
     WriteGuard l(x_peers);
@@ -461,28 +456,6 @@ bool WsService::registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler)
     return true;
 }
 
-MsgHandler WsService::getMsgHandler(uint16_t _type)
-{
-    ReadGuard l(x_msgTypeHandlers);
-    if (_type < m_msgType2Method.size())
-    {
-        return m_msgType2Method[_type];
-    }
-    return nullptr;
-}
-
-bool WsService::eraseMsgHandler(uint16_t _type)
-{
-    UpgradableGuard l(x_msgTypeHandlers);
-    if (_type >= m_msgType2Method.size() || !m_msgType2Method[_type])
-    {
-        return false;
-    }
-    UpgradeGuard ul(l);
-    m_msgType2Method[_type] = nullptr;
-    return true;
-}
-
 std::shared_ptr<WsSession> WsService::newSession(
     std::shared_ptr<WsStreamDelegate> _wsStreamDelegate, std::string const& _nodeId)
 {
@@ -515,14 +488,13 @@ std::shared_ptr<WsSession> WsService::newSession(
                 wsService->onDisconnect(std::move(_error), std::move(_session));
             }
         });
-    session->setRecvMessageHandler(
-        [self](WsMessage message, std::shared_ptr<WsSession> session) {
-            auto wsService = self.lock();
-            if (wsService)
-            {
-                wsService->onRecvMessage(std::move(message), std::move(session));
-            }
-        });
+    session->setRecvMessageHandler([self](WsMessage message, std::shared_ptr<WsSession> session) {
+        auto wsService = self.lock();
+        if (wsService)
+        {
+            wsService->onRecvMessage(std::move(message), std::move(session));
+        }
+    });
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("newSession") << LOG_DESC("start the session")
                             << LOG_KV("endPoint", endPoint);
@@ -678,14 +650,14 @@ void WsService::onRecvMessage(WsMessage message, std::shared_ptr<WsSession> sess
 
         WEBSOCKET_SERVICE(WARNING)
             << LOG_BADGE("onRecvMessage") << LOG_DESC("unrecognized message type")
-            << LOG_KV("type", type) << LOG_KV("endpoint", session->endPoint())
-            << LOG_KV("seq", seq) << LOG_KV("data size", message.payload().size())
+            << LOG_KV("type", type) << LOG_KV("endpoint", session->endPoint()) << LOG_KV("seq", seq)
+            << LOG_KV("data size", message.payload().size())
             << LOG_KV("use_count", session.use_count());
     }
 }
 
-void WsService::asyncSendMessageByEndPoint(const std::string& _endPoint, const WsMessage& _msg,
-    Options _options, RespCallBack _respFunc)
+void WsService::asyncSendMessageByEndPoint(
+    const std::string& _endPoint, const WsMessage& _msg, Options _options, RespCallBack _respFunc)
 {
     std::shared_ptr<WsSession> session = getSession(_endPoint);
     if (!session)
@@ -709,15 +681,15 @@ void WsService::asyncSendMessage(
     return asyncSendMessage(sessions(), _msg, _options, std::move(_respCallBack));
 }
 
-void WsService::asyncSendMessage(const WsSessions& _ss, const WsMessage& _msg,
-    Options _options, RespCallBack _respFunc)
+void WsService::asyncSendMessage(
+    const WsSessions& _ss, const WsMessage& _msg, Options _options, RespCallBack _respFunc)
 {
     if (_ss.empty())
     {
         if (_respFunc)
         {
-            auto error = BCOS_ERROR_PTR(
-                WsError::NoActiveCons, "there has no active connection available");
+            auto error =
+                BCOS_ERROR_PTR(WsError::NoActiveCons, "there has no active connection available");
             _respFunc(error, WsMessage(), nullptr);
         }
         return;

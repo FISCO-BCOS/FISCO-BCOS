@@ -33,8 +33,8 @@ public:
         std::shared_ptr<boostssl::ws::WsService> _wsService,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
         bcos::gateway::GatewayInterface::Ptr _gateway)
-      : AMOPClient(_ioService, std::move(_wsService),
-            std::move(_requestFactory), std::move(_gateway), "localGateway")
+      : AMOPClient(_ioService, std::move(_wsService), std::move(_requestFactory),
+            std::move(_gateway), "localGateway")
     {}
 
     // Note: must with empty implementation to in case of start the m_gatewayStatusDetector

@@ -148,8 +148,8 @@ void AMOP::publish(
             }
 
             // Note: the public PubCallback keeps shared_ptr<WsMessage>, convert at the boundary
-            _callback(_error,
-                std::make_shared<bcos::boostssl::ws::WsMessage>(std::move(_msg)), _session);
+            _callback(
+                _error, std::make_shared<bcos::boostssl::ws::WsMessage>(std::move(_msg)), _session);
         });
 }
 
@@ -201,13 +201,12 @@ void AMOP::updateTopicsToRemote(std::shared_ptr<bcos::boostssl::ws::WsSession> _
                       << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("topics", request);
 }
 
-void AMOP::onRecvAMOPRequest(boostssl::ws::WsMessage _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void AMOP::onRecvAMOPRequest(
+    boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     auto seq = _msg.seq();
     auto request = m_requestFactory->buildRequest();
-    auto ret =
-        request->decode(bcos::bytesConstRef(_msg.payload().data(), _msg.payload().size()));
+    auto ret = request->decode(bcos::bytesConstRef(_msg.payload().data(), _msg.payload().size()));
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPRequest")
@@ -238,8 +237,8 @@ void AMOP::onRecvAMOPRequest(boostssl::ws::WsMessage _msg,
     }
 }
 
-void AMOP::onRecvAMOPResponse(boostssl::ws::WsMessage _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void AMOP::onRecvAMOPResponse(
+    boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     auto seq = _msg.seq();
     AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPResponse")
@@ -247,13 +246,12 @@ void AMOP::onRecvAMOPResponse(boostssl::ws::WsMessage _msg,
                          << LOG_KV("seq", seq) << LOG_KV("endpoint", _session->endPoint());
 }
 
-void AMOP::onRecvAMOPBroadcast(boostssl::ws::WsMessage _msg,
-    std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
+void AMOP::onRecvAMOPBroadcast(
+    boostssl::ws::WsMessage _msg, std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     auto seq = _msg.seq();
     auto request = m_requestFactory->buildRequest();
-    auto ret =
-        request->decode(bcos::bytesConstRef(_msg.payload().data(), _msg.payload().size()));
+    auto ret = request->decode(bcos::bytesConstRef(_msg.payload().data(), _msg.payload().size()));
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPBroadcast")

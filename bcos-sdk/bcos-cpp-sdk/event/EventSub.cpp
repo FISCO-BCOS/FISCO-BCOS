@@ -371,8 +371,8 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
                     << LOG_KV("id", id) << LOG_KV("group", group) << LOG_KV("request", jsonReq);
 
     m_service->asyncSendMessageByGroupAndNode(_task->group(), "", message, Options(),
-        [id, _task, _callback, this](Error::Ptr _error, boostssl::ws::WsMessage _msg,
-            std::shared_ptr<WsSession> _session) {
+        [id, _task, _callback, this](
+            Error::Ptr _error, boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession> _session) {
             if (_error && _error->errorCode() != 0)
             {
                 EVENT_SUB(WARNING)

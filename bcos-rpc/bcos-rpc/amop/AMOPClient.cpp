@@ -40,8 +40,7 @@ void AMOPClient::initMsgHandler()
         [this](boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session) {
             onRecvSubTopics(std::move(_msg), std::move(_session));
         });
-    m_wsService->registerMsgHandler(
-        AMOPClientMessageType::AMOP_REQUEST,
+    m_wsService->registerMsgHandler(AMOPClientMessageType::AMOP_REQUEST,
         [this](boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session) {
             onRecvAMOPRequest(std::move(_msg), std::move(_session));
         });
@@ -76,8 +75,7 @@ bool AMOPClient::updateTopicInfos(
 /**
  * @brief: receive sub topic message from sdk
  */
-void AMOPClient::onRecvSubTopics(
-    boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession> _session)
+void AMOPClient::onRecvSubTopics(boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession> _session)
 {
     auto topicInfo = std::string(_msg.payload().begin(), _msg.payload().end());
     auto seq = _msg.seq();
@@ -163,8 +161,7 @@ void AMOPClient::onRecvAMOPRequest(
                     }
                     responseMsg.setStatus(errorCode);
                     // constructor the response
-                    responseMsg.setPayload(
-                        bcos::bytes(errorMsg.begin(), errorMsg.end()));
+                    responseMsg.setPayload(bcos::bytes(errorMsg.begin(), errorMsg.end()));
                     // recover the seq
                     responseMsg.setSeq(orgSeq);
                     AMOP_CLIENT_LOG(ERROR)
@@ -236,12 +233,11 @@ bool AMOPClient::trySendAMOPRequestToLocalNode(std::shared_ptr<WsSession> _sessi
 /**
  * @brief: receive amop broadcast message from sdk
  */
-void AMOPClient::onRecvAMOPBroadcast(
-    boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession>)
+void AMOPClient::onRecvAMOPBroadcast(boostssl::ws::WsMessage _msg, std::shared_ptr<WsSession>)
 {
     auto seq = _msg.seq();
-    auto amopReq = m_requestFactory->buildRequest(
-        bytesConstRef(_msg.payload().data(), _msg.payload().size()));
+    auto amopReq =
+        m_requestFactory->buildRequest(bytesConstRef(_msg.payload().data(), _msg.payload().size()));
     // broadcast message to the sdks connected to the local node
     broadcastAMOPMessage(amopReq->topic(), _msg);
     // broadcast messsage to sdks connected to other nodes
@@ -259,23 +255,18 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
     auto seq = _msg.seq();
     _selectSession->asyncSendMessage(_msg, Options(30000),
         [seq = std::move(seq), _topic, _callback](bcos::Error::Ptr _error,
-            bcos::boostssl::ws::WsMessage _responseMsg,
-            std::shared_ptr<WsSession> _session) {
+            bcos::boostssl::ws::WsMessage _responseMsg, std::shared_ptr<WsSession> _session) {
             if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
             {
                 AMOP_CLIENT_LOG(WARNING)
                     << LOG_BADGE("asyncNotifyAMOPMessage")
-                    << LOG_DESC("asyncSendMessage callback failed")
-                    << LOG_KV("endpoint", (_session ? _session->endPoint() : std::string("")))
-                    << LOG_KV("topic", _topic) << LOG_KV("seq", seq)
-                    << LOG_KV("code", _error ? _error->errorCode() : -1)
-                    << LOG_KV("message", _error ? _error->errorMessage() : "success");
+                    << LOG_DESC("asyncSendMessage callback failed") << LOG_KV("topic", _topic)
+                    << LOG_KV("seq", seq) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("message", _error->errorMessage());
             }
 
-            AMOP_CLIENT_LOG(DEBUG)
-                << LOG_BADGE("asyncNotifyAMOPMessage")
-                << LOG_DESC("asyncSendMessage callback response") << LOG_KV("seq", seq)
-                << LOG_KV("data size", _responseMsg.payload().size());
+            AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("asyncNotifyAMOPMessage") << LOG_KV("seq", seq)
+                                   << LOG_KV("data size", _responseMsg.payload().size());
             auto buffer = std::make_shared<bcos::bytes>();
             if (!_error)
             {
@@ -284,15 +275,9 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
                 _responseMsg.encode(*buffer);
             }
 
-            if (_error)
-            {
-                _callback(
-                    BCOS_ERROR_PTR(_error->errorCode(), _error->errorMessage()), std::move(buffer));
-            }
-            else
-            {
-                _callback(nullptr, std::move(buffer));
-            }
+            _callback(_error ? BCOS_ERROR_PTR(_error->errorCode(), _error->errorMessage()) :
+                               bcos::Error::Ptr(),
+                std::move(buffer));
         });
 }
 

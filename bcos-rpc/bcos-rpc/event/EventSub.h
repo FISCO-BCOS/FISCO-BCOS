@@ -43,7 +43,7 @@ namespace ws
 {
 class WsMessage;
 }
-}
+}  // namespace boostssl
 
 namespace event
 {
@@ -53,8 +53,8 @@ class EventSub : bcos::Worker, public std::enable_shared_from_this<EventSub>
 public:
     using Ptr = std::shared_ptr<EventSub>;
     using ConstPtr = std::shared_ptr<const EventSub>;
-    EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService,
-        boost::asio::io_context& _ioContext);
+    EventSub(
+        std::shared_ptr<boostssl::ws::WsService> _wsService, boost::asio::io_context& _ioContext);
     virtual ~EventSub() { stop(); }
 
 public:
@@ -164,8 +164,8 @@ public:
     using Ptr = std::shared_ptr<EventSubFactory>;
 
 public:
-    EventSub::Ptr buildEventSub(std::shared_ptr<boostssl::ws::WsService> _wsService,
-        boost::asio::io_context& _ioContext)
+    EventSub::Ptr buildEventSub(
+        std::shared_ptr<boostssl::ws::WsService> _wsService, boost::asio::io_context& _ioContext)
     {
         auto es = std::make_shared<EventSub>(_wsService, _ioContext);
         return es;

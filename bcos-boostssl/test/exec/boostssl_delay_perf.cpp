@@ -135,8 +135,8 @@ void workAsClient(
 
         msg.setSeq(newSeq());
         wsService->asyncSendMessage(msg, Options(-1),
-            [&p, &nFailedC, &nSucC](Error::Ptr _error, WsMessage _msg,
-                std::shared_ptr<WsSession> _session) {
+            [&p, &nFailedC, &nSucC](
+                Error::Ptr _error, WsMessage _msg, std::shared_ptr<WsSession> _session) {
                 (void)_error;
                 (void)_session;
                 (void)_msg;
@@ -191,8 +191,8 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl)
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
 
-    wsService->registerMsgHandler(DELAY_PERF_MSGTYPE,
-        [](WsMessage _msg, std::shared_ptr<WsSession> _session) {
+    wsService->registerMsgHandler(
+        DELAY_PERF_MSGTYPE, [](WsMessage _msg, std::shared_ptr<WsSession> _session) {
             _session->asyncSendMessage(_msg);
         });
 
