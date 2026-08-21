@@ -22,6 +22,7 @@
  *        cache for historical storages.
  */
 
+#include "SharedBaselineSchedulerMock.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -42,7 +43,6 @@
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/HostContext.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include "bcos-transaction-scheduler/HistoricalCallStorage.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
@@ -51,10 +51,12 @@
 #include <string>
 #include <vector>
 
-// Anonymous namespace + HC prefix: this TU is unity-merged with the other scheduler test
-// TUs, and the getLedgerConfig tag_invoke stub below is found by ADL through the ViewType's
-// template arguments — the storage types must be anchored here (same pattern as
-// TestMPTSchedulerWiring.cpp).
+// Anonymous namespace (unity-build friendly). The storage stack, mock executor /
+// scheduler and the getLedgerConfig stub are the SHARED test mocks
+// (SharedBaselineSchedulerMock.h): the old HCProbeExecutor became SharedMockExecutor's
+// ReadSlot / WriteThenReadSlot probe modes, and the whole-suite BaselineScheduler
+// instantiation happens once in SharedBaselineSchedulerInst.cpp. The HC aliases below
+// keep this file's existing names pointing at the shared types.
 namespace
 {
 using namespace bcos;
@@ -62,31 +64,16 @@ using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
-using HCMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
-struct HCBackendStorage
-  : memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-        std::hash<StateKey>>
-{
-};
-using HCCheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, HCBackendStorage>;
-using HCMultiLayerStorage = MultiLayerStorage<HCMutableStorage, void, HCCheckpointBackend>;
+using HCMutableStorage = bcos::test::sharedmock::SharedMutableStorage;
+using HCBackendStorage = bcos::test::sharedmock::SharedBackendStorage;
+using HCCheckpointBackend = bcos::test::sharedmock::SharedCheckpointBackend;
+using HCMultiLayerStorage = bcos::test::sharedmock::SharedMultiLayerStorage;
 using HCViewType = HCMultiLayerStorage::ViewType;
 using HCHistoricalBackend = HistoricalStateBackend<HCViewType>;
 using HCHistoricalView = View<HCMutableStorage, void, HCHistoricalBackend>;
 
-/// The Features the getLedgerConfig stub hands out — set per test.
-ledger::Features g_hcFeatures{};
-
-[[maybe_unused]] task::AwaitableValue<void> tag_invoke(
-    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, HCViewType& /*storage*/,
-    bcos::ledger::LedgerConfig& ledgerConfig, protocol::BlockNumber /*blockNumber*/,
-    protocol::BlockFactory& /*blockFactory*/)
-{
-    ledgerConfig.setFeatures(g_hcFeatures);
-    return {};
-}
+/// The Features the shared getLedgerConfig stub hands out — set per test.
+auto& g_hcFeatures = bcos::test::sharedmock::g_stubFeatures;
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> hcEmptyTxsTask()
 {
@@ -157,94 +144,7 @@ bytes toBytes(evmc_bytes32 const& value)
 
 // --- block-driving mocks (same shapes as TestMPTSchedulerWiring) ------------------------
 
-struct HCRowOp
-{
-    std::string table;
-    std::string key;
-    std::string value;
-};
-
-struct HCWritingScheduler
-{
-    std::map<protocol::BlockNumber, std::vector<HCRowOp>> const* m_plan{};
-
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
-        auto& /*executor*/, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
-    {
-        if (auto it = m_plan->find(blockHeader.number()); it != m_plan->end())
-        {
-            for (auto const& row : it->second)
-            {
-                storage::Entry entry;
-                entry.set(row.value);
-                co_await storage2::writeOne(
-                    storage, StateKey{row.table, row.key}, std::move(entry));
-            }
-        }
-        auto receipts = ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
-                        ::ranges::views::transform([](size_t) -> protocol::TransactionReceipt::Ptr {
-                            auto receipt =
-                                std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-                            constexpr static std::string_view str = "abc";
-                            auto& inner = receipt->inner();
-                            inner.dataHash.assign(str.begin(), str.end());
-                            inner.data.gasUsed = "100";
-                            return receipt;
-                        }) |
-                        ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
-        co_return receipts;
-    }
-};
-
-/// The "EVM" of these tests: reads the probed account's slot through whatever storage the
-/// scheduler hands it — EVMAccount over the historical stack, exactly the account type the
-/// production HostContext uses — and returns the 32-byte value as the receipt output.
-/// WriteThenReadSlot first SSTOREs m_writeValue, so the output proves (or disproves)
-/// read-your-writes on the stack.
-struct HCProbeExecutor
-{
-    enum class Mode : uint8_t
-    {
-        ReadSlot,
-        WriteThenReadSlot,
-    };
-    Mode m_mode{Mode::ReadSlot};
-    evmc_bytes32 m_writeValue{};
-    protocol::BlockNumber m_lastExecutedHeaderNumber{-1};
-
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
-        protocol::BlockHeader const& blockHeader, protocol::Transaction const& /*transaction*/,
-        int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
-    {
-        m_lastExecutedHeaderNumber = blockHeader.number();
-        ledger::account::EVMAccount account(storage, hcEvmcAddress(), false);
-        if (m_mode == Mode::WriteThenReadSlot)
-        {
-            co_await account.setStorage(ledger::account::toEvmcBytes32(hcSlot()), m_writeValue);
-        }
-        auto value = co_await account.storage(ledger::account::toEvmcBytes32(hcSlot()));
-        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-        auto& inner = receipt->inner();
-        inner.data.output.assign(value.bytes, value.bytes + sizeof(value.bytes));
-        co_return receipt;
-    }
-
-    template <class Storage>
-    struct ExecuteContext
-    {
-        task::Task<void> prepare() { co_return; }
-        task::Task<void> execute() { co_return; }
-        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
-    };
-    auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,
-        protocol::Transaction const& /*transaction*/, int32_t /*contextID*/,
-        ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
-    {
-        co_return {};
-    }
-};
+using HCRowOp = bcos::test::sharedmock::SharedMockScheduler::RowOp;
 
 class EthCallHistoryFixture
 {
@@ -271,6 +171,9 @@ public:
         features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
         g_hcFeatures = features;
         mockScheduler.m_plan = &plan;
+        probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::ReadSlot;
+        probeExecutor.m_probeAddress = hcEvmcAddress();
+        probeExecutor.m_probeSlot = ledger::account::toEvmcBytes32(hcSlot());
 
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
             .AlwaysDo([](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
@@ -434,14 +337,14 @@ public:
     crypto::Hash::Ptr hashImpl = std::make_shared<crypto::Keccak256>();
 
     std::map<protocol::BlockNumber, std::vector<HCRowOp>> plan;
-    HCWritingScheduler mockScheduler;
+    bcos::test::sharedmock::SharedMockScheduler mockScheduler;
     fakeit::Mock<ledger::LedgerInterface> mockLedger;
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     HCMultiLayerStorage multiLayerStorage;
-    HCProbeExecutor probeExecutor;
-    BaselineScheduler<decltype(multiLayerStorage), HCProbeExecutor, HCWritingScheduler,
-        ledger::LedgerInterface>
-        baselineScheduler;
+    bcos::test::sharedmock::SharedMockExecutor probeExecutor;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
+    bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
 // The trait getExecutable consults: the marker propagates through View and Rollbackable,
@@ -596,14 +499,14 @@ BOOST_AUTO_TEST_CASE(writeThenReadInsideHistoricalCall)
 {
     runCanonicalChain();
 
-    probeExecutor.m_mode = HCProbeExecutor::Mode::WriteThenReadSlot;
+    probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::WriteThenReadSlot;
     probeExecutor.m_writeValue = hcEvmcValue(0x99);
     auto [writeError, writeReceipt] = callAt(1);
     BOOST_REQUIRE_MESSAGE(!writeError, (writeError ? writeError->errorMessage() : std::string{}));
     BOOST_CHECK(outputOf(writeReceipt) == toBytes(hcEvmcValue(0x99)));
 
     // A fresh call at the same height starts from the committed state again.
-    probeExecutor.m_mode = HCProbeExecutor::Mode::ReadSlot;
+    probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::ReadSlot;
     auto [readError, readReceipt] = callAt(1);
     BOOST_REQUIRE_MESSAGE(!readError, (readError ? readError->errorMessage() : std::string{}));
     BOOST_CHECK(outputOf(readReceipt) == toBytes(hcEvmcValue(0x01)));

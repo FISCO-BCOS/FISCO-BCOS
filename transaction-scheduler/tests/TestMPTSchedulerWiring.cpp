@@ -24,6 +24,7 @@
  *        the stray-"/mpt/"-row guard, and the no-XOR-fallback policy.
  */
 
+#include "SharedBaselineSchedulerMock.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"
@@ -32,6 +33,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/Errors.h"
@@ -46,7 +48,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "bcos-transaction-scheduler/MPTNodeStorage.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <map>
@@ -54,10 +56,12 @@
 #include <string>
 #include <vector>
 
-// Everything in an anonymous namespace (unity-build friendly); all storage-stack types carry
-// the MW prefix and their own backend type, so this TU's ViewType — and its getLedgerConfig
-// tag_invoke stub — cannot collide with the other scheduler test TUs when CMake merges the
-// sources into one unity TU (same pattern as TestExecuteStateRootRegression.cpp).
+// Everything in an anonymous namespace (unity-build friendly). The storage stack and the
+// mock executor / scheduler / getLedgerConfig stub are the SHARED test mocks
+// (SharedBaselineSchedulerMock.h): one BaselineScheduler specialization serves all the
+// scheduler tests, so the whole-suite instantiation happens once in
+// SharedBaselineSchedulerInst.cpp instead of once per TU. The MW aliases below just keep
+// this file's existing names pointing at the shared types.
 namespace
 {
 using namespace bcos;
@@ -65,22 +69,12 @@ using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
-using MWMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
+using MWMutableStorage = bcos::test::sharedmock::SharedMutableStorage;
 // The backend is behaviourally a stock flat MemoryStorage: with trie nodes as ordinary
 // "/mpt/" StateKey rows there is nothing MPT-specific left for a backend to implement.
-// Still a DISTINCT type rather than an alias — this TU's getLedgerConfig tag_invoke stub is
-// found by ADL through the ViewType's template arguments, so the backend type must be
-// anchored in this anonymous namespace (the same reasoning as the MW prefix).
-struct MWBackendStorage
-  : memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-        std::hash<StateKey>>
-{
-};
-
-using MWCheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, MWBackendStorage>;
-using MWMultiLayerStorage = MultiLayerStorage<MWMutableStorage, void, MWCheckpointBackend>;
+using MWBackendStorage = bcos::test::sharedmock::SharedBackendStorage;
+using MWCheckpointBackend = bcos::test::sharedmock::SharedCheckpointBackend;
+using MWMultiLayerStorage = bcos::test::sharedmock::SharedMultiLayerStorage;
 
 /// Read one trie-node row from the backend under its ordinary StateKey.
 std::optional<bytes> backendNode(MWBackendStorage& backend, h256 const& hash)
@@ -114,91 +108,12 @@ size_t backendNodeCount(MWBackendStorage& backend)
 
 /// One flat-state row operation the mock scheduler performs for a block.
 /// value == nullopt means storage-level logical deletion (the removeSome path).
-struct MWRowOp
-{
-    std::string table;
-    std::string key;
-    std::optional<std::string> value;
-};
+using MWRowOp = bcos::test::sharedmock::SharedMockScheduler::RowOp;
 
 /// Scheduler impl that replays a per-block write plan through the storage argument
 /// BaselineScheduler hands it — the production write path (view mutable layer).
-struct MWWritingScheduler
-{
-    std::map<protocol::BlockNumber, std::vector<MWRowOp>> const* m_plan{};
-
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
-        auto& /*executor*/, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
-    {
-        if (auto it = m_plan->find(blockHeader.number()); it != m_plan->end())
-        {
-            for (auto const& row : it->second)
-            {
-                if (row.value)
-                {
-                    storage::Entry entry;
-                    entry.set(*row.value);
-                    co_await storage2::writeOne(
-                        storage, StateKey{row.table, row.key}, std::move(entry));
-                }
-                else
-                {
-                    co_await storage2::removeOne(storage, StateKey{row.table, row.key});
-                }
-            }
-        }
-
-        auto receipts = ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
-                        ::ranges::views::transform([](size_t) -> protocol::TransactionReceipt::Ptr {
-                            auto receipt =
-                                std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-                            constexpr static std::string_view str = "abc";
-                            auto& inner = receipt->inner();
-                            inner.dataHash.assign(str.begin(), str.end());
-                            inner.data.gasUsed = "100";
-                            return receipt;
-                        }) |
-                        ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
-        co_return receipts;
-    }
-};
-
-struct MWExecutor
-{
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& /*storage*/,
-        protocol::BlockHeader const& /*blockHeader*/, protocol::Transaction const& /*transaction*/,
-        int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
-    {
-        co_return {};
-    }
-    template <class Storage>
-    struct ExecuteContext
-    {
-        task::Task<void> prepare() { co_return; }
-        task::Task<void> execute() { co_return; }
-        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return {}; }
-    };
-    auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,
-        protocol::Transaction const& /*transaction*/, int32_t /*contextID*/,
-        ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
-    {
-        co_return {};
-    }
-};
-
-/// The Features the getLedgerConfig stub hands to every execute — set per test.
-ledger::Features g_mwFeatures{};
-
-[[maybe_unused]] task::AwaitableValue<void> tag_invoke(
-    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/,
-    MWMultiLayerStorage::ViewType& /*storage*/, bcos::ledger::LedgerConfig& ledgerConfig,
-    protocol::BlockNumber /*blockNumber*/, protocol::BlockFactory& /*blockFactory*/)
-{
-    ledgerConfig.setFeatures(g_mwFeatures);
-    return {};
-}
+/// The Features the shared getLedgerConfig stub hands to every execute — set per test.
+auto& g_mwFeatures = bcos::test::sharedmock::g_stubFeatures;
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> emptyTxsTaskMW()
 {
@@ -482,15 +397,15 @@ public:
     crypto::Hash::Ptr hashImpl = std::make_shared<crypto::Keccak256>();
 
     std::map<protocol::BlockNumber, std::vector<MWRowOp>> plan;
-    MWWritingScheduler mockScheduler;
+    bcos::test::sharedmock::SharedMockScheduler mockScheduler;
     fakeit::Mock<ledger::LedgerInterface> mockLedger;
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     MWMultiLayerStorage multiLayerStorage;
-    MWExecutor mockExecutor;
+    bcos::test::sharedmock::SharedMockExecutor mockExecutor;
     std::shared_ptr<MWProbeObserver> observer;
-    BaselineScheduler<decltype(multiLayerStorage), MWExecutor, MWWritingScheduler,
-        ledger::LedgerInterface>
-        baselineScheduler;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
+    bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestMPTSchedulerWiring, MPTWiringFixture)
