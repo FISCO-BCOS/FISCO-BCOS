@@ -5,9 +5,7 @@ find_package(intx REQUIRED)
 find_package(TBB CONFIG REQUIRED)
 
 add_library(opstack-executor INTERFACE)
-target_include_directories(opstack-executor INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/opstack-executor>)
+target_include_directories(opstack-executor INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<INSTALL_INTERFACE:include/opstack-executor>)
 # No direct `ledger` / `rlp-protocol` links: header-only usage only (Classify.h), and both drag
 # the bcos-crypto→wedprcrypto chain that breaks libc++ typed catch binary-wide
 # (bcos-rpc/test/CMakeLists.txt:29-34). `ledger` still arrives transitively via bcos-evm-eth.

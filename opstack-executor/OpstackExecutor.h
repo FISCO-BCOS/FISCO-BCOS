@@ -515,14 +515,20 @@ public:
         // concept lifecycle: prepare (validate) -> execute (transition) -> finish (writeback).
         // Deposit txs short-circuit (no opValidate / fee / m_finish writeback); normal txs run the
         // three shared stages with the block-context fee (lazily loaded) + blockGasLeft.
-        task::Task<void> prepare()
+
+        // The 6-arg createExecuteContext leaves m_ctx null; every lifecycle call on that form is
+        // unsupported for OP execution.
+        void requireBlockContext() const
         {
             if (m_ctx == nullptr)
-            {
                 throw bcos::evm::engine::OpConsensusError(
                     "OpstackExecutor: createExecuteContext called without a BlockContext (the "
                     "6-arg form is unsupported for OP execution)");
-            }
+        }
+
+        task::Task<void> prepare()
+        {
+            requireBlockContext();
             if (transaction.isDepositTx())
             {
                 if (m_ctx->seenNonDeposit)
@@ -571,12 +577,7 @@ public:
         }
         task::Task<void> execute()
         {
-            if (m_ctx == nullptr)
-            {
-                throw bcos::evm::engine::OpConsensusError(
-                    "OpstackExecutor: createExecuteContext called without a BlockContext (the "
-                    "6-arg form is unsupported for OP execution)");
-            }
+            requireBlockContext();
             if (transaction.isDepositTx())
             {
                 // executeDeposit member (not the op::runDeposit free function); applies the state
@@ -606,13 +607,11 @@ public:
                 {
                     // runDeposit's block-level errors arrive as bare std::runtime_error;
                     // reclassify to the consensus-rejection channel (INVALID, never -32603).
-                    throw bcos::evm::engine::OpConsensusError(
-                        std::string("OpScheduler: deposit execution failed: ") + e.what());
+                    throw depositExecFailed(e.what());
                 }
                 catch (...)
                 {
-                    throw bcos::evm::engine::OpConsensusError(
-                        "OpScheduler: deposit execution failed: unknown exception");
+                    throw depositExecFailed("unknown exception");
                 }
             }
             else
@@ -625,12 +624,7 @@ public:
         }
         task::Task<protocol::TransactionReceipt::Ptr> finish()
         {
-            if (m_ctx == nullptr)
-            {
-                throw bcos::evm::engine::OpConsensusError(
-                    "OpstackExecutor: createExecuteContext called without a BlockContext (the "
-                    "6-arg form is unsupported for OP execution)");
-            }
+            requireBlockContext();
             namespace op = bcos::evm::opstack;
             protocol::TransactionReceipt::Ptr receipt;
             if (transaction.isDepositTx())
@@ -733,13 +727,11 @@ public:
             {
                 // See ExecuteContext::execute's deposit branch: runDeposit's block-level
                 // errors are bare std::runtime_error and must classify as INVALID.
-                throw bcos::evm::engine::OpConsensusError(
-                    std::string("OpScheduler: deposit execution failed: ") + e.what());
+                throw depositExecFailed(e.what());
             }
             catch (...)
             {
-                throw bcos::evm::engine::OpConsensusError(
-                    "OpScheduler: deposit execution failed: unknown exception");
+                throw depositExecFailed("unknown exception");
             }
         }
 
@@ -823,6 +815,15 @@ public:
 
 private:
     // ---- Shared normal-tx pipeline: three stages (prepare/execute/finish). ----
+    // runDeposit's block-level errors arrive as bare std::runtime_error; both deposit paths
+    // reclassify them to the consensus-rejection channel (INVALID, never -32603) with this
+    // message shape.
+    static bcos::evm::engine::OpConsensusError depositExecFailed(std::string const& detail)
+    {
+        return bcos::evm::engine::OpConsensusError(
+            "OpScheduler: deposit execution failed: " + detail);
+    }
+
     // Stage 1 — validate: fork/evmc revision check, block info + evmone tx + signed envelope, then
     // injection-style opValidate (props.fee snapshotted for the transition stage).
     template <class Storage>
