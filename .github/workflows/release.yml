@@ -107,7 +107,9 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_STATIC=ON -DLINKER=mold -DTESTS=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=${TRIPLET} ..
+          # No -G Ninja: the GroupSig/Paillier ExternalProjects declare no BUILD_BYPRODUCTS,
+          # so Ninja rejects the deps/lib/*.a link inputs with "no known rule to make it".
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_STATIC=ON -DLINKER=mold -DTESTS=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=${TRIPLET} ..
       - name: Configure for macOS
         if: startsWith(matrix.os, 'macos-')
         run: |
@@ -116,11 +118,11 @@ jobs:
           export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p build
           cd build
-          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_STATIC=ON -DTESTS=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=${TRIPLET} ..
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_STATIC=ON -DTESTS=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=${TRIPLET} ..
       - name: Build
         run: |
           cd build
-          cmake --build . --target fisco-bcos
+          cmake --build . --parallel 4
       - name: Package binary
         shell: bash
         run: |
