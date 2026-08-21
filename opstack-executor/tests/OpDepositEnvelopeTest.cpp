@@ -118,6 +118,7 @@ BOOST_AUTO_TEST_CASE(ValidEnvelopeDecodesFieldByField)
 
     for (size_t i = 0; i < 32; ++i)
         BOOST_CHECK_EQUAL(dep.source_hash.bytes[i], 0x11);
+    BOOST_REQUIRE(dep.to.has_value());
     for (size_t i = 0; i < 20; ++i)
     {
         BOOST_CHECK_EQUAL(dep.from.bytes[i], 0x22);

@@ -1,4 +1,4 @@
-// bcos-evm/test/opstack/support/SeedPreStateTest.cpp
+// opstack-executor/tests/support/SeedPreStateTest.cpp
 #include "SeedPreState.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
@@ -113,6 +113,14 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
                     "0x0000000000000000000000000000000000000000000000000000000000001234"));
     BOOST_CHECK_MESSAGE(
         !bridge.poisoned(), "seeding poisoned: " << std::string(bridge.firstError()));
+}
+
+BOOST_AUTO_TEST_CASE(RejectsOddLengthHex)
+{
+    // bcos::fromHex would left-pad these to valid-length but wrong values.
+    BOOST_CHECK_THROW(opstack_test::jsonAddress("0x123"), std::runtime_error);
+    BOOST_CHECK_THROW(opstack_test::jsonBytes32("0xabc"), std::runtime_error);
+    BOOST_CHECK_THROW(opstack_test::jsonBytes("0x1"), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -229,6 +229,8 @@ DERIVE_BCOS_EXCEPTION(OpTxValidationFailed);
 
 using bcos::evm::evmstate::SharedErrorSlot;  // Storage2State.h
 
+namespace engine = bcos::evm::engine;
+
 /// BlockHashes that answers zero for every block number — the eth_call / standalone-tx paths
 /// have no block-hash source (the BLOCKHASH opcode then reads zero, as an out-of-window lookup).
 class NullBlockHashes final : public evmone::state::BlockHashes
@@ -443,12 +445,13 @@ public:
     /// Access the EVM instance (needed for system_call functions).
     evmc::VM& vm() { return m_vm; }
 
-    /// eth_call block context, mirroring detail::toBlockInfo: lenient optionals (unset header
-    /// fields read as 0 rather than throwing), gasLimit injected as blockGasLeft.
+    /// BlockInfo for tx execution, mirroring detail::toBlockInfo. Leniency follows the call
+    /// kind: eth_call (lenientOptionals=true) reads unset header fields as 0; block execution
+    /// (false) rejects a malformed header at the point of use instead of failing open.
     static evmone::state::BlockInfo buildBlockInfo(
-        protocol::BlockHeader const& header, uint64_t gasLimit)
+        protocol::BlockHeader const& header, uint64_t gasLimit, bool lenientOptionals = true)
     {
-        return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, /*lenientOptionals=*/true);
+        return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, lenientOptionals);
     }
 
     /// Real header gasLimit, falling back to the caller's blockGasLeft when the header leaves it
@@ -473,6 +476,10 @@ public:
         protocol::Transaction const& transaction;
         int contextID;
         ledger::LedgerConfig const& ledgerConfig;
+        // eth_call leniency: skips the chainId gate (prepare) and uses lenient header optionals.
+        // The concept path is still block-execution-oriented: per-block ctx bookkeeping
+        // (seenNonDeposit / blockGasLeft / cumulativeGasUsed) runs regardless, so a dry-run
+        // driver must own a throwaway BlockContext.
         bool call;
 
         // Per-transaction state threaded across the concept lifecycle.
@@ -521,7 +528,7 @@ public:
         void requireBlockContext() const
         {
             if (m_ctx == nullptr)
-                throw bcos::evm::engine::OpConsensusError(
+                throw engine::OpConsensusError(
                     "OpstackExecutor: createExecuteContext called without a BlockContext (the "
                     "6-arg form is unsupported for OP execution)");
         }
@@ -547,7 +554,7 @@ public:
                 {
                     // A malformed deposit envelope (e.g. a 0x02-envelope whose tars mirror
                     // claims deposit) is a consensus rejection, not an internal error.
-                    throw bcos::evm::engine::OpConsensusError(
+                    throw engine::OpConsensusError(
                         std::string("OpScheduler: deposit envelope validation failed: ") +
                         e.what());
                 }
@@ -563,21 +570,29 @@ public:
                 m_ctx->feeLoaded = true;
             }
             m_blockInfo = buildBlockInfo(blockHeader,
-                opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)));
+                opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)), call);
             try
             {  // Error normalization: validation failure -> consensus rejection
                 m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
-                    ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft, m_ctx->chainId, &*m_blockInfo);
+                    ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft,
+                    call ? std::optional<uint64_t>{} : std::optional<uint64_t>(m_ctx->chainId),
+                    &*m_blockInfo);
             }
             catch (const OpTxValidationFailed& e)
             {
-                throw bcos::evm::engine::OpConsensusError(
+                throw engine::OpConsensusError(
                     std::string("OpScheduler: normal tx validation failed: ") + e.what());
             }
         }
         task::Task<void> execute()
         {
             requireBlockContext();
+            // A missing block-hashes source on the block path would silently degrade BLOCKHASH
+            // to zeros (NullBlockHashes is the documented eth_call/standalone fallback) — fail
+            // loud instead of executing a deterministic-but-wrong state transition.
+            if (m_ctx->blockHashes == nullptr && !call)
+                throw engine::OpConsensusError(
+                    "OpstackExecutor: block execution requires wired RecentBlockHashes");
             if (transaction.isDepositTx())
             {
                 // executeDeposit member (not the op::runDeposit free function); applies the state
@@ -587,31 +602,10 @@ public:
                     m_receipt = co_await executor.executeDeposit(storage, blockHeader, m_deposit,
                         m_ctx->chainId, m_ctx->blockGasLeft, ledgerConfig, m_ctx->blockHashes);
                 }
-                catch (const bcos::evm::engine::OpConsensusError&)
-                {
-                    throw;
-                }
-                catch (const bcos::evm::engine::OpStorageError&)
-                {
-                    throw;
-                }
-                catch (const OpEvmcRevisionNotConfigured&)
-                {
-                    throw;  // local misconfiguration, not a consensus rejection
-                }
-                catch (const OpForkRevisionMismatch&)
-                {
-                    throw;
-                }
-                catch (const std::exception& e)
-                {
-                    // runDeposit's block-level errors arrive as bare std::runtime_error;
-                    // reclassify to the consensus-rejection channel (INVALID, never -32603).
-                    throw depositExecFailed(e.what());
-                }
                 catch (...)
                 {
-                    throw depositExecFailed("unknown exception");
+                    // Typed engine errors pass through; the rest classify as INVALID.
+                    rethrowExecError("deposit execution");
                 }
             }
             else
@@ -659,6 +653,15 @@ public:
             *this, storage, blockHeader, transaction, contextID, ledgerConfig, call, &blockCtx};
     }
 
+    // Deleted rvalue overload: this is a lazy coroutine, so a temporary bound to the const& above
+    // dies at the call-site full expression — before the body first runs — leaving m_ctx dangling.
+    // Make the misuse a compile error instead of UB.
+    template <class Storage>
+    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
+        BlockContext const&& blockCtx) = delete;
+
     /// 6-arg form (generic scheduler + the TransactionExecutor concept probe): no BlockContext is
     /// available, so m_ctx is null and any prepare/execute/finish throws. The previous default
     /// argument `= BlockContext{}` bound a temporary to the const-ref parameter whose lifetime
@@ -699,7 +702,7 @@ public:
             {
                 // Same error normalization as ExecuteContext::prepare: a malformed deposit
                 // envelope is a CONSENSUS rejection (INVALID), not an internal error.
-                throw bcos::evm::engine::OpConsensusError(
+                throw engine::OpConsensusError(
                     std::string("OpScheduler: deposit envelope validation failed: ") + e.what());
             }
             try
@@ -707,31 +710,10 @@ public:
                 co_return co_await executeDeposit(
                     storage, blockHeader, dep, chainId, blockGasLeft, ledgerConfig, blockHashes);
             }
-            catch (const bcos::evm::engine::OpConsensusError&)
-            {
-                throw;
-            }
-            catch (const bcos::evm::engine::OpStorageError&)
-            {
-                throw;
-            }
-            catch (const OpEvmcRevisionNotConfigured&)
-            {
-                throw;  // local misconfiguration, not a consensus rejection
-            }
-            catch (const OpForkRevisionMismatch&)
-            {
-                throw;
-            }
-            catch (const std::exception& e)
-            {
-                // See ExecuteContext::execute's deposit branch: runDeposit's block-level
-                // errors are bare std::runtime_error and must classify as INVALID.
-                throw depositExecFailed(e.what());
-            }
             catch (...)
             {
-                throw depositExecFailed("unknown exception");
+                // Same ladder as ExecuteContext::execute's deposit branch.
+                rethrowExecError("deposit execution");
             }
         }
 
@@ -742,7 +724,7 @@ public:
         // cache-hit in the transition stage.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         auto blockInfo = buildBlockInfo(
-            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
+            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);
         bcos::evm::opstack::OpTxProperties props;
         try
         {  // Error normalization (same as ExecuteContext::prepare): validation failure -> INVALID
@@ -751,7 +733,7 @@ public:
         }
         catch (const OpTxValidationFailed& e)
         {
-            throw bcos::evm::engine::OpConsensusError(
+            throw engine::OpConsensusError(
                 std::string("OpScheduler: normal tx validation failed: ") + e.what());
         }
         evmone::state::StateDiff diff;
@@ -769,14 +751,7 @@ public:
     {
         namespace op = bcos::evm::opstack;
 
-        auto revOpt = ledgerConfig.evmcRevision();
-        if (!revOpt.has_value())
-            BOOST_THROW_EXCEPTION(OpEvmcRevisionNotConfigured{}
-                                  << bcos::errinfo_comment("evmcRevision not configured"));
-        auto rev = *revOpt;
-        if (m_forkConfig.rev != rev)
-            BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
-                                      "OP fork revision does not match ledger evmcRevision"));
+        checkForkRevision(ledgerConfig);
 
         auto blockInfo = buildBlockInfo(
             blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
@@ -796,17 +771,15 @@ public:
         }
         catch (const std::exception& e)
         {
-            throw bcos::evm::engine::OpStorageError(
-                std::string("deposit write-back failed: ") + e.what());
+            throw engine::OpStorageError(std::string("deposit write-back failed: ") + e.what());
         }
         catch (...)
         {
-            throw bcos::evm::engine::OpStorageError("deposit write-back failed: unknown exception");
+            throw engine::OpStorageError("deposit write-back failed: unknown exception");
         }
         // Read-path poison from runDeposit with applyDiff returning normally.
         if (stateView.poisoned())
-            throw bcos::evm::engine::OpStorageError(
-                "deposit write-back poisoned: " + stateView.firstError());
+            throw engine::OpStorageError("deposit write-back poisoned: " + stateView.firstError());
         co_return receipt;
     }
 
@@ -815,13 +788,54 @@ public:
 
 private:
     // ---- Shared normal-tx pipeline: three stages (prepare/execute/finish). ----
-    // runDeposit's block-level errors arrive as bare std::runtime_error; both deposit paths
-    // reclassify them to the consensus-rejection channel (INVALID, never -32603) with this
-    // message shape.
-    static bcos::evm::engine::OpConsensusError depositExecFailed(std::string const& detail)
+    // Shared execution-path error ladder: typed engine errors and local misconfiguration pass
+    // through; anything else (runDeposit/opTransition's block-level errors arrive as bare
+    // std::runtime_error) is reclassified to the consensus-rejection channel (INVALID, never
+    // -32603).
+    [[noreturn]] static void rethrowExecError(std::string const& what)
     {
-        return bcos::evm::engine::OpConsensusError(
-            "OpScheduler: deposit execution failed: " + detail);
+        try
+        {
+            throw;
+        }
+        catch (const engine::OpConsensusError&)
+        {
+            throw;
+        }
+        catch (const engine::OpStorageError&)
+        {
+            throw;
+        }
+        catch (const OpEvmcRevisionNotConfigured&)
+        {
+            throw;  // local misconfiguration, not a consensus rejection
+        }
+        catch (const OpForkRevisionMismatch&)
+        {
+            throw;
+        }
+        catch (const std::exception& e)
+        {
+            throw engine::OpConsensusError("OpScheduler: " + what + " failed: " + e.what());
+        }
+        catch (...)
+        {
+            throw engine::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
+        }
+    }
+
+    // Fork/revision gate shared by the execute stages: ledger evmcRevision must be configured and
+    // match this executor's fork. (m_finish only needs the configured check — the mismatch was
+    // already rejected at prepare.)
+    void checkForkRevision(ledger::LedgerConfig const& ledgerConfig) const
+    {
+        auto revOpt = ledgerConfig.evmcRevision();
+        if (!revOpt.has_value())
+            BOOST_THROW_EXCEPTION(OpEvmcRevisionNotConfigured{}
+                                  << bcos::errinfo_comment("evmcRevision not configured"));
+        if (m_forkConfig.rev != *revOpt)
+            BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
+                                      "OP fork revision does not match ledger evmcRevision"));
     }
 
     // Stage 1 — validate: fork/evmc revision check, block info + evmone tx + signed envelope, then
@@ -837,14 +851,7 @@ private:
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
 
-        auto revOpt = ledgerConfig.evmcRevision();
-        if (!revOpt.has_value())
-            BOOST_THROW_EXCEPTION(OpEvmcRevisionNotConfigured{}
-                                  << bcos::errinfo_comment("evmcRevision not configured"));
-        auto rev = *revOpt;
-        if (m_forkConfig.rev != rev)
-            BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
-                                      "OP fork revision does not match ledger evmcRevision"));
+        checkForkRevision(ledgerConfig);
 
         // BlockInfo is built once per tx by the caller (ExecuteContext::prepare /
         // executeTransaction) and shared with m_execute; built here only when not supplied.
@@ -872,7 +879,7 @@ private:
             bool const exempt =
                 evmTx.type == evmone::state::Transaction::Type::legacy && evmTx.chain_id == 0;
             if (!exempt && evmTx.chain_id != *chainId)
-                throw bcos::evm::engine::OpConsensusError(
+                throw engine::OpConsensusError(
                     "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
                     " does not match node chainId " + std::to_string(*chainId));
         }
@@ -910,8 +917,18 @@ private:
 
         NullBlockHashes nullBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : nullBlockHashes;
-        co_return op::opTransition(stateView, blockInfo, bh, evmTx, m_forkConfig, m_vm, props,
-            chainId, m_receiptFactory, diff);
+        // opTransition's block-level errors arrive as bare std::runtime_error (e.g.
+        // OpTransition.cpp's "negative gas_used") — run them through the same ladder as the
+        // deposit path so callers never see an unclassified escape.
+        try
+        {
+            co_return op::opTransition(stateView, blockInfo, bh, evmTx, m_forkConfig, m_vm, props,
+                chainId, m_receiptFactory, diff);
+        }
+        catch (...)
+        {
+            rethrowExecError("tx execution");
+        }
     }
 
     // Stage 3 — writeback: apply the transition's state diff to storage, return the final receipt.
@@ -935,18 +952,16 @@ private:
         }
         catch (const std::exception& e)
         {
-            throw bcos::evm::engine::OpStorageError(
-                std::string("tx write-back failed: ") + e.what());
+            throw engine::OpStorageError(std::string("tx write-back failed: ") + e.what());
         }
         catch (...)
         {
-            throw bcos::evm::engine::OpStorageError("tx write-back failed: unknown exception");
+            throw engine::OpStorageError("tx write-back failed: unknown exception");
         }
         // Read-path poison from the transition with applyDiff returning normally (the shared
         // slot aggregates per-tx instances).
         if (stateView.poisoned())
-            throw bcos::evm::engine::OpStorageError(
-                "tx write-back poisoned: " + stateView.firstError());
+            throw engine::OpStorageError("tx write-back poisoned: " + stateView.firstError());
         co_return std::move(receipt);
     }
 

@@ -23,9 +23,19 @@
 namespace opstack_test
 {
 
+// bcos::fromHex left-pads an odd-length payload with a leading '0' nibble, which would turn a
+// malformed test vector into a valid-length but WRONG value — reject odd-length payloads first.
+inline bcos::bytes jsonHexBytes(std::string_view hex)
+{
+    const auto payload = (hex.starts_with("0x") || hex.starts_with("0X")) ? hex.substr(2) : hex;
+    if (payload.size() % 2 != 0)
+        throw std::runtime_error("odd-length hex payload: " + std::string(hex));
+    return bcos::fromHex(hex);
+}
+
 inline evmc::address jsonAddress(std::string_view hex)
 {
-    const auto bytes = bcos::fromHex(hex);
+    const auto bytes = jsonHexBytes(hex);
     if (bytes.size() != sizeof(evmc::address::bytes))
         throw std::runtime_error("jsonAddress: bad length for " + std::string(hex));
     evmc::address addr;
@@ -35,7 +45,7 @@ inline evmc::address jsonAddress(std::string_view hex)
 
 inline evmc::bytes32 jsonBytes32(std::string_view hex)
 {
-    const auto bytes = bcos::fromHex(hex);
+    const auto bytes = jsonHexBytes(hex);
     if (bytes.size() != sizeof(evmc::bytes32::bytes))
         throw std::runtime_error("jsonBytes32: bad length for " + std::string(hex));
     evmc::bytes32 out;
@@ -45,7 +55,7 @@ inline evmc::bytes32 jsonBytes32(std::string_view hex)
 
 inline evmc::bytes jsonBytes(std::string_view hex)
 {
-    const auto bytes = bcos::fromHex(hex);
+    const auto bytes = jsonHexBytes(hex);
     return {bytes.begin(), bytes.end()};
 }
 
@@ -113,9 +123,10 @@ void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
                 "seedPreState: ledger poisoned: " + std::string(bridge.firstError()));
         }
     }
-    // mergeBackStorage merges the oldest layer (FIFO). Drain the stack — the seed lands in the
-    // backend immediately, and with an empty stack before each block push, mergeView persists
-    // right away so the backend assertions can pass.
+    // Precondition: the MLS deque must be empty here — mergeView merges the pushed layer only in
+    // that case (MultiLayerStorage's own WARNING). That holds for this helper's use (fresh MLS,
+    // single seed), so the seed lands in the backend immediately and the backend assertions can
+    // pass.
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
