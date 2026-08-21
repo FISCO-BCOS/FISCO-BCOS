@@ -21,7 +21,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "bcos-transaction-scheduler/BaselineScheduler-tpp.h"
 #include <boost/test/unit_test.hpp>
 #include <optional>
 
