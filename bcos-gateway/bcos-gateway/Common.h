@@ -31,7 +31,13 @@ namespace bcos
 {
 namespace gateway
 {
-constexpr uint64_t MAX_MESSAGE_LENGTH = 32 * 1024 * 1024;  ///< The maximum length of data is 100M.
+/// The maximum length of a p2p message is 32 MB. When changing this value, keep
+/// front::MAX_PAYLOAD_LENGTH (bcos-front/bcos-front/FrontMessage.h) equal to it, otherwise
+/// messages in between the two caps pass the gateway but are dropped by the front service.
+/// Note: configuring p2p.allow_max_msg_size above this constant re-opens that gap for
+/// compressible messages (the sender checks the configured bound on the uncompressed size,
+/// while the wire-level decode bound only sees the compressed bytes).
+constexpr uint64_t MAX_MESSAGE_LENGTH = 32 * 1024 * 1024;
 enum GroupType : uint16_t
 {
     // group with at-least one consensus node
