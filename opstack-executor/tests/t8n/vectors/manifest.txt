@@ -175,3 +175,9 @@ isthmus_l1block_deposit_slots.json
 isthmus_message_passer_withdraw.json
 jovian_l1block_deposit_slots.json
 jovian_message_passer_withdraw.json
+
+# Dual-path observer vectors (gaslimit/basefee, bothForks)
+isthmus_deposit_basefee_observer.json
+isthmus_gaslimit_observer.json
+jovian_deposit_basefee_observer.json
+jovian_gaslimit_observer.json
