@@ -7,9 +7,11 @@
 #       --contracts ../../bcos-l2-contracts --out allocs.ini
 
 # This tool emits one [alloc.N] per predeploy: deployed bytecode, empty storage.
-# SystemConfig storage is NOT seeded here — `feature_flags` is injected by the
-# C++ genesis path (Ledger), which alone knows the version-gated feature set;
-# the remaining SystemConfig config entries (owner, chain_id, gas/version) are a
+# SystemConfig storage is NOT seeded here — the node VERIFIES `feature_flags` at
+# first start against Features::toFlagsNumber() (Ledger) and refuses to build
+# genesis on mismatch; the genesis state root commits the value on both FISCO
+# and the op-reth oracle. The remaining SystemConfig config entries (owner,
+# chain_id, gas/version) are a
 # follow-up PR. Only the predeploy list is needed below.
 
 # Predeploys: SystemConfig + L2ValidatorSet (self-written, src/) and the 11
