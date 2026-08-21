@@ -10,7 +10,9 @@
 
 **执行环境：** worktree `.claude/worktrees/op-alignment`（分支 `feat-opstack-e2e`，HEAD `b7d112b3f`）。工作区存在未提交改动（`opstack-executor/OpstackExecutor.h/.cpp`、t8n golden 若干）——**不要触碰、不要 add 它们**，每个任务只 add 自己改的文件。构建目录 `build/` 已存在（增量编译）。
 
-**范围外（独立后续计划，本计划不涉及）：** BL-1 reorg/consolidation 能力（S-DRV-6/7，需 blockHash→block 映射架构设计）；BL-2 eth_getProof 历史块（Ledger MPT 持久化）；BL-4 Karst（NUT 机制 + EVMC_OSAKA 绑定，行业无参照实现）；MN-1（无 txpool，架构决策）；MN-2（与 op-geth 行为一致，无需改动）；MN-5（FCU V3/V4 不对称，需 op-node 版本验证，Task 2 会同步更新驱动）；MN-9（创世固定 feature flag，文档已注明）。
+**范围外（独立后续计划，本计划不涉及）：** BL-1 reorg/consolidation 能力（S-DRV-6/7，需 blockHash→block 映射架构设计）；BL-2 eth_getProof 历史块（Ledger MPT 持久化）；BL-4 Karst（NUT 机制 + EVMC_OSAKA 绑定，行业无参照实现）；MN-1（无 txpool，架构决策）；MN-2（**无需改动**：FISCO 已有等价检查 `blobGasUsed > gasLimit`，EngineServiceImpl.cpp:553-557，与 op-geth `core/block_validator.go:131-134` 的 `daFootprint > GasLimit` 等价——审计 S-FEE-28 的 🟡 在 Task 9 中改判 ✅）；MN-5（FCU V3/V4 不对称，需 op-node 版本验证，Task 2 会同步更新驱动）；MN-9（创世固定 feature flag，文档已注明）。
+
+> **审查修订（2026-08-22，四维并行审查后）：** ① Task 2 版本门（`version < 3`）前移至 attrs 校验块开头，消除"校验先于版本门导致 ForkchoiceAttributesVersionGate 永不抛异常"的矛盾；② Task 2 校验函数补 `withdrawals` 非空拒绝（审计 MJ-2 四类静默规整之一，op-geth api_optimism.go:55-58）；③ Task 2 测试 target 修正为 `opstack-executor-block-tests`（OpNewPayloadRpcE2eTest.cpp 编入该二进制）；④ Task 1/2/3 构建前先 `cmake -S . -B build`（bcos-rpc/test GLOB 无 CONFIGURE_DEPENDS，新测试文件需重新 configure）；⑤ Task 8 测试 import 改 `from mpt_state_root import keccak256`（build-allocs.py 连字符文件名不可模块导入）；⑥ 新增调用点 `tools/op-e2e/probe_l1block.py:174-178` 更新；⑦ Task 9 回归补 `test-bcos-engine`（EngineServiceTest 通用路径）；⑧ 行号修正（Task 6 :1140-1152、Task 7 :10-12）；⑨ Task 8 Step 4 验证方式改为 build-allocs.py 生成 INI 后对拍。
 
 ---
 
@@ -31,7 +33,7 @@
 | `bcos-rpc/test/unittests/rpc/EngineErrorMapperTest.cpp` | 新建 | MJ-1 映射单元测试 |
 | `bcos-rpc/test/unittests/rpc/EngineRpcTest.cpp` | 修改 | mock 加 thrower、端点级错误码测试 |
 | `bcos-rpc/test/unittests/rpc/Web3ResponseTest.cpp` | 修改 | MN-3/MN-6 断言 |
-| `opstack-executor/tests/OpNewPayloadRpcE2eTest.cpp` | 修改 | MJ-2 三个 Invalid 用例 + 修复 `ForkchoiceAttributesVersionGate`（version=3→2） |
+| `opstack-executor/tests/OpNewPayloadRpcE2eTest.cpp` | 修改 | MJ-2 四个 Invalid 用例（缺 gasLimit/缺 minBaseFee/pre-Jovian minBaseFee/withdrawals 非空）+ 修复 `ForkchoiceAttributesVersionGate`（version=3→2） |
 | `tools/opstack-genesis/test_gen_eth_header_fixture.py` | 新建 | MN-4 工具测试 |
 
 ---
@@ -74,13 +76,9 @@ DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
 DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
 ```
 
-- [ ] **Step 2: `EngineServiceImpl.h` 改为 include Errors.h 并删除本地声明**
+- [ ] **Step 2: `EngineServiceImpl.h` 改用 Errors.h（确认 include 已存在）**
 
-删除 `EngineServiceImpl.h:71-98` 的整块 `DERIVE_BCOS_EXCEPTION(...)` 声明与注释（`UnsupportedEngineApiVersion` 到 `OpPayloadBuildingUnsupported`，含 `// ---- OP-mode exceptions ----` 注释块），在现有 include 区（约 :40 附近）加：
-
-```cpp
-#include "bcos-framework/engine/Errors.h"
-```
+删除 `EngineServiceImpl.h:71-98` 的整块 `DERIVE_BCOS_EXCEPTION(...)` 声明与注释（`UnsupportedEngineApiVersion` 到 `OpPayloadBuildingUnsupported`，含 `// ---- OP-mode exceptions ----` 注释块）。`bcos-framework/engine/Errors.h` 的 include 已存在于 :27（`#include "bcos-framework/engine/Errors.h"`）——用 `grep -n "engine/Errors.h" engine/bcos-engine/EngineServiceImpl.h` 确认，若缺失则补上。
 
 先确认 `OpPayloadBuildingUnsupported` 是否还有引用（Tier-2 构建上线后可能已无）：
 
@@ -129,10 +127,11 @@ BOOST_AUTO_TEST_SUITE_END()
 
 （`mapEngineErrorCode` 不存在 → 编译失败，即 TDD 的失败态。）
 
-- [ ] **Step 4: 运行确认失败**
+- [ ] **Step 4: 运行确认失败（先重新 configure——bcos-rpc/test 的 GLOB 无 CONFIGURE_DEPENDS，新文件需 configure 才进构建）**
 
 ```bash
 cd /Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment
+cmake -S . -B build >/dev/null 2>&1
 cmake --build build --target test-bcos-rpc -j8 2>&1 | tail -5
 ```
 
@@ -369,9 +368,9 @@ git commit -m "fix(engine): map engine exceptions to execution-apis JSON-RPC cod
 
 现状：OP 模式跳过 `validatePayloadAttributes`（EngineServiceImpl.h:270-283 `if constexpr (!c_opMode)`），缺 gasLimit 回退 ledgerConfig、eip1559Params 缺失用中性 1/1、withdrawals 非空/缺 parentBeaconBlockRoot 被静默规整——op-geth 在 `checkOptimismPayloadAttributes`（eth/catalyst/api_optimism.go:40-65）即拒。目标：与 op-geth 相同——非法 attrs 返回 STATUS_INVALID（-38003 语义），不更新 forkchoice 状态，不构建。
 
-- [ ] **Step 1: 写失败测试——`OpNewPayloadRpcE2eTest.cpp` 的 `OpForkchoiceRpcE2eSuite` 新增 3 个用例**
+- [ ] **Step 1: 写失败测试——`OpNewPayloadRpcE2eTest.cpp` 的 `OpForkchoiceRpcE2eSuite` 新增 4 个用例**
 
-在 `ForkchoiceAttributesVersionGate` 用例前插入（套件内 helper `runVectorAndGetBlockHash`/`forkFlagsFor` 已存在）：
+在 `ForkchoiceAttributesVersionGate` 用例前插入（套件内 helper `runVectorAndGetBlockHash`/`forkFlagsFor`/`registerVerifiedBlock` 已存在；注意 `OpE2eFixture` 无 `genesisBlockHash()` helper，Isthmus 用例用 `registerVerifiedBlock` 注册已知块，模式同 `ForkchoiceMonotonicityRejected`）：
 
 ```cpp
 // MJ-2: OP-mode FCU attrs deep validation (op-geth checkOptimismPayloadAttributes,
@@ -427,26 +426,47 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingMinBaseFeeInvalid)
 BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMinBaseFeeBeforeJovianInvalid)
 {
     // Isthmus fixture: minBaseFee must be null pre-Jovian (jovian/exec-engine.md:59-79).
+    // OpE2eFixture has no genesis-hash helper — register a known block instead
+    // (pattern: ForkchoiceMonotonicityRejected).
     auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(/*jovian=*/false));
-    bcos::h256 genesisHash = fixture->genesisBlockHash();  // 若不存在该 helper，见下方注
+    bcos::h256 knownBlock("0x5555555555555555555555555555555555555555555555555555555555555555");
+    registerVerifiedBlock(fixture->multiLayerStorage, knownBlock, /*number=*/0);
     auto attrs = makeJovianAttrs();
     auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
-        bcos::engine::ForkchoiceState{genesisHash, genesisHash, genesisHash}, &attrs, /*version=*/4));
+        bcos::engine::ForkchoiceState{knownBlock, knownBlock, knownBlock}, &attrs, /*version=*/4));
     (void)payloadId;
     BOOST_CHECK_EQUAL(static_cast<int>(state.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(state.validationError.has_value());
     BOOST_CHECK(state.validationError->find("minBaseFee") != std::string::npos);
 }
+
+BOOST_AUTO_TEST_CASE(ForkchoiceAttrsNonEmptyWithdrawalsInvalid)
+{
+    // MJ-2: OP attrs withdrawals must be present AND empty (op-geth api_optimism.go:55-58
+    // rejects non-empty; buildOpPayload must never silently normalize them away).
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    auto attrs = makeJovianAttrs();
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{bcos::engine::WithdrawalV1{}};
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs, /*version=*/4));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(state.validationError.has_value());
+    BOOST_CHECK(state.validationError->find("withdrawals") != std::string::npos);
+}
 ```
 
-注：`OpE2eFixture` 若没有 `genesisBlockHash()` helper，先读 `OpNewPayloadRpcE2eTest.cpp` 的 fixture 定义（搜 `struct OpE2eFixture`），用其暴露的 genesis hash 字段名替换（`ForkchoiceHeadUnknownSyncing` 用例用 `forkFlagsFor(false)` 构造 fixture 的方式可参考）。
+注：`WithdrawalV1` 的聚合初始化字段若要求指定成员（非空聚合），用 `bcos::engine::WithdrawalV1{.index = 0, .validatorIndex = 0, .address = bcos::Address{}, .amount = 0}` 形式（字段名以 `bcos-framework/engine/Types.h` 中 `WithdrawalV1` 定义为准）。
 
-- [ ] **Step 2: 运行确认失败**
+- [ ] **Step 2: 运行确认失败（target 是 block-tests——`OpNewPayloadRpcE2eTest.cpp` 编入 `opstack-executor-block-tests`，见 opstack-executor/tests/CMakeLists.txt:40；`opstack-executor-tests` 只含 OpstackExecutorTest.cpp）**
 
 ```bash
-cmake --build build --target opstack-executor-tests -j8 2>&1 | tail -3 && \
-./build/opstack-executor/tests/opstack-executor-tests --run_test=OpForkchoiceRpcE2eSuite
+cmake -S . -B build >/dev/null 2>&1
+cmake --build build --target opstack-executor-block-tests -j8 2>&1 | tail -3 && \
+./build/opstack-executor/tests/opstack-executor-block-tests --run_test=OpForkchoiceRpcE2eSuite
 ```
 
 预期：新用例失败——现状 `updateForkchoice` 对 V4 attrs 直接进 `buildOpPayload`（缺 gasLimit 回退 ledgerConfig 或抛 OpExecutionInternalError），测试期望 Invalid 状态。
@@ -460,8 +480,9 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     const PayloadAttributes& payloadAttributes, bool jovianActive)
 {
     // Rollup-mode FCU attrs validation (op-geth checkOptimismPayloadAttributes,
-    // eth/catalyst/api_optimism.go:40-65). The OP face is Isthmus+/Holocene+, so the
-    // Holocene eip1559Params and (from Jovian) minBaseFee presence rules are unconditional.
+    // eth/catalyst/api_optimism.go:40-65, non-empty withdrawals rejection :55-58). The OP face
+    // is Isthmus+/Holocene+, so the Holocene eip1559Params and (from Jovian) minBaseFee
+    // presence rules are unconditional.
     if (!payloadAttributes.gasLimit.has_value())
     {
         return std::string("gasLimit parameter is required (OP rollup)");
@@ -473,6 +494,12 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     if (payloadAttributes.eip1559Params->size() != 8)
     {
         return std::string("eip1559Params must be exactly 8 bytes");
+    }
+    // OP blocks carry an empty withdrawals list (isthmus/exec-engine.md:161-163); a non-empty
+    // attrs list must be rejected, never silently normalized to empty at build time.
+    if (payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
+    {
+        return std::string("withdrawals must be empty on the OP path");
     }
     if (jovianActive && !payloadAttributes.minBaseFee.has_value())
     {
@@ -507,15 +534,29 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
         const PayloadAttributes& payloadAttributes, bool jovianActive);
 ```
 
-`updateForkchoice` 中 `if (payloadAttributes != nullptr)` 块（:261-284）整体替换为：
+`updateForkchoice` 中 `if (payloadAttributes != nullptr)` 块（:261-284）整体替换为（**版本门前置**——校验与版本门都在任何 storage 查询与状态更新之前；`ForkchoiceAttributesVersionGate` 用例依赖此顺序）：
 
 ```cpp
         if (payloadAttributes != nullptr)
         {
+            // OP-mode version gate first: V1/V2 attrs are refused with -38005 before any
+            // validation or state change (op-node sends FCU V3+ attrs for Isthmus+ builds;
+            // the historical gate placement AFTER the state update is superseded -- op-geth
+            // rejects a version-skewed FCU outright, eth/catalyst/api.go:164-178).
+            if constexpr (c_opMode)
+            {
+                if (version < 3)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        UnsupportedFork{} << bcos::errinfo_comment{
+                            "Isthmus+ payload building requires engine_forkchoiceUpdatedV3 "
+                            "or V4 (JSON-RPC -38005)"});
+                }
+            }
             // Rollup mode validates the SAME attributes surface the generic path does, plus the
-            // OP-only rules (gasLimit/eip1559Params/minBaseFee). A validation failure returns
-            // STATUS_INVALID before any forkchoice state change -- the op-geth ordering
-            // (checkOptimismPayloadAttributes runs ahead of the state update,
+            // OP-only rules (gasLimit/eip1559Params/withdrawals/minBaseFee). A validation
+            // failure returns STATUS_INVALID before any forkchoice state change -- the op-geth
+            // ordering (checkOptimismPayloadAttributes runs ahead of the state update,
             // eth/catalyst/api.go:215-218). `if constexpr` keeps the generic path's codegen
             // unchanged.
             if (auto validationError =
@@ -546,15 +587,17 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
         }
 ```
 
+同时删除 OP 分支内原版本门（`EngineServiceImpl.h:392-398` 的 `if (payloadAttributes != nullptr && version < 3) throw UnsupportedFork`）及其注释（:386-391），OP 分支只剩 buildOpPayload 调用（原 :399-408）。
+
 - [ ] **Step 6: 修复 `ForkchoiceAttributesVersionGate`（钉死真实版本门）**
 
 该用例当前传 `version=3` 却期望 `UnsupportedFork`——代码的版本门是 `version < 3`（EngineServiceImpl.h:392，V3+ 带 attrs 是被接受的，op-node 即用 FCU V3 建块），此测试在现行代码下**实际失败**（P0 的"陈旧二进制"判断不准确）。改为传 `version=2` 并更新注释：
 
 ```cpp
 // ③ V1/V2 attrs -> UnsupportedFork (-38005): the OP build path gates attrs-carrying FCU at
-// V3+ (op-node sends FCU V3 with attrs for Isthmus+ builds); V1/V2 attrs are refused at the
-// version gate before any validation. Attrs deep validation (MJ-2) is exercised by the
-// ForkchoiceAttrs*Invalid cases above.
+// V3+ (op-node sends FCU V3 with attrs for Isthmus+ builds). The version gate now runs
+// BEFORE attrs validation (updateForkchoice), so V2 attrs hit -38005 first, never the
+// validation verdicts exercised by the ForkchoiceAttrs*Invalid cases above.
 BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
@@ -570,17 +613,29 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
 }
 ```
 
-- [ ] **Step 7: 运行 opstack 测试套件**
+- [ ] **Step 7: 运行 opstack 测试套件（block-tests 承载 OpForkchoiceRpcE2eSuite；executor-tests 全量回归）**
 
 ```bash
 cmake --build build --target opstack-executor-tests opstack-executor-block-tests -j8 2>&1 | tail -3
-./build/opstack-executor/tests/opstack-executor-tests --run_test=OpForkchoiceRpcE2eSuite
 ./build/opstack-executor/tests/opstack-executor-block-tests --run_test=OpForkchoiceRpcE2eSuite
+./build/opstack-executor/tests/opstack-executor-tests
 ```
 
-预期：新增 3 用例 PASS；`ForkchoiceAttributesVersionGate` PASS（block-tests 重新编译后不再失败）。
+预期：新增 4 用例 PASS；`ForkchoiceAttributesVersionGate` PASS（block-tests 重新编译后不再失败）。
 
-- [ ] **Step 8: 更新 `tools/op-e2e/a1_active.py`（驱动 attrs 补全 + getPayload 断言）**
+- [ ] **Step 8: 更新 `tools/op-e2e/a1_active.py` + `tools/op-e2e/probe_l1block.py`（驱动 attrs 补全 + getPayload 断言）**
+
+`probe_l1block.py:174-178` 的 `fcu_seal` 同样构造 3 字段 attrs——Task 2 校验上线后会被拒（Invalid、无 payloadId，`fc["payloadId"]` KeyError 崩溃）。该脚本被 `docs/2026-08-17-opstack-predeploy-matrix-plan.md:310/366` 引用为封块工具，必须同步更新。把 `probe_l1block.py` 的 attrs 改为与下方 a1_active 相同形态：
+
+```python
+    attrs = {"timestamp": hex(int(time.time())), "prevRandao": "0x" + "00" * 32,
+             "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011",
+             "gasLimit": hex(int(head["gasLimit"], 16)),
+             "eip1559Params": "0x0000000800000002",
+             "withdrawals": [],
+             "parentBeaconBlockRoot": "0x" + "00" * 32,
+             "minBaseFee": "0x0"}  # B3a/C2 均为 Jovian 链；Isthmus 链删此行
+```
 
 `a1_active.py` 第 4/5 步（:124-142 附近）替换为：
 
@@ -626,8 +681,8 @@ cmake --build build --target opstack-executor-tests opstack-executor-block-tests
 
 ```bash
 git add engine/bcos-engine/EngineServiceImpl.h engine/bcos-engine/EngineServiceImpl.cpp \
-        opstack-executor/tests/OpNewPayloadRpcE2eTest.cpp tools/op-e2e/a1_active.py
-git commit -m "fix(engine): OP FCU attrs deep validation (gasLimit/eip1559Params/minBaseFee) — STATUS_INVALID instead of silent fallback"
+        opstack-executor/tests/OpNewPayloadRpcE2eTest.cpp tools/op-e2e/a1_active.py tools/op-e2e/probe_l1block.py
+git commit -m "fix(engine): OP FCU attrs deep validation (gasLimit/eip1559Params/withdrawals/minBaseFee) — STATUS_INVALID instead of silent fallback"
 ```
 
 ---
@@ -660,9 +715,10 @@ git commit -m "fix(engine): OP FCU attrs deep validation (gasLimit/eip1559Params
                         extra[0] = 0x01;
                         extra.resize(17, 0x00);
                         // Jovian: minBaseFee u64 BE at [9,17) (op-geth
-                        // EncodeJovianExtraData, eip1559_optimism.go:49-54). The attrs field is
-                        // REQUIRED after Jovian (updateForkchoice validation); the absent
-                        // fallback (0 = the spec default) only serves direct-service callers.
+                        // EncodeJovianExtraData, eip1559_optimism.go:49-54; op-geth panics on an
+                        // absent minBaseFee there -- the spec REQUIRES the field after Jovian
+                        // and updateForkchoice validates it, so the 0 fallback below only
+                        // serves direct-service callers and keeps the lambda total).
                         if (auto minBaseFee = payloadAttributes.minBaseFee;
                             minBaseFee.has_value())
                         {
@@ -678,6 +734,7 @@ git commit -m "fix(engine): OP FCU attrs deep validation (gasLimit/eip1559Params
 - [ ] **Step 3: 编译 + 单元回归**
 
 ```bash
+cmake -S . -B build >/dev/null 2>&1
 cmake --build build --target bcos-evm-opstack-tests opstack-executor-tests opstack-executor-block-tests test-bcos-rpc -j8 2>&1 | tail -3
 ./build/bcos-evm/test/bcos-evm-opstack-tests
 ./build/opstack-executor/tests/opstack-executor-tests
@@ -840,11 +897,11 @@ git commit -m "feat(rpc): output depositReceiptVersion on deposit tx JSON (audit
 ## Task 6: MN-7 — 删除 EngineServiceImpl.h 过期注释
 
 **Files:**
-- Modify: `engine/bcos-engine/EngineServiceImpl.h:1143-1152`
+- Modify: `engine/bcos-engine/EngineServiceImpl.h:1140-1152`
 
 - [ ] **Step 1: 替换注释块**
 
-`handleOpNewPayload` 中 V4-only 门后面的 "NOTE (independent review #5429, finding B)" 注释块（:1143-1152）整体替换为：
+`handleOpNewPayload` 中 V4-only 门后面的 "NOTE (independent review #5429, finding B)" 注释块（:1140-1152）整体替换为：
 
 ```cpp
         // NOTE (audit v2, 2026-08-21): the historical "#5429 finding B" note claiming this
@@ -874,7 +931,7 @@ git commit -m "docs(engine): drop obsolete #5429 finding-B comment (V4 is wired,
 ## Task 7: MN-8 — chain-config.yaml feature_flags 注释修正
 
 **Files:**
-- Modify: `tools/opstack-genesis/chain-config.yaml:9-11`
+- Modify: `tools/opstack-genesis/chain-config.yaml:10-12`
 
 - [ ] **Step 1: 先确认哪些配置文件的注释是陈旧的**
 
@@ -886,7 +943,7 @@ grep -rn "injected by the" tools/opstack-genesis/*.yaml
 
 - [ ] **Step 2: 替换注释**
 
-`chain-config.yaml:9-11`：
+`chain-config.yaml:10-12`：
 
 ```
 # SystemConfig storage is NOT seeded here — `feature_flags` is injected by the
@@ -942,8 +999,9 @@ _SPEC = importlib.util.spec_from_file_location(
 _FIXTURE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_FIXTURE)
 
-from mpt_state_root import compute_storage_root  # noqa: E402
-from build_allocs import keccak256  # noqa: E402
+# keccak256 is re-exported by mpt_state_root (build-allocs.py has a hyphenated filename and
+# cannot be imported as a module).
+from mpt_state_root import compute_storage_root, keccak256  # noqa: E402
 
 PASSER = "0x4200000000000000000000000000000000000016"
 
@@ -984,7 +1042,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-注：先读 `mpt_state_root.py` 的 `parse_allocs_ini` 确认 INI 语法（`[alloc.N.storage]` 子节的确切 key 格式：slot 行是 `slot=value` 还是 `key=value`），按实际格式调整上面测试的 INI 内容。
+注：`parse_allocs_ini`（mpt_state_root.py:232-265）对 `[alloc.N.storage]` 子节收集任意 `key=value` 为 `(slot,value)` 二元组——与 `compute_storage_root`（:199-210，iterable of (slotHex, valueHex)）的输入形状匹配，测试 INI 格式已核实。
 
 - [ ] **Step 2: 运行确认失败**
 
@@ -1029,13 +1087,16 @@ PASSER_ADDRESS = "0x4200000000000000000000000000000000000016"
 
 ```bash
 cd tools/opstack-genesis && python3 -m unittest test_gen_eth_header_fixture -v
-# 当前 C2 链：passer 空存储 → 输出应不变（diff 为空）
-python3 gen_eth_header_fixture.py --toml --allocs op-fork-base-allocs.json > /tmp/header_new.toml
-# 与既有 chain-config-c2.yaml 的 [eth_genesis_header] 节对比（或 git diff 工作区无该文件则人工比对 hash 行）
-grep "^hash=" /tmp/header_new.toml
+# 当前 C2 链：passer 空存储 → withdrawals_root 保持 EMPTY_TRIE_ROOT → 创世 hash 不变。
+# 用 build-allocs.py 生成 C2 链的 allocs INI，喂给 fixture 脚本验证根未漂移：
+python3 build-allocs.py --config chain-config-c2.yaml --contracts ../bcos-l2-contracts 2>/dev/null \
+    --base-allocs op-fork-base-allocs.json --out /tmp/c2_allocs.ini
+# （--contracts 路径以 chain-config-c2.yaml 中 sol_file 的实际位置为准；若 C2 链暂不可构建，
+#   用单元测试的临时 INI 验证即可，并注明 artifact 验证延后）
+python3 gen_eth_header_fixture.py --toml --allocs /tmp/c2_allocs.ini | grep withdrawals_root
 ```
 
-预期：单测 PASS；hash 与链上既有创世一致（passer 无存储 → 空根不变）。
+预期：单测 PASS；`withdrawals_root` 输出 `0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421`（EMPTY_TRIE_ROOT，passer 无存储 → 链上创世 hash 不变）。
 
 - [ ] **Step 5: Commit**
 
@@ -1048,10 +1109,11 @@ git commit -m "fix(genesis): compute MessagePasser storage root as Isthmus genes
 
 ## Task 9: 全量回归与收尾
 
-- [ ] **Step 1: 编译全部受影响目标**
+- [ ] **Step 1: 编译全部受影响目标（含 test-bcos-engine——EngineServiceTest 是 updateForkchoice 通用路径的直接测试）**
 
 ```bash
-cmake --build build --target bcos-evm-opstack-tests opstack-executor-tests opstack-executor-block-tests test-bcos-rpc -j8 2>&1 | tail -5
+cmake -S . -B build >/dev/null 2>&1
+cmake --build build --target bcos-evm-opstack-tests opstack-executor-tests opstack-executor-block-tests test-bcos-rpc test-bcos-engine -j8 2>&1 | tail -5
 ```
 
 预期：零错误零警告（新增警告需修）。
@@ -1063,10 +1125,11 @@ cmake --build build --target bcos-evm-opstack-tests opstack-executor-tests opsta
 ./build/opstack-executor/tests/opstack-executor-tests
 ./build/opstack-executor/tests/opstack-executor-block-tests
 ./build/bcos-rpc/test/test-bcos-rpc --run_test=EngineRpcTest,EngineErrorMapperTest,Web3ResponseTest,EngineProtoAlignB1Test
+./build/engine/test/test-bcos-engine --run_test=EngineServiceTest
 cd tools/opstack-genesis && python3 -m unittest test_build_allocs test_gen_eth_header_fixture -v
 ```
 
-预期：全部 PASS。`OpstackExecutorBlockTests` 的 `ForkchoiceAttributesVersionGate` 必须 PASS（Task 2 Step 6 修复）。
+预期：全部 PASS。`OpstackExecutorBlockTests` 的 `ForkchoiceAttributesVersionGate` 必须 PASS（Task 2 Step 6 修复）；`EngineServiceTest` 通用路径不受 Task 2 影响（改动前通用路径已跑 validatePayloadAttributes，改动后等价）。
 
 - [ ] **Step 3: git status 确认只含计划内文件**
 
@@ -1078,7 +1141,7 @@ git status --short | grep -v "^??" | head -20
 
 - [ ] **Step 4: 更新审计报告差距清单状态**
 
-`docs/2026-08-21-opstack-el-spec-audit-v2.md` §5 差距清单：把 BL-3、MJ-1、MJ-2、MN-3、MN-4、MN-6、MN-7、MN-8 各项标注"已修复于 <commit>（本计划 Task N）"。提交：
+`docs/2026-08-21-opstack-el-spec-audit-v2.md` §5 差距清单：把 BL-3、MJ-1、MJ-2、MN-3、MN-4、MN-6、MN-7、MN-8 各项标注"已修复于 <commit>（本计划 Task N）"；同时把 **MN-2/S-FEE-28 改判 ✅**（审查确认 op-geth `core/block_validator.go:131-134` 有 `daFootprint > GasLimit` 检查、FISCO `EngineServiceImpl.cpp:553-557` 有等价检查——"与 op-geth 行为一致"的论证成立，无需改动）。提交：
 
 ```bash
 git add docs/2026-08-21-opstack-el-spec-audit-v2.md
@@ -1097,6 +1160,7 @@ git push ywy2090 HEAD:feat-opstack-e2e
 
 ## 自审记录
 
-- **Spec 覆盖**：BL-3→Task 3；MJ-1→Task 1；MJ-2→Task 2（含 S-SYC-12 的 minBaseFee null/非 null 语义）；MN-3→Task 4；MN-4→Task 8；MN-6→Task 5；MN-7→Task 6；MN-8→Task 7；MN-5 的驱动侧在 Task 2 Step 8 同步处理；MN-1/MN-2/MN-5(验证)/MN-9 在"范围外"列出理由。
-- **已知测试修复**：`ForkchoiceAttributesVersionGate`（version=3→2）是现行代码下的真实失败用例（P0 的"陈旧二进制"判断不成立），Task 2 Step 6 修复；`a1_active.py` 第 5 步 "getPayload refused" 已过期（Tier-2 后 getPayload 可用），Task 2 Step 8 一并更新。
-- **类型一致性**：`WithdrawalV1`（bcos-framework/engine/Types.h，buildOpPayload 已用）；`PayloadAttributes::minBaseFee`（Types.h:106，uint64）；`requestsHash()`（BlockHeader.h:184）；`deposit_receipt_version`（TransactionReceipt.h:49）；`compute_storage_root`（mpt_state_root.py）；`EngineError::*`（bcos-rpc utils/Common.h:33-42）；`InternalError`（bcos-rpc jsonrpc/Common.h:69）。
+- **审查轮（2026-08-22，四维并行 subagent）**：全部 Blocker/Major 已修订入计划（见头部"审查修订"清单）——版本门前置（A-B1/B-B1/D-B1）、withdrawals 非空拒绝（C-B1）+ 新测试用例（B-M4）、block-tests target（B-B2/D-B2）、configure 前置（B-M3/D-B3）、Task 8 import 与 INI 验证修正（A-B1/B-M1/B-M2）、probe_l1block.py 调用点（D-M1）、test-bcos-engine 回归（D-M2）、行号修正（A-Minor）。审查确认无误的部分：Task 1 异常下沉无冲突、通用路径代码生成不变、task::wait 异常可穿透、a1_active 仍被 workflow 引用、CALL_ENGINE 链路成立。
+- **Spec 覆盖**：BL-3→Task 3；MJ-1→Task 1；MJ-2→Task 2（含 S-SYC-12 的 minBaseFee null/非 null 语义 + S-EXE-32 的 withdrawals 非空拒绝）；MN-3→Task 4；MN-4→Task 8；MN-6→Task 5；MN-7→Task 6；MN-8→Task 7；MN-5 的驱动侧在 Task 2 Step 8 同步处理（含 probe_l1block）；MN-1/MN-2/MN-5(验证)/MN-9 在"范围外"列出理由（MN-2 论证已修正并将在 Task 9 改判）。
+- **已知测试修复**：`ForkchoiceAttributesVersionGate`（version=3→2）是现行代码下的真实失败用例（P0 的"陈旧二进制"判断不成立，已由审查确认代码路径），Task 2 Step 6 修复；`a1_active.py` 第 5 步 "getPayload refused" 已过期（Tier-2 后 getPayload 可用），Task 2 Step 8 一并更新。
+- **类型一致性**：`WithdrawalV1`（bcos-framework/engine/Types.h，buildOpPayload 已用）；`PayloadAttributes::minBaseFee`（Types.h:106，uint64）；`requestsHash()`（BlockHeader.h:184）；`deposit_receipt_version`（TransactionReceipt.h:49）；`compute_storage_root`（mpt_state_root.py:199）；`keccak256`（mpt_state_root.py re-export，build-allocs.py 连字符文件名不可模块导入）；`EngineError::*`（bcos-rpc utils/Common.h:33-42）；`InternalError`（bcos-rpc jsonrpc/Common.h:69）；`bcos::byte` = uint8_t；`JsonRpcException : std::exception`（不被 `catch(bcos::Exception)` 误捕）。
