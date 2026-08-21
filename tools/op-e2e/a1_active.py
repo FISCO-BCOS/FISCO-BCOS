@@ -136,7 +136,7 @@ def main():
              "withdrawals": [],
              "parentBeaconBlockRoot": "0x" + "00" * 32}
     if jovian:
-        attrs["minBaseFee"] = "0x0"
+        attrs["minBaseFee"] = "0x3b9aca00"
     fc2 = eng.call(f"engine_forkchoiceUpdatedV{ver}", [fcs, attrs])
     check("FCU attrs builds (VALID + payloadId, Tier-2)",
           fc2["payloadStatus"]["status"] == "VALID" and fc2.get("payloadId") is not None,
@@ -151,8 +151,9 @@ def main():
           str(pl)[:120])
     if jovian:
         extra = bytes.fromhex(pl_head["extraData"][2:])
-        check("Jovian extraData minBaseFee tail == 0 (BL-3)",
-              len(extra) == 17 and int.from_bytes(extra[9:17], "big") == 0, str(extra))
+        check("Jovian extraData minBaseFee tail (BL-3)",
+              len(extra) == 17 and int.from_bytes(extra[9:17], "big") == 1000000000,
+              str(extra))
 
     # 6. post-FCU labels: routed to the tracked (genesis) head — hash equality with the
     # FCU hashes proves the tracked path (not the latest alias) served them

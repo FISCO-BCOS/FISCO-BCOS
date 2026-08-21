@@ -737,6 +737,19 @@ private:
                     {
                         extra[0] = 0x01;
                         extra.resize(17, 0x00);
+                        // Jovian: minBaseFee u64 BE at [9,17) (op-geth
+                        // EncodeJovianExtraData, eip1559_optimism.go:49-54; op-geth panics on an
+                        // absent minBaseFee there -- the spec REQUIRES the field after Jovian
+                        // and updateForkchoice validates it, so the 0 fallback below only
+                        // serves direct-service callers and keeps the lambda total).
+                        if (auto minBaseFee = payloadAttributes.minBaseFee; minBaseFee.has_value())
+                        {
+                            for (std::size_t i = 0; i < 8; ++i)
+                            {
+                                extra[9 + i] =
+                                    static_cast<bcos::byte>((*minBaseFee >> (56 - 8 * i)) & 0xFF);
+                            }
+                        }
                     }
                     return extra;
                 }(),
