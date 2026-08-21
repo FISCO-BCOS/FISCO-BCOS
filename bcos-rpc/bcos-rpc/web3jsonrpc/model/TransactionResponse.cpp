@@ -27,6 +27,12 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         if (auto meta = receipt.opStackMeta(); meta.has_value() && meta->deposit_nonce)
         {
             result["nonce"] = toQuantity(*meta->deposit_nonce);
+            // op-geth also surfaces depositReceiptVersion on the tx object
+            // (internal/ethapi/api.go:1210-1213); absent without the meta.
+            if (meta->deposit_receipt_version)
+            {
+                result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
+            }
         }
     }
 }

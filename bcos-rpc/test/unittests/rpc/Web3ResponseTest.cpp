@@ -225,12 +225,16 @@ BOOST_AUTO_TEST_CASE(combineTxResponseDepositNonceFromReceiptMeta)
     combineTxResponse(result, *tx, *receipt, blockHash);
     BOOST_CHECK_EQUAL(result["type"].asString(), "0x7e");
     BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x12");  // 18 = depositNonce
+    // MN-6: the tx JSON surfaces depositReceiptVersion from the meta like op-geth does
+    // (internal/ethapi/api.go:1210-1213); 1 == Regolith receipt version.
+    BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x1");
 
     // Without a meta (or without deposit_nonce) the 0x0 default stands.
     auto receipt2 = makeReceipt(m_blockFactory);
     Json::Value result2(Json::objectValue);
     combineTxResponse(result2, *tx, *receipt2, blockHash);
     BOOST_CHECK_EQUAL(result2["nonce"].asString(), "0x0");
+    BOOST_CHECK(!result2.isMember("depositReceiptVersion"));
 
     // The no-receipt overload keeps the 0x0 default too.
     Json::Value result3(Json::objectValue);
