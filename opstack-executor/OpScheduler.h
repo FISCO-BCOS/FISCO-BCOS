@@ -702,8 +702,12 @@ private:
         executedBlockHeader->setWithdrawalsRoot(detail::toBcosH256(opResult.seal.withdrawalsRoot));
         if (opResult.seal.requestsHash.has_value())
             executedBlockHeader->setRequestsHash(detail::toBcosH256(*opResult.seal.requestsHash));
-        if (opResult.seal.blobGasUsed.has_value())
-            executedBlockHeader->setBlobGasUsed(bcos::u256(*opResult.seal.blobGasUsed));
+        // blobGasUsed is always present on the header (strict-path requireHeaderField reads it):
+        // pre-Jovian seal carries nullopt (no DA footprint), but the executed header must still
+        // carry 0 so the six-way comparison sees has_value(0) on both sides — the announced header
+        // seeds 0 via makeHeader, and optional != optional would report a nullopt-vs-0 mismatch.
+        executedBlockHeader->setBlobGasUsed(bcos::u256(
+            opResult.seal.blobGasUsed.has_value() ? *opResult.seal.blobGasUsed : 0));
         co_return executedBlockHeader;
     }
 
