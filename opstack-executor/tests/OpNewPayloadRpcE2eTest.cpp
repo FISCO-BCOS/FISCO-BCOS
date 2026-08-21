@@ -1269,12 +1269,14 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
-// ── FCU end-to-end 6 cases ──
+// ── FCU end-to-end cases ──
 // ── Mirrors op-geth v1.101702.2 eth/catalyst/api.go forkchoiceUpdated semantics:
 //   head known -> VALID + LatestValidHash=head (api.go:316-322 valid())
 //   head unknown -> STATUS_SYNCING (api.go:238 network pull)
-//   OP + attributes -> -38003 (checkOptimismPayloadAttributes rejects; here
-//   UnsupportedOpPayloadAttributes)  monotonicity finalized>head -> -38002 (api.go
+//   OP + attrs -> version<3 throws UnsupportedFork (-38005); attrs content invalid ->
+//   STATUS_INVALID before any state change (ForkchoiceAttrs*Invalid cases, op-geth
+//   checkOptimismPayloadAttributes api_optimism.go:40-65); valid attrs -> Tier-2 build
+//   monotonicity finalized>head -> -38002 (api.go
 //   safe/finalized checks; here InvalidForkchoiceState :263-280)  head increment must be
 //   exactly +1 (:318-323)  no attributes -> head/safe/finalized advance
 //   (updateTrackedBlockNumbers :1520-1525)
@@ -1392,7 +1394,57 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsNonEmptyWithdrawalsInvalid)
     BOOST_CHECK(state.validationError->find("withdrawals") != std::string::npos);
 }
 
-// ③ V1/V2 attrs -> UnsupportedFork (-38005): the OP build path gates attrs-carrying FCU at
+BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingEip1559ParamsInvalid)
+{
+    // MJ-2: Holocene+ OP face requires eip1559Params (op-geth api_optimism.go:40-65);
+    // a missing value is refused, never silently defaulted.
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    auto attrs = makeJovianAttrs();
+    attrs.eip1559Params = std::nullopt;
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs, /*version=*/4));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(state.validationError.has_value());
+    BOOST_CHECK(state.validationError->find("eip1559Params") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(ForkchoiceAttrsWrongSizeEip1559ParamsInvalid)
+{
+    // MJ-2: eip1559Params must be exactly 8 bytes (Holocene denominator|elasticity), and a
+    // partial-zero pair (denominator=0 with elasticity!=0, or vice versa) is rejected at FCU
+    // time (op-geth ValidateHolocene1559Params) -- both zero is allowed (= prior constants).
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    // 4-byte value: size != 8.
+    {
+        auto attrs = makeJovianAttrs();
+        attrs.eip1559Params = bcos::bytes{0, 0, 0, 8};
+        auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+            bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
+            /*version=*/4));
+        (void)payloadId;
+        BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+        BOOST_REQUIRE(state.validationError.has_value());
+        BOOST_CHECK(state.validationError->find("eip1559Params") != std::string::npos);
+    }
+    // Partial-zero: denominator=0, elasticity=2 -> rejected (never a silent default build).
+    {
+        auto attrs = makeJovianAttrs();
+        attrs.eip1559Params = bcos::bytes{0, 0, 0, 0, 0, 0, 0, 2};
+        auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+            bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
+            /*version=*/4));
+        (void)payloadId;
+        BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+        BOOST_REQUIRE(state.validationError.has_value());
+        BOOST_CHECK(state.validationError->find("eip1559Params") != std::string::npos);
+    }
+}
 // V3+ (op-node sends FCU V3 with attrs for Isthmus+ builds). The version gate now runs
 // BEFORE attrs validation (updateForkchoice), so V2 attrs hit -38005 first, never the
 // validation verdicts exercised by the ForkchoiceAttrs*Invalid cases above.

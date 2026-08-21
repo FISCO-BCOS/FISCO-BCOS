@@ -216,11 +216,11 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     }
     if (version <= 2 && payloadAttributes.parentBeaconBlockRoot.has_value())
     {
-        return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3");
+        return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3 and V4");
     }
     if (version >= 2 && !payloadAttributes.withdrawals.has_value())
     {
-        return std::string("withdrawals are required for PayloadAttributesV2 and V3");
+        return std::string("withdrawals are required for PayloadAttributesV2, V3 and V4");
     }
     if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
@@ -247,6 +247,22 @@ std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
     if (payloadAttributes.eip1559Params->size() != 8)
     {
         return std::string("eip1559Params must be exactly 8 bytes");
+    }
+    // Partial-zero eip-1559 params are rejected at FCU time (op-geth
+    // ValidateHolocene1559Params): denominator=0 with elasticity!=0 (or vice versa) would
+    // build a block newPayload then refuses. Both zero is allowed (= prior constants).
+    const auto readU32BE = [&](std::size_t off) {
+        return (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off]) << 24) |
+               (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 1]) << 16) |
+               (static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 2]) << 8) |
+               static_cast<std::uint32_t>((*payloadAttributes.eip1559Params)[off + 3]);
+    };
+    const auto denominator = readU32BE(0);
+    const auto elasticity = readU32BE(4);
+    if ((denominator == 0) != (elasticity == 0))
+    {
+        return std::string(
+            "eip1559Params denominator and elasticity must both be zero or both non-zero");
     }
     // OP blocks carry an empty withdrawals list (isthmus/exec-engine.md:161-163); a non-empty
     // attrs list must be rejected, never silently normalized to empty at build time.
