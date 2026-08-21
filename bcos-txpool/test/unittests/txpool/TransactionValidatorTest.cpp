@@ -45,9 +45,12 @@ namespace test
 {
 namespace
 {
-TxValidator::Ptr makeValidator()
+// Distinct name from Issue5318InvalidToTest.cpp's makeValidator (both compile into the same
+// unity TU; two anonymous-namespace helpers with the same name would be a redefinition).
+TxValidator::Ptr makeAdmissionValidator(bcos::crypto::CryptoSuite::Ptr cryptoSuite = nullptr)
 {
-    return std::make_shared<TxValidator>(nullptr, nullptr, nullptr, "group0", "chain0");
+    return std::make_shared<TxValidator>(
+        nullptr, nullptr, std::move(cryptoSuite), "group0", "chain0");
 }
 }  // namespace
 
@@ -211,7 +214,7 @@ BOOST_AUTO_TEST_CASE(testRejectDepositAtAdmission)
     auto hashImpl = std::make_shared<Keccak256>();
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-    auto validator = makeValidator();
+    auto validator = makeAdmissionValidator(cryptoSuite);
 
     // Build a deposit-shaped tars tx: type=Web3, web3TypedTxKind=0x7e. isDepositTx() must
     // trigger on web3TypedTxKind alone (never on isSystemTransaction).
@@ -234,14 +237,16 @@ BOOST_AUTO_TEST_CASE(testRejectDepositAtAdmission)
     BOOST_CHECK(validator->verify(*systemTx) == TransactionStatus::Malformed);
 
     // A normal Web3 tx (web3TypedTxKind=0) must NOT be rejected by this gate: the reject
-    // must key on the deposit kind, not on the Web3 type in general. Signature recovery of an
-    // empty-signature tx will fail, so assert the deposit gate fires *before* that, i.e. the
-    // non-deposit Web3 tx reaches the signature step (InvalidSignature, not Malformed).
+    // must key on the deposit kind, not on the Web3 type in general. (The full verify() of a
+    // non-deposit Web3 tx — signature recovery + nonce check — is covered by the existing
+    // testTransactionValidator cases; here we only assert the gate's classification.)
     auto normalInner = inner;
     normalInner.web3TypedTxKind = 0;
     auto normalTx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m = std::move(normalInner)]() mutable { return &m; });
     BOOST_CHECK(!normalTx->isDepositTx());
+    // The gate is the FIRST check in verify(): a non-deposit Web3 tx must pass it and reach
+    // signature recovery (which fails on an empty signature — InvalidSignature, NOT Malformed).
     BOOST_CHECK(validator->verify(*normalTx) != TransactionStatus::Malformed);
 }
 
@@ -279,6 +284,79 @@ BOOST_AUTO_TEST_CASE(testValidateChainIdFromEnvelope)
         auto result = task::syncWait(validator->validateChainId(*tx, ledger));
         BOOST_CHECK(result == TransactionStatus::None);
     }
+
+    // A typed tx carries its chainId as RLP field 0 of the signed preimage. Envelope chainId
+    // must match the config exactly — a "0" tars mirror must NOT provide an exemption (op-geth
+    // modernSigner has no chainId=0 exemption for typed txs).
+    auto makeTypedTx = [&](uint64_t envelopeChainId) {
+        bcostars::Transaction inner{};
+        inner.type = static_cast<tars::Char>(TransactionType::Web3Transaction);
+        inner.web3TypedTxKind = static_cast<tars::Char>(0x02);  // EIP-1559
+        // preimage = 0x02 || rlp([chainId, nonce, maxPriority, maxFee, gas, to, value, data, []])
+        // codec::rlp::encode over the variadic list already emits the list header; only the
+        // 0x02 type byte is prepended.
+        bcos::bytes typed{0x02};
+        bcos::codec::rlp::encode(typed, envelopeChainId, static_cast<uint64_t>(0),
+            static_cast<uint64_t>(1), static_cast<uint64_t>(1), static_cast<uint64_t>(21000),
+            bcos::Address("0xdead000000000000000000000000000000000011"),
+            static_cast<uint64_t>(0), bcos::bytes{}, bcos::bytes{});
+        inner.extraTransactionBytes.assign(typed.begin(), typed.end());
+        return std::make_shared<bcostars::protocol::TransactionImpl>(
+            [m = std::move(inner)]() mutable { return &m; });
+    };
+    {
+        auto tx = makeTypedTx(123);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        txImpl->mutableInner().data.chainID = "0";  // hostile mirror must not bypass
+        auto result = task::syncWait(validator->validateChainId(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::None);  // envelope 123 == config 123
+    }
+    {
+        auto tx = makeTypedTx(456);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        txImpl->mutableInner().data.chainID = "123";  // mirror lies to match config
+        auto result = task::syncWait(validator->validateChainId(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::InvalidChainId);  // envelope 456 != config
+    }
+}
+
+// EIP-2 low-s must be enforced on the P2P import path too (Transaction::verify), not only on
+// the RPC decode path: without the symmetric gate a malleated (high-s) tx imported from a peer
+// would pass admission and diverge from op-geth/op-reth, which enforce low-s at both txpool
+// admission and block execution.
+BOOST_AUTO_TEST_CASE(testVerifyRejectsHighSOnP2P)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+
+    const u256 kSecpOrder("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+    const u256 kSecpHalfOrder = kSecpOrder / 2;
+
+    // A valid Web3 tx with a canonical (low-s) signature.
+    auto tx = fakeWeb3Tx(cryptoSuite, "42", keyPair);
+    BOOST_CHECK_NO_THROW(tx->verify(*hashImpl, *signatureImpl));
+
+    // Malleability flip: s' = n - s is high-s but recovers the same sender. Rebuild the tars
+    // signature r(32)||s(32)||yParity(1) with the flipped s; verify() must reject it even
+    // though the flipped signature still recovers the original sender.
+    auto sigBytes = tx->signatureData().toBytes();
+    BOOST_REQUIRE(sigBytes.size() == 65);
+    bcos::u256 s = bcos::fromBigEndian<bcos::u256>(
+        bcos::bytesConstRef(sigBytes.data() + 32, 32));
+    BOOST_REQUIRE(s <= kSecpHalfOrder);
+    auto flipped = bcos::toBigEndian(kSecpOrder - s);
+    BOOST_REQUIRE(flipped.size() == 32);
+    std::copy(flipped.begin(), flipped.end(), sigBytes.begin() + 32);
+    auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+    BOOST_REQUIRE(txImpl);
+    txImpl->setSignatureData(sigBytes);
+    // Re-taint so verify() re-runs the full recovery + EIP-2 ladder (a prior verify()/forceSender
+    // already cleared the taint; setSignatureData does not reset it).
+    txImpl->clearSenderAndHash();
+
+    BOOST_CHECK_THROW(tx->verify(*hashImpl, *signatureImpl), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
