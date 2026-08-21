@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""A.1 engine API matrix on the B3a ACTIVE instance (spec §3 A.1). Pull-contract surface
-(D2 Tier-1): the OP-mode engine refuses attribute-driven building (FCU with attrs →
--38003 UnsupportedOpPayloadAttributes, after the head/safe/finalized tracking update has
-run) and getPayload (OpPayloadBuildingUnsupported — no in-process builder until Tier-2).
+"""A.1 engine API matrix on the B3a ACTIVE instance (spec §3 A.1). Tier-2 attribute-driven
+building: FCU with attrs builds a payload (VALID + payloadId) and getPayload serves it;
+the attrs surface mirrors op-node's rollup shape (gasLimit/eip1559Params/withdrawals/
+parentBeaconBlockRoot/minBaseFee) and the engine validates it (op-geth
+checkOptimismPayloadAttributes) instead of silently normalizing deviations.
 Payload-level flows (newPayload execution, -38005 version gates, tamper vectors) live in
 the C++ harness; this script asserts the FCU/label surface: attrs-less FCU VALID without
-payloadId, -38003 attrs refusal, getPayload refusal, safe/finalized routing to the
-tracked head (strict null pre-FCU), pending aliasing latest, and unknown-head SYNCING.
+payloadId, attrs FCU VALID + payloadId (Tier-2 build), getPayload serving the built
+payload (Jovian minBaseFee tail audit), safe/finalized routing to the tracked head
+(strict null pre-FCU), pending aliasing latest, and unknown-head SYNCING.
 
 Engine-version adaptive (08-18): the exchangeCapabilities trio is probed and the highest
 coherent V (V4 on worktree-op-alignment, V3 on the scheduler line — FCU V4 returns -38005
@@ -118,23 +120,39 @@ def main():
     check(f"FCU {V} attrs-less VALID, no payloadId",
           fc["payloadStatus"]["status"] == "VALID" and fc.get("payloadId") is None, str(fc))
 
-    # 4. FCU with attrs -> Tier-2 attribute-driven building: VALID + payloadId (a fresh node
-    # answers from the tracked head; the built payload is abandoned — the engine drops the
-    # delegate's pending on the next build).
+    # 4. FCU with attrs -> Tier-2 attribute-driven building: VALID + payloadId. The attrs mirror
+    # op-node's rollup shape (op-service/eth/types.go PayloadAttributes): gasLimit from the head
+    # (SystemConfig-derived), Holocene eip1559Params (denominator=8, elasticity=2), empty
+    # withdrawals, parentBeaconBlockRoot, and (Jovian chains) minBaseFee. The engine validates
+    # this surface (op-geth checkOptimismPayloadAttributes) and refuses to build on deviation.
     now = int(time.time())
+    head_gas = int(head_block["gasLimit"], 16)
+    genesis_extra = eth.call("eth_getBlockByNumber", ["0x0", False])["extraData"]
+    jovian = len(bytes.fromhex(genesis_extra[2:])) == 17  # Jovian 17B extraData shape
     attrs = {"timestamp": hex(now), "prevRandao": "0x" + "00" * 32,
-             "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011"}
+             "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011",
+             "gasLimit": hex(head_gas),
+             "eip1559Params": "0x0000000800000002",
+             "withdrawals": [],
+             "parentBeaconBlockRoot": "0x" + "00" * 32}
+    if jovian:
+        attrs["minBaseFee"] = "0x0"
     fc2 = eng.call(f"engine_forkchoiceUpdatedV{ver}", [fcs, attrs])
     check("FCU attrs builds (VALID + payloadId, Tier-2)",
           fc2["payloadStatus"]["status"] == "VALID" and fc2.get("payloadId") is not None,
           str(fc2)[:120])
 
-    # 5. getPayload -> refused (no OP-ized builder; Tier-2 will implement)
-    try:
-        eng.call(f"engine_getPayloadV{ver}", ["0x0000000000000000"])
-        check("getPayload refused in OP mode", False, "expected an error")
-    except AssertionError as e:
-        check("getPayload refused in OP mode", "-32601" not in str(e), str(e)[:90])
+    # 5. getPayload serves the built payload (Tier-2). Jovian chains: the extraData tail
+    # [9,17) must echo the requested minBaseFee (audit BL-3).
+    pl = eng.call(f"engine_getPayloadV{ver}", [fc2["payloadId"]])
+    pl_head = pl["executionPayload"]
+    check("getPayload serves the built payload (Tier-2)",
+          int(pl_head["blockNumber"], 16) == int(head_block["number"], 16) + 1,
+          str(pl)[:120])
+    if jovian:
+        extra = bytes.fromhex(pl_head["extraData"][2:])
+        check("Jovian extraData minBaseFee tail == 0 (BL-3)",
+              len(extra) == 17 and int.from_bytes(extra[9:17], "big") == 0, str(extra))
 
     # 6. post-FCU labels: routed to the tracked (genesis) head — hash equality with the
     # FCU hashes proves the tracked path (not the latest alias) served them

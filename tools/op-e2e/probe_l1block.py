@@ -173,7 +173,12 @@ def fcu_seal(rpc, want_head_after):
     fcs = {"headBlockHash": head["hash"], "safeBlockHash": head["hash"],
            "finalizedBlockHash": head["hash"]}
     attrs = {"timestamp": hex(int(time.time())), "prevRandao": "0x" + "00" * 32,
-             "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011"}
+             "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011",
+             "gasLimit": hex(int(head["gasLimit"], 16)),
+             "eip1559Params": "0x0000000800000002",
+             "withdrawals": [],
+             "parentBeaconBlockRoot": "0x" + "00" * 32,
+             "minBaseFee": "0x0"}  # B3a/C2 均为 Jovian 链；Isthmus 链删此行
     fc = rpc.eng("engine_forkchoiceUpdatedV4", [fcs, attrs])
     pid = fc["payloadId"]
     pl = rpc.eng("engine_getPayloadV4", [pid])

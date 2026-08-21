@@ -1307,26 +1307,106 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
         static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing));
 }
 
-// ③ OP attributes -> -38003 (UnsupportedOpPayloadAttributes; mirrors op-geth attribute rejection).
-// Note: the forkchoice state update takes effect first, then the build is rejected
-// (EngineServiceImpl.h:356-359).
-// Tier-2 (08-19): attribute-driven OP building replaced the -38003 refusal — an attrs FCU at
-// V4 now builds a payload (synthesized L1-attributes deposit, canonical two-pass execute).
-// The V4 build path is exercised live by the B3 fixture chain and a1_active; THIS golden
-// fixture's storage cannot continue a block past the vector (its ledger-config rows end at
-// the vector height), so the in-fixture assertion pins the remaining OP-face refusal: the
-// engine is Isthmus+/V4-only and a V3 attrs FCU is rejected at the version gate.
+// MJ-2: OP-mode FCU attrs deep validation (op-geth checkOptimismPayloadAttributes,
+// eth/catalyst/api_optimism.go:40-65). Invalid attrs return STATUS_INVALID *before* any
+// forkchoice state change or build -- never a silent fallback.
+namespace
+{
+bcos::engine::PayloadAttributes makeJovianAttrs()
+{
+    bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = 2'000'000'000'000;  // strictly after the golden parent (ms domain)
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
+    attrs.gasLimit = 30'000'000;
+    attrs.eip1559Params = bcos::bytes{0, 0, 0, 8, 0, 0, 0, 2};  // denominator=8, elasticity=2
+    attrs.minBaseFee = 0;
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::crypto::HashType{};
+    return attrs;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingGasLimitInvalid)
+{
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    auto attrs = makeJovianAttrs();
+    attrs.gasLimit = std::nullopt;
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs, /*version=*/4));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(state.validationError.has_value());
+    BOOST_CHECK(state.validationError->find("gasLimit") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMissingMinBaseFeeInvalid)
+{
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    auto attrs = makeJovianAttrs();
+    attrs.minBaseFee = std::nullopt;
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs, /*version=*/4));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(state.validationError.has_value());
+    BOOST_CHECK(state.validationError->find("minBaseFee") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMinBaseFeeBeforeJovianInvalid)
+{
+    // Isthmus fixture: minBaseFee must be null pre-Jovian (jovian/exec-engine.md:59-79).
+    // OpE2eFixture has no genesis-hash helper — register a known block instead
+    // (pattern: ForkchoiceMonotonicityRejected).
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(/*jovian=*/false));
+    bcos::h256 knownBlock("0x5555555555555555555555555555555555555555555555555555555555555555");
+    registerVerifiedBlock(fixture->multiLayerStorage, knownBlock, /*number=*/0);
+    auto attrs = makeJovianAttrs();
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{knownBlock, knownBlock, knownBlock}, &attrs, /*version=*/4));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(state.validationError.has_value());
+    BOOST_CHECK(state.validationError->find("minBaseFee") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(ForkchoiceAttrsNonEmptyWithdrawalsInvalid)
+{
+    // MJ-2: OP attrs withdrawals must be present AND empty (op-geth api_optimism.go:55-58
+    // rejects non-empty; buildOpPayload must never silently normalize them away).
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    (void)number;
+    auto attrs = makeJovianAttrs();
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{bcos::engine::WithdrawalV1{}};
+    auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs, /*version=*/4));
+    (void)payloadId;
+    BOOST_CHECK_EQUAL(static_cast<int>(state.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
+    BOOST_REQUIRE(state.validationError.has_value());
+    BOOST_CHECK(state.validationError->find("withdrawals") != std::string::npos);
+}
+
+// ③ V1/V2 attrs -> UnsupportedFork (-38005): the OP build path gates attrs-carrying FCU at
+// V3+ (op-node sends FCU V3 with attrs for Isthmus+ builds). The version gate now runs
+// BEFORE attrs validation (updateForkchoice), so V2 attrs hit -38005 first, never the
+// validation verdicts exercised by the ForkchoiceAttrs*Invalid cases above.
 BOOST_AUTO_TEST_CASE(ForkchoiceAttributesVersionGate)
 {
     auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
     (void)number;
     bcos::engine::PayloadAttributes attrs;
-    attrs.timestamp = 2'000'000'000'000;  // strictly after the golden parent (ms domain)
+    attrs.timestamp = 2'000'000'000'000;
     attrs.prevRandao = bcos::crypto::HashType{};
     attrs.suggestedFeeRecipient = bcos::Address{};
     BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.updateForkchoice(
                           bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, &attrs,
-                          /*version=*/3)),
+                          /*version=*/2)),
         bcos::engine::UnsupportedFork);
 }
 

@@ -222,9 +222,45 @@ std::optional<std::string> bcos::engine::detail::validatePayloadAttributes(
     {
         return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
-    if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
-        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
+        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and V4");
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> bcos::engine::detail::validateOpPayloadAttributes(
+    const PayloadAttributes& payloadAttributes, bool jovianActive)
+{
+    // Rollup-mode FCU attrs validation (op-geth checkOptimismPayloadAttributes,
+    // eth/catalyst/api_optimism.go:40-65, non-empty withdrawals rejection :55-58). The OP face
+    // is Isthmus+/Holocene+, so the Holocene eip1559Params and (from Jovian) minBaseFee
+    // presence rules are unconditional.
+    if (!payloadAttributes.gasLimit.has_value())
+    {
+        return std::string("gasLimit parameter is required (OP rollup)");
+    }
+    if (!payloadAttributes.eip1559Params.has_value())
+    {
+        return std::string("eip1559Params is required on the OP path (Holocene+)");
+    }
+    if (payloadAttributes.eip1559Params->size() != 8)
+    {
+        return std::string("eip1559Params must be exactly 8 bytes");
+    }
+    // OP blocks carry an empty withdrawals list (isthmus/exec-engine.md:161-163); a non-empty
+    // attrs list must be rejected, never silently normalized to empty at build time.
+    if (payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
+    {
+        return std::string("withdrawals must be empty on the OP path");
+    }
+    if (jovianActive && !payloadAttributes.minBaseFee.has_value())
+    {
+        return std::string("minBaseFee is required after the Jovian fork");
+    }
+    if (!jovianActive && payloadAttributes.minBaseFee.has_value())
+    {
+        return std::string("minBaseFee must be null before the Jovian fork");
     }
     return std::nullopt;
 }

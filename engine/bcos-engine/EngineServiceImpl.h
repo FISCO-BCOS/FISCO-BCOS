@@ -85,6 +85,12 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
 
+/// OP-mode rollup attrs validation: gasLimit/eip1559Params/withdrawals/minBaseFee presence
+/// rules (op-geth checkOptimismPayloadAttributes). `jovianActive` is feature-driven
+/// (feature_op_jovian, constant across blocks).
+std::optional<std::string> validateOpPayloadAttributes(
+    const PayloadAttributes& payloadAttributes, bool jovianActive);
+
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
@@ -231,17 +237,41 @@ public:
         }
         if (payloadAttributes != nullptr)
         {
-            // OP mode skips this pre-check entirely: the OP answer to *any* attributes object --
-            // well-formed or not -- is -38003, and it must be given only AFTER the forkchoice
-            // state has been updated (the forkchoice update is not rolled back, the head advances
-            // normally, only block building is not started). Returning an Invalid payloadStatus
-            // here would abort the update instead. The refusal is raised further down, where the
-            // generic path would start building. `if constexpr` keeps the generic path's codegen
-            // byte-for-byte unchanged.
-            if constexpr (!c_opMode)
+            // OP-mode version gate first: V1/V2 attrs are refused with -38005 before any
+            // validation or state change (op-node sends FCU V3+ attrs for Isthmus+ builds;
+            // the historical gate placement AFTER the state update is superseded -- op-geth
+            // rejects a version-skewed FCU outright, eth/catalyst/api.go:164-178).
+            if constexpr (c_opMode)
             {
-                if (auto validationError =
-                        detail::validatePayloadAttributes(*payloadAttributes, version);
+                if (version < 3)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        UnsupportedFork{} << bcos::errinfo_comment{
+                            "Isthmus+ payload building requires engine_forkchoiceUpdatedV3 "
+                            "or V4 (JSON-RPC -38005)"});
+                }
+            }
+            // Rollup mode validates the SAME attributes surface the generic path does, plus the
+            // OP-only rules (gasLimit/eip1559Params/withdrawals/minBaseFee). A validation
+            // failure returns STATUS_INVALID before any forkchoice state change -- the op-geth
+            // ordering (checkOptimismPayloadAttributes runs ahead of the state update,
+            // eth/catalyst/api.go:215-218). `if constexpr` keeps the generic path's codegen
+            // unchanged.
+            if (auto validationError =
+                    detail::validatePayloadAttributes(*payloadAttributes, version);
+                validationError.has_value())
+            {
+                ForkchoiceUpdatedResult result{
+                    .payloadStatus =
+                        makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError),
+                    .payloadId = std::nullopt,
+                };
+                co_return result;
+            }
+            if constexpr (c_opMode)
+            {
+                if (auto validationError = detail::validateOpPayloadAttributes(
+                        *payloadAttributes, m_scheduler.get().isJovianActive());
                     validationError.has_value())
                 {
                     ForkchoiceUpdatedResult result{
@@ -354,22 +384,10 @@ public:
         }
         if constexpr (c_opMode)
         {
-            // Isthmus+ payloads are V4-only on the OP face — the same gate newPayload enforces
-            // (c_opIsthmusPayloadVersion). An attrs-carrying FCU BUILDS a payload, so the gate
-            // belongs here too: a V3 build would produce a payload the OP newPayload path then
-            // refuses with -38005 (a build/submit version skew).
-            // op-node (geth engine kind) sends FCU V3 with attrs for Isthmus+ builds;
-            // accept V3+ when attrs are present (V3 attrs are ABI-compatible with V4).
-            if (payloadAttributes != nullptr && version < 3)
-            {
-                BOOST_THROW_EXCEPTION(
-                    UnsupportedFork{} << bcos::errinfo_comment{
-                        "Isthmus+ payload building requires engine_forkchoiceUpdatedV4 "
-                        "(JSON-RPC -38005)"});
-            }
             // Tier-2 (08-19): attribute-driven OP building. Everything above -- the storage
             // lookups, the monotonicity checks, and the tracked-head/safe/finalized update under
-            // `x_state` -- has already run and is *kept*. The build synthesizes the mandatory
+            // `x_state` -- has already run and is *kept* (the attrs validation and the V3+
+            // version gate ran BEFORE them). The build synthesizes the mandatory
             // L1-attributes deposit, seals the mempool (raw EIP-2718 forms only), pre-executes
             // via the delegate with verify=false (announced commitments are provisional), fills
             // the real commitments from the executed header and caches the payload. The driver's
