@@ -102,9 +102,9 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
                         response["blockNumber"] = currentStatus.blockNumber;
                         auto resp = response.toStyledString();
 
-                        auto message = wsService->messageFactory()->buildMessage();
-                        message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
-                        message->setPayload(bcos::bytes(resp.begin(), resp.end()));
+                        bcos::boostssl::ws::WsMessage message;
+                        message.setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
+                        message.setPayload(bcos::bytes(resp.begin(), resp.end()));
 
                         for (auto& session : sessions)
                         {

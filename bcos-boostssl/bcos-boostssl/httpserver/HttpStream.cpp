@@ -1,7 +1,120 @@
 #include "HttpStream.h"
 #include <bcos-utilities/BoostLog.h>
+#include <type_traits>
 
-std::string bcos::boostssl::http::HttpStream::localEndpoint()
+using namespace bcos::boostssl;
+
+http::HttpStream::HttpStream(boost::beast::tcp_stream _stream) : m_stream(std::move(_stream))
+{
+    HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStream]", this);
+}
+
+http::HttpStream::HttpStream(boost::beast::ssl_stream<boost::beast::tcp_stream> _stream)
+  : m_stream(std::move(_stream))
+{
+    HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStream][SSL]", this);
+}
+
+http::HttpStream::~HttpStream()
+{
+    HTTP_STREAM(DEBUG) << LOG_KV("[DELOBJ][HttpStream]", this);
+    close();
+}
+
+boost::beast::tcp_stream& http::HttpStream::stream()
+{
+    return std::visit(
+        [](auto& _stream) -> boost::beast::tcp_stream& {
+            if constexpr (std::is_same_v<std::decay_t<decltype(_stream)>,
+                              boost::beast::tcp_stream>)
+            {
+                return _stream;
+            }
+            else
+            {
+                return _stream.next_layer();
+            }
+        },
+        m_stream);
+}
+
+ws::WsStreamDelegate::Ptr http::HttpStream::wsStream()
+{
+    m_closed.test_and_set();
+    ws::WsStreamDelegateBuilder builder;
+    return std::visit(
+        [&builder](auto& _stream) { return builder.build(std::move(_stream)); }, m_stream);
+}
+
+bool http::HttpStream::open()
+{
+    if (m_closed.test())
+    {
+        return false;
+    }
+    return std::visit(
+        [](auto& _stream) {
+            if constexpr (std::is_same_v<std::decay_t<decltype(_stream)>,
+                              boost::beast::tcp_stream>)
+            {
+                return _stream.socket().is_open();
+            }
+            else
+            {
+                return _stream.next_layer().socket().is_open();
+            }
+        },
+        m_stream);
+}
+
+void http::HttpStream::close()
+{
+    if (!m_closed.test_and_set())
+    {
+        HTTP_STREAM(INFO) << LOG_DESC("close the stream") << LOG_KV("this", this);
+        std::visit(
+            [](auto& _stream) {
+                if constexpr (std::is_same_v<std::decay_t<decltype(_stream)>,
+                                  boost::beast::tcp_stream>)
+                {
+                    ws::WsTools::close(_stream.socket());
+                }
+                else
+                {
+                    ws::WsTools::close(_stream.next_layer().socket());
+                }
+            },
+            m_stream);
+    }
+}
+
+void http::HttpStream::asyncRead(boost::beast::flat_buffer& _buffer,
+    boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
+    HttpStreamRWHandler _handler)
+{
+    if (!m_closed.test())
+    {
+        std::visit(
+            [&](auto& _stream) {
+                boost::beast::http::async_read(_stream, _buffer, _parser, std::move(_handler));
+            },
+            m_stream);
+    }
+}
+
+void http::HttpStream::asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler)
+{
+    if (!m_closed.test())
+    {
+        std::visit(
+            [&](auto& _stream) {
+                boost::beast::http::async_write(_stream, _httpResp, std::move(_handler));
+            },
+            m_stream);
+    }
+}
+
+std::string http::HttpStream::localEndpoint()
 {
     try
     {
@@ -16,7 +129,8 @@ std::string bcos::boostssl::http::HttpStream::localEndpoint()
 
     return {};
 }
-std::string bcos::boostssl::http::HttpStream::remoteEndpoint()
+
+std::string http::HttpStream::remoteEndpoint()
 {
     try
     {
@@ -31,108 +145,15 @@ std::string bcos::boostssl::http::HttpStream::remoteEndpoint()
 
     return {};
 }
-bcos::boostssl::http::HttpStreamImpl::HttpStreamImpl(
+
+http::HttpStream::Ptr http::HttpStreamFactory::buildHttpStream(
     std::shared_ptr<boost::beast::tcp_stream> _stream)
-  : m_stream(std::move(_stream))
 {
-    HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStreamImpl]", this);
-}
-bcos::boostssl::http::HttpStreamImpl::~HttpStreamImpl()
-{
-    HTTP_STREAM(DEBUG) << LOG_KV("[DELOBJ][HttpStreamImpl]", this);
-    close();
-}
-boost::beast::tcp_stream& bcos::boostssl::http::HttpStreamImpl::stream()
-{
-    return *m_stream;
-}
-bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamImpl::wsStream()
-{
-    m_closed.test_and_set();
-    auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
-    return builder->build(m_stream);
-}
-bool bcos::boostssl::http::HttpStreamImpl::open()
-{
-    return !m_closed.test() && m_stream && m_stream->socket().is_open();
-}
-void bcos::boostssl::http::HttpStreamImpl::close()
-{
-    if (!m_closed.test_and_set())
-    {
-        HTTP_STREAM(INFO) << LOG_DESC("close the stream") << LOG_KV("this", this);
-        ws::WsTools::close(m_stream->socket());
-    }
+    return std::make_shared<HttpStream>(std::move(*_stream));
 }
 
-void bcos::boostssl::http::HttpStreamImpl::asyncRead(boost::beast::flat_buffer& _buffer,
-    boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
-    HttpStreamRWHandler _handler)
-{
-    if (!m_closed.test())
-    {
-        boost::beast::http::async_read(*m_stream, _buffer, _parser, std::move(_handler));
-    }
-}
-void bcos::boostssl::http::HttpStreamImpl::asyncWrite(
-    const HttpResponse& _httpResp, HttpStreamRWHandler _handler)
-{
-    if (!m_closed.test())
-    {
-        boost::beast::http::async_write(*m_stream, _httpResp, std::move(_handler));
-    }
-}
-bcos::boostssl::http::HttpStreamSslImpl::HttpStreamSslImpl(
-    std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
-  : m_stream(std::move(_stream))
-{
-    HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStreamSslImpl]", this);
-}
-bcos::boostssl::http::HttpStreamSslImpl::~HttpStreamSslImpl()
-{
-    HTTP_STREAM(DEBUG) << LOG_KV("[DELOBJ][HttpStreamSslImpl]", this);
-    close();
-}
-boost::beast::tcp_stream& bcos::boostssl::http::HttpStreamSslImpl::stream()
-{
-    return m_stream->next_layer();
-}
-bcos::boostssl::ws::WsStreamDelegate::Ptr bcos::boostssl::http::HttpStreamSslImpl::wsStream()
-{
-    m_closed.test_and_set();
-    auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
-    return builder->build(m_stream);
-}
-bool bcos::boostssl::http::HttpStreamSslImpl::open()
-{
-    return !m_closed.test() && m_stream && m_stream->next_layer().socket().is_open();
-}
-void bcos::boostssl::http::HttpStreamSslImpl::close()
-{
-    if (!m_closed.test_and_set())
-    {
-        HTTP_STREAM(INFO) << LOG_DESC("close the ssl stream") << LOG_KV("this", this);
-        ws::WsTools::close(m_stream->next_layer().socket());
-    }
-}
-void bcos::boostssl::http::HttpStreamSslImpl::asyncRead(boost::beast::flat_buffer& _buffer,
-    boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
-    HttpStreamRWHandler _handler)
-{
-    boost::beast::http::async_read(*m_stream, _buffer, _parser, std::move(_handler));
-}
-void bcos::boostssl::http::HttpStreamSslImpl::asyncWrite(
-    const HttpResponse& _httpResp, HttpStreamRWHandler _handler)
-{
-    boost::beast::http::async_write(*m_stream, _httpResp, std::move(_handler));
-}
-bcos::boostssl::http::HttpStream::Ptr bcos::boostssl::http::HttpStreamFactory::buildHttpStream(
-    std::shared_ptr<boost::beast::tcp_stream> _stream)
-{
-    return std::make_shared<HttpStreamImpl>(std::move(_stream));
-}
-bcos::boostssl::http::HttpStream::Ptr bcos::boostssl::http::HttpStreamFactory::buildHttpStream(
+http::HttpStream::Ptr http::HttpStreamFactory::buildHttpStream(
     std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
 {
-    return std::make_shared<HttpStreamSslImpl>(std::move(_stream));
+    return std::make_shared<HttpStream>(std::move(*_stream));
 }

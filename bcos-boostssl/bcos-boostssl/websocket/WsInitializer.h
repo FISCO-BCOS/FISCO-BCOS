@@ -33,14 +33,12 @@ public:
     using Ptr = std::shared_ptr<WsInitializer>;
     using ConstPtr = std::shared_ptr<const WsInitializer>;
 
-    std::shared_ptr<MessageFaceFactory> messageFactory() const;
-    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory);
+    // whether messages of the ws service use the raw wire format (fixed per service)
+    bool rawMessage() const noexcept { return m_rawMessage; }
+    void setRawMessage(bool _rawMessage) noexcept { m_rawMessage = _rawMessage; }
 
     std::shared_ptr<WsConfig> config() const;
     void setConfig(std::shared_ptr<WsConfig> _config);
-
-    std::shared_ptr<WsSessionFactory> sessionFactory();
-    void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory);
 
     void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
     {
@@ -50,9 +48,8 @@ public:
     void initWsService(WsService::Ptr _wsService);
 
 private:
-    std::shared_ptr<MessageFaceFactory> m_messageFactory;
+    bool m_rawMessage = false;
     std::shared_ptr<WsConfig> m_config;
-    WsSessionFactory::Ptr m_sessionFactory;
     bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace bcos::boostssl::ws

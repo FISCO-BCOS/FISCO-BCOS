@@ -156,10 +156,10 @@ void Web3Subscribe::onNewBlock(int64_t blockNumber)
             // modify subscriptionId
             resp["params"]["subscription"] = subscriptionId;
 
-            auto message = session->messageFactory()->buildMessage();
+            bcos::boostssl::ws::WsMessage message(session->rawMessage());
             auto respBytes = toBytesResponse(resp);
-            message->setPayload(std::move(respBytes));
-            session->asyncSendMessage(std::move(message));
+            message.setPayload(std::move(respBytes));
+            session->asyncSendMessage(message);
 
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
             {

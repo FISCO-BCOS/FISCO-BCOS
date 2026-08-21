@@ -34,6 +34,7 @@ namespace boostssl
 {
 namespace ws
 {
+class WsMessage;
 class WsSession;
 class WsService;
 }  // namespace ws
@@ -138,10 +139,10 @@ public:
 protected:
     virtual void notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
-    virtual void onRecvHandshakeRequest(std::shared_ptr<boostssl::MessageFace> _msg,
+    virtual void onRecvHandshakeRequest(boostssl::ws::WsMessage _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
-    virtual bool negotiatedVersion(std::shared_ptr<boostssl::MessageFace> _msg,
+    virtual bool negotiatedVersion(const boostssl::ws::WsMessage& _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
 private:

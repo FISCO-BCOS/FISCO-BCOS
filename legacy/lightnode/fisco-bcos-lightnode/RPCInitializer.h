@@ -55,7 +55,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
     }
 
     wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
-        [nodeConfig, nodeID, localLedger](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [nodeConfig, nodeID, localLedger](bcos::boostssl::ws::WsMessage msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             RPC_LOG(INFO) << "LightNode handshake request";
 
@@ -131,7 +131,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             std::string response;
             handshakeResponse.encode(response);
 
-            msg->setPayload(bcos::bytes(response.begin(), response.end()));
+            msg.setPayload(bcos::bytes(response.begin(), response.end()));
             session->asyncSendMessage(msg);
             RPC_LOG(INFO) << LOG_DESC("LightNode handshake success")
                           << LOG_KV("version", session->version())
@@ -139,23 +139,32 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                           << LOG_KV("handshakeResponse", response);
         });
     wsService->registerMsgHandler(bcos::rpc::AMOPClientMessageType::AMOP_SUBTOPIC,
-        [](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [](bcos::boostssl::ws::WsMessage msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             RPC_LOG(TRACE) << "LightNode amop topic request";
         });
     wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [jsonrpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+        [jsonrpc](bcos::boostssl::ws::WsMessage msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) mutable {
-            auto buffer = msg->payload();
+            auto buffer = msg.payload();
             auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
-            jsonrpc->onRPCRequest(req, [m_buffer = buffer, msg = std::move(msg),
+            // capture the scalar fields only; the response message is constructed
+            // inside the async callback below, no heap allocation needed here
+            auto seq = msg.seq();
+            auto packetType = msg.packetType();
+            auto ext = msg.ext();
+            jsonrpc->onRPCRequest(req, [m_buffer = buffer, seq = std::move(seq), packetType, ext,
                                            session = std::move(session)](
                                            bcos::bytes resp, boost::beast::http::status) {
                 if (session && session->isConnected())
                 {
-                    msg->setPayload(std::move(resp));
-                    session->asyncSendMessage(msg);
+                    bcos::boostssl::ws::WsMessage respMsg;
+                    respMsg.setSeq(seq);
+                    respMsg.setPacketType(packetType);
+                    respMsg.setExt(ext);
+                    respMsg.setPayload(std::move(resp));
+                    session->asyncSendMessage(respMsg);
                 }
                 else
                 {
@@ -165,7 +174,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                         << LOG_KV("req",
                                std::string_view((const char*)m_buffer.data(), m_buffer.size()))
                         << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
-                        << LOG_KV("seq", msg->seq())
+                        << LOG_KV("seq", seq)
                         << LOG_KV("endpoint", session ? session->endPoint() : std::string(""));
                 }
             });

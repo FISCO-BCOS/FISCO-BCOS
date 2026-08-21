@@ -32,8 +32,7 @@ BOOST_AUTO_TEST_SUITE(WsMessageTest)
 
 BOOST_AUTO_TEST_CASE(test_WsMessage)
 {
-    auto factory = std::make_shared<WsMessageFactory>();
-    auto msg = factory->buildMessage();
+    auto msg = std::make_shared<WsMessage>();
     auto buffer = std::make_shared<bytes>();
     auto r = msg->encode(*buffer);
     auto seq = msg->seq();
@@ -42,7 +41,7 @@ BOOST_AUTO_TEST_CASE(test_WsMessage)
     BOOST_CHECK_EQUAL(buffer->size(), WsMessage::MESSAGE_MIN_LENGTH);
 
     {
-        auto decodeMsg = factory->buildMessage();
+        auto decodeMsg = std::make_shared<WsMessage>();
         auto size = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
         BOOST_CHECK(size > 0);
         BOOST_CHECK_EQUAL(decodeMsg->payload().size(), 0);
@@ -58,12 +57,10 @@ BOOST_AUTO_TEST_CASE(test_buildMessage)
         int16_t status = 111;
         uint16_t type = 222;
         std::string data = "HelloWorld.";
-        auto factory = std::make_shared<WsMessageFactory>();
-        auto msg = factory->buildMessage();
-        auto wsMessage = std::dynamic_pointer_cast<WsMessage>(msg);
-        wsMessage->setStatus(status);
-        wsMessage->setPacketType(type);
-        wsMessage->setPayload(bytes(data.begin(), data.end()));
+        auto msg = std::make_shared<WsMessage>();
+        msg->setStatus(status);
+        msg->setPacketType(type);
+        msg->setPayload(bytes(data.begin(), data.end()));
 
         auto buffer = std::make_shared<bytes>();
         auto r = msg->encode(*buffer);
@@ -72,11 +69,10 @@ BOOST_AUTO_TEST_CASE(test_buildMessage)
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(buffer->size(), WsMessage::MESSAGE_MIN_LENGTH + data.length());
 
-        auto decodeMsg = factory->buildMessage();
+        auto decodeMsg = std::make_shared<WsMessage>();
         auto size = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
         BOOST_CHECK(size > 0);
-        auto decodedWsMessge = std::dynamic_pointer_cast<WsMessage>(decodeMsg);
-        BOOST_CHECK_EQUAL(decodedWsMessge->status(), status);
+        BOOST_CHECK_EQUAL(decodeMsg->status(), status);
         BOOST_CHECK_EQUAL(decodeMsg->packetType(), type);
         BOOST_CHECK_EQUAL(decodeMsg->payload().size(), data.size());
         auto decodeSeq = msg->seq();
@@ -89,14 +85,12 @@ BOOST_AUTO_TEST_CASE(test_buildMessage)
         int16_t status = 222;
         uint16_t type = 111;
         std::string data = "HelloWorld.";
-        auto factory = std::make_shared<WsMessageFactory>();
         auto payload = bytes(data.begin(), data.end());
-        auto msg = factory->buildMessage();
+        auto msg = std::make_shared<WsMessage>();
         msg->setPacketType(type);
         msg->setPayload(std::move(payload));
-        auto wsMessage = std::dynamic_pointer_cast<WsMessage>(msg);
-        wsMessage->setStatus(status);
-        wsMessage->setPacketType(type);
+        msg->setStatus(status);
+        msg->setPacketType(type);
 
         auto buffer = std::make_shared<bytes>();
         auto r = msg->encode(*buffer);
@@ -105,11 +99,10 @@ BOOST_AUTO_TEST_CASE(test_buildMessage)
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(buffer->size(), WsMessage::MESSAGE_MIN_LENGTH + data.length());
 
-        auto decodeMsg = factory->buildMessage();
+        auto decodeMsg = std::make_shared<WsMessage>();
         auto size = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
         BOOST_CHECK(size > 0);
-        auto decodedWsMessge = std::dynamic_pointer_cast<WsMessage>(decodeMsg);
-        BOOST_CHECK_EQUAL(decodedWsMessge->status(), status);
+        BOOST_CHECK_EQUAL(decodeMsg->status(), status);
         BOOST_CHECK_EQUAL(decodeMsg->packetType(), type);
         BOOST_CHECK_EQUAL(decodeMsg->payload().size(), data.size());
         auto decodeSeq = msg->seq();
@@ -117,14 +110,24 @@ BOOST_AUTO_TEST_CASE(test_buildMessage)
         BOOST_CHECK_EQUAL(
             data, std::string(decodeMsg->payload().begin(), decodeMsg->payload().end()));
     }
-    auto factory = std::make_shared<WsMessageFactory>();
-    auto msg = factory->buildMessage();
-    auto wsMessage = std::dynamic_pointer_cast<WsMessage>(msg);
+    auto msg = std::make_shared<WsMessage>();
     std::string invalidMessage =
         "GET / HTTP/1.1\r\nHost: 127.0.0.1:20200\r\nUpgrade: websocket\r\nConnection: "
         "upgrade\r\nSec-WebSocket-Key: lkBb9dFFu4tuMNJyXAWIfQ==\r\nSec-WebSocket-Version: "
         "13\r\n\r\n";
     auto invalidMsgBytes = bcos::bytes(invalidMessage.begin(), invalidMessage.end());
-    BOOST_CHECK_THROW(wsMessage->decode(ref(invalidMsgBytes)), std::out_of_range);
+    BOOST_CHECK_THROW(msg->decode(ref(invalidMsgBytes)), std::out_of_range);
+}
+
+BOOST_AUTO_TEST_CASE(test_newSeq)
+{
+    auto seq = newSeq();
+    BOOST_CHECK_EQUAL(seq.size(), 32);
+    for (char c : seq)
+    {
+        BOOST_CHECK(std::isxdigit(static_cast<unsigned char>(c)));
+        BOOST_CHECK(!std::isupper(static_cast<unsigned char>(c)));
+    }
+    BOOST_CHECK_NE(seq, newSeq());
 }
 BOOST_AUTO_TEST_SUITE_END()

@@ -20,7 +20,6 @@
  */
 
 #include "bcos-rpc/amop/AirAMOPClient.h"
-#include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -461,22 +460,25 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
 
         // register web3 json websocket message handler
         _wsService->registerMsgHandler(
-            WS_RAW_MESSAGE_TYPE, [web3JsonRpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+            WS_RAW_MESSAGE_TYPE, [web3JsonRpc](bcos::boostssl::ws::WsMessage msg,
                                     std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
-                auto payload = msg->payload();
+                auto payload = msg.payload();
                 std::string_view strRequest((char*)payload.data(), payload.size());
 
                 // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
 
-                web3JsonRpc->onRPCRequest(strRequest, session, [session, msg](bcos::bytes _respData, boost::beast::http::status) {
-                    msg->setPayload(bcos::bytes(std::move(_respData)));
-                    session->asyncSendMessage(msg);
-                });
+                // the response message is constructed inside the async sender,
+                // raw messages carry no header fields, nothing needs to be preserved
+                web3JsonRpc->onRPCRequest(strRequest, session,
+                    [session](bcos::bytes _respData, boost::beast::http::status) {
+                        bcos::boostssl::ws::WsMessage respMsg(session->rawMessage());
+                        respMsg.setPayload(bcos::bytes(std::move(_respData)));
+                        session->asyncSendMessage(respMsg);
+                    });
             });
 
-        auto messageFactory = std::make_shared<RawWsMessageFactory>();
-        // reset message factory
-        _wsService->setMessageFactory(messageFactory);
+        // web3 websocket connections use the raw wire format (payload only)
+        _wsService->setRawMessage(true);
     }
 
     return web3JsonRpc;
@@ -490,7 +492,6 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
 
     auto matcher = std::make_shared<event::EventSubMatcher>();
     eventSub->setGroupManager(std::move(_groupManager));
-    eventSub->setMessageFactory(_wsService->messageFactory());
     eventSub->setMatcher(matcher);
     RPC_LOG(INFO) << LOG_DESC("create event sub obj");
     return eventSub;
@@ -653,16 +654,14 @@ AirGroupManager::Ptr RpcFactory::buildAirGroupManager(
 AMOPClient::Ptr RpcFactory::buildAMOPClient(
     std::shared_ptr<boostssl::ws::WsService> _wsService, std::string const& _gatewayServiceName)
 {
-    auto wsFactory = std::make_shared<WsMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
-    return std::make_shared<AMOPClient>(*m_ioServicePool->getIOService(), _wsService, wsFactory,
+    return std::make_shared<AMOPClient>(*m_ioServicePool->getIOService(), _wsService,
         requestFactory, m_gateway, _gatewayServiceName);
 }
 
 AMOPClient::Ptr RpcFactory::buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService)
 {
-    auto wsFactory = std::make_shared<WsMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
     return std::make_shared<AirAMOPClient>(
-        *m_ioServicePool->getIOService(), _wsService, wsFactory, requestFactory, m_gateway);
+        *m_ioServicePool->getIOService(), _wsService, requestFactory, m_gateway);
 }

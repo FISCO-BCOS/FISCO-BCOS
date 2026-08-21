@@ -64,27 +64,25 @@ JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     m_forceSender(std::move(forceSender))
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        [this](std::shared_ptr<boostssl::MessageFace> msg,
-            std::shared_ptr<boostssl::ws::WsSession> session) {
+        [this](boostssl::ws::WsMessage msg, std::shared_ptr<boostssl::ws::WsSession> session) {
             this->handleRpcRequest(std::move(msg), std::move(session));
         });
 }
 
 void JsonRpcImpl_2_0::handleRpcRequest(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
+    boostssl::ws::WsMessage _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    auto buffer = _msg->payload();
+    auto buffer = _msg.payload();
     auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto seq = _msg->seq();
-    auto version = _msg->version();
-    auto ext = _msg->ext();
+    auto seq = _msg.seq();
+    auto version = _msg.version();
+    auto ext = _msg.ext();
 
     auto weakptrSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
-    auto messageFactory = m_wsService->messageFactory();
 
-    onRPCRequest(req, [ext, seq, version, weakptrSession, messageFactory, start](bcos::bytes resp, boost::beast::http::status) {
+    onRPCRequest(req, [ext, seq, version, weakptrSession, start](bcos::bytes resp, boost::beast::http::status) {
         auto session = weakptrSession.lock();
 
         auto end = std::chrono::high_resolution_clock::now();
@@ -101,11 +99,11 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         if (session->isConnected())
         {
             // TODO: no need to copy resp
-            auto msg = messageFactory->buildMessage();
-            msg->setPayload(std::move(resp));
-            msg->setVersion(version);
-            msg->setSeq(seq);
-            msg->setExt(ext);
+            bcos::boostssl::ws::WsMessage msg;
+            msg.setPayload(std::move(resp));
+            msg.setVersion(version);
+            msg.setSeq(seq);
+            msg.setExt(ext);
             session->asyncSendMessage(msg);
         }
         else

@@ -28,23 +28,22 @@ namespace cppsdk
 {
 namespace test
 {
-class WsServiceFake : public bcos::boostssl::ws::WsService
+class WsServiceFake
 {
 public:
     using Ptr = std::shared_ptr<WsServiceFake>;
 
 public:
-    virtual void asyncSendMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
-        bcos::boostssl::ws::Options _options = bcos::boostssl::ws::Options(-1),
-        bcos::boostssl::ws::RespCallBack _respFunc = bcos::boostssl::ws::RespCallBack()) override
+    // WsService is no longer inheritable for overriding, the fake is
+    // self-contained and only exposes the methods used by the tests
+    void asyncSendMessage(const bcos::boostssl::ws::WsMessage& _msg,
+        bcos::boostssl::ws::Options _options = bcos::boostssl::ws::Options(),
+        bcos::boostssl::ws::RespCallBack _respFunc = bcos::boostssl::ws::RespCallBack())
     {
         (void)_msg;
         (void)_options;
 
-        auto msg = std::make_shared<bcos::boostssl::ws::WsMessage>();
-        msg->setPayload(*m_resp);
-        auto session = shared_from_this();
-        _respFunc(m_error, _msg, m_session);
+        _respFunc(m_error, bcos::boostssl::ws::WsMessage(), m_session);
     }
 
 public:

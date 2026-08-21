@@ -147,7 +147,7 @@ protected:
     static void addProofToResponse(
         Json::Value& jResp, const std::string& _key, ledger::MerkleProofPtr _merkleProofPtr);
 
-    virtual void handleRpcRequest(std::shared_ptr<boostssl::MessageFace> _msg,
+    virtual void handleRpcRequest(boostssl::ws::WsMessage _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
     // TODO: check perf influence

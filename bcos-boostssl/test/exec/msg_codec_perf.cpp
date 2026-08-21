@@ -55,9 +55,8 @@ int main(int argc, char** argv)
     BCOS_LOG(INFO) << LOG_DESC("Msg Codec Test") << LOG_KV("payload length", payloadLength);
 
     std::string str(payloadLength, 'a');
-    auto messageFactory = std::make_shared<WsMessageFactory>();
     // construct message
-    auto msg = std::dynamic_pointer_cast<WsMessage>(messageFactory->buildMessage());
+    auto msg = std::make_shared<WsMessage>();
 
     msg->setPayload(bytes(str.begin(), str.end()));
 

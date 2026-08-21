@@ -20,6 +20,8 @@
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-utilities/BoostLog.h>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
 
 using namespace bcos;
 using namespace bcos::boostssl;
@@ -37,8 +39,12 @@ void CHECK_OFFSET(uint64_t offset, uint64_t length)
 // version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
 constexpr size_t WsMessage::MESSAGE_MIN_LENGTH = 10;
 
-WsMessage::WsMessage()
+WsMessage::WsMessage(bool _raw) : m_raw(_raw)
 {
+    if (m_raw)
+    {
+        m_packetType = WS_RAW_MESSAGE_TYPE;
+    }
     if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
     {
         WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][WsMessage]", this);
@@ -67,7 +73,10 @@ uint16_t WsMessage::packetType() const
 
 void WsMessage::setPacketType(uint16_t _packetType)
 {
-    m_packetType = _packetType;
+    if (!m_raw)
+    {
+        m_packetType = _packetType;
+    }
 }
 
 int16_t WsMessage::status() const
@@ -107,12 +116,20 @@ uint16_t WsMessage::ext() const
 
 void WsMessage::setExt(uint16_t _ext)
 {
-    m_ext = _ext;
+    if (!m_raw)
+    {
+        m_ext = _ext;
+    }
 }
 
-bool WsMessage::encode(bytes& _buffer)
+bool WsMessage::encode(bytes& _buffer) const
 {
-    _buffer.clear();
+    if (m_raw)
+    {
+        _buffer.reserve(_buffer.size() + m_payload.size());
+        _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
+        return true;
+    }
 
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
     uint16_t type = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
@@ -120,6 +137,9 @@ bool WsMessage::encode(bytes& _buffer)
     uint16_t seqLength = boost::asio::detail::socket_ops::host_to_network_short(m_seq.size());
     uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
 
+    _buffer.clear();
+    // reserve the whole packet upfront, so the following inserts never realloc
+    _buffer.reserve(10 + m_seq.size() + m_payload.size());
     _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
     _buffer.insert(_buffer.end(), (byte*)&type, (byte*)&type + 2);
     _buffer.insert(_buffer.end(), (byte*)&status, (byte*)&status + 2);
@@ -134,6 +154,12 @@ bool WsMessage::encode(bytes& _buffer)
 
 int64_t WsMessage::decode(bytesConstRef _buffer)
 {
+    if (m_raw)
+    {
+        m_payload.assign(_buffer.begin(), _buffer.end());
+        return static_cast<int64_t>(_buffer.size());
+    }
+
     uint64_t length = _buffer.size();
     if (length < MESSAGE_MIN_LENGTH)
     {
@@ -143,10 +169,8 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
     m_seq.clear();
     m_payload.clear();
 
-    auto dataBuffer = _buffer.data();
     auto p = _buffer.data();
     uint64_t offset = 0;
-
     // version field
     m_version = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     p += 2;
@@ -169,6 +193,7 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
 
     CHECK_OFFSET(offset + seqLength, length);
     // seq field
+    m_seq.reserve(seqLength);
     m_seq.insert(m_seq.begin(), p, p + seqLength);
     p += seqLength;
     offset += seqLength;
@@ -182,7 +207,8 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
     // data field
     if (p)
     {
-        m_payload.insert(m_payload.begin(), p, dataBuffer + length);
+        m_payload.reserve(length - offset);
+        m_payload.insert(m_payload.begin(), p, _buffer.data() + length);
     }
     m_length = length;
     return length;
@@ -195,15 +221,26 @@ bool WsMessage::isRespPacket() const
 
 void WsMessage::setRespPacket()
 {
-    m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE;
+    if (!m_raw)
+    {
+        m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE;
+    }
 }
 
 uint32_t WsMessage::length() const
 {
-    return m_length;
+    return m_raw ? m_payload.size() : m_length;
 }
 
-boostssl::MessageFace::Ptr WsMessageFactory::buildMessage()
+std::string bcos::boostssl::ws::newSeq()
 {
-    return std::make_shared<WsMessage>();
+    auto uuid = boost::uuids::random_generator()();
+    static constexpr char HEX[] = "0123456789abcdef";
+    std::string seq(32, '0');
+    for (std::size_t i = 0; i < uuid.size(); ++i)
+    {
+        seq[2 * i] = HEX[uuid.data[i] >> 4];
+        seq[2 * i + 1] = HEX[uuid.data[i] & 0x0F];
+    }
+    return seq;
 }

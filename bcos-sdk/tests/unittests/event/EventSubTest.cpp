@@ -148,8 +148,6 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 {
     boost::asio::io_context ioContext;
     auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
-    auto messageFactory = std::make_shared<bcos::boostssl::ws::WsMessageFactory>();
-    es->setMessageFactory(messageFactory);
 
     auto task = std::make_shared<bcos::cppsdk::event::EventSubTask>();
     std::string id = "123";
@@ -177,7 +175,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
     {
         // task is running
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
-        task->setSession(session);
+        task->setSession(session->session());
 
         std::string resp = "{}";
         session->setResp(std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
@@ -194,7 +192,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         // task is running
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
 
-        task->setSession(session);
+        task->setSession(session->session());
 
         es->addTask(task);
 

@@ -53,30 +53,14 @@ public:
     void mockMethod() {}
 };
 
-// Mock WsSession for testing
-class MockWsSession : public WsSession
+// WsSession is no longer polymorphic, so tests use a real session object.
+// Only endPoint()/setEndPoint() are exercised by these tests.
+static WsSession::Ptr makeMockWsSession(IOServicePool::Ptr ioServicePool)
 {
-public:
-    using Ptr = std::shared_ptr<MockWsSession>;
-
-    MockWsSession(IOServicePool::Ptr ioServicePool)
-      : WsSession(std::move(ioServicePool))
-    {
-        setEndPoint("127.0.0.1:8080");
-    }
-
-    ~MockWsSession() override = default;
-
-    bool isConnected() override { return m_connected; }
-    void setConnected(bool connected) { m_connected = connected; }
-
-    std::string getEndpoint() const { return endPoint(); }
-
-    void setEndPoint(const std::string& endpoint) { m_endPoint = endpoint; }
-
-private:
-    bool m_connected = true;
-};
+    auto session = std::make_shared<WsSession>(std::move(ioServicePool));
+    session->setEndPoint("127.0.0.1:8080");
+    return session;
+}
 
 BOOST_FIXTURE_TEST_SUITE(testWeb3Subscribe, RPCFixture)
 
@@ -137,9 +121,9 @@ BOOST_AUTO_TEST_CASE(testOnHttpSubscribeRequest)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
-    auto mockSession = std::make_shared<MockWsSession>(ioServicePool);
+    auto mockSession = makeMockWsSession(ioServicePool);
 
     int id = 111;
     // Test newHeads subscription
@@ -192,9 +176,9 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
-    auto mockSession = std::make_shared<MockWsSession>(ioServicePool);
+    auto mockSession = makeMockWsSession(ioServicePool);
 
     int id = 111;
     // Test newHeads subscription
@@ -231,7 +215,7 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
     BOOST_CHECK(responseJson.isMember("result"));
     BOOST_CHECK(!responseJson["result"].asString().empty());
 
-    BOOST_CHECK(web3Subscribe->endpoint2SubscriptionIds().contains(mockSession->getEndpoint()));
+    BOOST_CHECK(web3Subscribe->endpoint2SubscriptionIds().contains(mockSession->endPoint()));
     BOOST_CHECK(web3Subscribe->newHeads2Session().contains(responseJson["result"].asString()));
     BOOST_CHECK(web3Subscribe->isSubscriptionIdExists(responseJson["result"].asString()));
 
@@ -264,7 +248,7 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeNewHeads)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
     int id = 123;
     Json::Value request;
@@ -308,11 +292,11 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    // auto session = std::make_shared<MockWsSession>(ioServicePool);
+    // auto session = makeMockWsSession(ioServicePool);
 
-    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session1 = makeMockWsSession(ioServicePool);
     session1->setEndPoint("127.0.0.1:8080");
-    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session2 = makeMockWsSession(ioServicePool);
     session2->setEndPoint("127.0.0.1:8081");
 
     Json::Reader reader;
@@ -413,8 +397,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
     BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
     BOOST_CHECK(endpoint2SubscriptionIds.size() == 2);
-    BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+    BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->endPoint()));
+    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
 
     {
         // unsubscribe subscription1
@@ -444,8 +428,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK(endpoint2SubscriptionIds.size() == 2);
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -476,8 +460,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK(endpoint2SubscriptionIds.size() == 2);
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -508,8 +492,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK(endpoint2SubscriptionIds.size() == 1);
-        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -540,8 +524,8 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
         BOOST_CHECK(!newHeads2Session.contains(subscriptionId4));
 
         BOOST_CHECK_EQUAL(endpoint2SubscriptionIds.size(), 0);
-        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->getEndpoint()));
-        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session1->endPoint()));
+        BOOST_CHECK(!endpoint2SubscriptionIds.contains(session2->endPoint()));
     }
 
     {
@@ -582,11 +566,11 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    // auto session = std::make_shared<MockWsSession>(ioServicePool);
+    // auto session = makeMockWsSession(ioServicePool);
 
-    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session1 = makeMockWsSession(ioServicePool);
     session1->setEndPoint("127.0.0.1:8080");
-    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session2 = makeMockWsSession(ioServicePool);
     session2->setEndPoint("127.0.0.1:8081");
 
     Json::Reader reader;
@@ -688,7 +672,7 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
     BOOST_CHECK(!newHeads2Session.contains(subscriptionId3));
     BOOST_CHECK(!newHeads2Session.contains(subscriptionId1));
     BOOST_CHECK_EQUAL(endpoint2SubscriptionIds.size(), 1);
-    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->getEndpoint()));
+    BOOST_CHECK(endpoint2SubscriptionIds.contains(session2->endPoint()));
 
     // Remove session2 subscriptions
     web3Subscribe->onRemoveSubscribeBySession(session2);
@@ -711,7 +695,7 @@ BOOST_AUTO_TEST_CASE(testOnNewBlock)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
     Json::Value request;
     request["jsonrpc"] = "2.0";
@@ -750,7 +734,7 @@ BOOST_AUTO_TEST_CASE(testWeb3SubscribeInvalidRequests)
 
     // Create mock session
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
     // Test with empty request
     Json::Value emptyRequest;
@@ -784,9 +768,9 @@ BOOST_AUTO_TEST_CASE(testConcurrentAccess)
 
     // Create multiple mock sessions
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
-    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
-    auto session3 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session1 = makeMockWsSession(ioServicePool);
+    auto session2 = makeMockWsSession(ioServicePool);
+    auto session3 = makeMockWsSession(ioServicePool);
 
     // Create subscription requests
     Json::Value request1, request2, request3;
@@ -855,7 +839,7 @@ BOOST_AUTO_TEST_CASE(testMultiSubInOneRequest)
 
     // Create multiple mock sessions
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
 
     Json::Value request;
@@ -923,7 +907,7 @@ BOOST_AUTO_TEST_CASE(testMultiRequestInOneRequest)
 
     // Create multiple mock sessions
     auto ioServicePool = std::make_shared<IOServicePool>(1, "web3sub");
-    auto session = std::make_shared<MockWsSession>(ioServicePool);
+    auto session = makeMockWsSession(ioServicePool);
 
 
     Json::Value request;

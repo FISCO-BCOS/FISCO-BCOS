@@ -92,15 +92,13 @@ int main(int argc, char** argv)
     auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
-    auto sessionFactory = std::make_shared<WsSessionFactory>();
-    wsInitializer->setSessionFactory(sessionFactory);
 
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
 
     if (!wsService->registerMsgHandler(999,
-            [](std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session) {
-                _msg->setRespPacket();
+            [](WsMessage _msg, std::shared_ptr<WsSession> _session) {
+                _msg.setRespPacket();
 
                 _session->asyncSendMessage(_msg);
             }))
