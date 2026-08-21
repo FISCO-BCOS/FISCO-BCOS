@@ -127,9 +127,6 @@ void AMOP::publish(
     sendMsg.setPacketType(bcos::cppsdk::amop::MessageType::AMOP_REQUEST);
     sendMsg.setPayload(std::move(*buffer));
 
-    auto sendBuffer = std::make_shared<bytes>();
-    sendMsg.encode(*sendBuffer);
-
     AMOP_CLIENT(TRACE) << LOG_BADGE("publish") << LOG_DESC("publish message")
                        << LOG_KV("topic", _topic);
     m_service->asyncSendMessage(sendMsg, bcos::boostssl::ws::Options(_timeout),
@@ -147,9 +144,11 @@ void AMOP::publish(
                 _error = errorNew;
             }
 
-            // Note: the public PubCallback keeps shared_ptr<WsMessage>, convert at the boundary
-            _callback(
-                _error, std::make_shared<bcos::boostssl::ws::WsMessage>(std::move(_msg)), _session);
+            // Note: the public PubCallback keeps shared_ptr<WsMessage> (nullptr on error,
+            // same as before), convert at the boundary only for real responses
+            _callback(_error,
+                _error ? nullptr : std::make_shared<bcos::boostssl::ws::WsMessage>(std::move(_msg)),
+                _session);
         });
 }
 
@@ -167,9 +166,6 @@ void AMOP::broadcast(const std::string& _topic, bcos::bytesConstRef _data)
     sendMsg.setSeq(newSeq());
     sendMsg.setPacketType(bcos::cppsdk::amop::MessageType::AMOP_BROADCAST);
     sendMsg.setPayload(std::move(*buffer));
-
-    auto sendBuffer = std::make_shared<bytes>();
-    sendMsg.encode(*sendBuffer);
 
     AMOP_CLIENT(TRACE) << LOG_BADGE("broadcast") << LOG_DESC("broadcast message")
                        << LOG_KV("topic", _topic);

@@ -149,12 +149,11 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             auto buffer = msg.payload();
             auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
-            // capture the scalar fields only; the response message is constructed
-            // inside the async callback below, no heap allocation needed here
-            auto seq = msg.seq();
-            auto packetType = msg.packetType();
-            auto ext = msg.ext();
-            jsonrpc->onRPCRequest(req, [m_buffer = buffer, seq = std::move(seq), packetType, ext,
+            // capture the scalar fields and a copy of the request payload:
+            // the sender callback runs asynchronously after this handler returns,
+            // the stack message and its payload are destroyed by then
+            jsonrpc->onRPCRequest(req, [reqStr = std::string(req), seq = msg.seq(),
+                                           packetType = msg.packetType(), ext = msg.ext(),
                                            session = std::move(session)](
                                            bcos::bytes resp, boost::beast::http::status) {
                 if (session && session->isConnected())
@@ -171,8 +170,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                     // remove the callback
                     RPC_LOG(WARNING)
                         << LOG_DESC("Unable to send response for session has been inactive")
-                        << LOG_KV("req",
-                               std::string_view((const char*)m_buffer.data(), m_buffer.size()))
+                        << LOG_KV("req", reqStr)
                         << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
                         << LOG_KV("seq", seq)
                         << LOG_KV("endpoint", session ? session->endPoint() : std::string(""));

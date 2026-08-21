@@ -160,7 +160,9 @@ private:
     mutable boost::shared_mutex x_mutex;
     // all active sessions
     std::unordered_map<std::string, std::shared_ptr<WsSession>> m_sessions;
-    // type => handler, flat array indexed by packet type (types are small enums, < 0x1000)
+    // type => handler, flat array indexed by packet type (types are small enums, except
+    // WS_RAW_MESSAGE_TYPE(0xffff) which grows the table to 64K slots, a bounded
+    // one-time allocation per raw ws service)
     std::vector<MsgHandler> m_msgType2Method;
     mutable SharedMutex x_msgTypeHandlers;
     // connected handlers, the handers will be called after ws protocol handshake

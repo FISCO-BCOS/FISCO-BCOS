@@ -236,13 +236,11 @@ void Rpc::onRecvHandshakeRequest(
     }
     // capture the scalar fields only; the response message is constructed
     // inside the async callback below, no heap allocation needed here
-    auto seq = _msg.seq();
-    auto packetType = _msg.packetType();
-    auto ext = _msg.ext();
     auto self = std::weak_ptr<Rpc>(shared_from_this());
 
     // notify the handshakeResponse
-    m_jsonRpcImpl->getGroupInfoList([seq = std::move(seq), packetType, ext, _session, self](
+    m_jsonRpcImpl->getGroupInfoList([seq = _msg.seq(), packetType = _msg.packetType(),
+                                        ext = _msg.ext(), _session, self](
                                         bcos::Error::Ptr _error, Json::Value& _groupListResponse) {
         if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
         {

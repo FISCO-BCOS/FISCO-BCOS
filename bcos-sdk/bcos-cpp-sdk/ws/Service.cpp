@@ -60,7 +60,17 @@ void Service::start()
 {
     wireEventHandlers();
 
-    m_wsService->start();
+    try
+    {
+        // WsService::start() may stop() internally on total connect failure,
+        // which clears the wired handlers; allow re-wiring on the next start()
+        m_wsService->start();
+    }
+    catch (...)
+    {
+        m_handlersWired = false;
+        throw;
+    }
 
     waitForConnectionEstablish();
 }

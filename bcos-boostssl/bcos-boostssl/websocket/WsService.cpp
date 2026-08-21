@@ -622,7 +622,9 @@ void WsService::onRecvMessage(WsMessage message, std::shared_ptr<WsSession> sess
                              << LOG_KV("use_count", session.use_count());
 
     auto type = message.packetType();
-    // dispatch under the read lock: flat array lookup, no hash, no std::function copy
+    // dispatch under the read lock: flat array lookup, no hash, no std::function copy.
+    // Note: handlers must NOT call registerMsgHandler()/stop() (i.e. no runtime
+    // re-registration) — all in-tree handlers only register at startup before start().
     {
         ReadGuard l(x_msgTypeHandlers);
         if (type < m_msgType2Method.size())
