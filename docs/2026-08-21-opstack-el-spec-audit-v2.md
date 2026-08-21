@@ -1,6 +1,7 @@
 # FISCO Opstack × OP Stack 执行客户端（EL）规范对齐审计 v2
 
 - **日期**：2026-08-21
+- **修订**：2026-08-22 按实施计划（docs/2026-08-22-opstack-engine-rpc-alignment-plan.md）修复 BL-3/MJ-1/MJ-2/MN-3/4/6/7/8，MN-2 改判 ✅；详见 §5 标注。
 - **被检对象**：`feat-opstack-e2e` HEAD `b7d112b3f`（worktree `.claude/worktrees/op-alignment`；工作区未提交改动以文件当前内容取证）
 - **规范基线**：specs.optimism.io（ethereum-optimism/specs@main，本地 `/tmp/op-specs`，commit `2049036`，2026-08-05）
 - **分叉范围**：Isthmus（默认）+ Jovian（`feature_op_jovian`）+ **Karst 逐条审计**；Delta/Monsoon/Lagoon 概览扫描
@@ -103,15 +104,15 @@ M1 从"执行库"视角、M3/M5 从"引擎层"视角取证同一特性，以下 
 |---|---|---|---|---|---|
 | BL-1 | **reorg/consolidation 能力缺失（S-DRV-6/7 ❌）**：非 tip parent 的替代 payload 被 -32603 拒绝（Step 3c 自认 parked）；FCU head 回退被静默忽略 | derivation.md:824-827（"enables execution engines like go-ethereum to enact the change"）、:898-914 | EngineServiceImpl.h:1432-1468、:341-349 | op-geth `InsertBlockWithoutSetHead` + FCU `SetCanonical` 回退（eth/catalyst/api.go:278-293,760-767） | blockHash→block 映射 + 非 canonical 头导入 + FCU 回退更新；至少支持 tip 回退一层的替代属性处理 |
 | BL-2 | **eth_getProof 非创世块不可用（S-RPC-6 ❌）**：MPT 节点仅 genesis 导入写盘，运行时块不持久化 → 任意历史块提款证明（withdrawalProof）无法生成 | isthmus/exec-engine.md:58-59（"The storage root should be the same root that is returned by eth_getProof"） | Ledger.cpp:2398；tools/op-e2e/rpc_matrix.py:221-224（自认 -32004/-32602 边界） | op-geth GetProof 对任意块 header.Root 开 trie（internal/ethapi/api.go:382-471） | 运行时 MPT 节点持久化（或按需重建路径） |
-| BL-3 | **构建侧 minBaseFee 未写入 Jovian extraData（S-BLD-4 ❌，含 S-FEE-33/S-SYC-10/12）**：extraData 尾 8 字节恒零；attrs.minBaseFee 解析后无消费；缺 post-Jovian 必填校验 | jovian/exec-engine.md:40-54,79；jovian/system-config.md:23-68 | EngineServiceImpl.h:747-751（`extra.resize(17,0x00)`）；EngineHelper.cpp:358-369（仅解析） | op-geth `EncodeJovianExtraData` 写 u64 BE（eip1559_optimism.go:49-54,180-190）；缺失报 "missing minBaseFee"（miner/worker.go:380-394） | buildOpPayload 消费 attrs.minBaseFee → extraData[9,17)；FCU attrs 校验补必填/形状 |
+| BL-3 | **构建侧 minBaseFee 未写入 Jovian extraData（S-BLD-4 ✅，含 S-FEE-33/S-SYC-10/12）**：extraData 尾 8 字节恒零；attrs.minBaseFee 解析后无消费；缺 post-Jovian 必填校验 —— **✅ 已修复（2026-08-22，commit d498342f5 + 5ee1666ad/5544050d1，实施计划 Task 3+2）** | jovian/exec-engine.md:40-54,79；jovian/system-config.md:23-68 | EngineServiceImpl.h:747-751（`extra.resize(17,0x00)`）；EngineHelper.cpp:358-369（仅解析） | op-geth `EncodeJovianExtraData` 写 u64 BE（eip1559_optimism.go:49-54,180-190）；缺失报 "missing minBaseFee"（miner/worker.go:380-394） | buildOpPayload 消费 attrs.minBaseFee → extraData[9,17)；FCU attrs 校验补必填/形状 |
 | BL-4 | **Karst 激活即链断（S-KAR-9~14 ❌）**：无 NUT 机制（31 笔升级交易 bundle 未嵌入、无注入/顺序/gas 分配）、无 timestamp/feature 激活、无 Karst 预编译上限（bn256Pairing 57,600B，S-KAR-1） | karst/derivation.md:13-34；karst/exec-engine.md:16-25；l2-upgrades-1-execution.md | OpForkSchedule.cpp:88-101（jovianConfig 别名）、configAt 永不返回 Karst；OpPrecompiles.cpp:35-41（81984） | **行业现状：op-geth 仅 KarstTime 谓词无执行门控；op-reth main 已移除 OP 客户端、v1.9.4 最远 Jovian**；op-node develop 已含 KarstNUTBundleJSON（bundles.go:7-10） | 独立工作线：Karst→EVMC_OSAKA 绑定（EVM 原语已就绪）+ NUT 注入/激活/gas 分配 + bn256 上限 |
 
 ### Major（多节点/对接 op-node 前应修）
 
 | # | 缺口 | 规范条款 | FISCO 证据 | 参照实现 | 修复指向 |
 |---|---|---|---|---|---|
-| MJ-1 | **engine 错误码映射未接线（S-EXE-17 🟡）**：UnsupportedFork(-38005)/UnknownPayload(-38001)/InvalidForkchoiceState(-38002) 一律转 -32603；EngineEndpoint.cpp:158 的 -38001 分支为死代码 | exec-engine.md:206（execution-apis 错误码语义） | Web3JsonRpcImpl.cpp:91-103（`catch (bcos::Error)` → -32603）；EngineServiceImpl.h:78-84 自述 not implemented | op-geth 类型映射（beacon/engine/types.go:161-180） | 错误类型→JSON-RPC 码映射表 |
-| MJ-2 | **FCU 带 attrs 深度校验缺失（S-EXE-5/32 🟡）**：缺 gasLimit 回退 ledgerConfig 而非 INVALID；eip1559Params 尺寸非法、withdrawals 非空、缺 parentBeaconBlockRoot 被静默规整而非 -38003 | exec-engine.md:265-267（"required when used as rollup"） | EngineServiceImpl.h:270-283（`if constexpr (!c_opMode)` 跳过预检）、:714-716、:703-704、:757 | op-geth `checkOptimismPayloadAttributes` FCU 即拒（api_optimism.go:40-65 → STATUS_INVALID + -38003） | OP 面启用 validatePayloadAttributes + gasLimit 必填 |
+| MJ-1 | **engine 错误码映射未接线（S-EXE-17 ✅）**：UnsupportedFork(-38005)/UnknownPayload(-38001)/InvalidForkchoiceState(-38002) 一律转 -32603；EngineEndpoint.cpp:158 的 -38001 分支为死代码 —— **✅ 已修复（2026-08-22，commit d21bad656 + 88f33ce34，实施计划 Task 1）** | exec-engine.md:206（execution-apis 错误码语义） | Web3JsonRpcImpl.cpp:91-103（`catch (bcos::Error)` → -32603）；EngineServiceImpl.h:78-84 自述 not implemented | op-geth 类型映射（beacon/engine/types.go:161-180） | 错误类型→JSON-RPC 码映射表 |
+| MJ-2 | **FCU 带 attrs 深度校验缺失（S-EXE-5/32 ✅）**：缺 gasLimit 回退 ledgerConfig 而非 INVALID；eip1559Params 尺寸非法、withdrawals 非空、缺 parentBeaconBlockRoot 被静默规整而非 -38003 —— **✅ 已修复（2026-08-22，commit 5ee1666ad + 5544050d1，实施计划 Task 2）** | exec-engine.md:265-267（"required when used as rollup"） | EngineServiceImpl.h:270-283（`if constexpr (!c_opMode)` 跳过预检）、:714-716、:703-704、:757 | op-geth `checkOptimismPayloadAttributes` FCU 即拒（api_optimism.go:40-65 → STATUS_INVALID + -38003） | OP 面启用 validatePayloadAttributes + gasLimit 必填 |
 | MJ-3 | **Karst 逐条欠账（S-KAR-2/3/4/6/7 🟡）**：Osaka EIP 原语（7823 MODEXP 上限、7825 gas cap、7883 MODEXP 费、7939 CLZ、7951 P256 gas 6900）在 EVM 层就绪但 OP 路径 rev=PRAGUE 不生效；P256 被 3450 override 钉死 | karst/overview.md:19-26 | OpForkSchedule.cpp:97（karstConfig rev=EVMC_PRAGUE）；OpPrecompiles.cpp:29,37（3450 override） | op-geth EIP 原语（contracts.go:712,738；eips.go:299-300；protocol_params.go:42） | Karst→EVMC_OSAKA 绑定 + 取消 P256 override |
 | MJ-4 | **S-KAR-5 ❌：eth_config RPC 缺失**（EIP-7910，SHOULD 接口面） | karst/overview.md:23 | bcos-rpc 无 Config 方法 | op-geth internal/ethapi/api.go:1408 | 新增 RPC 方法 |
 
@@ -120,13 +121,13 @@ M1 从"执行库"视角、M3/M5 从"引擎层"视角取证同一特性，以下 
 | # | 缺口 | 说明 |
 |---|---|---|
 | MN-1 | S-FEE-20（🟡）：txpool worst-case 余额拒绝无实现 | 架构性——FISCO 无 txpool 组件；执行路径 512-bit cap 兜底（OpTransition.cpp:412-421） |
-| MN-2 | S-FEE-28（🟡）：无显式 `daFootprint <= gasLimit` 校验 | 与 op-geth 行为一致（构建侧约束）；校验端仅 blobGasUsed≤gasLimit（EngineServiceImpl.cpp:557） |
-| MN-3 | S-RPC-12（🟡）：block JSON 不输出 requestsHash | 共识值正确（sha256('')）；仅 RPC 输出与 op-geth 不一致 |
-| MN-4 | S-GEN-3（🟡）：Isthmus 创世 withdrawalsRoot 工具链默认空根 | Phase A MessagePasser 直接部署空存储；root=实际存储根自洽；切 op-deployer 代理布局须重生成 artifact |
+| MN-2 | S-FEE-28（✅）：无显式 `daFootprint <= gasLimit` 校验 —— **改判 ✅（2026-08-22 四维审查）**：op-geth core/block_validator.go:131-134 有 daFootprint>GasLimit 检查，FISCO EngineServiceImpl.cpp:553-557 有等价检查 | 与 op-geth 行为一致（构建侧约束）；校验端仅 blobGasUsed≤gasLimit（EngineServiceImpl.cpp:557） |
+| MN-3 | S-RPC-12（✅）：block JSON 不输出 requestsHash —— **✅ 已修复（2026-08-22，commit 01b7c9043，实施计划 Task 4）** | 共识值正确（sha256('')）；仅 RPC 输出与 op-geth 不一致 |
+| MN-4 | S-GEN-3（✅）：Isthmus 创世 withdrawalsRoot 工具链默认空根 —— **✅ 已修复（2026-08-22，commit d4983745b + a6c6c7bd6，实施计划 Task 8）**：C2 base allocs 的 passer 实为 EIP-1967 代理布局（2 槽），修复前空根对本 artifact 是错误的；工具现在计算实际存储根（0x8ed4baae…），rpc_matrix.py 创世断言已改为 header==getProof 不变量 | Phase A MessagePasser 直接部署空存储；root=实际存储根自洽；切 op-deployer 代理布局须重生成 artifact |
 | MN-5 | FCU V3 建块 vs newPayload V4-only 提交不对称 | 若 op-node 协商全链 V3，自建块回送被 UnsupportedFork 拒绝；需 op-node 版本选择验证 |
-| MN-6 | deposit tx JSON 缺 depositReceiptVersion | op-geth tx 响应也输出（api.go:1210-1213）；FISCO 仅回执输出 |
-| MN-7 | 过期注释：EngineServiceImpl.h:1140-1152（"#5429 finding B" 称 V4 不可达） | 与当前代码矛盾（V4 已接线），误导维护 |
-| MN-8 | chain-config.yaml 模板注释"feature_flags 由 C++ 注入"与 Ledger.cpp 实际"验证"行为不符 | 纯文档问题 |
+| MN-6 | deposit tx JSON 缺 depositReceiptVersion —— **✅ 已修复（2026-08-22，commit d215b7f53，实施计划 Task 5）** | op-geth tx 响应也输出（api.go:1210-1213）；FISCO 仅回执输出 |
+| MN-7 | 过期注释：EngineServiceImpl.h:1140-1152（"#5429 finding B" 称 V4 不可达） —— **✅ 已修复（2026-08-22，commit d746472c2，实施计划 Task 6）** | 与当前代码矛盾（V4 已接线），误导维护 |
+| MN-8 | chain-config.yaml 模板注释"feature_flags 由 C++ 注入"与 Ledger.cpp 实际"验证"行为不符 —— **✅ 已修复（2026-08-22，commit 44b2c5ffb，实施计划 Task 7）** | 纯文档问题 |
 | MN-9 | S-SYC-6 架构差异：feature flag 创世固定 vs 规范运行时 toggle/时间戳激活 | 新链语义等价；存量链升级不等价，文档已注明 |
 
 ---
@@ -161,6 +162,7 @@ M1 从"执行库"视角、M3/M5 从"引擎层"视角取证同一特性，以下 
 | OpstackExecutorBlockTests | 1 FAIL（`ForkchoiceAttributesVersionGate`，OpNewPayloadRpcE2eTest.cpp:1319）——**陈旧二进制**（Aug 19 构建，早于 8/21 buildOpPayload 重构批次；同源用例在最新二进制 23/23 中通过），未触发重编译验证（>10min 放弃） |
 | op-reth 参照 | main `7b3432d9`（已移除 crates/optimism）；raw 拉取 v1.2.0 `crates/optimism/payload` 6 文件（1654 行）作 payloadId 参照：`payload_id_optimism`（payload.rs:308-355）与 FISCO `derivePayloadId` 同构 |
 | 证据纪律 | 各子任务全部行号经 grep/Read 验证；❌/🟡 条款 100% 给出参照实现位置；未修改 worktree 任何文件 |
+| 2026-08-22 回归（实施计划 Task 9） | BcosEvmOpstackTests 115/115、OpstackExecutorTests 23/23、OpForkchoiceRpcE2eSuite 全绿、test-bcos-rpc 四 suite 全绿、EngineServiceTest 全绿、test_gen_eth_header_fixture 2/2；block-tests 全量 8 个 OpL1BlockDepositSuite 失败为 HEAD 既有（stash 实验证实与任务无关，另查） |
 
 ---
 
