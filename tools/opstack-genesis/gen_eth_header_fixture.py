@@ -37,12 +37,17 @@ _build_allocs = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_build_allocs)
 keccak256 = _build_allocs.keccak256
 
-from mpt_state_root import parse_allocs_ini, compute_state_root
+from mpt_state_root import parse_allocs_ini, compute_state_root, compute_storage_root
 
 EMPTY_TRIE_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 EMPTY_OMMERS_HASH = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
 # sha256 of empty input: the Prague empty-requests hash (EIP-7685).
 EMPTY_REQUESTS_HASH = "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+# L2ToL1MessagePasser predeploy. Isthmus+ genesis requires withdrawalsRoot = its
+# storage root (isthmus/exec-engine.md:100-101; op-geth core/genesis.go:711-719),
+# not the empty-trie root.
+PASSER_ADDRESS = "0x4200000000000000000000000000000000000016"
 
 # Default fixture: an empty-alloc post-Karst L2 genesis header. Kept in sync
 # with test_GenesisEthHeader.cpp (bcos-ledger) and
@@ -179,6 +184,15 @@ def main(argv=None):
     if args.allocs:
         allocs = parse_allocs_ini(args.allocs)
         fields["state_root"] = "0x" + compute_state_root(allocs).hex()
+        # Isthmus+ genesis: withdrawalsRoot = L2ToL1MessagePasser storage root
+        # (isthmus/exec-engine.md:100-101; op-geth core/genesis.go:711-719). Phase A deploys
+        # the passer with empty storage -> empty-trie root; a proxied op-deployer layout
+        # carries storage and the tool must track it.
+        for alloc in allocs:
+            if alloc["address"].lower() == PASSER_ADDRESS:
+                fields["withdrawals_root"] = "0x" + compute_storage_root(
+                    alloc.get("storage", [])).hex()
+                break
     if args.toml:
         print(to_toml_section(fields), end="")
         return 0
