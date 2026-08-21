@@ -1139,19 +1139,11 @@ private:
                     "Isthmus+ payloads require engine_newPayloadV4 (JSON-RPC -38005)"});
         }
 
-        // NOTE (independent review #5429, finding B): this V4-only gate is NOT reachable through
-        // the production composition root today. maxEngineVersion defaults to V3 (this class's
-        // ctor, EngineServiceImpl.h:212), the OP composition root cannot raise it
-        // (EngineServiceInitializer::build exposes no maxEngineVersion param),
-        // supportedOpCapabilities() advertises only V3 ("Production interop downgrade",
-        // EngineServiceImpl.cpp:135-142), and the V4 JSON-RPC endpoints are stubs
-        // (EngineEndpoint.cpp:96/143/191, "not yet supported"). A real op-node either negotiates V3
-        // -> newPayloadV3 -> this gate throws UnsupportedFork, or calls newPayloadV4 -> RPC stub —
-        // so OP block execution is unreachable end-to-end via the public Engine API until the V4
-        // endpoint follow-up lands. The OP composition root (executor_version>=3) currently enables
-        // this non-functional mode with no startup refusal. TODO(V4): register real
-        // newPayloadV4/getPayloadV4 + advertise V4 in the OP root, or add a startup InvalidConfig
-        // refusal until then.
+        // NOTE (audit v2, 2026-08-21): the historical "#5429 finding B" note claiming this
+        // V4-only gate is unreachable through the production composition root is obsolete --
+        // the OP root passes maxEngineVersion=4 (libinitializer/Initializer.cpp:620), the V4
+        // endpoints are registered (EndpointsMapping.cpp:63-71) and supportedOpCapabilities
+        // advertises the V4 trio (EngineServiceImpl.cpp:129-141).
 
         // ---- Classification barrier ----
         //
