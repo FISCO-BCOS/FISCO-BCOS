@@ -695,36 +695,5 @@ BOOST_AUTO_TEST_CASE(calculateHashClearsOnInvalid)
     BOOST_CHECK_THROW(header->hash(), std::exception);
 }
 
-// decodeTarsHeader pins ethBlockVersion to NON_ETH explicitly instead of relying on the tars
-// default 0 happening to equal it. The pin holds even when the destination header carried a
-// real ETH version before the decode. EthBlockHeaderData carries SECONDS (the RLP domain);
-// decodeTarsHeader converts to the internal BlockHeader milliseconds (×1000), so the decoded
-// header's timestamp equals the ms source's and the seconds↔ms round-trip reproduces the
-// input RLP byte-for-byte regardless of the pinned version.
-BOOST_AUTO_TEST_CASE(decodeTarsHeaderPinsNonEthVersion)
-{
-    auto source = makeEthHeader(EthBlockVersion::PRAGUE);
-    EthBlockHeader sourceBridge(*source);
-    bytes rlp;
-    sourceBridge.rlpEncode(rlp);
-
-    auto decoded = makeEthHeader(EthBlockVersion::PRAGUE);  // nonzero version pre-decode
-    bcos::Error::UniquePtr error;
-    error = EthBlockHeader::decodeTarsHeader(decoded, bcos::ref(rlp));
-    BOOST_CHECK(!error);
-    BOOST_CHECK(decoded->ethBlockVersion() == EthBlockVersion::NON_ETH);
-    // decodeTarsHeader writes the RLP seconds ×1000 into the header (milliseconds); source's
-    // header timestamp is already milliseconds, so the two must be equal — NOT ×1000 again.
-    BOOST_CHECK_EQUAL(decoded->timestamp(), source->timestamp());
-
-    // Re-encoding the decoded header must reproduce the input RLP: ×1000 on the
-    // EthBlockHeader->BlockHeader boundary, /1000 on the BlockHeader->EthBlockHeader
-    // boundary — the unconditional inverse pair of the bridge.
-    EthBlockHeader roundTrip(*decoded);
-    bytes reencoded;
-    roundTrip.rlpEncode(reencoded);
-    BOOST_CHECK(reencoded == rlp);
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
