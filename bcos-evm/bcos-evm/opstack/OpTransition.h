@@ -2,7 +2,8 @@
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpReceipt.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-evm/eth/state/state.hpp>
 #include <cstdint>
 #include <evmc/evmc.hpp>
@@ -14,6 +15,10 @@
 namespace bcos::evm::opstack
 {
 class OpHost;
+
+// OP Stack block-transition types and helpers.
+// Split out of OpSchedulerSeam.h so dependent layers can reference types without
+// depending on the class template.
 
 // ---- tx validation (formerly OpValidate.h) ----
 
@@ -40,6 +45,16 @@ struct OpTxProperties
     // forced to 0) and transition under Jovian would otherwise report a da_footprint_gas_scalar
     // for a transaction the Ecotone L1 formula priced, with da_footprint computed from flz_len 0.
     bool has_da_footprint = false;
+    // calldataGasUsed under the Ecotone formula (= zeroes*4 + ones*16); not filled under Fjord+
+    // (flz_len drives the Fjord formula). Snapshot at validate time (the envelope is available
+    // here); read by deriveOpReceiptMeta at transition -- preserving the no-cfg invariant.
+    std::optional<uint64_t> ecotone_calldata_gas_used = std::nullopt;
+    // The fully-built evmone state::Transaction, carried from m_prepare (validate) to m_execute
+    // (transition) so the hot path builds it once per tx instead of twice (calldata copy +
+    // to-address hex decode + access_list/blob/auth allocation each time). Filled by
+    // OpstackExecutor::m_prepare after opValidate returns; read (const&) by m_execute.
+    evmone::state::Transaction evm_tx{};  // default member init: keeps the positional aggregate
+                                          // init in opValidate (OpTransition.cpp) warning-free
 };
 
 /// Reuses evmone validate_transaction then applies OP checks: reject blob tx; balance cap
@@ -76,18 +91,64 @@ RunTxResult runTxMessage(evmone::state::State& state, OpHost& host,
     const evmone::state::Transaction& tx, evmc_revision rev, const evmc::address& coinbase,
     int64_t execution_gas_limit, int64_t min_gas_cost, int64_t delegation_refund);
 
+// ---- non-consensus receipt metadata (formerly OpReceiptMeta.h) ----
+
+/// The execution-layer OP receipt metadata, before it is projected into the framework's
+/// bcos::protocol::OpStackReceiptMeta (the typed view over the tars opStackMeta hex-string
+/// fields) via setOpStackMeta. Deliberately mirrors the op-geth receipt extension fields.
+struct OpReceiptMeta
+{
+    // L1 passthrough (op-geth: L1GasPrice / L1BlobBaseFee / L1BaseFeeScalar / L1BlobBaseFeeScalar /
+    // L1Fee)
+    std::optional<intx::uint256> l1_gas_price;      // = fee.l1_base_fee
+    std::optional<intx::uint256> l1_blob_base_fee;  // = fee.blob_base_fee
+    std::optional<uint32_t> l1_base_fee_scalar;
+    std::optional<uint32_t> l1_blob_base_fee_scalar;
+    std::optional<intx::uint256> l1_fee;  // = l1_cost
+    std::optional<uint64_t> l1_gas_used;  // Fjord+; wire index 11
+    // operator (Isthmus+)
+    std::optional<intx::uint256> operator_fee;    // FISCO extension: actually-charged value
+                                                  // (op-geth receipt has no such field)
+    std::optional<uint32_t> operator_fee_scalar;  // filled only when (scalar != 0 || constant != 0)
+    std::optional<uint64_t> operator_fee_constant;
+    // DA footprint (Jovian+; op-geth receipt BlobGasUsed semantics)
+    std::optional<uint64_t> da_footprint_gas_scalar;
+    std::optional<uint64_t> da_footprint;
+    // Effective gas price (base_fee + priority_gas_price) is deliberately NOT here: it is carried
+    // on the tars effectiveGasPrice base field instead (op-geth api.go:1775, RPC top-level output).
+};
+
+/// Build the non-consensus receipt metadata. Deliberately takes NO OpForkConfig: the receipt has
+/// to describe what the transaction was actually priced and charged under, and those decisions
+/// are frozen in the validate-time snapshot (OpTxProperties). Passing a cfg here would give this
+/// function a second, independent source of truth that can disagree with the charge whenever
+/// validate and transition straddle a fork boundary — which is exactly the bug this signature
+/// now makes unrepresentable.
+///
+/// Takes the whole snapshot rather than its booleans: three adjacent bool parameters would let a
+/// caller swap has_operator_fee and has_da_footprint with a clean compile and nothing visible in
+/// review. fill_operator_scalars stays separate because it is caller policy, not a snapshot fact.
+OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 operator_fee_at_used,
+    bool fill_operator_scalars) noexcept;
+
 // ---- normal-tx transition ----
 
 /// Fork evmone::state::transition (evmone state.cpp:561-649): buyGas adds l1Cost +
 /// operatorCost(gasLimit); Host replaced with OpHost; tail routes base/l1/operator fees to vaults.
-/// Does not write back; caller applies applyStateDiff(receipt.state_diff).
+/// Produces a bcos::protocol::TransactionReceipt directly (option A phase 2): status/gasUsed/logs
+/// are projected onto the FISCO receipt, the OP metadata (l1/operator/DA fields) is carried via
+/// setOpStackMeta, and the effective gas price lands on the receipt's top-level effectiveGasPrice.
+/// The state diff is returned through `outStateDiff` (the FISCO receipt interface has no field
+/// for it); the caller applies it via applyDiff. Does not write back otherwise.
 /// All fee inputs come from props (the snapshot opValidate produced) — l1_cost, flz_len, fee and
 /// the operator-fee formula flags — so validate and transition price the tx identically. The
 /// signed envelope is NOT taken here: L1/DA cost was already derived from it in opValidate.
-OpTxReceipt opTransition(const evmone::state::StateView& view,
+bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const evmone::state::Transaction& tx, const OpForkConfig& cfg, evmc::VM& vm,
-    const OpTxProperties& props, uint64_t chainId);
+    const OpTxProperties& props, uint64_t chainId,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
+    evmone::state::StateDiff& outStateDiff);
 
 // ---- 0x7E deposit tx (formerly OpDepositTx.h) ----
 
@@ -114,8 +175,11 @@ constexpr auto kDepositTxType = static_cast<evmone::state::Transaction::Type>(0x
 /// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the
 /// nonce; is_system_tx==true throws std::runtime_error (block-level error). gas_limit exceeding
 /// blockGasLeft throws std::runtime_error (op-geth ErrGasLimitReached, block-level error).
-OpDepositReceipt runDeposit(const evmone::state::StateView& view,
+/// Returns a bcos::protocol::TransactionReceipt::Ptr with the deposit_nonce/receipt_version
+/// carried via setOpStackMeta; the state diff is returned through `outStateDiff`.
+bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
-    int64_t blockGasLeft);
+    int64_t blockGasLeft, const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
+    evmone::state::StateDiff& outStateDiff);
 }  // namespace bcos::evm::opstack

@@ -367,10 +367,12 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     header.m_gasLimit = quantityField("gas_limit");
     header.m_gasUsed = quantityField("gas_used");
     auto timestamp = quantityField("timestamp");
-    if (timestamp > u256(std::numeric_limits<int64_t>::max()))
+    // The artifact timestamp is seconds; Ledger::applyEthGenesisHeader multiplies it by 1000
+    // to store internal milliseconds, so the parse bound must leave headroom for the x1000.
+    if (timestamp > u256(std::numeric_limits<int64_t>::max() / 1000))
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("[eth_genesis_header].timestamp exceeds int64"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[eth_genesis_header].timestamp exceeds int64 milliseconds"));
     }
     header.m_timestamp = static_cast<int64_t>(timestamp);
     auto extraData = requireField("extra_data");
