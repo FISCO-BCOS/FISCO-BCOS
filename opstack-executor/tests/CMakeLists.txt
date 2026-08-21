@@ -21,6 +21,7 @@ add_executable(opstack-executor-tests
     OpCommitmentsTest.cpp
     RecentBlockHashesTest.cpp
     PreBlockOpStepsTest.cpp
+    OpBlockProcessTest.cpp
     Storage2StateHelpersTest.cpp
     Storage2StatePoisonTest.cpp
     support/SeedPreStateTest.cpp

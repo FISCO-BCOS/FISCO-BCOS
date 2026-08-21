@@ -38,11 +38,18 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
     if (data.size() == IsthmusL1AttributesLen)
     {
         // Jovian activation block: Isthmus-length attributes, must be deposits-only (op-geth
-        // rollup_cost.go:568-576). Checking the last tx suffices (deposits always precede
-        // non-deposits).
-        if (!std::holds_alternative<DepositTx>(txs.back().tx))
-            throw engine::OpConsensusError(
-                "op block: unexpected non-deposit transactions in Jovian activation block");
+        // rollup_cost.go:568-576). op-geth checks only the last tx, relying on "deposits always
+        // precede non-deposits"; this function must NOT reuse that assumption because
+        // processOpBlock deliberately tolerates out-of-order deposits (accepts with a warning,
+        // op-geth parity) — under that relaxed ordering a [deposit, normal-tx, deposit] block
+        // would pass a last-tx-only check while still carrying a user tx. Scan the whole block:
+        // O(n), and the Jovian activation window is a single block.
+        for (const auto& btx : txs)
+        {
+            if (!std::holds_alternative<DepositTx>(btx.tx))
+                throw engine::OpConsensusError(
+                    "op block: unexpected non-deposit transactions in Jovian activation block");
+        }
         return;
     }
 
@@ -252,6 +259,14 @@ bcos::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
 
     if (txType == static_cast<uint8_t>(kDepositTxType))
     {
+        // Deposit receipts must always carry opStackMeta (nonce + receipt version): the
+        // execution path (runDeposit, bcos-evm) sets deposit_receipt_version=1 for every
+        // post-Canyon deposit, and op-geth's depositReceiptRLP only omits the fields when the
+        // version pointer is nil (pre-Canyon receipts, which FISCO never produces for deposits).
+        // The 0-fill below is therefore dead-on-arrival for consensus blocks; it exists only so
+        // a hand-constructed receipt without meta does not silently emit a different-length
+        // leaf (which would diverge from op-geth's receiptsRoot). Do not "fix" by dropping the
+        // fill — the invariant lives in runDeposit, not here.
         const auto& meta = r.opStackMeta();
         const uint64_t nonce = (meta && meta->deposit_nonce) ? *meta->deposit_nonce : uint64_t{0};
         const uint64_t version =
