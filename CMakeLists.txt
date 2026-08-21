@@ -62,6 +62,9 @@ if(FULLNODE)
     find_package(group-sig CONFIG REQUIRED)
     find_package(paillier CONFIG REQUIRED)
     find_package(blst CONFIG REQUIRED)
+    # Ensure vcpkg-installed libs are on the linker search path (fixes bare -lblst
+    # from evmone::precompiles transitive interface link libraries)
+    link_directories(${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib)
     # Create blst::blst if not already defined (overlay port only creates 'blst')
     if(NOT TARGET blst::blst)
         find_library(_blst_lib NAMES blst PATHS
