@@ -36,6 +36,14 @@
 #include <utility>
 #include <vector>
 
+namespace bcos::evm::opstack
+{
+// Defined in OpBlockExecute.cpp — forward-declared here to avoid including OpBlockExecute.h
+// (which includes this header, making finalizeOpBlock unavailable at template-definition time).
+evmone::state::StateDiff finalizeOpBlock(
+    const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
+}  // namespace bcos::evm::opstack
+
 namespace bcos::executor_v1::eth
 {
 // toIntxU256 lives in bcos::executor_v1::eth::evm (EVMSupport.h); re-import so
@@ -686,8 +694,8 @@ public:
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
-        bcos::evm::opstack::OpFeeParams const& fee, int64_t blockGasLeft, uint64_t chainId,
-        evmone::state::BlockHashes const* blockHashes)
+        bcos::evm::opstack::OpFeeParams const& fee = {}, int64_t blockGasLeft = 0,
+        uint64_t chainId = 0, evmone::state::BlockHashes const* blockHashes = nullptr)
     {
         (void)contextID;
 
@@ -786,7 +794,38 @@ public:
         co_return receipt;
     }
 
-    // Block-level finalize: use the finalizeOpBlock free function (OpBlockExecute.h).
+    // Block-level finalize: evmone finalize (MessagePasser snapshot etc.) + write-back. Used by
+    // the scheduler path (finalizeOpBlockResult, OpBlockExecute.h) after the per-tx loop; the
+    // standalone processOpBlock path finalizes through its own applyDiff callback instead.
+    // NOTE: `op::finalizeOpBlock` is a dependent name (Storage is a template param) — resolved at
+    // instantiation, when OpBlockExecute.h is fully loaded (callers include both); a
+    // non-dependent qualified name would fail at definition time due to the OpBlockExecute.h →
+    // OpstackExecutor.h cyclic include.
+    template <class Storage>
+    task::Task<void> finalizeBlock(Storage& storage, protocol::BlockHeader const& blockHeader,
+        ledger::LedgerConfig const& ledgerConfig)
+    {
+        namespace op = bcos::evm::opstack;
+        namespace eth = bcos::executor_v1::eth;
+
+        auto revOpt = ledgerConfig.evmcRevision();
+        if (!revOpt.has_value())
+            BOOST_THROW_EXCEPTION(OpEvmcRevisionNotConfigured{}
+                                  << bcos::errinfo_comment("evmcRevision not configured"));
+        auto rev = *revOpt;
+        if (m_forkConfig.rev != rev)
+            BOOST_THROW_EXCEPTION(OpForkRevisionMismatch{} << bcos::errinfo_comment(
+                                      "OP fork revision does not match ledger evmcRevision"));
+
+        bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
+        evmc_address coinbase{};
+        auto const& cb = blockHeader.coinbase();
+        if (cb.size() == sizeof(evmc_address))
+            std::copy_n(cb.begin(), sizeof(evmc_address), coinbase.bytes);
+
+        auto diff = op::finalizeOpBlock(stateView, m_forkConfig, coinbase);
+        co_await eth::applyStateDiff(storage, diff, rev, *m_hashImpl);
+    }
 
 private:
     // ---- Shared normal-tx pipeline: three stages (prepare/execute/finish). ----

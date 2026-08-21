@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bcos-evm/adapter/StateDiffSanitize.h>
+#include <bcos-evm/adapter/StateRootCompute.h>  // stateRootOf (finalizeOpBlockResult)
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>  // DepositTx
@@ -230,5 +231,82 @@ inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPa
         .requestsHash = ethHeader.requestsHash(),
     };
     return out;
+}
+
+/// transactionsRoot over raw EIP-2718 envelopes. Matches op-geth's DeriveSha because the raw-tx
+/// decoders reject non-canonical encodings (assertCanonicalRoundTrip fails closed if that lapses).
+/// Two call sites: the engine's pre-execution blockHash check and finalizeOpBlockResult's txRoot.
+template <class RawTxRange>
+[[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
+{
+    std::vector<std::pair<bcos::bytes, bcos::bytes>> entries;
+    entries.reserve(rawTxBytes.size());
+    uint64_t index = 0;
+    for (auto const& rawItem : rawTxBytes)
+    {
+        bcos::bytes key;
+        bcos::codec::rlp::encode(key, index);
+        entries.emplace_back(std::move(key), bcos::bytes(std::begin(rawItem), std::end(rawItem)));
+        ++index;
+    }
+    return bcos::ledger::mpt::computeTrieRootVarKey(entries).root;
+}
+
+/// Block-level finalization for the scheduler path (OpScheduler): finalizeBlock (MessagePasser
+/// snapshot) → seal → stateRoot → txRoot. txTypes are rebuilt from rawTxBytes[i][0] (the FISCO
+/// receipt has no tx-type slot; sealOpBlock's EncodeIndex receipts-root leaf needs the EIP-2718
+/// type byte — mirror of the per-tx loop's classification). hashErr is checked here (poisoned
+/// block-hash lookup → OpStorageError). **cumulativeGasUsed backfill is NOT in scope** (it stays
+/// in the per-tx loop / ExecuteContext::finish).
+template <class Storage, class RawTxRange>
+OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackExecutor& executor,
+    Storage& view, bcos::protocol::BlockHeader const& header,
+    bcos::ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpForkConfig const& cfg,
+    std::vector<bcos::protocol::TransactionReceipt::Ptr> const& receipts,
+    RawTxRange const& rawTxBytes, int64_t cumulative, std::optional<std::string> const& hashErr)
+{
+    namespace op = bcos::evm::opstack;
+    namespace detail = bcos::evm::engine::detail;
+
+    bcos::task::syncWait(executor.finalizeBlock(view, header, ledgerConfig));
+
+    // Rebuild txTypes via the shared classifyTxType helper (single home for the EIP-2718
+    // classification so the deposit loop / this rebuild / processOpBlock can't drift).
+    std::vector<uint8_t> txTypes;
+    txTypes.reserve(rawTxBytes.size());
+    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
+    {
+        if (rawTxBytes[i].empty())  // defensive: the per-tx loop already rejects empty envelopes
+            throw OpConsensusError("op block: empty envelope");
+        txTypes.emplace_back(op::classifyTxType(rawTxBytes[i][0]));
+    }
+
+    op::OpBlockResult result;
+    result.receipts = receipts;
+    result.txTypes = std::move(txTypes);
+    result.gasUsed = cumulative;
+    if (hashErr.has_value())
+        throw OpStorageError("block-hash lookup failed: " + *hashErr);
+
+    // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot.
+    std::map<evmc::bytes32, evmc::bytes32> mpStorage;
+    bcos::evm::evmstate::Storage2State<Storage> bridge(view, executor.sharedError());
+    bridge.visitAccounts([&](auto const& acc) {
+        if (acc.addr == op::OP_L2_TO_L1_MESSAGE_PASSER)
+        {
+            mpStorage = acc.storage;
+            return false;
+        }
+        return true;
+    });
+    if (bridge.poisoned())
+        throw OpStorageError("poisoned: " + std::string(bridge.firstError()));
+    auto seal = op::sealOpBlock(result, cfg, mpStorage);
+    auto root = bcos::evm::stateRootOf(bridge);
+    if (bridge.poisoned())
+        throw OpStorageError("poisoned after stateRootOf: " + std::string(bridge.firstError()));
+    auto txRoot = computeOpTxRoot(rawTxBytes);
+    return OpExecuteBlockResult{std::move(result.receipts), seal, detail::toBcosH256(root),
+        static_cast<uint64_t>(cumulative), txRoot};
 }
 }  // namespace bcos::evm::engine

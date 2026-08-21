@@ -23,3 +23,16 @@ set_target_properties(test-ethereum-state-smoke PROPERTIES RUNTIME_OUTPUT_DIRECT
 # SearchTestCases.cmake only discovers BOOST_*TEST_* targets; this standalone
 # target must register itself so ctest actually runs it in CI.
 add_test(NAME test-ethereum-state-smoke COMMAND test-ethereum-state-smoke)
+
+# ApplyStateDiffTest: write-back regression (B4) — a deleted_accounts entry must remove the
+# account's SYS_TABLES marker (else EIP-161 ghost empty accounts linger). Links Storage2State
+# from opstack-executor, so it carries the same test-only deps as the smoke target.
+find_package(Boost REQUIRED unit_test_framework)
+add_executable(test-apply-state-diff ApplyStateDiffTest.cpp)
+target_link_libraries(test-apply-state-diff
+    opstack-executor ethereum-executor bcos-evm-opstack bcos-framework bcos-task codec
+    bcos-crypto bcos-utilities evmone::evmone intx::intx TBB::tbb Boost::unit_test_framework)
+set_source_files_properties("ApplyStateDiffTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_target_properties(test-apply-state-diff PROPERTIES UNITY_BUILD OFF)
+set_target_properties(test-apply-state-diff PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+add_test(NAME test-apply-state-diff COMMAND test-apply-state-diff)

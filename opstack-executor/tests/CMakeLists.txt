@@ -1,14 +1,14 @@
 find_package(Boost REQUIRED unit_test_framework)
 find_package(jsoncpp CONFIG REQUIRED)
 
-# opstack-executor-tests was the repo's only GTest target; converted to Boost.Test to drop the
-# gtest dependency (not in vcpkg.json, broke CI configure). BOOST_TEST_MODULE is defined in
-# TestMain.cpp (the single main for the whole suite — the earlier three-target split left the
-# add_test entries dangling with no add_executable; this restores the wiring with one target).
+# opstack-executor-tests: single Boost.Test target (BOOST_TEST_MODULE in TestMain.cpp). All
+# part-4 unit tests plus the part-5 scheduler tests live here. OpSchedulerTest drives a real
+# bcos::ledger::Ledger commit hook and SchedulerSkeleton::current(), so the target links
+# transaction-scheduler / ledger / engine in addition to the part-4 set.
 #
-# No `ledger` link: header-only usage only (Classify.h), and the ledger→bcos-crypto→wedprcrypto
-# chain breaks libc++ typed catch binary-wide (bcos-rpc/test/CMakeLists.txt:29-34), so
-# exception-type assertions rely on exact-type BOOST_CHECK_THROW.
+# No `ledger` link was the part-4 rule (header-only usage + the ledger→bcos-crypto→wedprcrypto
+# chain breaking libc++ typed catch binary-wide, bcos-rpc/test/CMakeLists.txt:29-34); part-5
+# OpSchedulerTest instantiates bcos::ledger::Ledger for real, so ledger IS required here.
 add_executable(opstack-executor-tests
     TestMain.cpp
     OpstackExecutorTest.cpp
@@ -22,6 +22,10 @@ add_executable(opstack-executor-tests
     RecentBlockHashesTest.cpp
     PreBlockOpStepsTest.cpp
     OpBlockProcessTest.cpp
+    OpSchedulerSeamSmokeTest.cpp
+    OpSchedulerTest.cpp
+    OpEngineBranchSmokeTest.cpp
+    OpBlockInjectorTest.cpp
     Storage2StateHelpersTest.cpp
     Storage2StatePoisonTest.cpp
     support/SeedPreStateTest.cpp
@@ -47,6 +51,15 @@ target_link_libraries(opstack-executor-tests PRIVATE
     bcos-crypto
     bcos-task
     jsoncpp_static
+    transaction-scheduler  # OpSchedulerTest: SchedulerSkeleton::current() (BaselineScheduler.cpp)
+    ledger                 # OpSchedulerTest: real bcos::ledger::Ledger commit hook
+    engine
+    bcos-utilities
     Boost::unit_test_framework
 )
+target_include_directories(opstack-executor-tests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/bcos-ledger
+    ${CMAKE_SOURCE_DIR}/bcos-rpc)
+set_target_properties(opstack-executor-tests PROPERTIES UNITY_BUILD OFF)
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
