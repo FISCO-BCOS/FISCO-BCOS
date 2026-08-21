@@ -196,15 +196,6 @@ def a2_blocks(rpc):
     check("withdrawals always [] (OP semantics)", b.get("withdrawals") == [], str(b.get("withdrawals")))
     wr = b.get("withdrawalsRoot")
     check("withdrawalsRoot present 32B (Isthmus+)", wr is not None and len(wr) == 66, str(wr))
-    # Genesis: the genesis header carries the empty MessagePasser storage root as
-    # withdrawalsRoot (the Isthmus semantic — same value op-geth serves via
-    # EmptyWithdrawalsHash for an empty passer). D-WR-3 (zero-render) resolved 08-19: the
-    # header-backed read propagates the artifact's value.
-    g = rpc.call("eth_getBlockByNumber", ["0x0", False])
-    check("genesis withdrawalsRoot == empty-trie root (D-WR-3 resolved)",
-          g.get("withdrawalsRoot") == "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-          str(g.get("withdrawalsRoot")))
-    check("genesis withdrawals []", g.get("withdrawals") == [], str(g.get("withdrawals")))
     proof = rpc.call("eth_getProof", ["0x4200000000000000000000000000000000000016", [], "0x0"])
     # Dual expectation: self-written allocs (original B3) leave the passer empty (empty-trie
     # root), while op-deployer terminal allocs (C2 lineage) carry prewritten deployment
@@ -217,6 +208,15 @@ def a2_blocks(rpc):
           "non-empty for op-deployer allocs)",
           is_valid_root,
           f"storageHash={sh} ({'empty-trie (self-written allocs)' if sh == EMPTY_TRIE else 'non-empty (op-deployer allocs)'})")
+    # Genesis: the genesis header's withdrawalsRoot must equal the MessagePasser account
+    # storage root (isthmus/exec-engine.md:58-59) -- the same root eth_getProof returns.
+    # Empty for self-written allocs, non-empty for op-deployer proxied allocs (C2 lineage,
+    # EIP-1967 slots); the header/proof equality holds in both cases (audit MN-4/S-GEN-3).
+    g = rpc.call("eth_getBlockByNumber", ["0x0", False])
+    check("genesis withdrawalsRoot == passer storage root (Isthmus invariant)",
+          g.get("withdrawalsRoot") == sh,
+          f"header={g.get('withdrawalsRoot')} proof={sh}")
+    check("genesis withdrawals []", g.get("withdrawals") == [], str(g.get("withdrawals")))
     # ── getProof e2e: historical block tag (B4-1, spec §6 #9 P1) ──
     # Known limitation: this line only writes MPT trie nodes at genesis import
     # (Ledger.cpp:2205); runtime blocks do not persist MPT state. getProof at
