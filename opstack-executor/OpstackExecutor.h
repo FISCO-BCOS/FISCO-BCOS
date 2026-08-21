@@ -283,7 +283,10 @@ public:
             size_t len = 0;
             for (size_t i = 0; i < n; ++i)
                 len = (len << 8) | ref[1 + i];
-            if (ref.size() < 1 + n + len)
+            // Addition-free comparison: ref.size() >= 1 + n is established above, so the
+            // subtraction cannot underflow — whereas `ref.size() < 1 + n + len` wraps for
+            // len >= 2^64 - 9 and would skip the truncation check entirely.
+            if (len > ref.size() - 1 - n)
                 return std::nullopt;  // truncated payload
             if (len == 1 && ref[1 + n] < 0x80)
                 return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
@@ -679,12 +682,15 @@ public:
 
     /// Execute a single OP normal transaction (injection-style).
     /// Orchestrator supplies fee, decrementing blockGasLeft, chainId, and real block hashes.
+    /// All trailing params are required: these are coroutines (task::Task is lazy — the body runs
+    /// after the call expression), so a defaulted `const& fee = {}` would bind a temporary that is
+    /// destroyed before first use, leaving the frame holding a dangling reference.
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
-        bcos::evm::opstack::OpFeeParams const& fee = {}, int64_t blockGasLeft = 0,
-        uint64_t chainId = 0, evmone::state::BlockHashes const* blockHashes = nullptr)
+        bcos::evm::opstack::OpFeeParams const& fee, int64_t blockGasLeft, uint64_t chainId,
+        evmone::state::BlockHashes const* blockHashes)
     {
         (void)contextID;
 
@@ -823,9 +829,9 @@ private:
     task::Task<bcos::evm::opstack::OpTxProperties> m_prepare(
         bcos::evm::evmstate::Storage2State<Storage>& stateView,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee = {},
-        int64_t blockGasLeft = 0, std::optional<uint64_t> chainId = std::nullopt,
-        evmone::state::BlockInfo const* prebuiltBlockInfo = nullptr)
+        ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee,
+        int64_t blockGasLeft, std::optional<uint64_t> chainId,
+        evmone::state::BlockInfo const* prebuiltBlockInfo)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;

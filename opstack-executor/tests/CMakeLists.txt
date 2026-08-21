@@ -15,6 +15,10 @@ add_executable(opstack-executor-tests
     OpDepositEnvelopeTest.cpp
     OpTxConvertTest.cpp
     SmokeCompileTest.cpp
+    OpCommonTest.cpp
+    OpCommitmentsTest.cpp
+    RecentBlockHashesTest.cpp
+    PreBlockOpStepsTest.cpp
     Storage2StateHelpersTest.cpp
     Storage2StatePoisonTest.cpp
     support/SeedPreStateTest.cpp

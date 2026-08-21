@@ -48,15 +48,6 @@ struct OpBlockSeal
     std::optional<uint64_t> blobGasUsed;
 };
 
-/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool).
-[[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
-{
-    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
-    if (gasUsed > kMaxInt64)
-        throw std::runtime_error("op block: receipt gasUsed exceeds int64_t range");
-    return static_cast<int64_t>(gasUsed);
-}
-
 /// "0x" + lowercase hex (op-geth hexutil.Uint64); the value later feeds the receipts-root leaf
 /// encoding that returns with the block-seal wiring (part 5).
 [[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
@@ -222,3 +213,18 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
 }
 }  // namespace detail
 }  // namespace bcos::evm::engine
+
+namespace bcos::evm::opstack
+{
+/// Bounds-checked u256→int64 narrowing (a corrupt receipt must not wrap the gas pool). Throws
+/// engine::OpConsensusError — a bare std::runtime_error would escape the INVALID/-32603
+/// classification this header establishes (see requireHeaderField's comment). Defined after the
+/// engine block because the error types live there.
+[[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
+{
+    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
+    if (gasUsed > kMaxInt64)
+        throw engine::OpConsensusError("op block: receipt gasUsed exceeds int64_t range");
+    return static_cast<int64_t>(gasUsed);
+}
+}  // namespace bcos::evm::opstack
