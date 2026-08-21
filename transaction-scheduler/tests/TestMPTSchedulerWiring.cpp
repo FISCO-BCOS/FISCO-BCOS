@@ -403,6 +403,8 @@ public:
     MWMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor mockExecutor;
     std::shared_ptr<MWProbeObserver> observer;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 

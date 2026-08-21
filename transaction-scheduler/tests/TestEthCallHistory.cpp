@@ -22,6 +22,7 @@
  *        cache for historical storages.
  */
 
+#include "SharedBaselineSchedulerMock.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -42,7 +43,6 @@
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-transaction-executor/vm/HostContext.h"
-#include "SharedBaselineSchedulerMock.h"
 #include "bcos-transaction-scheduler/HistoricalCallStorage.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
@@ -342,6 +342,8 @@ public:
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     HCMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor probeExecutor;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 

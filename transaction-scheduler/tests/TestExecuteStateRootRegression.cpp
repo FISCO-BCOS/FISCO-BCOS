@@ -18,6 +18,7 @@
  * @date 2026/7/22
  */
 
+#include "SharedBaselineSchedulerMock.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
@@ -38,7 +39,6 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "SharedBaselineSchedulerMock.h"
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <fakeit.hpp>
@@ -248,6 +248,8 @@ public:
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     SharedMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor mockExecutor;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 

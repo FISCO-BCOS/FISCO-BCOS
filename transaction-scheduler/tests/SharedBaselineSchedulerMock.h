@@ -49,24 +49,24 @@
 #include "bcos-task/Task.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include <boost/test/unit_test.hpp>
-#include <range/v3/iterator/operations.hpp>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/transform.hpp>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
+#include <range/v3/iterator/operations.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/transform.hpp>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace bcos::test::sharedmock
 {
-using SharedMutableStorage = storage2::memory_storage::MemoryStorage<executor_v1::StateKey,
-    executor_v1::StateValue,
-    storage2::memory_storage::Attribute(
-        storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>;
+using SharedMutableStorage =
+    storage2::memory_storage::MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
+        storage2::memory_storage::Attribute(
+            storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION)>;
 // Behaviourally a stock flat MemoryStorage, but a DISTINCT subclass on purpose: it anchors
 // this namespace as an associated namespace of the MultiLayerStorage ViewType, which is
 // what lets ADL find the getLedgerConfig tag_invoke stub below (an alias to MemoryStorage
@@ -142,8 +142,8 @@ struct SharedMockExecutor
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& /*blockHeader*/,
         protocol::Transaction const& /*transaction*/, int32_t /*contextID*/,
-        ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
-        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+        ledger::LedgerConfig const& /*ledgerConfig*/,
+        bool /*call*/) -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }
@@ -183,7 +183,8 @@ struct SharedMockScheduler
                 }
                 else
                 {
-                    co_await storage2::removeOne(storage, executor_v1::StateKey{row.table, row.key});
+                    co_await storage2::removeOne(
+                        storage, executor_v1::StateKey{row.table, row.key});
                 }
             }
         };
@@ -224,6 +225,21 @@ struct SharedMockScheduler
 /// The Features the shared getLedgerConfig stub hands out — assigned by every fixture
 /// that drives the shared scheduler (see the file-level comment).
 inline ledger::Features g_stubFeatures{};
+
+/// RAII guard for g_stubFeatures: resets it to the default Features at fixture teardown.
+/// The global is shared by every suite in the binary; without the reset, a fixture that
+/// forgets to assign it would silently inherit whichever features the previously-run
+/// suite left behind (mpt_state_root / l2_ethereum_compat leak across suites). Declare
+/// the guard BEFORE the BaselineScheduler member so it is destructed after it; every
+/// fixture using the shared scheduler should hold one and still assign g_stubFeatures
+/// in its constructor.
+struct ScopedStubFeatures
+{
+    ScopedStubFeatures() = default;
+    ScopedStubFeatures(ScopedStubFeatures const&) = delete;
+    ScopedStubFeatures& operator=(ScopedStubFeatures const&) = delete;
+    ~ScopedStubFeatures() { g_stubFeatures = ledger::Features{}; }
+};
 
 /// Storage-level getLedgerConfig stub, found by ADL through the shared ViewType's
 /// template arguments. Replaces the per-test stubs, which differed only in the Features

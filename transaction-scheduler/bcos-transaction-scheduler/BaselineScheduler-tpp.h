@@ -5,6 +5,20 @@
 // specialization is actually instantiated (the explicit-instantiation TU in
 // libinitializer, and unit tests that define their own mock template arguments).
 // Everything else should include BaselineScheduler.h alone.
+//
+// Two notes on the out-of-line design:
+//  - A TU that includes this header AND references a specialization that has an
+//    extern template declaration (the production ones in BaselineSchedulerInitializer.h,
+//    the test ones in SharedBaselineSchedulerMock.h / FullChainFixture.h) must make sure
+//    the corresponding extern template declaration is visible, or it will instantiate
+//    its own copy — wasteful but harmless; the reverse (extern template declared,
+//    explicit instantiation TU missing from the binary) is a link error.
+//  - Inlining: all 21 members are out-of-line now, but the production entry points
+//    (executeBlock/commitBlock/call/callAtBlock) are SchedulerInterface virtuals whose
+//    call sites already dispatch through the vtable, and the coroutine bodies
+//    (coExecuteBlock/coCommitBlock) share the instantiation TU with their wrappers and
+//    remain TU-inlineable — so this split costs no devirtualization/inlining in
+//    practice. Revisit only if a direct (non-virtual) hot call site appears.
 
 #include "BaselineScheduler.h"
 

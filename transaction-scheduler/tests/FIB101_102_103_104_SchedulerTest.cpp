@@ -18,6 +18,7 @@
  * @date 2026/4/7
  */
 
+#include "SharedBaselineSchedulerMock.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -36,7 +37,6 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "SharedBaselineSchedulerMock.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 
@@ -85,6 +85,9 @@ public:
         // receipts; trivial getLedgerConfig stub behaviour (default Features).
         mockScheduler.m_receiptsWithLogs = true;
         bcos::test::sharedmock::g_stubFeatures = ledger::Features{};
+        // Guard against a future edit silently weakening the receipt shape this
+        // file's mocks historically produced.
+        BOOST_REQUIRE(mockScheduler.m_receiptsWithLogs);
 
         // Ledger: asyncPrewriteBlock => invoke callback(success)
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
@@ -180,6 +183,8 @@ public:
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     SharedMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor mockExecutor;
+    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
 
