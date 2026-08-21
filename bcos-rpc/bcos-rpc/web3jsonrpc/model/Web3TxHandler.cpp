@@ -159,6 +159,12 @@ struct LegacyTxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedList, "Unexpected list");
         }
+        // op-geth parity (rlp.Stream List/ListEnd): field decoding must not cross the
+        // declared list payload boundary. The RLP stream tracks listLimit and rejects reads
+        // past it (errNotAtEOL); without this gate a crafted envelope whose fields consume
+        // more bytes than the header declares would read trailing bytes as fields and pass.
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         out.type = TransactionType::Legacy;
         bcos::Error::UniquePtr decodeError = nullptr;
         if (decodeError = codec::rlp::decodeItems(in, out.nonce, out.maxPriorityFeePerGas);
@@ -280,6 +286,15 @@ struct LegacyTxHandler : Web3TxHandler
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
         }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        // data() is nullptr only when a getCroppedData call failed (view exhausted beyond the
+        // buffer), which decode already reported as an error — guard before pointer arithmetic.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart > static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "legacy tx: fields exceed the declared RLP list payload length");
+        }
         return decodeError;
     }
 };
@@ -394,6 +409,9 @@ struct EIP2930TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // op-geth ListEnd parity: field decoding must not cross the declared payload boundary.
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -453,6 +471,13 @@ struct EIP2930TxHandler : Web3TxHandler
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart > static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP2930 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -568,6 +593,9 @@ struct EIP1559TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // op-geth ListEnd parity: field decoding must not cross the declared payload boundary.
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -629,6 +657,13 @@ struct EIP1559TxHandler : Web3TxHandler
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart > static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP1559 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -715,6 +750,9 @@ struct DepositTxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "deposit: expected RLP list");
         }
+        // op-geth ListEnd parity: field decoding must not cross the declared payload boundary.
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         // Check and propagate errors on every field decode (must not swallow silently)
         if (auto err = codec::rlp::decode(in, out.sourceHash); err != nullptr)
             return err;  // h256
@@ -774,6 +812,13 @@ struct DepositTxHandler : Web3TxHandler
         if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
             return err;  // bytes
         out.nonce = 0;   // deposit nonce is always 0
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart > static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "deposit tx: fields exceed the declared RLP list payload length");
+        }
         return nullptr;
     }
 };
@@ -894,6 +939,9 @@ struct EIP4844TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // op-geth ListEnd parity: field decoding must not cross the declared payload boundary.
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -961,6 +1009,13 @@ struct EIP4844TxHandler : Web3TxHandler
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart > static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP4844 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -1079,6 +1134,9 @@ struct EIP7702TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // op-geth ListEnd parity: field decoding must not cross the declared payload boundary.
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -1145,6 +1203,13 @@ struct EIP7702TxHandler : Web3TxHandler
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart > static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP7702 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }

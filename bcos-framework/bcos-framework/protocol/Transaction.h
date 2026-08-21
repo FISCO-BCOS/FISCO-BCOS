@@ -91,6 +91,13 @@ public:
     /// EIP-2718 typed tx kind when type()==Web3Transaction (see bcos::rpc::TransactionType). 0 if
     /// unset.
     virtual uint8_t web3TypedTxKind() const { return 0; }
+    /// Chain id parsed from the SIGNED envelope (extraTransactionBytes), never from the
+    /// unauthenticated tars mirror (data.chainID): for a typed tx it is RLP field 0 of the
+    /// preimage; for a legacy tx it is the EIP-155 tail (nullopt = pre-EIP-155 unprotected,
+    /// v=27/28). Used by TxValidator::validateChainId to match op-geth, which validates
+    /// chainId from the envelope (modernSigner/EIP155Signer ErrInvalidChainId) with no "0"
+    /// exemption for typed txs.
+    virtual std::optional<uint64_t> web3ChainIdFromEnvelope() const { return std::nullopt; }
     /// deposit-only (0x7e) tx metadata (OP Stack). Empty/false when not a deposit.
     virtual std::string_view sourceHash() const { return {}; }
     virtual u256 mint() const { return {}; }

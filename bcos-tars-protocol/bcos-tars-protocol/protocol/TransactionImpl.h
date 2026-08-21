@@ -93,6 +93,7 @@ public:
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
     uint8_t web3TypedTxKind() const override;
+    std::optional<uint64_t> web3ChainIdFromEnvelope() const override;
     std::string_view sourceHash() const override;
     bcos::u256 mint() const override;
     bool isDepositTx() const override;

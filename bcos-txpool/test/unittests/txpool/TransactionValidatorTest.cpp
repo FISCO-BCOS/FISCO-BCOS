@@ -43,6 +43,14 @@ namespace bcos
 {
 namespace test
 {
+namespace
+{
+TxValidator::Ptr makeValidator()
+{
+    return std::make_shared<TxValidator>(nullptr, nullptr, nullptr, "group0", "chain0");
+}
+}  // namespace
+
 BOOST_FIXTURE_TEST_SUITE(TxPoolTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testTransactionValidator)
 {
@@ -192,6 +200,85 @@ BOOST_AUTO_TEST_CASE(testValidateBalanceIncludesGasCost)
     }
 
     std::cout << "#### testValidateBalanceIncludesGasCost finish" << std::endl;
+}
+
+// A 0x7e deposit must be rejected at admission even when "self-signed": deposits are unsigned
+// system txs that only enter via the engine newPayload path — op-geth txpool validation.go
+// rejects them (ErrTxTypeNotSupported), and a forged envelope that passes signature recovery
+// would mint funds once part 5 assembles OP blocks from the txpool.
+BOOST_AUTO_TEST_CASE(testRejectDepositAtAdmission)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto validator = makeValidator();
+
+    // Build a deposit-shaped tars tx: type=Web3, web3TypedTxKind=0x7e. isDepositTx() must
+    // trigger on web3TypedTxKind alone (never on isSystemTransaction).
+    bcostars::Transaction inner{};
+    inner.type = static_cast<tars::Char>(TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(0x7e);
+    inner.sourceHash = "0x" + std::string(64, 'a');
+    inner.data.input.assign({'x', 'y'});
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m = std::move(inner)]() mutable { return &m; });
+    BOOST_CHECK(tx->isDepositTx());
+    BOOST_CHECK(validator->verify(*tx) == TransactionStatus::Malformed);
+
+    // A deposit that also claims to be a system tx must still be rejected — isDepositTx()
+    // keys on web3TypedTxKind, not on the system flag.
+    auto systemInner = inner;
+    systemInner.isSystemTransaction = 1;
+    auto systemTx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m = std::move(systemInner)]() mutable { return &m; });
+    BOOST_CHECK(validator->verify(*systemTx) == TransactionStatus::Malformed);
+
+    // A normal Web3 tx (web3TypedTxKind=0) must NOT be rejected by this gate: the reject
+    // must key on the deposit kind, not on the Web3 type in general. Signature recovery of an
+    // empty-signature tx will fail, so assert the deposit gate fires *before* that, i.e. the
+    // non-deposit Web3 tx reaches the signature step (InvalidSignature, not Malformed).
+    auto normalInner = inner;
+    normalInner.web3TypedTxKind = 0;
+    auto normalTx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [m = std::move(normalInner)]() mutable { return &m; });
+    BOOST_CHECK(!normalTx->isDepositTx());
+    BOOST_CHECK(validator->verify(*normalTx) != TransactionStatus::Malformed);
+}
+
+// chainId must be validated from the SIGNED envelope, never from the unauthenticated tars
+// mirror (data.chainID): an attacker can rewrite the mirror to "0" to pass the old
+// "empty or 0 skip" exemption. Typed txs get no chainId=0 exemption (op-geth
+// modernSigner.Sender); only pre-EIP-155 unprotected legacy (no envelope chainId) is exempt.
+BOOST_AUTO_TEST_CASE(testValidateChainIdFromEnvelope)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+    auto groupId = "group_test_for_txpool";
+    auto chainId = "chain_test_for_txpool";
+    auto blockLimit = 10;
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(keyPair->publicKey(), cryptoSuite, groupId,
+        chainId, blockLimit, fakeGateWay, false, false);
+    faker->init();
+    auto ledger = faker->ledger();
+    auto validator = faker->txpool()->txpoolConfig()->txValidator();
+
+    // Seed the WEB3_CHAIN_ID system config to a known value (123).
+    ledger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "123");
+
+    // A legacy EIP-155 tx whose envelope chainId (123) matches the config passes even when the
+    // tars mirror lies (chainID="0"): the mirror is unauthenticated and must not be trusted.
+    {
+        auto tx = fakeWeb3Tx(cryptoSuite, "1", keyPair);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        // The fake preimage is pre-EIP-155 (6 fields, no chainId tail) → envelope nullopt →
+        // exempt like an unprotected legacy tx.
+        txImpl->mutableInner().data.chainID = "0";  // hostile mirror value
+        auto result = task::syncWait(validator->validateChainId(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::None);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

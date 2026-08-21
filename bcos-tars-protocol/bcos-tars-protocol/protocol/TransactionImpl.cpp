@@ -250,6 +250,18 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // The recompute is a byte splice plus one keccak, cheap enough to always run.
     if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
+        // Deposit (0x7e): unsigned, extraTransactionBytes already IS the full 0x7e envelope
+        // (Web3Transaction::takeToTarsTransaction deposit branch stores encode()). The hash is
+        // keccak of that envelope verbatim — op-geth DepositTx.Hash() (prefixedRlpHash) and
+        // op-reth TxDeposit::tx_hash() (= keccak256(encoded_2718)). reassembleWeb3RawTransaction
+        // cannot be used here: it requires a 65-byte signature, which deposits do not carry.
+        if (isDepositTx())
+        {
+            auto const depositHash =
+                bcos::crypto::keccak256Hash(extraTransactionBytes());
+            m_inner()->extraTransactionHash.assign(depositHash.begin(), depositHash.end());
+            return;
+        }
         auto const canonicalTxHash = bcos::crypto::keccak256Hash(
             bcos::ref(reassembleWeb3RawTransaction(extraTransactionBytes(), signatureData())));
         m_inner()->extraTransactionHash.assign(canonicalTxHash.begin(), canonicalTxHash.end());
@@ -411,6 +423,72 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
         return 0;
     }
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
+}
+
+std::optional<uint64_t> bcostars::protocol::TransactionImpl::web3ChainIdFromEnvelope() const
+{
+    // The tars mirror (data.chainID) is unauthenticated — the signature binds only
+    // extraTransactionBytes + signatureData (see calculateHash), so chainId admission must be
+    // derived from the SIGNED envelope, exactly as op-geth derives it from the tx preimage
+    // (modernSigner reads the typed chainId field / EIP155Signer derives it from v).
+    // extraTransactionBytes holds the signing preimage (Web3Transaction::takeToTarsTransaction
+    // stores encodeForSign()): typed = type byte || rlp([chainId, ...]); legacy =
+    // rlp([nonce,gasPrice,gasLimit,to,value,data]) or rlp([...6 fields, chainId, 0, 0]).
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        return std::nullopt;
+    }
+    auto const& payload = extraTransactionBytes();
+    if (payload.empty()) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    auto const firstByte = payload[0];
+    bcos::bytesRef cursor(
+        const_cast<bcos::byte*>(payload.data()), payload.size());
+    if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
+    {
+        // Typed (EIP-2718: 0x01-0x04): chainId is RLP field 0 of the inner list.
+        cursor = cursor.getCroppedData(1);
+        auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
+        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+        {
+            return std::nullopt;
+        }
+        uint64_t chainId = 0;
+        if (auto e = bcos::codec::rlp::decode(cursor, chainId); e != nullptr) [[unlikely]]
+        {
+            return std::nullopt;
+        }
+        return chainId;
+    }
+    // Legacy: walk the first 6 fields; if a 7th (chainId) is present it is the EIP-155 tail.
+    auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
+    if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    bcos::bytesRef walker(cursor.data(), header.payloadLength);
+    for (int i = 0; i < 6; ++i)
+    {
+        auto [fieldError, fieldHeader] = bcos::codec::rlp::decodeHeader(walker);
+        if (fieldError || fieldHeader.payloadLength > walker.size()) [[unlikely]]
+        {
+            return std::nullopt;
+        }
+        walker = walker.getCroppedData(fieldHeader.payloadLength);
+    }
+    if (walker.empty())
+    {
+        // pre-EIP-155 unprotected legacy (v=27/28): no chainId, exempt — op-geth HomesteadSigner.
+        return std::nullopt;
+    }
+    uint64_t chainId = 0;
+    if (auto e = bcos::codec::rlp::decode(walker, chainId); e != nullptr) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    return chainId;
 }
 
 std::string_view bcostars::protocol::TransactionImpl::sourceHash() const

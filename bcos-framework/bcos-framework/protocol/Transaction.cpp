@@ -11,6 +11,18 @@
 
 namespace bcos::protocol
 {
+namespace
+{
+// EIP-2 canonical-s guard (same constants as the RPC-side check in Web3Transaction.cpp):
+// a signature with s > n/2 is malleable — flipping s to n-s recovers the same sender and
+// executes identically, so op-geth/op-reth reject it at BOTH admission and block processing.
+// The RPC path (Web3Transaction::decode) already enforces this; this check closes the P2P
+// import path (TxValidator::verify -> Transaction::verify), which previously only did
+// signature recovery. r(32)||s(32)||yParity(1) wire format, s is the middle 32 bytes.
+const u256 c_secp256k1n("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
+}  // namespace
+
 Web3AccessList Transaction::web3AccessList() const
 {
     return {};
@@ -128,6 +140,19 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
                        << LOG_KV("hash", hashResult.abridged());
         BOOST_THROW_EXCEPTION(
             std::invalid_argument("recover sender address from signature failed"));
+    }
+    // EIP-2: reject malleable (high-s) signatures on the P2P import path too. The RPC path
+    // (Web3Transaction::decode -> checkEip2Signature) already rejects s > n/2; without this
+    // symmetric gate a P2P-imported malleated tx would pass admission and diverge from
+    // op-geth/op-reth, which enforce low-s at both txpool admission and block execution.
+    if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction) && signature.size() == 65)
+    {
+        auto const s = bcos::fromBigEndian<u256>(signature.getCroppedData(32, 32));
+        if (s == 0 || s > c_secp256k1nOver2) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument("EIP-2: malleable signature (s exceeds secp256k1n/2)"));
+        }
     }
 
     forceSender(sender);

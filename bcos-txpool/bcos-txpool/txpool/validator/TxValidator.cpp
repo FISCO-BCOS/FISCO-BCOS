@@ -61,6 +61,16 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
     {
         return TransactionStatus::Malformed;
     }
+    // Reject 0x7e deposit transactions at admission. Deposits are unsigned system txs that must
+    // only enter via the engine newPayload path (rawTransactions) — op-geth rejects them in the
+    // txpool with ErrTxTypeNotSupported ("No unauthenticated deposits allowed in the transaction
+    // pool", core/txpool/validation.go:84-90); op-reth likewise (no 0x7e branch in the pool
+    // validator). Without this gate a forged envelope could be self-signed, pass signature
+    // recovery below, and mint funds once part 5 assembles OP blocks from the txpool.
+    if (_tx.isDepositTx()) [[unlikely]]
+    {
+        return TransactionStatus::Malformed;
+    }
     if (_tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
         // check groupId and chainId
@@ -290,15 +300,24 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
     }
     if (auto config = co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
     {
-        auto [chainId, _] = config.value();
-        // if legacy tx, chainId is empty or 0, skip the check
-        if (!_tx.chainId().empty() && _tx.chainId() != "0")
+        auto [chainIdStr, _] = config.value();
+        // Validate against the SIGNED envelope, never the unauthenticated tars mirror
+        // (data.chainID): an attacker can rewrite the mirror to "0" to pass the old
+        // "empty or 0 skip" exemption. op-geth validates chainId from the tx preimage with
+        // no "0" exemption for typed txs (modernSigner.Sender ErrInvalidChainId); only
+        // pre-EIP-155 unprotected legacy (v=27/28, envelope carries no chainId) is exempt
+        // (HomesteadSigner).
+        auto const expected = boost::lexical_cast<uint64_t>(chainIdStr);
+        auto envelopeChainId = _tx.web3ChainIdFromEnvelope();
+        if (envelopeChainId.has_value() && *envelopeChainId != expected)
         {
-            // for EIP-155, check chainId
-            if (_tx.chainId() != chainId)
-            {
-                co_return TransactionStatus::InvalidChainId;
-            }
+            co_return TransactionStatus::InvalidChainId;
+        }
+        // A typed tx always carries a chainId in the envelope — a missing one means the
+        // preimage is malformed, which an EIP-155 signer would reject anyway; keep it strict.
+        if (!envelopeChainId.has_value() && _tx.web3TypedTxKind() != 0)
+        {
+            co_return TransactionStatus::InvalidChainId;
         }
     }
     co_return TransactionStatus::None;

@@ -166,12 +166,16 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         // 0x-prefixed, matching the read side u256(...) (parsed in TransactionImpl.cpp mint())
         tarsTx.mint = "0x" + mint.str(0, std::ios_base::hex);
         tarsTx.isSystemTransaction = isSystemTx ? 1 : 0;
-        // Full 0x7E envelope (encode()). extraTransactionHash is NOT filled here — the
-        // canonical txHash path (TransactionImpl::calculateHash) does not yet handle 0x7e;
-        // deposits are unsigned and rejected at eth_sendRawTransaction (see EthEndpoint.cpp).
+        // Full 0x7E envelope (encode()). Fill extraTransactionHash so the canonical txHash is
+        // computable and eth_getTransactionByHash/Receipt can look deposits up — op-geth
+        // DepositTx.Hash() = keccak(0x7e || rlp(fields)) (prefixedRlpHash) and deposits ARE
+        // indexed like any other tx (core/rawdb/accessors_indexes.go has no deposit exemption);
+        // op-reth likewise returns them (hash = keccak256(encoded_2718)).
         auto encoded = encode();
         tarsTx.extraTransactionBytes.reserve(encoded.size());
         ::ranges::move(encoded, std::back_inserter(tarsTx.extraTransactionBytes));
+        auto const hash = bcos::crypto::keccak256Hash(bcos::ref(encoded));
+        tarsTx.extraTransactionHash.assign(hash.begin(), hash.end());
         // Generic fields (so consumers on the tars generic read path don't see empty values)
         tarsTx.data.to = to.has_value() ? to->hexPrefixed() : "";
         tarsTx.data.input.assign(data.begin(), data.end());

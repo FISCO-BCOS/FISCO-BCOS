@@ -735,5 +735,64 @@ BOOST_AUTO_TEST_CASE(depositGoldenEncoding)
     }
 }
 
+// The six codecs must enforce the declared RLP list payload boundary (op-geth List/ListEnd
+// parity): a list header that under-declares its payload must not let field decoding cross
+// into the trailing bytes and read them as fields. Build a valid legacy envelope, then shrink
+// the outer list header's declared length so the fields overflow it — decode must fail.
+BOOST_AUTO_TEST_CASE(testRejectPayloadLengthOverflow)
+{
+    // A valid legacy pre-EIP-155 envelope (same raw tx as testLegacyTransactionDecode). The
+    // outer list header 0xf8 0x9b declares a 0x9b-byte payload that exactly covers the 9 items.
+    auto bytes = fromHexWithPrefix(
+        "0xf89b0c8504a817c80082520894727fc6a68321b754475c668a6abfb6e9e71c169a888ac7230489e80000afa9059cbb000000000213ed0f886efd100b67c7e4ec0a85a7d20dc971600000000000000000000015af1d78b58c400026a0be67e0a07db67da8d446f76add590e54b6e92cb6b8f9835aeb67540579a27717a02d690516512020171c1ec870f6ff45398cc8609250326be89915fb538e7bd718");
+    auto bRef = bcos::ref(bytes);
+    Web3Transaction tx{};
+    BOOST_CHECK(codec::rlp::decode(bRef, tx) == nullptr);
+
+    // Corrupt the declared payload length to 0x9a (one byte short): the nine fields' bytes now
+    // overflow the declared boundary by one byte. The decoder must reject (fields cross the
+    // declared payload — op-geth ListEnd errNotAtEOL), not silently read the trailing byte as
+    // part of a field.
+    bytes[1] = static_cast<byte>(0x9a);
+    auto badRef = bcos::ref(bytes);
+    Web3Transaction badTx{};
+    BOOST_CHECK(codec::rlp::decode(badRef, badTx) != nullptr);
+}
+
+// RLPDecode.h must reject integers wider than the target type (op-geth rlp uint overflow /
+// op-reth Error::Overflow parity) instead of truncating via fromBigEndian: a 9-byte uint64
+// or a 33-byte u256 is malformed input, never silently narrowed.
+BOOST_AUTO_TEST_CASE(testRejectOverwideInteger)
+{
+    namespace rlp = bcos::codec::rlp;
+
+    // uint64 with 9 payload bytes: 0x89 + 9 bytes.
+    {
+        bcos::bytes raw{0x89, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        auto ref = bcos::ref(raw);
+        uint64_t v = 0;
+        auto e = rlp::decode(ref, v);
+        BOOST_CHECK(e != nullptr);
+    }
+    // u256 with 33 payload bytes (header 0xa1 + 33B): must be rejected, not truncated.
+    {
+        bcos::bytes raw(34, 0x00);
+        raw[0] = 0xa1;  // long-string header, 33-byte payload
+        raw[1] = 0x01;  // leading non-zero so it is not a canonical-size violation
+        auto ref = bcos::ref(raw);
+        bcos::u256 v = 0;
+        auto e = rlp::decode(ref, v);
+        BOOST_CHECK(e != nullptr);
+    }
+    // A canonical 8-byte uint64 still decodes fine (no regression).
+    {
+        bcos::bytes raw{0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2a};  // 42
+        auto ref = bcos::ref(raw);
+        uint64_t v = 0;
+        BOOST_CHECK(rlp::decode(ref, v) == nullptr);
+        BOOST_CHECK_EQUAL(v, 42);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
