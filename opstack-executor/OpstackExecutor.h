@@ -392,12 +392,13 @@ public:
     return dep;
 }
 
-/// Per-block execution state threaded through ExecuteContext (shared scheduler plan Task 3).
+/// Per-block execution state threaded through ExecuteContext.
 /// fee is loaded lazily on the first NORMAL tx (after the L1 attributes deposit has run);
 /// blockGasLeft / cumulativeGasUsed / seenNonDeposit are mutated per tx; hashes / chainId are
 /// fixed at block construction; daFootprintGasScalar (Jovian) overrides
 /// fee.da_footprint_gas_scalar when set. The first five fields are mutable so a
-/// `BlockContext const*` can write them. Namespace-scope (not nested) so OpScheduler / tests can
+/// `BlockContext const*` can write them. Namespace-scope (not nested) so the block orchestrator /
+/// tests can
 /// value-initialize it (a nested struct's default member initializers are unusable outside
 /// OpstackExecutor's member functions).
 ///
@@ -555,8 +556,7 @@ public:
                     // A malformed deposit envelope (e.g. a 0x02-envelope whose tars mirror
                     // claims deposit) is a consensus rejection, not an internal error.
                     throw engine::OpConsensusError(
-                        std::string("OpScheduler: deposit envelope validation failed: ") +
-                        e.what());
+                        std::string("op block: deposit envelope validation failed: ") + e.what());
                 }
                 co_return;  // deposit has no opValidate
             }
@@ -581,7 +581,7 @@ public:
             catch (const OpTxValidationFailed& e)
             {
                 throw engine::OpConsensusError(
-                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
+                    std::string("op block: normal tx validation failed: ") + e.what());
             }
         }
         task::Task<void> execute()
@@ -600,7 +600,8 @@ public:
                 try
                 {
                     m_receipt = co_await executor.executeDeposit(storage, blockHeader, m_deposit,
-                        m_ctx->chainId, m_ctx->blockGasLeft, ledgerConfig, m_ctx->blockHashes);
+                        m_ctx->chainId, m_ctx->blockGasLeft, ledgerConfig, call,
+                        m_ctx->blockHashes);
                 }
                 catch (...)
                 {
@@ -641,8 +642,7 @@ public:
     };
 
     /// 7-arg form (OP path): the caller owns the BlockContext and must keep it alive across the
-    /// prepare/execute/finish lifecycle (SchedulerSerialImpl forwards the ctx that lives in
-    /// OpScheduler's coroutine frame).
+    /// prepare/execute/finish lifecycle (e.g. in the caller's coroutine frame).
     template <class Storage>
     task::Task<ExecuteContext<Storage>> createExecuteContext(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
@@ -703,12 +703,12 @@ public:
                 // Same error normalization as ExecuteContext::prepare: a malformed deposit
                 // envelope is a CONSENSUS rejection (INVALID), not an internal error.
                 throw engine::OpConsensusError(
-                    std::string("OpScheduler: deposit envelope validation failed: ") + e.what());
+                    std::string("op block: deposit envelope validation failed: ") + e.what());
             }
             try
             {
-                co_return co_await executeDeposit(
-                    storage, blockHeader, dep, chainId, blockGasLeft, ledgerConfig, blockHashes);
+                co_return co_await executeDeposit(storage, blockHeader, dep, chainId, blockGasLeft,
+                    ledgerConfig, call, blockHashes);
             }
             catch (...)
             {
@@ -734,7 +734,7 @@ public:
         catch (const OpTxValidationFailed& e)
         {
             throw engine::OpConsensusError(
-                std::string("OpScheduler: normal tx validation failed: ") + e.what());
+                std::string("op block: normal tx validation failed: ") + e.what());
         }
         evmone::state::StateDiff diff;
         auto receipt = co_await m_execute(stateView, blockHeader, transaction, ledgerConfig, props,
@@ -743,18 +743,21 @@ public:
     }
 
     /// Execute a single OP 0x7E deposit transaction (reuses runDeposit).
+    /// `call` follows the same contract as executeTransaction: eth_call (true) tolerates unset
+    /// optional header fields as 0; block execution (false) requires them (OpCommon.h
+    /// requireHeaderField) — deposits are NOT exempt from the strict-path contract.
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> executeDeposit(Storage& storage,
         protocol::BlockHeader const& blockHeader, bcos::evm::opstack::DepositTx const& dep,
         uint64_t chainId, int64_t blockGasLeft, ledger::LedgerConfig const& ledgerConfig,
-        evmone::state::BlockHashes const* blockHashes = nullptr)
+        bool call = false, evmone::state::BlockHashes const* blockHashes = nullptr)
     {
         namespace op = bcos::evm::opstack;
 
         checkForkRevision(ledgerConfig);
 
         auto blockInfo = buildBlockInfo(
-            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)));
+            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         NullBlockHashes nullBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : nullBlockHashes;
@@ -783,8 +786,7 @@ public:
         co_return receipt;
     }
 
-    // Block-level finalize (finalizeOpBlock / seal) is deferred to the part that lands the
-    // OpScheduler wiring (part 5).
+    // Block-level finalize: use the finalizeOpBlock free function (OpBlockExecute.h).
 
 private:
     // ---- Shared normal-tx pipeline: three stages (prepare/execute/finish). ----
@@ -816,11 +818,11 @@ private:
         }
         catch (const std::exception& e)
         {
-            throw engine::OpConsensusError("OpScheduler: " + what + " failed: " + e.what());
+            throw engine::OpConsensusError("op block: " + what + " failed: " + e.what());
         }
         catch (...)
         {
-            throw engine::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
+            throw engine::OpConsensusError("op block: " + what + " failed: unknown exception");
         }
     }
 
@@ -880,7 +882,7 @@ private:
                 evmTx.type == evmone::state::Transaction::Type::legacy && evmTx.chain_id == 0;
             if (!exempt && evmTx.chain_id != *chainId)
                 throw engine::OpConsensusError(
-                    "OpScheduler: tx chain_id " + std::to_string(evmTx.chain_id) +
+                    "op block: tx chain_id " + std::to_string(evmTx.chain_id) +
                     " does not match node chainId " + std::to_string(*chainId));
         }
         auto envRef = transaction.extraTransactionBytes();
@@ -978,8 +980,7 @@ public:
 
 private:
     protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
-    // Reserved for the part-5 seal wiring (header-commitment hashing); unused since the
-    // write-back moved to Storage2State::applyDiff.
+    // Reserved for header-commitment hashing at block seal; the per-tx path does not use it.
     [[maybe_unused]] crypto::Hash::Ptr m_hashImpl;
     // Value copy, not a reference: OpForkConfig is small (~32B, once per block) and a reference
     // member to a caller's config is the same lifetime footgun class that m_ctx had.

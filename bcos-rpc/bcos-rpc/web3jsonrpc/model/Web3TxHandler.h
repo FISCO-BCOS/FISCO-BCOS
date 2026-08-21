@@ -38,11 +38,14 @@ struct Web3TxHandler
     virtual bcos::codec::rlp::Header header(const Web3Transaction&) const = 0;
     // Decode (populates Web3Transaction; withSig controls whether the signature is parsed).
     // ⚠️ Returns Error::UniquePtr (not void): decode errors must propagate, not be silently
-    // swallowed (found by review).
+    // swallowed.
     virtual bcos::Error::UniquePtr decode(
         bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
 };
 
-// Dispatch by type via a lookup table. Unknown types fall back to the Legacy handler (defensive).
+// Dispatch by type via a switch over the known type bytes. Unknown types get a fail-loud
+// no-op sentinel (encode returns empty, decode reports UnsupportedTransactionType, FATAL log) —
+// deliberately NOT a Legacy fallback: silently coding a typed payload as legacy would produce
+// garbage fields (see Web3TxHandler.cpp's sentinel note).
 Web3TxHandler& handlerFor(TransactionType type);
 }  // namespace bcos::rpc

@@ -256,8 +256,9 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
         // Use explicit range check rather than `>=` so that Deposit (0x7e), which is numerically
-        // larger than all EIP types, is excluded from EIP-1559 field output.
-        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP4844)
+        // larger than all EIP types, is excluded from EIP-1559 field output. EIP-7702 is a
+        // fee-market type, so the upper bound is EIP7702 (matching TransactionResponse.cpp).
+        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP7702)
         {
             jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
             jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();

@@ -15,7 +15,7 @@ target_link_libraries(opstack-executor PUBLIC
     ledger evmone::evmone intx::intx TBB::tbb rlp-protocol)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    # kyonRay review #5429 K5: OP modules deliberately use skipped-field designated initializers
+    # OP modules deliberately use skipped-field designated initializers
     # and GCC-13 reference-returning helpers (jAt); downgrade only here, not repository-wide.
     target_compile_options(opstack-executor PRIVATE
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)

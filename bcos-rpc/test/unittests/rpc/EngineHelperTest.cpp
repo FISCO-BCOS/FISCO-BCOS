@@ -72,7 +72,7 @@ Json::Value makePayloadParams(
         txs.append(std::string(raw));
     }
     ep["transactions"] = txs;
-    // V4 wire shape (#5427): [executionPayload, expectedBlobVersionedHashes,
+    // V4 wire shape: [executionPayload, expectedBlobVersionedHashes,
     // parentBeaconBlockRoot, executionRequests] — parse enforces the full array.
     Json::Value params(Json::arrayValue);
     params.append(ep);
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(parseFillsWithdrawalsRoot)
 // withdrawalsRoot 缺省 → nullopt；错长（31/33 字节）→ bcos::rpc::JsonRpcException。
 BOOST_AUTO_TEST_CASE(parseWithdrawalsRootBoundaries)
 {
-    // Missing withdrawalsRoot on V4 is a malformed payload (#5427 shape gate):
+    // Missing withdrawalsRoot on V4 is a malformed payload:
     // -32602 at parse time, not a silent nullopt (the engine-side INVALID-status
     // rule covers in-process callers).
     auto noRoot = makePayloadParams({kEip1559RawTx}, "");

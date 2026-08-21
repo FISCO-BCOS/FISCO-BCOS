@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Shared error types + the block-execution result for the OP scheduler, plus the block-context
-// conversion helpers (bcos<->evmc fixed-size conversions / bounds-checked narrowing / FISCO-header
-// -> evmone BlockInfo build). Split out of OpSchedulerSeam.h so dependent layers can throw without
-// depending on the class template. OpBlockSeal lives here too (not in OpBlockExecute.h):
-// OpExecuteBlockResult carries it by value.
+// Shared error types + the block-execution result for the OP block executor, plus the
+// block-context conversion helpers (bcos<->evmc fixed-size conversions / bounds-checked
+// narrowing / FISCO-header -> evmone BlockInfo build), kept class-free so dependent layers can
+// throw without depending on the executor templates. OpBlockSeal lives here too (not in
+// OpBlockExecute.h): OpExecuteBlockResult carries it by value.
 //
 // The six-way commitment comparison surface (OpBlockCommitments / commitmentsOf /
 // payloadBloomToH2048 / mismatchedFieldOf / detail::toBcosH256 / toBcosBloom) lives in
@@ -48,15 +48,15 @@ struct OpBlockSeal
     std::optional<uint64_t> blobGasUsed;
 };
 
-/// "0x" + lowercase hex (op-geth hexutil.Uint64); the value later feeds the receipts-root leaf
-/// encoding that returns with the block-seal wiring (part 5).
+/// "0x" + lowercase hex (op-geth hexutil.Uint64); feeds the receipts-root leaf encoding
+/// (OpBlockExecute.cpp).
 [[nodiscard]] inline std::string hexCumulative(uint64_t cumulative)
 {
     return bcos::toQuantity(cumulative);  // reuse the library quantity formatter
 }
 
-/// EIP-2718 tx-type classification, single home for the block-execution sites (the OpScheduler
-/// deposit-classification loop and the part-5 seal wiring's txTypes rebuild) so the mapping can't
+/// EIP-2718 tx-type classification, single home for the block-execution sites (the
+/// deposit-classification loop and the seal wiring's txTypes rebuild) so the mapping can't
 /// drift and silently emit a wrong receiptsRoot leaf. Maps a raw type byte to the per-receipt
 /// type byte:
 /// OP deposit 0x7e (kDepositTxType, OpTransition.h) → itself; legacy (>= 0xc0 RLP list prefix)
@@ -142,8 +142,7 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 {
     static const bcos::u256 kMaxU64(std::numeric_limits<uint64_t>::max());
     if (v > kMaxU64)
-        throw OpConsensusError(
-            std::string("OpSchedulerSeam: field exceeds uint64_t range: ") + fieldName);
+        throw OpConsensusError(std::string("op block: field exceeds uint64_t range: ") + fieldName);
     return static_cast<uint64_t>(v);
 }
 
@@ -154,8 +153,7 @@ inline int64_t narrowU256ToI64(const bcos::u256& v, const char* fieldName)
 {
     static const bcos::u256 kMaxI64(std::numeric_limits<int64_t>::max());
     if (v > kMaxI64)
-        throw OpConsensusError(
-            std::string("OpSchedulerSeam: field exceeds int64_t range: ") + fieldName);
+        throw OpConsensusError(std::string("op block: field exceeds int64_t range: ") + fieldName);
     return static_cast<int64_t>(v);
 }
 
@@ -167,7 +165,7 @@ template <class T>
 {
     if (!opt.has_value())
         throw OpConsensusError(
-            std::string("OpSchedulerSeam: missing required header field: ") + fieldName);
+            std::string("op block: missing required header field: ") + fieldName);
     return *opt;
 }
 

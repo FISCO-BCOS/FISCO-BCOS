@@ -25,10 +25,9 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian (checkEip2Signature reuse, review #5429 S)
-#include <range/v3/algorithm/find_if.hpp>
-#include <range/v3/algorithm/move.hpp>
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian
 #include <limits>
+#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <utility>
 
@@ -48,6 +47,14 @@ const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
 bcos::Error::UniquePtr checkEip2Signature(
     bcos::bytes const& signatureR, bcos::bytes const& signatureS)
 {
+    // Width gate first: padSignature only zero-pads shorter input, and fromBigEndian truncates
+    // wider input — without this a 33-byte 0x00||r would pass the range check below on truncation,
+    // where op-geth rejects >256-bit scalars at RLP decode.
+    if (signatureR.size() > 32 || signatureS.size() > 32)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+            "EIP-2: invalid signature (r/s wider than 32 bytes)");
+    }
     // r/s are raw 32-byte big-endian scalars — decode in place instead of round-tripping through a
     // "0x"+hex string + u256 parse (4 heap allocations per tx on the shared decode funnel).
     const u256 r = bcos::fromBigEndian<u256>(signatureR);
@@ -333,9 +340,10 @@ size_t length(Web3Transaction const& tx) noexcept
 void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 {
     // Delegate to the handler. Move the returned vector into `out` to avoid a double allocation:
-    // the handler already reserves internally and returns a complete buffer; copying it into out
-    // would allocate a second time. Callers pass an empty `out` (the previous append semantics
-    // matched move for the empty case), so move-assign preserves compatibility.
+    // the handler returns a complete buffer; copying it into out would allocate a second time.
+    // (The handlers currently do not reserve — they grow from an empty vector; the reserve side
+    // is a possible micro-optimization since header() already computes the exact payload length.)
+    // Callers always pass an empty `out`, so move-assign is safe.
     out = handlerFor(tx.type).encode(tx);
 }
 

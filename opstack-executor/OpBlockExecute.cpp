@@ -5,7 +5,7 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::safeFromQuantity (parseHexUint64 reuse, review #5429 T)
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::safeFromQuantity
 #include <opstack-executor/OpBlockExecute.h>
 #include <algorithm>
 #include <bcos-evm/eth/state/state.hpp>  // evmone::state::finalize
@@ -14,6 +14,8 @@
 #include <functional>
 #include <iomanip>
 #include <limits>
+#include <map>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 
@@ -39,18 +41,18 @@ void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig
         // rollup_cost.go:568-576). Checking the last tx suffices (deposits always precede
         // non-deposits).
         if (!std::holds_alternative<DepositTx>(txs.back().tx))
-            throw std::runtime_error(
+            throw engine::OpConsensusError(
                 "op block: unexpected non-deposit transactions in Jovian activation block");
         return;
     }
 
     // Normal Jovian block: L1 attributes must carry the Jovian selector and be ≥ Jovian length.
     if (data.size() < JovianL1AttributesLen)
-        throw std::runtime_error(
+        throw engine::OpConsensusError(
             "op block: L1 attributes transaction data too short for DA footprint gas scalar");
     if (!std::equal(
             JovianL1AttributesSelector.begin(), JovianL1AttributesSelector.end(), data.begin()))
-        throw std::runtime_error(
+        throw engine::OpConsensusError(
             "op block: L1 attributes transaction data does not have Jovian selector");
 }
 
@@ -58,8 +60,9 @@ evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase)
 {
     if (!cfg.disable_prague_requests)
-        // runtime_error (not logic_error): block-level rejection (INVALID), not a local fault.
-        throw std::runtime_error("op finalize: prague requests unsupported on OP chains");
+        // OpConsensusError: block-level rejection (INVALID), not a local fault — a bare
+        // runtime_error would escape the INVALID/-32603 classification (OpCommon.h contract).
+        throw engine::OpConsensusError("op finalize: prague requests unsupported on OP chains");
     return bcos::evm::sanitizeStateDiff(
         view, evmone::state::finalize(view, cfg.rev, coinbase, std::nullopt, {}, {}));
 }
@@ -74,12 +77,20 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     applyDiff(bcos::evm::sanitizeStateDiff(
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
-    // Step 2: first tx must be the L1 attributes deposit (stricter-than-spec) + Jovian shape.
+    // Step 2: block-shape admission — aligned with preBlockOpSteps (OpBlockExecute.h) and
+    // op-geth's accept set: an empty block, or a first tx that is not a deposit at all, is a hard
+    // reject (nothing seeds the block's fee/DA context); a first deposit that is not the L1
+    // attributes tx is accepted with a warning (op-geth/op-reth accept at validation).
     if (txs.empty())
-        throw std::runtime_error("op block: missing L1 attributes deposit (empty block)");
+        throw engine::OpConsensusError("op block: missing L1 attributes deposit (empty block)");
     const auto* firstDep = std::get_if<DepositTx>(&txs[0].tx);
-    if (firstDep == nullptr || !isL1AttributesTx(*firstDep))
-        throw std::runtime_error("op block: first tx is not the L1 attributes deposit");
+    if (firstDep == nullptr)
+        throw engine::OpConsensusError("op block: no deposit transaction to seed the block");
+    if (!isL1AttributesTx(*firstDep))
+        BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
+                          << "op block: first tx is a deposit but not the L1 attributes tx — "
+                             "accepted (deliberate demotion, op-geth/op-reth accept at "
+                             "validation)";
     validateJovianBlockShape(txs, cfg);
 
     OpBlockResult result;
@@ -96,7 +107,11 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
         if (const auto* dep = std::get_if<DepositTx>(&btx.tx))
         {
             if (seenNonDeposit)
-                throw std::runtime_error("op block: deposit after non-deposit tx");
+                // Deposit ordering is not enforced: op-geth accepts such blocks at validation
+                // (preBlockOpSteps likewise enforces no ordering). Execute in place, observably.
+                BCOS_LOG(WARNING) << LOG_BADGE("OP_BLOCK_EXEC")
+                                  << "op block: deposit after non-deposit tx — accepted "
+                                     "(op-geth parity)";
             evmone::state::StateDiff diff;
             auto receipt = runDeposit(
                 view, block, hashes, *dep, cfg, vm, chainId, blockGasLeft, receiptFactory, diff);
@@ -136,7 +151,8 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
-                throw std::runtime_error("op block: invalid non-deposit tx: " + err->message());
+                throw engine::OpConsensusError(
+                    "op block: invalid non-deposit tx: " + err->message());
             // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
             auto receipt = opTransition(view, block, hashes, tx, cfg, vm,
@@ -163,13 +179,12 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 namespace
 {
 /// Parse "0x"-prefixed hex back to uint64 (the EncodeIndex leaf's cumulativeGasUsed). Delegates to
-/// the strict library parser bcos::safeFromQuantity — the previous hand-rolled loop silently
-/// wrapped >16-hex-digit input, where the library rejects overflow (review #5429 T).
+/// the strict library parser bcos::safeFromQuantity, which rejects overflow.
 [[nodiscard]] uint64_t parseHexUint64(std::string_view s)
 {
     if (auto v = bcos::safeFromQuantity(s))
         return *v;
-    throw std::runtime_error(
+    throw engine::OpConsensusError(
         "op block: invalid cumulativeGasUsed in receipt (not hex or overflow): " + std::string(s));
 }
 
@@ -211,7 +226,7 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
         }
         bcos::bytes leaf;
         bcos::codec::rlp::encode(
-            leaf, bcos::bytes(value.bytes + first, value.bytes + sizeof(value.bytes)));
+            leaf, bcos::bytesConstRef(value.bytes + first, sizeof(value.bytes) - first));
         entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
     }
     auto result = bcos::ledger::mpt::computeTrieRoot(entries);
@@ -220,7 +235,7 @@ evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& stor
     return root;
 }
 
-evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, uint8_t txType)
+bcos::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, uint8_t txType)
 {
     // RLP bool semantics: true → 0x01, false → 0x80 (raw push; the UnsignedByte encode path
     // mis-handles bool). Payload = rlp([status, cumGas, bloom, logs]) + (deposit) [nonce, version].
@@ -251,7 +266,7 @@ evmc::bytes encodeReceiptForRoot(const bcos::protocol::TransactionReceipt& r, ui
     // typed raw-byte prefix (legacy has none; deposit's 0x7e is the EIP-2718 type byte).
     if (txType != static_cast<uint8_t>(evmone::state::Transaction::Type::legacy))
         out.insert(out.begin(), txType);
-    return evmc::bytes(out.begin(), out.end());
+    return out;
 }
 
 OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
@@ -267,7 +282,7 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
         bcos::bytes key;
         bcos::codec::rlp::encode(key, static_cast<uint64_t>(i));
         auto const leaf = encodeReceiptForRoot(*result.receipts[i], result.txTypes[i]);
-        receiptsEntries.emplace_back(std::move(key), bcos::bytes{leaf.begin(), leaf.end()});
+        receiptsEntries.emplace_back(std::move(key), leaf);
     }
     auto receiptsResult = bcos::ledger::mpt::computeTrieRootVarKey(receiptsEntries);
     std::memcpy(

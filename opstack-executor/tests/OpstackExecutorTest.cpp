@@ -5,11 +5,12 @@
 // produce the final FISCO receipt directly (OP metadata + effective gas price already projected),
 // and the state diff is returned via an out-param. Storage is a plain MutableStorage.
 
-#define BOOST_TEST_MODULE BcosOpstackExecutorTests
+// BOOST_TEST_MODULE lives in TestMain.cpp (the single main for the whole suite).
 #include <boost/test/unit_test.hpp>
 
 #include "bcos-evm/opstack/OpForkSchedule.h"
 #include "bcos-evm/opstack/OpPredeploys.h"
+#include "opstack-executor/OpBlockExecute.h"  // finalizeOpBlock (block-level finalize free fn)
 #include "opstack-executor/OpstackExecutor.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>  // construct a 33-byte-mint envelope for the over-wide test
@@ -46,6 +47,16 @@ bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
     return std::make_shared<bcos::crypto::CryptoSuite>(
         std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+}
+
+// Block execution (call=false) builds BlockInfo on the strict path (OpCommon.h
+// requireHeaderField): baseFee / parentBeaconBlockRoot / blobGasUsed must be present even on a
+// minimal test header. Zero values are enough.
+void setRequiredHeaderFields(bcostars::protocol::BlockHeaderImpl& h)
+{
+    h.setBaseFee(bcos::u256(0));
+    h.setParentBeaconBlockRoot(bcos::h256{});
+    h.setBlobGasUsed(bcos::u256(0));
 }
 
 struct Fixture
@@ -193,6 +204,7 @@ BOOST_FIXTURE_TEST_CASE(ExecutesNormalTransferEndToEnd, Fixture)
 
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildWeb3Tx();
@@ -220,7 +232,7 @@ BOOST_FIXTURE_TEST_CASE(ExecutesNormalTransferEndToEnd, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};  // zero fee
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     // FISCO internal convention: 0 = success (the Ethereum RPC 0<->1 flip happens later).
     BOOST_CHECK_EQUAL(receipt->status(), 0);
@@ -235,28 +247,32 @@ BOOST_FIXTURE_TEST_CASE(RejectsForkRevisionMismatch, Fixture)
     ledgerConfig.setEVMCRevision(EVMC_FRONTIER);  // deliberately != fork.rev
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     auto tx = buildWeb3Tx();
     bcos::evm::opstack::OpFeeParams fee{};
-    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(
-                          storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
+    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx, 0,
+                          ledgerConfig, false, fee, 30000000, 10, nullptr)),
         bcos::executor_v1::opstack::OpForkRevisionMismatch);
 }
 
 BOOST_FIXTURE_TEST_CASE(RejectsInvalidTx, Fixture)
 {
-    // Balance 0 sender + value transfer -> insufficient balance -> OpTxValidationFailed.
+    // Balance 0 sender + value transfer -> validation failure; executeTransaction reclassifies
+    // OpTxValidationFailed to OpConsensusError (INVALID) at the boundary (OpstackExecutor.h
+    // error-normalization contract).
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     auto tx = buildWeb3Tx();
     constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
     tx.clearSenderAndHash();
     tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
     // No account created -> balance 0 -> validation fails.
     bcos::evm::opstack::OpFeeParams fee{};
-    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(
-                          storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
-        bcos::executor_v1::opstack::OpTxValidationFailed);
+    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx, 0,
+                          ledgerConfig, false, fee, 30000000, 10, nullptr)),
+        bcos::evm::engine::OpConsensusError);
 }
 
 BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
@@ -266,6 +282,7 @@ BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildWeb3Tx();
@@ -296,7 +313,7 @@ BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
 
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     BOOST_CHECK_EQUAL(receipt->status(), 0);
 
@@ -315,6 +332,7 @@ BOOST_FIXTURE_TEST_CASE(ReceiptMetaSurvives, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
 
     auto tx = buildWeb3Tx();
     constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
@@ -340,7 +358,7 @@ BOOST_FIXTURE_TEST_CASE(ReceiptMetaSurvives, Fixture)
 
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     auto meta = receipt->opStackMeta();
     BOOST_REQUIRE(meta.has_value());
@@ -363,6 +381,7 @@ BOOST_FIXTURE_TEST_CASE(ExecutesDepositMint, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     constexpr auto kFrom = 0x000000000000000000000000000000000000dead_address;
@@ -406,6 +425,7 @@ BOOST_FIXTURE_TEST_CASE(ExecutesDepositThroughExecuteTransaction, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildDepositTx();
@@ -421,7 +441,7 @@ BOOST_FIXTURE_TEST_CASE(ExecutesDepositThroughExecuteTransaction, Fixture)
     // fee default {} — deposit must ignore it (no L1/operator fee).
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, /*fee=*/{}, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     BOOST_CHECK_EQUAL(receipt->status(), 0);
 
@@ -448,6 +468,7 @@ BOOST_FIXTURE_TEST_CASE(DepositLifecycleThroughExecuteContext, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildDepositTx();
@@ -463,7 +484,14 @@ BOOST_FIXTURE_TEST_CASE(DepositLifecycleThroughExecuteContext, Fixture)
     constexpr int64_t kInitialGasLeft = 30000000;
     OpBlockExecutionContext ctx{};
     ctx.blockGasLeft = kInitialGasLeft;
-    ctx.chainId = 10;  // blockHashes left null -> executeDeposit uses ZeroBlockHashes
+    ctx.chainId = 10;
+    // Block-path execute() fails loud without a block-hashes source (the silent
+    // NullBlockHashes-degradation guard) — wire a real RecentBlockHashes over the fixture
+    // storage (lazy: the deposit never issues BLOCKHASH, so no rows are needed).
+    std::optional<std::string> hashErr;
+    bcos::evm::engine::detail::RecentBlockHashes<MutableStorage> blockHashes(
+        storage, 1, evmc::bytes32{}, &hashErr);
+    ctx.blockHashes = &blockHashes;
 
     auto context = task::syncWait(executor.createExecuteContext(
         storage, blockHeader, tx, /*contextID=*/0, ledgerConfig, /*call=*/false, ctx));
@@ -509,6 +537,8 @@ BOOST_FIXTURE_TEST_CASE(DepositGasLimitReachedIsBlockError, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);  // strict path needs these; keep the gas-limit throw as
+                                           // the assertion target
     bcos::evm::opstack::DepositTx dep{
         .source_hash = 0x02_bytes32,
         .from = 0x000000000000000000000000000000000000dead_address,
@@ -525,14 +555,46 @@ BOOST_FIXTURE_TEST_CASE(DepositGasLimitReachedIsBlockError, Fixture)
         std::runtime_error);
 }
 
-BOOST_FIXTURE_TEST_CASE(FinalizeOpBlockNoReward, Fixture)
+BOOST_FIXTURE_TEST_CASE(DepositBlockPathRejectsMissingHeaderFields, Fixture)
 {
+    // Symmetry regression: block-path deposits (call=false, the default) follow the same strict
+    // header contract as normal txs — a header missing baseFee/parentBeaconBlockRoot/blobGasUsed
+    // is INVALID (OpConsensusError), not silently zeroed. Only eth_call (call=true) is lenient.
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
-    blockHeader.setNumber(1);
-    blockHeader.setCoinbase(bcos::Address(bcos::bytes(20, 0x11)));
-    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+    blockHeader.setNumber(1);  // deliberately no setRequiredHeaderFields
+    bcos::evm::opstack::DepositTx dep{
+        .source_hash = 0x03_bytes32,
+        .from = 0x000000000000000000000000000000000000dead_address,
+        .to = 0x0000000000000000000000000000000000000001_address,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {},
+    };
+    BOOST_CHECK_THROW(task::syncWait(executor.executeDeposit(storage, blockHeader, dep,
+                          /*chainId=*/10, /*blockGasLeft=*/30000000, ledgerConfig)),
+        bcos::evm::engine::OpConsensusError);
+    // eth_call path stays lenient: same header, call=true -> executes with zeroed optionals.
+    task::syncWait([&]() -> task::Task<void> {
+        ledger::account::EVMAccount<MutableStorage> acc(
+            storage, 0x000000000000000000000000000000000000dead_address, false);
+        co_await acc.create();
+        co_await acc.setBalance(u256(0));
+        co_await acc.setNonce("0");
+        co_return;
+    }());
+    auto receipt = task::syncWait(executor.executeDeposit(storage, blockHeader, dep,
+        /*chainId=*/10, /*blockGasLeft=*/30000000, ledgerConfig, /*call=*/true));
+    BOOST_REQUIRE_NE(receipt, nullptr);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
+}
 
+BOOST_FIXTURE_TEST_CASE(FinalizeOpBlockNoReward, Fixture)
+{
+    // OP has no block reward: finalizeOpBlock (evmone state finalize + StateDiff sanitize) must
+    // leave the coinbase balance untouched. Drives the OpBlockExecute.h free function.
     constexpr auto kCoinbase = 0x1111111111111111111111111111111111111111_address;
     task::syncWait([&]() -> task::Task<void> {
         ledger::account::EVMAccount<MutableStorage> acc(storage, kCoinbase, false);
@@ -541,9 +603,10 @@ BOOST_FIXTURE_TEST_CASE(FinalizeOpBlockNoReward, Fixture)
         co_return;
     }());
 
-    task::syncWait(executor.finalizeBlock(storage, blockHeader, ledgerConfig));
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage, {});
+    auto diff = bcos::evm::opstack::finalizeOpBlock(view, fork, kCoinbase);
+    view.applyDiff(std::move(diff));
 
-    // OP has no block reward: coinbase balance unchanged.
     ledger::account::EVMAccount<MutableStorage> acc(storage, kCoinbase, false);
     auto bal = task::syncWait(acc.balance());
     BOOST_CHECK(bal == 100u);
@@ -567,6 +630,7 @@ BOOST_FIXTURE_TEST_CASE(BlockInfoGasLimitUsesHeaderGasLimit, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.setGasLimit(bcos::u256(1000000));  // exercises the header-gasLimit path
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
     ledgerConfig.setEVMCRevision(fork.rev);
@@ -617,7 +681,7 @@ BOOST_FIXTURE_TEST_CASE(BlockInfoGasLimitUsesHeaderGasLimit, Fixture)
     // validation, < header exposes the GASLIMIT fork) — the key to exposing the fork.
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/250000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     BOOST_CHECK_EQUAL(receipt->status(), 0);
 
@@ -642,7 +706,7 @@ BOOST_FIXTURE_TEST_CASE(DepositIsSystemTransactionGetter, Fixture)
     BOOST_CHECK(!tx2.depositIsSystemTransaction());  // tars field 15 == 0
 }
 
-/// kyonRay review #5429 K3: consensus deposit fields MUST come from the signed 0x7E envelope
+/// Consensus deposit fields MUST come from the signed 0x7E envelope
 /// (decodeDepositEnvelope), never from the unauthenticated tars mirrors. Happy path decodes a
 /// legit buildDepositTx envelope; rejection paths cover a non-0x7e type byte and trailing bytes.
 BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
@@ -685,7 +749,7 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
     BOOST_CHECK_THROW(
         [&]() { (void)decodeDepositEnvelope(bcos::ref(trailing)); }(), OpTxValidationFailed);
 
-    // Rejection (#1, kyonRay): an over-wide integer (33-byte mint) must fail loud —
+    // Rejection: an over-wide integer (33-byte mint) must fail loud —
     // rlp::decode(UnsignedIntegral) alone would truncate to the low 32 bytes via fromBigEndian.
     {
         bcos::bytes body;
@@ -707,7 +771,7 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
             [&]() { (void)decodeDepositEnvelope(bcos::ref(overWideEnv)); }(), OpTxValidationFailed);
     }
 
-    // Rejection (#2 round 3, kyonRay): non-canonical integers / int64 range / bool — the width
+    // Rejection: non-canonical integers / int64 range / bool — the width
     // gate does not cover these, and rlp::decode only rejects one non-canonical form (single-byte
     // payload < 0x80 via decodeHeader). Build an envelope from raw per-field items so we can feed
     // encodings RLPEncode would never emit. Field order: sourceHash, from, to, mint, value, gas,
@@ -731,6 +795,8 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
             body.insert(body.end(), it.begin(), it.end());
         bcos::bytes list;
         bcos::codec::rlp::encodeHeader(list, bcos::codec::rlp::Header{true, body.size()});
+        list.insert(list.end(), body.begin(), body.end());  // header + payload (the over-wide
+                                                            // block above spells this inline)
         bcos::bytes env{0x7e};
         env.insert(env.end(), list.begin(), list.end());
         return env;
@@ -800,10 +866,9 @@ BOOST_AUTO_TEST_CASE(DecodeDepositEnvelopeFromSignedEnvelope)
     }
 }
 
-// chainId-mismatch enforcement (morebtcg/kyonRay review #5429, review finding E): op-geth
+// chainId-mismatch enforcement: op-geth
 // EIP155Signer/modernSigner reject txs whose chainId differs from the node's (ErrInvalidChainId).
-// Before this test the rejection had ZERO negative coverage — every test fed a self-consistent
-// chainId. Cases (1)(2) need no sender funding: the check runs before opValidate's gates.
+// Cases (1)(2) need no sender funding: the check runs before opValidate's gates.
 BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
@@ -821,7 +886,8 @@ BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
         tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
         BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
                               /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
-                              /*blockGasLeft=*/30000000, /*chainId=*/10)),
+                              /*blockGasLeft=*/30000000, /*chainId=*/10,
+                              /*blockHashes=*/nullptr)),
             bcos::evm::engine::OpConsensusError);
     }
     // (2) typed tx chain_id==0 is NOT exempt (modernSigner rejects 0 != node chainId; a
@@ -833,7 +899,8 @@ BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
         tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
         BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
                               /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
-                              /*blockGasLeft=*/30000000, /*chainId=*/10)),
+                              /*blockGasLeft=*/30000000, /*chainId=*/10,
+                              /*blockHashes=*/nullptr)),
             bcos::evm::engine::OpConsensusError);
     }
 }
@@ -846,6 +913,7 @@ BOOST_FIXTURE_TEST_CASE(LegacyUnprotectedChainIdExempt, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildLegacyWeb3Tx();
@@ -870,21 +938,20 @@ BOOST_FIXTURE_TEST_CASE(LegacyUnprotectedChainIdExempt, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};  // zero fee
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);       // chainId exempt: executes instead of throwing
     BOOST_CHECK_EQUAL(receipt->status(), 0);  // and succeeds — not reverted-but-accepted
 }
 
-// CRITICAL-A regression (independent review): a transfer to a c_systemTxsAddress (0x...1000)
+// A transfer to a c_systemTxsAddress (0x...1000)
 // must credit /apps/<1000> — the table the read side and the state root use — not /sys/<1000>.
-// Before the fix the production write path used the address-taking EVMAccount ctor, which routes
-// these 8 addresses to /sys/, so the credit was invisible to the state root (state-root
-// divergence vs op-geth). Read back via the same Storage2State /apps/ path the root uses.
+// Read back via the same Storage2State /apps/ path the root uses.
 BOOST_FIXTURE_TEST_CASE(TransferToSystemAddressCreditsAppsBalance, Fixture)
 {
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    setRequiredHeaderFields(blockHeader);
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     constexpr auto sysAddr = 0x0000000000000000000000000000000000001000_address;  // SYS_CONFIG
@@ -911,7 +978,7 @@ BOOST_FIXTURE_TEST_CASE(TransferToSystemAddressCreditsAppsBalance, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};  // zero fee
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
 
     // The state root reads /apps/ (accountTableName); the credit must be visible there.

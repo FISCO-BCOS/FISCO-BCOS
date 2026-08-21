@@ -140,8 +140,10 @@ struct ExecutionPayload
     u256 baseFeePerGas = 0;
     h256 blockHash;
     /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
-    /// encoded bytes (including the OP 0x7E deposit envelope). Single authoritative
-    /// carrier for both generic and OP engine paths.
+    /// encoded bytes (including the OP 0x7E deposit envelope). Wire-replay carrier:
+    /// getPayload must return exactly these raw bytes. The OP execution path reads
+    /// `rawTransactions` below instead (both are populated from the same source bytes
+    /// at the RPC boundary — see EngineHelper.cpp).
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -165,18 +167,22 @@ struct ExecutionPayload
     /// by the generic (non-OP) engine path — zero behavioral change for existing callers.
     /// - rawTransactions: the block's transactions as raw EIP-2718 envelope bytes (typed tx
     ///   MarshalBinary() output, including the OP 0x7E deposit envelope). This is the OP path's
-    ///   only transaction carrier consumed by `bcos::evm::engine::OpSchedulerSeam::executeOpBlock`
+    ///   only transaction carrier consumed by the OP block executor (`processOpBlock`,
+    ///   opstack-executor/OpBlockExecute.h)
     ///   (via its `rawTxBytes` parameter) — `transactions` above (bcos::protocol::Transactions)
     ///   is the generic-path carrier and is not populated/read on the OP path.
     /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root field
     ///   (= MessagePasser storage root) that cannot be derived from the (always-empty)
     ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains (design §5.2).
-    std::optional<std::vector<bytes>> rawTransactions;
+    /// Invariant: when both carriers are populated, `rawTransactions[i]` and
+    /// `transactions[i].raw` must hold identical bytes (paired push in
+    /// EngineHelper::parseNewPayloadRequest).
+    std::optional<std::vector<bytes>> rawTransactions = std::nullopt;
 
     // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
     // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
     // header wiring lands.
-    std::optional<h256> withdrawalsRoot;
+    std::optional<h256> withdrawalsRoot = std::nullopt;
 };
 
 struct NewPayloadRequest

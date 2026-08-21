@@ -241,13 +241,39 @@ struct LegacyTxHandler : Web3TxHandler
         }
         else
         {
-            uint64_t chainId = 0;
-            decodeError = codec::rlp::decode(in, chainId);
-            if (decodeError != nullptr)
+            if (in.empty())
             {
-                return decodeError;
+                // Pre-EIP-155 6-field signing preimage: no chainId tail at all.
+                out.chainId = std::nullopt;
             }
-            out.chainId.emplace(chainId);
+            else
+            {
+                uint64_t chainId = 0;
+                decodeError = codec::rlp::decode(in, chainId);
+                if (decodeError != nullptr)
+                {
+                    return decodeError;
+                }
+                out.chainId.emplace(chainId);
+                // An EIP-155 signing preimage ends with (chainId, 0, 0): consume the two empty
+                // r/s placeholders so the member-level trailing-bytes check does not fire.
+                if (!in.empty())
+                {
+                    bcos::bytes placeholderR;
+                    bcos::bytes placeholderS;
+                    if (decodeError = codec::rlp::decodeItems(in, placeholderR, placeholderS);
+                        decodeError != nullptr)
+                    {
+                        return decodeError;
+                    }
+                    if (!placeholderR.empty() || !placeholderS.empty())
+                    {
+                        return BCOS_ERROR_UNIQUE_PTR(
+                            codec::rlp::DecodingError::UnexpectedListElements,
+                            "legacy signing preimage: non-empty r/s placeholders in EIP-155 tail");
+                    }
+                }
+            }
         }
         if (withSig)
         {
@@ -712,6 +738,11 @@ struct DepositTxHandler : Web3TxHandler
                 return err;
             out.to.emplace(addr);
         }
+        // Width note: this layer is display-grade — mint/value/gas decode without a payload-width
+        // cap (over-wide/non-canonical integers are truncated by fromBigEndian, where op-geth
+        // rejects at the RLP layer). The consensus path re-decodes the envelope fail-stop via
+        // decodeDepositEnvelope (OpstackExecutor.h, integerPayloadLength width+canonicality
+        // checks), so execution is never exposed to this wider accept set.
         if (auto err = codec::rlp::decode(in, out.mint); err != nullptr)
             return err;  // u256
         if (auto err = codec::rlp::decode(in, out.value); err != nullptr)

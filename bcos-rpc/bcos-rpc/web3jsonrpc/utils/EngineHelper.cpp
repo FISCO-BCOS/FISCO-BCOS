@@ -70,7 +70,7 @@ bcos::bytes parseRawTransactionElement(
 ///
 /// The isString() gate is what makes the check complete. jsoncpp's asString() does NOT
 /// reject a number or a bool: it stringifies them (json_value.cpp Value::asString), so
-/// `"gasLimit": 10` used to arrive as "10" and then be read as HEX 0x10 = 16 — a value
+/// `"gasLimit": 10` arrives as "10" and then be read as HEX 0x10 = 16 — a value
 /// forgery worse than the malformed-hex case. Only an array/object throws
 /// Json::LogicError there, which would surface as -32603.
 bcos::u256 parseBigQuantity(Json::Value const& value, std::string_view field)
@@ -364,7 +364,8 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         //     happens here — classification/decoding of the raw bytes is the dispatch table's
         //     job (bcos-framework/engine/RawTransactionDispatch.h), matching upstream.
         //   - payload.rawTransactions (vector<bytes>) — the OP path's sole tx carrier (raw
-        //     EIP-2718 envelope bytes incl. the 0x7E deposit), consumed by OpSchedulerSeam.
+        //     EIP-2718 envelope bytes incl. the 0x7E deposit), consumed by the OP block
+        //     executor (processOpBlock).
         payload.transactions.reserve(ep["transactions"].size());
         payload.rawTransactions.emplace();
         payload.rawTransactions->reserve(ep["transactions"].size());

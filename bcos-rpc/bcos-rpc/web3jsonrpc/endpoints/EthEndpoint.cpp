@@ -192,7 +192,7 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
-    // Round-2 Finding K: an empty state root (block 0 / empty blocks / pre-MPT blocks) is a
+    // An empty state root (block 0 / empty blocks / pre-MPT blocks) is a
     // legal "no accounts" root, not a missing node row — skip the root-presence check and let
     // MPTReadView (which handles emptyRootHash as "no accounts") plus the scenario flag decide
     // how absence reads: scenario B -> zero; scenario A -> honest dormant-account error.
@@ -729,9 +729,9 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto bytesRef = bcos::ref(rawTxBytes);
     // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
     // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
-    // acceptance divergence, not a reference check (see the OpScheduler.h type-byte gate note).
-    // Deposits (0x7e) can only be injected by the consensus layer through the Engine API, never
-    // through the public transaction pool.
+    // acceptance divergence, not a reference check (see the type-byte gate in OpTransition.h /
+    // OpCommon.h). Deposits (0x7e) can only be injected by the consensus layer through the
+    // Engine API, never through the public transaction pool.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
@@ -748,9 +748,11 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
-    // op-geth rejects Deposit (0x7e) from eth_sendRawTransaction
-    // (ErrTxTypeNotSupported); deposits only enter via the derivation/engine
-    // path, never from a client RPC submission.
+    // Defense-in-depth (unreachable today): the first-byte dispatch above already rejects 0x7e,
+    // and decode cannot produce type==Deposit from any other first byte. Kept as a second gate in
+    // case the dispatch policy ever widens. op-geth likewise rejects Deposit from
+    // eth_sendRawTransaction (ErrTxTypeNotSupported); deposits only enter via the
+    // derivation/engine path, never from a client RPC submission.
     if (web3Tx.type == TransactionType::Deposit) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,

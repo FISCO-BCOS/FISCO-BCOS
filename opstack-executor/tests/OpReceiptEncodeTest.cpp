@@ -31,6 +31,14 @@ bcos::protocol::TransactionReceipt::Ptr minimalDepositReceipt(int32_t status = 0
     r->setOpStackMeta(std::move(meta));
     return r;
 }
+
+/// encodeReceiptForRoot returns bcos::bytes; the assertions below compare against evmc::bytes
+/// fixtures (operator==, .find), so convert once at the call boundary.
+evmc::bytes encodeReceiptEvmc(const bcos::protocol::TransactionReceipt& r, uint8_t txType)
+{
+    const auto encoded = encodeReceiptForRoot(r, txType);
+    return {encoded.begin(), encoded.end()};
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpReceiptEncodeSuite)
@@ -44,7 +52,7 @@ BOOST_AUTO_TEST_SUITE(OpReceiptEncodeSuite)
 BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
 {
     const auto enc =
-        encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
+        encodeReceiptEvmc(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
     evmc::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
     expected += evmc::bytes(256, 0x00);
     expected += evmc::bytes{0xc0, 0x05, 0x01};
@@ -59,7 +67,7 @@ BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
 BOOST_AUTO_TEST_CASE(FailedDepositStatusIsEmptyString)
 {
     auto dep = minimalDepositReceipt(/*status=*/1);  // FISCO non-zero = failed
-    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    const auto enc = encodeReceiptEvmc(*dep, static_cast<uint8_t>(kDepositTxType));
     evmc::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x80, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
     expected += evmc::bytes(256, 0x00);
     expected += evmc::bytes{0xc0, 0x05, 0x01};
@@ -96,7 +104,7 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
     meta.deposit_receipt_version = 1;
     dep->setOpStackMeta(std::move(meta));
 
-    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    const auto enc = encodeReceiptEvmc(*dep, static_cast<uint8_t>(kDepositTxType));
     BOOST_CHECK_EQUAL(enc[0], 0x7e);
     // evmone's vector<Log> list encoding (independent path) must appear whole — covers the list
     // wrapper bytes
@@ -126,7 +134,7 @@ BOOST_AUTO_TEST_CASE(NormalReceiptMatchesEvmoneEncoding)
     bcos::bytes bloom(256, 0x00);
     r->setLogsBloom(bcos::ref(bloom));
     const auto enc =
-        encodeReceiptForRoot(*r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+        encodeReceiptEvmc(*r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
 
     BOOST_CHECK_EQUAL(enc[0], 0x02);  // eip1559 typed prefix
     BOOST_CHECK_EQUAL(enc, evmc::bytes(expected.begin(), expected.end()));
@@ -151,7 +159,7 @@ BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
         ref.status = EVMC_SUCCESS;
         ref.cumulative_gas_used = 42000;
         const auto expected = evmone::state::rlp_encode(ref);
-        const auto enc = encodeReceiptForRoot(*fisco, static_cast<uint8_t>(type));
+        const auto enc = encodeReceiptEvmc(*fisco, static_cast<uint8_t>(type));
         BOOST_CHECK_EQUAL(enc, evmc::bytes(expected.begin(), expected.end()));
     };
 
@@ -165,14 +173,14 @@ BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
 BOOST_AUTO_TEST_CASE(DepositAndNormalLeavesDiffer)
 {
     const auto depEnc =
-        encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
+        encodeReceiptEvmc(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
     auto normal = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
         std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
     normal->setCumulativeGasUsed("0x5208");
     bcos::bytes bloom(256, 0x00);
     normal->setLogsBloom(bcos::ref(bloom));
-    const auto normalEnc = encodeReceiptForRoot(
-        *normal, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    const auto normalEnc =
+        encodeReceiptEvmc(*normal, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
     BOOST_CHECK_NE(depEnc, normalEnc);
 }
 
