@@ -95,6 +95,7 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseGasLimitAndParentBeaconBlockRoot)
         BOOST_CHECK_EQUAL(result["gasLimit"].asString(), "0x1c9c380");  // 30M fallback
         BOOST_CHECK_EQUAL(result["parentBeaconBlockRoot"].asString(),
             "0x0000000000000000000000000000000000000000000000000000000000000000");
+        BOOST_CHECK(!result.isMember("requestsHash"));  // PBFT/unset -> absent (op-geth omitempty)
     }
     // Set header fields (engine-built block: rebuildOpEthHeader / applyEthGenesisHeader)
     // -> exact round-trip
@@ -107,6 +108,8 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseGasLimitAndParentBeaconBlockRoot)
         header->setGasLimit(u256(3000000000));
         header->setParentBeaconBlockRoot(
             crypto::HashType("0x1111111111111111111111111111111111111111111111111111111111111111"));
+        header->setRequestsHash(
+            crypto::HashType("0x2222222222222222222222222222222222222222222222222222222222222222"));
         header->calculateHash(*hashImpl);
         block->setBlockHeader(header);
 
@@ -115,6 +118,8 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseGasLimitAndParentBeaconBlockRoot)
         BOOST_CHECK_EQUAL(result["gasLimit"].asString(), "0xb2d05e00");  // 3e9 round-trip
         BOOST_CHECK_EQUAL(result["parentBeaconBlockRoot"].asString(),
             "0x1111111111111111111111111111111111111111111111111111111111111111");
+        BOOST_CHECK_EQUAL(result["requestsHash"].asString(),
+            "0x2222222222222222222222222222222222222222222222222222222222222222");
     }
 }
 

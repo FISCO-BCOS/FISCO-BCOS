@@ -141,4 +141,11 @@ void bcos::rpc::combineBlockResponse(
     {
         result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
     }
+    // EIP-7685 requestsHash: Isthmus+ OP headers carry sha256('') (set by the seal and rebuilt
+    // by the engine); PBFT/pre-Isthmus headers have no value (nullopt) and keep the field
+    // absent -- symmetric with op-geth (internal/ethapi/api.go:1092-1094, omitempty).
+    if (auto requestsHash = blockHeader->requestsHash(); requestsHash.has_value())
+    {
+        result["requestsHash"] = requestsHash->hexPrefixed();
+    }
 }
