@@ -22,6 +22,7 @@
 #include "NodeService.h"
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Timer.h>
+#include <bcos-utilities/BoostLog.h>
 namespace bcos::rpc
 {
 class GroupManager : public std::enable_shared_from_this<GroupManager>

@@ -23,6 +23,7 @@
 #include "./TxDAGInterface.h"
 #include "tbb/flow_graph.h"
 #include <vector>
+#include <bcos-utilities/BoostLog.h>
 
 #define DAGFLOW_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR") << LOG_BADGE("DAGFlow")
 

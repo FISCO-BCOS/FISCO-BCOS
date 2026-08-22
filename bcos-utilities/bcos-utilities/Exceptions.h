@@ -23,11 +23,9 @@
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/info.hpp>
-#include <boost/exception/info_tuple.hpp>
 #include <boost/stacktrace.hpp>
 #include <boost/stacktrace/stacktrace_fwd.hpp>
 #include <boost/throw_exception.hpp>
-#include <boost/tuple/tuple.hpp>
 #include <exception>
 #include <string>
 

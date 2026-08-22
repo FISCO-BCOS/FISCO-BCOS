@@ -46,6 +46,7 @@
 #include <memory>
 #include <shared_mutex>
 #include <thread>
+#include <list>
 
 
 namespace bcos

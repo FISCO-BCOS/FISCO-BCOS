@@ -23,6 +23,7 @@
 #include <atomic>
 #include <functional>
 #include <tuple>
+#include <deque>
 
 namespace bcos::sealer
 {

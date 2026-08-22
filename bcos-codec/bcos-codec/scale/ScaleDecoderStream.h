@@ -27,6 +27,7 @@
 #include <boost/variant.hpp>
 #include <array>
 #include <gsl/span>
+#include <list>
 
 namespace bcos
 {

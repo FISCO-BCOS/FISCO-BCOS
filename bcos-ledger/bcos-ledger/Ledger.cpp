@@ -77,6 +77,7 @@
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
+#include <list>
 
 using namespace bcos;
 using namespace bcos::ledger;

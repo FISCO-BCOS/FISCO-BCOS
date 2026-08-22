@@ -22,6 +22,7 @@
 #include <thread>
 
 #include "../common/FrontServiceBuilder.h"
+#include <bcos-utilities/BoostLog.h>
 
 using namespace std;
 using namespace bcos;

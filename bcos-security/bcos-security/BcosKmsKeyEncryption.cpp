@@ -33,6 +33,8 @@
 #include <bcos-utilities/Base64.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
+#include <boost/algorithm/string.hpp>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace crypto;

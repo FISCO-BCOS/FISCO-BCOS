@@ -15,6 +15,7 @@
 #include <memory>
 #include <range/v3/algorithm/copy.hpp>
 #include <variant>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::executor_v1
 {

@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-framework/Common.h>
 #include <tbb/parallel_for.h>
+#include <bcos-utilities/BoostLog.h>
 
 #define BLKSYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BLOCK SYNC")
 namespace bcos::sync

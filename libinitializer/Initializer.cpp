@@ -58,6 +58,7 @@
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
+#include <boost/algorithm/string.hpp>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/rpc/RPCInterface.h>

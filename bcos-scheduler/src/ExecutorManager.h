@@ -10,6 +10,8 @@
 #include <queue>
 #include <string>
 #include <unordered_map>
+#include <boost/iterator/transform_iterator.hpp>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::scheduler
 {

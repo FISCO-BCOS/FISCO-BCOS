@@ -1,6 +1,7 @@
 #include "BlockHeaderFactoryImpl.h"
 #include "../impl/TarsHashable.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include <bcos-utilities/BoostLog.h>
 
 bcostars::protocol::BlockHeaderFactoryImpl::BlockHeaderFactoryImpl(
     bcos::crypto::CryptoSuite::Ptr cryptoSuite)

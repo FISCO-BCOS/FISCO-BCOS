@@ -23,6 +23,7 @@
 
 #include "hsm-crypto/hsm/CryptoProvider.h"
 #include "hsm-crypto/hsm/SDFCryptoProvider.h"
+#include <bcos-utilities/BoostLog.h>
 
 using namespace hsm;
 using namespace bcos;

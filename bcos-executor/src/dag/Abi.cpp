@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::executor;
 

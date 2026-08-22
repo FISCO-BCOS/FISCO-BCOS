@@ -27,6 +27,7 @@
 #include <servant/Application.h>
 
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 #define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")
 
