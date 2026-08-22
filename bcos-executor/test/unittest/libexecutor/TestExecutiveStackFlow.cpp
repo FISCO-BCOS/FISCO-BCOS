@@ -32,8 +32,7 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
+using std::make_shared;
 struct ExecutiveStackFlowFixture
 {
     ExecutiveStackFlowFixture()

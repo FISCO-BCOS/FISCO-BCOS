@@ -25,6 +25,11 @@ add_subdirectory(exec)
 set(TEST_BINARY_NAME test-boostssl)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
+# WsConfigTest.cpp defines BOOST_TEST_MAIN (generates init_unit_test_suite for the static
+# boost UTF); in a unity batch the define lands after the first unit_test.hpp inclusion and
+# the symbol is lost, so keep it out of the batch.
+set_source_files_properties(unittests/websocket/WsConfigTest.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 find_package(Boost REQUIRED unit_test_framework)
 target_link_libraries(${TEST_BINARY_NAME} bcos-boostssl protocol-tars ledger rpc bcos-utilities bcos-framework Boost::unit_test_framework)

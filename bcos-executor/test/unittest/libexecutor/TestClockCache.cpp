@@ -30,8 +30,8 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
+using std::make_shared;
+using std::shared_ptr;
 struct ClockCacheFixture
 {
     ClockCacheFixture()

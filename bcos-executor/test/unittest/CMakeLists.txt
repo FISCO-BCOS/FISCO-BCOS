@@ -16,34 +16,19 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -fno-var-tracking -Wno-unused
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # Unity build is ON for this target (Linux/GCC): it amortizes the heavy shared
 # include set (~200k preprocessed lines per TU: boost.test + framework + executor
-# headers) across ~40 test files — measured on GCC 14/Debug: test target rebuild
-# 150.7s -> 111.0s wall (-26%), ~2200s -> ~1500s CPU (-32%).
-# Opt-outs:
-#  - evmone/compat/Compat*.cpp: all share BOOST_AUTO_TEST_SUITE(Compat), which would
-#    redefine the same suite registration symbols inside one unity TU.
-#  - DAGTest / DagTransferPrecompiledTest / SmallBankPrecompiledTest: kept standalone
-#    since release-3.17.0 (name collisions in unity TUs).
-#  - files with a global `using namespace std;`: range-v3 headers first included
-#    after that using-directive in the same unity TU see an ambiguous `ranges`
-#    (::ranges vs ::std::ranges), so they must compile standalone.
+# headers) across all test files — measured on GCC 14/Debug: test target rebuild
+# 150.7s -> ~90s wall. No per-file opt-outs remain:
+#  - the global `using namespace std;` files were fixed to targeted `using std::x;`
+#    (a global using-directive makes range-v3's ::ranges ambiguous with ::std::ranges
+#    inside unity TUs);
+#  - BOOST_AUTO_TEST_SUITE(Compat) shared by evmone/compat/Compat*.cpp works fine in
+#    unity TUs with this Boost version (registration symbols are uniquified);
+#  - the release-3.17.0-era opt-outs (DAGTest / DagTransferPrecompiledTest /
+#    SmallBankPrecompiledTest) were verified safe on GCC 14.
+# Default batch size (8): measured GCC 14/Debug on a 20-core box — test target clean
+# rebuild ~150s -> ~120-145s wall, ~2200s -> ~1500-1800s CPU; batch 4 was strictly
+# worse (more repeated header parsing, no wall-clock gain).
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
-file(GLOB COMPAT_SOURCES "evmone/compat/Compat*.cpp")
-set_source_files_properties(${COMPAT_SOURCES}
-    "DAGTest.cpp"
-    "libprecompiled/DagTransferPrecompiledTest.cpp"
-    "libprecompiled/SmallBankPrecompiledTest.cpp"
-    "libexecutive/TestShardingSyncStorageWrapper.h.cpp"
-    "libexecutor/TestScaleUtils.cpp"
-    "libexecutor/TestEVMExecutor.cpp"
-    "libexecutor/TestBlockContext.cpp"
-    "libexecutor/TestExecutiveStackFlow.cpp"
-    "libexecutor/TestLedgerCache.cpp"
-    "libexecutor/TestClockCache.cpp"
-    "libexecutor/TestExecutiveState.cpp"
-    "libexecutor/TestTxDAG.cpp"
-    "libexecutor/TestDagExecutor.cpp"
-    "libexecutor/TestAbiReader.cpp"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # CompatStaticGuardsTest locates repo sources from __FILE__. With UNITY_BUILD off the compiler
 # sees a path relative to its own working directory, while ctest runs the binary from the build
 # root, so the relative form resolves to the wrong place. Give the test an absolute anchor.
