@@ -613,7 +613,7 @@ public:
                 m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
                     ledgerConfig, m_ctx->fee, m_ctx->blockGasLeft,
                     call ? std::optional<uint64_t>{} : std::optional<uint64_t>(m_ctx->chainId),
-                    &*m_blockInfo);
+                    &*m_blockInfo, call);
             }
             catch (const OpTxValidationFailed& e)
             {
@@ -785,7 +785,7 @@ public:
         try
         {  // M1 normalization: validation failure -> consensus rejection
             props = co_await m_prepare(stateView, blockHeader, transaction, ledgerConfig, fee,
-                blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo);
+                blockGasLeft, call ? std::optional<uint64_t>{} : chainId, &blockInfo, call);
         }
         catch (const OpTxValidationFailed& e)
         {
@@ -934,7 +934,7 @@ private:
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
         ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpFeeParams const& fee,
         int64_t blockGasLeft, std::optional<uint64_t> chainId,
-        evmone::state::BlockInfo const* prebuiltBlockInfo)
+        evmone::state::BlockInfo const* prebuiltBlockInfo, bool skipBalanceCheck = false)
     {
         namespace op = bcos::evm::opstack;
         namespace eth = bcos::executor_v1::eth;
@@ -974,10 +974,23 @@ private:
         auto envRef = transaction.extraTransactionBytes();
         evmc::bytes_view env{envRef.data(), envRef.size()};
 
-        auto validated =
-            op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft);
+        // skipBalanceCheck: eth_call/estimateGas simulations must not balance-validate —
+        // op-geth never balance-validates a call (its simulated sender routinely carries no
+        // funds). opValidate's flag was designed for exactly this but was never wired to the
+        // call path, so every eth_call failed validation and surfaced as the RTTI-bypassed
+        // "unknown exception" at the RPC boundary (see OpScheduler::call).
+        auto validated = op::opValidate(
+            stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft, skipBalanceCheck);
         if (auto const* err = std::get_if<std::error_code>(&validated))
+        {
+            BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK") << LOG_DESC("opValidate failed")
+                              << LOG_KV("reason", err->message())
+                              << LOG_KV("sender", bcos::toHex(std::span<uint8_t const>(
+                                                                 evmTx.sender.bytes, 20)))
+                              << LOG_KV("nonce", evmTx.nonce)
+                              << LOG_KV("skipBalanceCheck", skipBalanceCheck);
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));
+        }
         auto props = std::move(std::get<op::OpTxProperties>(validated));
         props.evm_tx = std::move(evmTx);  // carry the built tx to m_execute (build once, not twice)
         co_return props;
