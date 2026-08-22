@@ -170,6 +170,10 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         tarsTx.data.gasLimit = gasLimit;
         tarsTx.data.nonce = "0x0";  // deposit nonce is always 0
         tarsTx.data.chainID = "0";
+        // Raw EIP-2718 envelope as submitted (OP block building reuses it verbatim; empty when
+        // the tx entered via block derivation rather than eth_sendRawTransaction).
+        tarsTx.rawTransactionBytes.assign(
+            this->rawTransactionBytes.begin(), this->rawTransactionBytes.end());
         return tarsTx;
     }
     bcostars::Transaction tarsTx{};
@@ -264,6 +268,11 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
 
     tarsTx.data.nonce = toQuantity(this->nonce);
     tarsTx.data.chainID = std::to_string(this->chainId.value_or(0));
+
+    // Raw EIP-2718 envelope as submitted (OP block building reuses it verbatim; empty when
+    // the tx entered via block derivation rather than eth_sendRawTransaction).
+    tarsTx.rawTransactionBytes.assign(
+        this->rawTransactionBytes.begin(), this->rawTransactionBytes.end());
 
     // dataHash and sender left empty — TxValidator::verify() computes them
     return tarsTx;

@@ -112,13 +112,13 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
-            // NOTE: deliberately no upper bound here. A value >= 2 (or any value above
-            // today's set) runs the v2 ethereum-executor via MultiVersionScheduler's
-            // saturating setVersion; banning values here would be an unversioned consensus
-            // change (validate() runs inside block execution) that breaks replay/resync of
-            // historical blocks that set executor_version on the old binary. The v2-only
-            // guardrails live in node-local startup (Initializer refuses to boot a v2 chain
-            // without an on-chain evmc_revision), not in this per-block validator.
+            // NOTE: deliberately no upper bound here. setVersion saturates: >= 2 runs the v2
+            // EthereumExecutor, >= 3 the OP scheduler (index 3), values above that saturate to
+            // the newest. Banning values here would be an unversioned consensus change
+            // (validate() runs inside block execution) that breaks replay/resync of historical
+            // blocks that set executor_version on the old binary. The v2/v3-only guardrails live
+            // in node-local startup (Initializer refuses to boot a v2 chain without an on-chain
+            // evmc_revision), not in this per-block validator.
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility

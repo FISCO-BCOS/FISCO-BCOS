@@ -746,6 +746,10 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
+    // Keep the exact submitted envelope bytes: OP block building (sequencer) must re-execute
+    // the transaction on the raw bytes the user signed, not a re-serialization from fields.
+    // decode() consumes bytesRef, so copy from the pre-decode buffer.
+    web3Tx.rawTransactionBytes = rawTxBytes;
     // op-geth rejects Deposit (0x7e) from eth_sendRawTransaction
     // (ErrTxTypeNotSupported); deposits only enter via the derivation/engine
     // path, never from a client RPC submission.
@@ -1144,7 +1148,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        auto blockHash = block->blockHeader()->hash();
+        // OP headers hash as keccak(encodeOpHeader), not the tars dataHash fallback — same fix
+        // as combineBlockResponse (R1).
+        auto blockHash = bcos::rpc::opAwareBlockHash(*block->blockHeader());
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)

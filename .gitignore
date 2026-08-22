@@ -78,6 +78,9 @@ opstack-executor/tests/t8n/vectors/*.json
 opstack-executor/tests/t8n/golden/engine/*.golden.json
 opstack-executor/tests/t8n/golden/engine/chained/*.json
 
+# opstack-genesis local working config (copied from chain-config.template.yaml per README; template is the tracked asset)
+tools/opstack-genesis/chain-config.yaml
+
 test/*
 /CMakeSettings.json
 
