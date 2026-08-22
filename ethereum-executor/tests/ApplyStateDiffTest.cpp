@@ -34,7 +34,6 @@ constexpr evmc::address kGhostAddr = 0x00000000000000000000000000000000deadbeef_
 BOOST_AUTO_TEST_CASE(applyStateDiffDeletedAccountRemovesSysTablesMarker)
 {
     MutableStorage storage;
-    bcos::crypto::Keccak256 keccak;
 
     // Set up an EMPTY account on the ledger: only the SYS_TABLES marker row exists
     // (nonce=0, balance=0, no code — the EIP-161 touch-delete scenario).
@@ -49,7 +48,11 @@ BOOST_AUTO_TEST_CASE(applyStateDiffDeletedAccountRemovesSysTablesMarker)
     evmone::state::StateDiff diff;
     diff.deleted_accounts.push_back(kGhostAddr);
 
-    task::syncWait(bcos::executor_v1::eth::applyStateDiff(storage, diff, EVMC_SHANGHAI, keccak));
+    // Merged write-back path: the former eth::applyStateDiff(storage, diff, rev, hash) was
+    // folded into Storage2State::applyDiff (Storage2State.h) — one bridge owns both the read
+    // and write-back sides, no separate hash argument.
+    bcos::evm::evmstate::Storage2State<MutableStorage> stateView(storage);
+    stateView.applyDiff(diff);
 
     // B4: the deleted account's SYS_TABLES marker must be removed — no EIP-161 ghost
     // empty account may linger after touch-delete.

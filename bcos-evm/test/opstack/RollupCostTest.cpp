@@ -6,18 +6,8 @@
 #include <evmc/hex.hpp>
 #include <vector>
 
-namespace
-{
-// Port shim: the scheduler line dropped computeChargedOperatorCost (the has_operator_fee
-// gating moved to callers); these pinned expectations need the same gated value.
-intx::uint256 computeChargedOperatorCost(const bcos::evm::opstack::OpFeeParams& params,
-    uint64_t gas, const bcos::evm::opstack::OpForkConfig& cfg) noexcept
-{
-    return cfg.has_operator_fee ? bcos::evm::opstack::computeOperatorCost(params, gas, cfg) :
-                                  intx::uint256{0};
-}
-}  // namespace
-
+// computeChargedOperatorCost is provided by RollupCost.h again (restored by the op-alignment
+// merge); the former local port shim shadowed it and made unqualified calls ambiguous.
 
 using namespace bcos::evm::opstack;
 using intx::operator""_u256;

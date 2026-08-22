@@ -276,6 +276,15 @@ std::optional<bcos::u256> bcostars::protocol::ExecutionMessageImpl::createSalt()
     {
         return emptySalt;
     }
+    // This repo's binaries link wedprcrypto's Rust static libs (via bcos-crypto), whose
+    // bundled runtime breaks libc++ exception matching binary-wide on some toolchains:
+    // a boost::bad_lexical_cast can escape catch(std::exception). catch(...) keeps the
+    // documented contract — the getter degrades to nullopt, never throws (same discipline
+    // as Storage2State.h's exception-matching ladder).
+    catch (...)
+    {
+        return emptySalt;
+    }
 }
 
 void bcostars::protocol::ExecutionMessageImpl::setCreateSalt(bcos::u256 createSalt)
@@ -378,8 +387,7 @@ std::string_view bcostars::protocol::ExecutionMessageImpl::delegateCallSender() 
     return m_inner()->delegateCallSender;
 }
 
-void bcostars::protocol::ExecutionMessageImpl::setDelegateCallSender(
-    std::string delegateCallSender)
+void bcostars::protocol::ExecutionMessageImpl::setDelegateCallSender(std::string delegateCallSender)
 {
     m_inner()->delegateCallSender = std::move(delegateCallSender);
 }
