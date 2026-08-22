@@ -38,9 +38,8 @@ namespace
 {
     // bcos::Error stores its message in errorMessage() (not what()); fall back so a
     // storage/service fault never surfaces as -32603 with an empty message.
-    auto message = dynamic_cast<bcos::Error const*>(&e) ?
-                       dynamic_cast<bcos::Error const*>(&e)->errorMessage() :
-                       std::string(e.what());
+    auto msg = dynamic_cast<bcos::Error const*>(&e);
+    auto message = msg ? msg->errorMessage() : std::string(e.what());
     throw JsonRpcException(mapEngineErrorCode(e), std::move(message));
 }
 }  // namespace
