@@ -630,7 +630,7 @@ private:
             bcos::ledger::LedgerConfig execLedgerConfig;
             execLedgerConfig.setEVMCRevision(cfg.rev);
 
-            auto sharedError = std::make_shared<std::string>();
+            auto sharedError = std::make_shared<SharedErrorSlot>();
             OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
             // ① Block-pre steps (preBlockOpSteps, OpBlockExecute.h — the single home shared with
@@ -642,7 +642,7 @@ private:
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<detail::RecentBlockHashes<ViewType>> hashes;
             bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor,
-                m_hashImpl, hashes, hashErr, daFootprintGasScalar);
+                hashes, hashErr, daFootprintGasScalar);
 
             // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
             // blockGasLeft via narrowU256ToU64 (silent-truncation guard, same as coCallLatest).
@@ -653,18 +653,20 @@ private:
                 .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};
 
-            // ③ Per-tx execution via the shared serial scheduler (one per block; serial=true
-            // forces grain size 1 — OP is linear-only, see the class header's DESIGN INVARIANT).
-            bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
-                m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
-            auto transactionsRefs =
-                transactions |
-                ::ranges::views::transform(
-                    [](protocol::Transaction::ConstPtr const& ptr) -> protocol::Transaction const& {
-                        return *ptr;
-                    });
-            auto receipts = co_await serialScheduler.executeBlock(
-                view, executor, header, transactionsRefs, execLedgerConfig, ctx);
+            // ③ Per-tx execution: direct serial loop (OpstackExecutor::executeTransaction has
+            // extra params [fee/blockGasLeft/chainId/blockHashes] beyond the TransactionExecutor
+            // concept's 6-arg check, so we cannot go through SchedulerSerialImpl::executeBlock).
+            std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
+            receipts.reserve(transactions.size());
+            for (std::size_t i = 0; i < transactions.size(); ++i)
+            {
+                auto execCtx = co_await executor.createExecuteContext(view, header,
+                    *transactions[i], static_cast<int>(i), execLedgerConfig,
+                    /*call=*/false, ctx);
+                co_await execCtx.prepare();
+                co_await execCtx.execute();
+                receipts.push_back(co_await execCtx.finish());
+            }
 
             // ④ Block-post finalize (hashErr check lives inside finalizeOpBlockResult).
             result = bcos::evm::engine::finalizeOpBlockResult(executor, view, header,
@@ -956,7 +958,7 @@ private:
             view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
 
         // Construct the executor per call (one evmc::VM).
-        auto sharedError = std::make_shared<std::string>();
+        auto sharedError = std::make_shared<SharedErrorSlot>();
         OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
 
         auto receipt = co_await executor.executeTransaction(view, header, *transaction,

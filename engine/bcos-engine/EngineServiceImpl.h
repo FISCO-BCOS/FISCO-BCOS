@@ -68,11 +68,7 @@
 
 namespace bcos::engine
 {
-// UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
-// bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes.
-DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
-DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
-DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+// All engine exceptions are now in bcos-framework/engine/Errors.h — included via Types.h.
 
 namespace detail
 {

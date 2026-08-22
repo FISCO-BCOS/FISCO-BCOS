@@ -1,9 +1,19 @@
 #include "BlockResponse.h"
 #include "Log.h"
 
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
+
+bcos::crypto::HashType bcos::rpc::opAwareBlockHash(const bcos::protocol::BlockHeader& header)
+{
+    if (!header.withdrawalsRoot().has_value())
+    {
+        return header.hash();
+    }
+    return bcos::protocol::EthBlockHeader::computeHash(header);
+}
 
 void bcos::rpc::combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)

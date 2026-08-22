@@ -19,11 +19,11 @@
 
 #pragma once
 
+#include "Errors.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <optional>
@@ -48,12 +48,7 @@ enum class ApiVersion : std::uint8_t
 
 using PayloadID = std::string;
 
-/// Engine API error conditions shared by the service implementation and the RPC
-/// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
-/// -38001, the two version mismatches -> -38005 Unsupported fork.
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+// Exceptions moved to Errors.h — included above.
 
 struct WithdrawalV1
 {

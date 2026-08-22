@@ -843,6 +843,7 @@ public:
         }
         if (stateView.poisoned())
             throw engine::OpStorageError("finalize write-back poisoned: " + stateView.firstError());
+        co_return;
     }
 
 private:
