@@ -45,6 +45,7 @@
 #include <exception>
 #include <memory>
 #include <thread>
+#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(StartLightNodeException);
 
