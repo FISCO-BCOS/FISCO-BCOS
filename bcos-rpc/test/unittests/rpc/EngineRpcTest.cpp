@@ -323,7 +323,17 @@ BOOST_AUTO_TEST_CASE(newPayloadUnsupportedForkMapsTo38005)
     ep["baseFeePerGas"] = "0x1";
     ep["blockHash"] = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     ep["transactions"] = Json::Value(Json::arrayValue);
+    ep["withdrawals"] = Json::Value(Json::arrayValue);  // V4 field-shape requirement
+    ep["withdrawalsRoot"] = "0x0000000000000000000000000000000000000000000000000000000000000000";
+    ep["blobGasUsed"] = "0x0";  // V4 field-shape requirement (Isthmus+ fields)
+    ep["excessBlobGas"] = "0x0";
     params.append(ep);
+    // V4 shape requires all four params: [executionPayload, expectedBlobVersionedHashes,
+    // parentBeaconBlockRoot, executionRequests]. Without them the RPC-level shape validation
+    // rejects (-32602) before the engine's fork check can throw and map to -38005.
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes: none
+    params.append("0x0000000000000000000000000000000000000000000000000000000000000000");  // PBBR
+    params.append(Json::Value(Json::arrayValue));  // executionRequests: empty
     Json::Value response;
     bool threw = false;
     try

@@ -207,8 +207,8 @@ bcos::evm::engine::OpExecuteBlockResult runSharedPath(MutableStorage& storage,
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<detail::RecentBlockHashes<MutableStorage>> hashes;
-    bcos::evm::engine::preBlockOpSteps(storage, header, cfg, rawTxBytes, deposits, executor,
-        hashImpl, hashes, hashErr, daFootprintGasScalar);
+    bcos::evm::engine::preBlockOpSteps(storage, header, cfg, rawTxBytes, deposits, executor, hashes,
+        hashErr, daFootprintGasScalar);
     bcos::executor_v1::opstack::OpBlockExecutionContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashes = &*hashes,
@@ -322,7 +322,7 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<detail::RecentBlockHashes<MutableStorage>> hashes;
     BOOST_CHECK_THROW(engine::preBlockOpSteps(storage, *header, cfg, rawTxBytes, deposits, executor,
-                          hashImpl, hashes, hashErr, daFootprintGasScalar),
+                          hashes, hashErr, daFootprintGasScalar),
         std::runtime_error);
 }
 

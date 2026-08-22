@@ -633,6 +633,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // block execute/commit (via the shared SchedulerSkeleton). The RPC eth_call path routes
         // via MultiVersionScheduler setVersion(m_executorVersion) -> getScheduler() -> slot 3.
         m_opScheduler = opDelegate;
+        // RPC block-number push (alignment plan problem 3): installs the callback into the
+        // concrete OpScheduler (typed ptr — the setter is not on SchedulerInterface); the
+        // delegate fires it from commitBlock after a VALID OP block merges.
+        // initNotificationHandlers consumes this setter; without it RPC block-number subscribers
+        // never see OP blocks.
+        m_setOpSchedulerBlockNumberNotifier =
+            [opDelegate](std::function<void(bcos::protocol::BlockNumber)> notifier) {
+                opDelegate->setBlockNumberNotifier(std::move(notifier));
+            };
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -957,6 +966,18 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     if (m_setEthereumSchedulerBlockNumberNotifier)
     {
         m_setEthereumSchedulerBlockNumberNotifier(
+            [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+                INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
+                _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
+            });
+    }
+
+    // executor_version>=3 (OP): the delegate fires the notifier after a VALID OP block merges
+    // (OpScheduler::commitBlock); without it RPC block-number subscribers never see OP blocks.
+    // The setter is only present in OP mode.
+    if (m_setOpSchedulerBlockNumberNotifier)
+    {
+        m_setOpSchedulerBlockNumberNotifier(
             [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
                 INITIALIZER_LOG(DEBUG) << "Notify blocknumber: " << number;
                 _rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});

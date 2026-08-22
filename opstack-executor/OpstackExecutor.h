@@ -159,11 +159,17 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     for (auto const& entry : tx.web3AccessList())
     {
         evmc_address addr{};
+        if (entry.account.size() < sizeof(evmc_address))
+            throw bcos::evm::engine::OpConsensusError(
+                "toEvmoneTransaction: access-list account address too short");
         std::copy_n(entry.account.begin(), sizeof(evmc_address), addr.bytes);
         std::vector<evmc::bytes32> keys;
         for (auto const& sk : entry.storageKeys)
         {
             evmc_bytes32 key{};
+            if (sk.size() < sizeof(evmc_bytes32))
+                throw bcos::evm::engine::OpConsensusError(
+                    "toEvmoneTransaction: access-list storage key too short");
             std::copy_n(sk.begin(), sizeof(evmc_bytes32), key.bytes);
             keys.push_back(key);
         }
@@ -172,6 +178,9 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
     for (auto const& h : tx.blobVersionedHashes())
     {
         evmc_bytes32 hash{};
+        if (h.size() < sizeof(evmc_bytes32))
+            throw bcos::evm::engine::OpConsensusError(
+                "toEvmoneTransaction: blob versioned hash too short");
         std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
         evmTx.blob_hashes.push_back(hash);
     }
@@ -211,6 +220,9 @@ inline evmone::state::Transaction toEvmoneTransaction(bcos::protocol::Transactio
         evmone::state::Authorization ea{};
         // AuthorizationEntry: all fields are numeric (uint64_t, u256, Address, uint8_t)
         ea.chain_id = toIntxU256(bcos::u256(auth.chainId));
+        if (auth.address.size() < sizeof(evmc_address))
+            throw bcos::evm::engine::OpConsensusError(
+                "toEvmoneTransaction: authorization entry address too short");
         std::copy_n(auth.address.begin(), sizeof(evmc_address), ea.addr.bytes);
         ea.nonce = auth.nonce;
         if (auth.signer.size() == sizeof(evmc_address))
@@ -704,6 +716,21 @@ public:
     {
         co_return ExecuteContext<Storage>{
             *this, storage, blockHeader, transaction, contextID, ledgerConfig, call, nullptr};
+    }
+
+    /// 6-arg form matching the TransactionExecutor concept probe (TransactionExecutor.h:18).
+    /// OP is never driven through this form — SchedulerSerialImpl's pipeline uses
+    /// createExecuteContext + prepare/execute/finish — but the concept requires executeTransaction
+    /// to exist with this exact signature. Throws if actually called (same guard as the 6-arg
+    /// createExecuteContext: no BlockContext means no fee / blockGasLeft / chainId / blockHashes).
+    template <class Storage>
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& /*storage*/,
+        protocol::BlockHeader const& /*blockHeader*/, protocol::Transaction const& /*transaction*/,
+        int /*contextID*/, ledger::LedgerConfig const& /*ledgerConfig*/, bool /*call*/)
+    {
+        throw engine::OpConsensusError(
+            "OpstackExecutor: executeTransaction 6-arg form is unsupported for OP execution "
+            "(use createExecuteContext + prepare/execute/finish instead)");
     }
 
     /// Execute a single OP normal transaction (injection-style, mirroring processOpBlock).

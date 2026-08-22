@@ -154,6 +154,7 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
         params.append(hexPrefixedH256(*header->parentBeaconBlockRoot()));
     else
         params.append(Json::Value(Json::nullValue));
+    params.append(Json::Value(Json::arrayValue));  // executionRequests = []
     return params;
 }
 
@@ -203,6 +204,7 @@ inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
         params.append(op["parentBeaconBlockRoot"]);
     else
         params.append(Json::Value(Json::nullValue));
+    params.append(Json::Value(Json::arrayValue));  // executionRequests = []
     return params;
 }
 

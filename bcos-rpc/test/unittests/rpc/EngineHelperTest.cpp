@@ -60,6 +60,8 @@ Json::Value makePayloadParams(
     ep["logsBloom"] = "0x" + std::string(512, '0');
     ep["extraData"] = "0x";
     ep["withdrawals"] = Json::Value(Json::arrayValue);
+    ep["blobGasUsed"] = "0x0";  // V4 field-shape requirement (Isthmus+ fields)
+    ep["excessBlobGas"] = "0x0";
     if (withdrawalsRoot.size())
     {
         ep["withdrawalsRoot"] = std::string(withdrawalsRoot);
@@ -72,6 +74,11 @@ Json::Value makePayloadParams(
     ep["transactions"] = txs;
     Json::Value params(Json::arrayValue);
     params.append(ep);
+    // V4 param shape: [executionPayload, expectedBlobVersionedHashes, parentBeaconBlockRoot,
+    // executionRequests] — requireNewPayloadV4ParamShape rejects a 1-element params array.
+    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes: none
+    params.append("0x" + std::string(64, '0'));    // parentBeaconBlockRoot
+    params.append(Json::Value(Json::arrayValue));  // executionRequests: empty
     return params;
 }
 
@@ -119,12 +126,15 @@ BOOST_AUTO_TEST_CASE(parseFillsWithdrawalsRoot)
         expect.begin(), expect.end(), request.executionPayload.withdrawalsRoot->begin()));
 }
 
-// withdrawalsRoot 缺省 → nullopt；错长（31/33 字节）→ bcos::rpc::JsonRpcException。
+// withdrawalsRoot 缺省 → V4 形状校验拒绝（Isthmus 必填字段）；错长（31/33 字节）→
+// bcos::rpc::JsonRpcException。
 BOOST_AUTO_TEST_CASE(parseWithdrawalsRootBoundaries)
 {
+    // V4 shape validation requires withdrawalsRoot as a hex string (Isthmus contract) — a
+    // missing key is a shape rejection, not a silent nullopt.
     auto noRoot = makePayloadParams({kEip1559RawTx}, "");
-    auto reqNoRoot = parseNewPayloadRequest(noRoot, engine::ApiVersion::V4);
-    BOOST_CHECK(!reqNoRoot.executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_THROW(
+        parseNewPayloadRequest(noRoot, engine::ApiVersion::V4), bcos::rpc::JsonRpcException);
 
     // 31 字节（62 hex）
     auto badShort = makePayloadParams({kEip1559RawTx}, "0x" + std::string(62, '1'));
@@ -139,7 +149,9 @@ BOOST_AUTO_TEST_CASE(parseWithdrawalsRootBoundaries)
 // 缺 transactions 键 → rawTransactions 保持 nullopt（OP 校验 :299 仍拒）。
 BOOST_AUTO_TEST_CASE(parseMissingTransactionsLeavesRawNullopt)
 {
-    auto params = makePayloadParams({}, "");
+    // withdrawalsRoot 必须给合法值：V4 形状校验（Isthmus 必填）会先于本测试关注的
+    // transactions 缺省语义拒绝缺根载荷。
+    auto params = makePayloadParams({}, kWithdrawalsRoot);
     params[0].removeMember("transactions");
     auto request = parseNewPayloadRequest(params, engine::ApiVersion::V4);
     BOOST_CHECK(!request.executionPayload.rawTransactions.has_value());
@@ -148,7 +160,7 @@ BOOST_AUTO_TEST_CASE(parseMissingTransactionsLeavesRawNullopt)
 // transactions 存在但为空数组 → rawTransactions present-and-empty（OP 校验 :299 接受）。
 BOOST_AUTO_TEST_CASE(parseEmptyTransactionsIsPresentAndEmpty)
 {
-    auto params = makePayloadParams({}, "");
+    auto params = makePayloadParams({}, kWithdrawalsRoot);
     auto request = parseNewPayloadRequest(params, engine::ApiVersion::V4);
     BOOST_REQUIRE(request.executionPayload.rawTransactions.has_value());
     BOOST_CHECK(request.executionPayload.rawTransactions->empty());

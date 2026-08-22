@@ -11,6 +11,7 @@
 #include "bcos-evm/opstack/OpForkSchedule.h"
 #include "bcos-evm/opstack/OpPredeploys.h"
 #include "opstack-executor/OpstackExecutor.h"
+#include "opstack-executor/RecentBlockHashes.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>  // construct a 33-byte-mint envelope for the over-wide test
 #include <bcos-crypto/hash/Keccak256.h>
@@ -193,6 +194,10 @@ BOOST_FIXTURE_TEST_CASE(ExecutesNormalTransferEndToEnd, Fixture)
 
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildWeb3Tx();
@@ -220,7 +225,7 @@ BOOST_FIXTURE_TEST_CASE(ExecutesNormalTransferEndToEnd, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};  // zero fee
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     // FISCO internal convention: 0 = success (the Ethereum RPC 0<->1 flip happens later).
     BOOST_CHECK_EQUAL(receipt->status(), 0);
@@ -235,10 +240,14 @@ BOOST_FIXTURE_TEST_CASE(RejectsForkRevisionMismatch, Fixture)
     ledgerConfig.setEVMCRevision(EVMC_FRONTIER);  // deliberately != fork.rev
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     auto tx = buildWeb3Tx();
     bcos::evm::opstack::OpFeeParams fee{};
-    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(
-                          storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
+    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx, 0,
+                          ledgerConfig, false, fee, 30000000, 10, nullptr)),
         bcos::executor_v1::opstack::OpForkRevisionMismatch);
 }
 
@@ -248,15 +257,20 @@ BOOST_FIXTURE_TEST_CASE(RejectsInvalidTx, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     auto tx = buildWeb3Tx();
+    tx.setNonce("0x0");  // nonce=0 so balance check is reached (nonce check would fail first)
     constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
     tx.clearSenderAndHash();
     tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
     // No account created -> balance 0 -> validation fails.
     bcos::evm::opstack::OpFeeParams fee{};
-    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(
-                          storage, blockHeader, tx, 0, ledgerConfig, false, fee, 30000000, 10)),
-        bcos::executor_v1::opstack::OpTxValidationFailed);
+    BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx, 0,
+                          ledgerConfig, false, fee, 30000000, 10, nullptr)),
+        bcos::evm::engine::OpConsensusError);
 }
 
 BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
@@ -266,6 +280,10 @@ BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildWeb3Tx();
@@ -296,7 +314,7 @@ BOOST_FIXTURE_TEST_CASE(ChargesL1AndOperatorFees, Fixture)
 
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     BOOST_CHECK_EQUAL(receipt->status(), 0);
 
@@ -315,6 +333,10 @@ BOOST_FIXTURE_TEST_CASE(ReceiptMetaSurvives, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
 
     auto tx = buildWeb3Tx();
     constexpr auto sender = 0xe0e794ca86d198042b64285c5ce667aee747509b_address;
@@ -340,7 +362,7 @@ BOOST_FIXTURE_TEST_CASE(ReceiptMetaSurvives, Fixture)
 
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     auto meta = receipt->opStackMeta();
     BOOST_REQUIRE(meta.has_value());
@@ -363,6 +385,10 @@ BOOST_FIXTURE_TEST_CASE(ExecutesDepositMint, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     constexpr auto kFrom = 0x000000000000000000000000000000000000dead_address;
@@ -406,6 +432,10 @@ BOOST_FIXTURE_TEST_CASE(ExecutesDepositThroughExecuteTransaction, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildDepositTx();
@@ -421,7 +451,7 @@ BOOST_FIXTURE_TEST_CASE(ExecutesDepositThroughExecuteTransaction, Fixture)
     // fee default {} — deposit must ignore it (no L1/operator fee).
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, /*fee=*/{}, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     BOOST_CHECK_EQUAL(receipt->status(), 0);
 
@@ -448,6 +478,10 @@ BOOST_FIXTURE_TEST_CASE(DepositLifecycleThroughExecuteContext, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildDepositTx();
@@ -461,9 +495,12 @@ BOOST_FIXTURE_TEST_CASE(DepositLifecycleThroughExecuteContext, Fixture)
     }());
 
     constexpr int64_t kInitialGasLeft = 30000000;
+    bcos::evm::engine::detail::RecentBlockHashes<MutableStorage> recentBlockHashes{
+        storage, blockHeader.number() - 1, evmc::bytes32{}, nullptr};
     OpBlockExecutionContext ctx{};
     ctx.blockGasLeft = kInitialGasLeft;
-    ctx.chainId = 10;  // blockHashes left null -> executeDeposit uses ZeroBlockHashes
+    ctx.chainId = 10;
+    ctx.blockHashes = &recentBlockHashes;
 
     auto context = task::syncWait(executor.createExecuteContext(
         storage, blockHeader, tx, /*contextID=*/0, ledgerConfig, /*call=*/false, ctx));
@@ -493,6 +530,10 @@ BOOST_FIXTURE_TEST_CASE(NullContextSixArgFormThrows, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildDepositTx();
@@ -508,6 +549,10 @@ BOOST_FIXTURE_TEST_CASE(DepositGasLimitReachedIsBlockError, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     bcos::evm::opstack::DepositTx dep{
         .source_hash = 0x02_bytes32,
         .from = 0x000000000000000000000000000000000000dead_address,
@@ -529,6 +574,10 @@ BOOST_FIXTURE_TEST_CASE(FinalizeOpBlockNoReward, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.setCoinbase(bcos::Address(bcos::bytes(20, 0x11)));
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
@@ -566,7 +615,11 @@ BOOST_FIXTURE_TEST_CASE(BlockInfoGasLimitUsesHeaderGasLimit, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
-    blockHeader.setGasLimit(bcos::u256(1000000));  // exercises the header-gasLimit path
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
+    blockHeader.setGasLimit(bcos::u256(1000000));        // exercises the header-gasLimit path
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
     ledgerConfig.setEVMCRevision(fork.rev);
 
@@ -616,7 +669,7 @@ BOOST_FIXTURE_TEST_CASE(BlockInfoGasLimitUsesHeaderGasLimit, Fixture)
     // validation, < header exposes the GASLIMIT fork) — the key to exposing the fork.
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/250000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
     BOOST_CHECK_EQUAL(receipt->status(), 0);
 
@@ -809,6 +862,10 @@ BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
     bcos::evm::opstack::OpFeeParams fee{};  // zero fee
 
@@ -821,7 +878,7 @@ BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
         tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
         BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
                               /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
-                              /*blockGasLeft=*/30000000, /*chainId=*/10)),
+                              /*blockGasLeft=*/30000000, /*chainId=*/10, /*blockHashes=*/nullptr)),
             bcos::evm::engine::OpConsensusError);
     }
     // (2) typed tx chain_id==0 is NOT exempt (modernSigner rejects 0 != node chainId; a
@@ -833,7 +890,7 @@ BOOST_FIXTURE_TEST_CASE(ChainIdMismatchEnforced, Fixture)
         tx.forceSender(bcos::bytes(sender.bytes, sender.bytes + sizeof(sender.bytes)));
         BOOST_CHECK_THROW(task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
                               /*contextID=*/0, ledgerConfig, /*call=*/false, fee,
-                              /*blockGasLeft=*/30000000, /*chainId=*/10)),
+                              /*blockGasLeft=*/30000000, /*chainId=*/10, /*blockHashes=*/nullptr)),
             bcos::evm::engine::OpConsensusError);
     }
 }
@@ -846,6 +903,10 @@ BOOST_FIXTURE_TEST_CASE(LegacyUnprotectedChainIdExempt, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     auto tx = buildLegacyWeb3Tx();
@@ -870,7 +931,7 @@ BOOST_FIXTURE_TEST_CASE(LegacyUnprotectedChainIdExempt, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};  // zero fee
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);       // chainId exempt: executes instead of throwing
     BOOST_CHECK_EQUAL(receipt->status(), 0);  // and succeeds — not reverted-but-accepted
 }
@@ -885,6 +946,10 @@ BOOST_FIXTURE_TEST_CASE(TransferToSystemAddressCreditsAppsBalance, Fixture)
     OpstackExecutor executor{receiptFactory, cryptoSuite->hashImpl(), fork};
     bcostars::protocol::BlockHeaderImpl blockHeader;
     blockHeader.setNumber(1);
+    blockHeader.setBaseFee(bcos::u256(1000000000));      // 1 gwei, required by new API
+    blockHeader.setParentBeaconBlockRoot(bcos::h256{});  // required by new API
+    blockHeader.setBlobGasUsed(0);                       // required by new API
+    blockHeader.setExcessBlobGas(0);                     // required by new API
     blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
     constexpr auto sysAddr = 0x0000000000000000000000000000000000001000_address;  // SYS_CONFIG
@@ -911,7 +976,7 @@ BOOST_FIXTURE_TEST_CASE(TransferToSystemAddressCreditsAppsBalance, Fixture)
     bcos::evm::opstack::OpFeeParams fee{};  // zero fee
     auto receipt = task::syncWait(executor.executeTransaction(storage, blockHeader, tx,
         /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30000000,
-        /*chainId=*/10));
+        /*chainId=*/10, /*blockHashes=*/nullptr));
     BOOST_REQUIRE_NE(receipt, nullptr);
 
     // The state root reads /apps/ (accountTableName); the credit must be visible there.
@@ -919,6 +984,97 @@ BOOST_FIXTURE_TEST_CASE(TransferToSystemAddressCreditsAppsBalance, Fixture)
     auto acc = view.get_account(sysAddr);
     BOOST_REQUIRE(acc.has_value());
     BOOST_CHECK(acc->balance == intx::uint256(2000000000000000000));  // the 2 ETH transfer value
+}
+
+// Buffer overread defense-in-depth tests.
+//
+// The TARS layer (TransactionImpl::web3AccessList / authorizationList / blobVersionedHashes)
+// already validates and returns fixed-size types, so the size guards in toEvmoneTransaction are
+// defense-in-depth. These tests verify the TARS layer properly rejects malformed data.
+static bcostars::Transaction makeValidTarsEIP2930()
+{
+    bcos::rpc::Web3Transaction w3{};
+    w3.type = bcos::rpc::TransactionType::EIP2930;
+    w3.chainId = 10;
+    w3.nonce = 0;
+    w3.maxFeePerGas = bcos::u256(30000000000);
+    w3.maxPriorityFeePerGas = w3.maxFeePerGas;
+    w3.gasLimit = 5000000;
+    w3.to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
+    w3.value = bcos::u256(0);
+    w3.signatureV = 0;
+    w3.signatureR = bcos::bytes(32, 0x01);
+    w3.signatureS = bcos::bytes(32, 0x02);
+    bcos::rpc::AccessListEntry entry;
+    entry.account = bcos::Address("0x2e81f449a7d4b7f9f82844ab488b1a828a884837");
+    entry.storageKeys.push_back(bcos::crypto::HashType(bcos::bytes(32, 0xbb)));
+    w3.accessList.push_back(entry);
+    return w3.takeToTarsTransaction();
+}
+
+BOOST_AUTO_TEST_CASE(RejectsShortAccessListAccount)
+{
+    // TARS layer skips entries with invalid account addresses (bcos::toAddress throws)
+    auto tarsHolder = std::make_shared<bcostars::Transaction>(makeValidTarsEIP2930());
+    BOOST_REQUIRE(!tarsHolder->data.accessList.empty());
+    tarsHolder->data.accessList[0].account = std::string(10, '\xaa');  // 10 < 20 bytes
+    bcostars::protocol::TransactionImpl tx([tarsHolder]() { return tarsHolder.get(); });
+    // web3AccessList() catches the toAddress exception and skips the entry → empty access list
+    auto const& al = tx.web3AccessList();
+    BOOST_CHECK(al.empty());
+}
+
+BOOST_AUTO_TEST_CASE(RejectsShortAccessListStorageKey)
+{
+    // TARS layer skips storage keys with wrong length
+    auto tarsHolder = std::make_shared<bcostars::Transaction>(makeValidTarsEIP2930());
+    BOOST_REQUIRE(!tarsHolder->data.accessList.empty());
+    BOOST_REQUIRE(!tarsHolder->data.accessList[0].storageKeys.empty());
+    tarsHolder->data.accessList[0].storageKeys[0] = std::vector<char>(16, '\xbb');  // 16 < 32
+    bcostars::protocol::TransactionImpl tx([tarsHolder]() { return tarsHolder.get(); });
+    // web3AccessList() skips the invalid key but keeps the entry
+    auto const& al = tx.web3AccessList();
+    BOOST_REQUIRE_EQUAL(al.size(), 1u);
+    BOOST_CHECK(al[0].storageKeys.empty());
+}
+
+BOOST_AUTO_TEST_CASE(RejectsShortBlobVersionedHash)
+{
+    // TARS layer throws runtime_error on non-32-byte blob hashes
+    auto tarsHolder = std::make_shared<bcostars::Transaction>(makeValidTarsEIP2930());
+    tarsHolder->data.blobVersionedHashes.push_back(std::vector<char>(16, '\xcc'));  // 16 < 32
+    bcostars::protocol::TransactionImpl tx([tarsHolder]() { return tarsHolder.get(); });
+    BOOST_CHECK_THROW(tx.blobVersionedHashes(), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(RejectsShortAuthorizationAddress)
+{
+    // TARS layer throws on malformed authorization address (bcos::toAddress rejects short input)
+    bcos::rpc::Web3Transaction w3{};
+    w3.type = bcos::rpc::TransactionType::EIP7702;
+    w3.chainId = 10;
+    w3.nonce = 0;
+    w3.maxFeePerGas = bcos::u256(30000000000);
+    w3.maxPriorityFeePerGas = w3.maxFeePerGas;
+    w3.gasLimit = 5000000;
+    w3.to = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
+    w3.value = bcos::u256(0);
+    w3.signatureV = 0;
+    w3.signatureR = bcos::bytes(32, 0x01);
+    w3.signatureS = bcos::bytes(32, 0x02);
+    bcos::rpc::AuthorizationListEntry auth;
+    auth.chainId = bcos::u256(10);
+    auth.address = bcos::Address("0x811a752c8cd697e3cb27279c330ed1ada745a8d7");
+    auth.nonce = 0;
+    auth.yParity = 0;
+    auth.r = bcos::u256(1);
+    auth.s = bcos::u256(2);
+    w3.authorizationList.push_back(auth);
+    auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+    BOOST_REQUIRE(!tarsHolder->data.authorizationList.empty());
+    tarsHolder->data.authorizationList[0].address = std::string(10, '\xdd');  // 10 < 20 bytes
+    bcostars::protocol::TransactionImpl tx([tarsHolder]() { return tarsHolder.get(); });
+    BOOST_CHECK_THROW(tx.authorizationList(), bcos::BadHexCharacter);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

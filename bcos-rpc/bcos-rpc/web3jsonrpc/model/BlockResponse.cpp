@@ -19,7 +19,7 @@ void bcos::rpc::combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
 {
     auto blockHeader = block.blockHeader();
-    auto blockHash = blockHeader->hash();
+    auto blockHash = opAwareBlockHash(*blockHeader);
     auto blockNumber = blockHeader->number();
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();

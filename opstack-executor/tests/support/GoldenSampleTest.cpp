@@ -46,9 +46,11 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
 {
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
     auto params = w6test::makeParamsJson(sample);
-    // engine_newPayloadV4 params = [ExecutionPayload, blobHashes, parentBeaconBlockRoot]
+    // engine_newPayloadV4 params = [ExecutionPayload, blobHashes, parentBeaconBlockRoot,
+    // executionRequests]
     BOOST_REQUIRE(params.isArray());
-    BOOST_REQUIRE(params.size() >= 3);
+    BOOST_REQUIRE(params.size() >= 4);
+    BOOST_CHECK(params[3u].isArray());  // executionRequests must be an array
     auto const& ep = params[0u];
     BOOST_CHECK(ep.isMember("parentHash"));
     BOOST_CHECK(ep.isMember("stateRoot"));

@@ -1598,4 +1598,37 @@ BOOST_AUTO_TEST_CASE(LegacyArmBuildsLegacyTx)
     BOOST_CHECK(bc.txs[1].signedEnvelope.size() > 0);
 }
 
+// Ported from op-alignment (audit O3): the persisted golden transactionsRoot must equal
+// computeOpTxRoot over the golden's rawTransactions (raw EIP-2718 envelopes incl. the 0x7E
+// deposit). Without this cross-check the golden txsRoot is never compared against FISCO's own
+// derivation. Pre-Isthmus goldens (ecotone/fjord/granite) and Isthmus+ are both covered.
+BOOST_AUTO_TEST_CASE(GoldenTransactionsRootMatches)
+{
+    const fs::path goldenDir = OP_T8N_GOLDEN_ENGINE_DIR;
+    BOOST_REQUIRE_MESSAGE(fs::is_directory(goldenDir), goldenDir);
+    int checked = 0;
+    for (const auto& entry : fs::directory_iterator(goldenDir))
+    {
+        if (!entry.is_regular_file() || entry.path().extension() != ".json")
+            continue;
+        Json::Value j;
+        {
+            std::ifstream in(entry.path());
+            in >> j;
+        }
+        if (!j.isMember("rawTransactions") || !j.isMember("transactionsRoot"))
+            continue;
+        std::vector<bcos::bytes> raws;
+        for (auto const& rt : j["rawTransactions"])
+            raws.push_back(bcos::fromHexWithPrefix(rt.asString()));
+        auto root = bcos::evm::engine::computeOpTxRoot(raws);
+        auto golden = bcos::h256(j["transactionsRoot"].asString());
+        BOOST_CHECK_MESSAGE(root == golden,
+            entry.path().filename() << ": txsRoot mismatch computed=" << root.hexPrefixed()
+                                    << " golden=" << j["transactionsRoot"].asString());
+        ++checked;
+    }
+    BOOST_CHECK_MESSAGE(checked >= 16, "expected >=16 golden txsRoot checks, got " << checked);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

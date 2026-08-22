@@ -307,6 +307,15 @@ public:
     OpScheduler& operator=(const OpScheduler&) = delete;
     ~OpScheduler() noexcept override = default;
 
+    /// RPC block-number push channel (alignment plan problem 3): the composition root
+    /// (Initializer's m_setOpSchedulerBlockNumberNotifier) installs the callback; commitBlock
+    /// fires it via notifyBlockNumber after the merge of a VALID OP block. Without the setter the
+    /// ctor no-op is permanent and RPC block-number subscribers never see OP blocks.
+    void setBlockNumberNotifier(std::function<void(bcos::protocol::BlockNumber)> notifier)
+    {
+        m_blockNumberNotifier = std::move(notifier);
+    }
+
 private:
     // ================================================================
     // Orchestration (inlined from the former SchedulerSkeleton; trimmed — OP is synchronous
@@ -653,20 +662,18 @@ private:
                 .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};
 
-            // ③ Per-tx execution: direct serial loop (OpstackExecutor::executeTransaction has
-            // extra params [fee/blockGasLeft/chainId/blockHashes] beyond the TransactionExecutor
-            // concept's 6-arg check, so we cannot go through SchedulerSerialImpl::executeBlock).
-            std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
-            receipts.reserve(transactions.size());
-            for (std::size_t i = 0; i < transactions.size(); ++i)
-            {
-                auto execCtx = co_await executor.createExecuteContext(view, header,
-                    *transactions[i], static_cast<int>(i), execLedgerConfig,
-                    /*call=*/false, ctx);
-                co_await execCtx.prepare();
-                co_await execCtx.execute();
-                receipts.push_back(co_await execCtx.finish());
-            }
+            // ③ Per-tx execution via the shared serial scheduler (one per block; serial=true
+            // forces grain size 1 — OP is linear-only, see the class header's DESIGN INVARIANT).
+            bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
+                m_ioServicePool, /*chunkSize=*/1, /*serial=*/true);
+            auto transactionsRefs =
+                transactions |
+                ::ranges::views::transform(
+                    [](protocol::Transaction::ConstPtr const& ptr) -> protocol::Transaction const& {
+                        return *ptr;
+                    });
+            auto receipts = co_await serialScheduler.executeBlock(
+                view, executor, header, transactionsRefs, execLedgerConfig, ctx);
 
             // ④ Block-post finalize (hashErr check lives inside finalizeOpBlockResult).
             result = bcos::evm::engine::finalizeOpBlockResult(executor, view, header,
@@ -733,6 +740,12 @@ private:
             executedBlockHeader->setRequestsHash(detail::toBcosH256(*opResult.seal.requestsHash));
         if (opResult.seal.blobGasUsed.has_value())
             executedBlockHeader->setBlobGasUsed(bcos::u256(*opResult.seal.blobGasUsed));
+        else if (blockHeader.blobGasUsed())
+            // Pre-Jovian (Isthmus): the seal does not compute DA-footprint blobGasUsed,
+            // but the announced OP header always carries blobGasUsed=0 (EIP-4844 leftover
+            // in the 21-field RLP). Copy it so the six-way commitment check does not
+            // spuriously reject on presence-asymmetry (nullopt vs 0).
+            executedBlockHeader->setBlobGasUsed(*blockHeader.blobGasUsed());
         co_return executedBlockHeader;
     }
 

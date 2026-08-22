@@ -17,7 +17,7 @@
 #   - FISCO L2: 8555(web3) / 8566(engine),chain 914901
 #   - rollup.json 的 L1 genesis 必须 = anvil block 0 哈希(非部署块)
 #   - rollup.json 的 L2 genesis 必须 = FISCO 实际创世哈希(非 op-deployer 计算值)
-#   - eth_genesis_header.timestamp 用毫秒(L1 时间戳 * 1000)
+#   - eth_genesis_header.timestamp 用秒(L1 时间戳;C++ 侧 ×1000 存内部毫秒)
 #   - [features] feature_op_jovian=true(否则 9B extraData,op-node 拒绝)
 #   - op-node: --l1.beacon.ignore + --rollup.l1-chain-config(anvil 需 cancunTime)
 set -eu
@@ -25,9 +25,9 @@ set -eu
 # ---------- 可调参数 ----------
 C2="${C2:-/tmp/c2}"
 MONOREPO="${MONOREPO:-/Users/octopus/octo/code/blockchain-impl/optimism}"
-FISCO_BIN="${FISCO_BIN:-/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/build/fisco-bcos-air/fisco-bcos}"
-OPGEN="${OPGEN:-/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/tools/opstack-genesis}"
-L2CONTRACTS="${L2CONTRACTS:-/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/bcos-l2-contracts}"
+FISCO_BIN="${FISCO_BIN:-/Users/octopus/octo/code/FISCO-BCOS/build/fisco-bcos-air/fisco-bcos}"
+OPGEN="${OPGEN:-/Users/octopus/octo/code/FISCO-BCOS/tools/opstack-genesis}"
+L2CONTRACTS="${L2CONTRACTS:-/Users/octopus/octo/code/FISCO-BCOS/bcos-l2-contracts}"
 
 # 端口(套件硬编码,勿改)
 ANVIL_PORT=8549; ANVIL_CHAIN=900900
@@ -142,9 +142,12 @@ req = urllib.request.Request('http://127.0.0.1:$ANVIL_PORT',
 d = json.loads(urllib.request.urlopen(req, timeout=10).read())
 print(int(d['result']['timestamp'], 16))
 ")
+  # artifact 时间戳必须是秒(Ethereum header 域);C++ NodeConfig→applyEthGenesisHeader
+  # 自己 ×1000 存内部毫秒。此处再 ×1000 会让 RPC 返回毫秒,op-node 排程序等待
+  # 时间戳到 year-58k(getPayload 永不触发)——见 2026-08-22 交接文档问题 E。
   python3 -c "
 import json
-json.dump({'timestamp': hex($L1_TS * 1000)}, open('$C2/header_override.json', 'w'))
+json.dump({'timestamp': hex($L1_TS)}, open('$C2/header_override.json', 'w'))
 "
   python3 "$OPGEN/gen_eth_header_fixture.py" --toml --allocs "$C2/allocs-new.ini" \
     "$C2/header_override.json" > "$C2/eth_genesis_header.ini" || die "gen_eth_header 失败"

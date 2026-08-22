@@ -370,6 +370,30 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
     {
         return e;
     }
+    // EIP-7702 yParity width guard: op-geth decodes yParity as a Go uint8 — an encoding wider
+    // than one byte is a decode rejection (Go rlp ErrCanonSize), and a bare 0x00 is
+    // non-canonical (integer zero must be the empty item 0x80). The generic UnsignedIntegral
+    // decode folds wider payloads via fromBigEndian (silent truncation), which would accept two
+    // encodings of the same tx — a block-hash ambiguity / consensus split vs op-geth. The
+    // 0x81 xx (xx<0x80) single-byte non-canonical form is already rejected by decodeHeader.
+    // Mirrors op-alignment's decodeAuthYParityScalar (readCanonicalScalar width=1).
+    if (in.empty())
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooShort, "Input data is too short");
+    }
+    if (in[0] == 0x00)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(DecodingError::NonCanonicalSize,
+            "Non-canonical authorization yParity: bare 0x00 (zero must be the empty item 0x80)");
+    }
+    if (in[0] >= 0x82)
+    {
+        // covers short-string headers promising >=2 payload bytes, long-string headers, and
+        // list headers (the generic decode would reject lists anyway, but with the wrong class
+        // of acceptance for wide scalars).
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::UnexpectedLength, "Authorization yParity wider than one byte");
+    }
     if (auto e = decode(in, out.yParity); e != nullptr)
     {
         return e;

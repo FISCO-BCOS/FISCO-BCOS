@@ -202,6 +202,11 @@ private:
     /// the OpBlockScheduler (which inherits OpSchedulerSeam's evmc::VM and holds the storage ref)
     /// stays alive for the whole Initializer lifetime.
     std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
+    /// OP-mode RPC block-number push setter: installs the callback into the concrete OpScheduler
+    /// (typed, not the SchedulerInterface base); commitBlock fires it after a VALID OP block
+    /// merges. Only set in OP mode (executor_version>=3).
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setOpSchedulerBlockNumberNotifier;
     /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
     /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
     /// FISCO system-contract deployment block applies (it does not for the ethereum executor).

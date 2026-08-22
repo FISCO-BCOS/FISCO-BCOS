@@ -428,6 +428,71 @@ BOOST_AUTO_TEST_CASE(testEIP7702Transaction)
     BOOST_CHECK_EQUAL(tx.sender(), "0x1a2e20b2fb1346f5751ec4d05f1964042f06c072");
 }
 
+// EIP-7702 authorization yParity is a uint8 on op-geth's side: an encoding wider than one byte
+// is a decode rejection there (Go rlp ErrCanonSize), while the generic UnsignedIntegral decode
+// would fold wider payloads via fromBigEndian — accepting two encodings of one tx, i.e. a
+// block-hash ambiguity / consensus split. Mirrors op-alignment's OverWideAuthYParity guard
+// (readCanonicalScalar width=1). The value-RANGE case (yParity in [2,255]) is deliberately NOT
+// rejected at decode — EIP-7702 requires the authorization to be *skipped* at execution.
+BOOST_AUTO_TEST_CASE(authYParityOverWideRejected)
+{
+    // Entry layout [chainId, address, nonce, yParity, r, s]; all other fields canonical zero /
+    // fixed address. yParity slot is swapped per case.
+    auto makeEntry = [](std::vector<bcos::byte> yParityEncoding) {
+        std::vector<bcos::byte> payload;
+        payload.push_back(0x80);  // chainId = 0
+        payload.push_back(0x94);  // address: 20-byte string
+        payload.insert(payload.end(), 20, 0x00);
+        payload.push_back(0x80);  // nonce = 0
+        payload.insert(payload.end(), yParityEncoding.begin(), yParityEncoding.end());
+        payload.push_back(0x80);  // r = 0
+        payload.push_back(0x80);  // s = 0
+        bcos::bytes entry;
+        entry.push_back(static_cast<bcos::byte>(0xc0 + payload.size()));
+        entry.insert(entry.end(), payload.begin(), payload.end());
+        return entry;
+    };
+    auto decodeEntry = [](bcos::bytes entry) {
+        auto in = bcos::ref(entry);
+        AuthorizationListEntry out{};
+        auto e = codec::rlp::decode(in, out);
+        return std::make_pair(std::move(e), out);
+    };
+
+    // Over-wide: 0x82 0x01 0x00 = RLP string with 2-byte payload (value 256) → rejected.
+    {
+        auto [e, out] = decodeEntry(makeEntry({0x82, 0x01, 0x00}));
+        BOOST_CHECK(e != nullptr);
+        if (e)
+        {
+            BOOST_CHECK(e->errorMessage().find("wider than one byte") != std::string::npos);
+        }
+    }
+    // Bare 0x00 is non-canonical (integer zero must be the empty item 0x80) → rejected.
+    {
+        auto [e, out] = decodeEntry(makeEntry({0x00}));
+        BOOST_CHECK(e != nullptr);
+    }
+    // Boundary: canonical single-item encodings still decode — 0x80 → 0, 0x01 → 1.
+    {
+        auto [e, out] = decodeEntry(makeEntry({0x80}));
+        BOOST_REQUIRE(e == nullptr);
+        BOOST_CHECK_EQUAL(out.yParity, 0);
+    }
+    {
+        auto [e, out] = decodeEntry(makeEntry({0x01}));
+        BOOST_REQUIRE(e == nullptr);
+        BOOST_CHECK_EQUAL(out.yParity, 1);
+    }
+    // Value-RANGE case: yParity=2 decodes fine (execution skips the authorization); only the
+    // encoding WIDTH is a decode error. Pins the width-vs-range boundary.
+    {
+        auto [e, out] = decodeEntry(makeEntry({0x02}));
+        BOOST_REQUIRE(e == nullptr);
+        BOOST_CHECK_EQUAL(out.yParity, 2);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(recoverAddress)
 {
     // clang-format off

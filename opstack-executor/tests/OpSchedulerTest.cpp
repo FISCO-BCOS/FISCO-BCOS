@@ -471,8 +471,8 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<detail::RecentBlockHashes<ViewType>> hashes;
-    bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor,
-        f.hashImpl, hashes, hashErr, daFootprintGasScalar);
+    bcos::evm::engine::preBlockOpSteps(
+        view, header, cfg, rawTxBytes, deposits, executor, hashes, hashErr, daFootprintGasScalar);
     bcos::executor_v1::opstack::OpBlockExecutionContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashes = &*hashes,
@@ -545,6 +545,17 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
         execErr == nullptr, "executeBlock failed: " << (execErr ? execErr->errorMessage() : ""));
     BOOST_REQUIRE(executedHeader != nullptr);
 
+    // O1 regression: the RPC block-number push channel. Install a counting notifier via the
+    // composition-root setter; it must fire exactly once, with the committed number, after a
+    // VALID commit (and must NOT have fired before commitBlock).
+    bcos::protocol::BlockNumber notifiedNumber = -1;
+    int notifyCount = 0;
+    f.scheduler->setBlockNumberNotifier([&](bcos::protocol::BlockNumber number) {
+        ++notifyCount;
+        notifiedNumber = number;
+    });
+    BOOST_CHECK_EQUAL(notifyCount, 0);
+
     bcos::Error::Ptr commitErr;
     called = false;
     f.scheduler->commitBlock(
@@ -555,6 +566,8 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     BOOST_REQUIRE(called);
     BOOST_REQUIRE_MESSAGE(commitErr == nullptr,
         "commitBlock failed: " << (commitErr ? commitErr->errorMessage() : ""));
+    BOOST_CHECK_EQUAL(notifyCount, 1);
+    BOOST_CHECK_EQUAL(notifiedNumber, header->number());
 
     // ── 7-table persistence assertions ──
     auto const blockNumberStr = boost::lexical_cast<std::string>(header->number());

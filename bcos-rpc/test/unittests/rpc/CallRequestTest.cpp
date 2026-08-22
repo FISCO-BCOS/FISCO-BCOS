@@ -270,4 +270,30 @@ BOOST_AUTO_TEST_CASE(callTxCarriesEnvelopeForOpPipeline)
     BOOST_CHECK(!tx2->extraTransactionBytes().empty());
 }
 
+// Ported from op-alignment's CallTxWithZeroGasUsesBlockGasLeft (audit O4), adapted to merged's
+// architecture: the zero-gas eth_call fallback lives HERE (CallRequest defaults an absent gas to
+// the 30M block-gas figure) instead of inside the executor. Regression for the phase-1 real-node
+// finding where eth_call reported "intrinsic gas too low": without this default, a gas-less call
+// reaches the executor with gasLimit 0 and fails evmone's intrinsic-gas validation.
+BOOST_AUTO_TEST_CASE(callTxWithoutGasDefaultsToBlockGasFigure)
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    CallRequest req;
+    req.from = "0x6afa9580383e6627da926b6f6ed9ab2b9c8cc693";
+    req.to = "0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1";
+    // req.gas deliberately unset — the eth_call default path.
+
+    auto tx = req.takeToTransaction(txFactory, nullptr);
+    BOOST_REQUIRE(tx != nullptr);
+    BOOST_CHECK_EQUAL(tx->gasLimit(), 30'000'000);
+    // An explicit gas still wins over the default.
+    req.gas = 21'000;
+    auto tx2 = req.takeToTransaction(txFactory, nullptr);
+    BOOST_CHECK_EQUAL(tx2->gasLimit(), 21'000);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

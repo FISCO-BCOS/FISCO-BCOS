@@ -1,15 +1,16 @@
 // OP payload builder: computes the transactionsRoot and blockHash the real node's
 // engine_newPayloadV3 will validate, given a raw deposit envelope + the payload's
 // header-relevant fields. Reuses the proven in-process machinery (computeOpTxRoot,
-// BlockHeaderImpl::encodeOpHeader) instead of re-deriving the trie/RLP by hand.
+// EthBlockHeader::computeHash) instead of re-deriving the trie/RLP by hand.
 //
 // Input  (argv[1], JSON): all header-relevant payload fields + the deposit envelope.
 // Output (stdout, JSON):  { transactionsRoot, blockHash }.
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
-#include <opstack-executor/OpEngineSeam.h>
+#include <opstack-executor/OpBlockExecute.h>
 #include <fstream>
 #include <iostream>
 
@@ -81,15 +82,15 @@ int main(int argc, char** argv)
     h.setParentBeaconBlockRoot(hexFixed<32>(in["parentBeaconBlockRoot"].asString()));
     h.setRequestsHash(hexFixed<32>(in["requestsHash"].asString()));
 
-    // 3. blockHash = keccak256(encodeOpHeader), with the 3 post-merge constants (byte-identical
-    //    to engine's detail::opHeaderConst + OpBlockSeal.h).
-    bcos::protocol::BlockHeader::OpHeaderConst c{
-        .ommersHash = bcos::h256{std::string{
-            "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}},
-        .difficulty = bcos::u256(0),
-        .nonce = bcos::h64{std::string{"0x0000000000000000"}},
-    };
-    const auto blockHash = h.opHeaderHash(c);
+    // 3. blockHash = keccak256(rlp(21-field header)) via EthBlockHeader::computeHash — the same
+    //    helper the engine itself validates against (EngineServiceImpl newPayload acceptance).
+    //    The 3 post-merge constants are pinned on the header first (byte-identical to the
+    //    engine's applyOpHeaderConstants): empty-uncles hash, difficulty 0, PoS nonce.
+    h.setUncleHash(bcos::h256{
+        std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}});
+    h.setDifficulty(bcos::u256(0));
+    h.setNonce(bcos::h64{std::string{"0x0000000000000000"}});
+    const auto blockHash = bcos::protocol::EthBlockHeader::computeHash(h);
 
     Json::Value out;
     out["transactionsRoot"] = "0x" + txRoot.hex();

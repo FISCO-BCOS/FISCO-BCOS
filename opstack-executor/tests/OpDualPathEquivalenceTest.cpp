@@ -222,12 +222,12 @@ bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& e
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     const int64_t number =
-        static_cast<int64_t>(w6test::jsonU64(jAt(env, "currentNumber").asString()));
+        static_cast<int64_t>(opstack_test::jsonU64(jAt(env, "currentNumber").asString()));
     h->setNumber(number);
     // FISCO tars store milliseconds; the vector currentTimestamp is in seconds (OP semantics).
     // toBlockInfo then /1000 restores seconds.
     h->setTimestamp(
-        static_cast<int64_t>(w6test::jsonU64(jAt(env, "currentTimestamp").asString()) * 1000));
+        static_cast<int64_t>(opstack_test::jsonU64(jAt(env, "currentTimestamp").asString()) * 1000));
     h->setGasLimit(jsonBcosU256(jAt(env, "currentGasLimit").asString()));
     h->setGasUsed(bcos::u256(0));
     h->setBaseFee(jsonBcosU256(jAt(env, "currentBaseFee").asString()));
@@ -262,18 +262,18 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
             const auto& d = jAt(t, "_op_deposit");
             op::DepositTx dep;
             dep.source_hash = detail::toEvmcBytes32(jsonH256(jAt(d, "source_hash").asString()));
-            dep.from = w6test::jsonAddress(jAt(d, "from").asString());
+            dep.from = opstack_test::jsonAddress(jAt(d, "from").asString());
             dep.to = jAt(d, "to").isNull() ?
                          std::nullopt :
-                         std::optional{w6test::jsonAddress(jAt(d, "to").asString())};
+                         std::optional{opstack_test::jsonAddress(jAt(d, "to").asString())};
             dep.mint = d.isMember("mint") ?
-                           std::optional{w6test::jsonU256(jAt(d, "mint").asString())} :
+                           std::optional{opstack_test::jsonU256(jAt(d, "mint").asString())} :
                            std::nullopt;
-            dep.value = d.isMember("value") ? w6test::jsonU256(jAt(d, "value").asString()) :
+            dep.value = d.isMember("value") ? opstack_test::jsonU256(jAt(d, "value").asString()) :
                                               intx::uint256{0};
-            dep.gas_limit = static_cast<int64_t>(w6test::jsonU64(jAt(d, "gas").asString()));
+            dep.gas_limit = static_cast<int64_t>(opstack_test::jsonU64(jAt(d, "gas").asString()));
             dep.is_system_tx = jAt(d, "is_system_tx").asBool();
-            dep.data = w6test::jsonBytes(jAt(t, "data").asString());
+            dep.data = opstack_test::jsonBytes(jAt(t, "data").asString());
             rawTxBytes.push_back(encodeDepositEnvelope(dep));
         }
         else
@@ -342,25 +342,25 @@ void checkSysTripwire(const std::string& id, const JsonValue& vec)
         {
             if (j.isMember(k) && !j[k].isNull())
                 tables.insert(
-                    bcos::evm::evmstate::accountTableName(w6test::jsonAddress(j[k].asString())));
+                    bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(j[k].asString())));
         }
     };
     if (vec.isMember("pre"))
     {
         for (const auto& a : vec["pre"].getMemberNames())
-            tables.insert(bcos::evm::evmstate::accountTableName(w6test::jsonAddress(a)));
+            tables.insert(bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(a)));
     }
     if (vec.isMember("postState"))
     {
         for (const auto& a : vec["postState"].getMemberNames())
-            tables.insert(bcos::evm::evmstate::accountTableName(w6test::jsonAddress(a)));
+            tables.insert(bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(a)));
     }
     if (vec.isMember("env"))
     {
         const auto& cb = vec["env"]["currentCoinbase"];
         if (cb.isString())
             tables.insert(
-                bcos::evm::evmstate::accountTableName(w6test::jsonAddress(cb.asString())));
+                bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(cb.asString())));
     }
     if (vec.isMember("block") && vec["block"].isMember("transactions"))
     {
@@ -600,7 +600,7 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     sample.jovian = jovian;
     try
     {
-        w6test::seedPreState(fixture.multiLayerStorage, vec["pre"]);
+        opstack_test::seedPreState(fixture.multiLayerStorage, vec["pre"]);
     }
     catch (const std::exception& e)
     {
@@ -669,7 +669,7 @@ void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixtur
         const auto& blk = blocks[static_cast<Json::ArrayIndex>(i)];
         const std::string bid = id + "[" + std::to_string(i) + "]";
         if (blk.isMember("pre") && !blk["pre"].isNull())
-            w6test::seedPreState(fixture.multiLayerStorage, blk["pre"]);
+            opstack_test::seedPreState(fixture.multiLayerStorage, blk["pre"]);
         const auto header = buildHeaderFromEnv(jAt(blk, "env"));
         const auto rawTxBytes = buildRawTxBytes(blk, bid);
         fillAnnouncedHeaderFromGolden(header, blk, rawTxBytes);

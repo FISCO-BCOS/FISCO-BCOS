@@ -121,14 +121,17 @@ BOOST_AUTO_TEST_CASE(FirstMismatchWinsMidField)
     BOOST_CHECK_EQUAL(*mismatchedFieldOf(c, a), "gasUsed");  // mid-field order pinned
 }
 
-BOOST_AUTO_TEST_CASE(BlobGasUsedComparedOnlyWhenComputedHasValue)
+BOOST_AUTO_TEST_CASE(BlobGasUsedPresenceAsymmetryIsMismatch)
 {
-    // computed nullopt + announced value → SKIP (pre-Jovian real path: seal.blobGasUsed nullopt,
-    // payload.blobGasUsed=0).
+    // Deliberate strict semantic (OpCommitments.h mismatchedFieldOf): presence asymmetry between
+    // computed and announced is REPORTED as a mismatch — fork-config divergence between the peers
+    // must be loud, never silently passed. (The real pre-Jovian path — seal leaves blobGasUsed
+    // nullopt while the payload always carries 0 — is normalized upstream of the comparison: the
+    // seal copies the announced value onto the executed header, so both sides present 0.)
     C c = match();
     C a = match();
     a.blobGasUsed = 1;
-    BOOST_CHECK(!mismatchedFieldOf(c, a).has_value());
+    BOOST_CHECK_EQUAL(*mismatchedFieldOf(c, a), "blobGasUsed");
 
     // computed value + announced value different → compare
     C c2 = match();
@@ -145,12 +148,13 @@ BOOST_AUTO_TEST_CASE(BlobGasUsedComparedOnlyWhenComputedHasValue)
     BOOST_CHECK(!mismatchedFieldOf(c3, a3).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(RequestsHashComparedOnlyWhenComputedHasValue)
+BOOST_AUTO_TEST_CASE(RequestsHashPresenceAsymmetryIsMismatch)
 {
+    // Same strict-presence semantic as blobGasUsed (see above).
     C c = match();
     C a = match();
     a.requestsHash = bcos::h256{};
-    BOOST_CHECK(!mismatchedFieldOf(c, a).has_value());  // computed nullopt → SKIP
+    BOOST_CHECK_EQUAL(*mismatchedFieldOf(c, a), "requestsHash");
 
     C c2 = match();
     C a2 = match();
