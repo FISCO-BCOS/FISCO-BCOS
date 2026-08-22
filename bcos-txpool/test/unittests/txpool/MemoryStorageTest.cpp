@@ -107,6 +107,9 @@ struct MemoryStorageFixture
         tx->mutableInner().sender.assign(senderBytes.begin(), senderBytes.end());
         HashType txHash = HashType::generateRandomFixedBytes();
         tx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
+        // Set extraTransactionBytes to a valid EIP-1559 (0x02) payload so the OP Stack type
+        // gate does not reject the transaction as Unsupported.
+        tx->mutableInner().extraTransactionBytes.assign({0x02});
         tx->setSealed(sealed);
         // No calculateHash() here: this fabricated tx has no signing preimage/signature, and
         // since FIB-New1 the Web3 branch of calculateHash() unconditionally recomputes the
