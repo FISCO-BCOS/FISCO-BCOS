@@ -45,8 +45,10 @@ public:
         const std::map<evmc::bytes32, evmc::bytes32>& storage;
 
         /// Lazily returns the account's code bytes; only invoked by visitors that actually need
-        /// the code (e.g. debugging/export), not by state-root computation.
-        [[nodiscard]] const evmc::bytes& code() const noexcept { return m_code; }
+        /// the code (e.g. debugging/export), not by state-root computation. Returns by value to
+        /// mirror Storage2State::AccountView::code() — a generic visitor must work against
+        /// either backend unchanged.
+        [[nodiscard]] evmc::bytes code() const noexcept { return m_code; }
 
         const evmc::bytes& m_code;
     };
@@ -80,11 +82,20 @@ public:
     {
         for (const auto& [addr, account] : m_accounts)
         {
+            // Zero-valued slots are normalized away (zero ≡ nonexistent, matching
+            // Storage2State's read path) even when seeded raw via accounts() — otherwise the two
+            // backends would disagree on the same logical state.
+            std::map<evmc::bytes32, evmc::bytes32> liveStorage;
+            for (const auto& [key, value] : account.storage)
+            {
+                if (!evmc::is_zero(value))
+                    liveStorage.emplace(key, value);
+            }
             const AccountView view{.addr = addr,
                 .nonce = account.nonce,
                 .balance = account.balance,
                 .codeHash = evmone::keccak256(account.code),
-                .storage = account.storage,
+                .storage = liveStorage,
                 .m_code = account.code};
             if (!visitor(view))
                 return false;
@@ -92,7 +103,10 @@ public:
         return true;
     }
 
-    /// Direct access to the underlying account map, for test/seed callers.
+    /// Direct access to the underlying account map, for test/seed callers. Contract ② still
+    /// applies on the read side: a zero-valued slot seeded here is normalized away by
+    /// get_account's has_storage computation and by visitAccounts (zero ≡ nonexistent, as in
+    /// Storage2State), so seeding zero slots is pointless but harmless.
     [[nodiscard]] std::map<evmc::address, StateAccount>& accounts() noexcept { return m_accounts; }
 
 private:

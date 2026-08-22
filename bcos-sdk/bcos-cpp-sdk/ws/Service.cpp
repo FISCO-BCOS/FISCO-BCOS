@@ -27,6 +27,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/thread/thread.hpp>
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <type_traits>
 #include <utility>

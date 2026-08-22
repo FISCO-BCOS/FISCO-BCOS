@@ -23,10 +23,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
-#include <boost/algorithm/string/classification.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/property_tree/ini_parser.hpp>
 
 using namespace bcos::boostssl::context;
 

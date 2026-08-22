@@ -4,13 +4,11 @@
 
 #include "state.hpp"
 #include "../Eip7702Recover.h"
-#include "../utils/stdx/utility.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
 #include <algorithm>
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
-#include <evmone_precompiles/secp256k1.hpp>
 
 using namespace intx;
 

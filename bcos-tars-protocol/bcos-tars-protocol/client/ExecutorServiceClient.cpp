@@ -17,11 +17,6 @@
  * @author: yujiechen
  * @date 2022-5-9
  */
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/view/join.hpp>
-#include <range/v3/view/all.hpp>
-#include <range/v3/view/subrange.hpp>
-#include <range/v3/algorithm/copy.hpp>
 #include "ExecutorServiceClient.h"
 #include "../Common.h"
 #include "../ErrorConverter.h"
@@ -35,7 +30,8 @@ template <typename... Args>
 class AsyncCallback
 {
 public:
-    AsyncCallback(std::weak_ptr<bcos::IOServicePool> threadPool, std::function<void(Args...)> callback)
+    AsyncCallback(
+        std::weak_ptr<bcos::IOServicePool> threadPool, std::function<void(Args...)> callback)
       : m_pool(threadPool), m_callback(std::move(callback))
     {}
 
@@ -46,8 +42,8 @@ public:
         {
             // m_callback(std::move(args)...);
             pool->post([callback = std::move(m_callback),
-                              m_args = std::make_shared<std::tuple<Args...>>(
-                                  std::make_tuple(std::forward<Args>(args)...))]() mutable {
+                           m_args = std::make_shared<std::tuple<Args...>>(
+                               std::make_tuple(std::forward<Args>(args)...))]() mutable {
                 std::apply(callback, std::move(*m_args));
             });
         }
@@ -646,9 +642,8 @@ void ExecutorServiceClient::updateEoaNonce(std::unordered_map<std::string, bcos:
 {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented"));
 }
-bcostars::ExecutorServiceClient::ExecutorServiceClient(ExecutorServicePrx _prx,
-    bcos::IOServicePool::Ptr ioServicePool)
-  : m_prx(_prx),
-    m_callbackPool(std::move(ioServicePool))
+bcostars::ExecutorServiceClient::ExecutorServiceClient(
+    ExecutorServicePrx _prx, bcos::IOServicePool::Ptr ioServicePool)
+  : m_prx(_prx), m_callbackPool(std::move(ioServicePool))
 {}
 bcostars::ExecutorServiceClient::~ExecutorServiceClient() {}

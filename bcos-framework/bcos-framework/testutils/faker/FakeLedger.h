@@ -260,11 +260,14 @@ public:
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
         std::optional<bcos::ledger::Features> features,
-        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
-        bool writeNonces = true) override
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
     {
         (void)storage;
         (void)block;
+        (void)writeTxsAndReceipts;
+        (void)features;
+        (void)blockHashOverride;
+        (void)writeNonces;
         callback("", nullptr);
     }
 
@@ -548,6 +551,14 @@ public:
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override
     {
         co_return m_features;
+    }
+
+    // Single-flag read mirrors the injected feature set, so the historical state-read path
+    // (ledger::getFeature) agrees with the test's setFeatures() injection.
+    task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag _flag, protocol::BlockNumber) override
+    {
+        co_return m_features.get(_flag);
     }
 
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,

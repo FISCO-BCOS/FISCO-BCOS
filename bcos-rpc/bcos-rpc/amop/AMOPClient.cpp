@@ -21,9 +21,7 @@
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 
 #include "AMOPClient.h"
-#include "bcos-tars-protocol/Common.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <bcos-framework/gateway/GatewayTypeDef.h>
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-protocol/amop/TopicItem.h>
 #include <bcos-rpc/Common.h>
@@ -43,8 +41,7 @@ void AMOPClient::initMsgHandler()
             std::shared_ptr<boostssl::ws::WsSession> _session) {
             onRecvSubTopics(std::move(_msg), std::move(_session));
         });
-    m_wsService->registerMsgHandler(
-        AMOPClientMessageType::AMOP_REQUEST,
+    m_wsService->registerMsgHandler(AMOPClientMessageType::AMOP_REQUEST,
         [this](std::shared_ptr<boostssl::MessageFace> _msg,
             std::shared_ptr<boostssl::ws::WsSession> _session) {
             onRecvAMOPRequest(std::move(_msg), std::move(_session));
@@ -166,8 +163,7 @@ void AMOPClient::onRecvAMOPRequest(
                     std::dynamic_pointer_cast<bcos::boostssl::ws::WsMessage>(responseMsg)
                         ->setStatus(errorCode);
                     // constructor the response
-                    responseMsg->setPayload(
-                        bcos::bytes(errorMsg.begin(), errorMsg.end()));
+                    responseMsg->setPayload(bcos::bytes(errorMsg.begin(), errorMsg.end()));
                     // recover the seq
                     responseMsg->setSeq(orgSeq);
                     AMOP_CLIENT_LOG(ERROR)

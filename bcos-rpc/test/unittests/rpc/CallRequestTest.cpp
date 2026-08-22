@@ -9,9 +9,8 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
-#include <json/json.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
 

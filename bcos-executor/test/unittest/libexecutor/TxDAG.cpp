@@ -21,8 +21,6 @@
 
 #include "TxDAG.h"
 #include "bcos-executor/src/dag/CriticalFields.h"
-#include <tbb/parallel_for.h>
-#include <map>
 
 using namespace bcos;
 using namespace bcos::executor;

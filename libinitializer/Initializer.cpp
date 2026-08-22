@@ -1796,6 +1796,29 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 
+std::function<
+    std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+Initializer::stateStorageProvider()
+{
+    if (!m_globalStateStorageInitializer)
+    {
+        return {};
+    }
+    // Captures a shared_ptr (not `this`): the provider outlives this Initializer's
+    // stateStorageProvider() call by design (it rides on the RPC NodeService), and the
+    // GlobalStateStorageInitializer owns the storage the forked views borrow.
+    auto storageInitializer = m_globalStateStorageInitializer;
+    return [storageInitializer]() {
+        // COMMITTED plane per request: a fresh view over cache -> committed backend, with
+        // NO in-flight pending layers. eth_getStorageAt("latest") must observe the same
+        // plane as getBalance / getTransactionCount / getCode (committed ledger /
+        // scheduler) — Ethereum's "latest = last committed block". A fork() view (which
+        // exposes in-flight uncommitted layers) stays available as an explicit opt-in for
+        // operators who want the pending window visible.
+        return forkCommittedStateView(storageInitializer->storage());
+    };
+}
+
 std::string Initializer::getConsensusStorageDBPath(bool _airVersion) const
 {
     std::string consensusStorageDBPath =

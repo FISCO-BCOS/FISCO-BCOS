@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "MemoryState.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace bcos::evm::evmstate
@@ -15,9 +16,11 @@ std::optional<MemoryState::Account> MemoryState::get_account(
 
     const auto& account = it->second;
     // KEEP: a present-but-empty account still returns a value; has_storage's dynamic semantics
-    // align with TestState.
-    return Account{
-        account.nonce, account.balance, evmone::keccak256(account.code), !account.storage.empty()};
+    // align with TestState. Zero-valued slots (possible via raw accounts() seeding) do not count
+    // as live storage — zero ≡ nonexistent, matching Storage2State's probeHasStorage.
+    const bool hasStorage = std::any_of(account.storage.begin(), account.storage.end(),
+        [](const auto& kv) { return !evmc::is_zero(kv.second); });
+    return Account{account.nonce, account.balance, evmone::keccak256(account.code), hasStorage};
 }
 
 evmc::bytes MemoryState::get_account_code(const evmc::address& addr) const noexcept

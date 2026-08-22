@@ -88,8 +88,11 @@ RunWithAuthResult runWithAuth(
     BOOST_CHECK(std::holds_alternative<OpTxProperties>(v));
     if (!std::holds_alternative<OpTxProperties>(v))
     {
-        // 返回失败 receipt 以免崩溃，由调用方 BOOST_CHECK 捕获
-        return RunWithAuthResult{nullptr, {}};
+        // 返回失败 receipt 以免崩溃，由调用方 BOOST_CHECK 捕获（与 base 的静态空 receipt
+        // 守卫同形态）：status=1 使调用方的 BOOST_REQUIRE_EQUAL(r.receipt->status(), 0)
+        // 干净失败而不是解引用 nullptr。
+        auto failed = kOpTestReceiptFactory->createReceipt2(0, "", {}, 1, {}, 0);
+        return RunWithAuthResult{std::move(failed), {}};
     }
     const auto& props = std::get<OpTxProperties>(v);
     evmone::state::StateDiff diff;
@@ -232,6 +235,9 @@ BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_nonce5),
         .v = intx::uint256{kV_nonce5}};
     const auto r = runWithAuth(ts, vm, auth);
+    // 交易本身必须成功（nonce 不匹配只 skip 该条 authorization）——否则"无委托"断言会把
+    // opValidate 拒绝交易（status=1 空 diff 兜底 receipt）误判为"正确跳过"。
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // kAuthority 不应有委托代码，nonce 不应被 bump
@@ -265,6 +271,9 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/1);
+    // 交易本身必须成功（chain_id 不匹配只 skip 该条 authorization）——否则"无委托"断言
+    // 会把 opValidate 拒绝交易误判为"正确跳过"。
+    BOOST_REQUIRE_EQUAL(r.receipt->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, r.diff);
 
     // 必须全量扫描，不能只看 kAuthority：chain_id=999 时签名恢复出的是另一个（垃圾）地址，
@@ -324,8 +333,8 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1, kOpTestReceiptFactory, diff);
 
     // 委托调用应成功执行 kDelegate 代码；SSTORE 在 authority 上下文中落槽
     BOOST_CHECK_EQUAL(txR->status(), 0);

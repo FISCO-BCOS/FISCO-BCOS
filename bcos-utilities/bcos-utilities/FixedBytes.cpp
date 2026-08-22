@@ -19,7 +19,6 @@
  */
 
 #include "FixedBytes.h"
-#include <boost/algorithm/string.hpp>
 
 namespace bcos
 {

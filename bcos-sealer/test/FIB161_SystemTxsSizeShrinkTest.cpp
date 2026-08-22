@@ -29,7 +29,6 @@
 
 #include "bcos-sealer/SealingManager.h"
 #include <boost/test/unit_test.hpp>
-#include <tuple>
 
 using bcos::sealer::detail::c_maxSysTxsPerBlock;
 using bcos::sealer::detail::computeAssemblyPlan;

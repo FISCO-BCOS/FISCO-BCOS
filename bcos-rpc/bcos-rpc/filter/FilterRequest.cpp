@@ -21,12 +21,12 @@
 #include "bcos-rpc/filter/Common.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/util.h"
-#include <boost/exception/diagnostic_information.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
 
-void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber latest)
+void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber latest,
+    protocol::BlockNumber safeDepth, protocol::BlockNumber finalizedDepth)
 {
     // check params
     if (!jParams.isMember("fromBlock") || jParams["fromBlock"].isNull())
@@ -55,10 +55,11 @@ void FilterRequest::fromJson(const Json::Value& jParams, protocol::BlockNumber l
 
     // prase fromBlock
     std::tie(m_fromBlock, m_fromIsLatest) =
-        getBlockNumberByTag(latest, jParams["fromBlock"].asString());
+        getBlockNumberByTag(latest, jParams["fromBlock"].asString(), safeDepth, finalizedDepth);
 
     // prase toBlock
-    std::tie(m_toBlock, m_toIsLatest) = getBlockNumberByTag(latest, jParams["toBlock"].asString());
+    std::tie(m_toBlock, m_toIsLatest) =
+        getBlockNumberByTag(latest, jParams["toBlock"].asString(), safeDepth, finalizedDepth);
 
     // prase address
     auto& jAddresses = jParams["address"];

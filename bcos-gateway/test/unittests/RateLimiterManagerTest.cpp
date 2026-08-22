@@ -21,11 +21,10 @@
 
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
+#include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/filesystem.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -179,12 +178,14 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
 
-    BOOST_CHECK(rateLimiterManager
+    BOOST_CHECK(
+        rateLimiterManager
             ->registerRateLimiter("192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
             .first);
     BOOST_CHECK(!rateLimiterManager
-            ->registerRateLimiter("192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
-            .first);
+                     ->registerRateLimiter(
+                         "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
+                     .first);
 
     BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") != nullptr);
     BOOST_CHECK(rateLimiterManager->removeRateLimiter("192.108.0.0"));
@@ -289,17 +290,17 @@ void checkGroupRateLimiterConfig(const std::shared_ptr<GatewayConfig>& config,
     BOOST_CHECK(rateLimiterManager->removeRateLimiter("group2"));
     BOOST_CHECK(!rateLimiterManager->removeRateLimiter("group2"));
     BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
-    BOOST_CHECK(!rateLimiterManager
-            ->registerRateLimiter("group2", rateLimiterFactory->buildTimeWindowRateLimiter(10))
-            .first);
+    BOOST_CHECK(
+        !rateLimiterManager
+             ->registerRateLimiter("group2", rateLimiterFactory->buildTimeWindowRateLimiter(10))
+             .first);
     BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
     BOOST_CHECK(rateLimiterManager->removeRateLimiter("group2"));
     BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
 
     // 分支：重新构建rateLimiterManager，检查TimeWindowRateLimiter
     {
-        auto rateLimiterManager2 =
-            gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+        auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
         auto rateLimiter0 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
             rateLimiterManager2->getGroupRateLimiter("group0"));
         BOOST_CHECK_EQUAL(rateLimiter0->maxPermitsSize(), timeWindowSec * config->doubleMBToBit(2));
@@ -334,26 +335,28 @@ void checkConnRateLimiterConfig(const std::shared_ptr<GatewayConfig>& config,
     BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
 
     BOOST_CHECK(!rateLimiterManager
-            ->registerRateLimiter("192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
-            .first);
+                     ->registerRateLimiter(
+                         "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
+                     .first);
     BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
     BOOST_CHECK(!rateLimiterManager
-            ->registerRateLimiter("192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
-            .first);
+                     ->registerRateLimiter(
+                         "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
+                     .first);
 
     BOOST_CHECK(rateLimiterManager->removeRateLimiter("192.108.0.2"));
     BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
     BOOST_CHECK(rateLimiterManager->removeRateLimiter("192.108.0.2"));
 
-    BOOST_CHECK(rateLimiterManager
+    BOOST_CHECK(
+        rateLimiterManager
             ->registerRateLimiter("192.108.0.2", rateLimiterFactory->buildTimeWindowRateLimiter(10))
             .first);
     BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
 
     // 分支：重新构建rateLimiterManager，检查TimeWindowRateLimiter
     {
-        auto rateLimiterManager2 =
-            gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+        auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
         auto rateLimiter0 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
             rateLimiterManager2->getConnRateLimiter("192.108.0.1"));
         BOOST_CHECK_EQUAL(rateLimiter0->maxPermitsSize(), timeWindowSec * config->doubleMBToBit(1));
@@ -420,8 +423,7 @@ void checkInRateLimiterConfig(const std::shared_ptr<GatewayConfig>& config,
 
     // 分支：重新构建rateLimiterManager，检查inRateLimiter
     {
-        auto rateLimiterManager2 =
-            gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
+        auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig);
         BOOST_CHECK(rateLimiterConfig.allowExceedMaxPermitSize);
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());

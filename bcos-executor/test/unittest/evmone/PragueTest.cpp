@@ -22,7 +22,6 @@
 #include "vm/Precompiled.h"
 #include <Common.h>
 #include <boost/test/unit_test.hpp>
-#include <algorithm>
 #include <vector>
 
 namespace bcos::test

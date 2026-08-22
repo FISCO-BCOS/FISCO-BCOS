@@ -162,7 +162,7 @@ BOOST_AUTO_TEST_CASE(strandAndPostAreIndependent)
 
     // Wait for completion.
     for (int timeout = 0; timeout < 100 && (strandDone.load() < N || postDone.load() < N);
-        ++timeout)
+         ++timeout)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

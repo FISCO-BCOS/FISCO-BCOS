@@ -24,17 +24,15 @@
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FileUtility.h>
 #include <jwt-cpp/traits/kazuho-picojson/defaults.h>
-#include <boost/algorithm/string.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
-#include <atomic>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -46,8 +44,7 @@ std::string buildJwt(std::string_view _alg, std::optional<std::string> _typ,
     std::string_view _secretHex)
 {
     auto secretBytes = fromHex(std::string(_secretHex));
-    std::string secret(
-        reinterpret_cast<const char*>(secretBytes.data()), secretBytes.size());
+    std::string secret(reinterpret_cast<const char*>(secretBytes.data()), secretBytes.size());
     auto builder = ::jwt::create().set_algorithm(std::string(_alg));
     if (_typ.has_value())
     {
@@ -55,8 +52,8 @@ std::string buildJwt(std::string_view _alg, std::optional<std::string> _typ,
     }
     if (_iat.has_value())
     {
-        builder.set_issued_at(std::chrono::system_clock::time_point{std::chrono::seconds{
-            _iat.value()}});
+        builder.set_issued_at(
+            std::chrono::system_clock::time_point{std::chrono::seconds{_iat.value()}});
     }
     if (_id.has_value())
     {
@@ -73,9 +70,8 @@ std::string buildJwt(std::string_view _alg, std::optional<std::string> _typ,
 // This helper is used to test that the verifier rejects alg:none tokens.
 std::string buildJwtNone()
 {
-    auto header = ::jwt::builder<::jwt::traits::kazuho_picojson>()
-                      .set_algorithm("none")
-                      .set_type("JWT");
+    auto header =
+        ::jwt::builder<::jwt::traits::kazuho_picojson>().set_algorithm("none").set_type("JWT");
     auto token = header.sign(::jwt::algorithm::none{});
     // Replace signature part with empty (jwt-cpp's none algorithm may leave a signature)
     auto dotPos = token.rfind('.');
@@ -96,9 +92,8 @@ std::string writeSecretFile(std::string const& _hexSecret)
     auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch())
                   .count();
-    auto path = tempDir /
-                ("fisco-bcos-jwt-secret-" + std::to_string(ns) + "-" +
-                    std::to_string(counter.fetch_add(1)) + ".hex");
+    auto path = tempDir / ("fisco-bcos-jwt-secret-" + std::to_string(ns) + "-" +
+                              std::to_string(counter.fetch_add(1)) + ".hex");
     std::ofstream ofs(path);
     ofs << _hexSecret;
     ofs.close();
@@ -135,9 +130,8 @@ BOOST_AUTO_TEST_CASE(testJwtVerifierSuccess)
     config->setAllowedAlgorithms("HS256");
 
     JwtVerifier verifier(config);
-    auto jwt = buildJwt("HS256", "JWT", static_cast<int64_t>(utcTime() / 1000), "client1",
-        "1.0",
-        secretHex);
+    auto jwt = buildJwt(
+        "HS256", "JWT", static_cast<int64_t>(utcTime() / 1000), "client1", "1.0", secretHex);
 
     auto result = verifier.verify("Bearer " + jwt);
     BOOST_CHECK(result);
@@ -313,16 +307,16 @@ BOOST_AUTO_TEST_CASE(testJwtVerifierConcurrent)
     config->setAllowedAlgorithms("HS256");
 
     JwtVerifier verifier(config);
-    auto validJwt = buildJwt("HS256", "JWT", static_cast<int64_t>(utcTime() / 1000), "client1",
-        "1.0", secretHex);
+    auto validJwt = buildJwt(
+        "HS256", "JWT", static_cast<int64_t>(utcTime() / 1000), "client1", "1.0", secretHex);
     auto invalidJwt = buildJwt("HS256", "JWT", static_cast<int64_t>(utcTime() / 1000), std::nullopt,
         std::nullopt, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
     // Sanity check the invalid token alone first.
     {
         auto sanity = verifier.verify("Bearer " + invalidJwt);
-        BOOST_TEST_MESSAGE("sanity invalidJwt ok=" << sanity.ok
-                                                  << " error=" << static_cast<int>(sanity.error));
+        BOOST_TEST_MESSAGE(
+            "sanity invalidJwt ok=" << sanity.ok << " error=" << static_cast<int>(sanity.error));
         BOOST_CHECK(!sanity.ok);
         BOOST_CHECK_EQUAL(sanity.error, JwtError::InvalidSignature);
     }

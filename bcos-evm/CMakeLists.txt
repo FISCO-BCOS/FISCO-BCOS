@@ -5,6 +5,9 @@ if(NOT DEFINED PROJECT_NAME)
 else()
     set(BCOS_EVM_STANDALONE OFF)
 endif()
+if(NOT BCOS_EVM_STANDALONE)
+    set(BCOS_EVM_STATE_ROOT_SOURCES bcos-evm/adapter/StateRootCompute.cpp)
+endif()
 
 project(bcos-evm LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
@@ -58,16 +61,13 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    # StateRootCompute 是状态根引擎（AccountVisitor 建根，用 FISCO bcos-ledger/mpt
-    # computeTrieRoot，不再依赖 evmone 的 MPT/mpt_hash）。
-    # MemoryState（自研内存账本，evmone test_state 的替换品）已移到 bcos-evm/test/testutils/。
-    bcos-evm/adapter/StateRootCompute.cpp
+    ${BCOS_EVM_STATE_ROOT_SOURCES}
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
-    # rlp_encode: removed from the production lib (zero production callers, grep+nm verified).
-    # Its only consumer is OpReceiptEncodeTest (ADL into evmone::state::rlp_encode), now compiled
-    # directly in the opstack-executor test target (opstack-executor/tests/CMakeLists.txt).
+    # rlp_encode: removed from the production lib (zero production callers). Its only consumer
+    # was OpReceiptEncodeTest (ADL into evmone::state::rlp_encode), removed with the retired
+    # OpReceipt.h; the receiptsRoot leaf encoding returns with block-seal wiring (part 3).
     #
     # DEBT(eth-utils-removal): test_state is evmone's in-memory test ledger; all 11 reference
     # points are under bcos-evm/test/, and neither production lib references it (nm-verified),
@@ -95,14 +95,10 @@ target_include_directories(bcos-evm-eth PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
 # 自研建根(替代退役 evmone mpt/mpt_hash):StateRootCompute.h 用 bcos-codec RLP + bcos-ledger
-# computeTrieRoot。`codec` 仅 in-tree 存在;`ledger` 由顶层 add_subdirectory(bcos-ledger) 提供
-# (在 bcos-evm 之后,目标引用在 generate 期解析)。
-if(TARGET codec)
-    target_link_libraries(bcos-evm-eth PUBLIC codec)
-endif()
-target_link_libraries(bcos-evm-eth PUBLIC ledger)
-target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_SOURCE_DIR}/bcos-ledger)
-
+# computeTrieRoot。codec/ledger 均用 genex 解析(standalone 为空)；bcos-ledger 的头路径由
+# ledger 目标的 PUBLIC include 传递（BUILD_INTERFACE 指向 <repo>/bcos-ledger），无需单独
+# 添加——且 standalone 下 CMAKE_SOURCE_DIR 指向 bcos-evm 自身，该路径并不存在。
+target_link_libraries(bcos-evm-eth PUBLIC $<$<TARGET_EXISTS:codec>:codec> $<$<TARGET_EXISTS:ledger>:ledger>)
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
 # （cmake/CompilerSettings.cmake），AppleClang 对上游代码报 missing-field-initializers。
 # vendored 代码不受本仓告警策略约束——抑制仅限移植源文件，FISCO 自有代码保持全 -Werror。
@@ -117,22 +113,25 @@ set_source_files_properties(
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 
-add_library(bcos-evm-opstack STATIC
-    bcos-evm/opstack/OpForkSchedule.cpp
-    bcos-evm/opstack/OpHost.cpp
-    bcos-evm/opstack/OpPrecompiles.cpp
-    bcos-evm/opstack/OpFeeParams.cpp
-    bcos-evm/opstack/RollupCost.cpp
-    bcos-evm/opstack/OpTransition.cpp)
-add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
-target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    # kyonRay review #5429 K5: OP modules deliberately use skipped-field designated initializers
-    # and GCC-13 reference-returning helpers; downgrade only here, not repository-wide (the global
-    # -Wmissing-field-initializers detector stays active for all non-OP modules).
-    target_compile_options(bcos-evm-opstack PRIVATE
-        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+# opstack 库依赖 bcos-framework（OpTransition 投影到框架 receipt），standalone 不可编译——
+# 仅 FULLNODE 集成构建包含。
+if(NOT BCOS_EVM_STANDALONE)
+    add_library(bcos-evm-opstack STATIC
+        bcos-evm/opstack/OpForkSchedule.cpp
+        bcos-evm/opstack/OpHost.cpp
+        bcos-evm/opstack/OpPrecompiles.cpp
+        bcos-evm/opstack/OpFeeParams.cpp
+        bcos-evm/opstack/RollupCost.cpp
+        bcos-evm/opstack/OpTransition.cpp)
+    add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
+    target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth bcos-framework)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        # OP modules use skipped-field designated initializers and GCC-13 reference-returning
+        # helpers; downgrade only here (global -Wmissing-field-initializers stays active).
+        target_compile_options(bcos-evm-opstack PRIVATE
+            -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+    endif()
 endif()
 
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；

@@ -60,9 +60,8 @@ BOOST_AUTO_TEST_CASE(RejectsBlobTx)
 // 判断时 0x7E 会静默穿过全部 revision 门控、被当作 legacy 通过校验。
 //
 // 后果一路错到共识字段：opTransition 会为它买 gas、收 L1 与 operator 费、强制 nonce（deposit
-// 三者都不该有），并产出 OpTxReceipt——其 encodeReceiptForRoot 只编码
-// [status, cumGas, bloom, logs]，缺失 deposit_nonce / deposit_receipt_version，对一笔标记为
-// 0x7E 的交易而言就是错误的 receipts-root 叶子。
+// 三者都不该有），并产出缺失 deposit_nonce / deposit_receipt_version 语义的回执——对一笔
+// 标记为 0x7E 的交易而言就是错误的 receipts-root 叶子（deposit 必须走 runDeposit 专用路径）。
 //
 // 用非零 envelope + 充足余额，确保拒因只可能来自类型判断本身，而不是空 envelope 或余额不足。
 BOOST_AUTO_TEST_CASE(RejectsDepositTxOnTheNonDepositPath)

@@ -21,25 +21,15 @@
 
 #include "../common/RPCFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/engine/AnyEngineService.h>
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
-#include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
-#include <bcos-rpc/tarsRPC/RPCServer.h>
-#include <bcos-rpc/validator/CallValidator.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -565,11 +555,13 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     auto const expectedLargeValue = fromBigQuantity(largeQuantity);
     auto const logsBloom = "0x" + std::string(BloomBytesSize * 2, '0');
 
+    // Karst surface (B4): the wire dialect is newPayloadV4 (payload with withdrawalsRoot,
+    // plus blob hashes / beacon root / executionRequests params) and getPayloadV5.
     std::string newPayloadRequest =
-        R"({"jsonrpc":"2.0","id":8,"method":"engine_newPayloadV2","params":[{"parentHash":"0x1111111111111111111111111111111111111111111111111111111111111111","feeRecipient":"0x2222222222222222222222222222222222222222","stateRoot":"0x3333333333333333333333333333333333333333333333333333333333333333","receiptsRoot":"0x4444444444444444444444444444444444444444444444444444444444444444","logsBloom":")";
+        R"({"jsonrpc":"2.0","id":8,"method":"engine_newPayloadV4","params":[{"parentHash":"0x1111111111111111111111111111111111111111111111111111111111111111","feeRecipient":"0x2222222222222222222222222222222222222222","stateRoot":"0x3333333333333333333333333333333333333333333333333333333333333333","receiptsRoot":"0x4444444444444444444444444444444444444444444444444444444444444444","logsBloom":")";
     newPayloadRequest += logsBloom;
     newPayloadRequest +=
-        R"(","prevRandao":"0x5555555555555555555555555555555555555555555555555555555555555555","blockNumber":"0x1","gasLimit":"0x5208","gasUsed":"0x5208","timestamp":"0x1","extraData":"0x1234","baseFeePerGas":"0x1","blockHash":"0x6666666666666666666666666666666666666666666666666666666666666666","transactions":[")";
+        R"(","prevRandao":"0x5555555555555555555555555555555555555555555555555555555555555555","blockNumber":"0x1","gasLimit":"0x5208","gasUsed":"0x5208","timestamp":"0x1","extraData":"0x1234","baseFeePerGas":"0x1","blockHash":"0x6666666666666666666666666666666666666666666666666666666666666666","withdrawalsRoot":"0x9999999999999999999999999999999999999999999999999999999999999999","transactions":[")";
     newPayloadRequest += encodedTxHex;
     newPayloadRequest +=
         R"("],"withdrawals":[{"index":"0x1","validatorIndex":"0x2","address":"0x7777777777777777777777777777777777777777","amount":")";
@@ -578,14 +570,20 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     newPayloadRequest += largeQuantity;
     newPayloadRequest += R"(","excessBlobGas":")";
     newPayloadRequest += largeQuantity;
-    newPayloadRequest += R"("}]})";
+    newPayloadRequest +=
+        R"("},[],"0x169630f535b4a41330164c6e5c92b1224c0c407f582d407d0ac3d206cd32fd52",[]]})";
 
     auto newPayloadResponse = engineRequest(newPayloadRequest);
     validRespCheck(newPayloadResponse);
     BOOST_TEST(newPayloadResponse["result"]["status"].asString() == "VALID");
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest.has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
-    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 2);
+    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
+                      .withdrawalsRoot.has_value());
+    BOOST_REQUIRE(
+        testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
+    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
@@ -614,20 +612,38 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     testEngineService.m_state->getPayloadResult->blockValue = expectedLargeValue;
 
     const auto getPayloadRequest =
-        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
+        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV5","params":["payload-id-1"]})";
     auto getPayloadResponse = engineRequest(getPayloadRequest);
     validRespCheck(getPayloadResponse);
     BOOST_REQUIRE(testEngineService.m_state->capturedPayloadId.has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "payload-id-1");
-    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 5);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"].size() == 1);
     BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"][0].asString() ==
                encodedTxHex);
     BOOST_TEST(
         getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
         largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["withdrawalsRoot"].asString() ==
+               "0x9999999999999999999999999999999999999999999999999999999999999999");
     BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["executionRequests"].isArray());
+    BOOST_TEST(getPayloadResponse["result"]["executionRequests"].size() == 0U);
+
+    // Adapting to Karst does not retire the older method versions: getPayloadV2 still
+    // reaches the engine service over the same full RPC path, and answers in the V2 shape
+    // (executionPayload + blockValue, no blobsBundle / executionRequests).
+    const auto oldVersionRequest =
+        R"({"jsonrpc":"2.0","id":10,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
+    auto oldVersionResponse = engineRequest(oldVersionRequest);
+    validRespCheck(oldVersionResponse);
+    BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
+    BOOST_TEST(oldVersionResponse["result"].isMember("executionPayload"));
+    BOOST_TEST(oldVersionResponse["result"].isMember("blockValue"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("blobsBundle"));
+    BOOST_TEST(!oldVersionResponse["result"].isMember("executionRequests"));
 }
 
 // D2 U3-U6: safe/finalized tag routing at the EthEndpoint layer.

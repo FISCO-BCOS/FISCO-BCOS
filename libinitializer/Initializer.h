@@ -139,6 +139,15 @@ public:
     /// GlobalStateStorageInitializer, so the handle must not outlive this Initializer.
     /// nullptr before initNode() built the global state storage (e.g. config-only usage).
     std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
+
+    /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
+    /// of GlobalStateStorage and returns an AnyStorage handle owning it (see
+    /// forkLatestStateView). Captures a shared_ptr to the GlobalStateStorageInitializer, so
+    /// the returned provider stays valid independently of this Initializer's lifetime.
+    /// Empty (default-constructed) before initNode() built the global state storage.
+    std::function<std::shared_ptr<
+        bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+    stateStorageProvider();
     bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts,
         const tool::NodeConfig::Ptr& nodeConfig);
     bcos::Error::Ptr importSnapshot(

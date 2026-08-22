@@ -22,7 +22,6 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;

@@ -64,11 +64,16 @@ private:
 
 namespace
 {
-/// Engine API version the built-in CL speaks. V1 keeps the driver minimal (no withdrawals /
-/// beacon-root bookkeeping); the produced blocks' execution semantics are governed by the
-/// ledger's executor version, not by the Engine API version.
-constexpr std::uint32_t c_engineApiVersion =
-    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1);
+/// Karst Engine dialect: the built-in CL speaks the same method versions op-node uses
+/// against a Karst chain (rollup/types.go version selection) — forkchoiceUpdated V3 to
+/// build, getPayload V5 to fetch, newPayload V4 to commit. The produced blocks' execution
+/// semantics are still governed by the ledger's executor version, not by these versions.
+constexpr std::uint32_t c_forkchoiceVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3);
+constexpr std::uint32_t c_getPayloadVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V5);
+constexpr std::uint32_t c_newPayloadVersion =
+    static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4);
 }  // namespace
 
 SingleNodeConsensus::SingleNodeConsensus(bcos::engine::AnyEngineService& _engineService,
@@ -204,9 +209,21 @@ bool SingleNodeConsensus::produceBlock()
     payloadAttributes.prevRandao = m_prevRandao;
     payloadAttributes.suggestedFeeRecipient = m_feeRecipient;
     payloadAttributes.timestamp = timestamp;
-    // Tier-2 OP build: the engine fills the payload/header beacon root from this field; the
-    // newPayload round-trip below must carry the same value (zero when unset).
-    payloadAttributes.parentBeaconBlockRoot = bcos::crypto::HashType{};
+    // V3 attributes require withdrawals and parentBeaconBlockRoot. This CL has no beacon
+    // chain and OP L2 has no withdrawals, so both are the fixed empty/zero values. The
+    // structs are passed in-process (behind the RPC boundary), so the timestamp above
+    // stays in the internal millisecond unit -- the Engine wire's seconds<->ms conversion
+    // lives in the RPC serialization layer only.
+    //
+    // TODO(C4 header fields): the zero parentBeaconBlockRoot here, and the zero
+    // withdrawalsRoot the EngineService stamps onto the payload it builds from these
+    // attributes (see the placeholder note in EngineServiceImpl.h buildPayload), are
+    // built-in-CL stand-ins, NOT production semantics. Because they are zero, a payload
+    // produced by this driver is byte-indistinguishable from one a broken or malicious
+    // external CL would submit with zero roots. Do not read this file as evidence that
+    // zero roots are acceptable on a real chain.
+    payloadAttributes.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    payloadAttributes.parentBeaconBlockRoot = bcos::h256{};
 
     // forkchoiceUpdated(head, attributes): the EL resolves the head hash from storage, removes
     // stale transactions, seals the in-process mempool (with the nonce-vs-state check) and
@@ -219,7 +236,7 @@ bool SingleNodeConsensus::produceBlock()
         .finalizedBlockHash = m_headHash,
     };
     auto fcResult = task::syncWait(
-        m_engineService.updateForkchoice(forkchoiceState, &payloadAttributes, m_engineApiVersion));
+        m_engineService.updateForkchoice(forkchoiceState, &payloadAttributes, c_forkchoiceVersion));
     if (fcResult.payloadStatus.status != bcos::engine::PayloadValidationStatus::Valid ||
         !fcResult.payloadId)
     {
@@ -233,7 +250,7 @@ bool SingleNodeConsensus::produceBlock()
 
     // getPayload: fetch the built block proposal (sealed transactions + header).
     auto payload =
-        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, m_engineApiVersion));
+        task::syncWait(m_engineService.getPayload(*fcResult.payloadId, c_getPayloadVersion));
     if (!payload)
     {
         SINGLE_CONSENSUS_LOG(ERROR) << LOG_DESC("getPayload returned null");
@@ -262,8 +279,12 @@ bool SingleNodeConsensus::produceBlock()
     // and the eth_* RPC reads.
     bcos::engine::NewPayloadRequest request;
     request.executionPayload = std::move(executionPayload);
-    request.parentBeaconBlockRoot = payloadAttributes.parentBeaconBlockRoot;
-    auto newPayloadStatus = task::syncWait(m_engineService.newPayload(request, m_engineApiVersion));
+    // newPayloadV4: echo the beacon root the payload was built with (as op-node does)
+    // and pass the required-empty blob-hash / executionRequests lists.
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bcos::bytes>{};
+    auto newPayloadStatus =
+        task::syncWait(m_engineService.newPayload(request, c_newPayloadVersion));
     if (newPayloadStatus.status != bcos::engine::PayloadValidationStatus::Valid)
     {
         SINGLE_CONSENSUS_LOG(ERROR)

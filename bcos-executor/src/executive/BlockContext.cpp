@@ -20,16 +20,11 @@
  */
 
 #include "BlockContext.h"
-#include "../vm/Precompiled.h"
-#include "TransactionExecutive.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Serialize.h>
-#include <boost/core/ignore_unused.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/throw_exception.hpp>
 #include <string>
 #include <utility>
 

@@ -41,6 +41,7 @@ public:
     task::Task<void> getPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV3(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV4(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadV5(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV1(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV3(const Json::Value&, Json::Value&);
@@ -49,13 +50,14 @@ public:
 private:
     task::Task<void> handleForkchoiceUpdated(
         engine::ApiVersion version, const Json::Value&, Json::Value&);
-    task::Task<void> handleGetPayload(
-        engine::ApiVersion version, const Json::Value&, Json::Value&);
-    task::Task<void> handleNewPayload(
-        engine::ApiVersion version, const Json::Value&, Json::Value&);
+    task::Task<void> handleGetPayload(engine::ApiVersion version, const Json::Value&, Json::Value&);
+    task::Task<void> handleNewPayload(engine::ApiVersion version, const Json::Value&, Json::Value&);
 
     /// Build a JSON-RPC error response when the engine service is unavailable.
     void buildEngineNotAvailableError(Json::Value& response) const;
+
+    /// Build the -38005 answer for a method version this node does not implement.
+    void buildUnimplementedVersionError(std::string_view method, Json::Value& response) const;
 
     NodeService::Ptr m_nodeService;
 };

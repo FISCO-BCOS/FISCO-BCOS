@@ -24,7 +24,6 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-framework/security/CloudKmsType.h"
 #include "bcos-framework/security/KeyEncryptionType.h"
 #include "bcos-framework/security/StorageEncryptionType.h"
 #include "bcos-utilities/BoostLog.h"
@@ -34,20 +33,15 @@
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <json/forwards.h>
-#include <json/reader.h>
-#include <json/value.h>
-#include <servant/RemoteLogger.h>
 #include <util/tc_clientsocket.h>
-#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cctype>
-#include <charconv>
 #include <cstdint>
 #include <limits>
 #include <set>
@@ -373,10 +367,12 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
     header.m_gasLimit = quantityField("gas_limit");
     header.m_gasUsed = quantityField("gas_used");
     auto timestamp = quantityField("timestamp");
-    if (timestamp > u256(std::numeric_limits<int64_t>::max()))
+    // The artifact timestamp is seconds; Ledger::applyEthGenesisHeader multiplies it by 1000
+    // to store internal milliseconds, so the parse bound must leave headroom for the x1000.
+    if (timestamp > u256(std::numeric_limits<int64_t>::max() / 1000))
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("[eth_genesis_header].timestamp exceeds int64"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[eth_genesis_header].timestamp exceeds int64 milliseconds"));
     }
     header.m_timestamp = static_cast<int64_t>(timestamp);
     auto extraData = requireField("extra_data");
@@ -775,6 +771,10 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         cors_allowed_headers=Content-Type, Authorization, X-Requested-With
         cors_max_age=86400
         sync_transaction=false
+        ; how many blocks behind latest the safe/finalized blockTag point to (default 0 = latest)
+        ; PBFT has no finalization window: a committed block is already final
+        ; safe_block_depth=0
+        ; finalized_block_depth=0
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -815,6 +815,8 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_web3CorsMaxAge = corsMaxAge;
     m_web3CorsAllowCredentials = corsAllowCredentials;
     m_web3SyncTransaction = _pt.get<bool>("web3_rpc.sync_transaction", false);
+    m_web3SafeBlockDepth = _pt.get<uint32_t>("web3_rpc.safe_block_depth", 0);
+    m_web3FinalizedBlockDepth = _pt.get<uint32_t>("web3_rpc.finalized_block_depth", 0);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
@@ -827,7 +829,19 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("corsAllowedHeaders", corsAllowedHeaders)
                          << LOG_KV("corsMaxAge", corsMaxAge)
                          << LOG_KV("corsAllowCredentials", corsAllowCredentials)
-                         << LOG_KV("syncTransaction", m_web3SyncTransaction);
+                         << LOG_KV("syncTransaction", m_web3SyncTransaction)
+                         << LOG_KV("safeBlockDepth", m_web3SafeBlockDepth)
+                         << LOG_KV("finalizedBlockDepth", m_web3FinalizedBlockDepth);
+}
+
+uint32_t NodeConfig::web3SafeBlockDepth() const
+{
+    return m_web3SafeBlockDepth;
+}
+
+uint32_t NodeConfig::web3FinalizedBlockDepth() const
+{
+    return m_web3FinalizedBlockDepth;
 }
 
 void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)

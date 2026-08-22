@@ -4,7 +4,6 @@
  */
 
 #include "FrontServiceInfo.h"
-#include "fisco-bcos-tars-service/Common/TarsUtils.h"
 
 bcos::gateway::FrontServiceInfo::FrontServiceInfo(std::string _nodeID,
     bcos::front::FrontServiceInterface::Ptr _frontService, bcos::protocol::NodeType _type,
@@ -32,7 +31,8 @@ bool bcos::gateway::FrontServiceInfo::unreachable()
         return false;
     }
 
-    return !bcostars::checkConnection("FrontService", "unreachable", m_frontServicePrx, nullptr, false);
+    return !bcostars::checkConnection(
+        "FrontService", "unreachable", m_frontServicePrx, nullptr, false);
 }
 
 std::string const& bcos::gateway::FrontServiceInfo::nodeID() const

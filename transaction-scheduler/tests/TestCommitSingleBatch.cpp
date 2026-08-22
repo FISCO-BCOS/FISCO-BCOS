@@ -67,7 +67,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "bcos-transaction-scheduler/BaselineScheduler-tpp.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>

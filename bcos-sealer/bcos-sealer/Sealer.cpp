@@ -23,7 +23,6 @@
 #include "bcos-framework/ledger/Features.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/ITTAPI.h>
-#include <boost/chrono/duration.hpp>
 #include <chrono>
 #include <range/v3/view/transform.hpp>
 #include <utility>

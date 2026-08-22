@@ -18,7 +18,6 @@
  * @date 2021-09-29
  */
 #include <bcos-boostssl/context/ContextBuilder.h>
-#include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConfig.h>

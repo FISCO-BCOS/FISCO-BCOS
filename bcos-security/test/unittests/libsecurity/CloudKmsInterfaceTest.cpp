@@ -3,10 +3,8 @@
  * @file AwsKmsWrapperTest.cpp
  */
 
-#include <aws/core/VersionConfig.h>
 
 #include <aws/core/Aws.h>
-#include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/utils/base64/Base64.h>
 #include <aws/kms/KMSClient.h>
 #include <aws/kms/model/DecryptRequest.h>
@@ -88,14 +86,8 @@ private:
 
 struct AwsKmsGlobalFixture
 {
-    AwsKmsGlobalFixture()
-    {
-        Aws::InitAPI(options);
-    }
-    ~AwsKmsGlobalFixture()
-    {
-        Aws::ShutdownAPI(options);
-    }
+    AwsKmsGlobalFixture() { Aws::InitAPI(options); }
+    ~AwsKmsGlobalFixture() { Aws::ShutdownAPI(options); }
     Aws::SDKOptions options;
 };
 

@@ -18,10 +18,8 @@
  * @date 2022.04.19
  */
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
-#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/test/unit_test_suite.hpp>
 #include <iterator>

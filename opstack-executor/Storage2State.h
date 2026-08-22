@@ -2,24 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// Storage2State — the real-ledger read bridge. Implements evmone::state::StateView over the
-// storage2 (MultiLayerStorage/StateKey/EVMAccount) key space: each read is
-// cache -> task::syncWait fetch -> normalize -> refill cache. One instance per block (no reset),
-// single-threaded only (mutable caches, no locks).
+// Storage2State — evmone::state::StateView over the storage2 (StateKey/EVMAccount) key space.
+// One instance per block, single-threaded (mutable caches, no locks). The shared block-wide
+// error slot (dbErr analogue) is the one cross-instance state and is deliberately mutex-guarded
+// (SharedErrorSlot): part-3 parallel execution shares one slot across per-tx instances, and
+// every access to it (poison write, poisoned()/firstError() read) takes the lock.
 //
 // Core invariants:
-//   * “exists but empty” accounts return Account{defaults}, never nullopt (EIP-7610 create
-//     collision fidelity; KEEP contract migrated from the deleted StateViewAdapter.h);
-//   * zero-valued storage slot == nonexistent slot (Ethereum trie semantics), applied uniformly
-//     across probeHasStorage/fetchAllStorage/fetchStorage;
-//   * poison-flag error channel: every read is noexcept and swallows storage errors into
-//     poisoned()/firstError(); consumers must check poisoned() after block execution and fail the
-//     whole block — never silently degrade a storage fault to “account missing”. applyDiff is the
-//     sole writer and its write-back failures poison AND rethrow (strict tripwire);
-//   * account tables are “/apps/<hex(addr)>” paths (same classifier as mainline MPT), identical
-//     for every address including c_systemTxsAddress; requires feature_raw_address=off;
-//   * nested syncWait is safe only inside the x_state-serialized engine execution segment, where
-//     the storage2 backends complete synchronously in-thread (no true async suspension).
+//   * exists-but-empty accounts return Account{defaults}, never nullopt (EIP-7610 collision
+//     fidelity);
+//   * zero-valued storage slot == nonexistent slot (Ethereum trie semantics), uniform across
+//     probeHasStorage/fetchAllStorage/fetchStorage;
+//   * poison-flag channel: reads are noexcept and swallow storage errors into poisoned()/
+//     firstError(); consumers must fail the whole block on poisoned() — never degrade a storage
+//     fault to “account missing”. applyDiff write-back failures poison AND rethrow (tripwire);
+//   * account tables are “/apps/<hex(addr)>” paths (mainline MPT classifier), same for every
+//     address incl. c_systemTxsAddress; requires feature_raw_address=off;
+//   * nested syncWait is safe only inside the x_state-serialized segment (backends complete
+//     synchronously in-thread).
 
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -27,8 +27,8 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <ethereum-executor/EthereumState.h>  // clearAccountStorage (applyStateDiff)
 #include <opstack-executor/Storage2StateHelpers.h>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
@@ -38,6 +38,7 @@
 #include <intx/intx.hpp>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -48,6 +49,16 @@
 namespace bcos::evm::evmstate
 {
 
+/// Block-wide error slot shared by per-tx execution instances (op-geth's dbErr analogue), safe
+/// for the part-3 parallel-execution sharing pattern: every access is mutex-guarded, and the
+/// stored message is first-write-wins so the block-level check observes the FIRST error across
+/// all instances. Constructed once per block by the scheduler, shared via shared_ptr.
+struct SharedErrorSlot
+{
+    std::mutex mutex;
+    std::string message;
+};
+
 
 template <class Storage>
 class Storage2State final : public evmone::state::StateView
@@ -55,9 +66,11 @@ class Storage2State final : public evmone::state::StateView
 public:
     /// One instance per block; no reset().
     /// @param sharedError optional block-wide error slot (op-geth's dbErr analogue): every
-    /// Storage2State constructed with the same shared slot reports poison to it, so a read error
-    /// in ANY per-tx execution instance is visible to the block-level check that owns the slot.
-    explicit Storage2State(Storage& storage, std::shared_ptr<std::string> sharedError = {}) noexcept
+    /// Storage2State constructed with the same shared slot reports poison to it (mutex-guarded,
+    /// first-write-wins), so a read error in ANY per-tx execution instance is visible to the
+    /// block-level check that owns the slot.
+    explicit Storage2State(
+        Storage& storage, std::shared_ptr<SharedErrorSlot> sharedError = {}) noexcept
       : m_storage(storage), m_sharedError(std::move(sharedError))
     {}
 
@@ -78,12 +91,15 @@ public:
             m_accountCache.emplace(addr, fetched);
             return fetched;
         }
-        // Four-level catch ladder shared by all read methods (and applyDiff): the repo's
-        // typed-catch discriminates by exception type family — std::runtime_error subclasses
-        // escape typed catch (falling to catch(...)) while std::logic_error subclasses bind
-        // normally, so both families are caught explicitly to preserve the original message
-        // in firstError() (read path is the main poison source; runtime_error used to degrade
-        // firstError() to "unknown exception").
+        // Exception-matching ladder shared by all read methods (and applyDiff): this repo's
+        // binaries have unreliable typed-catch behavior — bcos-crypto PUBLICly links
+        // wedprcrypto's Rust static libs, whose bundled runtime breaks libc++ exception matching
+        // binary-wide (documented at bcos-rpc/test/CMakeLists.txt:29-34). Empirically in the
+        // bcos-evm-opstack-tests binary, std::runtime_error-family throws only bind at an
+        // exact-type runtime_error handler (they escape catch(std::exception) into catch(...)),
+        // while std::logic_error-family throws do bind at catch(std::exception). Keep the
+        // runtime_error level so firstError() retains the original message for triage;
+        // catch(...) guarantees the poison flag is always set.
         catch (const std::runtime_error& e)
         {
             poison(e.what());
@@ -114,7 +130,7 @@ public:
             m_codeCache.emplace(addr, code);
             return code;
         }
-        // Four-level ladder; see get_account's comment.
+        // Exception-matching ladder; see get_account's comment.
         catch (const std::runtime_error& e)
         {
             poison(e.what());
@@ -147,7 +163,7 @@ public:
             m_storageCache.emplace(cacheKey, value);
             return value;
         }
-        // Four-level ladder; see get_account's comment.
+        // Exception-matching ladder; see get_account's comment.
         catch (const std::runtime_error& e)
         {
             poison(e.what());
@@ -169,17 +185,46 @@ public:
 
     /// Consumer contract: check after block execution; once set the whole block must fail.
     /// Also true when the shared block error slot (if any) has been poisoned by ANOTHER instance
-    /// over the same view — op-geth's dbErr accumulating across the block.
+    /// over the same view — op-geth's dbErr accumulating across the block. The shared-slot read
+    /// takes its mutex; a lock failure (unreachable in correct usage) degrades to false rather
+    /// than terminating the noexcept path.
     [[nodiscard]] bool poisoned() const noexcept
     {
-        return m_poisoned || (m_sharedError && !m_sharedError->empty());
+        if (m_poisoned)
+            return true;
+        if (!m_sharedError)
+            return false;
+        try
+        {
+            std::lock_guard lock(m_sharedError->mutex);
+            return !m_sharedError->message.empty();
+        }
+        catch (...)
+        {
+            return false;
+        }
     }
     /// Records only the first error; per-instance unless a shared slot is present (then the
-    /// block-wide first error is returned).
-    [[nodiscard]] std::string_view firstError() const noexcept
+    /// block-wide first error is returned — the slot's first-write-wins message, read under its
+    /// mutex). Returns std::string, not a view: a view into the shared slot's message would
+    /// dangle as soon as the lock is released. The string copies are guarded so a bad_alloc
+    /// degrades to {} instead of std::terminate on the noexcept path.
+    [[nodiscard]] std::string firstError() const noexcept
     {
-        return (m_sharedError && !m_sharedError->empty()) ? std::string_view(*m_sharedError) :
-                                                            m_firstError;
+        try
+        {
+            if (m_sharedError)
+            {
+                std::lock_guard lock(m_sharedError->mutex);
+                if (!m_sharedError->message.empty())
+                    return m_sharedError->message;
+            }
+            return m_firstError;
+        }
+        catch (...)
+        {
+            return {};
+        }
     }
 
     /// Write-back (single strict form): every modified entry is unconditionally ensure-existed
@@ -188,15 +233,21 @@ public:
     /// (deleting an account invalidates all three for that address). Not noexcept: strict
     /// tripwire — a deleted_accounts entry missing on the ledger throws.
     ///
+    /// PRECONDITION: @p diff must already be sanitized (sanitizeStateDiff) — evmone's diff model
+    /// routinely emits phantom deleted_accounts entries (zero-value CALL touch of a never-created
+    /// address, access-list/EIP-7702 get_or_insert with erase_if_empty), and the ghost-delete
+    /// tripwire below turns an unsanitized diff into a hard block failure on ordinary tx
+    /// patterns. opTransition/runDeposit always sanitize before calling; part-3 callers must too.
+    ///
     /// Any write-back failure ALSO sets the poison flag before rethrowing. This is error
     /// CLASSIFICATION, not style: OpSchedulerSeam maps poisoned() -> OpStorageError (-32603) and
     /// anything else -> OpConsensusError (INVALID); every failure here (ghost delete, system-
     /// address routing, contract-② zero-slot leak, nonce/width violations, the storage backend
     /// itself) is a LOCAL fault, and the diff comes from evmone itself (malformed payloads were
-    /// already rejected at decode/processOpBlock), so none must ever be answered INVALID. The
-    /// whole body is wrapped in one try/catch so every present and future throw point inherits
-    /// that invariant; catch(...) guarantees the flag is set even when the known -fno-rtti
-    /// typed-catch bypass loses the message. `seeding` (true only for SeedPreState, a
+    /// already rejected at the decode/block-shape gates), so none must ever be answered INVALID.
+    /// The whole body is wrapped in one try/catch so every present and future throw point inherits
+    /// that invariant; catch(...) guarantees the flag is set even when the standard exception
+    /// families cannot be matched. `seeding` (true only for SeedPreState, a
     /// genesis snapshot) exempts the new-EIP-161-empty-account guard, which is otherwise on for
     /// the execution path.
     void applyDiff(const evmone::state::StateDiff& diff, bool seeding = false)
@@ -208,16 +259,10 @@ public:
             for (const auto& addr : diff.deleted_accounts)
                 task::syncWait(applyDeletedEntry(addr));
         }
-        // The ladder's order is not stylistic: it is the measured behaviour of this repo's
-        // -fno-rtti typed-catch bypass. Experiments showed std::runtime_error subclasses escape
-        // typed catch (falling to catch(...)) while std::logic_error subclasses bind normally;
-        // the root cause is not yet identified, so do not reorder or drop levels on any other
-        // theory. Catch the concrete base classes first (runtime_error/logic_error cover every
-        // throw here: overflow_error and length_error respectively), keep std::exception (the
-        // only level the logic_error family binds, and the landing point for future standard
-        // exceptions outside both families), and keep catch(...) as the guarantee that the poison
-        // flag is always set. All four levels poison — classification only depends on the flag,
-        // not the message.
+        // Exception-matching ladder; see get_account's comment. Every write-back failure poisons
+        // AND rethrows (tripwire); catch(...) guarantees the flag is set even when the standard
+        // exception families cannot be matched. Classification only depends on the flag, not the
+        // message.
         catch (const std::runtime_error& e)
         {
             poison(e.what());
@@ -235,10 +280,7 @@ public:
         }
         catch (...)
         {
-            poison(
-                "Storage2State::applyDiff: unknown exception on the write-back path (not derived "
-                "from std::runtime_error/std::logic_error, or typed catch bypassed by the known "
-                "-fno-rtti RTTI issue; message unavailable)");
+            poison("Storage2State::applyDiff: unknown exception on the write-back path");
             throw;
         }
     }
@@ -247,8 +289,8 @@ public:
     /// getter (state-root computation never calls it — avoids an unconditional SYS_CODE_BINARY
     /// read per account) + the account's already-materialized, tombstone-filtered,
     /// poison-checked live storage slot map (see fetchAllStorage). Field names mirror
-    /// MemoryState::AccountView exactly so bcos::evm::stateRootOf<Ledger> works unmodified
-    /// against either backend.
+    /// MemoryState::AccountView exactly, and code() returns by value on both backends, so
+    /// bcos::evm::stateRootOf<Ledger> and generic visitors work unmodified against either.
     struct AccountView
     {
         const evmc::address& addr;
@@ -278,10 +320,9 @@ public:
         {
             return task::syncWait(visitAccountsImpl(visitor));
         }
-        // Four-level ladder; see get_account's comment. This is the most important of the four
-        // read methods: fetchAllStorage's runtime_error used to escape to catch(...) and degrade
-        // firstError() to "unknown exception", and visitAccounts is on the mandatory stateRootOf
-        // path — its poison message is the only clue for triaging a -32603.
+        // Exception-matching ladder; see get_account's comment. This is the most important of the
+        // four read methods: visitAccounts is on the mandatory stateRootOf path — its poison
+        // message is the only clue for triaging a -32603.
         catch (const std::runtime_error& e)
         {
             poison(e.what());
@@ -322,15 +363,10 @@ private:
         // same nonce/balance is harmless.
         const bool createdNew = !co_await account.exists();
 
-        // Guard: creating a NEW EIP-161-empty account (nonce=0, balance=0, no code) on the ledger
-        // is a protocol violation — EIP-161 empty accounts are treated as nonexistent and must
-        // not be stored. Checked only for createdNew (modifying an existing account to empty is
-        // the delete path's job). evmone's build_diff already routes touch-empty accounts (those
-        // created with erase_if_empty, e.g. zero-value CALL touch or authorization-list
-        // get_or_insert) to deleted_accounts, so only a default get_or_insert that ends empty can
-        // reach here — exactly the path this guard pins. `seeding` (true only for
-        // SeedPreState, a genesis snapshot) exempts it; the execution path always runs with
-        // the guard on.
+        // EIP-161: creating a NEW empty account (nonce=0, balance=0, no code) is a protocol
+        // violation. build_diff already routes touch-empty accounts to deleted_accounts, so only
+        // a default get_or_insert ending empty reaches here. `seeding` (SeedPreState snapshot)
+        // exempts; the execution path always guards.
         if (!seeding && createdNew && entry.nonce == 0 && entry.balance == 0 &&
             (!entry.code.has_value() || entry.code->empty()))
         {
@@ -342,12 +378,15 @@ private:
         if (createdNew)
             co_await account.create();
 
-        co_await account.setBalance(bcos::u256(intx::to_string(entry.balance)));
+        // intx → bcos balance via big-endian byte store + fromBigEndian (full-width, no decimal
+        // string round-trip) — same path as OpTransition.h's intxToBcosU256.
+        auto const balanceBe = intx::be::store<evmc::uint256be>(entry.balance);
+        co_await account.setBalance(bcos::fromBigEndian<bcos::u256>(bcos::bytesConstRef{
+            reinterpret_cast<const bcos::byte*>(balanceBe.bytes), sizeof(balanceBe.bytes)}));
         co_await account.setNonce(std::to_string(entry.nonce));
 
-        // Contract ③: code is written only when has_value(); codeHash is computed here via
-        // keccak(code) (StateDiff has no code_hash field); ABI content is not written (setCode's
-        // abi parameter is the empty string).
+        // Contract ③: code written only when has_value(); codeHash = keccak(code) (StateDiff has
+        // no code_hash field); ABI is not written.
         if (entry.code.has_value())
         {
             const auto codeHash = evmone::keccak256(*entry.code);
@@ -357,9 +396,8 @@ private:
                 bcos::bytes(entry.code->begin(), entry.code->end()), std::string{}, codeHashValue);
         }
 
-        // Contract ②: a zero-valued slot deletes the row (storage2::removeOne, never writes a
-        // zero value — EVMAccount has no delete API); non-zero goes through
-        // EVMAccount::setStorage (same key space as the read-side fetchStorage).
+        // Contract ②: zero-valued slot deletes the row (removeOne — EVMAccount has no delete
+        // API, and a zero row would be skipped by reads but linger); non-zero via setStorage.
         for (const auto& [key, value] : entry.modified_storage)
         {
             if (evmc::is_zero(value))
@@ -369,14 +407,12 @@ private:
                 co_await storage2::removeOne(
                     m_storage.get(), executor_v1::StateKeyView{tableName, keyView});
 
-                // Contract ② invariant guard (moved to the write path): after removing a
-                // zero-valued slot, re-read it and throw if the row is still alive. This checks
-                // the RESULT, not the intent (a removeOne that no-ops or degrades to a write is
-                // caught), and uses existsOne rather than liveContent because logical-deletion
-                // storage writes DELETED_TYPE tombstones rather than physically erasing — the
-                // tombstone must not count as "present" or every normal zero-write would
-                // false-positive. The read path no longer guards this (production ledgers write
-                // zero values without deleting, HostContext.h:288 / Ledger.cpp:1844).
+                // Contract ② guard: after removeOne, re-read and throw if the row survived —
+                // checks the RESULT (a removeOne that no-ops or degrades to a write is caught).
+                // existsOne (not liveContent): logical-deletion writes DELETED_TYPE tombstones,
+                // which must not count as "present" or every normal zero-write false-positives.
+                // The read path no longer guards this (production ledgers write zero values
+                // without deleting, HostContext.h:288 / Ledger.cpp:1844).
                 if (co_await storage2::existsOne(
                         m_storage.get(), executor_v1::StateKeyView{tableName, keyView}))
                     throw std::runtime_error(
@@ -392,10 +428,17 @@ private:
             }
         }
 
-        // Write-through: refresh the account/code caches via the same fetchAccount/fetchCode used
-        // by the read path (one set of field-default/has_storage rules); the slot cache is
-        // updated directly to this round's exact written value (zero -> all-zero bytes32, matching
-        // the read path's normalization of deleted slots).
+        // Write-through: refresh caches via fetchAccount/fetchCode (one set of field-default/
+        // has_storage rules); slot cache gets this round's exact written value (zero ->
+        // all-zero bytes32, matching read-path normalization of deleted slots).
+        // TODO(perf): fetchAccount's probeHasStorage is a full range scan per
+        // modified account and fetchCode re-reads SYS_CODE_BINARY — both repeat per tx in a
+        // block. A local derivation is possible (rebuild the Account from this round's writes;
+        // has_storage: non-zero slot written → true, fresh account without one → false, no
+        // storage change with a cached account → cached value stays valid, zero-valued
+        // deletions / no cached account → probe, the only safe answer — a stale true would
+        // wrongly fail CREATE2 collision checks). Deferred to keep the whole-PR valid-insertion
+        // count within the check-commit budget.
         m_accountCache.insert_or_assign(entry.addr, co_await fetchAccount(tableName));
         m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));
         for (const auto& [key, value] : entry.modified_storage)
@@ -587,7 +630,11 @@ private:
         {
             m_firstError.assign(reason);
             if (m_sharedError)
-                m_sharedError->assign(m_firstError);
+            {
+                std::lock_guard lock(m_sharedError->mutex);
+                if (m_sharedError->message.empty())  // first-write-wins across instances
+                    m_sharedError->message.assign(m_firstError);
+            }
         }
         catch (...)
         {
@@ -677,6 +724,9 @@ private:
 
     /// has_storage rule: range-seek the account table for the first live (non-tombstone) 32-byte
     /// raw key whose value is non-zero (distinct from the known short ACCOUNT_TABLE_FIELDS names).
+    /// PRECONDITION on the Storage parameter: range() must be globally ordered (production:
+    /// ordered memory layers over RocksDB). An unordered backend (MemoryStorage CONCURRENT
+    /// iterates hash buckets) interleaves foreign tables mid-range and defeats the early exit.
     /// Two cumulative filters, each fixing a real bug:
     ///   * tombstone layer: range scanning without value-variant discrimination would count a
     ///     logically-deleted (DELETED_TYPE) row as a live slot, so has_storage could not flip back
@@ -725,10 +775,33 @@ private:
         if (!codeHashEntry || codeHashEntry->get().empty())
             co_return evmc::bytes{};
 
-        auto codeEntry = co_await storage2::readOne(m_storage.get(),
-            executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashEntry->get()});
-        if (!codeEntry)
+        auto codeHashView = codeHashEntry->get();
+        if (codeHashView.size() != sizeof(evmc::bytes32::bytes))
+            throw std::length_error(
+                "Storage2State::fetchCode: codeHash field size mismatch in account table '" +
+                tableName + "'");
+
+        // keccak(empty) is the canonical "no code" marker: fetchAccount normalizes an absent
+        // CODE_HASH row to exactly this value, SYS_CODE_BINARY holds no blob for it, and an
+        // empty code must not trip the corruption tripwire below.
+        evmc::bytes32 codeHash{};
+        std::memcpy(codeHash.bytes, codeHashView.data(), codeHashView.size());
+        if (codeHash == evmone::keccak256(evmc::bytes_view{}))
             co_return evmc::bytes{};
+
+        // A non-empty CODE_HASH with no matching blob is ledger data corruption (setCode writes
+        // the blob and the CODE_HASH row together). Silently returning empty would run a
+        // code-bearing contract as a CODELESS account — "executed successfully" with a wrong
+        // state and poisoned()==false, invisible to the block-level check. Throw instead: the
+        // read path's catch ladder poisons, and the block fails as -32603 (OpStorageError) —
+        // never a silent wrong state.
+        auto codeEntry = co_await storage2::readOne(m_storage.get(),
+            executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashView});
+        if (!codeEntry)
+            throw std::runtime_error("Storage2State::fetchCode: account table '" + tableName +
+                                     "' has a non-empty CODE_HASH but no matching blob in " +
+                                     std::string(bcos::ledger::SYS_CODE_BINARY) +
+                                     " (ledger data corruption: code blob missing)");
 
         auto view = codeEntry->get();
         co_return evmc::bytes(view.begin(), view.end());
@@ -767,134 +840,8 @@ private:
 
     mutable bool m_poisoned{false};
     mutable std::string m_firstError;
-    std::shared_ptr<std::string> m_sharedError;  // optional block-wide error slot (op-geth dbErr)
+    std::shared_ptr<SharedErrorSlot> m_sharedError;  // optional block-wide error slot (op-geth
+                                                     // dbErr)
 };
 
 }  // namespace bcos::evm::evmstate
-
-namespace bcos::executor_v1::eth
-{
-/// intx::uint256 → bcos::u256 (applyStateDiff's balance write-back). Moved from the removed
-/// BCOS2Evmone module.
-inline bcos::u256 toBcosU256(intx::uint256 const& val)
-{
-    return bcos::u256(intx::to_string(val));
-}
-
-/// Write an evmone `StateDiff` back into FISCO storage2 (EVMAccount-based) — the reverse of
-/// StorageStateView's read bridge. Moved from the removed BCOS2Evmone module; kept in the eth
-/// namespace so call sites (`eth::applyStateDiff`) and `clearAccountStorage` (EthereumState.h)
-/// resolve unchanged.
-template <class Storage>
-task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const& diff,
-    evmc_revision, crypto::Hash const& hashImpl)
-{
-    using namespace bcos::ledger::account;
-
-    // Phase 1: Process modified_accounts FIRST.
-    // This ensures created accounts exist before we potentially delete them.
-    for (auto const& m : diff.modified_accounts)
-    {
-        EVMAccount<Storage> acc(
-            storage, FromTableName{}, bcos::evm::evmstate::accountTableName(m.addr));
-        const bool createdNew = !co_await acc.exists();
-        const std::string_view tableName = co_await acc.path();
-        // EIP-161 guard (ported from Storage2State::applyDiff): creating a NEW EIP-161-empty
-        // account (nonce=0, balance=0, no code) on the ledger is a protocol violation — such
-        // accounts are treated as nonexistent. evmone's build_diff routes touch-empty accounts
-        // to deleted_accounts, so this only fires on a default get_or_insert that ends empty.
-        if (createdNew && m.nonce == 0 && m.balance == 0 &&
-            (!m.code.has_value() || m.code->empty()))
-        {
-            throw std::runtime_error(
-                std::string("applyStateDiff: EIP-161-empty account would be created in the "
-                            "ledger by a diff entry that never bumped nonce (address table '") +
-                std::string{tableName} + "')");
-        }
-        if (createdNew)
-            co_await acc.create();
-        co_await acc.setNonce(std::to_string(m.nonce));
-        co_await acc.setBalance(toBcosU256(m.balance));
-        if (m.code.has_value())
-        {
-            auto const& c = *m.code;
-            if (c.empty())
-            {
-                co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
-            }
-            else
-            {
-                bcos::bytes code(c.begin(), c.end());
-                auto ch = hashImpl.hash(bcos::bytesConstRef(code.data(), code.size()));
-                co_await acc.setCode(std::move(code), std::string{}, ch);
-            }
-        }
-        for (auto const& [key, value] : m.modified_storage)
-        {
-            // Zero-valued slot: delete the row (never write a zero — EVMAccount has no delete
-            // API, and a zero row is skipped by has_storage/stateRoot but is garbage that only
-            // self-destruct cleans). Ported from Storage2State::applyDiff (contract ②).
-            if (evmc::is_zero(value))
-            {
-                std::string_view keyView(
-                    reinterpret_cast<const char*>(key.bytes), sizeof(key.bytes));
-                co_await storage2::removeOne(
-                    storage, executor_v1::StateKeyView{tableName, keyView});
-            }
-            else
-            {
-                co_await acc.setStorage(key, value);
-            }
-        }
-    }
-
-    // Phase 2: Process deleted_accounts, but skip addresses that were just
-    // created/modified in Phase 1 (recreated accounts).
-    for (auto const& addr : diff.deleted_accounts)
-    {
-        bool inModified = false;
-        for (auto const& m : diff.modified_accounts)
-        {
-            if (memcmp(m.addr.bytes, addr.bytes, sizeof(evmc_address)) == 0)
-            {
-                inModified = true;
-                break;
-            }
-        }
-        if (inModified)
-            continue;  // Already handled by modified_accounts processing
-
-        // Genuine deletion: clear account state (including storage, so that a
-        // later CREATE/CREATE2 at this address is not an EIP-7610 collision).
-        EVMAccount<Storage> acc(
-            storage, FromTableName{}, bcos::evm::evmstate::accountTableName(addr));
-        if (co_await acc.exists())
-        {
-            co_await acc.setBalance(0);
-            co_await acc.setNonce("0");
-            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
-            co_await clearAccountStorage(storage, acc);
-            // B4 (Task 6.1): drop the SYS_TABLES marker too, so the touch-deleted
-            // account is fully gone — not a lingering EIP-161 ghost empty account
-            // (marker row survives while every field reads zero). acc.path() is the
-            // same tableName key space Storage2State::applyDeletedEntry removes
-            // (Storage2State.h:427-428); the exists() guard above keeps this shared
-            // function quiet when the account is already missing.
-            co_await storage2::removeOne(storage,
-                bcos::executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, co_await acc.path()));
-        }
-    }
-
-    // NOTE: evmone's State::build_diff() may not include recreated accounts
-    // (destructed + recreated via CREATE2 in the same tx) in modified_accounts.
-    // This is a known limitation — without modifying bcos-evm, we cannot
-    // recover the lost nonce/balance/code for these accounts.
-}
-
-/// All-zero BLOCKHASH provider (Ethereum "unknown block" semantics) — used by the OP executor's
-/// execution when no historical hashes are reachable. Moved from the removed BCOS2Evmone module.
-struct ZeroBlockHashes : evmone::state::BlockHashes
-{
-    evmc::bytes32 get_block_hash(int64_t) const noexcept override { return {}; }
-};
-}  // namespace bcos::executor_v1::eth

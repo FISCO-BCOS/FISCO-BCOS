@@ -25,8 +25,6 @@
 #include "FakeGateway.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-front/Common.h>
-#include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
@@ -145,8 +143,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
 
     // Use wait_for with timeout to avoid hanging indefinitely on CI
     auto status = f.wait_for(std::chrono::seconds(10));
-    BOOST_CHECK_MESSAGE(status == std::future_status::ready,
-        "Timed out waiting for group node info notification");
+    BOOST_CHECK_MESSAGE(
+        status == std::future_status::ready, "Timed out waiting for group node info notification");
     if (status == std::future_status::ready)
     {
         f.get();

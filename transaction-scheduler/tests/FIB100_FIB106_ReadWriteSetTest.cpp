@@ -21,7 +21,6 @@
 #include <bcos-transaction-executor/RollbackableStorage.h>
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
 
 using namespace bcos;
@@ -234,8 +233,9 @@ BOOST_AUTO_TEST_CASE(forwardRangeWriteSomePersists)
         // ranges::views::transform is a forward_range when the source is, so
         // this exercises the two-pass pattern (tracking loop + forwarding).
         std::vector<int> source{1, 2, 3};
-        auto keyValues =
-            source | ::ranges::views::transform([](int key) { return std::pair{key, key * 100}; });
+        auto keyValues = source | ::ranges::views::transform([](int key) {
+            return std::pair{key, key * 100};
+        });
 
         co_await storage2::writeSome(rwStorage, keyValues);
 

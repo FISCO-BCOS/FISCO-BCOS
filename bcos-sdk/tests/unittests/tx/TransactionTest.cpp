@@ -23,6 +23,7 @@
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderV2.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcostars;
 using namespace bcos;

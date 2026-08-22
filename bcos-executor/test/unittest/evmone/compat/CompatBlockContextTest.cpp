@@ -7,12 +7,11 @@
 
 #include "../../mock/MockLedger.h"
 #include "CompatTestFixture.h"
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Wait.h"
 #include "executive/BlockContext.h"
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 namespace bcos::test
 {
 

@@ -24,7 +24,6 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/codec/SignatureDataWithV.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
-#include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
@@ -137,8 +136,8 @@ BOOST_AUTO_TEST_CASE(testSecp256k1SignAndVerify)
     std::cout << "### recover address:" << toHex(ret.second) << std::endl;
 
     BOOST_CHECK(address.asBytes() == ret.second);
-    std::cout << "### secp256k1Recover begin, publicKey:"
-              << toHex(keyPair->publicKey()->data()) << std::endl;
+    std::cout << "### secp256k1Recover begin, publicKey:" << toHex(keyPair->publicKey()->data())
+              << std::endl;
     std::cout << "#### recoverd publicKey:" << toHex(pub->data()) << std::endl;
     BOOST_CHECK(pub->data() == keyPair->publicKey()->data());
     BOOST_TEST(toHex(pub->data()) == toHex(keyPair->publicKey()->data()));
@@ -268,15 +267,15 @@ inline void SM2SignAndVerifyTest(SM2Crypto::Ptr _smCrypto)
     auto sec = std::make_shared<KeyImpl>(secret.asBytes());
     auto keyPair = _smCrypto->createKeyPair(sec);
     BOOST_CHECK(keyPair->publicKey()->data() ==
-            fromHex("f7dee65e76603ed7cd4c598d53cabe875c459e0fae4c6fd7b858189fd4741081e9"
-                "70bca0d5cb571a7ac30586aec71b23187d4b25e59143812f74a2744604d42b"));
+                fromHex("f7dee65e76603ed7cd4c598d53cabe875c459e0fae4c6fd7b858189fd4741081e9"
+                        "70bca0d5cb571a7ac30586aec71b23187d4b25e59143812f74a2744604d42b"));
     auto signatureData = fromHex(
         "cd39bf939d999ca710576a629c962edfc28608701a3a7b61c971daeac5a1399cf4a7272fa80783e171c7fd5b03"
         "8a3af4521f681ebe9fd44db3b60e750c438293f7dee65e76603ed7cd4c598d53cabe875c459e0fae4c6fd7b858"
         "189fd4741081e970bca0d5cb571a7ac30586aec71b23187d4b25e59143812f74a2744604d42b");
     // check verify
-    bool result = _smCrypto->verify(keyPair->publicKey(), hashData,
-        bytesConstRef(signatureData.data(), signatureData.size()));
+    bool result = _smCrypto->verify(
+        keyPair->publicKey(), hashData, bytesConstRef(signatureData.data(), signatureData.size()));
     BOOST_CHECK(result == true);
 
     keyPair = _smCrypto->generateKeyPair();
@@ -369,8 +368,7 @@ BOOST_AUTO_TEST_CASE(testED25519SignAndVerify)
     bool result = signatureCrypto->verify(
         keyPair->publicKey(), hashData, bytesConstRef(sig->data(), sig->size()));
     std::cout << "#### phase 1, signatureData:" << toHex(*sig) << std::endl;
-    std::cout << "#### keyPair->publicKey():" << toHex(keyPair->publicKey()->data())
-              << std::endl;
+    std::cout << "#### keyPair->publicKey():" << toHex(keyPair->publicKey()->data()) << std::endl;
     BOOST_CHECK(result == true);
     // recover
     auto pub = signatureCrypto->recover(hashData, bytesConstRef(sig->data(), sig->size()));

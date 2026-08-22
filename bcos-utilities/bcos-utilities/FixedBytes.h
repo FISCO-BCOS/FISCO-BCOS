@@ -402,7 +402,10 @@ public:
 
     auto begin() { return m_data.begin(); }
     auto end() { return m_data.end(); }
-    auto size() const { return SIZE; }
+    // Returns size_t, not the unnamed enum SIZE is declared in. MSVC rejects
+    // bytesConstRef{data(), size()} otherwise: brace-init forbids narrowing, and the enum's
+    // underlying type is signed int, so int -> size_t is a narrowing conversion there.
+    constexpr size_t size() const { return SIZE; }
     void clear() { m_data.fill(0); }
 
 private:

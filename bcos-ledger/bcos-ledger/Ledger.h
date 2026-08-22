@@ -72,12 +72,12 @@ public:
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTxs,
         bcos::protocol::Block::ConstPtr block,
         std::function<void(Error::UniquePtr&&)> _callback) override;
+    // No default arguments here — see LedgerInterface::asyncPrewriteBlock.
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
-        std::optional<bcos::ledger::Features> features = std::nullopt,
-        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
-        bool writeNonces = true) override;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override;
 
     bcos::Error::Ptr storeTransactionsAndReceipts(bcos::protocol::ConstTransactionsPtr blockTxs,
         bcos::protocol::Block::ConstPtr block) override;
@@ -139,6 +139,11 @@ public:
         protocol::BlockNumber number = INT64_MAX) override;
 
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
+
+    // Single-flag read (round-2 Finding E): one SYS_CONFIG row instead of fetchAllFeatures'
+    // ~61-key scan; used by the historical state-read path for feature_l2_ethereum_compat.
+    task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag flag, protocol::BlockNumber blockNumber) override;
 
     storage::StorageInterface::Ptr getStateStorage() override;
 

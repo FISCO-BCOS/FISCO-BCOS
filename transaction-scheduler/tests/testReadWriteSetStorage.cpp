@@ -2,7 +2,6 @@
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
-#include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <optional>
 
@@ -93,7 +92,8 @@ struct MockStorage
         co_return std::nullopt;
     }
 
-    auto readOne(auto&& key, storage2::BYPASS_READ_SET_TYPE untracked) -> task::Task<std::optional<int>>
+    auto readOne(auto&& key, storage2::BYPASS_READ_SET_TYPE untracked)
+        -> task::Task<std::optional<int>>
     {
         co_return std::make_optional(100);
     }

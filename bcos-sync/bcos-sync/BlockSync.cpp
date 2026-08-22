@@ -19,14 +19,13 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
-#include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include <json/json.h>
+#include <chrono>
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <string>
@@ -38,8 +37,7 @@ using namespace bcos::crypto;
 using namespace bcos::ledger;
 using namespace bcos::tool;
 
-BlockSync::BlockSync(
-    BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+BlockSync::BlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
     bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs)
   : Worker(_ioContext, "syncWorker", _idleWaitMs),
     m_config(_config),

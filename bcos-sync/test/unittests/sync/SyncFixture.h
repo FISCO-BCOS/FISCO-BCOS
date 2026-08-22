@@ -28,8 +28,8 @@
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -90,13 +90,12 @@ public:
             _nodeTimeMaintenance)
     {}
 
-    BlockSync::Ptr createBlockSync(boost::asio::io_context& _ioContext,
-        bcos::IOServicePool::Ptr _ioServicePool) override
+    BlockSync::Ptr createBlockSync(
+        boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool) override
     {
         auto pool = _ioServicePool;  // keep a copy before move
         auto sync = BlockSyncFactory::createBlockSync(_ioContext, std::move(_ioServicePool));
-        return std::make_shared<FakeBlockSync>(
-            sync->config(), _ioContext, std::move(pool));
+        return std::make_shared<FakeBlockSync>(sync->config(), _ioContext, std::move(pool));
     }
 };
 
@@ -147,6 +146,23 @@ public:
         if (m_frontService)
         {
             m_frontService->stop();
+        }
+        // Break the reference cycle this fixture creates:
+        //   FakeGateWay --(m_nodeId2Sync)--> BlockSync --(BlockSyncConfig)-->
+        //   FakeFrontService --(m_fakeGateWay)--> FakeGateWay
+        // Both edges are strong shared_ptrs, so without explicit teardown the
+        // whole node graph (ledger, blocks, txs, io_context) stays alive until
+        // process exit and trips LeakSanitizer. Sever both cross-references
+        // here so the object graph can actually release; the same
+        // FrontService <-> BlockSync cycle exists in production components
+        // and is tracked separately in #5433.
+        if (m_frontService)
+        {
+            m_frontService->setGateWay(nullptr);
+        }
+        if (m_gateWay && m_keyPair)
+        {
+            m_gateWay->removeSync(m_keyPair->publicKey());
         }
     }
 

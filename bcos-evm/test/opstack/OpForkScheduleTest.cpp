@@ -43,6 +43,41 @@ BOOST_AUTO_TEST_CASE(IsthmusDisablesJovianFlags)
     BOOST_CHECK(!(i.has_da_footprint));
 }
 
+// Feature-flag fork selection (feature_op_jovian replaces the former timestamp thresholds):
+// OFF → Isthmus baseline, ON → Jovian semantics.
+BOOST_AUTO_TEST_CASE(ConfigAtSelectsForkByFeatureFlag)
+{
+    // Value copies, not references: configAt returns a reference to a static config, but the
+    // OpForkFlags{...} argument is a prvalue temporary — GCC-14 -Wdangling-reference flags the
+    // reference binding as potentially dangling (false positive; the returned ref never aliases
+    // the flags argument). Copy the ~32B config instead.
+    const auto ist = configAt(OpForkFlags{.jovianActive = false});
+    BOOST_CHECK_EQUAL(ist.fork, OpFork::Isthmus);
+    BOOST_CHECK(!ist.has_jovian_operator_formula);
+    BOOST_CHECK(!ist.has_da_footprint);
+
+    const auto jov = configAt(OpForkFlags{.jovianActive = true});
+    BOOST_CHECK_EQUAL(jov.fork, OpFork::Jovian);
+    BOOST_CHECK(jov.has_jovian_operator_formula);
+    BOOST_CHECK(jov.has_da_footprint);
+}
+
+// 覆盖剩余字段 has_ecotone_l1_formula（Ecotone 用 calldataGas、Fjord+ 用 FastLZ）
+// 与 configAt 永不返回 karstConfig()（Karst 是 op-reth-only 占位，无真实语义）。
+BOOST_AUTO_TEST_CASE(EcotoneFormulaFlagAndKarstUnreachable)
+{
+    BOOST_CHECK(ecotoneConfig().has_ecotone_l1_formula);
+    BOOST_CHECK(!(fjordConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(!(graniteConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(!(holoceneConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(!(isthmusConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(!(jovianConfig().has_ecotone_l1_formula));
+
+    // configAt 只有 Isthmus/Jovian 两分支（引用稳定性：返回指向同一 static config）。
+    BOOST_CHECK_EQUAL(&configAt(OpForkFlags{.jovianActive = false}), &isthmusConfig());
+    BOOST_CHECK_EQUAL(&configAt(OpForkFlags{.jovianActive = true}), &jovianConfig());
+}
+
 BOOST_AUTO_TEST_CASE(PreIsthmusConfigsPinned)
 {
     for (const auto* cfg : {&ecotoneConfig(), &fjordConfig(), &graniteConfig(), &holoceneConfig()})

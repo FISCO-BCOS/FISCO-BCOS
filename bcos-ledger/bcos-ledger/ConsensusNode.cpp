@@ -2,11 +2,9 @@
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/text_oarchive.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/serialization/version.hpp>
 
 bcos::ledger::ConsensusNodeList bcos::ledger::decodeConsensusList(const std::string_view& value)
 {

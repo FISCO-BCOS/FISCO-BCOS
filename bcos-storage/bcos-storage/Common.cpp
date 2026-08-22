@@ -20,13 +20,6 @@
  */
 
 #include "Common.h"
-#include <boost/archive/basic_archive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <boost/serialization/vector.hpp>
 namespace bcos::storage
 {
 const __itt_string_handle* const ITT_STRING_STORAGE_PREPARE =

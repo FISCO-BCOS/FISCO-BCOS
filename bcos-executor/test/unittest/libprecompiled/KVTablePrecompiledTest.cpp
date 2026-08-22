@@ -18,10 +18,9 @@
  * @date 2021-12-01
  */
 
-#include "precompiled/KVTablePrecompiled.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

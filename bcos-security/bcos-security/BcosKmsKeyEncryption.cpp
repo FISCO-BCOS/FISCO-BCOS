@@ -30,11 +30,9 @@
 #include "BcosKms.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
-#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Base64.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
-#include <bcos-utilities/Log.h>
 
 using namespace bcos;
 using namespace crypto;

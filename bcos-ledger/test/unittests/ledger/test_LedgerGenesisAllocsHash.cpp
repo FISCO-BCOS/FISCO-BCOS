@@ -23,17 +23,12 @@
  */
 #include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
-#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
-#include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
-#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-tool/Exceptions.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
-#include <bcos-table/src/StateStorage.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 

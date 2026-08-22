@@ -120,10 +120,20 @@ bcos::h256 bcos::engine::detail::syntheticHash(std::string_view seed)
 
 std::vector<std::string> bcos::engine::detail::supportedCapabilities()
 {
+    // Everything this node implements, not a fork-narrowed subset. op-geth advertises its
+    // full `caps` list regardless of the active fork and lets the CL pick; op-node picks
+    // its method versions from the rollup config (forkchoiceUpdatedV3 / getPayloadV5 /
+    // newPayloadV4 on Karst) without needing the EL to prune the list for it. Narrowing
+    // here would also break the pre-Karst callers this node still serves — the v1 Engine
+    // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
+    //
+    // forkchoiceUpdatedV4 is the one absentee, and genuinely so: the forkchoice version
+    // window tops out at V3 (isForkchoiceVersionSupported), so the endpoint answers
+    // -38005. getPayloadV5 and newPayloadV4 were added by B4.
     return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
-        "engine_getPayloadV2", "engine_getPayloadV3", "engine_newPayloadV1", "engine_newPayloadV2",
-        "engine_newPayloadV3"};
+        "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
+        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
 }
 
 std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
@@ -160,6 +170,19 @@ bool bcos::engine::detail::isGetPayloadVersionCompatible(
         // Tier-2: V4-built payloads (the OP composition's attribute-driven builds) are
         // served by getPayloadV4 only, mirroring the V3 rule's shape.
         return payloadVersion <= 4;
+    }
+    if (requestVersion == ApiVersion::V5)
+    {
+        // Exactly V3 builds, matching op-geth's GetPayloadV5, which passes
+        // []engine.PayloadVersion{engine.PayloadV3} to its getPayload helper and answers
+        // engine.UnsupportedFork for anything else (eth/catalyst/api.go:498-511, 531-533).
+        // A Karst CL always pairs getPayloadV5 with a forkchoiceUpdatedV3 build, and the
+        // built-in single-node CL uses the same V3/V5/V4 triple. Accepting V1/V2 builds
+        // here would serialize them in the V5 response shape, fabricating a zero
+        // withdrawalsRoot and omitting the required blobGasUsed / excessBlobGas. A V1/V2
+        // CL is unaffected: it fetches its builds through getPayloadV1/V2, which still
+        // accept them.
+        return payloadVersion == 3;
     }
     return false;
 }
@@ -302,17 +325,35 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     }
     if (version >= 2 && !executionPayload.withdrawals.has_value())
     {
-        return std::string("withdrawals are required for ExecutionPayloadV2 and V3");
+        return std::string("withdrawals are required for ExecutionPayloadV2 and later");
+    }
+    // Isthmus (ExecutionPayloadV4+): the withdrawals operation list must be present AND
+    // empty. op-geth enforces exactly this before building the block — "expected non-nil
+    // empty withdrawals operation list in Isthmus" (beacon/engine/types.go:324-326) — and
+    // an OP L2 has no withdrawal operations to carry, the L1 accounting lives in the
+    // L2ToL1MessagePasser storage root instead.
+    if (version >= 4 && executionPayload.withdrawals.has_value() &&
+        !executionPayload.withdrawals->empty())
+    {
+        return std::string(
+            "withdrawals must be an empty list for ExecutionPayloadV4 and later (Isthmus)");
     }
     if (version <= 2 &&
         (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
     {
-        return std::string("blob gas fields are only valid for ExecutionPayloadV3");
+        return std::string("blob gas fields are only valid for ExecutionPayloadV3 and later");
     }
-    if (version == 3 &&
+    if (version >= 3 &&
         (!executionPayload.blobGasUsed.has_value() || !executionPayload.excessBlobGas.has_value()))
     {
-        return std::string("blob gas fields are required for ExecutionPayloadV3");
+        return std::string("blob gas fields are required for ExecutionPayloadV3 and later");
+    }
+    // Isthmus: an ExecutionPayloadV4 always carries the L2ToL1MessagePasser storage root.
+    // Pre-V4 payloads with the field present are tolerated (mirrors the parse side, which
+    // ignores it below V4 the way op-geth's NewPayloadV3 performs no withdrawalsRoot check).
+    if (version >= 4 && !executionPayload.withdrawalsRoot.has_value())
+    {
+        return std::string("withdrawalsRoot is required for ExecutionPayloadV4 and later");
     }
     return std::nullopt;
 }

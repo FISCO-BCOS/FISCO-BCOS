@@ -79,8 +79,8 @@ BOOST_AUTO_TEST_CASE(RoutesFeesToFourVaults)
     const auto& props = std::get<OpTxProperties>(v);
 
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
@@ -139,8 +139,8 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta)
     const auto& props = std::get<OpTxProperties>(v);
 
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
 
     const auto& meta = txR->opStackMeta();
@@ -149,10 +149,21 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta)
     BOOST_CHECK_EQUAL(*meta->l1_fee, bcosU256FromIntx(props.l1_cost));
     BOOST_REQUIRE(meta->l1_gas_price.has_value());
     BOOST_CHECK_EQUAL(*meta->l1_gas_price, bcosU256FromIntx(fee.l1_base_fee));
+    // l1_gas_used：Isthmus 的 has_ecotone_l1_formula=false（Fjord+ 语义）→ 走
+    // estimatedDaSizeScaled(flz) * 16 / 1e6 公式（op-geth rollup_cost.go:623-624）。
+    // 公式本体由 RollupCostTest 的任意精度字面量锚定；此处断言钉的是接线（l1_gas_used
+    // 必须来自 props.flz_len 的 Fjord 路径而非其他来源）。
+    BOOST_REQUIRE(meta->l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*meta->l1_gas_used,
+        static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000));
     BOOST_REQUIRE(meta->operator_fee.has_value());
     // Isthmus operator = gasUsed×scalar(1e6)/1e6 + 0 = gasUsed（纯转账 21000）。
     BOOST_CHECK_EQUAL(*meta->operator_fee, bcos::u256(static_cast<uint64_t>(txR->gasUsed())));
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(txR->gasUsed()), 21000u);
+    // effectiveGasPrice = base_fee(7) + priority(10) = 0x11（op-geth hexutil.Big 最小小写）；
+    // 转账型 tx 无 contractAddress。
+    BOOST_CHECK_EQUAL(txR->effectiveGasPrice(), "0x11");
+    BOOST_CHECK(txR->contractAddress().empty());
 }
 
 BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula)
@@ -200,8 +211,8 @@ BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula)
     const auto& props = std::get<OpTxProperties>(v);
 
     evmone::state::StateDiff diff;
-    const auto txR = opTransition(
-        ts, block, hashes, tx, cfg, vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR =
+        opTransition(ts, block, hashes, tx, cfg, vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
 
     const auto gasUsedInt = static_cast<uint64_t>(txR->gasUsed());
@@ -210,14 +221,20 @@ BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula)
     BOOST_REQUIRE(meta.has_value());
     BOOST_REQUIRE(meta->operator_fee.has_value());
     BOOST_CHECK_EQUAL(*meta->operator_fee, bcosU256FromIntx(expectedOp));
-    BOOST_CHECK_EQUAL(expectedOp, intx::uint256{gasUsedInt} * intx::uint256{1} *
-                                          intx::uint256{100} +
-                                      intx::uint256{500});
+    BOOST_CHECK_EQUAL(expectedOp,
+        intx::uint256{gasUsedInt} * intx::uint256{1} * intx::uint256{100} + intx::uint256{500});
 
     BOOST_REQUIRE(meta->da_footprint_gas_scalar.has_value());
     BOOST_CHECK_EQUAL(*meta->da_footprint_gas_scalar, 2u);
     BOOST_REQUIRE(meta->da_footprint.has_value());
     BOOST_CHECK_EQUAL(*meta->da_footprint, estimatedDaSize({env.data(), env.size()}) * 2u);
+
+    // l1_gas_used（Fjord+ 分支）：ecotone_calldata_gas_used 为 nullopt → 走
+    // estimatedDaSizeScaled(flz) * 16 / 1e6（op-geth rollup_cost.go:623-624）；公式本体由
+    // RollupCostTest 锚定，此处钉接线（同 Isthmus 用例）。
+    BOOST_REQUIRE(meta->l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*meta->l1_gas_used,
+        static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000));
 
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(ts.at(OP_OPERATOR_FEE_VAULT).balance, expectedOp);
@@ -267,9 +284,8 @@ BOOST_AUTO_TEST_CASE(AccessListKeepsStorageWarm)
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     evmone::state::StateDiff diff;
-    const auto txR = opTransition(
-        ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234,
-        kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm,
+        std::get<OpTxProperties>(v), 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(txR->gasUsed()), 25405u);
 }
@@ -317,16 +333,15 @@ BOOST_AUTO_TEST_CASE(AccessListWithOverridePrecompileStorageKey)
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     evmone::state::StateDiff diff;
-    const auto txR = opTransition(
-        ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234,
-        kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm,
+        std::get<OpTxProperties>(v), 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     // 纯转账 21000 + accessList(2400 地址 + 1900 槽) = 25300
     BOOST_CHECK_EQUAL(static_cast<uint64_t>(txR->gasUsed()), 25300u);
 
     // 幽灵删除必须已被 sanitizeStateDiff 剥离
-    BOOST_CHECK_MESSAGE((std::count(diff.deleted_accounts.begin(), diff.deleted_accounts.end(),
-                            kP256)) == (0),
+    BOOST_CHECK_MESSAGE(
+        (std::count(diff.deleted_accounts.begin(), diff.deleted_accounts.end(), kP256)) == (0),
         "override-table precompile must not enter deleted_accounts as a ghost");
     bcos::evm::applyStateDiffStrict(ts, diff);
 }

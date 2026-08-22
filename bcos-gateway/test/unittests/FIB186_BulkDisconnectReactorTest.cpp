@@ -45,14 +45,12 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/asio/error.hpp>
+#include <chrono>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <chrono>
 #include <memory>
 #include <thread>
 #include <vector>

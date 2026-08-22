@@ -86,8 +86,8 @@ BOOST_AUTO_TEST_CASE(UserTxGasUsedRaisedToFloor)
     const auto& props = std::get<OpTxProperties>(v);
 
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     // 7623 floor 生效：gas_used 恰等于公式推导的 floor，且严格大于 intrinsic
     constexpr int64_t kExpectedFloor3000 = 21000 + 3000 * 10;  // = 51000
@@ -122,8 +122,8 @@ BOOST_AUTO_TEST_CASE(DepositGasUsedRaisedToFloor)
         .data = state::bytes(3000, 0x00)};
 
     evmone::state::StateDiff diff;
-    const auto r = runDeposit(
-        ts, block, hashes, dep, isthmusConfig(), vm, 1234, block.gas_limit, kOpTestReceiptFactory, diff);
+    const auto r = runDeposit(ts, block, hashes, dep, isthmusConfig(), vm, 1234, block.gas_limit,
+        kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(r->status(), 0);
     // deposit 同样吃 7623 floor（op-geth Isthmus 无豁免）：gas_used == floor
     constexpr int64_t kExpectedFloor3000 = 21000 + 3000 * 10;  // = 51000
@@ -137,8 +137,8 @@ BOOST_AUTO_TEST_CASE(DepositGasUsedRaisedToFloor)
     ts2[depositor] = {.nonce = 0, .balance = 0_u256, .storage = {}, .code = {}};
     seedOpPredeploys(ts2);
     evmone::state::StateDiff diff2;
-    const auto rs = runDeposit(
-        ts2, block, hashes, small, isthmusConfig(), vm, 1234, block.gas_limit, kOpTestReceiptFactory, diff2);
+    const auto rs = runDeposit(ts2, block, hashes, small, isthmusConfig(), vm, 1234,
+        block.gas_limit, kOpTestReceiptFactory, diff2);
     BOOST_REQUIRE_EQUAL(rs->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*rs), kExpectedFloorEmpty);
     BOOST_CHECK_GT(receiptGasUsed(*r), receiptGasUsed(*rs));

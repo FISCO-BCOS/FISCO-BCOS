@@ -1,0 +1,932 @@
+# OP Stack 规范需求代码映射
+# 日期: 2026-08-19
+# 版本: v1.0
+
+扇区: ENG  # Engine API
+映射:
+
+  - id: "ENG-CAP-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 234-250
+          function: "exchangeCapabilities"
+          snippet: "if constexpr (c_opMode) co_return detail::supportedOpCapabilities();"
+      test:
+        - file: "engine/test/unittests/engine/EngineServiceTest.cpp"
+          case: "exchangeCapabilities"
+
+  - id: "ENG-CAP-002"
+    status: "PARTIAL"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.cpp"
+          line: 135-142
+          function: "supportedOpCapabilities"
+          snippet: "// OP capability list: only V3 advertised (V4 endpoints are stubs)"
+    notes: "V4 能力未广告,端点是桩"
+
+  - id: "ENG-FCU-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 252-500
+          function: "updateForkchoice"
+          snippet: "m_forkchoiceState = forkchoiceState; m_trackedHeadBlock = ..."
+
+  - id: "ENG-FCU-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 304-309
+          function: "updateForkchoice"
+          snippet: "if (*safeBlockNumber > *headBlockNumber) BOOST_THROW_EXCEPTION(InvalidForkchoiceState...)"
+
+  - id: "ENG-FCU-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 310-321
+          function: "updateForkchoice"
+          snippet: "if (*finalizedBlockNumber > *headBlockNumber) BOOST_THROW_EXCEPTION(...); if (*finalizedBlockNumber > *safeBlockNumber) ..."
+
+  - id: "ENG-FCU-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 294-303
+          function: "updateForkchoice"
+          snippet: "if (!headBlockNumber.has_value()) ... makeStatus(Syncing...)"
+
+  - id: "ENG-FCU-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 270-283
+          function: "updateForkchoice"
+          snippet: "if (auto validationError = detail::validatePayloadAttributes(*payloadAttributes, version); ...)"
+
+  - id: "ENG-FCU-006"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 392-398
+          function: "updateForkchoice"
+          snippet: "if (payloadAttributes != nullptr && version < 3) BOOST_THROW_EXCEPTION(UnsupportedFork...)"
+
+  - id: "ENG-FCU-007"
+    status: "MISSING"
+    notes: "-38006 TooDeepReorg 未实现"
+
+  - id: "ENG-FCU-008"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 270-283
+          snippet: "OP mode skips pre-check; forkchoice state updated before refusing attrs"
+
+  - id: "ENG-FCU-009"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 384-408
+          snippet: "buildOpPayload() — attribute-driven OP building"
+
+  - id: "ENG-FCU-010"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1576-1598
+          function: "derivePayloadId"
+          snippet: "derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash, version)"
+
+  - id: "ENG-FCU-011"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 392-398
+          snippet: "if (payloadAttributes != nullptr && version < 3) BOOST_THROW_EXCEPTION(UnsupportedFork...)"
+
+  - id: "ENG-NP-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.cpp"
+          line: 379+
+          function: "validateOpNewPayloadRequest"
+          snippet: "校验 OP payload 字段 -- baseFee > 0, no blob tx, no withdrawals"
+
+  - id: "ENG-NP-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1222-1235
+          snippet: "const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions); ... if (computeHash(*ethHeader) != payload.blockHash)"
+
+  - id: "ENG-NP-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1290-1295
+          snippet: "if (!parentBlockNumber.has_value()) co_return makeStatus(Syncing...)"
+
+  - id: "ENG-NP-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1308-1312
+          snippet: "if (payload.blockNumber != *parentBlockNumber + 1) co_return makeStatus(Invalid...)"
+
+  - id: "ENG-NP-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1378-1383
+          snippet: "if (static_cast<uint64_t>(payload.timestamp) <= static_cast<uint64_t>(parentHeader->timestamp())) co_return makeStatus(Invalid...)"
+
+  - id: "ENG-NP-006"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1392-1400
+          snippet: "auto expectedBaseFee = detail::calcOpBaseFee(*parentHeader, ...); if (payload.baseFeePerGas != expectedBaseFee) co_return makeStatus(Invalid...)"
+
+  - id: "ENG-NP-007"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1425-1430
+          snippet: "if (auto knownBlockNumber = ... getBlockNumber(view, payload.blockHash, ...); knownBlockNumber.has_value()) co_return makeStatus(Valid...)"
+
+  - id: "ENG-NP-008"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1460-1468
+          snippet: "if (auto occupiedHeight = ... readOne(view, SYS_NUMBER_2_HASH, childNumberStr); occupiedHeight.has_value()) BOOST_THROW_EXCEPTION(OpExecutionInternalError...)"
+
+  - id: "ENG-NP-009"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1496-1504
+          snippet: "m_delegate->executeBlock(block, /*verify=*/true, ...)"
+
+  - id: "ENG-NP-010"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1506-1514
+          snippet: "m_delegate->commitBlock(executedHeader, ...)"
+
+  - id: "ENG-NP-011"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1132-1138
+          snippet: "if (version != c_opIsthmusPayloadVersion) BOOST_THROW_EXCEPTION(UnsupportedFork...)"
+
+  - id: "ENG-NP-012"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1132-1138
+          snippet: "constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;"
+
+  - id: "ENG-NP-013"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1154-1196
+          snippet: "Classification barrier: catch (OpExecutionInternalError&) rethrow; catch (...) wrap as -32603"
+
+  - id: "ENG-NP-014"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1184-1195
+          snippet: "catch (...) BOOST_THROW_EXCEPTION(OpExecutionInternalError...)"
+
+  - id: "ENG-NP-015"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 291-292
+          snippet: "if (!payload.withdrawalsRoot.has_value()) throw OpConsensusError(...)"
+
+  - id: "ENG-GP-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 880-915
+          function: "handleGetPayload"
+          snippet: "auto it = m_payloadCache.find(payloadId); ... return std::make_unique<GetPayloadData>(...)"
+
+  - id: "ENG-GP-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 896
+          snippet: "BOOST_THROW_EXCEPTION(UnknownPayload...)"
+
+  - id: "ENG-GP-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 898-904
+          snippet: "if (!detail::isGetPayloadVersionCompatible(...)) BOOST_THROW_EXCEPTION(IncompatiblePayloadVersion...)"
+
+---
+
+扇区: BLK  # 块执行
+映射:
+
+  - id: "BLK-PRE-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 221-224
+          snippet: "auto sysDiff = evmone::state::system_call_block_start(stateView, blk, *hashes, cfg.rev, executor.vm());"
+
+  - id: "BLK-PRE-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 216-217
+          snippet: "hashes.emplace(view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);"
+
+  - id: "BLK-PRE-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 228-234
+          snippet: "if (rawTxBytes.empty()) throw OpConsensusError('missing L1 attributes deposit');"
+
+  - id: "BLK-PRE-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 245-266
+          snippet: "Jovian activation block: deposits-only check"
+
+  - id: "BLK-PRE-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 270-279
+          snippet: "daFootprintGasScalar = static_cast<uint16_t>((attrData[176] << 8) | attrData[177]);"
+
+  - id: "BLK-DEP-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpstackExecutor.h"
+          line: 307
+          snippet: "if (env.size() < 2 || env[0] != static_cast<uint8_t>(op::kDepositTxType)) fail('not a 0x7e deposit');"
+
+  - id: "BLK-DEP-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpstackExecutor.h"
+          line: 310-314
+          snippet: "auto [err, header] = rlp::decodeHeader(body); if (err != nullptr || !header.isList) fail(...)"
+
+  - id: "BLK-DEP-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpstackExecutor.h"
+          line: 245-252
+          snippet: "Strict 0x7E deposit envelope decode — deposit fields re-derived HERE from the signed envelope"
+
+  - id: "BLK-DEP-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 492+
+          snippet: "runDeposit: skip buyGas"
+
+  - id: "BLK-DEP-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 492+
+          snippet: "mint 加余额 (when present)"
+
+  - id: "BLK-DEP-006"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 492+
+          snippet: "失败也 force nonce++"
+
+  - id: "BLK-DEP-007"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 492+
+          snippet: "is_system_tx==true throws std::runtime_error"
+
+  - id: "BLK-DEP-008"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 492+
+          snippet: "is_system_tx must be false after Regolith"
+
+  - id: "BLK-TX-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpstackExecutor.h"
+          line: 793-808
+          snippet: "if (chainId != 0) { if (evmTx.chain_id != 0 && evmTx.chain_id != chainId) throw OpConsensusError(...) }"
+
+  - id: "BLK-TX-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 371+
+          snippet: "白名单类型过滤(blob/set_code+ rejected)"
+
+  - id: "BLK-TX-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 371-437
+          snippet: "Balance cap = gasLimit*maxGasPrice + value + l1Cost + operatorCost(gasLimit)"
+
+  - id: "BLK-TX-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 272-366
+          snippet: "buyGas(+l1+operator)"
+
+  - id: "BLK-FIN-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 57-65
+          snippet: "finalizeOpBlock: no block reward"
+
+  - id: "BLK-FIN-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 57-65
+          snippet: "disable_prague_requests check"
+
+  - id: "BLK-FIN-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 278-320
+          snippet: "sealOpBlock: withdrawalsRoot = opStorageRoot(mpStorage)"
+
+  - id: "BLK-FIN-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 104-105
+          snippet: "OP_EMPTY_REQUESTS_HASH = sha256('')"
+
+  - id: "BLK-CMT-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpCommitments.h"
+          line: 89-111
+          function: "mismatchedFieldOf"
+          snippet: "逐字段比较 receiptsRoot/logsBloom/withdrawalsRoot/stateRoot/gasUsed/txRoot/blobGasUsed/requestsHash"
+
+  - id: "BLK-CMT-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 278-320
+          snippet: "sealOpBlock: blobGasUsed = Jovian DA footprint"
+
+---
+
+扇区: PRE  # 预部署合约
+映射:
+
+  - id: "PRE-ADR-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 11
+          snippet: "inline constexpr evmc::address OP_L1_BLOCK = 0x4200...0015_address;"
+
+  - id: "PRE-ADR-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 12-13
+          snippet: "inline constexpr evmc::address OP_GAS_PRICE_ORACLE = 0x4200...000f_address;"
+
+  - id: "PRE-ADR-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 26-27
+          snippet: "inline constexpr evmc::address OP_L2_TO_L1_MESSAGE_PASSER = 0x4200...0016_address;"
+
+  - id: "PRE-ADR-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 14-15
+          snippet: "inline constexpr evmc::address OP_SEQUENCER_FEE_VAULT = 0x4200...0011_address;"
+
+  - id: "PRE-ADR-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 16-17
+          snippet: "inline constexpr evmc::address OP_BASE_FEE_VAULT = 0x4200...0019_address;"
+
+  - id: "PRE-ADR-006"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 18
+          snippet: "inline constexpr evmc::address OP_L1_FEE_VAULT = 0x4200...001a_address;"
+
+  - id: "PRE-ADR-007"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 19-20
+          snippet: "inline constexpr evmc::address OP_OPERATOR_FEE_VAULT = 0x4200...001b_address;"
+
+  - id: "PRE-ADR-008"
+    status: "MISSING"
+    notes: "WETH 合约未部署"
+
+  - id: "PRE-SLOT-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpFeeParams.h"
+          line: 19
+          snippet: "intx::uint256 l1_base_fee; // slot 1 (whole slot)"
+
+  - id: "PRE-SLOT-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpFeeParams.h"
+          line: 20-21
+          snippet: "uint32_t base_fee_scalar; // slot 3 bytes[16,20); uint32_t blob_base_fee_scalar; // slot 3 bytes[20,24)"
+
+  - id: "PRE-SLOT-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpFeeParams.h"
+          line: 22
+          snippet: "intx::uint256 blob_base_fee; // slot 7 (whole slot)"
+
+  - id: "PRE-SLOT-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpFeeParams.h"
+          line: 23-25
+          snippet: "uint32_t operator_fee_scalar; // slot 8 bytes[20,24); uint64_t operator_fee_constant; // slot 8 bytes[24,32); uint16_t da_footprint_gas_scalar; // slot 8 bytes[18,20)"
+
+  - id: "PRE-SYS-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/eth/state/system_contracts.cpp"
+          line: 85-107
+          function: "system_call_block_start"
+          snippet: "遍历 STORAGE_SYSTEM_CONTRACTS → execute_system_call(SYSTEM_ADDRESS, 30M gas)"
+
+  - id: "PRE-SYS-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 57-65
+          snippet: "finalizeOpBlock: no ommers, Prague requests suppressed"
+
+---
+
+扇区: FEE  # 费用计算
+映射:
+
+  - id: "FEE-L1-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/RollupCost.cpp"
+          function: "computeL1Cost"
+          snippet: "Ecotone: calldataGasUsed * (baseFeeScalar * 16 + blobBaseFeeScalar * blobBaseFee) / 1e6"
+
+  - id: "FEE-L1-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/RollupCost.cpp"
+          function: "computeL1CostFromFlz"
+          snippet: "Fjord+: estimatedDaSizeScaled(flz) * 16 / 1e6"
+
+  - id: "FEE-L1-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 371+
+          snippet: "Ecotone calldataGas = zeroes*4 + ones*16"
+
+  - id: "FEE-L1-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTxProperties"
+          line: 32
+          snippet: "uint32_t flz_len = 0; // Fjord+ single FastLZ result"
+
+  - id: "FEE-OP-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/RollupCost.cpp"
+          line: 208
+          snippet: "gasUsed * operatorFeeScalar / 1e6 + operatorFeeConstant"
+
+  - id: "FEE-OP-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/RollupCost.cpp"
+          line: 208
+          snippet: "Jovian: ×100 formula"
+
+  - id: "FEE-OP-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 19-20
+          snippet: "OP_OPERATOR_FEE_VAULT = 0x4200...001b"
+
+  - id: "FEE-DA-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.cpp"
+          line: 265-268
+          snippet: "estimatedDaSizeFromFlz(flz_len) * da_footprint_gas_scalar"
+
+  - id: "FEE-DA-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 278-320
+          snippet: "sealOpBlock: blobGasUsed = Jovian DA footprint"
+
+  - id: "FEE-EIP-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 725-753
+          snippet: "Holocene extraData: version=0 || denominator || elasticity (9 bytes)"
+
+  - id: "FEE-EIP-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 747-752
+          snippet: "if (m_scheduler.get().isJovianActive()) { extra[0] = 0x01; extra.resize(17, 0x00); }"
+
+  - id: "FEE-EIP-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.h"
+          line: 1392-1400
+          snippet: "auto expectedBaseFee = detail::calcOpBaseFee(*parentHeader, ...); if (payload.baseFeePerGas != expectedBaseFee) ..."
+
+  - id: "FEE-EIP-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.cpp"
+          line: 293+
+          function: "calcOpBaseFee"
+          snippet: "Jovian blobGasUsed substitution"
+
+  - id: "FEE-EIP-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "engine/bcos-engine/EngineServiceImpl.cpp"
+          line: 293+
+          function: "calcOpBaseFee"
+          snippet: "Jovian minBaseFee floor"
+
+  - id: "FEE-RT-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 16-17
+          snippet: "OP_BASE_FEE_VAULT = 0x4200...0019"
+
+  - id: "FEE-RT-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 18
+          snippet: "OP_L1_FEE_VAULT = 0x4200...001a"
+
+  - id: "FEE-RT-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpPredeploys.h"
+          line: 14-15
+          snippet: "OP_SEQUENCER_FEE_VAULT = 0x4200...0011"
+
+---
+
+扇区: RCP  # Receipt 编码
+映射:
+
+  - id: "RCP-ENC-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 244+
+          function: "encodeReceiptForRoot"
+          snippet: "0x7E || rlp([status, cumGas, bloom, logs, depositNonce, receiptVersion])"
+
+  - id: "RCP-ENC-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 244+
+          function: "encodeReceiptForRoot"
+          snippet: "typed_prefix || rlp([status, cumGas, bloom, logs])"
+
+  - id: "RCP-META-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 100
+          snippet: "std::optional<intx::uint256> l1_gas_price;"
+
+  - id: "RCP-META-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 101
+          snippet: "std::optional<intx::uint256> l1_blob_base_fee;"
+
+  - id: "RCP-META-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 102
+          snippet: "std::optional<uint32_t> l1_base_fee_scalar;"
+
+  - id: "RCP-META-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 103
+          snippet: "std::optional<uint32_t> l1_blob_base_fee_scalar;"
+
+  - id: "RCP-META-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 104
+          snippet: "std::optional<intx::uint256> l1_fee;"
+
+  - id: "RCP-META-006"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 105
+          snippet: "std::optional<uint64_t> l1_gas_used;"
+
+  - id: "RCP-META-007"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 108-109
+          snippet: "std::optional<uint32_t> operator_fee_scalar; std::optional<uint64_t> operator_fee_constant;"
+
+  - id: "RCP-META-008"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 112-113
+          snippet: "std::optional<uint64_t> da_footprint_gas_scalar; std::optional<uint64_t> da_footprint;"
+
+  - id: "RCP-META-009"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpTransition.h"
+          line: 117
+          snippet: "std::optional<intx::uint256> effective_gas_price;"
+
+  - id: "RCP-ROOT-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 244+
+          snippet: "op-geth Receipts.EncodeIndex semantics"
+
+---
+
+扇区: STA  # 状态管理
+映射:
+
+  - id: "STA-ROOT-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/adapter/StateRootCompute.h"
+          line: 60-87
+          function: "stateRootOf"
+          snippet: "visitAccounts → per-account leaf = rlp(nonce, balance, storageRoot, codeHash) → computeTrieRoot"
+
+  - id: "STA-ROOT-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.h"
+          line: 314+
+          function: "computeOpTxRoot"
+          snippet: "key=rlp(index), leaf=raw-envelope → MPT trie hash"
+
+  - id: "STA-ROOT-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/OpBlockExecute.cpp"
+          line: 220-235
+          function: "opStorageRoot"
+          snippet: "secure-trie: key=keccak256(slot), value=rlp(trimmed)"
+
+  - id: "STA-DIFF-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/eth/state/state.hpp"
+          function: "applyStateDiff"
+          snippet: "遍历 diff — deleted accounts 删, created/updated accounts 写"
+
+  - id: "STA-ERR-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "opstack-executor/Storage2State.h"
+          snippet: "SharedErrorSlot — poison-flag 错误通道"
+
+---
+
+扇区: FRK  # 硬分叉
+映射:
+
+  - id: "FRK-SCH-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 21
+          snippet: "Ecotone → EVMC_CANCUN"
+
+  - id: "FRK-SCH-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 22
+          snippet: "Fjord → EVMC_CANCUN"
+
+  - id: "FRK-SCH-003"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 23
+          snippet: "Granite → EVMC_CANCUN"
+
+  - id: "FRK-SCH-004"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 24
+          snippet: "Holocene → EVMC_CANCUN"
+
+  - id: "FRK-SCH-005"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 25
+          snippet: "Isthmus → EVMC_PRAGUE"
+
+  - id: "FRK-SCH-006"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 26-27
+          snippet: "Jovian → EVMC_PRAGUE"
+
+  - id: "FRK-SEL-001"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 82-87
+          snippet: "OpForkFlags { bool jovianActive = false; }"
+
+  - id: "FRK-SEL-002"
+    status: "IMPLEMENTED"
+    evidence:
+      code:
+        - file: "bcos-evm/bcos-evm/opstack/OpForkSchedule.h"
+          line: 89-95
+          function: "configAt"
+          snippet: "jovianActive -> Jovian, otherwise Isthmus"

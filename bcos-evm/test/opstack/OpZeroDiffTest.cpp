@@ -131,7 +131,6 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
         opTransition(ts, block, hashes, tx, cfg, vm, props, /*chainId=*/1, kOpTestReceiptFactory, opDiff);
     BOOST_REQUIRE_EQUAL(opTxR->status(), 0);
     const auto opGasUsed = static_cast<uint64_t>(opTxR->gasUsed());
-    const auto& opReceipt = opDiff;
 
     // eth side: validate -> transition -> sanitize, the three steps EthTransition.{h,cpp}
     // used to wrap. Both sides sanitize, so the diffs stay comparable.

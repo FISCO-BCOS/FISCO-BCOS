@@ -20,7 +20,6 @@
 #include "ZkpPrecompiled.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <wedpr-crypto/WedprDiscreteLogarithmProof.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

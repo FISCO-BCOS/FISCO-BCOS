@@ -7,7 +7,6 @@
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_map.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <boost/container_hash/hash_fwd.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/zip.hpp>
 #include <variant>

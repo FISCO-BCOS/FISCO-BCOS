@@ -23,6 +23,7 @@
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
 #include <opstack-executor/Storage2State.h>
+#include <algorithm>
 #include <array>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/system_contracts.hpp>
@@ -73,6 +74,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff);
 
+
 // ---- Jovian L1-attributes block shape ----
 // The L1-attributes deposit's calldata is 176B on the Jovian activation block, 178B with the
 // Jovian selector thereafter.
@@ -85,6 +87,7 @@ inline constexpr std::array<uint8_t, 4> JovianL1AttributesSelector = {0x3d, 0xb6
 void validateJovianBlockShape(std::span<const OpBlockTx> txs, const OpForkConfig& cfg);
 
 // ---- shared per-receipt helpers (one implementation shared with the per-tx loop) ----
+
 
 /// Stricter-than-spec content check for the L1 attributes deposit (to==OP_L1_BLOCK &&
 /// from==OP_DEPOSITOR); rejects hand-crafted payloads.
@@ -197,7 +200,8 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
 
 /// Block-pre steps shared by the OpScheduler execution path (and previously the retired
 /// runOpBlockInjection): recent-block-hashes construction → system_call_block_start +
-/// applyStateDiff → deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs
+/// write-back → deposit-first content check + Jovian shape → DA footprint gas scalar. Outputs
+
 /// hashes (emplaced in place — RecentBlockHashes holds a storage reference, not assignable, hence
 /// the std::optional carrier), hashErr, and daFootprintGasScalar via reference params. Throws
 /// OpConsensusError on shape/validation faults.
@@ -205,23 +209,39 @@ template <class Storage, class RawTxRange>
 void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     bcos::evm::opstack::OpForkConfig const& cfg, RawTxRange const& rawTxBytes,
     std::vector<bcos::evm::opstack::DepositTx> const& deposits,
-    bcos::executor_v1::opstack::OpstackExecutor& executor, bcos::crypto::Hash::Ptr const& hashImpl,
+    bcos::executor_v1::opstack::OpstackExecutor& executor,
     std::optional<detail::RecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,
     std::optional<uint16_t>& daFootprintGasScalar)
 {
     namespace op = bcos::evm::opstack;
-    namespace eth = bcos::executor_v1::eth;
 
     auto blk = detail::toBlockInfo(header);
     hashes.emplace(
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     bcos::evm::evmstate::Storage2State<Storage> stateView(view, executor.sharedError());
 
-    // (1) Pre-block system call.
+    // (1) Pre-block system call; write back through the bridge (the diff is sanitized first —
+    // applyDiff's precondition). applyDiff poisons AND rethrows raw; a write-back failure is a
+    // local storage fault, so it leaves as OpStorageError, never a bare runtime_error.
     auto sysDiff =
         evmone::state::system_call_block_start(stateView, blk, *hashes, cfg.rev, executor.vm());
-    bcos::task::syncWait(eth::applyStateDiff(
-        view, bcos::evm::sanitizeStateDiff(stateView, sysDiff), cfg.rev, *hashImpl));
+    try
+    {
+        stateView.applyDiff(bcos::evm::sanitizeStateDiff(stateView, std::move(sysDiff)));
+    }
+    catch (const std::exception& e)
+    {
+        throw OpStorageError(std::string("pre-block system-call write-back failed: ") + e.what());
+    }
+    catch (...)
+    {
+        throw OpStorageError("pre-block system-call write-back failed: unknown exception");
+    }
+    // Read-path poison from the system call with applyDiff returning normally — same check as
+    // the deposit/tx write-back paths in OpstackExecutor; without it a storage fault here would
+    // silently execute as zero-value reads and surface later as a stateRoot mismatch.
+    if (stateView.poisoned())
+        throw OpStorageError("pre-block system-call poisoned: " + stateView.firstError());
 
     // (2) deposit-first content check + Jovian shape (type-byte classification, no raw-tx parse).
     constexpr uint8_t kDepositTypeByte = 0x7e;
@@ -247,6 +267,13 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
         auto const& data = deposits[0].data;
         if (data.size() == op::IsthmusL1AttributesLen)
         {
+            // Jovian activation block must be deposits-only. Parity anchor: op-geth
+            // CalcDAFootprint (core/types/rollup_cost.go:563-577, v1.101701.0) makes the exact
+            // same last-tx-only check ("sufficient to check last transaction because deposits
+            // precede non-deposit txs") and likewise relies on — without enforcing — the
+            // deposit-prefix invariant, so with the deposit order gate demoted to a log our accept
+            // set still matches op-geth's; iterating all envelopes here would be stricter than the
+            // reference client and a consensus divergence.
             // Empty-envelope guard before back()[0] access (trailing empty tx -> same reject path).
             if (rawTxBytes.back().empty() || rawTxBytes.back()[0] != kDepositTypeByte)
                 throw OpConsensusError(

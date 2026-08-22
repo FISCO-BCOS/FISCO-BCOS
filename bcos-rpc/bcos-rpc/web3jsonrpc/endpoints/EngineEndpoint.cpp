@@ -24,7 +24,6 @@
 #include <bcos-rpc/web3jsonrpc/utils/EngineErrorMapper.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -73,6 +72,14 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     auto const& capsArray = request[0u];
     for (auto const& cap : capsArray)
     {
+        // This is the FIRST Engine method a CL calls, and asString() throws
+        // Json::LogicError on an array/object element — which the RPC entry point turns
+        // into -32603 carrying boost's diagnostic string back to the caller.
+        if (!cap.isString())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "engine_exchangeCapabilities expects an array of method names"));
+        }
         remoteCaps.push_back(cap.asString());
     }
 
@@ -83,6 +90,28 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
         result.append(cap);
     }
     buildJsonContent(result, response);
+}
+
+void EngineEndpoint::buildUnimplementedVersionError(
+    std::string_view method, Json::Value& response) const
+{
+    // -38005 Unsupported fork for a method version this node does not implement at all
+    // (currently only forkchoiceUpdatedV4: the service layer's forkchoice window tops out
+    // at V3, see isForkchoiceVersionSupported). This is NOT a declaration that older
+    // versions are incompatible: every version that IS implemented stays served, so a
+    // pre-Karst CL — the v1 Engine API harness kept alive by unsafe_allow_v1_executor, or
+    // a stock Lodestar driving V1-V3 — keeps working.
+    //
+    // Built inline instead of through buildJsonError(request, ...) because a handler only
+    // ever receives the params array, never the request envelope: the JSON-RPC id is
+    // stamped onto the handler's response by the dispatcher
+    // (Web3JsonRpcImpl::handleRequest, `result["id"] = _request["id"]`), the same way it
+    // is for buildEngineNotAvailableError above and for every successful response.
+    Json::Value error(Json::objectValue);
+    error["code"] = EngineError::UnsupportedFork;
+    error["message"] = std::string(method) + " is not yet supported";
+    response["jsonrpc"] = "2.0";
+    response["error"] = std::move(error);
 }
 
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV1(
@@ -155,7 +184,18 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
 
 task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value& request, Json::Value& response)
 {
+    // Isthmus getPayload — a pre-Karst version, and served like every other one. The whole
+    // stack below already handles V4: isGetPayloadVersionSupported spans V1-V5,
+    // isGetPayloadVersionCompatible has its own V4 window, handleGetPayload fills
+    // executionRequests for V4+, and combineGetPayloadResponse renders the V4 shape.
+    // Refusing it here while serving newPayloadV4 would be the same fork-narrowing this
+    // node no longer does.
     co_await handleGetPayload(engine::ApiVersion::V4, request, response);
+}
+
+task::Task<void> EngineEndpoint::getPayloadV5(const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetPayload(engine::ApiVersion::V5, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleGetPayload(
@@ -168,6 +208,11 @@ task::Task<void> EngineEndpoint::handleGetPayload(
         co_return;
     }
 
+    if (request.size() < 1 || !request[0u].isString())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "engine_getPayload expects [payloadId]"));
+    }
     engine::PayloadID payloadId = request[0u].asString();
     bcos::engine::GetPayloadResult engineResult;
     try

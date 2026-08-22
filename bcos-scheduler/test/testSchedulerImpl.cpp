@@ -1,30 +1,20 @@
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-scheduler/src/BlockExecutive.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
 #include "bcos-utilities/IOServicePool.h"
-#include "bcos-table/src/KeyPageStorage.h"
-#include "bcos-table/src/StateStorage.h"
-#include "bcos-table/src/StateStorageInterface.h"
-#include "mock/MockBlockExecutive.h"
 #include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutorForCall.h"
-#include "mock/MockExecutorForCreate.h"
 #include "mock/MockLedger3.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-framework/storage/Table.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -34,11 +24,8 @@
 #include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
-#include <rocksdb/write_batch.h>
 #include <boost/test/unit_test.hpp>
-#include <filesystem>
 #include <future>
-#include <optional>
 
 
 using namespace std;
@@ -94,7 +81,16 @@ struct schedulerImplFixture
         scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
     };
 
-    ~schedulerImplFixture() {}
+    // Release the shared IOServicePool before any member is destroyed: dropping
+    // the fixture's references lets ~IOServicePool() stop and join the worker
+    // threads up front, so a pending scheduler task (which captures `this`) cannot
+    // run against already-freed members/schedulers (intermittent "memory access
+    // violation at fixture dtor").
+    ~schedulerImplFixture()
+    {
+        scheduler = nullptr;      // release the scheduler's pool reference
+        ioServicePool = nullptr;  // destroy the pool now -> stop + join threads
+    }
     bcos::IOServicePool::Ptr ioServicePool;
     boost::asio::io_context ioService;
     bcos::test::MockLedger3::Ptr ledger;
@@ -400,9 +396,9 @@ BOOST_AUTO_TEST_CASE(commitBlock)
 
 BOOST_AUTO_TEST_CASE(handlerBlockTest)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
     scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
 
@@ -481,9 +477,9 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
 
 BOOST_AUTO_TEST_CASE(getCode)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
     scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
 
@@ -500,9 +496,9 @@ BOOST_AUTO_TEST_CASE(getCode)
 BOOST_AUTO_TEST_CASE(call)
 {
     // Add executor
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     // auto blockExecutiveFactory = std::make_shared<bcos::test::MockBlockExecutiveFactory>(false);
     // scheduler->setBlockExecutiveFactory(blockExecutiveFactory);
     auto executor = std::make_shared<MockParallelExecutorForCall>("executor1");
@@ -557,9 +553,9 @@ BOOST_AUTO_TEST_CASE(call)
 
 BOOST_AUTO_TEST_CASE(testDeploySysContract)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     // Add executor
     auto executor1 = std::make_shared<MockParallelExecutor>("executor1");
     executorManager->addExecutor("executor1", executor1);
@@ -590,9 +586,9 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
 
 BOOST_AUTO_TEST_CASE(testCallSysContract)
 {
-    auto scheduler =
-        std::make_shared<SchedulerImpl>(executorManager, ledger, storage, executionMessageFactory,
-            blockFactory, txPool, transactionSubmitResultFactory, hashImpl, false, false, false, 0, ioServicePool);
+    auto scheduler = std::make_shared<SchedulerImpl>(executorManager, ledger, storage,
+        executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory, hashImpl,
+        false, false, false, 0, ioServicePool);
     // Add executor
     auto executor1 = std::make_shared<MockParallelExecutorForCall>("executor1");
     executorManager->addExecutor("executor1", executor1);

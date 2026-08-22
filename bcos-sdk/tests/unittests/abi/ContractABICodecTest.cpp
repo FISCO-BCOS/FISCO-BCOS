@@ -28,6 +28,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
+#include <boost/test/unit_test.hpp>
 #include <cstddef>
 #include <utility>
 
@@ -187,8 +188,8 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         bcos::bytes buffer;
         solcImpl->serialize(*sPtr, buffer);
-        BOOST_CHECK_EQUAL("000000000000000000000000000000000000000000000000000000000001b207",
-            toHex(buffer));
+        BOOST_CHECK_EQUAL(
+            "000000000000000000000000000000000000000000000000000000000001b207", toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);
@@ -326,8 +327,8 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         bcos::bytes buffer;
         solcImpl->serialize(*sPtr, buffer);
-        BOOST_CHECK_EQUAL("fffffffffffffffffffffffffffffffffffffffffffffda5aa5b91a256638e39",
-            toHex(buffer));
+        BOOST_CHECK_EQUAL(
+            "fffffffffffffffffffffffffffffffffffffffffffffda5aa5b91a256638e39", toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);
@@ -557,9 +558,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
     {}
 
     // bytesN
-    {
-
-    }
+    {}
 
     // string
     {

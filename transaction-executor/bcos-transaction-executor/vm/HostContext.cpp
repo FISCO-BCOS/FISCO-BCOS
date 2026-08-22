@@ -1,7 +1,6 @@
 #include "HostContext.h"
 #include "VMFactory.h"
 #include "bcos-crypto/ChecksumAddress.h"
-#include <fmt/compile.h>
 #include <fmt/format.h>
 
 evmc_bytes32 bcos::executor_v1::hostcontext::evm_hash_fn(
@@ -24,17 +23,15 @@ evmc_message bcos::executor_v1::hostcontext::getMessage(bool web3Tx,
         {
             if (!web3Tx)
             {
-                auto address = fmt::format(FMT_COMPILE("{}_{}_{}"), blockNumber, contextID, seq);
+                auto address = fmt::format("{}_{}_{}", blockNumber, contextID, seq);
                 auto hash = hashImpl.hash(address);
                 std::copy_n(
                     hash.data(), sizeof(message.code_address.bytes), message.code_address.bytes);
             }
             else
             {
-                auto legacyAddr =
-                    newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
-                std::copy(
-                    legacyAddr.begin(), legacyAddr.end(), message.code_address.bytes);
+                auto legacyAddr = newLegacyEVMAddress(bytesConstRef(message.sender.bytes), nonce);
+                std::copy(legacyAddr.begin(), legacyAddr.end(), message.code_address.bytes);
             }
         }
         message.recipient = message.code_address;

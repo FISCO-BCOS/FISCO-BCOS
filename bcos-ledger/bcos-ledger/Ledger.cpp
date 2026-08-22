@@ -247,6 +247,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // number 2 header
+    // When blockHashOverride is set (OP path), the stored header's hash() differs
+    // from the override key in SYS_NUMBER_2_HASH. OP-aware readers must use the
+    // override hash, not header->hash().
     bytes headerBuffer;
     header->encode(headerBuffer);
 
@@ -1997,9 +2000,14 @@ static void applyEthGenesisHeader(
     header.setDifficulty(ethHeader.m_difficulty);
     header.setGasLimit(ethHeader.m_gasLimit);
     header.setGasUsed(ethHeader.m_gasUsed);
-    // B0's timestamp is artifact-authoritative and in SECONDS (the Ethereum
-    // header domain): the RLP hash must reproduce the artifact byte-for-byte.
-    header.setTimestamp(ethHeader.m_timestamp);
+    // The artifact carries B0's timestamp in SECONDS (the Ethereum header
+    // domain); internal BlockHeader timestamps are MILLISECONDS everywhere, so
+    // convert on the way in. The RLP bridge (EthBlockHeader) divides by 1000 on
+    // encode, so keccak256(rlp(header)) still reproduces the artifact hash
+    // byte-for-byte. No int64 overflow: the config parser bounds the artifact
+    // seconds by INT64_MAX/1000 (NodeConfig's [eth_genesis_header].timestamp
+    // check), so the x1000 cannot wrap.
+    header.setTimestamp(ethHeader.m_timestamp * 1000);
     header.setExtraData(bcos::bytes(ethHeader.m_extraData));
     header.setPrevRandao(ethHeader.m_mixHash);
     header.setNonce(ethHeader.m_nonce);
@@ -2757,6 +2765,24 @@ task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumbe
     bcos::ledger::Features features;
     co_await features.readFromStorage(*m_stateStorage, _blockNumber);
     co_return features;
+}
+
+task::Task<bool> Ledger::fetchFeature(
+    bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
+{
+    // One SYS_CONFIG row instead of fetchAllFeatures' read of every feature key (~61 rows).
+    // A flag is active when its enableNumber <= _blockNumber; absent row / decode failure
+    // means "not enabled" (the honest scenario-A default). Used by the historical
+    // state-read path which needs exactly feature_l2_ethereum_compat.
+    auto const key = std::string(magic_enum::enum_name(_flag));
+    auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
+    if (error || !entry)
+    {
+        co_return false;
+    }
+    auto const [value, enableNumber] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+    co_return _blockNumber >= enableNumber;
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
 {

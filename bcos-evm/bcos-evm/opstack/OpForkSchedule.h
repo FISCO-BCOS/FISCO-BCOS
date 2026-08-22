@@ -23,9 +23,9 @@ namespace bcos::evm::opstack
 //   Granite      | Cancun        | EVMC_CANCUN       | modeled; 8 precompile size limits
 //   Holocene     | Cancun        | EVMC_CANCUN       | modeled; EIP-1559 via 9B extraData
 //   Isthmus      | Prague/Pectra | EVMC_PRAGUE       | modeled; EIP-7702/7623/2935/2537 + OP
-//   deposit changes Jovian       | Prague        | EVMC_PRAGUE       | modeled; +DA footprint,
-//   operator fee ×100 Karst        | TBD           | EVMC_PRAGUE (alias)| placeholder = Jovian
-//   (op-reth only)
+//                 |               |                   | deposit changes
+//   Jovian        | Prague        | EVMC_PRAGUE       | modeled; +DA footprint, operator fee ×100
+//   Karst         | TBD           | EVMC_PRAGUE (alias)| placeholder = Jovian (op-reth only)
 //
 // Key facts:
 //   * Isthmus = all Prague/Pectra features that apply to L2s (optimism docs
@@ -71,8 +71,9 @@ const OpForkConfig& isthmusConfig() noexcept;
 const OpForkConfig& jovianConfig() noexcept;
 const OpForkConfig& karstConfig() noexcept;
 
-/// Fork-activation timestamps for the OP validator loop (op-validator-minimal-loop design §4.2,
-/// decision A5). Injected via OpSchedulerSeam's constructor (same channel as chainId) rather than
+/// Fork-activation flags for the OP validator loop (op-validator-minimal-loop design §4.2,
+/// decision A5): no timestamp dimension — FISCO activates forks by feature flag, not by header
+/// timestamp. Injected via OpSchedulerSeam's constructor (same channel as chainId) rather than
 /// read from SystemConfigs — the minimal loop only distinguishes Isthmus/Jovian. Isthmus is the
 /// OP-mode baseline (the engine -38005 gate admits only Isthmus+ payloads), so a single boolean
 /// switch — `feature_op_jovian` (Features::Flag, read from genesis [features]) — selects Jovian

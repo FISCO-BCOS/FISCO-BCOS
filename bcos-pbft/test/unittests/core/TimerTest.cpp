@@ -35,7 +35,8 @@ class FakeTimer : public Timer
 {
 public:
     explicit FakeTimer(boost::asio::io_context& _ioService, uint64_t _timeout)
-      : Timer(_ioService, _timeout, "fakeTimer") {}
+      : Timer(_ioService, _timeout, "fakeTimer")
+    {}
     ~FakeTimer() override {}
     void setTriggerTimeout(bool _triggerTimeout) { m_triggerTimeout = _triggerTimeout; }
     bool triggerTimeout() { return m_triggerTimeout; }

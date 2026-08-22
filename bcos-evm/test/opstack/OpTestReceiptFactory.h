@@ -20,9 +20,9 @@ namespace bcos::evm::opstack::testutil
 /// crypto suite; the receipt objects it creates are independent).
 inline bcos::protocol::TransactionReceiptFactory::Ptr makeOpTestReceiptFactory()
 {
-    auto suite = std::make_shared<bcos::crypto::CryptoSuite>(
-        std::make_shared<bcos::crypto::Keccak256>(),
-        std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto suite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite);
 }
 

@@ -18,11 +18,9 @@
  * @date 2021-09-03
  */
 
-#include <bcos-framework/Common.h>
 #include <bcos-rpc/event/Common.h>
 #include <bcos-rpc/event/EventSubRequest.h>
 #include <bcos-rpc/event/EventSubTask.h>
-#include <json/json.h>
 #include <exception>
 
 using namespace bcos;

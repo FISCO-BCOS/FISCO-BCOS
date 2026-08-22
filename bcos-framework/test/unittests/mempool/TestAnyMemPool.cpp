@@ -8,13 +8,11 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
-#include "bcos-utilities/Common.h"
 #include <proxy/v3/proxy.h>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <mutex>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -75,10 +73,7 @@ struct MockMemPool
         m_addedTransactions.clear();
     }
 
-    void remove(std::vector<bcos::crypto::HashType> hashes)
-    {
-        m_removedHashes = std::move(hashes);
-    }
+    void remove(std::vector<bcos::crypto::HashType> hashes) { m_removedHashes = std::move(hashes); }
 
     std::vector<protocol::Transaction::Ptr> get(std::vector<bcos::crypto::HashType> hashes)
     {
@@ -162,10 +157,7 @@ struct NonCopyableMemPool
         m_addedTransactions.clear();
     }
 
-    void remove(std::vector<bcos::crypto::HashType> /*hashes*/)
-    {
-        m_addedTransactions.clear();
-    }
+    void remove(std::vector<bcos::crypto::HashType> /*hashes*/) { m_addedTransactions.clear(); }
 
     std::vector<protocol::Transaction::Ptr> get(std::vector<bcos::crypto::HashType> /*hashes*/)
     {

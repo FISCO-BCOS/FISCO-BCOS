@@ -21,15 +21,10 @@
 #include "ProPBFTInitializer.h"
 #include "Common.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-utilities/Exceptions.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <bcos-pbft/pbft/PBFTImpl.h>
-#include <bcos-sealer/Sealer.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
-#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
-#include <boost/throw_exception.hpp>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -48,7 +43,8 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
         _storage, _frontService, _nodeTimeMaintenance, _ioServicePool)
 {
-    m_timer = std::make_shared<Timer>(*_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
+    m_timer = std::make_shared<Timer>(
+        *_ioServicePool->getIOService(), m_timerSchedulerInterval, "node info report");
 
     std::vector<tars::TC_Endpoint> endPoints;
     auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();

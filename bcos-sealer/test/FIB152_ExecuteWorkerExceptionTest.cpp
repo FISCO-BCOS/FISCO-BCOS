@@ -28,11 +28,10 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/Worker.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
-#include <boost/asio/io_context.hpp>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
@@ -138,8 +137,7 @@ struct ThrowingHookSealer : public bcos::sealer::Sealer
 {
     std::atomic<int> hookInvocations{0};
 
-    explicit ThrowingHookSealer(bcos::sealer::SealerConfig::Ptr cfg,
-        boost::asio::io_context& io)
+    explicit ThrowingHookSealer(bcos::sealer::SealerConfig::Ptr cfg, boost::asio::io_context& io)
       : bcos::sealer::Sealer(std::move(cfg), io)
     {}
 

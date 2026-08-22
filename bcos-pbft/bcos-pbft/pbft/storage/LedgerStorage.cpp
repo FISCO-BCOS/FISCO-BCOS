@@ -20,7 +20,6 @@
  */
 #include "LedgerStorage.h"
 #include "../utilities/Common.h"
-#include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
 
@@ -397,15 +396,14 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
             // Note:Here the thread pool is used to asynchronize the operation of PBFT finalize to
             // prevent the commitBlock from calling the callback synchronously and affecting the
             // performance.
-            ledgerStorage->m_strand.post(
-                [self, txsSize, _blockHeader, _ledgerConfig]() {
-                    auto storage = self.lock();
-                    if (!storage)
-                    {
-                        return;
-                    }
-                    storage->onStableCheckPointCommitted(txsSize, _blockHeader, _ledgerConfig);
-                });
+            ledgerStorage->m_strand.post([self, txsSize, _blockHeader, _ledgerConfig]() {
+                auto storage = self.lock();
+                if (!storage)
+                {
+                    return;
+                }
+                storage->onStableCheckPointCommitted(txsSize, _blockHeader, _ledgerConfig);
+            });
         }
         catch (std::exception const& e)
         {

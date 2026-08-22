@@ -542,6 +542,27 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
     co_return features;
 }
 
+bcos::task::Task<bool> bcos::ledger::tag_invoke(ledger::tag_t<getFeature> /*unused*/,
+    LedgerInterface& ledger, ledger::Features::Flag flag, protocol::BlockNumber blockNumber)
+{
+    // Single-flag read: Ledger overrides fetchFeature with one SYS_CONFIG row instead of
+    // fetchAllFeatures' scan of every feature key (~60 rows). Used by the historical
+    // state-read path (feature_l2_ethereum_compat) which needs exactly one flag; degrades
+    // to false (scenario A) on any failure, the same honest default as getFeatures'
+    // empty-set fallback.
+    try
+    {
+        co_return co_await ledger.fetchFeature(flag, blockNumber);
+    }
+    catch (...)
+    {
+        LEDGER2_LOG(DEBUG) << LOG_DESC("fetch feature failed")
+                           << LOG_KV("flag", magic_enum::enum_name(flag))
+                           << LOG_KV("msg", boost::current_exception_diagnostic_information());
+        co_return false;
+    }
+}
+
 bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> bcos::ledger::tag_invoke(
     ledger::tag_t<getReceipt> /*unused*/, LedgerInterface& ledger, crypto::HashType const& txHash)
 {

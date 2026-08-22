@@ -1,6 +1,4 @@
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/key/KeyImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <bcos-utilities/Common.h>

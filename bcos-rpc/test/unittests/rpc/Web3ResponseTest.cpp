@@ -15,8 +15,8 @@
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
 
@@ -44,6 +44,28 @@ bcos::protocol::Transaction::Ptr makeWeb3Tx(bcos::protocol::BlockFactory::Ptr bl
     auto txFactory = blockFactory->transactionFactory();
     return txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
         bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+}
+
+// calculateHash routes headers with ethBlockVersion != NON_ETH through
+// EthBlockHeader::validate, which demands every mandatory and fork-gated PRAGUE field —
+// fill them all so the header hashes. Distinctively named for unity-build safety.
+void fillWeb3ResponseTestPragueFields(bcos::protocol::BlockHeader& header)
+{
+    bcos::crypto::HashType nonZero;
+    nonZero[0] = 0x42;
+    header.setUncleHash(nonZero);
+    header.setStateRoot(nonZero);
+    header.setTxsRoot(nonZero);
+    header.setReceiptsRoot(nonZero);
+    bcos::bytes bloom(256, 0x00);
+    header.setLogsBloom(bcos::ref(bloom));
+    header.setBaseFee(u256(1000000000));
+    header.setWithdrawalsRoot(nonZero);
+    header.setBlobGasUsed(u256(0));
+    header.setExcessBlobGas(u256(0));
+    header.setParentBeaconBlockRoot(nonZero);
+    header.setRequestsHash(nonZero);
+    header.setEthBlockVersion(bcos::protocol::EthBlockVersion::PRAGUE);
 }
 }  // namespace
 
@@ -149,6 +171,68 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseNonGenesisComputesMiner)
     BOOST_CHECK_EQUAL(result["gasUsed"].asString(), "0x5208");  // 21000
     // timestamp is emitted in seconds (ms / 1000): 1700000000 == 0x6553f100.
     BOOST_CHECK_EQUAL(result["timestamp"].asString(), "0x6553f100");
+}
+
+BOOST_AUTO_TEST_CASE(combineBlockResponseEthGenesisTimestampSeconds)
+{
+    // The eth-genesis B0 stores its timestamp in the internal MILLISECOND domain
+    // (Ledger::applyEthGenesisHeader multiplies the artifact's seconds by 1000),
+    // exactly like every other block, so the web3 view's uniform ms->s division
+    // reports the artifact value — no B0 special case.
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(0);
+    header->setGasUsed(u256(0));
+    header->setTimestamp(1755143168000);  // ms: artifact seconds x 1000
+    fillWeb3ResponseTestPragueFields(*header);
+    header->calculateHash(*hashImpl);
+    block->setBlockHeader(header);
+
+    Json::Value result(Json::objectValue);
+    combineBlockResponse(result, *block, /*fullTxs=*/false);
+
+    // 1755143168 == 0x689d5c00: the artifact's seconds value.
+    BOOST_CHECK_EQUAL(result["timestamp"].asString(), "0x689d5c00");
+}
+
+BOOST_AUTO_TEST_CASE(combineBlockResponseEthNonGenesisTimestampStillDivided)
+{
+    // Every block >= 1 keeps the internal milliseconds domain and the seconds
+    // view keeps dividing.
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(1);
+    header->setGasUsed(u256(0));
+    header->setTimestamp(1700000000000);  // ms
+    fillWeb3ResponseTestPragueFields(*header);
+    bcos::crypto::HashType parentHash;
+    parentHash[0] = 0x24;
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0, .blockHash = parentHash});
+    header->calculateHash(*hashImpl);
+    block->setBlockHeader(header);
+
+    Json::Value result(Json::objectValue);
+    combineBlockResponse(result, *block, /*fullTxs=*/false);
+
+    BOOST_CHECK_EQUAL(result["timestamp"].asString(), "0x6553f100");  // 1700000000
+}
+
+BOOST_AUTO_TEST_CASE(combineBlockResponseLegacyGenesisTimestampStillDivided)
+{
+    // A legacy FISCO genesis header (NON_ETH) stores milliseconds like every
+    // other header; its B0 gets the same milliseconds-to-seconds division.
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(0);
+    header->setGasUsed(u256(0));
+    header->setTimestamp(2000);  // ms
+    header->calculateHash(*hashImpl);
+    block->setBlockHeader(header);
+
+    Json::Value result(Json::objectValue);
+    combineBlockResponse(result, *block, /*fullTxs=*/false);
+
+    BOOST_CHECK_EQUAL(result["timestamp"].asString(), "0x2");  // 2000 ms -> 2 s
 }
 
 BOOST_AUTO_TEST_CASE(combineBlockResponseFullTxsEmptyList)

@@ -27,7 +27,6 @@
 #include "bcos-utilities/FileUtility.h"
 #include "utils.h"
 #include <aws/core/Aws.h>
-#include <bcos-utilities/Log.h>
 
 namespace bcos::security
 {
@@ -104,7 +103,8 @@ std::shared_ptr<bytes> CloudKmsKeyEncryption::decryptContents(
     }
 
     BCOS_LOG(ERROR) << LOG_BADGE("KmsInterface::decrypt")
-                    << LOG_KV("Unsupported KMS provider:", std::string(magic_enum::enum_name(m_kmsType)));
+                    << LOG_KV("Unsupported KMS provider:",
+                           std::string(magic_enum::enum_name(m_kmsType)));
     BOOST_THROW_EXCEPTION(KmsTypeError());
 }
 

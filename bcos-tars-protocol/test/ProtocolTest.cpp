@@ -1,9 +1,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-framework/protocol/LogEntry.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
@@ -722,7 +720,7 @@ BOOST_AUTO_TEST_CASE(tarsMovable)
 
     BOOST_CHECK_EQUAL((intptr_t)addressTx1, (intptr_t)tx2.data.input.data());
 
-    BOOST_CHECK_EQUAL((intptr_t)tx1.data.input.data(), (intptr_t)nullptr);
+    BOOST_CHECK_EQUAL((intptr_t)tx1.data.input.data(), (intptr_t) nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(testMemberImpl)

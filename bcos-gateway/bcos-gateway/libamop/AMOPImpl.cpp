@@ -17,14 +17,11 @@
  * @author: octopus
  * @date 2021-10-26
  */
-#include <range/v3/numeric/accumulate.hpp>
-#include <range/v3/view/concat.hpp>
-#include <range/v3/view/single.hpp>
 #include "AMOPImpl.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-utilities/BoostLog.h"
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::amop;
@@ -39,8 +36,7 @@ TopicManager::Ptr AMOPImpl::topicManager()
 
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID,
-    boost::asio::io_context& _ioContext,
+    P2PInterface::Ptr _network, P2pID const& _p2pNodeID, boost::asio::io_context& _ioContext,
     bcos::IOServicePool::Ptr _ioServicePool)
   : m_topicManager(_topicManager),
     m_messageFactory(_messageFactory),
