@@ -131,11 +131,22 @@ a9fcf74f1 无关、修复前后失败集合完全一致）：
 - karst_v3_build_v5_get_v4_commit_round_trip
 - new_payload_v4_rejects_nonempty_lists_and_missing_fields
 
-症状：self-built payload 走 newPayload 快速路径时**跳过了 V3/V4 请求级校验**
-（expectedBlobVersionedHashes / executionRequests 等，校验代码在
-EngineServiceImpl.cpp:498/:664 存在但未被该路径调用）——返回 Valid(0) 而非
-Invalid(1)。与 feat-opstack-e2e 时代修复过的"统一 V3/V4 校验"在合并中丢失有关，
-需在 engine 侧恢复"self-built 快速路径也要跑请求级校验"。
+症状（修正版诊断，2026-08-23 10:2x）：并非 OP 快速路径跳过校验，而是**通用（非 OP）分支**
+相对 release #5427 统一引擎回归了三点（上一个会话对这三点的修复只改了工作树、
+从未落库，被并行会话回退吞掉）：
+
+1. **Accepted 旧转义**：V3 带交易 + 空 blobHashes 的请求返回 Accepted(3) 且不落
+   存储——应走正常校验/存储/Valid 路径（测试钉住"存储的字节能从缓存读回"）。
+2. **缺 V3+/V4 请求级校验**：非空 expectedBlobVersionedHashes（L2 禁 blob）应
+   Invalid；V4 的 executionRequests 必须 present 且 empty（线上第四参必填，
+   op-geth post-prague 拒 nil）；parentBeaconBlockRoot 从 V3 起必填（原仅 V3）。
+3. **`!c_opMode` V4 拒绝守卫**挡住了通用组合根的 Karst V4/V5 方法面
+   （karst_v3_build_v5_get_v4_commit_round_trip 直接抛 -38003）。
+
+**已修复（da02d7a32，2026-08-23）**：删 Accepted 转义、按 version>=3 / >=4 补齐
+请求级校验、移除 V4 拒绝守卫（OP 分支在此之前已 return，该守卫只会误伤通用路径）。
+EngineServiceTest **26/26 绿**；rpc/mapper/helper/mempool/Any 套件 80/80；
+opstack-executor 4/4；C2 链重启实测出块正常（2s 节奏，零 INVALID）。
 
 ### 5.2 本次修复的验证记录（2026-08-23 10:0x）
 
