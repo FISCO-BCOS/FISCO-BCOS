@@ -415,6 +415,117 @@ if step_run 7; then
   fi
 fi
 
+# ---------- version manifest check (pinned baseline: tools/op-e2e/versions.json) ----------
+# Collects OBSERVED versions into $C2/versions.json and diffs against the manifest:
+#   enforced (aborts on mismatch): monorepo commit, on-chain contract versions
+#   warned:  anvil / go toolchain version
+#   recorded only: FISCO-BCOS EL commit (moves with development)
+# Escape hatch for deliberate off-baseline experiments: SKIP_VERSION_CHECK=1
+if [ -z "${SKIP_VERSION_CHECK:-}" ]; then
+  # set -e: a failing command substitution inside an assignment would kill the script
+  # silently, so resolve the repo root defensively (the script has cd'd to $C2 by now,
+  # a relative $0 no longer resolves).
+  FISCO_REPO="${FISCO_REPO:-$( (cd "$(dirname "$0")/../.." 2>/dev/null && pwd) || true )}"
+  FISCO_REPO="${FISCO_REPO:-/Users/octopus/octo/code/FISCO-BCOS}"
+  VERSIONS_MANIFEST="$FISCO_REPO/tools/op-e2e/versions.json"
+  if [ -f "$VERSIONS_MANIFEST" ]; then
+    echo
+    echo "==== version manifest check ===="
+    python3 - "$VERSIONS_MANIFEST" "$C2" "$MONOREPO" "$FISCO_REPO" "$ANVIL_PORT" <<'PYEOF' || die "version manifest mismatch - e2e baseline compromised; fix the environment or bump the manifest deliberately"
+import json, re, subprocess, sys
+
+manifest_path, c2, monorepo, fisco_repo, anvil_port = sys.argv[1:6]
+manifest = json.load(open(manifest_path))
+
+def sh(*cmd, cwd=None):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=cwd).stdout.strip()
+    except Exception:
+        return ""
+
+observed = {"manifest": manifest_path}
+mono_commit = sh("git", "-C", monorepo, "rev-parse", "HEAD")
+# go must be probed INSIDE the monorepo: go.mod's toolchain directive selects the real
+# build toolchain there, while a bare `go version` elsewhere reports the system bootstrap go.
+go_raw = sh("go", "version", cwd=monorepo)
+observed["op_monorepo"] = {
+    "commit": mono_commit,
+    "describe": sh("git", "-C", monorepo, "describe", "--tags"),
+    "go": go_raw.split()[2] if len(go_raw.split()) > 2 else "unknown",
+}
+anvil_raw = sh("anvil", "--version")
+anvil_m = re.search(r"([0-9]+\.[0-9]+\.[0-9]+)", anvil_raw)
+observed["l1"] = {
+    "anvil": anvil_m.group(1) if anvil_m else "unknown",
+    "chain_id": manifest["l1"]["chain_id"],
+}
+observed["el"] = {
+    "commit": sh("git", "-C", fisco_repo, "rev-parse", "HEAD"),
+    "dirty_files": len(sh("git", "-C", fisco_repo, "status", "--porcelain").splitlines()),
+}
+try:
+    gen = json.load(open(f"{c2}/l2genesis.json")).get("config", {})
+    observed["fork_schedule"] = {k: v for k, v in gen.items() if k.endswith("Time")}
+except Exception:
+    observed["fork_schedule"] = "l2genesis.json not found"
+
+# On-chain contract versions (needs L1 + state.json; soft-skip when unreachable).
+contract_observed, contract_enforced = {}, True
+try:
+    deployed = json.load(open(f"{c2}/state.json"))["opChainDeployments"][0]
+    for name in manifest["l1_contracts"]["expected_versions"]:
+        out = sh("cast", "call", deployed[name], "version()(string)",
+                 "--rpc-url", f"http://127.0.0.1:{anvil_port}")
+        m = re.search(r"[0-9]+\.[0-9]+\.[0-9]+", out)
+        contract_observed[name] = m.group(0) if m else "no version()"
+except Exception as e:
+    contract_observed["error"] = str(e)[:120]
+    contract_enforced = False
+observed["l1_contracts"] = contract_observed
+
+def row(label, expected, actual, status):
+    print(f"  {status:<4} {label:<36} expected={expected:<24} observed={actual}")
+
+failures = []
+print("  -- enforced --")
+exp_commit = manifest["op_monorepo"]["commit"]
+mono_ok = mono_commit == exp_commit
+row("op_monorepo.commit", exp_commit[:16], mono_commit[:16] or "unknown", "ok" if mono_ok else "FAIL")
+if not mono_ok:
+    failures.append("op_monorepo.commit")
+if contract_enforced:
+    for name, exp in manifest["l1_contracts"]["expected_versions"].items():
+        got = contract_observed.get(name, "?")
+        ok = got == exp
+        row(f"contract.{name}", exp, got, "ok" if ok else "FAIL")
+        if not ok:
+            failures.append(f"contract.{name}")
+else:
+    print("  WARN contracts unreachable - on-chain versions not verified this run")
+print("  -- warned --")
+exp_anvil = manifest["l1"]["anvil"]
+row("anvil", exp_anvil, observed["l1"]["anvil"],
+    "ok" if observed["l1"]["anvil"] == exp_anvil else "WARN")
+exp_go = manifest["op_monorepo"]["go"]
+row("go", exp_go, observed["op_monorepo"]["go"],
+    "ok" if observed["op_monorepo"]["go"] == exp_go else "WARN")
+print("  -- recorded (never enforced) --")
+dirty = f" (dirty:{observed['el']['dirty_files']})" if observed["el"]["dirty_files"] else ""
+row("el.commit (FISCO-BCOS)", ">= 5178d86db", observed["el"]["commit"][:16] + dirty, "")
+
+observed["check"] = {"failures": failures, "enforced_contracts": contract_enforced}
+json.dump(observed, open(f"{c2}/versions.json", "w"), indent=1)
+print(f"  observed versions written to {c2}/versions.json")
+if failures:
+    print(f"  !! MISMATCH: {', '.join(failures)}")
+    sys.exit(1)
+print("  all enforced versions match the manifest")
+PYEOF
+  else
+    log "!! versions manifest not found at $VERSIONS_MANIFEST - skipping check"
+  fi
+fi
+
 echo
 echo "=== C2 devnet 就绪 ==="
 echo "  anvil L1 : http://127.0.0.1:$ANVIL_PORT (chain $ANVIL_CHAIN)"
