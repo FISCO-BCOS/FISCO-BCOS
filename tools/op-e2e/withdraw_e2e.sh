@@ -43,8 +43,14 @@ python3 - "$L1_BEFORE" "$L1_AFTER" <<'PY'
 import sys
 before, after = int(sys.argv[1]), int(sys.argv[2])
 delta = after - before
-assert 10**18 - 5 * 10**16 <= delta <= 10**18, f"unexpected L1 delta {delta}"
-print(f"BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus gas)")
+# 1 ETH out MINUS the 0.08 create bond, which stays in the game's credit
+# ledger until claimCredit (DelayedWETH holds it 3.5 days — outside this
+# window), minus L1 gas. This window was never actually reachable before
+# 2026-08-24: a five-field finalize signature in the claim tool's wait loop
+# had been failing every run upstream of this assert.
+assert 10**18 - 9 * 10**16 <= delta <= 10**18 - 7 * 10**16, \
+    f"unexpected L1 delta {delta} (want ~0.92: 1 ETH minus the held 0.08 bond minus gas)"
+print(f"BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus 0.08 held bond minus gas)")
 PY
 
 # No clock warps were used, so the sequencer must still accept txs after the

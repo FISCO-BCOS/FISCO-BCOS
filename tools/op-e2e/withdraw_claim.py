@@ -49,6 +49,12 @@ from eth_hash.auto import keccak
 from trie.hexary import HexaryTrie
 import rlp
 
+# cast (alloy/reqwest) honors the macOS SYSTEM proxy; a local VPN/proxy tool
+# then intercepts 127.0.0.1 RPC calls and answers with unparseable bodies
+# ("Error: parser error:"). Everything here talks to localhost only.
+os.environ.setdefault("NO_PROXY", "127.0.0.1,localhost")
+os.environ.setdefault("no_proxy", "127.0.0.1,localhost")
+
 # Every endpoint/path/key is env-overridable so the same tool runs against any
 # devnet instance (C2 default, C3/c4 forks by export). Defaults = the C2 layout.
 L2_WEB3 = os.environ.get("C2_L2_WEB3", "http://127.0.0.1:8555")
@@ -191,8 +197,11 @@ def call_ok(*args):
 def wait_until(desc, timeout, *args):
     # Poll a cast-call simulation until it succeeds or the timeout (seconds)
     # elapses. Timeouts are generous: they bound chain-clock waits, not checks.
-    # On timeout, surface the LAST revert reason — diagnosing a stuck gate from
-    # a bare "not ready" line wastes hours (the 08-24 finalize chase).
+    # A CONTRACT REVERT is an expected wait state; anything else (cast parser
+    # error, transport failure, bad args) is a defect in the invocation itself
+    # — fail fast with the full command instead of burning the whole timeout
+    # polling a bug (the 08-24 finalize chase lost 600s per run to exactly
+    # that).
     import subprocess, time
     deadline = time.time() + timeout
     last_err = ""
@@ -202,6 +211,11 @@ def wait_until(desc, timeout, *args):
             return True
         last_err = (r.stderr or "").strip().splitlines()
         last_err = last_err[0][:160] if last_err else ""
+        if "execution reverted" not in (r.stderr or ""):
+            raise SystemExit(
+                f"{desc}: cast call failed for a NON-REVERT reason — this is a "
+                f"tool defect, not a clock gate.\n  argv: cast call "
+                + " ".join(map(repr, args)) + f"\n  stderr: {(r.stderr or '').strip()[-500:]}")
         time.sleep(5)
     print(f"!! {desc} not ready within {timeout}s (last revert: {last_err or 'none'})")
     return False
@@ -326,23 +340,26 @@ def prove_withdrawal(portal, w, game_index, orp, proof):
 
 
 def game_status(game):
-    return int(cast("call", game, "status()(uint8)",
-                    "--rpc-url", L1).split()[0], 16)
+    raw = cast("call", game, "status()(uint8)",
+               "--rpc-url", L1).split()[0]
+    return int(raw, 16) if raw.lower().startswith("0x") else int(raw)
 
 
 def game_credit(game, who):
     """Bond ledger view (wei-exact, no gas noise). claimCredit itself is
     unusable in an e2e: the first call only unlocks, and DelayedWETH holds the
     withdrawal behind a 3.5-day delay."""
-    return int(cast("call", game, "credit(address)(uint256)", who,
-                    "--rpc-url", L1).split()[0])
+    raw = cast("call", game, "credit(address)(uint256)", who,
+               "--rpc-url", L1).split()[0]
+    return int(raw, 16) if raw.lower().startswith("0x") else int(raw)
 
 
 def required_bond_wei(game, gindex):
     """Big-Bonds depth ladder: the root attack child sits at gindex 2, its
     attack child at 4 (a 0.08 flat bond IncorrectBondAmount-reverts there)."""
-    return int(cast("call", game, "getRequiredBond(uint128)", str(gindex),
-                    "--rpc-url", L1).split()[0])
+    raw = cast("call", game, "getRequiredBond(uint128)", str(gindex),
+               "--rpc-url", L1).split()[0]
+    return int(raw, 16) if raw.lower().startswith("0x") else int(raw)
 
 
 def contest_abandoned(output_root, w, orp, proof, portal, dgf, tx, l2_block):
@@ -393,15 +410,17 @@ def contest_abandoned(output_root, w, orp, proof, portal, dgf, tx, l2_block):
     if dev0_credit != 0:
         raise SystemExit(f"challenger credit {dev0_credit} != 0")
     print(f"bond ledger: defender credit {dev1_credit} wei, challenger 0")
+    wtx = (f"({w['nonce']},{w['sender']},{w['target']},{w['value']},"
+           f"{w['gasLimit']},{w['data']})")
     if not wait_until("proof maturity + finality delay", 600,
                       portal,
                       'finalizeWithdrawalTransaction((uint256,address,address,'
-                      'uint256,bytes))', tx,
+                      'uint256,uint256,bytes))', wtx,
                       "--from", PROPOSER_ADDR, "--rpc-url", L1):
         raise SystemExit("finalize not callable within 600s")
     cast("send", portal,
          'finalizeWithdrawalTransaction((uint256,address,address,uint256,'
-         'uint256,bytes))', tx, "--private-key", PROPOSER_KEY,
+         'uint256,bytes))', wtx, "--private-key", PROPOSER_KEY,
          "--rpc-url", L1)
     print("finalized: honest claim stays finalizable under an abandoned challenge")
 
@@ -523,10 +542,10 @@ def main():
     print(f"storage root match; proof has {len(proof)} nodes")
 
     if args.contest == "abandoned":
-        contest_abandoned(output_root, w, orp, proof, portal, dgf, tx_hash, l2_block)
+        contest_abandoned(output_root, w, orp, proof, portal, dgf, args.tx_hash, l2_block)
         return
     if args.contest == "dishonest":
-        contest_dishonest(w, orp, proof, portal, dgf, tx_hash, l2_block)
+        contest_dishonest(w, orp, proof, portal, dgf, args.tx_hash, l2_block)
         return
 
     # 1. dispute game (rootClaim=outputRoot, extraData=claimed L2 block)
@@ -579,7 +598,7 @@ def main():
     if not wait_until("proof maturity + finality delay", 600,
                       portal,
                       'finalizeWithdrawalTransaction((uint256,address,address,'
-                      'uint256,bytes))', tx,
+                      'uint256,uint256,bytes))', tx,
                       "--from", PROPOSER_ADDR, "--rpc-url", L1):
         raise SystemExit("finalize not callable within 300s")
     fin = cast("send", portal,

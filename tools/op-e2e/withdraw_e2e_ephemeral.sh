@@ -14,6 +14,11 @@
 # auto-builds op-batcher).
 set -euo pipefail
 
+# cast honors the macOS system proxy; bypass it for all the localhost RPC this
+# runner performs (proxy-garbage responses surface as cast "parser error").
+export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
+export no_proxy="${no_proxy:-127.0.0.1,localhost}"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORKSPACE="$(mktemp -d /tmp/c2eph.XXXXXX)"
 # Physicalize: macOS resolves /tmp -> /private/tmp and lsof reports the
@@ -53,9 +58,13 @@ trap teardown EXIT INT TERM
 
 log "workspace: $WORKSPACE"
 # Stage prebuilt binaries (setup only auto-builds op-batcher — a fresh go
-# build per run wastes ~1min); fall through to setup's build if absent.
+# build per run wastes ~1min). chmod: a leftover 644 dest makes cp keep the
+# un-executable mode and the -x staging check fail.
 for bin in op-deployer op-node op-batcher; do
-    [ -x "/tmp/c2/$bin" ] && cp "/tmp/c2/$bin" "$WORKSPACE/$bin" || true
+    if [ -f "/tmp/c2/$bin" ]; then
+        cp "/tmp/c2/$bin" "$WORKSPACE/$bin"
+        chmod +x "$WORKSPACE/$bin"
+    fi
 done
 for bin in op-deployer op-node; do
     [ -x "$WORKSPACE/$bin" ] || { log "missing /tmp/c2/$bin (prebuild first)"; exit 1; }
@@ -126,15 +135,18 @@ bf = head.get("baseFeePerGas")
 check("baseFeePerGas", isinstance(bf, str) and int(bf, 16) > 0,
       f"{bf} (OP headers always carry baseFee; PBFT never writes it)")
 ed = head.get("extraData", "0x")
-check("extraData-1559-params", len(ed) == 2 + 17 * 2 and ed[2:4] == "00",
-      f"{ed[:24]}… ({(len(ed)-2)//2}B, version byte 0x00 — OP EIP-1559/DA-params encoding)")
+check("extraData-1559-params", len(ed) == 2 + 17 * 2 and ed[2:4] in ("00", "01"),
+      f"{ed[:24]}… ({(len(ed)-2)//2}B, version byte {ed[2:4]} — OP EIP-1559/DA-params "
+      "encoding, not a PBFT extraData)")
 for back in range(6):
     n = int(head["number"], 16) - back
     if n < 1:
         break
     t = rpc(web3_url, "eth_getTransactionByBlockNumberAndIndex", [hex(n), "0x0"])
     if t:
-        ok = t.get("type") == "0x7e" and "sourceHash" in t and "mint" in t
+        # mint is omitted when zero (FISCO's serializer) — sourceHash is the
+        # hard deposit signature.
+        ok = t.get("type") == "0x7e" and "sourceHash" in t
         check("deposit-tx[0]", ok,
               f"block {n}: type {t.get('type')}, sourceHash "
               f"{'present' if 'sourceHash' in t else 'MISSING'}")

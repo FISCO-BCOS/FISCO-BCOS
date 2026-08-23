@@ -12,6 +12,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# cast honors the macOS system proxy; bypass it for localhost RPC (a local
+# proxy tool answering instead of the node yields "parser error" bodies).
+export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
+export no_proxy="${no_proxy:-127.0.0.1,localhost}"
+
 L1="${C2_L1_RPC:-http://127.0.0.1:8549}"
 L2="${C2_L2_WEB3:-http://127.0.0.1:8555}"
 OPNODE="${C2_OP_NODE:-http://127.0.0.1:9545}"
@@ -30,8 +35,10 @@ L2_BEFORE=$(cast balance "$DEV1" --rpc-url "$L2")
 TIP0=$(cast block-number --rpc-url "$L2")
 
 # ── phase 1: depositETH + derived-credit poll + shape asserts ──────────────
-cast send "$PORTAL" "depositETH()" --value 1ether --private-key "$KEY" \
-  --rpc-url "$L1" > /dev/null || die "depositETH send failed"
+# OptimismPortal2 has no depositETH() selector — a plain ETH transfer hits
+# receive(), which deposits to msg.sender (RECEIVE_DEFAULT_GAS_LIMIT 100k).
+cast send "$PORTAL" --value 1ether --private-key "$KEY" \
+  --rpc-url "$L1" > /dev/null || die "depositETH (receive) send failed"
 log "depositETH(1 ETH) sent; waiting for derivation (<=180s)"
 
 python3 - "$L2" "$OPNODE" "$DEV1" "$L2_BEFORE" "$TIP0" <<'PY' || die "deposit phase-1 failed"
@@ -101,18 +108,24 @@ def rpc(m, p):
         headers={"Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(req, timeout=5))["result"]
 def find_deposit(to, data_prefix):
-    deadline = time.time() + 180
+    deadline = time.time() + 240
+    seen_dump = []
     while time.time() < deadline:
         tip = int(rpc("eth_blockNumber", []), 16)
-        for n in range(max(1, tip - 40), tip + 1):
+        for n in range(max(1, tip - 80), tip + 1):
             for i in range(8):
                 t = rpc("eth_getTransactionByBlockNumberAndIndex", [hex(n), hex(i)])
                 if not t:
                     break
-                if t.get("type") == "0x7e" and (t.get("to") or "").lower() == to \
-                        and (t.get("input") or t.get("data") or "").startswith(data_prefix):
-                    return t, rpc("eth_getTransactionReceipt", [t["hash"]])
+                if t.get("type") == "0x7e" and (t.get("to") or "").lower() == to:
+                    if (t.get("input") or t.get("data") or "").startswith(data_prefix):
+                        return t, rpc("eth_getTransactionReceipt", [t["hash"]])
+                    if len(seen_dump) < 3:
+                        seen_dump.append(
+                            f"block {n}: to={t.get('to')} input={(t.get('input') or t.get('data'))!r}")
         time.sleep(3)
+    print(f"[dep] DEBUG 0x7e txs to {to} seen: {seen_dump or 'NONE'}",
+          file=sys.stderr)
     return None, None
 ta, ra = find_deposit("0x1111111111111111111111111111111111111111", "0xdeadbeef")
 assert ta and ra, "variant-a deposit not derived within 180s"
