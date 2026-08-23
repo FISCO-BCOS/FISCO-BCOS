@@ -133,7 +133,14 @@ def a2_chain(rpc):
     nv = rpc.call("net_version")
     check("chainId == net_version", cid == nv, f"{cid} vs {nv}")
     gp = rpc.call("eth_gasPrice")
-    check("gasPrice returns 0x0 (FISCO hardcoded)", gp == "0x0", str(gp))
+    # op-geth parity: a suggestion for legacy txs = tip + head baseFee (never below the
+    # base fee, or legacy sends signed from it are silently evicted). FISCO serves the
+    # head baseFee itself (tip = this node's eth_maxPriorityFeePerGas, currently 0).
+    lb = rpc.call("eth_getBlockByNumber", ["latest", False])
+    check("gasPrice >= latest baseFeePerGas (op-geth suggestion semantics)",
+          gp is not None and lb is not None and
+          int(gp, 16) >= int(lb["baseFeePerGas"], 16),
+          f"gasPrice={gp} baseFee={lb and lb.get('baseFeePerGas')}")
     # B1 (08-18): pin the current eth_maxPriorityFeePerGas. op-geth's is dynamic
     # (SuggestOptimismPriorityFee >= 1e6 wei, gasprice/optimism-gasprice.go:38);
     # FISCO's is the constant 0x0 (EthEndpoint.cpp:943) — divergence D-GP-2, see

@@ -192,9 +192,34 @@ task::Task<void> EthEndpoint::setMaxDASize(const Json::Value& request, Json::Val
 }
 task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
 {
-    // result: gasPrice(QTY)
+    // eth_gasPrice is a SUGGESTION for pricing legacy (type 0) transactions, not a chain
+    // parameter. op-geth (internal/ethapi/api.go GasPrice) computes it as suggested-tip +
+    // current-head-baseFee, and mainstream clients rely on the implicit contract that the
+    // value is >= the head baseFee: foundry's `cast send --legacy` signs with whatever
+    // this returns, and a below-baseFee legacy tx is silently rejected at seal time and
+    // evicted from the pool ("broadcast accepted, never confirmed").
+    //
+    // Chain-mode dispatch is intrinsic rather than configured: EIP-1559 chains (the OP
+    // path) always carry baseFee on the header, PBFT headers never write the tars field.
+    // The suggested tip reuses this node's eth_maxPriorityFeePerGas value (currently 0) —
+    // a single source of truth, and honest for our inert tip market: op-geth's OP-mode
+    // oracle likewise serves a constant floor (0.001 gwei) because with a single block
+    // builder tips do not affect inclusion while blocks have capacity. Its
+    // capacity-heuristic escalation (median-tip * 1.1 when the last block was full) is a
+    // deliberate omission here, to be revisited if this chain ever runs congested.
     auto const ledger = m_nodeService->ledger();
-    // TODO)): gas price can be updated with the current base fee
+    if (auto const latest = co_await ledger::getCurrentBlockNumber(*ledger); latest >= 0)
+    {
+        auto block = co_await ledger::getBlockData(*ledger, latest, bcos::ledger::HEADER);
+        if (auto const& baseFee = block->blockHeader()->baseFee(); baseFee.has_value())
+        {
+            Json::Value result = toQuantity(*baseFee);
+            buildJsonContent(result, response);
+            co_return;
+        }
+    }
+    // Legacy PBFT path (headers without baseFee): keep serving the static
+    // SYSTEM_KEY_TX_GAS_PRICE knob so those chains' output stays byte-identical.
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
     Json::Value result;
     if (config.has_value())
