@@ -1040,29 +1040,13 @@ private:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
-        // ---- opMode silent-failure guardrail ----
+        // ---- opMode dispatch note ----
         //
-        // `c_opMode` is a SFINAE probe on `computeTxRoot`'s presence. If the probe
-        // ever silently collapses (signature change), a V4 request would fall through to the
-        // generic path, where an OP payload is accepted and answered VALID with its self-reported
-        // blockHash without the block ever being executed -- a validator that rubber-stamps is
-        // worse than one that refuses. Hence a non-OP build refuses V4 outright, independently of
-        // `maxEngineVersion`.
-        //
-        // Zero behavioural drift for the generic composition root as configured today: it leaves
-        // `maxEngineVersion` at 3, so `isVersionSupported(4)` already threw the same exception
-        // before this statement was reachable. Defence in depth for the mis-configuration, not a
-        // new rule for the existing one.
-        if constexpr (!c_opMode)
-        {
-            if (version >= static_cast<std::uint32_t>(ApiVersion::V3) + 1)
-            {
-                BOOST_THROW_EXCEPTION(
-                    UnsupportedEngineApiVersion{} << bcos::errinfo_comment{
-                        "engine_newPayloadV4 requires an OP-mode scheduler; this build's "
-                        "c_opMode probe did not detect one"});
-            }
-        }
+        // The generic composition root (no `computeTxRoot` on its scheduler) serves the
+        // full Karst method surface itself — newPayloadV4/getPayloadV5 with the
+        // V4 request-level validation below — exactly as the release lineage's unified
+        // engine did (#5427). A blanket non-OP V4 refusal here would break that surface;
+        // OP-mode builds never reach this branch (they take handleOpNewPayload above).
         // OP branch. Compile-time dispatch on `c_opMode`: the generic composition root never
         // instantiates `handleOpNewPayload`, and its own path below is the unconditional `else`,
         // i.e. byte-for-byte the pre-existing body.
@@ -1086,20 +1070,38 @@ private:
                 co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                     std::string("parentBeaconBlockRoot is only valid for newPayloadV3"));
             }
-            if (version == 3)
+            // ---- V3+/V4 request-level validation (release #5427 lineage, op-geth parity) ----
+            // L2 forbids blob transactions: from V3 up, a non-empty expectedBlobVersionedHashes
+            // can never match an L2 payload (op-geth answers the mismatch INVALID,
+            // beacon/engine/types.go:311-322 -> api.invalid).
+            if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
             {
-                if (!request.parentBeaconBlockRoot.has_value())
+                co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    std::string(
+                        "expectedBlobVersionedHashes must be empty (L2 forbids blob "
+                        "transactions)"));
+            }
+            // Karst (V4) carries no execution-layer requests. The fourth parameter is
+            // mandatory on the wire (the RPC layer rejects its absence), so an in-process
+            // caller must not get a laxer contract: absent is rejected too
+            // (op-geth: "nil executionRequests post-prague").
+            if (version >= 4)
+            {
+                if (!request.executionRequests.has_value() || !request.executionRequests->empty())
                 {
                     co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                        std::string(
-                            "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3"));
+                        std::string("executionRequests must be present and empty (L2 carries no "
+                                    "execution requests)"));
                 }
-                if (request.expectedBlobVersionedHashes.empty() &&
-                    !request.executionPayload.transactions.empty())
-                {
-                    co_return makeStatus(
-                        PayloadValidationStatus::Accepted, std::nullopt, std::nullopt);
-                }
+            }
+            // parentBeaconBlockRoot is required from V3 on (V4 echoes it back alongside
+            // executionRequests).
+            if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
+            {
+                co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    std::string(
+                        "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
+                        "later"));
             }
 
             std::unique_lock lock(x_state);
