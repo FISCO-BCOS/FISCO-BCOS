@@ -99,10 +99,9 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
-struct StubMemPool
-{
-    // Tier-2: the OP build path mempool hygiene (remove/seal) — no-op stubs; the tests never
-    // populate the pool, so the built payloads carry only the synthesized L1 deposit.
+    // Poisoned-tx eviction hook (engine build loop): no-op in tests - the pool is never populated.
+    void removeByHash(std::span<bcos::crypto::HashType const>)
+    {}
     template <class View>
     void remove(View&)
     {}

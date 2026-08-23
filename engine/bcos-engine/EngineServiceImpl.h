@@ -50,10 +50,14 @@
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <functional>
 #include <mutex>
+#include <set>
+#include <span>
 #include <optional>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/filter.hpp>
@@ -644,7 +648,7 @@ private:
         // record the revert -- the documented predeploy-matrix divergence). Then the forced
         // transactions (attrs.transactions, OP's sanctioned deposit path), then the sealed
         // mempool transactions in their reassembled EIP-2718 wire forms.
-        std::vector<bytes> envelopes;
+        std::vector<bytes> forcedEnvelopes;
         // The L1-attributes deposit synthesis lives on the seam (OpSchedulerSeam) so the
         // engine stays decoupled from bcos-evm/opstack-executor (EngineServiceImpl.cpp:93).
         // A real CL (op-node) derives and supplies the L1-attributes deposit itself in
@@ -652,16 +656,22 @@ private:
         // attribute-less drivers (the single-node fixture) need the synthesized envelope.
         if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
         {
-            envelopes.push_back(m_scheduler.get().synthesizeL1AttributesEnvelope(
+            forcedEnvelopes.push_back(m_scheduler.get().synthesizeL1AttributesEnvelope(
                 m_scheduler.get().isJovianActive()));
         }
         if (payloadAttributes.transactions.has_value())
         {
             for (auto const& forcedHex : *payloadAttributes.transactions)
             {
-                envelopes.push_back(fromHex(forcedHex));
+                forcedEnvelopes.push_back(fromHex(forcedHex));
             }
         }
+        // Sealed pool txs tagged with their pool key (the tx hash): a tx that fails
+        // validation during building is evicted by hash and the build retried without it —
+        // op-geth's worker equivalently discards txs that fail Prepare during commitWork.
+        // Without this, a permanently-invalid tx (e.g. unfunded sender) poisons EVERY
+        // sequencer build while the pool keeps re-sealing it.
+        std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
         for (auto& sealedTx : sealedTxs)
         {
             if (sealedTx->type() !=
@@ -674,8 +684,9 @@ private:
                            "wire form");
                 continue;
             }
-            envelopes.push_back(bcostars::protocol::reassembleWeb3RawTransaction(
-                sealedTx->extraTransactionBytes(), sealedTx->signatureData()));
+            sealedEnvelopes.emplace_back(sealedTx->hash(),
+                bcostars::protocol::reassembleWeb3RawTransaction(
+                    sealedTx->extraTransactionBytes(), sealedTx->signatureData()));
         }
 
         // Ledger config (gasLimit) off a read-only view.
@@ -703,112 +714,178 @@ private:
             }
         }
 
-        std::vector<EngineTransaction> engineTransactions;
-        engineTransactions.reserve(envelopes.size());
-        for (auto& env : envelopes)
-        {
-            engineTransactions.push_back(EngineTransaction{.raw = env, .decoded = nullptr});
-        }
-
         auto const parentBeaconBlockRoot =
             payloadAttributes.parentBeaconBlockRoot.value_or(crypto::HashType{});
-        ExecutionPayload payload{
-            .logsBloom = Bloom{},
-            .parentHash = forkchoiceState.headBlockHash,
-            .stateRoot = h256{},
-            .receiptsRoot = h256{},
-            .prevRandao = payloadAttributes.prevRandao,
-            // Prefer the gasLimit the CL (op-node) passes via payload attributes — it
-            // reflects the L1-derived SystemConfig value.  Fall back to ledger config
-            // only when the attribute is absent (local/legacy path).
-            .gasLimit = payloadAttributes.gasLimit.has_value() ?
-                            u256(*payloadAttributes.gasLimit) :
-                            u256(std::get<0>(ledgerConfig.gasLimit())),
-            .gasUsed = 0,
-            .baseFeePerGas = baseFee,
-            .blockHash = h256{},
-            .transactions = std::move(engineTransactions),
-            // Holocene+ header shape (op-geth eip1559_optimism.go): version byte (0 = Holocene,
-            // 1 = Jovian) || u32 denominator || u32 elasticity.  Jovian appends u64 minBaseFee.
-            // Decode from attrs.eip1559Params (8 bytes from SystemConfig via op-node); neutral 1/1
-            // when absent/invalid so baseFee stays unchanged per Holocene recalculation.
-            .extraData =
-                [this, &payloadAttributes]() {
-                    uint32_t denominator = 1, elasticity = 1;
-                    if (auto const& params = payloadAttributes.eip1559Params;
-                        params.has_value() && params->size() == 8)
-                    {
-                        denominator = (static_cast<uint32_t>((*params)[0]) << 24) |
-                                      (static_cast<uint32_t>((*params)[1]) << 16) |
-                                      (static_cast<uint32_t>((*params)[2]) << 8) |
-                                      static_cast<uint32_t>((*params)[3]);
-                        elasticity = (static_cast<uint32_t>((*params)[4]) << 24) |
-                                     (static_cast<uint32_t>((*params)[5]) << 16) |
-                                     (static_cast<uint32_t>((*params)[6]) << 8) |
-                                     static_cast<uint32_t>((*params)[7]);
-                    }
-                    // Holocene extraData: version=0 || denominator || elasticity (9 bytes).
-                    bcos::bytes extra{0x00, static_cast<uint8_t>(denominator >> 24),
-                        static_cast<uint8_t>(denominator >> 16),
-                        static_cast<uint8_t>(denominator >> 8), static_cast<uint8_t>(denominator),
-                        static_cast<uint8_t>(elasticity >> 24),
-                        static_cast<uint8_t>(elasticity >> 16),
-                        static_cast<uint8_t>(elasticity >> 8), static_cast<uint8_t>(elasticity)};
-                    if (m_scheduler.get().isJovianActive())
-                    {
-                        extra[0] = 0x01;
-                        extra.resize(17, 0x00);
-                        // Jovian: minBaseFee u64 BE at [9,17) (op-geth
-                        // EncodeJovianExtraData, eip1559_optimism.go:49-54; op-geth panics on an
-                        // absent minBaseFee there -- the spec REQUIRES the field after Jovian
-                        // and updateForkchoice validates it, so the 0 fallback below only
-                        // serves direct-service callers and keeps the lambda total).
-                        if (auto minBaseFee = payloadAttributes.minBaseFee; minBaseFee.has_value())
+        // Assemble the candidate payload for the current envelope set. Invoked once per
+        // build attempt (the eviction loop below may drop poisoned pool txs and retry).
+        auto assemblePayload = [&](std::vector<bytes> candidateEnvelopes) {
+            std::vector<EngineTransaction> candidateTransactions;
+            candidateTransactions.reserve(candidateEnvelopes.size());
+            for (auto& env : candidateEnvelopes)
+            {
+                candidateTransactions.push_back(EngineTransaction{.raw = env, .decoded = nullptr});
+            }
+            ExecutionPayload candidate{
+                .logsBloom = Bloom{},
+                .parentHash = forkchoiceState.headBlockHash,
+                .stateRoot = h256{},
+                .receiptsRoot = h256{},
+                .prevRandao = payloadAttributes.prevRandao,
+                // Prefer the gasLimit the CL (op-node) passes via payload attributes — it
+                // reflects the L1-derived SystemConfig value.  Fall back to ledger config
+                // only when the attribute is absent (local/legacy path).
+                .gasLimit = payloadAttributes.gasLimit.has_value() ?
+                                u256(*payloadAttributes.gasLimit) :
+                                u256(std::get<0>(ledgerConfig.gasLimit())),
+                .gasUsed = 0,
+                .baseFeePerGas = baseFee,
+                .blockHash = h256{},
+                .transactions = std::move(candidateTransactions),
+                // Holocene+ header shape (op-geth eip1559_optimism.go): version byte (0 = Holocene,
+                // 1 = Jovian) || u32 denominator || u32 elasticity.  Jovian appends u64 minBaseFee.
+                // Decode from attrs.eip1559Params (8 bytes from SystemConfig via op-node); neutral 1/1
+                // when absent/invalid so baseFee stays unchanged per Holocene recalculation.
+                .extraData =
+                    [this, &payloadAttributes]() {
+                        uint32_t denominator = 1, elasticity = 1;
+                        if (auto const& params = payloadAttributes.eip1559Params;
+                            params.has_value() && params->size() == 8)
                         {
-                            for (std::size_t i = 0; i < 8; ++i)
+                            denominator = (static_cast<uint32_t>((*params)[0]) << 24) |
+                                          (static_cast<uint32_t>((*params)[1]) << 16) |
+                                          (static_cast<uint32_t>((*params)[2]) << 8) |
+                                          static_cast<uint32_t>((*params)[3]);
+                            elasticity = (static_cast<uint32_t>((*params)[4]) << 24) |
+                                         (static_cast<uint32_t>((*params)[5]) << 16) |
+                                         (static_cast<uint32_t>((*params)[6]) << 8) |
+                                         static_cast<uint32_t>((*params)[7]);
+                        }
+                        // Holocene extraData: version=0 || denominator || elasticity (9 bytes).
+                        bcos::bytes extra{0x00, static_cast<uint8_t>(denominator >> 24),
+                            static_cast<uint8_t>(denominator >> 16),
+                            static_cast<uint8_t>(denominator >> 8),
+                            static_cast<uint8_t>(denominator),
+                            static_cast<uint8_t>(elasticity >> 24),
+                            static_cast<uint8_t>(elasticity >> 16),
+                            static_cast<uint8_t>(elasticity >> 8),
+                            static_cast<uint8_t>(elasticity)};
+                        if (m_scheduler.get().isJovianActive())
+                        {
+                            extra[0] = 0x01;
+                            extra.resize(17, 0x00);
+                            // Jovian: minBaseFee u64 BE at [9,17) (op-geth
+                            // EncodeJovianExtraData, eip1559_optimism.go:49-54; op-geth panics on an
+                            // absent minBaseFee there -- the spec REQUIRES the field after Jovian
+                            // and updateForkchoice validates it, so the 0 fallback below only
+                            // serves direct-service callers and keeps the lambda total).
+                            if (auto minBaseFee = payloadAttributes.minBaseFee;
+                                minBaseFee.has_value())
                             {
-                                extra[9 + i] =
-                                    static_cast<bcos::byte>((*minBaseFee >> (56 - 8 * i)) & 0xFF);
+                                for (std::size_t i = 0; i < 8; ++i)
+                                {
+                                    extra[9 + i] =
+                                        static_cast<bcos::byte>((*minBaseFee >> (56 - 8 * i)) & 0xFF);
+                                }
                             }
                         }
-                    }
-                    return extra;
-                }(),
-            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
-            .timestamp = payloadAttributes.timestamp,
-            .blockNumber = nextBlockNumber,
-            .withdrawals = std::vector<WithdrawalV1>{},
-            .blobGasUsed = u256(0),
-            .excessBlobGas = u256(0),
-            .blockAccessList = std::nullopt,
-            .slotNumber = std::nullopt,
-            .rawTransactions = std::move(envelopes),
-            .withdrawalsRoot = h256{},  // filled from the executed header below
+                        return extra;
+                    }(),
+                .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+                .timestamp = payloadAttributes.timestamp,
+                .blockNumber = nextBlockNumber,
+                .withdrawals = std::vector<WithdrawalV1>{},
+                .blobGasUsed = u256(0),
+                .excessBlobGas = u256(0),
+                .blockAccessList = std::nullopt,
+                .slotNumber = std::nullopt,
+                .rawTransactions = std::move(candidateEnvelopes),
+                .withdrawalsRoot = h256{},  // filled from the executed header below
+            };
+            return candidate;
         };
 
-        // Provisional header (placeholder commitments) -> block -> delegate pre-execution.
-        const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
-        auto provisionalHeader = detail::rebuildOpEthHeader(
-            m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
-        auto block = buildOpBlock(payload, provisionalHeader);
+        // The executor embeds the failing tx's hash as "[tx=0x<hex>]" in the block
+        // validation error (bcos::Error carries a string only across the delegate).
+        auto parseCulpritHash = [](std::string const& message) -> std::optional<crypto::HashType> {
+            constexpr std::string_view kTag = "[tx=0x";
+            auto pos = message.rfind(kTag);
+            if (pos == std::string::npos)
+            {
+                return std::nullopt;
+            }
+            auto hex = message.substr(pos + kTag.size(), 64);
+            if (hex.size() != 64)
+            {
+                return std::nullopt;
+            }
+            try
+            {
+                return crypto::HashType("0x" + hex);
+            }
+            catch (...)
+            {
+                return std::nullopt;
+            }
+        };
 
-        // Drop an uncommitted abandoned build first (the delegate's continuity guard would
-        // refuse the re-execute), then pre-execute. verify=false: the six-way commitment
-        // comparison must not run against the placeholder announcements.
-        m_delegate->reset([](bcos::Error::Ptr) {});
-        bcos::Error::Ptr executeError;
+        // Build-and-probe loop: execute the candidate; on a per-tx validation failure
+        // naming a SEALED tx, evict it from the pool and retry without it. A failure
+        // naming a forced/deposit tx (or carrying no hash) is a genuine build error.
+        // Each iteration evicts exactly one tx, so the loop is bounded by the sealed set.
+        std::set<crypto::HashType> evicted;
+        ExecutionPayload payload;
         bcos::protocol::BlockHeader::Ptr executedHeader;
-        m_delegate->executeBlock(block, /*verify=*/false,
-            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
-                executeError = std::move(error);
-                executedHeader = std::move(header);
-            });
-        if (executeError || !executedHeader)
+        while (true)
         {
+            std::vector<bytes> candidateEnvelopes = forcedEnvelopes;
+            for (auto const& [hash, env] : sealedEnvelopes)
+            {
+                if (evicted.count(hash) == 0)
+                {
+                    candidateEnvelopes.push_back(env);
+                }
+            }
+            payload = assemblePayload(std::move(candidateEnvelopes));
+
+            // Provisional header (placeholder commitments) -> block -> delegate pre-execution.
+            const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
+            auto provisionalHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
+                payload, transactionsRoot, parentBeaconBlockRoot);
+            auto block = buildOpBlock(payload, provisionalHeader);
+
+            // Drop an uncommitted abandoned build first (the delegate's continuity guard
+            // would refuse the re-execute), then pre-execute. verify=false: the six-way
+            // commitment comparison must not run against the placeholder announcements.
+            m_delegate->reset([](bcos::Error::Ptr) {});
+            bcos::Error::Ptr executeError;
+            m_delegate->executeBlock(block, /*verify=*/false,
+                [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
+                    executeError = std::move(error);
+                    executedHeader = std::move(header);
+                });
+            if (!executeError && executedHeader)
+            {
+                break;
+            }
+            auto const message =
+                executeError ? executeError->errorMessage() : std::string("no executed header");
+            auto culprit = parseCulpritHash(message);
+            if (culprit.has_value() && evicted.count(*culprit) == 0 &&
+                std::any_of(sealedEnvelopes.begin(), sealedEnvelopes.end(),
+                    [&culprit](auto const& entry) { return entry.first == *culprit; }))
+            {
+                evicted.insert(*culprit);
+                std::array<crypto::HashType, 1> hashSpan{*culprit};
+                m_memPool.get().removeByHash(std::span<crypto::HashType const>(hashSpan));
+                BCOS_LOG(WARNING)
+                    << LOG_BADGE("EngineService")
+                    << LOG_DESC("buildOpPayload: evicted poisoned pool transaction, retrying")
+                    << LOG_KV("tx", culprit->hexPrefixed()) << LOG_KV("reason", message);
+                continue;
+            }
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
-                    std::string("OP payload build execution failed: ") +
-                    (executeError ? executeError->errorMessage() : "no executed header")});
+                    std::string("OP payload build execution failed: ") + message});
         }
 
         // Fill the real commitments and derive the final OP blockHash over the now-complete
@@ -830,8 +907,8 @@ private:
         {
             payload.blobGasUsed = *executedBlobGas;
         }
-        auto finalHeader = detail::rebuildOpEthHeader(
-            m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
+        auto finalHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
+            payload, SchedulerType::computeTxRoot(*payload.rawTransactions), parentBeaconBlockRoot);
         payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
         // Canonical second pass: execute the FINAL block (real announced commitments) with
@@ -842,17 +919,19 @@ private:
         // round-trips. The reset drops the probe pass's pending slot; the probe pushed no view.
         auto finalBlock = buildOpBlock(payload, finalHeader);
         m_delegate->reset([](bcos::Error::Ptr) {});
+        bcos::Error::Ptr canonicalError;
+        bcos::protocol::BlockHeader::Ptr canonicalHeader;
         m_delegate->executeBlock(finalBlock, /*verify=*/true,
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
-                executeError = std::move(error);
-                executedHeader = std::move(header);
+                canonicalError = std::move(error);
+                canonicalHeader = std::move(header);
             });
-        if (executeError || !executedHeader)
+        if (canonicalError || !canonicalHeader)
         {
             BOOST_THROW_EXCEPTION(
                 OpExecutionInternalError{} << bcos::errinfo_comment{
                     std::string("OP payload build canonical pass failed: ") +
-                    (executeError ? executeError->errorMessage() : "no executed header")});
+                    (canonicalError ? canonicalError->errorMessage() : "no executed header")});
         }
 
         // payloadId was derived at the top of buildOpPayload from the attributes;
@@ -865,7 +944,7 @@ private:
             .shouldOverrideBuilder = false,
             .parentBeaconBlockRoot = parentBeaconBlockRoot,
             .view = nullptr,
-            .header = std::move(executedHeader),
+            .header = std::move(canonicalHeader),
             .receipts = {},
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))

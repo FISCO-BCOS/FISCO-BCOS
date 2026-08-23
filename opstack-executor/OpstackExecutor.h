@@ -617,8 +617,12 @@ public:
             }
             catch (const OpTxValidationFailed& e)
             {
+                // The offending tx's hash rides in the message (bcos::Error carries a string
+                // only across the delegate boundary): the engine's OP build loop parses it to
+                // evict the culprit from the pool instead of failing every subsequent build.
                 throw engine::OpConsensusError(
-                    std::string("OpScheduler: normal tx validation failed: ") + e.what());
+                    std::string("OpScheduler: normal tx validation failed: ") + e.what() +
+                    " [tx=0x" + transaction.hash().hex() + "]");
             }
         }
         task::Task<void> execute()

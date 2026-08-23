@@ -78,8 +78,9 @@ using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBa
 using ViewType = typename MLS::ViewType;
 
 // ── Composition-root stand-ins (the OP build path touches memPool hygiene; never populated) ──
-struct StubMemPool
-{
+    // Poisoned-tx eviction hook (engine build loop): no-op in tests - the pool is never populated.
+    void removeByHash(std::span<bcos::crypto::HashType const>)
+    {}
     template <class View>
     void remove(View&)
     {}

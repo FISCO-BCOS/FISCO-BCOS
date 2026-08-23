@@ -52,9 +52,58 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <algorithm>
+#include <array>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+namespace
+{
+// op-geth eth_call revert semantics (internal/ethapi): a reverted call is a JSON-RPC
+// error with code 3 and message "execution reverted"; when the revert data carries a
+// solidity Error(string) (selector 0x08c379a0) the decoded reason is appended.
+// A bare receipt status as the code and an empty message is unusable by clients.
+constexpr int32_t c_executionReverted = 3;
+
+std::string decodeRevertMessage(std::string_view outputHex)
+{
+    static std::string constexpr kReverted = "execution reverted";
+    auto bytes = fromHexWithPrefix(outputHex);
+    // Error(string): selector(4) || offset==32 (32) || length (32) || payload
+    if (bytes.size() < 4U + 32U + 32U ||
+        !std::equal(bytes.begin(), bytes.begin() + 4,
+            std::array<bcos::byte, 4>{0x08, 0xc3, 0x79, 0xa0}.begin()))
+    {
+        return kReverted;
+    }
+    auto word = [&bytes](std::size_t offset) {
+        std::size_t value = 0;
+        for (std::size_t i = 0; i < 32; ++i)
+        {
+            if (value > (std::numeric_limits<std::size_t>::max() >> 8))
+            {
+                return std::numeric_limits<std::size_t>::max();
+            }
+            value = (value << 8) | static_cast<std::uint8_t>(bytes[offset + i]);
+        }
+        return value;
+    };
+    if (word(4) != 32)
+    {
+        return kReverted;
+    }
+    auto length = word(36);
+    if (length > bytes.size() - (4U + 32U + 32U))
+    {
+        return kReverted;
+    }
+    auto reason = std::string(reinterpret_cast<char const*>(bytes.data() + 68),
+        static_cast<std::size_t>(length));
+    return kReverted + ": " + reason;
+}
+}  // namespace
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
@@ -925,9 +974,11 @@ task::Task<void> EthEndpoint::call(
                     else
                     {
                         // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
+                        // Reverted call -> op-geth style error: code 3 "execution reverted"
+                        // with the Error(string) reason decoded into the message.
                         Json::Value jsonResult = Json::objectValue;
-                        jsonResult["code"] = result->status();
-                        jsonResult["message"] = result->message();
+                        jsonResult["code"] = c_executionReverted;
+                        jsonResult["message"] = decodeRevertMessage(output);
                         jsonResult["data"] = output;
                         m_response["jsonrpc"] = "2.0";
                         m_response["error"] = std::move(jsonResult);

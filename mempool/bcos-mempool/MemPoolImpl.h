@@ -15,6 +15,7 @@
 #include <boost/multi_index_container.hpp>
 #include <algorithm>
 #include <concepts>
+#include <span>
 #include <string_view>
 #include <unordered_set>
 
@@ -143,6 +144,20 @@ public:
         for (auto&& transaction : transactions)
         {
             add(std::forward<decltype(transaction)>(transaction));
+        }
+    }
+
+    /// Exact eviction by pool key (the tx hash). Used by the engine's OP payload
+    /// build loop: a tx that fails validation during building is dropped from the
+    /// pool — op-geth's worker equivalently discards txs that fail Prepare — so a
+    /// permanently-invalid tx cannot poison every subsequent build.
+    void removeByHash(std::span<bcos::crypto::HashType const> hashes)
+    {
+        std::unique_lock lock(m_mutex);
+        auto& hashIndex = m_transactions.get<1>();
+        for (auto const& hash : hashes)
+        {
+            hashIndex.erase(hash);
         }
     }
 
