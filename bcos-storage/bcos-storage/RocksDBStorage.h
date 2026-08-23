@@ -64,6 +64,9 @@ public:
     void asyncSetRow(std::string_view table, std::string_view key, Entry entry,
         std::function<void(Error::UniquePtr)> callback) override;
 
+    // All async* ops above execute the RocksDB call and fire the callback inline.
+    bool isSynchronousCompletion() const noexcept override { return true; }
+
     void asyncPrepare(const bcos::protocol::TwoPCParams& params,
         const TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t, const std::string&)> callback) override;
