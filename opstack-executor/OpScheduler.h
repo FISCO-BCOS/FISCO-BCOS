@@ -27,10 +27,10 @@
 
 #include <opstack-executor/OpBlockExecute.h>  // preBlockOpSteps / finalizeOpBlockResult / OpBlockSeal
 #include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / mismatchedFieldOf / toBcosH256
-#include <opstack-executor/ReorgUndo.h>  // ReorgUndoBlob (S-DRV-6/7 one-level tip rollback)
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
 #include <opstack-executor/RecentBlockHashes.h>
+#include <opstack-executor/ReorgUndo.h>  // ReorgUndoBlob (S-DRV-6/7 one-level tip rollback)
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
@@ -510,12 +510,12 @@ private:
                 auto const announcedParent = blockHeader->parentInfo().blockHash;
                 if (!canonicalParent.has_value() || *canonicalParent != announcedParent)
                 {
-                    auto message =
-                        fmt::format("Block {} sits at the committed tip's height but is not its "
-                                    "sibling: parent {} is not the canonical parent {}",
-                            number, announcedParent.hex(),
-                            canonicalParent.has_value() ? canonicalParent->hex() :
-                                                          std::string("<none>"));
+                    auto message = fmt::format(
+                        "Block {} sits at the committed tip's height but is not its "
+                        "sibling: parent {} is not the canonical parent {}",
+                        number, announcedParent.hex(),
+                        canonicalParent.has_value() ? canonicalParent->hex() :
+                                                      std::string("<none>"));
                     OP_SCHEDULER_LOG(WARNING) << message;
                     co_return {BCOS_ERROR_UNIQUE_PTR(
                                    scheduler::SchedulerError::InvalidBlockNumber, message),
@@ -523,8 +523,8 @@ private:
                 }
                 auto const canonicalAtHeight =
                     co_await ledger::getBlockHash(view, number, ledger::fromStorage);
-                if (canonicalAtHeight.has_value() && *canonicalAtHeight ==
-                        bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
+                if (canonicalAtHeight.has_value() &&
+                    *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
                 {
                     // The engine's step-3b short-circuit owns committed re-deliveries; a direct
                     // delegate call with the committed tip itself would otherwise re-execute it
@@ -540,19 +540,18 @@ private:
                 }
                 ReorgUndoBlob replacedUndo;
                 if (auto undoEntry = co_await storage2::readOne(view,
-                        executor_v1::StateKey{
-                            ledger::SYS_REORG_UNDO, std::to_string(number)});
+                        executor_v1::StateKey{ledger::SYS_REORG_UNDO, std::to_string(number)});
                     undoEntry.has_value())
                 {
                     replacedUndo = ReorgUndoCodec::decode(undoEntry->get());
                 }
                 else
                 {
-                    auto message =
-                        fmt::format("Rollback to height {} has no undo journal (chain tip "
-                                    "predates S-DRV-6/7, or the window was pruned) — cannot "
-                                    "rebuild the parent state as the execution base",
-                            number);
+                    auto message = fmt::format(
+                        "Rollback to height {} has no undo journal (chain tip "
+                        "predates S-DRV-6/7, or the window was pruned) — cannot "
+                        "rebuild the parent state as the execution base",
+                        number);
                     OP_SCHEDULER_LOG(WARNING) << message;
                     co_return {BCOS_ERROR_UNIQUE_PTR(
                                    scheduler::SchedulerError::InvalidBlockNumber, message),
@@ -1134,8 +1133,7 @@ private:
                 touched.emplace_back(data.key);
                 // DataValue = variant<NOT_EXISTS, DELETED, Entry>: DELETED (the delta's
                 // tombstones) and NOT_EXISTS both mean "this commit removes the row".
-                if (auto* entry =
-                        std::get_if<storage::Entry>(std::addressof(data.value)))
+                if (auto* entry = std::get_if<storage::Entry>(std::addressof(data.value)))
                 {
                     newValues.emplace_back(*entry);
                 }
@@ -1159,8 +1157,7 @@ private:
             ReorgUndoBlob undoBlob;
             undoBlob.txCount = static_cast<int64_t>(block->transactionsSize());
             undoBlob.failedCount = std::count_if(pending.result.receipts.begin(),
-                pending.result.receipts.end(),
-                [](auto const& r) { return r->status() != 0; });
+                pending.result.receipts.end(), [](auto const& r) { return r->status() != 0; });
             for (size_t i = 0; i < touched.size(); ++i)
             {
                 auto old = [&]() -> std::optional<storage::Entry> {
@@ -1189,9 +1186,9 @@ private:
             // Prune beyond the retention window (tombstone merges into the backend).
             if (number > c_reorgUndoKeep)
             {
-                co_await storage2::removeOne(*storage,
-                    executor_v1::StateKey{
-                        ledger::SYS_REORG_UNDO, std::to_string(number - c_reorgUndoKeep)});
+                co_await storage2::removeOne(
+                    *storage, executor_v1::StateKey{ledger::SYS_REORG_UNDO,
+                                  std::to_string(number - c_reorgUndoKeep)});
             }
 
             // Rollback count compensation: prewrite's asyncGetTotalTransactionCount read the
@@ -1211,8 +1208,8 @@ private:
                     }
                     else
                     {
-                        auto committedRow = co_await storage2::readOne(committed,
-                            executor_v1::StateKey{ledger::SYS_CURRENT_STATE, key});
+                        auto committedRow = co_await storage2::readOne(
+                            committed, executor_v1::StateKey{ledger::SYS_CURRENT_STATE, key});
                         if (committedRow.has_value())
                         {
                             current = boost::lexical_cast<int64_t>(committedRow->get());
@@ -1221,15 +1218,14 @@ private:
                     storage::Entry adjusted;
                     adjusted.set(std::to_string(current + delta));
                     co_await storage2::writeOne(*storage,
-                        executor_v1::StateKey{ledger::SYS_CURRENT_STATE, key},
-                        std::move(adjusted));
+                        executor_v1::StateKey{ledger::SYS_CURRENT_STATE, key}, std::move(adjusted));
                 };
                 co_await adjust(
                     ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT, -rollback->replacedUndo.txCount);
                 if (rollback->replacedUndo.failedCount != 0)
                 {
-                    co_await adjust(
-                        ledger::SYS_KEY_TOTAL_FAILED_TRANSACTION, -rollback->replacedUndo.failedCount);
+                    co_await adjust(ledger::SYS_KEY_TOTAL_FAILED_TRANSACTION,
+                        -rollback->replacedUndo.failedCount);
                 }
             }
         }

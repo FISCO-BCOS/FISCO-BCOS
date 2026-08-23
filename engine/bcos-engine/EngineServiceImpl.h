@@ -56,14 +56,14 @@
 #include <deque>
 #include <functional>
 #include <mutex>
-#include <set>
-#include <span>
 #include <optional>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/transform.hpp>
+#include <set>
 #include <shared_mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -343,10 +343,10 @@ public:
         // S-DRV-6/7 stage 1: whether the head hash is the CANONICAL block at its height,
         // read BEFORE the lock (the read co_awaits; x_state must not be held across a
         // suspension). It gates the two reorg recognizers inside the lock.
-        auto canonicalHeadHash = co_await bcos::ledger::getBlockHash(
-            view, *headBlockNumber, bcos::ledger::fromStorage);
-        bool const headCanonical = canonicalHeadHash.has_value() &&
-                                   *canonicalHeadHash == forkchoiceState.headBlockHash;
+        auto canonicalHeadHash =
+            co_await bcos::ledger::getBlockHash(view, *headBlockNumber, bcos::ledger::fromStorage);
+        bool const headCanonical =
+            canonicalHeadHash.has_value() && *canonicalHeadHash == forkchoiceState.headBlockHash;
 
         {
             std::unique_lock lock(x_state);
@@ -772,8 +772,8 @@ private:
                 .transactions = std::move(candidateTransactions),
                 // Holocene+ header shape (op-geth eip1559_optimism.go): version byte (0 = Holocene,
                 // 1 = Jovian) || u32 denominator || u32 elasticity.  Jovian appends u64 minBaseFee.
-                // Decode from attrs.eip1559Params (8 bytes from SystemConfig via op-node); neutral 1/1
-                // when absent/invalid so baseFee stays unchanged per Holocene recalculation.
+                // Decode from attrs.eip1559Params (8 bytes from SystemConfig via op-node); neutral
+                // 1/1 when absent/invalid so baseFee stays unchanged per Holocene recalculation.
                 .extraData =
                     [this, &payloadAttributes]() {
                         uint32_t denominator = 1, elasticity = 1;
@@ -803,17 +803,17 @@ private:
                             extra[0] = 0x01;
                             extra.resize(17, 0x00);
                             // Jovian: minBaseFee u64 BE at [9,17) (op-geth
-                            // EncodeJovianExtraData, eip1559_optimism.go:49-54; op-geth panics on an
-                            // absent minBaseFee there -- the spec REQUIRES the field after Jovian
-                            // and updateForkchoice validates it, so the 0 fallback below only
-                            // serves direct-service callers and keeps the lambda total).
+                            // EncodeJovianExtraData, eip1559_optimism.go:49-54; op-geth panics on
+                            // an absent minBaseFee there -- the spec REQUIRES the field after
+                            // Jovian and updateForkchoice validates it, so the 0 fallback below
+                            // only serves direct-service callers and keeps the lambda total).
                             if (auto minBaseFee = payloadAttributes.minBaseFee;
                                 minBaseFee.has_value())
                             {
                                 for (std::size_t i = 0; i < 8; ++i)
                                 {
-                                    extra[9 + i] =
-                                        static_cast<bcos::byte>((*minBaseFee >> (56 - 8 * i)) & 0xFF);
+                                    extra[9 + i] = static_cast<bcos::byte>(
+                                        (*minBaseFee >> (56 - 8 * i)) & 0xFF);
                                 }
                             }
                         }
@@ -878,8 +878,9 @@ private:
 
             // Provisional header (placeholder commitments) -> block -> delegate pre-execution.
             const auto transactionsRoot = SchedulerType::computeTxRoot(*payload.rawTransactions);
-            auto provisionalHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
-                payload, transactionsRoot, parentBeaconBlockRoot);
+            auto provisionalHeader =
+                detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
+                    transactionsRoot, parentBeaconBlockRoot);
             auto block = buildOpBlock(payload, provisionalHeader);
 
             // Drop an uncommitted abandoned build first (the delegate's continuity guard
@@ -936,8 +937,8 @@ private:
         {
             payload.blobGasUsed = *executedBlobGas;
         }
-        auto finalHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
-            payload, SchedulerType::computeTxRoot(*payload.rawTransactions), parentBeaconBlockRoot);
+        auto finalHeader = detail::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
+            SchedulerType::computeTxRoot(*payload.rawTransactions), parentBeaconBlockRoot);
         payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
 
         // Canonical second pass: execute the FINAL block (real announced commitments) with
@@ -1106,9 +1107,8 @@ private:
             if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                    std::string(
-                        "expectedBlobVersionedHashes must be empty (L2 forbids blob "
-                        "transactions)"));
+                    std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
+                                "transactions)"));
             }
             // Karst (V4) carries no execution-layer requests. The fourth parameter is
             // mandatory on the wire (the RPC layer rejects its absence), so an in-process
@@ -1128,9 +1128,8 @@ private:
             if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
             {
                 co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-                    std::string(
-                        "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
-                        "later"));
+                    std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and "
+                                "later"));
             }
 
             std::unique_lock lock(x_state);
@@ -1636,8 +1635,8 @@ private:
             bool siblingOfTip = false;
             if (payload.blockNumber > 0)
             {
-                auto currentNumber = co_await bcos::ledger::getCurrentBlockNumber(
-                    view, bcos::ledger::fromStorage);
+                auto currentNumber =
+                    co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
                 auto canonicalParent = co_await bcos::ledger::getBlockHash(
                     view, payload.blockNumber - 1, bcos::ledger::fromStorage);
                 siblingOfTip = currentNumber == payload.blockNumber &&

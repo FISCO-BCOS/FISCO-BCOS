@@ -261,8 +261,7 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::storage::Entry hashEntry;
     hashEntry.set(blockHash.asBytes());
     bcos::task::syncWait(bcos::storage2::writeOne(view,
-        StateKey{bcos::ledger::SYS_NUMBER_2_HASH, std::to_string(number)},
-        std::move(hashEntry)));
+        StateKey{bcos::ledger::SYS_NUMBER_2_HASH, std::to_string(number)}, std::move(hashEntry)));
     // mergeBackStorage merges the oldest layer (FIFO).
     // Drain the stack — parent pre-registration lands in the backend immediately, and
     // with an empty stack before each block push, mergeView persists right away so the
@@ -721,11 +720,11 @@ void runInvalidVector(std::string const& id)
         auto canonicalReq =
             bcos::rpc::parseNewPayloadRequest(canonicalParams, bcos::engine::ApiVersion::V4);
         auto canonicalStatus = bcos::task::syncWait(fixture->service.newPayload(canonicalReq, 4));
-        BOOST_REQUIRE_MESSAGE(
-            static_cast<int>(canonicalStatus.status) ==
-                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+        BOOST_REQUIRE_MESSAGE(static_cast<int>(canonicalStatus.status) ==
+                                  static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
             id << ": canonical expected VALID, got " << static_cast<int>(canonicalStatus.status)
-               << (canonicalStatus.validationError ? " : " + *canonicalStatus.validationError : ""));
+               << (canonicalStatus.validationError ? " : " + *canonicalStatus.validationError :
+                                                     ""));
     }
 
     if (classification == "VALID")
@@ -744,8 +743,8 @@ void runInvalidVector(std::string const& id)
         auto view = fixture->multiLayerStorage.fork();
         auto canonicalAtHeight = bcos::task::syncWait(bcos::ledger::getBlockHash(
             view, request.executionPayload.blockNumber, bcos::ledger::fromStorage));
-        BOOST_CHECK_MESSAGE(
-            canonicalAtHeight.has_value() && *canonicalAtHeight == request.executionPayload.blockHash,
+        BOOST_CHECK_MESSAGE(canonicalAtHeight.has_value() &&
+                                *canonicalAtHeight == request.executionPayload.blockHash,
             id << ": sibling commit must switch SYS_NUMBER_2_HASH at the height to the sibling's "
                << "hash");
         return;
@@ -1676,9 +1675,9 @@ w6test::InvalidSample forkCanonicalSampleOf(w6test::InvalidSample const& sample)
 int64_t currentTotalTxCountOf(MLS& multiLayerStorage)
 {
     auto view = multiLayerStorage.fork();
-    auto entry = bcos::task::syncWait(bcos::storage2::readOne(view,
-        StateKey{bcos::ledger::SYS_CURRENT_STATE,
-            std::string(bcos::ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT)}));
+    auto entry = bcos::task::syncWait(bcos::storage2::readOne(
+        view, StateKey{bcos::ledger::SYS_CURRENT_STATE,
+                  std::string(bcos::ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT)}));
     if (!entry.has_value())
     {
         return 0;
@@ -1689,8 +1688,8 @@ int64_t currentTotalTxCountOf(MLS& multiLayerStorage)
 bcos::h256 canonicalHashAtHeight(MLS& multiLayerStorage, int64_t height)
 {
     auto view = multiLayerStorage.fork();
-    auto hash = bcos::task::syncWait(
-        bcos::ledger::getBlockHash(view, height, bcos::ledger::fromStorage));
+    auto hash =
+        bcos::task::syncWait(bcos::ledger::getBlockHash(view, height, bcos::ledger::fromStorage));
     BOOST_REQUIRE(hash.has_value());
     return *hash;
 }
@@ -1734,10 +1733,10 @@ BOOST_AUTO_TEST_CASE(ReorgSiblingRetractsForkchoiceHead)
     BOOST_CHECK_EQUAL(currentTotalTxCountOf(fixture->multiLayerStorage), 2);
 
     // The retract: FCU onto the reorged head at the SAME height — VALID under stage 1.
-    auto [retract, pid1] = bcos::task::syncWait(fixture->service.updateForkchoice(
-        bcos::engine::ForkchoiceState{
-            bcos::h256(siblingHash), bcos::h256(siblingHash), bcos::h256(siblingHash)},
-        nullptr, /*version=*/3));
+    auto [retract, pid1] = bcos::task::syncWait(
+        fixture->service.updateForkchoice(bcos::engine::ForkchoiceState{bcos::h256(siblingHash),
+                                              bcos::h256(siblingHash), bcos::h256(siblingHash)},
+            nullptr, /*version=*/3));
     (void)pid1;
     BOOST_CHECK_EQUAL(static_cast<int>(retract.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
@@ -1752,30 +1751,29 @@ BOOST_AUTO_TEST_CASE(ReorgRetractNonCanonicalHeadStillRejected)
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     registerVerifiedBlock(fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
     BOOST_REQUIRE_EQUAL(
-        static_cast<int>(bcos::task::syncWait(fixture->service.newPayload(
-                             forkPayloadRequestOf(forkCanonicalSampleOf(sample)), 4))
+        static_cast<int>(bcos::task::syncWait(
+            fixture->service.newPayload(forkPayloadRequestOf(forkCanonicalSampleOf(sample)), 4))
                              .status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     auto canonicalHash = canonicalHashAtHeight(fixture->multiLayerStorage, 1);
-    BOOST_REQUIRE_EQUAL(
-        static_cast<int>(bcos::task::syncWait(
-                             fixture->service.newPayload(forkPayloadRequestOf(sample), 4))
-                             .status),
+    BOOST_REQUIRE_EQUAL(static_cast<int>(bcos::task::syncWait(
+                            fixture->service.newPayload(forkPayloadRequestOf(sample), 4))
+                                             .status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     const auto siblingHash = sample.vector["_op_payload"]["blockHash"].asString();
 
     // Track the reorged sibling head, then FCU the replaced canonical at the same height.
-    auto [retract, pid] = bcos::task::syncWait(fixture->service.updateForkchoice(
-        bcos::engine::ForkchoiceState{
-            bcos::h256(siblingHash), bcos::h256(siblingHash), bcos::h256(siblingHash)},
-        nullptr, /*version=*/3));
+    auto [retract, pid] = bcos::task::syncWait(
+        fixture->service.updateForkchoice(bcos::engine::ForkchoiceState{bcos::h256(siblingHash),
+                                              bcos::h256(siblingHash), bcos::h256(siblingHash)},
+            nullptr, /*version=*/3));
     (void)pid;
     BOOST_REQUIRE_EQUAL(static_cast<int>(retract.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     BOOST_CHECK_THROW(
         bcos::task::syncWait(fixture->service.updateForkchoice(
-            bcos::engine::ForkchoiceState{canonicalHash, canonicalHash, canonicalHash},
-            nullptr, /*version=*/3)),
+            bcos::engine::ForkchoiceState{canonicalHash, canonicalHash, canonicalHash}, nullptr,
+            /*version=*/3)),
         bcos::engine::InvalidForkchoiceState);
 }
 
@@ -1842,8 +1840,8 @@ BOOST_AUTO_TEST_CASE(ReorgRebuildOnParentBuildsSibling)
     BOOST_CHECK_EQUAL(static_cast<int>(redelivery.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     // The height's canonical slot switched to the rebuilt sibling; the tip number stands.
-    BOOST_CHECK_EQUAL(canonicalHashAtHeight(fixture->multiLayerStorage, 1),
-        built->executionPayload.blockHash);
+    BOOST_CHECK_EQUAL(
+        canonicalHashAtHeight(fixture->multiLayerStorage, 1), built->executionPayload.blockHash);
     BOOST_CHECK_EQUAL(currentTotalTxCountOf(fixture->multiLayerStorage), 1);
     // Tracking advances onto the rebuilt tip (+1 over the parent).
     auto [advance, pid1] = bcos::task::syncWait(fixture->service.updateForkchoice(
@@ -1899,8 +1897,8 @@ BOOST_AUTO_TEST_CASE(ReorgSiblingWithoutUndoJournalRefused)
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     registerVerifiedBlock(fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
     BOOST_REQUIRE_EQUAL(
-        static_cast<int>(bcos::task::syncWait(fixture->service.newPayload(
-                             forkPayloadRequestOf(forkCanonicalSampleOf(sample)), 4))
+        static_cast<int>(bcos::task::syncWait(
+            fixture->service.newPayload(forkPayloadRequestOf(forkCanonicalSampleOf(sample)), 4))
                              .status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
 
@@ -1913,8 +1911,8 @@ BOOST_AUTO_TEST_CASE(ReorgSiblingWithoutUndoJournalRefused)
         bcos::task::syncWait(fixture->multiLayerStorage.mergeView(std::move(view)));
     }
 
-    BOOST_CHECK_THROW(bcos::task::syncWait(
-                          fixture->service.newPayload(forkPayloadRequestOf(sample), 4)),
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(fixture->service.newPayload(forkPayloadRequestOf(sample), 4)),
         bcos::engine::OpExecutionInternalError);
 }
 
