@@ -68,8 +68,14 @@ def rpc(url, method, params):
 
 
 def cast(*args):
-    return subprocess.run(["cast", *args], capture_output=True,
-                          text=True).stdout.strip()
+    # Fail loud: a failed `cast send` writes to stderr and leaves stdout empty —
+    # returning "" made every downstream print ("proven", "finalized: ?") a false
+    # green during the 08-24 bring-up.
+    r = subprocess.run(["cast", *args], capture_output=True, text=True)
+    if r.returncode != 0 or (not r.stdout.strip() and r.stderr.strip()):
+        raise SystemExit("cast " + " ".join(args[:2]) + " failed: " +
+                         r.stderr.strip()[-400:])
+    return r.stdout.strip()
 
 
 def contracts():
@@ -86,13 +92,23 @@ def withdrawal_from_receipt(tx_hash):
         t = log["topics"]
         data = log["data"][2:]
         words = [data[i:i + 64] for i in range(0, len(data), 64)]
+        # Non-indexed args: value, gasLimit, data (dynamic), withdrawalHash. The data
+        # tail starts at args_offset = int(words[2]) into the region AFTER the 4-word
+        # head: [len][content]. words[4] is the LENGTH word, not the content — using it
+        # as bytes (the old bug) silently substitutes 32 zero bytes for empty data,
+        # which changes the L1-recomputed withdrawal hash and the proof walk dies
+        # inside the portal's MerkleTrie ("invalid large internal hash").
+        args = data[4 * 64:]
+        off = int(words[2], 16) * 2
+        dlen = int.from_bytes(bytes.fromhex(args[off:off + 64]), "big")
+        content = args[off + 64:off + 64 + dlen * 2]
         return {
             "nonce": "0x" + t[1][2:],
             "sender": "0x" + t[2][26:],
             "target": "0x" + t[3][26:],
             "value": int(words[0], 16),
             "gasLimit": int(words[1], 16),
-            "data": "0x" + words[4],  # tail: bytes length word (empty data)
+            "data": "0x" + content,
             "withdrawalHash": "0x" + words[3],
             "block": int(log["blockNumber"], 16),
         }
@@ -126,7 +142,8 @@ def message_passer_slots():
     import re
     keys = re.findall(r"key hex=([0-9a-f]+)",
                       listing.stdout.decode("utf-8", "replace"))
-    prefix = tbl.encode().hex() + ":"
+    # The physical key is "<table-ascii>:<raw 32B slot>"; in hex form the colon is byte 0x3a.
+    prefix = tbl.encode().hex() + "3a"
     slots = []
     for k in keys:
         if not k.startswith(prefix):
@@ -202,7 +219,10 @@ def main():
     print(f"output at finalized L2 {l2_block}: {output_root}")
 
     wh = bytes.fromhex(w["withdrawalHash"][2:])
-    storage_key = keccak(rlp.encode([wh, b""]))
+    # Solidity mapping slot: sentMessages (slot 0) => keccak256(abi.encodePacked(key, slot)),
+    # NOT keccak(rlp([key, ""])) — the RLP form lands on a key that is absent from the trie
+    # (verified on C2: the encodePacked form matches the on-chain slot, value 0x01).
+    storage_key = keccak(wh + b"\x00" * 32)
     if args.rocksdb_proof:
         slots = message_passer_slots()
         root, proof = build_inclusion_proof(slots, storage_key)
