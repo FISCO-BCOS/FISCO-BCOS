@@ -272,7 +272,16 @@ bcos::task::Task<void> mergeInsert(
 {
     if (std::holds_alternative<std::monostate>(slot))
     {
-        slot = makeLeaf(path, std::move(value));
+        // A fresh leaf landing in an EMPTIED subtree becomes the (new) root of that
+        // subtree. It must be dirty or mergeTrie's phase-2 short-circuit would see an
+        // untouched overlay and return the PRIOR root, silently dropping the insert.
+        // Concretely: a commitTrie batch that deletes the trie's last remaining leaf
+        // (slot -> monostate) and then inserts a new key hits this path — the delete
+        // emptied the trie, the insert repopulates it, and without dirty=true the new
+        // root would never be re-emitted (forked storageRoot, wrong state root).
+        auto leaf = makeLeaf(path, std::move(value));
+        leaf->dirty = true;
+        slot = std::move(leaf);
         co_return;
     }
     MutableNode* node = co_await mergeResolve(ctx, slot);
