@@ -1,7 +1,10 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/filter/LogMatcher.h>
+#include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
+
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -47,7 +50,7 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
             log["transactionIndex"] = toQuantity(_txIndex);
             log["transactionHash"] = _txHash.hexPrefixed();
             log["removed"] = false;
-            log["address"] = "0x" + std::string(logEntry.address());
+            log["address"] = "0x" + toLogAddressHex(logEntry.address());
             Json::Value jTopics(Json::arrayValue);
             for (const auto& topic : logEntry.topics())
             {
@@ -69,10 +72,19 @@ bool LogMatcher::matches(FilterRequest::ConstPtr _params, const bcos::protocol::
     FILTER_LOG(TRACE) << LOG_BADGE("matches") << LOG_KV("address", _logEntry.address())
                       << LOG_KV("logEntry topics", _logEntry.topics().size());
 
-    // An empty address array matches all values otherwise log.address must be in addresses
-    if (!addresses.empty() && !addresses.count("0x" + std::string(_logEntry.address())))
+    // An empty address array matches all values otherwise log.address must be in addresses.
+    // The log side may be raw bytes (OP executor) or a hex string (legacy), and the request
+    // side keeps the user's casing — normalize both and compare case-insensitively.
+    if (!addresses.empty())
     {
-        return false;
+        auto needle = "0x" + toLogAddressHex(_logEntry.address());
+        auto matchesAddress = [&needle](std::string const& filter) {
+            return boost::algorithm::to_lower_copy(filter) == needle;
+        };
+        if (!std::any_of(addresses.begin(), addresses.end(), matchesAddress))
+        {
+            return false;
+        }
     }
 
     if (topics.size() > logTopics.size())
