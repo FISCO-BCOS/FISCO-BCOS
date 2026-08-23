@@ -99,14 +99,52 @@
    （OpConsensusError 等）跨边界后 `catch(std::exception&)` 不匹配，RPC 只能看到
    generic "unknown exception"。已用 WARNING 日志补位（G 修复），根治需统一
    RTTI 编译选项或改用错误码传递。
-3. **revert 错误呈现**：eth_call revert 返回 `{"code":1,"message":"","data":"0x08c379a0..."}`，
-   op-geth 为 `{"code":3,"message":"execution reverted","data":...}`——需解码
-   Error(string) 填 message 并用标准 code。
-4. **SystemConfig 预部署（0x4200...1000）proxy 未初始化**：allocs 未种
-   implementation slot（build-allocs.yaml 声明了 0x...1002 但状态没落）。
-5. **mempool 毒化**（见 H）：失败交易永久滞留反复 seal。
+3. ~~**revert 错误呈现**~~【已修复 a9fcf74f1，2026-08-23】eth_call revert 现返回 op-geth 规范的
+   `{"code":3,"message":"execution reverted[: <reason>]","data":...}`，Error(string)
+   (0x08c379a0) 解码进 message。实测：`code 3 | execution reverted: Proxy: implementation
+   not initialized` ✓。
+4. ~~**SystemConfig 预部署播种**~~【结案：非链缺陷，是测试 fixture 用错地址】链上 0x4200...1000
+   的 EIP-1967 slots 本来就正确（impl=0x...1002, admin=0x...18，eth_getStorageAt 验证），
+   `getValueByKey()`/`owner()` 均正常。predeploy_matrix 旧 worktree 版查询了 OP 保留段
+   0x4200...00c0（op-deployer base 里未初始化的占位 proxy）才报 "implementation not
+   initialized"。主仓库版测试用对了地址，SystemConfig 组全绿（syscfg_get_default /
+   syscfg_owner_governance / syscfg_set_reverts_unwritable）。
+5. ~~**mempool 毒化**~~【已修复 a9fcf74f1，2026-08-23】三层修复：(a) executor 把失败 tx 的
+   hash 以 `[tx=0x..]` 嵌进块校验错误串（bcos::Error 跨 delegate 只能带字符串）；
+   (b) MemPoolImpl 新增 `removeByHash`；(c) buildOpPayload 重构为 build-and-probe 循环——
+   失败点名 sealed tx 时驱逐该 tx 并重试（对齐 op-geth worker 对 Prepare 失败交易的丢弃
+   语义），循环以 sealed 数为上界。实测：提交无余额 DEV0 毒交易 → 日志
+   `evicted poisoned pool transaction, tx=0x0d835ca1...` → 出块不中断、毒交易永不上链、
+   正常交易照常落地（chain_driver 30/1）。
 6. **setup_c2.sh 的 DEV1 key 字段缺一位**（40 hex chars）：应换 mnemonic 派生。
 7. Karst fork 特性：按用户决定当前版本不支持（维持排除）。
+
+### 5.1 新发现：EngineServiceTest 6 个合并遗留失败（非本次修复引入）
+
+`feat-opstack-merged` HEAD 上 `EngineServiceTest` 26 例中 6 失败（基线对照确认与
+a9fcf74f1 无关、修复前后失败集合完全一致）：
+
+- new_payload_v3_with_transactions_is_validated_not_accepted
+- new_payload_v3_rejects_blob_versioned_hashes
+- build_payload_excludes_native_transactions_full_loop
+- new_payload_round_trips_deposit_raw_bytes
+- karst_v3_build_v5_get_v4_commit_round_trip
+- new_payload_v4_rejects_nonempty_lists_and_missing_fields
+
+症状：self-built payload 走 newPayload 快速路径时**跳过了 V3/V4 请求级校验**
+（expectedBlobVersionedHashes / executionRequests 等，校验代码在
+EngineServiceImpl.cpp:498/:664 存在但未被该路径调用）——返回 Valid(0) 而非
+Invalid(1)。与 feat-opstack-e2e 时代修复过的"统一 V3/V4 校验"在合并中丢失有关，
+需在 engine 侧恢复"self-built 快速路径也要跑请求级校验"。
+
+### 5.2 本次修复的验证记录（2026-08-23 10:0x）
+
+- 单测：mempool/AnyMemPool/AnyEngineService/EngineRpc/Mapper/Helper **80/80 绿**；
+  opstack-executor 套件 **4/4 绿**；EngineServiceTest 20/26（6 个为 §5.1 合并遗留）。
+- 链上：revert 呈现 ✓；毒交易驱逐 ✓（出块连续 20683→20715）；chain_driver 30/1
+  （唯一失败仍是 driver 自身 L1 费用估算取整）；rpc_matrix 56/3（无 batcher 的
+  safe/finalized 环境性失败 + pending 竞态）；predeploy_matrix（主仓库版）35/2
+  （SystemConfig 组全绿；余 2 个为同 epoch 探针与本地缺 mpt_state_root 模块）。
 
 ## 6. 环境快照（当前可用）
 
