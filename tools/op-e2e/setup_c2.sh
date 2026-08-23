@@ -115,6 +115,31 @@ EOF
     --workdir "$C2" || die "op-deployer apply 失败"
   "$C2/op-deployer" inspect rollup $L2_CHAIN --workdir "$C2" > "$C2/rollup.json" 2>/dev/null || \
     die "inspect rollup 失败"
+  # ── 根因 F 固化（2026-08-23 C2 重建踩坑重现）────────────────────────────
+  # op-deployer custom-intent 部署后 L1 SystemConfig.eip1559Params 为全零
+  # （intent.toml 的 eip1559Denominator=8 并不会落到链上）。零参数下 op-node 的
+  # FCU attrs 携带 0x0，引擎按 Holocene 语义编码出零 denominator 的 extraData，
+  # op-node 立即拒绝（"extraData must encode a non-zero eip-1559 denominator"），
+  # 块生产完全卡死；且零参数费率数学会让引擎的状态写入产生每次执行不同的垃圾
+  # 状态（表现为 stateRoot 六路比对随机失败——曾误诊为 ①a 增量 MPT 的编码 bug，
+  # 参数修复后增量/全量根完全一致、①a 节点落盘正常）。修复 = 部署后立即用
+  # owner(DEV0) 设置 8/2，并把 rollup.json 的 genesis.system_config.eip1559Params
+  # 同步为非零值（op-node 启动时校验）。
+  SYSTEM_CONFIG=$(python3 -c "import json; print(json.load(open('$C2/rollup.json'))['l1_system_config_address'])" 2>/dev/null) || true
+  if [ -n "${SYSTEM_CONFIG:-}" ]; then
+    cast send "$SYSTEM_CONFIG" "setEIP1559Params(uint32,uint32)" 8 2 \
+      --rpc-url http://127.0.0.1:$ANVIL_PORT \
+      --private-key $DEV0 > /dev/null || die "setEIP1559Params(8,2) 失败"
+    log "SystemConfig eip1559Params 已设为 8/2（根因 F 修复）"
+  fi
+  # 兜底：若 inspect 未反映链上最新值，强制同步（op-node 启动时校验该字段非零）
+  python3 - "$C2/rollup.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+r = json.load(open(path))
+r['genesis']['system_config']['eip1559Params'] = '0x0000000800000002'
+json.dump(r, open(path, 'w'), indent=2)
+PYEOF
   "$C2/op-deployer" inspect genesis $L2_CHAIN --workdir "$C2" > "$C2/l2genesis.json" 2>/dev/null || \
     die "inspect genesis 失败"
   log "rollup.json + l2genesis.json 就绪"
