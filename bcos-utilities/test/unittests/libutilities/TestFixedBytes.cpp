@@ -53,4 +53,27 @@ BOOST_AUTO_TEST_CASE(fromStringView)
         prefixLeftBytes.begin(), prefixLeftBytes.end(), std::back_inserter(outHex));
     BOOST_CHECK_EQUAL("0x" + outHex, hex);
 }
+
+BOOST_AUTO_TEST_CASE(fromBinaryKeepsLeading0xBytes)
+{
+    // Regression test: FromBinary must NOT strip a leading 0x30 0x78 (ASCII
+    // "0x") from raw binary data. A 32-byte value such as a block hash that
+    // happens to begin with 0x3078... must round-trip intact; previously the
+    // "0x" prefix stripping (intended for hex strings only) corrupted the value
+    // by dropping its first two bytes.
+    std::string raw;
+    const unsigned char prefix[4] = {0x30, 0x78, 0x90, 0xb5};
+    raw.append(reinterpret_cast<const char*>(prefix), sizeof(prefix));
+    raw.append(28, static_cast<char>(0x11));
+
+    bcos::FixedBytes<LENGTH> fb(raw, bcos::FixedBytes<32>::FromBinary);
+    auto bytes = fb.asBytes();
+    BOOST_CHECK_EQUAL(bytes.size(), LENGTH);
+    BOOST_CHECK_EQUAL(bytes[0], 0x30);
+    BOOST_CHECK_EQUAL(bytes[1], 0x78);
+    BOOST_CHECK_EQUAL(bytes[2], 0x90);
+    BOOST_CHECK_EQUAL(bytes[3], 0xb5);
+    BOOST_CHECK_EQUAL(bytes[4], 0x11);
+    BOOST_CHECK_EQUAL(bytes[31], 0x11);
+}
 BOOST_AUTO_TEST_SUITE_END()

@@ -115,13 +115,18 @@ public:
     explicit FixedBytes(std::string_view view, StringDataType type,
         DataAlignType _alignType = DataAlignType::AlignRight)
     {
-        if (view.size() >= 2 && (view[0] == '0' && view[1] == 'x'))
-        {
-            view = view.substr(2);
-        }
-
         if (type == FromHex) [[likely]]
         {
+            // Strip an optional "0x" prefix only for hex strings. Binary data
+            // (FromBinary) must NEVER be prefix-stripped: raw bytes may
+            // legitimately start with 0x30 0x78 (ASCII "0x"), and stripping
+            // them would corrupt the value (e.g. a block hash that happens to
+            // begin with 0x3078...).
+            if (view.size() >= 2 && (view[0] == '0' && view[1] == 'x'))
+            {
+                view = view.substr(2);
+            }
+
             if ((view.size() > static_cast<std::string_view::size_type>(N * 2)) ||
                 (view.size() % 2 != 0)) [[unlikely]]
             {
