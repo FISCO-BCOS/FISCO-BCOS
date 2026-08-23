@@ -47,6 +47,7 @@ add_executable(opstack-executor-block-tests
     OpL1BlockDepositTest.cpp
     OpDaMatrixSchemaTest.cpp
     OpJovianShapeTest.cpp
+    OpGoldenCorpusProvenanceTest.cpp
     support/SeedPreStateTest.cpp
     support/GoldenSampleTest.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
