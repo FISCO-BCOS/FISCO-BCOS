@@ -359,14 +359,14 @@ print(json.loads(urllib.request.urlopen(req, timeout=10).read())['result'])
 fi
 
 # ---------- 7. op-batcher ----------
-# 把 L2 unsafe 块打成 batch 投到 L1，驱动 derivation 推进 cross-safe/finalized。
-# batcher 私钥必须与 SystemConfig.batcherAddr 一致（op-deployer 默认 = anvil #2）。
+# Post L2 unsafe blocks as batches to L1 so derivation advances cross-safe/finalized.
+# The batcher key must match SystemConfig.batcherAddr (op-deployer default = anvil #2).
 if step_run 7; then
-  step 7 "op-batcher 启动"
+  step 7 "op-batcher start"
   OP_MONOREPO="${OP_MONOREPO:-/Users/octopus/octo/code/blockchain-impl/optimism}"
   if [ ! -x "$C2/op-batcher" ]; then
     (cd "$OP_MONOREPO" && go build -o "$C2/op-batcher" ./op-batcher/cmd) \
-      || die "op-batcher 构建失败(需 monorepo + go)"
+      || die "op-batcher build failed (needs monorepo + go)"
   fi
   BATCHER_KEY=$(cast wallet private-key --mnemonic "test test test test test test test test test test test junk" --mnemonic-index 2)
   pgrep -f "$C2/op-batcher" | xargs kill 2>/dev/null || true
@@ -384,9 +384,9 @@ if step_run 7; then
   disown
   sleep 10
   if grep -q "Batch Submitter started" "$C2/op-batcher.log" 2>/dev/null; then
-    log "✅ op-batcher 启动(PID $(cat "$C2/op-batcher.pid"))，safe/finalized 将随后推进"
+    log "✅ op-batcher started (PID $(cat "$C2/op-batcher.pid")), safe/finalized will advance shortly"
   else
-    log "!! op-batcher 可能启动失败，查看 $C2/op-batcher.log"
+    log "!! op-batcher may have failed to start, check $C2/op-batcher.log"
   fi
 fi
 
@@ -394,8 +394,8 @@ echo
 echo "=== C2 devnet 就绪 ==="
 echo "  anvil L1 : http://127.0.0.1:$ANVIL_PORT (chain $ANVIL_CHAIN)"
 echo "  FISCO L2 : web3 $FISCO_WEB3 / engine $FISCO_ENGINE (chain $L2_CHAIN)"
-echo "  常用操作:"
-echo "    存款  : cast send <deposit_contract> \"depositTransaction(address,uint256,uint64,bool,bytes)\" <to> <amt> 100000 false 0x --value <amt> --rpc-url http://127.0.0.1:$ANVIL_PORT"
-echo "    提款  : cast send 0x4200000000000000000000000000000000000016 \"initiateWithdrawal(address,uint256,bytes)\" <l1收款地址> 100000 0x --value 1ether --gas-limit 200000 --gas-price 2gwei --priority-gas-price 0.1gwei --rpc-url http://127.0.0.1:$FISCO_WEB3 --chain-id $L2_CHAIN"
-echo "           (注意: MessagePasser 在 0x4200..0016, 入口是 initiateWithdrawal, 没有 withdraw();"
-echo "            需显式给 gas-price/priority-gas-price, FISCO 尚无 eth_feeHistory)"
+echo "  Quick reference:"
+echo "    deposit : cast send <deposit_contract> \"depositTransaction(address,uint256,uint64,bool,bytes)\" <to> <amt> 100000 false 0x --value <amt> --rpc-url http://127.0.0.1:$ANVIL_PORT"
+echo "    withdraw: cast send 0x4200000000000000000000000000000000000016 \"initiateWithdrawal(address,uint256,bytes)\" <l1_recipient> 100000 0x --value 1ether --rpc-url http://127.0.0.1:$FISCO_WEB3 --chain-id $L2_CHAIN"
+echo "             (MessagePasser lives at 0x4200..0016 with entry point initiateWithdrawal — there is no withdraw();"
+echo "              0x4200..0010 is the L2StandardBridge. Default-fee flows work: eth_feeHistory and eth_gasPrice are implemented.)"
