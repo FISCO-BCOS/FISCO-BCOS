@@ -981,16 +981,16 @@ private:
         // skipBalanceCheck: eth_call/estimateGas simulations must not balance-validate —
         // op-geth never balance-validates a call (its simulated sender routinely carries no
         // funds). opValidate's flag was designed for exactly this but was never wired to the
-        // call path, so every eth_call failed validation and surfaced as the RTTI-bypassed
-        // "unknown exception" at the RPC boundary (see OpScheduler::call).
+        // call path, so every eth_call failed validation and surfaced as an opaque "unknown
+        // exception" at the RPC boundary (see OpScheduler::call).
         auto validated = op::opValidate(
             stateView, blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft, skipBalanceCheck);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
             BCOS_LOG(WARNING) << LOG_BADGE("OPSTACK") << LOG_DESC("opValidate failed")
                               << LOG_KV("reason", err->message())
-                              << LOG_KV("sender", bcos::toHex(std::span<uint8_t const>(
-                                                                 evmTx.sender.bytes, 20)))
+                              << LOG_KV("sender",
+                                     bcos::toHex(std::span<uint8_t const>(evmTx.sender.bytes, 20)))
                               << LOG_KV("nonce", evmTx.nonce)
                               << LOG_KV("skipBalanceCheck", skipBalanceCheck);
             BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(err->message()));

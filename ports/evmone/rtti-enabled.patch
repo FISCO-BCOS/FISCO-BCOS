@@ -1,0 +1,15 @@
+diff --git a/lib/evmone/CMakeLists.txt b/lib/evmone/CMakeLists.txt
+--- a/lib/evmone/CMakeLists.txt
++++ b/lib/evmone/CMakeLists.txt
+@@ -48,10 +48,6 @@
+     target_compile_options(
+         evmone PRIVATE
+         $<$<CXX_COMPILER_ID:GNU>:-Wstack-usage=2900>
+     )
+-    if(NOT SANITIZE MATCHES undefined)
+-        # RTTI can be disabled except for UBSan which checks vptr integrity.
+-        target_compile_options(evmone PRIVATE -fno-rtti)
+-    endif()
+ endif()
+ set_target_properties(
+     evmone

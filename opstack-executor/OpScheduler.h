@@ -179,10 +179,11 @@ public:
             }
             catch (...)
             {
-                // Typed-catch RTTI bypass: catch(std::exception&) does not reliably bind across the
-                // -fno-rtti evmone boundary — return an Error rather than dangling the coroutine.
+                // Defense-in-depth backstop. Historically this caught the duplicate-typeinfo
+                // poisoning described at describeException() below; with the evmone port fixed
+                // (RTTI enabled, ports/evmone) typed catches bind again and this stays silent.
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
-                       "OpScheduler::call: unknown (RTTI-bypassed) exception"),
+                       "OpScheduler::call: unknown exception"),
                     nullptr);
             }
         }());
@@ -436,11 +437,10 @@ private:
         }
         catch (...)
         {
-            // RTTI-bypass fallback: -fno-rtti's libevmone.a carries non-unique typeinfo, so
-            // runtime_error subclasses (OpConsensusError/OpStorageError) escape the
-            // catch(std::exception&) above. Without this, OP exceptions bypass classifyException
-            // and leak out of executeBlock. classifyException's rethrow + typed catch binds
-            // reliably on the FISCO types normalized by the execute hook's own catch(...).
+            // Backstop for non-std::exception throws. Historically this also caught the
+            // duplicate-typeinfo poisoning (see describeException below); with the evmone
+            // port fixed (RTTI enabled, ports/evmone) std::exception types bind in the
+            // catch above, and this stays silent for them.
             auto message = std::string{"Execute block failed! ("} +
                            describeException(std::current_exception()) + ")";
             OP_SCHEDULER_LOG(ERROR) << message;
@@ -681,9 +681,8 @@ private:
         }
         catch (const bcos::evm::engine::OpConsensusError&)
         {
-            // FISCO types bind reliably — rethrow as-is, preserving the message (describeException
-            // restores it at the skeleton backstop). Do not fall to catch(std::exception&) (the
-            // -fno-rtti evmone boundary's typeinfo is unreliable) or catch(...) (message lost).
+            // Keep the FISCO type and message; describeException/classifyException at the
+            // skeleton backstop consume them (OpConsensusRejected / detailed reason).
             throw;
         }
         catch (const bcos::evm::engine::OpStorageError&)
@@ -697,11 +696,11 @@ private:
         }
         catch (...)
         {
-            // RTTI bypass: -fno-rtti evmone types escape the typed catch with broken typeinfo and
-            // would bypass the skeleton's catch(std::exception&). Normalize to a FISCO type so
+            // Non-std::exception throw (raw evmone code paths can still produce these).
+            // Normalize to a FISCO type so the skeleton's catch(std::exception&) binds and
             // classifyException receives a catchable one.
             throw bcos::evm::engine::OpConsensusError(
-                "OpScheduler: execute threw an unrecognized (RTTI-bypassed) exception; "
+                "OpScheduler: execute threw an unrecognized (non-std::exception) object; "
                 "raw tx decode or block-level consensus fault");
         }
 
@@ -873,8 +872,14 @@ public:
     }
 
     /// Error-message recovery at the catch(...) backstop: rethrow + typed catch, so the engine
-    /// barrier can emit a detailed validationError. FISCO types bind reliably and yield what();
-    /// catch(std::exception&) cannot reliably bind across the -fno-rtti evmone boundary.
+    /// barrier can emit a detailed validationError. Prefer what() from the OP error families;
+    /// history note — the former catch-all "RTTI typed-catch bypassed" outcome was not an
+    /// evmone-RTTI property at all: the pre-fix evmone port (compiled -fno-rtti) injected a
+    /// private typeinfo(std::exception) copy into the link, so EVERY catch(std::exception&)
+    /// in the binary compared against a different typeinfo address than the runtime used and
+    /// silently fell to catch(...). The port now builds evmone with RTTI (ports/evmone,
+    /// rtti-enabled.patch); a plain catch(const std::exception&) here would bind fine — the
+    /// OP-specific catches stay first so their exact messages win.
     std::string describeException(std::exception_ptr eptr) const
     {
         try
@@ -889,9 +894,13 @@ public:
         {
             return e.what();
         }
+        catch (const std::exception& e)
+        {
+            return e.what();
+        }
         catch (...)
         {
-            return "unclassified exception, RTTI typed-catch bypassed";
+            return "unclassified exception (not derived from std::exception)";
         }
     }
 

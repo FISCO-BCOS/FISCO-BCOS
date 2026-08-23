@@ -5,6 +5,19 @@
 # opaque upstream). The patch also carries the macOS static-lib combine and the
 # fork-parity exception-enabled build (noexcept stripped from the execute entry
 # points; NOT an exception-propagation guarantee). See fisco-sm3.patch.
+# rtti-enabled.patch drops upstream's `-fno-rtti` on the evmone target. Compiled
+# without RTTI, evmone's objects each carry a private-external definition of
+# typeinfo for std::exception; once linked into a FISCO-BCOS binary, the linker
+# binds every catch(std::exception&) landing pad in the WHOLE binary to that
+# local copy, while exceptions thrown through the platform runtime
+# (libc++abi.dylib on macOS) match against the dylib's own
+# typeinfo(std::exception) during base-class walks. The two addresses never
+# compare equal, so catch(std::exception&) handlers silently stop binding and
+# control falls through to catch(...) — observed as opaque "RTTI-bypassed"
+# RPC errors and misclassified exceptions node-wide. With RTTI enabled,
+# evmone's objects merely reference the runtime's typeinfo and typed catches
+# work again. evmone's public surface is a C API (EVMC), so the flag has no
+# ABI effect on consumers.
 # Use the GitHub source archive (single tarball) rather than a full git history
 # fetch: official evmone's history is large and vcpkg_from_git kept disconnecting
 # mid-transfer. The archive contains the vendored evmc/ and lib/evmone_precompiles/
@@ -15,7 +28,7 @@ vcpkg_from_github(
     REF v0.21.0
     SHA512 bc2928d42140d2fbb47d1e06773e634d208945e52ac70a418798586897a60164910cc2b23c80479ae172941d8d9142ea6fdd86e13f560195cff44ccdc1f1d0f2
     HEAD_REF master
-    PATCHES fisco-sm3.patch
+    PATCHES fisco-sm3.patch rtti-enabled.patch
 )
 
 vcpkg_cmake_configure(

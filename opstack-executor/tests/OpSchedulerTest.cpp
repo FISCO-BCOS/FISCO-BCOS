@@ -666,6 +666,13 @@ BOOST_AUTO_TEST_CASE(GetCodeEmpty)
 
 /// Invalid call (maxFeePerGas=1 < baseFee(1e9) trips evmone validate FEE_CAP_LESS_THAN_BLOCKS; an
 /// unfunded sender also trips the balance check) → JSON-RPC Error, never a status-0 receipt.
+/// The message assertion is the regression guard for the duplicate-typeinfo poisoning: the
+/// pre-fix evmone port (compiled -fno-rtti) injected a private typeinfo(std::exception) copy
+/// into the link, so every catch(std::exception&) in the binary — including the one in
+/// OpScheduler::call below this path — silently fell through to catch(...) and the reason was
+/// replaced by "unknown (RTTI-bypassed) exception". evmone now builds with RTTI
+/// (ports/evmone/rtti-enabled.patch); if this assertion ever sees the opaque message again,
+/// a -fno-rtti object crept back into the link.
 BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
 {
     Fixture f;
@@ -676,6 +683,10 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
         std::move(tx), [&](bcos::Error::Ptr err, bcos::protocol::TransactionReceipt::Ptr) {
             called = true;
             BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC), never a status-0 receipt
+            const auto msg = err->errorMessage();
+            BOOST_CHECK_MESSAGE(
+                msg.find("max fee per gas less than block base fee") != std::string::npos,
+                "validation reason must survive to the callback, got: " << msg);
         });
     BOOST_REQUIRE(called);
 }

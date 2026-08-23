@@ -726,11 +726,19 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         protocol::LogEntry log2(address1, {C, D}, bytes());
         auto params1 = std::make_shared<Web3FilterRequest>();
         auto params2 = std::make_shared<Web3FilterRequest>();
+        auto params3 = std::make_shared<Web3FilterRequest>();
         params2->addAddress(toHexStringWithPrefix(address1));
+        params3->addAddress(toHexStringWithPrefix(address2));
         BOOST_TEST(matcher.matches(params1, log1));
         BOOST_TEST(matcher.matches(params1, log2));
-        BOOST_TEST(!matcher.matches(params2, log1));
-        BOOST_TEST(!matcher.matches(params2, log2));
+        // Address filtering: the log side carries the address as raw bytes (OP executor) while
+        // the request side keeps the user's hex string — since the LogMatcher normalization fix
+        // the identical address must MATCH (these two assertions used to pin the pre-fix bug
+        // where a raw-bytes address could never match a hex filter).
+        BOOST_TEST(matcher.matches(params2, log1));
+        BOOST_TEST(matcher.matches(params2, log2));
+        // A different address still must not match.
+        BOOST_TEST(!matcher.matches(params3, log1));
     }
     // 2.[A] "A in first position (and anything after)"
     {
