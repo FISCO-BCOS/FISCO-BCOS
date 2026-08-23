@@ -7,7 +7,7 @@
   "invalid_isthmus_chain_3_fork": {
     "_info": {
       "hardfork": "isthmus",
-      "description": "same-parent same-height fork: canonical 0xc8cf44bff52144ccaa3e586f4625b68fc18110ac9a916b30f0f97f8f1fb6a511 + sibling 0x7a8face62048a79e4cb345378e2044f5dd23ebc779179b5184db5842a7e99adf (two-pour -32603)"
+      "description": "same-parent same-height fork: canonical 0xc8cf44bff52144ccaa3e586f4625b68fc18110ac9a916b30f0f97f8f1fb6a511 + sibling 0x7a8face62048a79e4cb345378e2044f5dd23ebc779179b5184db5842a7e99adf (two-pour sibling VALID (S-DRV-6/7 stage-1 rollback))"
     },
     "pre": {
       "0x4200000000000000000000000000000000000015": {
@@ -60,9 +60,8 @@
         "op_geth": "VALID (side chain)",
         "fisco": {
           "consumer": "engine",
-          "classification": "-32603",
-          "latest_valid_hash": null,
-          "expect_throw": "OpExecutionInternalError"
+          "classification": "VALID",
+          "latest_valid_hash": null
         }
       }
     },

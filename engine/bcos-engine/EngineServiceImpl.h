@@ -340,6 +340,14 @@ public:
         // explicitly covers both that usage and the pre-existing lock-across-`co_await` TODO in
         // `handleNewPayload`'s generic path. The two are consistent: this comment states the
         // default, the coroutine contract states the audited exception.
+        // S-DRV-6/7 stage 1: whether the head hash is the CANONICAL block at its height,
+        // read BEFORE the lock (the read co_awaits; x_state must not be held across a
+        // suspension). It gates the two reorg recognizers inside the lock.
+        auto canonicalHeadHash = co_await bcos::ledger::getBlockHash(
+            view, *headBlockNumber, bcos::ledger::fromStorage);
+        bool const headCanonical = canonicalHeadHash.has_value() &&
+                                   *canonicalHeadHash == forkchoiceState.headBlockHash;
+
         {
             std::unique_lock lock(x_state);
             if (m_trackedHeadBlock.has_value())
@@ -347,17 +355,38 @@ public:
                 auto const& trackedHeadBlock = *m_trackedHeadBlock;
                 if (*headBlockNumber < trackedHeadBlock.blockNumber)
                 {
-                    ForkchoiceUpdatedResult result{
-                        .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
-                            forkchoiceState.headBlockHash, std::nullopt),
-                        .payloadId = std::nullopt,
-                    };
-                    co_return result;
-                }
-                if (*headBlockNumber == trackedHeadBlock.blockNumber)
-                {
-                    if (forkchoiceState.headBlockHash != trackedHeadBlock.hash)
+                    // Old head. One exception — the sequencer rebuild-on-parent (S-DRV-6/7
+                    // stage 1): the head names the tracked tip's PARENT, is canonical, and
+                    // attributes are present. Falling through lets the attribute-driven
+                    // build below produce the sibling at the tip's own height (the
+                    // delegate's rollback path supplies the parent execution base); the
+                    // follow-up newPayload overwrites the height, then FCU advances tracking
+                    // to the sibling. Any OLDER head stays swallowed — this engine cannot
+                    // rebuild beyond one level, and VALID-without-payloadId is that
+                    // capability's honest ceiling.
+                    bool const rebuildOnParent =
+                        *headBlockNumber == trackedHeadBlock.blockNumber - 1 && headCanonical &&
+                        payloadAttributes != nullptr;
+                    if (!rebuildOnParent)
                     {
+                        ForkchoiceUpdatedResult result{
+                            .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
+                                forkchoiceState.headBlockHash, std::nullopt),
+                            .payloadId = std::nullopt,
+                        };
+                        co_return result;
+                    }
+                }
+                else if (*headBlockNumber == trackedHeadBlock.blockNumber)
+                {
+                    if (forkchoiceState.headBlockHash != trackedHeadBlock.hash && !headCanonical)
+                    {
+                        // A CANONICAL different hash at the tracked height is the committed
+                        // reorg sibling — the ledger tables already switched (newPayload
+                        // overwrote the height), so tracking follows (op-geth's FCU
+                        // SetCanonical reorg, eth/catalyst/api.go:278-293). A known-but-
+                        // non-canonical hash (e.g. the replaced tip) is a genuine forkchoice
+                        // conflict and keeps the -38002.
                         BOOST_THROW_EXCEPTION(
                             InvalidForkchoiceState{} << bcos::errinfo_comment{
                                 "Forkchoice head block hash conflicts with tracked block number"});
@@ -1368,6 +1397,21 @@ private:
                 }
                 if (builtHeader)
                 {
+                    // Idempotency guard (S-DRV-6/7 round): a CACHED payload can arrive again
+                    // AFTER its pending is gone — a CL retry of a delivery whose response was
+                    // lost, or the replaced tip of an enacted reorg. Committing the cached
+                    // header then dies on the empty pending slot (-32603 "Unexpected empty
+                    // results"); the block is already executed and accepted, so answer VALID
+                    // through the same operational definition step 3b uses (presence in
+                    // SYS_HASH_2_NUMBER = committed by this node's VALID branch).
+                    auto knownView = m_globalStateStorage.get().fork();
+                    if (auto known = co_await bcos::ledger::getBlockNumber(
+                            knownView, payload.blockHash, bcos::ledger::fromStorage);
+                        known.has_value())
+                    {
+                        co_return makeStatus(
+                            PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+                    }
                     bcos::Error::Ptr commitError;
                     m_delegate->commitBlock(
                         builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
@@ -1421,6 +1465,19 @@ private:
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("blockNumber must be exactly one greater than the parent's"));
+        }
+
+        // S-DRV-6/7 companion check (mandated by the step-3a comment above): with reorg
+        // siblings admitted, a height's NUMBER-keyed tables can hold a DIFFERENT block than
+        // payload.parentHash names. A parent that is known but no longer canonical (the
+        // replaced tip of a one-level reorg, or any deeper side-chain block) has no execution
+        // base here — answer SYNCING, the "cannot serve this parent" verdict, rather than
+        // letting the by-number reads below validate against the wrong block.
+        if (auto canonicalParent = co_await bcos::ledger::getBlockHash(
+                view, *parentBlockNumber, bcos::ledger::fromStorage);
+            !canonicalParent.has_value() || *canonicalParent != payload.parentHash)
+        {
+            co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
 
         // ---- Step 3a: timestamp strictly increases ----
@@ -1563,20 +1620,38 @@ private:
         // immediately above, so reaching here with an occupied height means a genuine
         // sibling/side-chain delivery.)
         //
-        // Answering `OpExecutionInternalError` (-32603) rather than INVALID is the honest
-        // reply: this node cannot evaluate the block, which is a capability limit, not a verdict.
-        // Serving arbitrary-parent base state needs a `blockHash -> MLS layer` mapping that does
-        // not exist today; that is architecture work, parked (this cycle delivers the explicit
-        // refusal, not the capability).
+        // S-DRV-6/7 stage 1 — the one-level tip rollback exemption: a payload at the CURRENT
+        // TIP's own height whose parent is the tip's canonical parent is a reorg SIBLING (an
+        // L1 reorg / consolidation event; op-specs derivation.md:824-827 names the EL's duty to
+        // enact it). The delegate rebuilds the parent state from the tip's undo journal
+        // (SYS_REORG_UNDO; OpScheduler's rollback path), executes the sibling on it, and
+        // overwrites the height — the single-slot SYS tables make that overwrite the implicit
+        // canonical switch. Deeper replacements (child height below the current tip) remain
+        // unsupported and keep the honest -32603 refusal below.
         const auto childNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
         if (auto occupiedHeight = co_await storage2::readOne(
                 view, executor_v1::StateKeyView{ledger::SYS_NUMBER_2_HASH, childNumberStr});
             occupiedHeight.has_value())
         {
-            BOOST_THROW_EXCEPTION(
-                OpExecutionInternalError{} << bcos::errinfo_comment{
-                    "non-tip parent not supported: a different block is already registered at "
-                    "this height, so the forked view's base state is not the payload's parent"});
+            bool siblingOfTip = false;
+            if (payload.blockNumber > 0)
+            {
+                auto currentNumber = co_await bcos::ledger::getCurrentBlockNumber(
+                    view, bcos::ledger::fromStorage);
+                auto canonicalParent = co_await bcos::ledger::getBlockHash(
+                    view, payload.blockNumber - 1, bcos::ledger::fromStorage);
+                siblingOfTip = currentNumber == payload.blockNumber &&
+                               canonicalParent.has_value() &&
+                               *canonicalParent == payload.parentHash;
+            }
+            if (!siblingOfTip)
+            {
+                BOOST_THROW_EXCEPTION(
+                    OpExecutionInternalError{} << bcos::errinfo_comment{
+                        "non-tip parent not supported: a different block is already registered "
+                        "at this height (and it is not a one-level reorg sibling of the tip), "
+                        "so the forked view's base state is not the payload's parent"});
+            }
         }
 
         // ---- Step 4: delegate block execution + commit (wiring Task 5b) ----

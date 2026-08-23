@@ -113,6 +113,13 @@ constexpr static std::string_view SYS_NUMBER_2_BLOCK_HEADER{"s_number_2_header"}
 constexpr static std::string_view SYS_NUMBER_2_TXS{"s_number_2_txs"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
+/// Reorg undo journal (S-DRV-6/7 stage 1, one-level tip rollback): key = the decimal
+/// block number of a COMMITTED block, value = ReorgUndoBlob (opstack-executor/ReorgUndo.h)
+/// recording the pre-block value of every state-plane key the block's delta layer touched
+/// plus its tx counters — enough for a reorg sibling at the same height to rebuild the
+/// parent's flat state as its execution base. Rows are overwritten per height (a sibling's
+/// commit replaces the journal with its own) and pruned after a retention window.
+constexpr static std::string_view SYS_REORG_UNDO{"s_reorg_undo"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};

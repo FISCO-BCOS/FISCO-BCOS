@@ -244,10 +244,11 @@ bcos::protocol::BlockHeader::Ptr productionHeaderOf(
 }
 
 /// Parent pre-registration: the OP path's step-3 parentKnown
-/// checks SYS_HASH_2_NUMBER. All 33 isolated vectors are block 1, so the parent must be
-/// pre-registered as a trusted genesis, otherwise newPayload returns SYNCING. The write
-/// encoding must match production: key = raw 32-byte hash, value = decimal number string
-/// (gate test registerVerifiedBlock, EngineNewPayloadGateTest.cpp:188-198).
+/// checks SYS_HASH_2_NUMBER, and the canonical-parent check (S-DRV-6/7 companion) verifies
+/// SYS_NUMBER_2_HASH at the parent's height. All 33 isolated vectors are block 1, so the
+/// parent must be pre-registered as a trusted genesis, otherwise newPayload returns
+/// SYNCING. The write encodings must match production: key = raw 32-byte hash, value =
+/// decimal number string; and number → raw 32-byte hash.
 void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, int64_t number)
 {
     auto view = multiLayerStorage.fork();
@@ -257,6 +258,11 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(bcos::storage2::writeOne(view,
         StateKey{bcos::ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         std::move(entry)));
+    bcos::storage::Entry hashEntry;
+    hashEntry.set(blockHash.asBytes());
+    bcos::task::syncWait(bcos::storage2::writeOne(view,
+        StateKey{bcos::ledger::SYS_NUMBER_2_HASH, std::to_string(number)},
+        std::move(hashEntry)));
     // mergeBackStorage merges the oldest layer (FIFO).
     // Drain the stack — parent pre-registration lands in the backend immediately, and
     // with an empty stack before each block push, mergeView persists right away so the
@@ -617,10 +623,15 @@ w6test::InvalidSample makeInlineInvalidSample(std::string const& id)
     }
     if (id == "inline_invalid_siblingFork")
     {
+        // S-DRV-6/7 stage 1: after the canonical commits, a feeRecipient-divergent sibling
+        // EXECUTES on the rebuilt parent base and is judged on its merits. On this
+        // deposit-only base the coinbase divergence changes no state (no fees collected),
+        // so the verdict is VALID — op-geth's "VALID (side chain)". The pre-rollback
+        // engine answered the -32603 capability refusal.
         return buildInlineInvalidSample(id, InlineInvalidSpec{
                                                 .baseId = "jovian_deposit_only",
                                                 .corruptField = "feeRecipient",
-                                                .classification = "-32603",
+                                                .classification = "VALID",
                                                 .carryCanonical = true,
                                             });
     }
@@ -695,6 +706,51 @@ void runInvalidVector(std::string const& id)
     const auto parentHash = parseParentHashFromPayload(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, parentHash, 0);
 
+    // S-DRV-6/7 two-pour pre-step: a vector carrying _op_canonical first commits the
+    // canonical block at the target height (VALID), so the vector's own payload arrives as
+    // its reorg sibling — the same-parent same-height fork delivery (chain_fork_* corpus
+    // schema). Under stage-1 rollback semantics the sibling is EXECUTED on the rebuilt
+    // parent base; classification decides the expected verdict below.
+    if (sample.vector.isMember("_op_canonical"))
+    {
+        w6test::InvalidSample canonicalSample;
+        canonicalSample.vector["_info"]["hardfork"] = sample.hardfork;
+        canonicalSample.vector["_op_payload"] = sample.vector["_op_canonical"];
+        canonicalSample.jovian = sample.jovian;
+        auto canonicalParams = w6test::makeInvalidParamsJson(canonicalSample);
+        auto canonicalReq =
+            bcos::rpc::parseNewPayloadRequest(canonicalParams, bcos::engine::ApiVersion::V4);
+        auto canonicalStatus = bcos::task::syncWait(fixture->service.newPayload(canonicalReq, 4));
+        BOOST_REQUIRE_MESSAGE(
+            static_cast<int>(canonicalStatus.status) ==
+                static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+            id << ": canonical expected VALID, got " << static_cast<int>(canonicalStatus.status)
+               << (canonicalStatus.validationError ? " : " + *canonicalStatus.validationError : ""));
+    }
+
+    if (classification == "VALID")
+    {
+        // S-DRV-6/7 stage 1: the sibling is a genuinely valid alternative block — op-geth
+        // answers "VALID (side chain)" and so must this engine now (the pre-rollback
+        // engine answered -32603, the parked capability refusal). The VALID commit also
+        // switches the height's canonical slot: SYS_NUMBER_2_HASH must name the sibling.
+        auto params = w6test::makeInvalidParamsJson(sample);
+        auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
+        auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+        BOOST_REQUIRE_MESSAGE(static_cast<int>(status.status) ==
+                                  static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
+            id << ": sibling expected VALID, got " << static_cast<int>(status.status)
+               << (status.validationError ? " : " + *status.validationError : ""));
+        auto view = fixture->multiLayerStorage.fork();
+        auto canonicalAtHeight = bcos::task::syncWait(bcos::ledger::getBlockHash(
+            view, request.executionPayload.blockNumber, bcos::ledger::fromStorage));
+        BOOST_CHECK_MESSAGE(
+            canonicalAtHeight.has_value() && *canonicalAtHeight == request.executionPayload.blockHash,
+            id << ": sibling commit must switch SYS_NUMBER_2_HASH at the height to the sibling's "
+               << "hash");
+        return;
+    }
+
     if (classification == "-38005" || classification == "-32603")
     {
         auto params = w6test::makeInvalidParamsJson(sample);
@@ -716,30 +772,8 @@ void runInvalidVector(std::string const& id)
             BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, version)),
                 bcos::engine::UnsupportedFork);
         }
-        else  // -32603: two-pour — submit canonical child first (VALID, writes SYS_NUMBER_2_HASH
-              // occupancy), then sibling
+        else  // -32603 remains for DEEPER-than-one-level forks (below the tip's own height)
         {
-            // The canonical sibling must travel with the vector (Task 5 chain_fork_*
-            // carriers share the schema). Missing = malformed corpus: a single sibling
-            // submit is VALID and does not throw, so a silent skip would give a
-            // misleading failure — fail loudly with a named schema violation.
-            BOOST_REQUIRE_MESSAGE(sample.vector.isMember("_op_canonical"),
-                id << ": -32603 vector must carry _op_canonical (two-pour canonical sibling)");
-            w6test::InvalidSample canonicalSample;
-            canonicalSample.vector["_info"]["hardfork"] = sample.hardfork;
-            canonicalSample.vector["_op_payload"] = sample.vector["_op_canonical"];
-            canonicalSample.jovian = sample.jovian;
-            auto canonicalParams = w6test::makeInvalidParamsJson(canonicalSample);
-            auto canonicalReq =
-                bcos::rpc::parseNewPayloadRequest(canonicalParams, bcos::engine::ApiVersion::V4);
-            auto canonicalStatus =
-                bcos::task::syncWait(fixture->service.newPayload(canonicalReq, 4));
-            BOOST_REQUIRE_MESSAGE(
-                static_cast<int>(canonicalStatus.status) ==
-                    static_cast<int>(bcos::engine::PayloadValidationStatus::Valid),
-                id << ": canonical expected VALID, got " << static_cast<int>(canonicalStatus.status)
-                   << (canonicalStatus.validationError ? " : " + *canonicalStatus.validationError :
-                                                         ""));
             BOOST_CHECK_THROW(bcos::task::syncWait(fixture->service.newPayload(request, 4)),
                 bcos::engine::OpExecutionInternalError);
         }
@@ -1171,7 +1205,10 @@ BOOST_AUTO_TEST_CASE(InvalidUnsupportedForkVersion3)
     runInvalidVector("inline_invalid_unsupportedFork");
 }
 
-BOOST_AUTO_TEST_CASE(InvalidSiblingForkRejected)
+// S-DRV-6/7 stage 1: the reorg sibling of the committed canonical tip EXECUTES on the
+// rebuilt parent base (undo-journal pre-writes) and is accepted on its merits — op-geth's
+// "VALID (side chain)" — replacing the pre-rollback -32603 capability refusal.
+BOOST_AUTO_TEST_CASE(SiblingForkAcceptedAfterCanonicalCommit)
 {
     runInvalidVector("inline_invalid_siblingFork");
 }
@@ -1242,7 +1279,7 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         if (pos != std::string::npos)
             staticItems.insert(std::stoi(id.substr(pos + 8)));
     }
-    // Inline vectors (-38005 / two-pour -32603 / SYNCING satisfied inline; not in manifest).
+    // Inline vectors (-38005 / sibling-fork / SYNCING satisfied inline; not in manifest).
     for (auto const* id : {"inline_invalid_stateRoot", "inline_invalid_parentUnknown",
              "inline_invalid_unsupportedFork", "inline_invalid_siblingFork"})
     {
@@ -1253,8 +1290,10 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
             lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
                                                              fisco["latest_valid_hash"].asString());
     }
-    // Required: classification (all four states covered)
-    for (auto const* c : {"INVALID", "SYNCING", "-38005", "-32603"})
+    // Required: classification (all four states covered). "VALID" replaced "-32603" as the
+    // same-height fork verdict under S-DRV-6/7 stage 1 (the sibling executes on the rebuilt
+    // parent base); -32603 remains the DEEPER-fork refusal but has no corpus vector yet.
+    for (auto const* c : {"INVALID", "SYNCING", "-38005", "VALID"})
         BOOST_CHECK_MESSAGE(
             classifications.count(c), "coverage: classification '" << c << "' has no vector");
     // Required: latest_valid_hash (both "parent" and null values)
@@ -1601,6 +1640,282 @@ BOOST_AUTO_TEST_CASE(ForkchoiceSafeBelowHeadIsValid)
     (void)pid;
     BOOST_CHECK_EQUAL(static_cast<int>(state.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+}
+
+// ── S-DRV-6/7 stage 1: one-level tip rollback (reorg sibling acceptance) ──
+//
+// The corpus's chain_fork vectors carry a canonical block and a same-parent same-height
+// sibling; these cases pin the full rollback lifecycle: sibling execution on the rebuilt
+// parent base (undo-journal pre-writes), the canonical-slot switch, the FCU retract onto
+// the reorged head, the sequencer rebuild-on-parent, the uncommitted-pending replacement
+// (case U), and the two honest refusals (no undo journal / non-canonical retract head).
+namespace
+{
+bcos::engine::NewPayloadRequest forkPayloadRequestOf(w6test::InvalidSample const& sample)
+{
+    return bcos::rpc::parseNewPayloadRequest(
+        w6test::makeInvalidParamsJson(sample), bcos::engine::ApiVersion::V4);
+}
+
+w6test::InvalidSample forkVectorSample(std::string const& stem)
+{
+    auto sample = w6test::loadInvalidSample(stem);
+    BOOST_REQUIRE(sample.vector.isMember("_op_canonical"));
+    return sample;
+}
+
+w6test::InvalidSample forkCanonicalSampleOf(w6test::InvalidSample const& sample)
+{
+    w6test::InvalidSample canonical;
+    canonical.vector["_info"]["hardfork"] = sample.hardfork;
+    canonical.vector["_op_payload"] = sample.vector["_op_canonical"];
+    canonical.jovian = sample.jovian;
+    return canonical;
+}
+
+int64_t currentTotalTxCountOf(MLS& multiLayerStorage)
+{
+    auto view = multiLayerStorage.fork();
+    auto entry = bcos::task::syncWait(bcos::storage2::readOne(view,
+        StateKey{bcos::ledger::SYS_CURRENT_STATE,
+            std::string(bcos::ledger::SYS_KEY_TOTAL_TRANSACTION_COUNT)}));
+    if (!entry.has_value())
+    {
+        return 0;
+    }
+    return boost::lexical_cast<int64_t>(entry->get());
+}
+
+bcos::h256 canonicalHashAtHeight(MLS& multiLayerStorage, int64_t height)
+{
+    auto view = multiLayerStorage.fork();
+    auto hash = bcos::task::syncWait(
+        bcos::ledger::getBlockHash(view, height, bcos::ledger::fromStorage));
+    BOOST_REQUIRE(hash.has_value());
+    return *hash;
+}
+}  // namespace
+
+// Verifier path: commit the canonical, retract onto the reorged sibling. The sibling
+// executes on the rebuilt parent base (its announced stateRoot only matches there), the
+// canonical slot switches, total_transaction_count compensates (2 canonical + 2 sibling
+// txs must total 2, not 4), and the confirming FCU onto the sibling head — the retract
+// that was -38002 before stage 1 — is VALID.
+BOOST_AUTO_TEST_CASE(ReorgSiblingRetractsForkchoiceHead)
+{
+    auto sample = forkVectorSample("invalid_isthmus_chain_3_fork");
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
+    opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    registerVerifiedBlock(fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
+
+    auto canonicalStatus = bcos::task::syncWait(
+        fixture->service.newPayload(forkPayloadRequestOf(forkCanonicalSampleOf(sample)), 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(canonicalStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    auto canonicalHash = canonicalHashAtHeight(fixture->multiLayerStorage, 1);
+
+    // Confirm the canonical head first (tracked head = canonical, height 1).
+    auto [tracked, pid0] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{canonicalHash, canonicalHash, canonicalHash}, nullptr,
+        /*version=*/3));
+    (void)pid0;
+    BOOST_REQUIRE_EQUAL(static_cast<int>(tracked.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+
+    // The reorg sibling: executes on the rolled-back parent base and overwrites height 1.
+    auto siblingStatus =
+        bcos::task::syncWait(fixture->service.newPayload(forkPayloadRequestOf(sample), 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(siblingStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    const auto siblingHash = sample.vector["_op_payload"]["blockHash"].asString();
+    BOOST_CHECK_EQUAL(
+        canonicalHashAtHeight(fixture->multiLayerStorage, 1), bcos::h256(siblingHash));
+    // Count compensation: the reorged history contains the sibling's 2 txs only.
+    BOOST_CHECK_EQUAL(currentTotalTxCountOf(fixture->multiLayerStorage), 2);
+
+    // The retract: FCU onto the reorged head at the SAME height — VALID under stage 1.
+    auto [retract, pid1] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{
+            bcos::h256(siblingHash), bcos::h256(siblingHash), bcos::h256(siblingHash)},
+        nullptr, /*version=*/3));
+    (void)pid1;
+    BOOST_CHECK_EQUAL(static_cast<int>(retract.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+}
+
+// A known-but-NON-canonical head at the tracked height (the replaced tip) is still a
+// forkchoice conflict: the -38002 survives for genuinely non-canonical retract heads.
+BOOST_AUTO_TEST_CASE(ReorgRetractNonCanonicalHeadStillRejected)
+{
+    auto sample = forkVectorSample("invalid_isthmus_chain_3_fork");
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
+    opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    registerVerifiedBlock(fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
+    BOOST_REQUIRE_EQUAL(
+        static_cast<int>(bcos::task::syncWait(fixture->service.newPayload(
+                             forkPayloadRequestOf(forkCanonicalSampleOf(sample)), 4))
+                             .status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    auto canonicalHash = canonicalHashAtHeight(fixture->multiLayerStorage, 1);
+    BOOST_REQUIRE_EQUAL(
+        static_cast<int>(bcos::task::syncWait(
+                             fixture->service.newPayload(forkPayloadRequestOf(sample), 4))
+                             .status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    const auto siblingHash = sample.vector["_op_payload"]["blockHash"].asString();
+
+    // Track the reorged sibling head, then FCU the replaced canonical at the same height.
+    auto [retract, pid] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{
+            bcos::h256(siblingHash), bcos::h256(siblingHash), bcos::h256(siblingHash)},
+        nullptr, /*version=*/3));
+    (void)pid;
+    BOOST_REQUIRE_EQUAL(static_cast<int>(retract.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(fixture->service.updateForkchoice(
+            bcos::engine::ForkchoiceState{canonicalHash, canonicalHash, canonicalHash},
+            nullptr, /*version=*/3)),
+        bcos::engine::InvalidForkchoiceState);
+}
+
+// An old head WITHOUT attributes stays swallowed (VALID, no payload build) — the parent
+// itself included; only the rebuild-on-parent WITH attributes builds (next case).
+BOOST_AUTO_TEST_CASE(ReorgParentHeadWithoutAttrsStillSwallowed)
+{
+    auto [fixture, blockHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    auto [state, pid] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{blockHash, blockHash, blockHash}, nullptr,
+        /*version=*/3));
+    (void)state;
+    (void)pid;
+    // Now retract the head to the parent (height 0) with NO attributes: swallowed.
+    bcos::h256 genesis("0x0000000000000000000000000000000000000000000000000000000000000001");
+    registerVerifiedBlock(fixture->multiLayerStorage, genesis, number - 1);
+    auto [swallow, swallowPid] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{genesis, genesis, genesis}, nullptr, /*version=*/3));
+    BOOST_CHECK_EQUAL(static_cast<int>(swallow.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_CHECK(!swallowPid.has_value());  // no build without attributes
+}
+
+// Sequencer path — the rebuild-on-parent: FCU names the committed tip's PARENT with
+// attributes; the build produces the sibling at the tip's own height on the rolled-back
+// base, the self newPayload commits it (overwriting the height), and the follow-up FCU
+// advances tracking to the new tip.
+BOOST_AUTO_TEST_CASE(ReorgRebuildOnParentBuildsSibling)
+{
+    auto [fixture, canonicalHash, number] = runVectorAndGetBlockHash("jovian_deposit_only");
+    BOOST_REQUIRE_EQUAL(number, 1);
+    auto [confirm, pid0] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{canonicalHash, canonicalHash, canonicalHash}, nullptr,
+        /*version=*/3));
+    (void)confirm;
+    (void)pid0;
+    // The parent = the committed tip's parent (height 0), already registered by the runner.
+    bcos::h256 parentHash = canonicalHashAtHeight(fixture->multiLayerStorage, 0);
+
+    auto attrs = makeJovianAttrs();
+    attrs.noTxPool = true;
+    auto [rebuild, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{parentHash, parentHash, parentHash}, &attrs,
+        /*version=*/4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(rebuild.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(payloadId.has_value());
+
+    auto built = bcos::task::syncWait(fixture->service.getPayload(*payloadId, 4));
+    BOOST_REQUIRE(built);
+    BOOST_CHECK_EQUAL(built->executionPayload.blockNumber, 1);
+    BOOST_CHECK_NE(built->executionPayload.blockHash, canonicalHash);
+
+    bcos::engine::NewPayloadRequest request;
+    request.executionPayload = built->executionPayload;
+    request.parentBeaconBlockRoot = attrs.parentBeaconBlockRoot;
+    auto commitStatus = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(commitStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    // Re-delivery of the now-COMMITTED self-built payload (CL retry / reorg orphan): the
+    // fast path must answer VALID through the known-block check instead of committing the
+    // cached header onto an empty pending slot (-32603, the pre-fix gap).
+    auto redelivery = bcos::task::syncWait(fixture->service.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(static_cast<int>(redelivery.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    // The height's canonical slot switched to the rebuilt sibling; the tip number stands.
+    BOOST_CHECK_EQUAL(canonicalHashAtHeight(fixture->multiLayerStorage, 1),
+        built->executionPayload.blockHash);
+    BOOST_CHECK_EQUAL(currentTotalTxCountOf(fixture->multiLayerStorage), 1);
+    // Tracking advances onto the rebuilt tip (+1 over the parent).
+    auto [advance, pid1] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{built->executionPayload.blockHash,
+            built->executionPayload.blockHash, built->executionPayload.blockHash},
+        nullptr, /*version=*/3));
+    (void)pid1;
+    BOOST_CHECK_EQUAL(static_cast<int>(advance.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+}
+
+// Case U — a divergent block replacing an UNCOMMITTED pending at the same height: a
+// built-but-not-yet-committed payload sits in the delegate's pending slot (height 1, its
+// delta layer pushed), and the external sibling's execute must pop that layer and run on
+// the parent base instead of stacking on top of the abandoned build.
+BOOST_AUTO_TEST_CASE(ReorgCaseUReplacesUncommittedPending)
+{
+    auto sample = forkVectorSample("invalid_jovian_chain_3_fork");
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
+    opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    registerVerifiedBlock(fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
+    const auto genesis = parseParentHashFromPayload(sample);
+
+    // Build (but do not commit) a payload at height 1: pending slot + pushed delta layer.
+    auto attrs = makeJovianAttrs();
+    attrs.noTxPool = true;
+    auto [build, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{genesis, genesis, genesis}, &attrs, /*version=*/4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(build.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(payloadId.has_value());
+
+    // The external sibling arrives before the built payload's own newPayload: case U.
+    auto siblingStatus =
+        bcos::task::syncWait(fixture->service.newPayload(forkPayloadRequestOf(sample), 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(siblingStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    const auto siblingHash = sample.vector["_op_payload"]["blockHash"].asString();
+    BOOST_CHECK_EQUAL(
+        canonicalHashAtHeight(fixture->multiLayerStorage, 1), bcos::h256(siblingHash));
+    // The abandoned build contributed nothing to the tx counters.
+    BOOST_CHECK_EQUAL(currentTotalTxCountOf(fixture->multiLayerStorage),
+        static_cast<int64_t>(sample.vector["_op_payload"]["transactions"].size()));
+}
+
+// Honest refusal: a tip committed before the undo journal existed (or pruned away) has no
+// execution base for its sibling — the delegate refuses, and the engine surfaces the
+// capability limit as -32603 (OpExecutionInternalError), not a wrong consensus verdict.
+BOOST_AUTO_TEST_CASE(ReorgSiblingWithoutUndoJournalRefused)
+{
+    auto sample = forkVectorSample("invalid_jovian_chain_3_fork");
+    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
+    opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    registerVerifiedBlock(fixture->multiLayerStorage, parseParentHashFromPayload(sample), 0);
+    BOOST_REQUIRE_EQUAL(
+        static_cast<int>(bcos::task::syncWait(fixture->service.newPayload(
+                             forkPayloadRequestOf(forkCanonicalSampleOf(sample)), 4))
+                             .status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+
+    // Erase the committed tip's undo journal (simulating a pre-S-DRV-6/7 tip).
+    {
+        auto view = fixture->multiLayerStorage.fork();
+        view.newMutable();
+        bcos::task::syncWait(bcos::storage2::removeOne(
+            view, StateKey{bcos::ledger::SYS_REORG_UNDO, std::string("1")}));
+        bcos::task::syncWait(fixture->multiLayerStorage.mergeView(std::move(view)));
+    }
+
+    BOOST_CHECK_THROW(bcos::task::syncWait(
+                          fixture->service.newPayload(forkPayloadRequestOf(sample), 4)),
+        bcos::engine::OpExecutionInternalError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

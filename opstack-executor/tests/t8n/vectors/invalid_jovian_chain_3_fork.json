@@ -7,7 +7,7 @@
   "invalid_jovian_chain_3_fork": {
     "_info": {
       "hardfork": "jovian",
-      "description": "same-parent same-height fork: canonical 0xdf75ecea178f9ff57dbcfe19a2e41eeb1db97437bfb631ae0f15a762b1f14589 + sibling 0x3659c0bafbba5f8bd2c1d2e88e09e51ba0ee45313818500f099a74f759dc383d (two-pour -32603)"
+      "description": "same-parent same-height fork: canonical 0xdf75ecea178f9ff57dbcfe19a2e41eeb1db97437bfb631ae0f15a762b1f14589 + sibling 0x3659c0bafbba5f8bd2c1d2e88e09e51ba0ee45313818500f099a74f759dc383d (two-pour sibling VALID (S-DRV-6/7 stage-1 rollback))"
     },
     "pre": {
       "0x4200000000000000000000000000000000000015": {
@@ -61,9 +61,8 @@
         "op_geth": "VALID (side chain)",
         "fisco": {
           "consumer": "engine",
-          "classification": "-32603",
-          "latest_valid_hash": null,
-          "expect_throw": "OpExecutionInternalError"
+          "classification": "VALID",
+          "latest_valid_hash": null
         }
       }
     },

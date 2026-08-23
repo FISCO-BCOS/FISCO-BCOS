@@ -19,6 +19,7 @@
 #include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
+#include <opstack-executor/ReorgUndo.h>             // ReorgUndoCodec (S-DRV-6/7 undo journal)
 #include <opstack-executor/Storage2StateHelpers.h>  // accountTableName (corrupt-slot seeding)
 
 #include <bcos-crypto/hash/Keccak256.h>
@@ -670,6 +671,51 @@ std::pair<bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr> callAt(
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSuite)
+
+/// S-DRV-6/7 stage 1: the undo journal's wire format round-trips — counters, restored-value
+/// rows, and tombstone rows (nullopt oldValue = the key did not exist pre-block); a
+/// truncated or version-skewed blob must throw rather than decode garbage.
+BOOST_AUTO_TEST_CASE(ReorgUndoCodecRoundTrip)
+{
+    using bcos::executor_v1::opstack::ReorgUndoBlob;
+    using bcos::executor_v1::opstack::ReorgUndoCodec;
+    using bcos::executor_v1::opstack::ReorgUndoRow;
+
+    ReorgUndoBlob blob;
+    blob.txCount = 7;
+    blob.failedCount = 2;
+    bcos::storage::Entry value;
+    value.set(std::string("pre-block value \x00\x01 with NUL", 26));
+    blob.rows.push_back(
+        ReorgUndoRow{bcos::executor_v1::StateKey{"/apps/ab", std::string(32, '\xdd')}, value});
+    blob.rows.push_back(ReorgUndoRow{bcos::executor_v1::StateKey{"/apps/cd", "created-by-block"},
+        std::nullopt});  // tombstone: restore-to-absent
+
+    auto encoded = ReorgUndoCodec::encode(blob);
+    auto decoded = ReorgUndoCodec::decode(
+        std::string_view(reinterpret_cast<char const*>(encoded.data()), encoded.size()));
+    BOOST_CHECK_EQUAL(decoded.txCount, 7);
+    BOOST_CHECK_EQUAL(decoded.failedCount, 2);
+    BOOST_REQUIRE_EQUAL(decoded.rows.size(), 2U);
+    BOOST_CHECK(decoded.rows[0].oldValue.has_value());
+    BOOST_CHECK(decoded.rows[0].oldValue->get() == value.get());
+    BOOST_CHECK_EQUAL(decoded.rows[0].key.m_tableAndKey, blob.rows[0].key.m_tableAndKey);
+    BOOST_CHECK(!decoded.rows[1].oldValue.has_value());
+    BOOST_CHECK_EQUAL(decoded.rows[1].key.m_tableAndKey, blob.rows[1].key.m_tableAndKey);
+
+    // Hostile inputs: truncation at every offset throws (never a partial decode).
+    for (size_t cut = 0; cut < encoded.size(); ++cut)
+    {
+        BOOST_CHECK_THROW(ReorgUndoCodec::decode(
+                              std::string_view(reinterpret_cast<char const*>(encoded.data()), cut)),
+            std::runtime_error);
+    }
+    auto skewed = encoded;
+    skewed[0] = 0xFF;  // unknown version byte
+    BOOST_CHECK_THROW(ReorgUndoCodec::decode(std::string_view(
+                          reinterpret_cast<char const*>(skewed.data()), skewed.size())),
+        std::runtime_error);
+}
 
 /// After OpScheduler executeBlock + commitBlock, 7 SYS tables are persisted
 /// (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER / SYS_CURRENT_STATE /
