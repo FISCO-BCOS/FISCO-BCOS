@@ -180,9 +180,24 @@ task::Task<void> EthEndpoint::setMaxDASize(const Json::Value& request, Json::Val
     // calls this on every L2 endpoint and treats "method not found" as fatal ("either enable
     // it or disable throttling"). op-geth's sequencer shrinks blocks/txs under throttle; the
     // values are recorded here (see m_maxDATxSize/m_maxDABlockSize) until the engine's OP
-    // build path consumes them.
-    auto maxTxSize = fromQuantity(std::string(toView(request[0U])));
-    auto maxBlockSize = fromQuantity(std::string(toView(request[1U])));
+    // build path consumes them (TODO(miner_setMaxDASize), EngineServiceImpl::buildOpPayload).
+    if (!request.isArray() || request.size() != 2U)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "miner_setMaxDASize expects exactly two quantities: maxTxSize, maxBlockSize"));
+    }
+    uint64_t maxTxSize = 0;
+    uint64_t maxBlockSize = 0;
+    try
+    {
+        maxTxSize = fromQuantity(std::string(toView(request[0U])));
+        maxBlockSize = fromQuantity(std::string(toView(request[1U])));
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "miner_setMaxDASize quantities must be 0x-prefixed hex"));
+    }
     m_maxDATxSize.store(maxTxSize, std::memory_order_relaxed);
     m_maxDABlockSize.store(maxBlockSize, std::memory_order_relaxed);
     WEB3_LOG(INFO) << LOG_BADGE("setMaxDASize") << LOG_KV("maxTxSize", maxTxSize)

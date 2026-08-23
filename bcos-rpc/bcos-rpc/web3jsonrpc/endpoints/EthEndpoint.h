@@ -92,6 +92,9 @@ private:
     // Last values received via miner_setMaxDASize (the OP Stack batcher's DA throttling
     // pushes these on every L2 endpoint; 0 = no throttle). Recorded and logged until the
     // engine's OP build path consumes them — block building is unaffected in the interim.
+    // TODO(miner_setMaxDASize): consumption is unimplemented — see the matching TODO at
+    // EngineServiceImpl::buildOpPayload's mempool seal. Until then this endpoint only ACKs
+    // the batcher (true) without actually throttling block data.
     std::atomic<uint64_t> m_maxDATxSize{0};
     std::atomic<uint64_t> m_maxDABlockSize{0};
 

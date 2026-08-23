@@ -668,6 +668,19 @@ private:
             sealView.newMutable();
             m_memPool.get().remove(sealView);
             m_memPool.get().seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));
+            // TODO(miner_setMaxDASize): the OP Stack batcher's DA throttling pushes
+            // miner_setMaxDASize(maxTxSize, maxBlockSize) on every L2 endpoint and treats a
+            // missing method as fatal (op-batcher/batcher/driver.go:621,631). The RPC layer
+            // serves it (EthEndpoint::setMaxDASize records the caps in atomics, 90e7888c0),
+            // but nothing in the build path consumes them yet — under throttle this engine
+            // keeps building at full size while the batcher believes it is being limited.
+            // Consumption points, once the caps are plumbed through NodeService (the RPC
+            // layer and the engine share nothing else):
+            //   - seal: drop pool txs whose serialized EIP-2718 envelope exceeds maxTxSize
+            //     (0 = unset = uncapped, matching the atomics' zero init);
+            //   - block assembly: stop appending envelopes once Σ serialized bytes (deposit
+            //     + forced + sealed) crosses maxBlockSize — op-geth's miner shrinks blocks
+            //     the same way under throttle.
         }
 
         // Raw envelope list. tx[0] is the synthesized L1-attributes deposit -- OP blocks
