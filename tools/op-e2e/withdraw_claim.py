@@ -24,14 +24,17 @@ index-based prove) flow on L1:
      extraData=uint256(l2Block) (this contracts version packs the claimed L2
      block number into extraData), bond 0.08 ETH.
   5. proveWithdrawalTransaction(_tx, gameIndex, outputRootProof, proof).
-  6. anvil time-warp past the game clock, resolveClaim(0,0)+resolve()
-     (uncontested -> DEFENDER_WINS), warp past proof maturity (7d) + game
-     finality (3.5d), finalizeWithdrawalTransaction(_tx).
+  6. Real-time waits on the devnet's compressed dispute timelines (setup
+     intent: faultGameMaxClockDuration=60s, proofMaturityDelay=12s,
+     disputeGameFinalityDelay=6s — op-e2e parity, op-e2e/config/init.go):
+     wait out the game clock, resolveClaim(0,0)+resolve() (uncontested ->
+     DEFENDER_WINS), wait maturity+finality, finalizeWithdrawalTransaction.
+     NEVER warp the L1 clock instead: a warped clock permanently locks the
+     sequencer into noTxPool catch-up ~30min later (handoff 裁决 8).
 
-Devnet-only: step 6 warps the L1 clock (evm_increaseTime); on a real chain
-these are real waits. Constants default to the C2 deployment (read from
-/tmp/c2/state.json); override via flags. Requires: cast, python3 (rlp,
-eth-hash, trie), tools/op-e2e/op_state_read built.
+Every wait is real time on chain timestamps. Constants default to the C2
+deployment (read from /tmp/c2/state.json). Requires: cast, python3 (rlp,
+eth-hash, trie); --rocksdb-proof additionally needs op_state_read built.
 """
 import argparse
 import json
@@ -115,10 +118,18 @@ def withdrawal_from_receipt(tx_hash):
     raise SystemExit("MessagePassed not found in receipt")
 
 
-def output_at_finalized(min_block):
-    fin = int(rpc(OP_NODE, "optimism_syncStatus", [])["finalized_l2"]["number"])
-    if fin < min_block:
-        raise SystemExit(f"withdrawal block {min_block} not finalized yet ({fin})")
+def output_at_finalized(min_block, wait_seconds=0):
+    import time
+    deadline = time.time() + wait_seconds
+    while True:
+        fin = int(rpc(OP_NODE, "optimism_syncStatus", [])["finalized_l2"]["number"])
+        if fin >= min_block:
+            break
+        if time.time() >= deadline:
+            raise SystemExit(
+                f"withdrawal block {min_block} not finalized within "
+                f"{wait_seconds}s (finalized={fin})")
+        time.sleep(15)
     res = rpc(OP_NODE, "optimism_outputAtBlock", [hex(fin)])
     proof = {
         "version": res["version"],
@@ -131,6 +142,27 @@ def output_at_finalized(min_block):
     if expected != res["outputRoot"]:
         raise SystemExit("outputRoot mismatch vs recomputed hash — refusing")
     return fin, res["outputRoot"], proof
+
+
+def call_ok(*args):
+    # cast-call exit status — True iff the simulation succeeds, i.e. a clock
+    # gate (game clock, proof maturity, finality delay) has expired. A revert
+    # here is an expected wait state, never an error.
+    return subprocess.run(["cast", "call", *args],
+                          capture_output=True).returncode == 0
+
+
+def wait_until(desc, timeout, *args):
+    # Poll a cast-call simulation until it succeeds or the timeout (seconds)
+    # elapses. Timeouts are generous: they bound chain-clock waits, not checks.
+    import time
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if call_ok(*args):
+            return True
+        time.sleep(5)
+    print(f"!! {desc} not ready within {timeout}s")
+    return False
 
 
 def message_passer_slots():
@@ -203,8 +235,9 @@ def rpc_inclusion_proof(storage_key):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("tx_hash", help="L2 tx hash of the initiateWithdrawal")
-    ap.add_argument("--warp", action="store_true",
-                    help="devnet: warp L1 clock through game clock + delays")
+    ap.add_argument("--wait-finalized", type=int, default=0, metavar="SECONDS",
+                    help="poll up to SECONDS for the finalized L2 head to pass "
+                         "the withdrawal block before starting (CI: ~2400)")
     ap.add_argument("--rocksdb-proof", action="store_true",
                     help="build the storage proof from a local RocksDB dump "
                          "instead of the node's eth_getProof (debug bypass)")
@@ -215,7 +248,8 @@ def main():
     print(f"withdrawal: {w['value'] / 1e18} ETH, block {w['block']}, "
           f"hash {w['withdrawalHash']}")
 
-    l2_block, output_root, orp = output_at_finalized(w["block"])
+    l2_block, output_root, orp = output_at_finalized(
+        w["block"], args.wait_finalized)
     print(f"output at finalized L2 {l2_block}: {output_root}")
 
     wh = bytes.fromhex(w["withdrawalHash"][2:])
@@ -260,21 +294,24 @@ def main():
          "--rpc-url", L1)
     print("proven")
 
-    if not args.warp:
-        print("skip --warp: resolve the game and finalize after the real "
-              "delays (clock 302400s, maturity 604800s, finality 302400s)")
-        return
-
-    # 3. devnet clock warp: game clock -> resolve; maturity+finality -> finalize
-    cast("rpc", "evm_increaseTime", "500000", "--rpc-url", L1)
-    cast("rpc", "evm_mine", "--rpc-url", L1)
+    # 3. real-time waits on the compressed devnet timelines (game clock 60s,
+    #    maturity 12s, finality delay 6s — set in setup_c2.sh's intent). No
+    #    clock warps: a warped L1 clock permanently locks the sequencer
+    #    (handoff 裁决 8).
+    if not wait_until("game clock (resolveClaim)", 360,
+                      game, "resolveClaim(uint256,uint256)", "0", "0",
+                      "--rpc-url", L1):
+        raise SystemExit("resolveClaim not callable within 360s")
     cast("send", game, "resolveClaim(uint256,uint256)", "0", "0",
          "--private-key", PROPOSER_KEY, "--rpc-url", L1)
-    status = cast("send", game, "resolve()", "--private-key", PROPOSER_KEY,
-                  "--rpc-url", L1)
+    cast("send", game, "resolve()", "--private-key", PROPOSER_KEY,
+         "--rpc-url", L1)
     print("game resolved (DEFENDER_WINS)")
-    cast("rpc", "evm_increaseTime", "700000", "--rpc-url", L1)
-    cast("rpc", "evm_mine", "--rpc-url", L1)
+    if not wait_until("proof maturity + finality delay", 300,
+                      portal,
+                      '"finalizeWithdrawalTransaction((uint256,address,address,'
+                      'uint256,bytes))"', f'"{tx}"', "--rpc-url", L1):
+        raise SystemExit("finalize not callable within 300s")
     fin = cast("send", portal,
         '"finalizeWithdrawalTransaction((uint256,address,address,uint256,'
         'uint256,bytes))"', f'"{tx}"', "--private-key", PROPOSER_KEY,

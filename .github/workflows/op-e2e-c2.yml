@@ -114,6 +114,10 @@ jobs:
           python3 -m pip install --quiet pyyaml 2>/dev/null || \
           pip3 install --quiet pyyaml 2>/dev/null || \
           pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
+          # withdraw_claim.py deps (eth_getProof verification path)
+          pip3 install --break-system-packages --quiet \
+            rlp 'eth-hash[pycryptodome]' trie 2>/dev/null || \
+          pip3 install --quiet rlp 'eth-hash[pycryptodome]' trie || true
 
       - name: Run setup_c2.sh (full pipeline)
         env:
@@ -183,6 +187,43 @@ jobs:
             exit 1
           fi
           echo "WITHDRAWAL OK (MessagePassed nonce advanced)"
+
+      - name: Full withdrawal claim assertion (compressed timelines, no clock warps)
+        # op-e2e parity (system/bridge/withdrawal.go): deposit->withdraw->prove->
+        # resolve->finalize, then assert the exact L1 balance delta. The setup
+        # intent deploys compressed dispute timelines (game clock 60s, maturity
+        # 12s, finality delay 6s), so the whole claim runs in real time — the
+        # L1 clock is NEVER warped (a warped clock permanently locks the
+        # sequencer into noTxPool catch-up ~30min later).
+        # The finalized-head lag (~580 L2 blocks) makes this step take ~20 min;
+        # acceptable for the scheduled/dispatch cadence of this workflow.
+        run: |
+          set -eo pipefail
+          DEV1=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+          KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+          L1_BEFORE=$(cast balance "$DEV1" --rpc-url http://127.0.0.1:8549)
+          echo "DEV1 L1 before: $L1_BEFORE"
+          TX=$(cast send 0x4200000000000000000000000000000000000016 \
+            "initiateWithdrawal(address,uint256,bytes)" "$DEV1" 100000 0x --value 1ether \
+            --private-key "$KEY" --rpc-url http://127.0.0.1:8555 --chain-id 914901 --json \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["transactionHash"])')
+          echo "withdrawal tx: $TX"
+          python3 tools/op-e2e/withdraw_claim.py "$TX" --wait-finalized 2400
+          L1_AFTER=$(cast balance "$DEV1" --rpc-url http://127.0.0.1:8549)
+          echo "DEV1 L1 after:  $L1_AFTER"
+          python3 - "$L1_BEFORE" "$L1_AFTER" <<'PY'
+          import sys
+          before, after = int(sys.argv[1]), int(sys.argv[2])
+          delta = after - before
+          assert 10**18 - 5 * 10**16 <= delta <= 10**18, f"unexpected L1 delta {delta}"
+          print(f"CLAIM BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus gas)")
+          PY
+          # No clock warps were used, so the sequencer must still accept txs
+          # after the full claim — the failure mode that motivated compressed
+          # timelines (a warped clock locks tx inclusion permanently).
+          cast send "$DEV1" --value 0.001ether --private-key "$KEY" \
+            --rpc-url http://127.0.0.1:8555 --chain-id 914901 > /dev/null
+          echo "POST-CLAIM TX OK — sequencer healthy after claim"
 
       - name: eth_getProof assertion (OP flat-state path)
         # eth_getProof on the OP path rebuilds the whole trie from the

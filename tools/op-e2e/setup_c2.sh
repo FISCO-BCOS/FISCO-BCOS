@@ -108,6 +108,21 @@ useInterop = false
     batcher = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293bc"
     proposer = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
     challenger = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+
+# Devnet-only compressed dispute timelines (op-e2e parity: op-e2e/config/init.go).
+# The whole withdrawal claim flow (prove -> resolveClaim -> resolve -> finalize)
+# then runs in REAL time in ~2 minutes. NEVER warp the L1 clock instead: a warped
+# L1 clock puts the sequencer into permanent noTxPool catch-up mode ~30 minutes
+# later (see docs/2026-08-23-session-handoff-final.md 裁决 8) — unrecoverable.
+# Keys are the JSON tags of op-deployer's SuperchainProofParams / ChainProofParams;
+# globalDeployOverrides feeds both merge sites (pipeline/implementations.go for the
+# portal params, pipeline/opchain.go for the per-chain game params).
+[globalDeployOverrides]
+proofMaturityDelaySeconds = 12
+disputeGameFinalityDelaySeconds = 6
+faultGameClockExtension = 1
+faultGameMaxClockDuration = 60
+dangerouslyAllowCustomDisputeParameters = true
 EOF
   "$C2/op-deployer" --log.level info apply \
     --l1-rpc-url http://127.0.0.1:$ANVIL_PORT \
