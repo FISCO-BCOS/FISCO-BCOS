@@ -10,15 +10,16 @@ index-based prove) flow on L1:
   2. Pick a finalized L2 block >= the withdrawal block and pull the output
      v0 proof from op-node (`optimism_outputAtBlock`); verify
      outputRoot == keccak(version|stateRoot|messagePasserStorageRoot|latestBlockHash).
-  3. Build the MessagePasser storage inclusion proof WITHOUT eth_getProof
-     (FISCO's OP path serves no MPT proofs — "Block stateRoot not in MPT node
-     storage"): dump the `/apps/<message-passer>` table straight from the L2
-     RocksDB via op_state_read, rebuild the secure MPT
-     (key=keccak(slot), value=rlp(trim(value))), assert the root equals the
-     committed messagePasserStorageRoot, then emit the proof nodes for the
-     withdrawal slot. Root equality is the trust anchor: the portal only
-     accepts proofs under the storage root hashed into the dispute game's
-     rootClaim.
+  3. Pull the MessagePasser storage inclusion proof from the node's
+     eth_getProof (the OP flat-state path rebuilds the trie from the committed
+     flat state and gates on the block's stateRoot). Client-side trust
+     anchors: the account proof must root at the live header's stateRoot, and
+     the walked leaf must decode to the proven-in flag. Root equality against
+     the committed messagePasserStorageRoot is checked as with the fallback.
+     (--rocksdb-proof instead dumps the `/apps/<message-passer>` table
+     straight from the L2 RocksDB via op_state_read and rebuilds the secure
+     MPT locally — kept as a debugging bypass that needs node filesystem
+     access.)
   4. Create a type-1 (permissioned) dispute game with rootClaim=outputRoot,
      extraData=uint256(l2Block) (this contracts version packs the claimed L2
      block number into extraData), bond 0.08 ETH.
@@ -156,11 +157,40 @@ def build_inclusion_proof(slots, storage_key):
     return t.root_hash, [p.hex() for p in proof_nodes]
 
 
+def rpc_inclusion_proof(storage_key):
+    """Inclusion proof for storage_key served by the node's eth_getProof.
+
+    The OP flat-state path rebuilds the whole trie from the committed flat
+    state and refuses (root gate) unless the rebuild matches the requested
+    block's stateRoot — so the proof arrives already anchored. Client-side we
+    still re-verify: the accountProof must hash-chain to the live header's
+    stateRoot, and the walked storage leaf must be the proven-in flag (0x01).
+    """
+    header = rpc(L2_WEB3, "eth_getBlockByNumber", ["latest", False])
+    res = rpc(L2_WEB3, "eth_getProof",
+              [MESSAGE_PASSER, ["0x" + storage_key.hex()], "latest"])
+    entry = res["storageProof"][0]
+    acc = [rlp.decode(bytes.fromhex(n[2:])) for n in res["accountProof"]]
+    state_root = bytes.fromhex(header["stateRoot"][2:])
+    if keccak(rlp.encode(acc[0])) != state_root:
+        raise SystemExit("eth_getProof accountProof not anchored at header stateRoot")
+    root = bytes.fromhex(res["storageHash"][2:])
+    nodes = [bytes.fromhex(n[2:]) for n in entry["proof"]]
+    val = HexaryTrie.get_from_proof(root, keccak(storage_key),
+                                    [rlp.decode(n) for n in nodes])
+    if val != b"\x01":
+        raise SystemExit(f"withdrawal slot not proven-in (value {val.hex() if val else 'none'})")
+    return root, [n.hex() for n in nodes]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("tx_hash", help="L2 tx hash of the initiateWithdrawal")
     ap.add_argument("--warp", action="store_true",
                     help="devnet: warp L1 clock through game clock + delays")
+    ap.add_argument("--rocksdb-proof", action="store_true",
+                    help="build the storage proof from a local RocksDB dump "
+                         "instead of the node's eth_getProof (debug bypass)")
     args = ap.parse_args()
 
     portal, dgf = contracts()
@@ -173,8 +203,11 @@ def main():
 
     wh = bytes.fromhex(w["withdrawalHash"][2:])
     storage_key = keccak(rlp.encode([wh, b""]))
-    slots = message_passer_slots()
-    root, proof = build_inclusion_proof(slots, storage_key.hex() and storage_key)
+    if args.rocksdb_proof:
+        slots = message_passer_slots()
+        root, proof = build_inclusion_proof(slots, storage_key)
+    else:
+        root, proof = rpc_inclusion_proof(storage_key)
     if "0x" + root.hex() != orp["messagePasserStorageRoot"]:
         raise SystemExit(
             f"rebuilt storage root {root.hex()} != committed "

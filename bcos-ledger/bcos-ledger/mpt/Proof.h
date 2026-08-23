@@ -85,6 +85,11 @@ enum class ProofErrorCode : uint8_t
 {
     AccountNotInMPT,    ///< the walk from stateRoot dead-ends before an account leaf
     BlockNotCommitted,  ///< stateRoot itself is absent from node storage (unknown/uncommitted)
+    /// Flat-path only (generateProofFromFlat): the trie rebuilt from the committed flat state
+    /// roots at a DIFFERENT hash than the requested block's stateRoot — the requested block is
+    /// not the latest committed one (the flat plane serves no history), or the committed state
+    /// diverged from the header. Either way no honest proof exists for this request.
+    RootMismatch,
 };
 
 namespace detail
