@@ -99,9 +99,10 @@ using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, Backend
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ViewType = typename MLS::ViewType;
 
+struct StubMemPool
+{
     // Poisoned-tx eviction hook (engine build loop): no-op in tests - the pool is never populated.
-    void removeByHash(std::span<bcos::crypto::HashType const>)
-    {}
+    void removeByHash(std::span<bcos::crypto::HashType const>) {}
     template <class View>
     void remove(View&)
     {}
