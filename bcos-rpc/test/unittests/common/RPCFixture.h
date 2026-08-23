@@ -37,6 +37,7 @@
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
+#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
@@ -58,12 +59,38 @@ namespace bcos::test
 
 class FakeScheduler2 : public FakeScheduler
 {
+public:
     using FakeScheduler::FakeScheduler;
-    void call(protocol::Transaction::Ptr,
+    using Ptr = std::shared_ptr<FakeScheduler2>;
+
+    // estimateGas regression knobs (08-24 EIP-150 boundary fix): when viableGas
+    // is engaged (has_value), call() mimics a proxy DELEGATECALL hop — the call
+    // only succeeds at gasLimit >= *viableGas while gasUsed reports the lower
+    // consumption, exactly like an EIP-150 1/64 retention. Unset keeps the old
+    // always-succeed empty-receipt behavior.
+    std::optional<uint64_t> viableGas;
+    uint64_t consumedGas = 59186;
+
+    void call(protocol::Transaction::Ptr transaction,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) noexcept
         override
     {
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        if (viableGas.has_value())
+        {
+            auto const limit = static_cast<uint64_t>(transaction->gasLimit());
+            if (limit < *viableGas)
+            {
+                receipt->inner().data.status =
+                    static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction);
+                receipt->inner().data.gasUsed =
+                    std::to_string(limit > 740 ? limit - 740 : limit);  // 1/64-ish leftover
+            }
+            else
+            {
+                receipt->inner().data.gasUsed = std::to_string(consumedGas);
+            }
+        }
         callback({}, receipt);
     }
 };
@@ -123,8 +150,8 @@ public:
         txPool->init();
         txPool->start();
 
-        nodeService = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory,
+        nodeService = std::make_shared<rpc::NodeService>(m_ledger, scheduler, txPool, nullptr,
+            nullptr, m_blockFactory,
             // EngineService not needed for existing RPC tests; pass nullptr as stub.
             nullptr);
 
@@ -141,8 +168,7 @@ public:
     }
     // ioServicePool MUST be declared before any member that creates Timer objects
     // referencing its io_context, to ensure it outlives them during destruction.
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "rpcTest");
+    bcos::IOServicePool::Ptr ioServicePool = std::make_shared<bcos::IOServicePool>(1, "rpcTest");
 
     bcos::tool::NodeConfig::Ptr nodeConfig;
     RPCInterface::Ptr rpc;

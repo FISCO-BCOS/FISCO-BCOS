@@ -1257,19 +1257,76 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
 
+    // op-geth's estimator answers the smallest gas limit at which the call still
+    // succeeds, found by simulating at candidate limits. The run below executes
+    // at the gas-less default cap (CallRequest defaults an absent gas field to
+    // 30M), so its gasUsed is mere consumption. A tx that hops through a proxy
+    // DELEGATECALL or any internal CALL retains 1/64 of the available gas at
+    // each hop (EIP-150), making the minimum viable limit strictly greater than
+    // the consumed gas — measured on the C2 devnet, the MessagePasser withdrawal
+    // (proxy predeploy) consumed 59186 but reverted on-chain at exactly that
+    // limit, while direct (non-proxy) calls are exact. So re-simulate at
+    // gasUsed first, and when that fails binary-search upward for the smallest
+    // viable limit, mirroring op-geth. Only object-form params carry an
+    // overridable gas field; a raw signed tx embeds its own.
+    auto const objectForm = tx.isObject();
+    auto const effectiveFirstRunLimit = [&]() -> u256 {
+        if (objectForm && tx.isMember("gas"))
+        {
+            try
+            {
+                return u256(fromQuantity(tx["gas"].asString()));
+            }
+            catch (...)
+            {}
+        }
+        return u256(30'000'000);
+    }();
+
     u256 gasUsed;
     Json::Value callResponse;
     co_await call(request, callResponse, std::addressof(gasUsed), true);
 
-    if (!callResponse.isMember("error"))
-    {
-        Json::Value result = toQuantity(gasUsed);
-        buildJsonContent(result, response);
-    }
-    else
+    if (callResponse.isMember("error"))
     {
         response = std::move(callResponse);
+        co_return;
     }
+
+    auto estimate = gasUsed;
+    if (objectForm && !co_await simulateAtGasLimit(request, estimate))
+    {
+        auto lowerBound = estimate;  // known-bad
+        auto upperBound = effectiveFirstRunLimit > lowerBound ?
+                              effectiveFirstRunLimit :
+                              lowerBound + 1;  // the first run succeeded at its own limit
+        while (upperBound - lowerBound > 1)
+        {
+            auto const mid = lowerBound + (upperBound - lowerBound) / 2;
+            if (co_await simulateAtGasLimit(request, mid))
+            {
+                upperBound = mid;
+            }
+            else
+            {
+                lowerBound = mid;
+            }
+        }
+        estimate = upperBound;
+    }
+
+    Json::Value result = toQuantity(estimate);
+    buildJsonContent(result, response);
+}
+
+task::Task<bool> EthEndpoint::simulateAtGasLimit(const Json::Value& request, u256 limit)
+{
+    Json::Value bounded = request;
+    bounded[0U]["gas"] = toQuantity(limit);
+    Json::Value callResponse;
+    u256 gasUsed;
+    co_await call(bounded, callResponse, std::addressof(gasUsed), true);
+    co_return !callResponse.isMember("error");
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
 {

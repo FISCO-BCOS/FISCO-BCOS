@@ -306,6 +306,34 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         response = onRPCRequestWrapper(request2);
         validRespCheck(response);
     }
+
+    // eth_estimateGas must answer the minimum Viable gas limit, not the raw
+    // consumption measured under the gas-less default cap. Regression (08-24,
+    // C2 devnet): the MessagePasser withdrawal hops through a proxy
+    // DELEGATECALL, which retains 1/64 of the gas at the hop (EIP-150) — the
+    // tx consumed 59186 but reverted on-chain at exactly that limit. The fake
+    // scheduler below reproduces that shape: consumption 59186, viable only
+    // at >= 59926 — the estimate must land on 59926, and a follow-up
+    // at-limit eth_call shape (direct call, always viable) returns the
+    // consumption unchanged.
+    {
+        scheduler->viableGas = 59926;
+        scheduler->consumedGas = 59186;
+        auto request =
+            R"({"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"0x2a09be8823b80f337170650802d1a0f8a99fe2d8","to":"0x4200000000000000000000000000000000000016","data":"0xc2b3e5ac"},"pending"],"id":5})";
+        auto response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 59926);
+
+        // Direct-call shape: every limit is viable, so the estimate is the
+        // consumption itself (fast path — no search needed).
+        scheduler->viableGas = 0;
+        response = onRPCRequestWrapper(request);
+        validRespCheck(response);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 59186);
+
+        scheduler->viableGas.reset();
+    }
 }
 
 BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
