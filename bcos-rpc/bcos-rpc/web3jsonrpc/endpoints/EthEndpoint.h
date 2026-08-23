@@ -46,6 +46,7 @@ public:
     task::Task<void> mining(const Json::Value&, Json::Value&);
     task::Task<void> hashrate(const Json::Value&, Json::Value&);
     task::Task<void> gasPrice(const Json::Value&, Json::Value&);
+    task::Task<void> feeHistory(const Json::Value&, Json::Value&);
     task::Task<void> accounts(const Json::Value&, Json::Value&);
     task::Task<void> blockNumber(const Json::Value&, Json::Value&);
     task::Task<void> getBalance(const Json::Value&, Json::Value&);

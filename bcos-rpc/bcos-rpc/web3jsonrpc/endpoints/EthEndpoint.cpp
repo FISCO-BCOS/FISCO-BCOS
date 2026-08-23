@@ -28,6 +28,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
@@ -51,6 +52,7 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <variant>
@@ -192,7 +194,7 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
 {
     // result: gasPrice(QTY)
     auto const ledger = m_nodeService->ledger();
-    // TODO)): gas price can wrap in a class
+    // TODO)): gas price can be updated with the current base fee
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
     Json::Value result;
     if (config.has_value())
@@ -206,6 +208,189 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
         result = "0x0";
     }
     buildJsonContent(result, response);
+    co_return;
+}
+
+namespace
+{
+// OP-stack Holocene/Jovian next-baseFee prediction for eth_feeHistory's trailing entry.
+// Faithful port of the engine's authoritative copy (bcos::engine::detail::calcOpBaseFee,
+// EngineServiceImpl.cpp:386, mirroring op-geth consensus/misc/eip1559/eip1559.go); the
+// bcos-rpc layer cannot link bcos-engine, so the formula is duplicated — any change to one
+// copy MUST be mirrored in the other. Fork shape is self-describing from the parent's own
+// extraData: 9 bytes = Holocene (version||denominator||elasticity), 17 bytes = Jovian
+// (+ u64 minBaseFee floor).
+bcos::u256 predictNextBaseFee(bcos::protocol::BlockHeader const& parent)
+{
+    auto const extra = parent.extraData();
+    uint64_t elasticity = 2;
+    uint64_t denominator = 8;
+    std::optional<bcos::u256> minBaseFee;
+    if (extra.size() >= 9)
+    {
+        auto readU32BE = [&extra](std::size_t off) {
+            return (static_cast<uint64_t>(extra[off]) << 24) |
+                   (static_cast<uint64_t>(extra[off + 1]) << 16) |
+                   (static_cast<uint64_t>(extra[off + 2]) << 8) |
+                   static_cast<uint64_t>(extra[off + 3]);
+        };
+        denominator = readU32BE(1);
+        elasticity = readU32BE(5);
+    }
+    if (extra.size() >= 17)
+    {
+        uint64_t floor = 0;
+        for (std::size_t i = 0; i < 8; ++i)
+        {
+            floor = (floor << 8) | static_cast<uint64_t>(extra[9 + i]);
+        }
+        minBaseFee = bcos::u256(floor);
+    }
+    const auto gasTarget = static_cast<uint64_t>(parent.gasLimit()) / elasticity;
+    // Jovian meters baseFee on max(gasUsed, DA footprint) — the DA footprint lives in the
+    // blobGasUsed header slot. Only read it when the Jovian tail is present.
+    auto gasMetered = static_cast<uint64_t>(parent.gasUsed());
+    if (minBaseFee.has_value() && parent.blobGasUsed().has_value() &&
+        static_cast<uint64_t>(*parent.blobGasUsed()) > gasMetered)
+    {
+        gasMetered = static_cast<uint64_t>(*parent.blobGasUsed());
+    }
+    const auto parentBaseFee = parent.baseFee().value_or(bcos::u256(0));
+    if (gasMetered == gasTarget)
+    {
+        return parentBaseFee;
+    }
+    bcos::u256 result;
+    if (gasMetered > gasTarget)
+    {
+        bcos::u256 deltaFee = parentBaseFee * (gasMetered - gasTarget);
+        deltaFee /= gasTarget;
+        deltaFee /= denominator;
+        result = parentBaseFee + (deltaFee > 0 ? deltaFee : bcos::u256(1));
+    }
+    else
+    {
+        bcos::u256 deltaFee = parentBaseFee * (gasTarget - gasMetered);
+        deltaFee /= gasTarget;
+        deltaFee /= denominator;
+        result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);
+    }
+    if (minBaseFee.has_value() && result < *minBaseFee)
+    {
+        result = *minBaseFee;
+    }
+    return result;
+}
+}  // namespace
+
+task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
+{
+    // params: [blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles?(array of numbers)]
+    // result: {oldestBlock(QTY), baseFeePerGas(QTY[], resolved+1 entries with the trailing
+    //          predicted next base fee), gasUsedRatio(number[]), reward?(QTY[][])}
+    // (execution-apis fee_history). Foundry/alloy's EIP-1559 fee suggestion calls this on
+    // every send, so its absence breaks every default-fee cast send against the node.
+    uint64_t blockCount = 0;
+    try
+    {
+        blockCount = fromQuantity(std::string(toView(request[0U])));
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid blockCount"));
+    }
+    if (blockCount < 1 || blockCount > 1024)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "blockCount must be between 1 and 1024"));
+    }
+    std::vector<double> percentiles;
+    if (request.size() > 2 && !request[2U].isNull())
+    {
+        if (!request[2U].isArray())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
+        }
+        for (auto const& p : request[2U])
+        {
+            if (!p.isNumeric())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles entries must be numbers"));
+            }
+            percentiles.push_back(p.asDouble());
+        }
+    }
+    auto const [newestNumber, _] = co_await getBlockNumberByTag(toView(request[1U]));
+    auto const newest = static_cast<uint64_t>(newestNumber);
+    auto const oldest = newest >= blockCount - 1 ? newest - (blockCount - 1) : 0;
+
+    auto const ledger = m_nodeService->ledger();
+    Json::Value result;
+    result["oldestBlock"] = toQuantity(oldest);
+    result["baseFeePerGas"] = Json::arrayValue;
+    result["gasUsedRatio"] = Json::arrayValue;
+    auto const wantReward = !percentiles.empty();
+    if (wantReward)
+    {
+        result["reward"] = Json::arrayValue;
+    }
+    protocol::BlockHeader::Ptr newestHeader;
+    for (auto n = oldest; n <= newest; ++n)
+    {
+        auto block = co_await ledger::getBlockData(
+            *ledger, static_cast<protocol::BlockNumber>(n), bcos::ledger::HEADER);
+        auto const& header = block->blockHeader();
+        auto const baseFee = header->baseFee().value_or(bcos::u256(0));
+        auto const gasLimit = static_cast<uint64_t>(header->gasLimit());
+        auto const gasUsed = static_cast<uint64_t>(header->gasUsed());
+        result["baseFeePerGas"].append(toQuantity(baseFee));
+        result["gasUsedRatio"].append(
+            gasLimit > 0 ? Json::Value(double(gasUsed) / double(gasLimit)) : Json::Value(0.0));
+        if (wantReward)
+        {
+            // Per-tx priority fee = effectiveGasPrice - baseFee (0 for legacy txs paying
+            // exactly baseFee); the percentile entry selects from the sorted list the way
+            // geth's feeHistory does (floor index, clamped).
+            auto receiptsBlock = co_await ledger::getBlockData(
+                *ledger, static_cast<protocol::BlockNumber>(n), bcos::ledger::RECEIPTS);
+            std::vector<bcos::u256> priorities;
+            for (auto const& receipt : receiptsBlock->receipts())
+            {
+                auto const& effective = receipt->effectiveGasPrice();
+                if (effective.empty())
+                {
+                    continue;
+                }
+                bcos::u256 effectiveFee{std::string(effective)};
+                priorities.push_back(
+                    effectiveFee > baseFee ? effectiveFee - baseFee : bcos::u256(0));
+            }
+            std::sort(priorities.begin(), priorities.end());
+            Json::Value rewards(Json::arrayValue);
+            for (auto const p : percentiles)
+            {
+                auto index = priorities.empty() ?
+                                 std::size_t(0) :
+                                 static_cast<std::size_t>(priorities.size() * p / 100.0);
+                if (index >= priorities.size())
+                {
+                    index = priorities.size() - 1;
+                }
+                rewards.append(toQuantity(priorities.empty() ? bcos::u256(0) : priorities[index]));
+            }
+            result["reward"].append(std::move(rewards));
+        }
+        newestHeader = header;
+    }
+    // Trailing entry: the predicted base fee of newest+1 from newest's own header.
+    if (newestHeader)
+    {
+        result["baseFeePerGas"].append(toQuantity(predictNextBaseFee(*newestHeader)));
+    }
+    buildJsonContent(result, response);
+    co_return;
 }
 task::Task<void> EthEndpoint::accounts(const Json::Value&, Json::Value& response)
 {

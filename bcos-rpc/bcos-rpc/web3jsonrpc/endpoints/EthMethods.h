@@ -52,6 +52,7 @@ enum class EthMethod
     eth_mining,
     eth_hashrate,
     eth_gasPrice,
+    eth_feeHistory,
     eth_accounts,
     eth_blockNumber,
     eth_getBalance,
