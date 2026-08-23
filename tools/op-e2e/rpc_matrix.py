@@ -164,18 +164,18 @@ def a2_blocks(rpc):
     check("parentBeaconBlockRoot matches genesis artifact (block 0)",
           g0 is not None and g0["parentBeaconBlockRoot"].lower() ==
           gh["parent_beacon_block_root"].lower(), g0 and g0.get("parentBeaconBlockRoot"))
-    # D2 E3: safe/finalized route to the FCU-tracked head. At Tier-1 the chain is at genesis
-    # and the single-node driver still FCUs (tracking precedes the attrs refusal), so both
-    # tags resolve to genesis == latest. Tier-2 (blocks advance) upgrades this to a window
-    # check: latest-1 <= safe <= latest.
-    # Tier-2: the chain advances ~1 block/s, so tag queries race the driver's next FCU —
-    # accept a small lag instead of exact equality with the previously-read latest.
-    for tag in ("safe", "finalized"):
+    # D2 E3: safe/finalized route to the FCU-tracked head. The original failure mode this
+    # guards against is "no batcher -> derivation never advances -> tags pinned at genesis".
+    # With an active op-batcher both tags advance, but they legitimately lag latest by the
+    # structural batching latency (channel flush + L1 confirmations + sub-safety margin —
+    # minutes on OP mainnet too), so a tight window is wrong: require resolution past genesis
+    # and inside a generous window.
+    for tag, window in (("safe", 600), ("finalized", 4000)):
         t = rpc.call("eth_getBlockByNumber", [tag, False])
         latest = int(b["number"], 16)
         tn = int(t["number"], 16) if t is not None else -1
-        check(f"{tag} tag resolves (within 2 of latest)",
-              t is not None and latest - 2 <= tn <= latest,
+        check(f"{tag} tag resolves (past genesis, within {window} of latest)",
+              t is not None and 0 < tn and latest - window <= tn <= latest,
               f"tag={tn} latest={latest}")
     pend = rpc.call("eth_getBlockByNumber", ["pending", False])
     check("pending aliases latest", pend is not None and pend["number"] == b["number"],

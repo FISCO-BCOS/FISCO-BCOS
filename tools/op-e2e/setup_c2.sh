@@ -39,8 +39,8 @@ DEV0=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80   # depl
 DEV1=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d   # signer/proposer
 AUTH_ADMIN=0x70997970C51812dc3A010C7d01b50e0d17dc79C8                     # governance owner
 
-START="${START:-1}"; END="${END:-6}"
-step() { echo; echo "==== [$1/6] $2 ===="; }
+START="${START:-1}"; END="${END:-7}"
+step() { echo; echo "==== [$1/7] $2 ===="; }
 log() { echo "  >> $*"; }
 die() { echo "  !! $*" >&2; exit 1; }
 step_run() { [ "$1" -ge "$START" ] && [ "$1" -le "$END" ]; }
@@ -358,10 +358,44 @@ print(json.loads(urllib.request.urlopen(req, timeout=10).read())['result'])
   [ "$BN" != "0x0" ] && log "✅ C2 出块中!deposit/withdraw 闭环可用"
 fi
 
+# ---------- 7. op-batcher ----------
+# 把 L2 unsafe 块打成 batch 投到 L1，驱动 derivation 推进 cross-safe/finalized。
+# batcher 私钥必须与 SystemConfig.batcherAddr 一致（op-deployer 默认 = anvil #2）。
+if step_run 7; then
+  step 7 "op-batcher 启动"
+  OP_MONOREPO="${OP_MONOREPO:-/Users/octopus/octo/code/blockchain-impl/optimism}"
+  if [ ! -x "$C2/op-batcher" ]; then
+    (cd "$OP_MONOREPO" && go build -o "$C2/op-batcher" ./op-batcher/cmd) \
+      || die "op-batcher 构建失败(需 monorepo + go)"
+  fi
+  BATCHER_KEY=$(cast wallet private-key --mnemonic "test test test test test test test test test test test junk" --mnemonic-index 2)
+  pgrep -f "$C2/op-batcher" | xargs kill 2>/dev/null || true
+  sleep 1
+  nohup "$C2/op-batcher" \
+    --l1-eth-rpc http://127.0.0.1:$ANVIL_PORT \
+    --l2-eth-rpc http://127.0.0.1:$FISCO_WEB3 \
+    --rollup-rpc http://127.0.0.1:9545 \
+    --private-key "$BATCHER_KEY" \
+    --max-channel-duration 10 \
+    --rpc.port 8547 \
+    --log.level debug \
+    > "$C2/op-batcher.log" 2>&1 &
+  echo $! > "$C2/op-batcher.pid"
+  disown
+  sleep 10
+  if grep -q "Batch Submitter started" "$C2/op-batcher.log" 2>/dev/null; then
+    log "✅ op-batcher 启动(PID $(cat "$C2/op-batcher.pid"))，safe/finalized 将随后推进"
+  else
+    log "!! op-batcher 可能启动失败，查看 $C2/op-batcher.log"
+  fi
+fi
+
 echo
 echo "=== C2 devnet 就绪 ==="
 echo "  anvil L1 : http://127.0.0.1:$ANVIL_PORT (chain $ANVIL_CHAIN)"
 echo "  FISCO L2 : web3 $FISCO_WEB3 / engine $FISCO_ENGINE (chain $L2_CHAIN)"
-echo "  常用操作 :"
-echo "    存款  : cast send <deposit_contract> \"depositTransaction(address,uint256,uint64,bool,bytes)\" <to> <amt> 100000 false 0x --value <amt>"
-echo "    提款  : cast send 0x4200000000000000000000000000000000000010 \"withdraw(address,uint256,uint32,bytes)\" 0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000 <amt> 100000 0x --value <amt> --legacy"
+echo "  常用操作:"
+echo "    存款  : cast send <deposit_contract> \"depositTransaction(address,uint256,uint64,bool,bytes)\" <to> <amt> 100000 false 0x --value <amt> --rpc-url http://127.0.0.1:$ANVIL_PORT"
+echo "    提款  : cast send 0x4200000000000000000000000000000000000016 \"initiateWithdrawal(address,uint256,bytes)\" <l1收款地址> 100000 0x --value 1ether --gas-limit 200000 --gas-price 2gwei --priority-gas-price 0.1gwei --rpc-url http://127.0.0.1:$FISCO_WEB3 --chain-id $L2_CHAIN"
+echo "           (注意: MessagePasser 在 0x4200..0016, 入口是 initiateWithdrawal, 没有 withdraw();"
+echo "            需显式给 gas-price/priority-gas-price, FISCO 尚无 eth_feeHistory)"
