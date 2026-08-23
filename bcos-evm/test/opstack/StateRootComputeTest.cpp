@@ -72,4 +72,45 @@ BOOST_AUTO_TEST_CASE(single_account_root_matches_golden)
             0x26afd9d805a51c2d588429a29c18c3c23b14ba8c78b5f44be651867fc4815906_bytes32}));
 }
 
+// Poisoned traversal: visitAccounts returning false is Storage2State's mid-traversal
+// failure channel (the visitor never aborts, so false can only mean the walk broke —
+// a poisoned storage read). The merged stateRootOfWithNodes must THROW — a partially
+// built trie must never be returned — for BOTH collectNodes values (the poison-throw
+// contract rides on top of the ①a collectNodes branching, not only the root-only path).
+namespace
+{
+// Local classes cannot have member templates — the failing visitor lives at file scope.
+// It ignores the visitor argument entirely: false is returned before any account is
+// consumed, which is exactly the "walk broke before completing" shape.
+struct FailingTraversal
+{
+    bool visitAccounts(auto&&) const noexcept { return false; }
+};
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(poisoned_traversal_throws_never_returns_partial_root)
+{
+    MemoryState ledger;
+    ledger.applyDiff(evmone::state::StateDiff{
+        .modified_accounts = {{.addr = 0x00000000000000000000000000000000000000aa_address,
+            .nonce = 1,
+            .balance = 1000_u256,
+            .code = std::nullopt,
+            .modified_storage = {}}},
+        .deleted_accounts = {}});
+
+    for (bool collectNodes : {false, true})
+    {
+        try
+        {
+            (void)stateRootOfWithNodes(FailingTraversal{}, collectNodes);
+            BOOST_FAIL("stateRootOfWithNodes returned despite a failed traversal");
+        }
+        catch (const std::runtime_error& e)
+        {
+            BOOST_CHECK(std::string(e.what()).find("traversal incomplete") != std::string::npos);
+        }
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

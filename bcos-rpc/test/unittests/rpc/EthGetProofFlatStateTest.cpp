@@ -223,8 +223,9 @@ public:
     }
 
     /// The production wiring shape (AirNodeInitializer): a provider handing back an owning
-    /// AnyStorage over the committed flat plane. No MPT node reader is wired on purpose — the
-    /// OP path must never consult it.
+    /// AnyStorage over the committed flat plane. No MPT node reader is wired on purpose —
+    /// these cases pin the flat FALLBACK in isolation (a pre-①a chain shape); the
+    /// node-first ordering with a reader wired is pinned by EthGetProofOpNodePathTest.
     void wireProvider()
     {
         nodeService->setStateStorageProvider([this]() { return makeOwningFlatStorage(m_flat); });
