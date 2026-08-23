@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""L1 withdrawal claim (prove + finalize) for the C2 devnet.
+
+Closes the OP Stack withdraw loop against the FISCO L2: takes an L2
+`initiateWithdrawal` tx hash, and walks the OptimismPortal2 (contracts 5.x,
+index-based prove) flow on L1:
+
+  1. Recover the MessagePassed event (nonce/sender/target/value/gasLimit/data,
+     withdrawalHash) from the L2 receipt.
+  2. Pick a finalized L2 block >= the withdrawal block and pull the output
+     v0 proof from op-node (`optimism_outputAtBlock`); verify
+     outputRoot == keccak(version|stateRoot|messagePasserStorageRoot|latestBlockHash).
+  3. Build the MessagePasser storage inclusion proof WITHOUT eth_getProof
+     (FISCO's OP path serves no MPT proofs — "Block stateRoot not in MPT node
+     storage"): dump the `/apps/<message-passer>` table straight from the L2
+     RocksDB via op_state_read, rebuild the secure MPT
+     (key=keccak(slot), value=rlp(trim(value))), assert the root equals the
+     committed messagePasserStorageRoot, then emit the proof nodes for the
+     withdrawal slot. Root equality is the trust anchor: the portal only
+     accepts proofs under the storage root hashed into the dispute game's
+     rootClaim.
+  4. Create a type-1 (permissioned) dispute game with rootClaim=outputRoot,
+     extraData=uint256(l2Block) (this contracts version packs the claimed L2
+     block number into extraData), bond 0.08 ETH.
+  5. proveWithdrawalTransaction(_tx, gameIndex, outputRootProof, proof).
+  6. anvil time-warp past the game clock, resolveClaim(0,0)+resolve()
+     (uncontested -> DEFENDER_WINS), warp past proof maturity (7d) + game
+     finality (3.5d), finalizeWithdrawalTransaction(_tx).
+
+Devnet-only: step 6 warps the L1 clock (evm_increaseTime); on a real chain
+these are real waits. Constants default to the C2 deployment (read from
+/tmp/c2/state.json); override via flags. Requires: cast, python3 (rlp,
+eth-hash, trie), tools/op-e2e/op_state_read built.
+"""
+import argparse
+import json
+import subprocess
+import sys
+import urllib.request
+
+from eth_hash.auto import keccak
+from trie.hexary import HexaryTrie
+import rlp
+
+L2_WEB3 = "http://127.0.0.1:8555"
+OP_NODE = "http://127.0.0.1:9545"
+L1 = "http://127.0.0.1:8549"
+STATE = "/tmp/c2/state.json"
+ROCKSDB = "/tmp/c2/fisco/data/1/latest"
+OP_STATE_READ = "op_state_read"
+MESSAGE_PASSER = "0x4200000000000000000000000000000000000016"
+PROPOSER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"  # DEV1
+
+MESSAGE_PASSED_TOPIC = "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054"
+
+
+def rpc(url, method, params):
+    body = json.dumps({"jsonrpc": "2.0", "method": method, "params": params,
+                       "id": 1}).encode()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(urllib.request.Request(
+            url, body, {"Content-Type": "application/json"}), timeout=30) as r:
+        out = json.load(r)
+    if "error" in out:
+        raise SystemExit(f"rpc {method} failed: {out['error']}")
+    return out["result"]
+
+
+def cast(*args):
+    return subprocess.run(["cast", *args], capture_output=True,
+                          text=True).stdout.strip()
+
+
+def contracts():
+    s = json.load(open(STATE))
+    oc = s["opChainDeployments"][0]
+    return oc["OptimismPortalProxy"], oc["DisputeGameFactoryProxy"]
+
+
+def withdrawal_from_receipt(tx_hash):
+    r = rpc(L2_WEB3, "eth_getTransactionReceipt", [tx_hash])
+    for log in r["logs"]:
+        if log["topics"][0] != MESSAGE_PASSED_TOPIC:
+            continue
+        t = log["topics"]
+        data = log["data"][2:]
+        words = [data[i:i + 64] for i in range(0, len(data), 64)]
+        return {
+            "nonce": "0x" + t[1][2:],
+            "sender": "0x" + t[2][26:],
+            "target": "0x" + t[3][26:],
+            "value": int(words[0], 16),
+            "gasLimit": int(words[1], 16),
+            "data": "0x" + words[4],  # tail: bytes length word (empty data)
+            "withdrawalHash": "0x" + words[3],
+            "block": int(log["blockNumber"], 16),
+        }
+    raise SystemExit("MessagePassed not found in receipt")
+
+
+def output_at_finalized(min_block):
+    fin = int(rpc(OP_NODE, "optimism_syncStatus", [])["finalized_l2"]["number"])
+    if fin < min_block:
+        raise SystemExit(f"withdrawal block {min_block} not finalized yet ({fin})")
+    res = rpc(OP_NODE, "optimism_outputAtBlock", [hex(fin)])
+    proof = {
+        "version": res["version"],
+        "stateRoot": res["stateRoot"],
+        "messagePasserStorageRoot": res["withdrawalStorageRoot"],
+        "latestBlockHash": res["blockRef"]["hash"],
+    }
+    expected = "0x" + keccak(bytes.fromhex("".join(proof[k][2:] for k in
+        ("version", "stateRoot", "messagePasserStorageRoot", "latestBlockHash")))).hex()
+    if expected != res["outputRoot"]:
+        raise SystemExit("outputRoot mismatch vs recomputed hash — refusing")
+    return fin, res["outputRoot"], proof
+
+
+def message_passer_slots():
+    """Dump every storage slot of the MessagePasser from the L2 RocksDB."""
+    tbl = "/apps/" + MESSAGE_PASSER[2:].lower()
+    out = subprocess.run([OP_STATE_READ, "--help"], capture_output=True)
+    listing = subprocess.run([sys.argv[0].replace("withdraw_claim.py",
+        "op_state_list"), ROCKSDB, tbl, "200"], capture_output=True)
+    import re
+    keys = re.findall(r"key hex=([0-9a-f]+)",
+                      listing.stdout.decode("utf-8", "replace"))
+    prefix = tbl.encode().hex() + ":"
+    slots = []
+    for k in keys:
+        if not k.startswith(prefix):
+            continue
+        slot = k[len(prefix):]
+        if len(slot) != 64 or slot in (
+                "62616c616e6365", "6e6f6e6365", "636f646548617368"):
+            continue  # balance/nonce/codeHash account fields
+        val = subprocess.run([OP_STATE_READ, ROCKSDB, "hex:" + k],
+                             capture_output=True, text=True).stdout.strip()
+        slots.append((bytes.fromhex(slot), bytes.fromhex(val[4:])))
+    return slots
+
+
+def build_inclusion_proof(slots, storage_key):
+    """Secure-MPT inclusion proof for storage_key, root-anchored."""
+    db = {}
+    t = HexaryTrie(db, prune=False)
+    for slot, value in slots:
+        if value == b"\x00" * 32:
+            continue
+        t[keccak(slot)] = rlp.encode(value.lstrip(b"\x00") or b"\x00")
+    key = keccak(storage_key)
+    proof_nodes = [rlp.encode(n) for n in t.get_proof(key)]
+    val = HexaryTrie.get_from_proof(t.root_hash, key, list(t.get_proof(key)))
+    if val != b"\x01":
+        raise SystemExit(f"withdrawal slot not proven-in (value {val.hex()})")
+    return t.root_hash, [p.hex() for p in proof_nodes]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("tx_hash", help="L2 tx hash of the initiateWithdrawal")
+    ap.add_argument("--warp", action="store_true",
+                    help="devnet: warp L1 clock through game clock + delays")
+    args = ap.parse_args()
+
+    portal, dgf = contracts()
+    w = withdrawal_from_receipt(args.tx_hash)
+    print(f"withdrawal: {w['value'] / 1e18} ETH, block {w['block']}, "
+          f"hash {w['withdrawalHash']}")
+
+    l2_block, output_root, orp = output_at_finalized(w["block"])
+    print(f"output at finalized L2 {l2_block}: {output_root}")
+
+    wh = bytes.fromhex(w["withdrawalHash"][2:])
+    storage_key = keccak(rlp.encode([wh, b""]))
+    slots = message_passer_slots()
+    root, proof = build_inclusion_proof(slots, storage_key.hex() and storage_key)
+    if "0x" + root.hex() != orp["messagePasserStorageRoot"]:
+        raise SystemExit(
+            f"rebuilt storage root {root.hex()} != committed "
+            f"{orp['messagePasserStorageRoot']} (storage dump incomplete?)")
+    print(f"storage root match; proof has {len(proof)} nodes")
+
+    # 1. dispute game (rootClaim=outputRoot, extraData=claimed L2 block)
+    extra = "0x%064x" % l2_block
+    out = cast("send", dgf, "create(uint32,bytes32,bytes)", "1", output_root,
+               extra, "--value", "0.08ether", "--private-key", PROPOSER_KEY,
+               "--rpc-url", L1, "--json")
+    game_index = cast("call", dgf, "gameCount()(uint256)", "--rpc-url", L1)
+    game_index = int(game_index.split()[0]) - 1
+    print(f"game created, index {game_index}")
+    game = cast("call", dgf,
+                f"gameAtIndex(uint256)(uint32,uint64,address)", str(game_index),
+                "--rpc-url", L1).split()[-1]
+
+    # 2. prove
+    tx = (f"({w['nonce']},{w['sender']},{w['target']},{w['value']},"
+          f"{w['gasLimit']},{w['data']})")
+    orps = "(" + ",".join(orp[k] for k in ("version", "stateRoot",
+        "messagePasserStorageRoot", "latestBlockHash")) + ")"
+    nodes = "[" + ",".join("0x" + n for n in proof) + "]"
+    calldata = cast("calldata",
+        '"proveWithdrawalTransaction((uint256,address,address,uint256,'
+        'uint256,bytes),uint256,(bytes32,bytes32,bytes32,bytes32),bytes[])"',
+        f'"{tx}"', str(game_index), f'"{orps}"', f'"{nodes}"')
+    cast("send", portal, "--data", calldata, "--private-key", PROPOSER_KEY,
+         "--rpc-url", L1)
+    print("proven")
+
+    if not args.warp:
+        print("skip --warp: resolve the game and finalize after the real "
+              "delays (clock 302400s, maturity 604800s, finality 302400s)")
+        return
+
+    # 3. devnet clock warp: game clock -> resolve; maturity+finality -> finalize
+    cast("rpc", "evm_increaseTime", "500000", "--rpc-url", L1)
+    cast("rpc", "evm_mine", "--rpc-url", L1)
+    cast("send", game, "resolveClaim(uint256,uint256)", "0", "0",
+         "--private-key", PROPOSER_KEY, "--rpc-url", L1)
+    status = cast("send", game, "resolve()", "--private-key", PROPOSER_KEY,
+                  "--rpc-url", L1)
+    print("game resolved (DEFENDER_WINS)")
+    cast("rpc", "evm_increaseTime", "700000", "--rpc-url", L1)
+    cast("rpc", "evm_mine", "--rpc-url", L1)
+    fin = cast("send", portal,
+        '"finalizeWithdrawalTransaction((uint256,address,address,uint256,'
+        'uint256,bytes))"', f'"{tx}"', "--private-key", PROPOSER_KEY,
+        "--rpc-url", L1)
+    print("finalized:", fin.splitlines()[0] if fin else "?")
+
+
+if __name__ == "__main__":
+    main()
