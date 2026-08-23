@@ -85,9 +85,11 @@ def check(name, cond, detail=""):
 
 
 class Rpc:
-    def __init__(self, port=8553):
+    def __init__(self, port=None):
         self._o = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        self.url = f"http://127.0.0.1:{port}"
+        # B3_ETH_PORT env (default 8553) keeps the whole spike family pointed at
+        # one instance without per-script edits.
+        self.url = f"http://127.0.0.1:{port or os.environ.get('B3_ETH_PORT', 8553)}"
 
     def eth(self, m, p=None):
         body = json.dumps({"jsonrpc": "2.0", "method": m, "params": p or [], "id": 1}).encode()

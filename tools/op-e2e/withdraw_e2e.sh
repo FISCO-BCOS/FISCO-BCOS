@@ -19,16 +19,19 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Env overrides (defaults = the /tmp/c2 C2 layout; same names as withdraw_claim.py
+# and setup_c2.sh): C2_L1_RPC / C2_L2_WEB3 / C2_L2_CHAIN_ID / C2_DEV_KEY.
 DEV1=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
-KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d  # DEV1
-L1=http://127.0.0.1:8549
-L2=http://127.0.0.1:8555
+KEY="${C2_DEV_KEY:-0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d}"  # DEV1
+L1="${C2_L1_RPC:-http://127.0.0.1:8549}"
+L2="${C2_L2_WEB3:-http://127.0.0.1:8555}"
+CHAIN_ID="${C2_L2_CHAIN_ID:-914901}"
 
 L1_BEFORE=$(cast balance "$DEV1" --rpc-url "$L1")
 echo "DEV1 L1 before: $L1_BEFORE"
 TX=$(cast send 0x4200000000000000000000000000000000000016 \
   "initiateWithdrawal(address,uint256,bytes)" "$DEV1" 100000 0x --value 1ether \
-  --private-key "$KEY" --rpc-url "$L2" --chain-id 914901 --json \
+  --private-key "$KEY" --rpc-url "$L2" --chain-id "$CHAIN_ID" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["transactionHash"])')
 echo "withdrawal tx: $TX"
 
@@ -47,6 +50,6 @@ PY
 # No clock warps were used, so the sequencer must still accept txs after the
 # full claim — this is the regression guard for the 裁决 8 failure mode.
 cast send "$DEV1" --value 0.001ether --private-key "$KEY" \
-  --rpc-url "$L2" --chain-id 914901 > /dev/null
+  --rpc-url "$L2" --chain-id "$CHAIN_ID" > /dev/null
 echo "POST-CLAIM TX OK — sequencer healthy after claim (no clock warps used)"
 echo "E2E ALL GREEN"

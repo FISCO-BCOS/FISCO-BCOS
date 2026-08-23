@@ -109,9 +109,9 @@ def make_deploy_tx(privkey, nonce, data, gas=200_000):
 
 
 class Rpc:
-    def __init__(self, port=8553):
+    def __init__(self, port=None):
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        self.url = f"http://127.0.0.1:{port}"
+        self.url = f"http://127.0.0.1:{port or os.environ.get('B3_ETH_PORT', 8553)}"
 
     def call(self, m, p=None):
         body = json.dumps({"jsonrpc": "2.0", "method": m, "params": p or [], "id": 1}).encode()

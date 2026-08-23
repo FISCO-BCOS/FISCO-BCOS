@@ -33,11 +33,14 @@ index-based prove) flow on L1:
      sequencer into noTxPool catch-up ~30min later (handoff 裁决 8).
 
 Every wait is real time on chain timestamps. Constants default to the C2
-deployment (read from /tmp/c2/state.json). Requires: cast, python3 (rlp,
+deployment (read from /tmp/c2/state.json) and are env-overridable:
+C2_L2_WEB3 / C2_OP_NODE / C2_L1_RPC / C2_STATE / C2_ROCKSDB /
+C2_PROPOSER_KEY / OP_STATE_READ. Requires: cast, python3 (rlp,
 eth-hash, trie); --rocksdb-proof additionally needs op_state_read built.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 import urllib.request
@@ -46,14 +49,17 @@ from eth_hash.auto import keccak
 from trie.hexary import HexaryTrie
 import rlp
 
-L2_WEB3 = "http://127.0.0.1:8555"
-OP_NODE = "http://127.0.0.1:9545"
-L1 = "http://127.0.0.1:8549"
-STATE = "/tmp/c2/state.json"
-ROCKSDB = "/tmp/c2/fisco/data/1/latest"
-OP_STATE_READ = "op_state_read"
+# Every endpoint/path/key is env-overridable so the same tool runs against any
+# devnet instance (C2 default, C3/c4 forks by export). Defaults = the C2 layout.
+L2_WEB3 = os.environ.get("C2_L2_WEB3", "http://127.0.0.1:8555")
+OP_NODE = os.environ.get("C2_OP_NODE", "http://127.0.0.1:9545")
+L1 = os.environ.get("C2_L1_RPC", "http://127.0.0.1:8549")
+STATE = os.environ.get("C2_STATE", "/tmp/c2/state.json")
+ROCKSDB = os.environ.get("C2_ROCKSDB", "/tmp/c2/fisco/data/1/latest")
+OP_STATE_READ = os.environ.get("OP_STATE_READ", "op_state_read")
 MESSAGE_PASSER = "0x4200000000000000000000000000000000000016"
-PROPOSER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"  # DEV1
+PROPOSER_KEY = os.environ.get(
+    "C2_PROPOSER_KEY", "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d")  # DEV1
 
 MESSAGE_PASSED_TOPIC = "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054"
 

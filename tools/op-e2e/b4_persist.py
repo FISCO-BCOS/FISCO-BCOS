@@ -4,12 +4,13 @@ chain survives — head does not reset, block production resumes, and a submitte
 Spec §4 B.4 depends on the single-node-consensus restart fix (head timestamp recovery).
 """
 import json
+import os
 import subprocess
 import sys
 import time
 import urllib.request
 
-URL = "http://127.0.0.1:8553"
+URL = f"http://127.0.0.1:{os.environ.get('B3_ETH_PORT', 8553)}"
 PASSED, FAILED = [], []
 
 

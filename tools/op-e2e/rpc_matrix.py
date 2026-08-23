@@ -374,12 +374,14 @@ def a3_web3_net(rpc):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8553)
-    ap.add_argument("--engine-port", type=int, default=8564,
+    ap.add_argument("--port", type=int, default=int(os.environ.get("B3_ETH_PORT", 8553)))
+    ap.add_argument("--engine-port", type=int, default=int(os.environ.get("B3_ENGINE_PORT", 8564)),
                     help="Engine RPC port (B3a has op_engine_rpc; B3 has consensus-only)")
     ap.add_argument("--jwt-secret", default=os.environ.get("B3A_JWT", "/tmp/op-spike/b3a/jwt.hex"))
     ap.add_argument("--only", default=None, help="a1|a2|a3")
-    ap.add_argument("--sender", default="0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693")
+    ap.add_argument("--sender",
+                    default=os.environ.get("B3_SENDER", "0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693"),
+                    help="funded EOA used by the a2 checks (fresh devnets must fund it first)")
     args = ap.parse_args()
 
     rpc = RpcClient(args.host, args.port)

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # C2 devnet op-node launcher — daemonized properly (no tee pipeline, disowned).
-# Usage: bash /tmp/c2/start_op_node.sh   (restarts if already running)
+# Usage: bash start_c2_op_node.sh   (restarts if already running)
+# Env overrides (defaults = the /tmp/c2 layout, same names as setup_c2.sh):
+#   C2, ANVIL_PORT (8549), FISCO_ENGINE (8566)
 set -u
 
-C2=/tmp/c2
+C2="${C2:-/tmp/c2}"
+ANVIL_PORT="${ANVIL_PORT:-8549}"
+FISCO_ENGINE="${FISCO_ENGINE:-8566}"
 OPNODE=$C2/op-node
 LOG=$C2/op-node.log
 PIDFILE=$C2/op-node.pid
@@ -18,23 +22,23 @@ pgrep -f "op-node.*rollup.config $C2/rollup.json" | xargs kill 2>/dev/null
 sleep 1
 
 # Pre-flight: FISCO engine RPC must be up
-if ! curl -s -o /dev/null http://127.0.0.1:8566; then
-    echo "FISCO engine RPC (8566) not reachable — start FISCO first" >&2
+if ! curl -s -o /dev/null "http://127.0.0.1:$FISCO_ENGINE"; then
+    echo "FISCO engine RPC ($FISCO_ENGINE) not reachable — start FISCO first" >&2
     exit 1
 fi
 # Pre-flight: anvil L1 must be up
-if ! curl -s -o /dev/null -X POST http://127.0.0.1:8549 \
+if ! curl -s -o /dev/null -X POST "http://127.0.0.1:$ANVIL_PORT" \
        -H 'Content-Type: application/json' \
        -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'; then
-    echo "anvil L1 (8549) not reachable — start anvil first" >&2
+    echo "anvil L1 ($ANVIL_PORT) not reachable — start anvil first" >&2
     exit 1
 fi
 
 nohup "$OPNODE" \
   --rollup.config "$C2/rollup.json" \
   --rollup.l1-chain-config "$C2/l1_chain_config.json" \
-  --l1 http://127.0.0.1:8549 \
-  --l2 http://127.0.0.1:8566 \
+  --l1 "http://127.0.0.1:$ANVIL_PORT" \
+  --l2 "http://127.0.0.1:$FISCO_ENGINE" \
   --l2.jwt-secret "$C2/fisco/jwt.hex" \
   --l2.enginekind geth \
   --l1.beacon.ignore \
