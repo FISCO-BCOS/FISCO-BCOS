@@ -203,8 +203,10 @@ BOOST_AUTO_TEST_CASE(EmptyStorageTrieSlotVerifies)
     BOOST_CHECK(!verifyProof(setup.stateRoot, tampered).storageValid.at(0));
 }
 
-// A dormant (never-written) account has no leaf to prove: the boundary is documented at the
-// generate level — generateProof refuses with AccountNotInMPT, so no proof reaches the verifier.
+// A dormant (never-written) account: under fullTrie the generator answers op-geth's proof of
+// non-existence and the verifier accepts it as a VALID ABSENCE (zero-shape fields, every slot a
+// provable zero); under scenario A the generator still refuses — absence is not a provable zero
+// there — and no proof reaches the verifier.
 BOOST_AUTO_TEST_CASE(ExclusionAtGenerateLevel)
 {
     VerifyMemStorage storage;
@@ -212,10 +214,26 @@ BOOST_AUTO_TEST_CASE(ExclusionAtGenerateLevel)
     account.nonce = 1;
     auto const stateRoot = seedStateTrieFlushed(storage, {{makeAddress(0xab), account}});
 
+    std::vector<bcos::h256> const slots{makeHash(0x05)};
     auto missing = bcos::task::syncWait(
-        generateProof(storage, stateRoot, makeAddress(0xcd), std::span<bcos::h256 const>{}));
-    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(missing));
-    BOOST_CHECK(std::get<ProofErrorCode>(missing) == ProofErrorCode::AccountNotInMPT);
+        generateProof(storage, stateRoot, makeAddress(0xcd), std::span<bcos::h256 const>(slots)));
+    BOOST_REQUIRE(std::holds_alternative<EIP1186Proof>(missing));
+    auto const res = verifyProof(stateRoot, std::get<EIP1186Proof>(missing));
+    BOOST_CHECK(res.accountValid);
+    BOOST_CHECK(res.accountAbsent);
+    BOOST_REQUIRE_EQUAL(res.storageValid.size(), 1);
+    BOOST_CHECK(res.storageValid.at(0));
+
+    // The exclusion chain does not license claims: a nonzero balance on an absence shape fails.
+    auto tampered = std::get<EIP1186Proof>(missing);
+    tampered.balance = 1;
+    BOOST_CHECK(!verifyProof(stateRoot, tampered).accountValid);
+
+    // Scenario A keeps the generate-level refusal.
+    auto scenarioA = bcos::task::syncWait(generateProof(
+        storage, stateRoot, makeAddress(0xcd), std::span<bcos::h256 const>{}, /*fullTrie=*/false));
+    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(scenarioA));
+    BOOST_CHECK(std::get<ProofErrorCode>(scenarioA) == ProofErrorCode::AccountNotInMPT);
 }
 
 // Extra trailing nodes after the walk concluded must be rejected: a padded proof is not the

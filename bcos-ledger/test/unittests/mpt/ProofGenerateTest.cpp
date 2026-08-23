@@ -298,9 +298,12 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
     BOOST_CHECK(!check.value.has_value());
 }
 
-// An unknown address on a populated trie, and any address on the empty root, both yield
-// AccountNotInMPT. A root absent from storage yields BlockNotCommitted.
-BOOST_AUTO_TEST_CASE(AccountNotInMPTErrors)
+// An unknown address on a populated trie answers op-geth's proof of NON-EXISTENCE under the
+// default fullTrie semantics: the dead-end walk's nodes, zero fields (zero hashes, NOT the
+// empty-code/empty-trie hashes), provable-zero slots. The empty root proves every account
+// absent with nothing to walk. Under scenario A (fullTrie=false) absence is not a provable
+// zero, so the error stays. A root absent from storage still yields BlockNotCommitted.
+BOOST_AUTO_TEST_CASE(AbsentAccountAnswersExclusionProof)
 {
     MemStorage storage;
     bcos::Address const known = makeAddress(0xab);
@@ -309,16 +312,51 @@ BOOST_AUTO_TEST_CASE(AccountNotInMPTErrors)
     auto const stateRoot = seedStateTrieFlushed(storage, {{known, account}});
 
     bcos::Address const unknown = makeAddress(0xcd);
+    std::vector<bcos::h256> const slots{makeHash(0x01), makeHash(0x02)};
     auto missing = bcos::task::syncWait(
-        generateProof(storage, stateRoot, unknown, std::span<bcos::h256 const>{}));
-    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(missing));
-    BOOST_CHECK(std::get<ProofErrorCode>(missing) == ProofErrorCode::AccountNotInMPT);
+        generateProof(storage, stateRoot, unknown, std::span<bcos::h256 const>(slots)));
+    BOOST_REQUIRE(std::holds_alternative<EIP1186Proof>(missing));
+    auto const& proof = std::get<EIP1186Proof>(missing);
+    BOOST_CHECK_EQUAL(proof.address, unknown);
+    BOOST_CHECK(proof.balance == 0 && proof.nonce == 0);
+    BOOST_CHECK_EQUAL(proof.codeHash, bcos::h256{});     // zero: GetCodeHash on a missing object
+    BOOST_CHECK_EQUAL(proof.storageHash, bcos::h256{});  // zero: GetStorageRoot on a missing object
+    BOOST_CHECK(!proof.accountProof.empty());  // the dead-end prefix against a populated trie
+    auto const walk = verifyProofChain(proof.accountProof, stateRoot, accountKeyHash(unknown));
+    BOOST_CHECK(walk.hashChainOk && walk.allNodesUsed);
+    BOOST_CHECK(!walk.value.has_value());  // exclusion: no leaf reached
+    BOOST_REQUIRE_EQUAL(proof.storageProof.size(), slots.size());
+    for (size_t i = 0; i < slots.size(); ++i)
+    {
+        auto const& entry = proof.storageProof.at(i);
+        BOOST_CHECK_EQUAL(entry.key, slots.at(i));
+        BOOST_CHECK(entry.value.empty() && entry.proof.empty());
+        BOOST_CHECK(entry.inMPT);
+    }
+    auto const verified = verifyProof(stateRoot, proof);
+    BOOST_CHECK(verified.accountValid && verified.accountAbsent);
+    BOOST_CHECK(verified.storageValid.at(0) && verified.storageValid.at(1));
 
+    // Empty state root: every account is provably absent; there is nothing to walk.
     auto emptyRoot = bcos::task::syncWait(
         generateProof(storage, emptyRootHash(), known, std::span<bcos::h256 const>{}));
-    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(emptyRoot));
-    BOOST_CHECK(std::get<ProofErrorCode>(emptyRoot) == ProofErrorCode::AccountNotInMPT);
+    BOOST_REQUIRE(std::holds_alternative<EIP1186Proof>(emptyRoot));
+    auto const& emptyProof = std::get<EIP1186Proof>(emptyRoot);
+    BOOST_CHECK(emptyProof.accountProof.empty());
+    auto const emptyVerified = verifyProof(emptyRootHash(), emptyProof);
+    BOOST_CHECK(emptyVerified.accountValid && emptyVerified.accountAbsent);
 
+    // Scenario A: the incomplete trie cannot prove absence — the honest error stays.
+    auto scenarioA = bcos::task::syncWait(generateProof(
+        storage, stateRoot, unknown, std::span<bcos::h256 const>{}, /*fullTrie=*/false));
+    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(scenarioA));
+    BOOST_CHECK(std::get<ProofErrorCode>(scenarioA) == ProofErrorCode::AccountNotInMPT);
+    auto scenarioAEmpty = bcos::task::syncWait(generateProof(
+        storage, emptyRootHash(), known, std::span<bcos::h256 const>{}, /*fullTrie=*/false));
+    BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(scenarioAEmpty));
+    BOOST_CHECK(std::get<ProofErrorCode>(scenarioAEmpty) == ProofErrorCode::AccountNotInMPT);
+
+    // A root absent from storage is a request about an unknown block, not a proof question.
     auto unknownRoot = bcos::task::syncWait(
         generateProof(storage, makeHash(0x99), known, std::span<bcos::h256 const>{}));
     BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(unknownRoot));

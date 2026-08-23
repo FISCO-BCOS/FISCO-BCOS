@@ -103,8 +103,9 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(
-            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);
@@ -248,16 +249,36 @@ BOOST_AUTO_TEST_CASE(HappyPathShapeAndRoundTrip)
     BOOST_TEST(verify.storageValid[2]);
 }
 
-// Dormant account (present state root, address not in the trie) -> -32004 "not in trie".
-BOOST_AUTO_TEST_CASE(DormantAccountReturns32004)
+// Dormant account (present state root, address not in the trie) answers op-geth's proof of
+// NON-EXISTENCE (internal/ethapi/api.go:471-480): the dead-end accountProof, zero fields —
+// codeHash/storageHash are the ZERO hash, not emptyCodeHash/emptyRootHash (StateDB's getters
+// on a missing object return common.Hash{}) — and every requested slot a provable zero.
+// Scenario A keeps the -32004 refusal (EthGetProofSlotNotInMPTTest / EthGetProofIntegrationTest).
+BOOST_AUTO_TEST_CASE(DormantAccountAnswersExclusionProof)
 {
     buildTrie();
     wireReader();
 
-    auto resp = getProof(dormant.hexPrefixed(), {}, "latest");
-    BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    BOOST_CHECK(resp["error"]["message"].asString().find("not in trie") != std::string::npos);
+    auto resp = getProof(dormant.hexPrefixed(), {slotMissing.hexPrefixed()}, "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    auto const& result = resp["result"];
+    BOOST_TEST(result["address"].asString() == dormant.hexPrefixed());
+    BOOST_TEST(result["balance"].asString() == "0x0");
+    BOOST_TEST(result["nonce"].asString() == "0x0");
+    BOOST_TEST(result["codeHash"].asString() == h256{}.hexPrefixed());
+    BOOST_TEST(result["storageHash"].asString() == h256{}.hexPrefixed());
+    BOOST_TEST(result["accountProof"].size() >= 1U);  // the diverging-leaf exclusion path
+    BOOST_REQUIRE_EQUAL(result["storageProof"].size(), 1U);
+    BOOST_TEST(result["storageProof"][0U]["value"].asString() == "0x0");
+    BOOST_TEST(result["storageProof"][0U]["proof"].empty());
+
+    auto const reconstructed = proofFromJson(result);
+    auto const verify = mpt::verifyProof(stateRoot, reconstructed);
+    BOOST_TEST(verify.accountValid);
+    BOOST_TEST(verify.accountAbsent);
+    BOOST_REQUIRE_EQUAL(verify.storageValid.size(), 1U);
+    BOOST_TEST(verify.storageValid[0]);
 }
 
 // Header stateRoot absent from the MPT node storage -> -32004 "not in MPT node storage".

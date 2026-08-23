@@ -83,7 +83,7 @@ struct EIP1186Proof
 /// codes. Genuine storage inconsistencies still throw MPTInvariantViolation, like Trie does.
 enum class ProofErrorCode : uint8_t
 {
-    AccountNotInMPT,    ///< the walk from stateRoot dead-ends before an account leaf
+    AccountNotInMPT,    ///< the walk from stateRoot dead-ends before an account leaf (scenario A)
     BlockNotCommitted,  ///< stateRoot itself is absent from node storage (unknown/uncommitted)
     /// Flat-path only (generateProofFromFlat): the trie rebuilt from the committed flat state
     /// roots at a DIFFERENT hash than the requested block's stateRoot — the requested block is
@@ -91,6 +91,29 @@ enum class ProofErrorCode : uint8_t
     /// diverged from the header. Either way no honest proof exists for this request.
     RootMismatch,
 };
+
+/// The absent-account result (op-geth GetProof semantics, internal/ethapi/api.go:471-480): the
+/// exclusion walk's nodes as accountProof (empty when there is nothing to walk — an empty state
+/// trie), balance/nonce zero, and codeHash/storageHash the ZERO hash (StateDB's GetCodeHash /
+/// GetStorageRoot on a missing object return common.Hash{} — NOT the empty-code hash or the
+/// empty-trie root). Every requested slot answers value 0x0 with an empty proof: an absent
+/// account has no storage trie, so each slot is a provable zero, hence inMPT=true.
+inline EIP1186Proof absentAccountProof(
+    bcos::Address address, std::span<bcos::h256 const> slots, std::vector<bcos::bytes> accountProof)
+{
+    EIP1186Proof out;
+    out.address = address;
+    out.codeHash = bcos::h256{};
+    out.storageHash = bcos::h256{};
+    out.accountProof = std::move(accountProof);
+    out.storageProof.reserve(slots.size());
+    for (auto const& slot : slots)
+    {
+        out.storageProof.push_back(
+            StorageProof{.key = slot, .value = {}, .proof = {}, .inMPT = true});
+    }
+    return out;
+}
 
 namespace detail
 {
@@ -220,8 +243,12 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 ///
 /// Outcomes:
 ///   - stateRoot absent from storage        → ProofErrorCode::BlockNotCommitted
-///   - stateRoot == emptyRootHash(), or the account walk dead-ends
-///                                           → ProofErrorCode::AccountNotInMPT
+///   - stateRoot == emptyRootHash(), or the account walk dead-ends:
+///       fullTrie                            → proof of NON-EXISTENCE (absentAccountProof: the
+///                                             dead-end node prefix, zero fields — op-geth shape)
+///       !fullTrie (scenario A)              → ProofErrorCode::AccountNotInMPT (a dormant account
+///                                             may hold flat state the incomplete trie cannot
+///                                             speak to; absence is not a provable zero)
 ///   - a requested slot is absent, fullTrie  → StorageProof with empty value and the dead-end
 ///                                             prefix as exclusion proof (EIP-1186 value 0x0)
 ///   - a requested slot is absent, !fullTrie → StorageProof with inMPT=false, empty value, empty
@@ -256,7 +283,13 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
 {
     if (stateRoot == emptyRootHash())
     {
-        co_return ProofErrorCode::AccountNotInMPT;  // empty trie holds no accounts
+        // The empty trie holds no accounts: a provable absence under fullTrie (geth's Prove()
+        // on it answers an empty accountProof); scenario A keeps the honest error.
+        if (fullTrie)
+        {
+            co_return absentAccountProof(address, slots, {});
+        }
+        co_return ProofErrorCode::AccountNotInMPT;
     }
 
     auto const addressKeyHash = accountKeyHash(address);
@@ -268,6 +301,14 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
     }
     if (!accountWalk.value)
     {
+        // The walk dead-ended before an account leaf. Under fullTrie the trie is complete, so
+        // this IS the account's absence — answer the exclusion proof like op-geth. Under
+        // scenario A the incomplete trie cannot distinguish absence from dormancy: keep the
+        // request-level error for the RPC layer to map.
+        if (fullTrie)
+        {
+            co_return absentAccountProof(address, slots, std::move(accountWalk.nodes));
+        }
         co_return ProofErrorCode::AccountNotInMPT;
     }
     auto const account = Account::decode(bcos::ref(*accountWalk.value));
@@ -342,6 +383,10 @@ enum class SlotProofStatus : uint8_t
 struct VerifyResult
 {
     bool accountValid = false;
+    /// True only when accountValid holds via a VALID EXCLUSION chain: the proof establishes the
+    /// account's ABSENCE (zero fields, absentAccountProof's shape) rather than a present leaf.
+    /// recovered* stay zero-valued in that case — there is no account state to recover.
+    bool accountAbsent = false;
     bcos::u256 recoveredBalance{};
     bcos::u256 recoveredNonce{};
     bcos::h256 recoveredCodeHash{};
@@ -478,8 +523,11 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
 /// generateProof's proofWalk.
 ///
 /// accountValid requires all of: the account chain anchors at @p claimedRoot, ends at a present
-/// account leaf, the leaf decodes, and the decoded fields EQUAL the proof's claimed
-/// nonce/balance/codeHash/storageHash. Malformed leaf bytes yield accountValid=false, never an
+/// account leaf OR a valid exclusion dead-end, the leaf (when present) decodes, and the decoded
+/// fields EQUAL the proof's claimed nonce/balance/codeHash/storageHash. An exclusion chain is
+/// accepted only in absentAccountProof's shape — accountAbsent then flags that the proof
+/// establishes the account's ABSENCE (every slot a provable zero) rather than a present account.
+/// Malformed leaf bytes yield accountValid=false, never an
 /// exception. On any account-side failure the function returns immediately with every
 /// storageValid false and every storageStatus Invalid (including inMPT=false entries: an
 /// unestablished account leaf makes even "unverifiable" too generous) — slot chains hang off
@@ -503,12 +551,44 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
 
     HasherT hasher;  // one hash context, reused for the account chain and every slot
     auto const accountPath = bytesToNibbles(accountKeyHash(proof.address).ref());
+    auto const acceptAbsence = [&] {
+        // A valid EXCLUSION account chain (or the trivially-empty chain against the empty root):
+        // the claimed fields must be exactly absentAccountProof's shape — a nonzero claim is
+        // something the exclusion chain cannot establish. Every slot then answers a provable
+        // zero: valid iff inMPT with empty value and empty proof.
+        if (proof.nonce != 0 || proof.balance != 0 || proof.codeHash != bcos::h256{} ||
+            proof.storageHash != bcos::h256{})
+        {
+            return;
+        }
+        out.accountValid = true;
+        out.accountAbsent = true;
+        for (size_t i = 0; i < proof.storageProof.size(); ++i)
+        {
+            auto const& entry = proof.storageProof[i];
+            out.storageValid[i] = entry.inMPT && entry.value.empty() && entry.proof.empty();
+            out.storageStatus[i] =
+                out.storageValid[i] ? SlotProofStatus::Verified : SlotProofStatus::Invalid;
+            // recoveredStorageValues[i] stays empty: the slot is proven absent
+        }
+    };
+    if (claimedRoot == emptyRootHash<HasherT>() && proof.accountProof.empty())
+    {
+        // The empty trie proves every account absent with NO nodes at all (generateProof's
+        // empty-root shape); verifyProofChain cannot walk an empty item list, so judge directly.
+        acceptAbsence();
+        return out;
+    }
     auto const accountLeaf = detail::verifyProofChain(
         claimedRoot, std::span<bcos::bytes const>(proof.accountProof), accountPath, hasher);
-    if (!accountLeaf || accountLeaf->empty())
+    if (!accountLeaf)
     {
-        // Invalid chain, or an exclusion: an EIP-1186 proof for a present account must contain
-        // the account leaf.
+        return out;  // broken hash link, malformed node, dangling ref, or padded proof
+    }
+    if (accountLeaf->empty())
+    {
+        // Valid exclusion chain: the proof's account half establishes absence.
+        acceptAbsence();
         return out;
     }
 

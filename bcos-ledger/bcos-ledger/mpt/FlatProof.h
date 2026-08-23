@@ -116,27 +116,6 @@ struct FlatAccount
     bcos::h256 codeHash = emptyCodeHash();
 };
 
-/// The absent-account result (op-geth GetProof semantics): the exclusion walk's nodes as
-/// accountProof (possibly empty when there is nothing to walk), zero fields, and every
-/// requested slot answering 0x0 with an empty proof — an absent account's empty storage trie
-/// makes each slot a provable zero, hence inMPT=true.
-inline EIP1186Proof absentFlatProof(
-    bcos::Address address, std::span<bcos::h256 const> slots, std::vector<bcos::bytes> accountProof)
-{
-    EIP1186Proof out;
-    out.address = address;
-    out.codeHash = bcos::h256{};     // zero hash: StateDB.GetCodeHash on a missing object
-    out.storageHash = bcos::h256{};  // zero hash: StateDB.GetStorageRoot on a missing object
-    out.accountProof = std::move(accountProof);
-    out.storageProof.reserve(slots.size());
-    for (auto const& slot : slots)
-    {
-        out.storageProof.push_back(
-            StorageProof{.key = slot, .value = {}, .proof = {}, .inMPT = true});
-    }
-    return out;
-}
-
 /// Fold one classified row of an account table into @p account / @p storageEntries. Shape
 /// violations (a slot value that is not 32 bytes, a malformed codeHash) throw
 /// MPTInvariantViolation — the same rows would fail the OP block's own stateRoot computation
@@ -259,7 +238,7 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProofFromFl
     if (expectedRoot == emptyRootHash())
     {
         // The empty trie has no walkable nodes: geth answers an empty accountProof.
-        co_return detail::absentFlatProof(address, slots, {});
+        co_return absentAccountProof(address, slots, {});
     }
 
     HasherT hasher;
@@ -373,7 +352,7 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProofFromFl
         // Absent account, op-geth semantics: exclusion walk + zero fields.
         auto walk = co_await detail::proofWalk(
             nodeStore, expectedRoot, bytesToNibbles(accountKeyHash(address).ref()));
-        co_return detail::absentFlatProof(address, slots, std::move(walk.nodes));
+        co_return absentAccountProof(address, slots, std::move(walk.nodes));
     }
 
     // Complete flat state: every exclusion walk IS a provable zero — fullTrie semantics.
