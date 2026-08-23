@@ -60,6 +60,28 @@ OP_STATE_READ = os.environ.get("OP_STATE_READ", "op_state_read")
 MESSAGE_PASSER = "0x4200000000000000000000000000000000000016"
 PROPOSER_KEY = os.environ.get(
     "C2_PROPOSER_KEY", "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d")  # DEV1
+# Address of PROPOSER_KEY. finalize's gate reads provenWithdrawals[hash][msg.sender],
+# so cast-call simulations MUST pass --from this address — a zero-address caller
+# always observes the withdrawal as unproven (0xcca6afda) and the wait never ends.
+PROPOSER_ADDR = os.environ.get(
+    "C2_PROPOSER_ADDR", "0x70997970C51812dc3A010C7d01b50e0d17dc79C8")
+
+# The dispute-game counterparty. Game type 1 is a PermissionedDisputeGame: only
+# the intent-registered (proposer, challenger) may move — the challenger role
+# must be a DIFFERENT account than the proposer for the adversarial scenarios
+# (setup_c2.sh registers DEV0 as the challenger).
+CHALLENGER_KEY = os.environ.get(
+    "C2_CHALLENGER_KEY", "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+CHALLENGER_ADDR = os.environ.get(
+    "C2_CHALLENGER_ADDR", "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+# Claim-commitment constants for the clock-driven contest scenarios: the game
+# validates positions/bonds, not claim contents, before resolution.
+FAKE_ROOT = "0x" + "66" * 32
+COUNTER_CLAIM = "0x" + "01" * 32
+REBUT_CLAIM = "0x" + "02" * 32
+# GameStatus (contracts-bedrock Types.sol): 0=IN_PROGRESS 1=CHALLENGER_WINS
+# 2=DEFENDER_WINS
+STATUS_CHALLENGER_WINS, STATUS_DEFENDER_WINS = 1, 2
 
 MESSAGE_PASSED_TOPIC = "0x02a52367d10742d8032712c1bb8e0144ff1ec5ffda1ed7d70bb05a2744955054"
 
@@ -169,13 +191,19 @@ def call_ok(*args):
 def wait_until(desc, timeout, *args):
     # Poll a cast-call simulation until it succeeds or the timeout (seconds)
     # elapses. Timeouts are generous: they bound chain-clock waits, not checks.
-    import time
+    # On timeout, surface the LAST revert reason — diagnosing a stuck gate from
+    # a bare "not ready" line wastes hours (the 08-24 finalize chase).
+    import subprocess, time
     deadline = time.time() + timeout
+    last_err = ""
     while time.time() < deadline:
-        if call_ok(*args):
+        r = subprocess.run(["cast", "call", *args], capture_output=True, text=True)
+        if r.returncode == 0:
             return True
+        last_err = (r.stderr or "").strip().splitlines()
+        last_err = last_err[0][:160] if last_err else ""
         time.sleep(5)
-    print(f"!! {desc} not ready within {timeout}s")
+    print(f"!! {desc} not ready within {timeout}s (last revert: {last_err or 'none'})")
     return False
 
 
@@ -261,6 +289,197 @@ def rpc_inclusion_proof(storage_key):
     return root, [n.hex() for n in nodes]
 
 
+def create_game(dgf, root_claim, l2_block):
+    """create(type=1, rootClaim, extraData=l2Block) + resolve the game address."""
+    extra = "0x%064x" % l2_block
+    cast("send", dgf, "create(uint32,bytes32,bytes)", "1", root_claim,
+         extra, "--value", "0.08ether", "--private-key", PROPOSER_KEY,
+         "--rpc-url", L1, "--json")
+    game_index = cast("call", dgf, "gameCount()(uint256)", "--rpc-url", L1)
+    game_index = int(game_index.split()[0]) - 1
+    print(f"game created, index {game_index}")
+    game = cast("call", dgf,
+                f"gameAtIndex(uint256)(uint32,uint64,address)", str(game_index),
+                "--rpc-url", L1).split()[-1]
+    return game_index, game
+
+
+def prove_withdrawal(portal, w, game_index, orp, proof):
+    """prove + the creation-block wait (same-block proves revert with
+    InvalidProofTimestamp). Bare args — cast 1.7.1 rejects quoted forms."""
+    tx = (f"({w['nonce']},{w['sender']},{w['target']},{w['value']},"
+          f"{w['gasLimit']},{w['data']})")
+    orps = "(" + ",".join(orp[k] for k in ("version", "stateRoot",
+        "messagePasserStorageRoot", "latestBlockHash")) + ")"
+    nodes = "[" + ",".join("0x" + n for n in proof) + "]"
+    calldata = cast("calldata",
+        'proveWithdrawalTransaction((uint256,address,address,uint256,'
+        'uint256,bytes),uint256,(bytes32,bytes32,bytes32,bytes32),bytes[])',
+        tx, str(game_index), orps, nodes)
+    if not wait_until("prove (game-creation block passed)", 120,
+                      portal, "--data", calldata, "--from", PROPOSER_ADDR,
+                      "--rpc-url", L1):
+        raise SystemExit("prove not callable within 120s")
+    cast("send", portal, "--data", calldata, "--private-key", PROPOSER_KEY,
+         "--rpc-url", L1)
+    return tx, calldata
+
+
+def game_status(game):
+    return int(cast("call", game, "status()(uint8)",
+                    "--rpc-url", L1).split()[0], 16)
+
+
+def game_credit(game, who):
+    """Bond ledger view (wei-exact, no gas noise). claimCredit itself is
+    unusable in an e2e: the first call only unlocks, and DelayedWETH holds the
+    withdrawal behind a 3.5-day delay."""
+    return int(cast("call", game, "credit(address)(uint256)", who,
+                    "--rpc-url", L1).split()[0])
+
+
+def required_bond_wei(game, gindex):
+    """Big-Bonds depth ladder: the root attack child sits at gindex 2, its
+    attack child at 4 (a 0.08 flat bond IncorrectBondAmount-reverts there)."""
+    return int(cast("call", game, "getRequiredBond(uint128)", str(gindex),
+                    "--rpc-url", L1).split()[0])
+
+
+def contest_abandoned(output_root, w, orp, proof, portal, dgf, tx, l2_block):
+    """Honest claim challenged, then the challenger goes silent -> DEFENDER_WINS.
+
+    Bottom-up resolution is mandatory (OutOfOrderResolution otherwise): the
+    rebut leaf (claim 2) resolves first, then the challenger's claim 1, then
+    the root — percolation resets root.counteredBy to 0 -> DEFENDER_WINS.
+    """
+    print("== contest: abandoned (challenger attacks the root, then silence)")
+    game_index, game = create_game(dgf, output_root, l2_block)
+    prove_withdrawal(portal, w, game_index, orp, proof)
+    print("proven (honest claim)")
+    root_bond = required_bond_wei(game, 2)
+    cast("send", game, "attack(bytes32,uint256,bytes32)",
+         output_root, "0", COUNTER_CLAIM, "--value", f"{root_bond}wei",
+         "--private-key", CHALLENGER_KEY, "--rpc-url", L1)
+    print(f"challenger countered the root (bond {root_bond} wei)")
+    rebut_bond = required_bond_wei(game, 4)
+    cast("send", game, "attack(bytes32,uint256,bytes32)",
+         COUNTER_CLAIM, "1", REBUT_CLAIM, "--value", f"{rebut_bond}wei",
+         "--private-key", PROPOSER_KEY, "--rpc-url", L1)
+    print(f"defender countered the challenger's claim (bond {rebut_bond} wei)")
+    # Challenger silence: their side's clock on the rebut (claim 2) expires,
+    # then the subgames collapse bottom-up.
+    for label, idx, num in (("rebut leaf (claim 2)", "2", "0"),
+                            ("challenger claim (claim 1)", "1", "1"),
+                            ("root (claim 0)", "0", "1")):
+        if not wait_until(f"clock + resolution ({label})", 360, game,
+                          "resolveClaim(uint256,uint256)", idx, num,
+                          "--rpc-url", L1):
+            raise SystemExit(f"{label} not resolvable within 360s")
+        cast("send", game, "resolveClaim(uint256,uint256)", idx, num,
+             "--private-key", PROPOSER_KEY, "--rpc-url", L1)
+    cast("send", game, "resolve()", "--private-key", PROPOSER_KEY,
+         "--rpc-url", L1)
+    status = game_status(game)
+    if status != STATUS_DEFENDER_WINS:
+        raise SystemExit(f"expected DEFENDER_WINS(2), got {status}")
+    print("game resolved: DEFENDER_WINS under an abandoned challenge")
+    # Bond ledger: defender recovers its own bonds AND pockets the challenger's
+    # forfeited root-attack bond; the challenger's credit stays zero.
+    dev1_credit = game_credit(game, PROPOSER_ADDR)
+    dev0_credit = game_credit(game, CHALLENGER_ADDR)
+    expected = 80_000_000_000_000_000 + root_bond + rebut_bond  # root+claim1+claim2
+    if dev1_credit != expected:
+        raise SystemExit(f"defender credit {dev1_credit} != expected {expected}")
+    if dev0_credit != 0:
+        raise SystemExit(f"challenger credit {dev0_credit} != 0")
+    print(f"bond ledger: defender credit {dev1_credit} wei, challenger 0")
+    if not wait_until("proof maturity + finality delay", 600,
+                      portal,
+                      'finalizeWithdrawalTransaction((uint256,address,address,'
+                      'uint256,bytes))', tx,
+                      "--from", PROPOSER_ADDR, "--rpc-url", L1):
+        raise SystemExit("finalize not callable within 600s")
+    cast("send", portal,
+         'finalizeWithdrawalTransaction((uint256,address,address,uint256,'
+         'uint256,bytes))', tx, "--private-key", PROPOSER_KEY,
+         "--rpc-url", L1)
+    print("finalized: honest claim stays finalizable under an abandoned challenge")
+
+
+def contest_dishonest(w, orp, proof, portal, dgf, tx, l2_block):
+    """Proposer posts a FAKE output root; a real proof provably cannot prove
+    against it; challenged and silent -> CHALLENGER_WINS, bond forfeited."""
+    print("== contest: dishonest (proposer posts a FAKE output root)")
+    # extraData must clear the anchor state left by any earlier resolved game
+    # (initialize: UnexpectedRootClaim) — claim one block past it.
+    game_index, game = create_game(dgf, FAKE_ROOT, l2_block + 1)
+    # Game-side verification oracle: wait past the creation-block timestamp
+    # gate (InvalidProofTimestamp fires first in the same block), then a REAL
+    # withdrawal proof must die on the root-claim binding: the portal binds the
+    # proof to game.rootClaim() — the fake root can never match. cast prints
+    # the revert data; assert the selector so this is not a gas-style false red.
+    real_tx = (f"({w['nonce']},{w['sender']},{w['target']},{w['value']},"
+               f"{w['gasLimit']},{w['data']})")
+    orps = "(" + ",".join(orp[k] for k in ("version", "stateRoot",
+        "messagePasserStorageRoot", "latestBlockHash")) + ")"
+    nodes = "[" + ",".join("0x" + n for n in proof) + "]"
+    calldata = cast("calldata",
+        'proveWithdrawalTransaction((uint256,address,address,uint256,'
+        'uint256,bytes),uint256,(bytes32,bytes32,bytes32,bytes32),bytes[])',
+        real_tx, str(game_index), orps, nodes)
+    deadline_sel = "0x426149af"  # OptimismPortal_InvalidOutputRootProof()
+    import time as _time
+    deadline = _time.time() + 120
+    while _time.time() < deadline:
+        r = subprocess.run(["cast", "call", portal, "--data", calldata,
+                            "--from", PROPOSER_ADDR, "--rpc-url", L1],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            out = r.stdout + r.stderr
+            if "0xb4caa4e5" in out:  # InvalidProofTimestamp: same-block gate first
+                _time.sleep(3)
+                continue
+            if deadline_sel in out:
+                print("prove against the fake root reverts with "
+                      "InvalidOutputRootProof — game-side verification holds")
+                break
+            raise SystemExit(f"prove reverted with an UNEXPECTED reason "
+                             f"(wanted {deadline_sel}): {out[-300:]}")
+        raise SystemExit("prove against a FAKE root SUCCEEDED — game "
+                         "verification is broken")
+    else:
+        raise SystemExit("prove precheck never reached the root-claim check "
+                         "within 120s")
+    root_bond = required_bond_wei(game, 2)
+    cast("send", game, "attack(bytes32,uint256,bytes32)",
+         FAKE_ROOT, "0", COUNTER_CLAIM, "--value", f"{root_bond}wei",
+         "--private-key", CHALLENGER_KEY, "--rpc-url", L1)
+    print(f"challenger countered the fake root (bond {root_bond} wei)")
+    # The lying proposer stays silent: bottom-up resolution, CHALLENGER_WINS.
+    for label, idx, num in (("challenger claim (claim 1)", "1", "0"),
+                            ("root (claim 0)", "0", "1")):
+        if not wait_until(f"clock + resolution ({label})", 360, game,
+                          "resolveClaim(uint256,uint256)", idx, num,
+                          "--rpc-url", L1):
+            raise SystemExit(f"{label} not resolvable within 360s")
+        cast("send", game, "resolveClaim(uint256,uint256)", idx, num,
+             "--private-key", CHALLENGER_KEY, "--rpc-url", L1)
+    cast("send", game, "resolve()", "--private-key", CHALLENGER_KEY,
+         "--rpc-url", L1)
+    status = game_status(game)
+    if status != STATUS_CHALLENGER_WINS:
+        raise SystemExit(f"expected CHALLENGER_WINS(1), got {status}")
+    print("game resolved: CHALLENGER_WINS — the liar loses")
+    dev0_credit = game_credit(game, CHALLENGER_ADDR)
+    dev1_credit = game_credit(game, PROPOSER_ADDR)
+    expected = 80_000_000_000_000_000 + root_bond  # forfeited root + own refund
+    if dev0_credit != expected:
+        raise SystemExit(f"challenger credit {dev0_credit} != expected {expected}")
+    if dev1_credit != 0:
+        raise SystemExit(f"lying proposer credit {dev1_credit} != 0")
+    print(f"bond ledger: challenger credit {dev0_credit} wei, liar 0")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("tx_hash", help="L2 tx hash of the initiateWithdrawal")
@@ -270,6 +489,15 @@ def main():
     ap.add_argument("--rocksdb-proof", action="store_true",
                     help="build the storage proof from a local RocksDB dump "
                          "instead of the node's eth_getProof (debug bypass)")
+    ap.add_argument("--contest", choices=["abandoned", "dishonest"], default=None,
+                    help="adversarial dispute scenarios (requires the intent "
+                         "challenger role to differ from the proposer — DEV0 "
+                         "on devnets built by the current setup_c2.sh): "
+                         "'abandoned' = honest claim challenged then the "
+                         "challenger goes silent -> DEFENDER_WINS, still "
+                         "finalizable; 'dishonest' = proposer posts a FAKE "
+                         "output root -> a real proof provably reverts against "
+                         "it -> CHALLENGER_WINS, bond forfeited")
     args = ap.parse_args()
 
     portal, dgf = contracts()
@@ -294,6 +522,13 @@ def main():
             f"{orp['messagePasserStorageRoot']} (storage dump incomplete?)")
     print(f"storage root match; proof has {len(proof)} nodes")
 
+    if args.contest == "abandoned":
+        contest_abandoned(output_root, w, orp, proof, portal, dgf, tx_hash, l2_block)
+        return
+    if args.contest == "dishonest":
+        contest_dishonest(w, orp, proof, portal, dgf, tx_hash, l2_block)
+        return
+
     # 1. dispute game (rootClaim=outputRoot, extraData=claimed L2 block)
     extra = "0x%064x" % l2_block
     out = cast("send", dgf, "create(uint32,bytes32,bytes)", "1", output_root,
@@ -312,10 +547,18 @@ def main():
     orps = "(" + ",".join(orp[k] for k in ("version", "stateRoot",
         "messagePasserStorageRoot", "latestBlockHash")) + ")"
     nodes = "[" + ",".join("0x" + n for n in proof) + "]"
+    # cast 1.7.1 rejects signatures/args wrapped in literal double quotes (an
+    # older cast tolerated them) — pass everything bare.
     calldata = cast("calldata",
-        '"proveWithdrawalTransaction((uint256,address,address,uint256,'
-        'uint256,bytes),uint256,(bytes32,bytes32,bytes32,bytes32),bytes[])"',
-        f'"{tx}"', str(game_index), f'"{orps}"', f'"{nodes}"')
+        'proveWithdrawalTransaction((uint256,address,address,uint256,'
+        'uint256,bytes),uint256,(bytes32,bytes32,bytes32,bytes32),bytes[])',
+        tx, str(game_index), orps, nodes)
+    # The portal rejects a proof in the same L1 block as the game's creation
+    # (OptimismPortal_InvalidProofTimestamp: block.timestamp <= createdAt) —
+    # poll the simulation until the chain moves past the creation block.
+    if not wait_until("prove (game-creation block passed)", 120,
+                      portal, "--data", calldata, "--rpc-url", L1):
+        raise SystemExit("prove not callable within 120s")
     cast("send", portal, "--data", calldata, "--private-key", PROPOSER_KEY,
          "--rpc-url", L1)
     print("proven")
@@ -333,14 +576,15 @@ def main():
     cast("send", game, "resolve()", "--private-key", PROPOSER_KEY,
          "--rpc-url", L1)
     print("game resolved (DEFENDER_WINS)")
-    if not wait_until("proof maturity + finality delay", 300,
+    if not wait_until("proof maturity + finality delay", 600,
                       portal,
-                      '"finalizeWithdrawalTransaction((uint256,address,address,'
-                      'uint256,bytes))"', f'"{tx}"', "--rpc-url", L1):
+                      'finalizeWithdrawalTransaction((uint256,address,address,'
+                      'uint256,bytes))', tx,
+                      "--from", PROPOSER_ADDR, "--rpc-url", L1):
         raise SystemExit("finalize not callable within 300s")
     fin = cast("send", portal,
-        '"finalizeWithdrawalTransaction((uint256,address,address,uint256,'
-        'uint256,bytes))"', f'"{tx}"', "--private-key", PROPOSER_KEY,
+        'finalizeWithdrawalTransaction((uint256,address,address,uint256,'
+        'uint256,bytes))', tx, "--private-key", PROPOSER_KEY,
         "--rpc-url", L1)
     print("finalized:", fin.splitlines()[0] if fin else "?")
 
