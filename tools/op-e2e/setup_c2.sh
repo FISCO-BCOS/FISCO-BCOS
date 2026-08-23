@@ -12,6 +12,14 @@
 #   bash setup_c2.sh -s 2                # 从第 2 步开始(跳过已完成步骤)
 #   C2=~/c2 bash setup_c2.sh             # 自定义工作区(默认 /tmp/c2)
 #
+# 独立目录隔离实例(多会话共用一台机时,避免互踩 /tmp/c2):
+#   C2=/tmp/c2b ANVIL_PORT=8649 FISCO_WEB3=8655 FISCO_ENGINE=8666 \
+#   FISCO_RPC=21213 FISCO_P2P=32400 OP_NODE_PORT=9645 OP_BATCHER_PORT=8647 \
+#   OP_NODE_EXTRA_FLAGS="--p2p.disable" bash setup_c2.sh
+# (端口全部可 env 覆盖,默认值不变;隔离实例务必 --p2p.disable,防止两个
+#  devnet 通过 gossip 互联。) 配套脚本 withdraw_claim.py / withdraw_e2e.sh
+# 用 C2_L1 / C2_L2_WEB3 / C2_OP_NODE / C2_STATE 指向同一实例。
+#
 # 关键配置(踩坑后固化,见 docs/2026-08-19-session-handoff-final.md):
 #   - anvil L1: 8549,chain 900900,块时间 12s;op-deployer live 部署 L1 合约
 #   - FISCO L2: 8555(web3) / 8566(engine),chain 914901
@@ -29,10 +37,26 @@ FISCO_BIN="${FISCO_BIN:-/Users/octopus/octo/code/FISCO-BCOS/build/fisco-bcos-air
 OPGEN="${OPGEN:-/Users/octopus/octo/code/FISCO-BCOS/tools/opstack-genesis}"
 L2CONTRACTS="${L2CONTRACTS:-/Users/octopus/octo/code/FISCO-BCOS/bcos-l2-contracts}"
 
-# 端口(套件硬编码,勿改)
-ANVIL_PORT=8549; ANVIL_CHAIN=900900
-FISCO_WEB3=8555; FISCO_ENGINE=8566; FISCO_RPC=20213; FISCO_P2P=31400
-L2_CHAIN=914901
+# 端口(可 env 覆盖——隔离实例用: 见文件头"独立目录"说明; 默认值不变)
+ANVIL_PORT="${ANVIL_PORT:-8549}"; ANVIL_CHAIN="${ANVIL_CHAIN:-900900}"
+FISCO_WEB3="${FISCO_WEB3:-8555}"; FISCO_ENGINE="${FISCO_ENGINE:-8566}"
+FISCO_RPC="${FISCO_RPC:-20213}"; FISCO_P2P="${FISCO_P2P:-31400}"
+L2_CHAIN="${L2_CHAIN:-914901}"
+OP_NODE_PORT="${OP_NODE_PORT:-9545}"
+OP_BATCHER_PORT="${OP_BATCHER_PORT:-8547}"
+# Appended verbatim to the op-node command line (isolated instances want
+# "--p2p.disable" so two devnets never gossip blocks at each other).
+OP_NODE_EXTRA_FLAGS="${OP_NODE_EXTRA_FLAGS:-}"
+
+# Dispute/DA clocks (ephemeral tier-2 instances compress these; defaults = C2).
+# Keep the InvalidClockExtension invariant above when compressing: max(ext*2,
+# ext+PREIMAGE_CHALLENGE_SECONDS) <= FAULT_GAME_MAX_CLOCK.
+ANVIL_BLOCK_TIME="${ANVIL_BLOCK_TIME:-12}"
+PROOF_MATURITY_SECONDS="${PROOF_MATURITY_SECONDS:-12}"
+DISPUTE_FINALITY_SECONDS="${DISPUTE_FINALITY_SECONDS:-6}"
+FAULT_GAME_MAX_CLOCK="${FAULT_GAME_MAX_CLOCK:-90}"
+PREIMAGE_CHALLENGE_SECONDS="${PREIMAGE_CHALLENGE_SECONDS:-60}"
+BATCHER_MAX_CHANNEL="${BATCHER_MAX_CHANNEL:-10}"
 
 # 账户(anvil 标准助记词)
 DEV0=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80   # deployer/owner
@@ -56,9 +80,15 @@ if step_run 1; then
        -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_chainId\",\"params\":[],\"id\":1}"; then
     log "anvil 已在运行,跳过"
   else
+    # --slots-in-an-epoch 1: anvil's finalized tag = head - 2*slots (default 32
+    # slots = 64 blocks = 12.8min finality lag at 12s blocks); with 1 slot the
+    # lag is 2 blocks (~24s), so op-node finalized_l2 tracks the head closely
+    # and withdrawal claims don't wait ~20min for finality.
     anvil --port $ANVIL_PORT --chain-id $ANVIL_CHAIN \
       --mnemonic "test test test test test test test test test test test junk" \
-      --block-time 12 > "$C2/anvil.log" 2>&1 &
+      --block-time "$ANVIL_BLOCK_TIME" \
+      --slots-in-an-epoch "${ANVIL_SLOTS_IN_AN_EPOCH:-1}" \
+      > "$C2/anvil.log" 2>&1 &
     echo $! > "$C2/anvil.pid"
     sleep 2
     log "anvil 启动(PID $(cat "$C2/anvil.pid"))"
@@ -107,21 +137,34 @@ useInterop = false
     unsafeBlockSigner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
     batcher = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293bc"
     proposer = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
-    challenger = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    # The dispute game challenger role MUST differ from the proposer: game type 1
+    # is a PermissionedDisputeGame — only (proposer, challenger) may move — and
+    # the adversarial e2e scenarios (withdraw_claim --contest) need a real
+    # counterparty (DEV0) rather than the proposer attacking its own claims.
+    challenger = "${INTENT_CHALLENGER:-0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266}"
 
 # Devnet-only compressed dispute timelines (op-e2e parity: op-e2e/config/init.go).
 # The whole withdrawal claim flow (prove -> resolveClaim -> resolve -> finalize)
 # then runs in REAL time in ~2 minutes. NEVER warp the L1 clock instead: a warped
 # L1 clock puts the sequencer into permanent noTxPool catch-up mode ~30 minutes
-# later (see docs/2026-08-23-session-handoff-final.md 裁决 8) — unrecoverable.
+# later (docs/2026-08-23-session-handoff-final.md 裁决 8) — unrecoverable.
+#
 # Keys are the JSON tags of op-deployer's SuperchainProofParams / ChainProofParams;
 # globalDeployOverrides feeds both merge sites (pipeline/implementations.go for the
 # portal params, pipeline/opchain.go for the per-chain game params).
+#
+# Invariant (FaultDisputeGame.sol, InvalidClockExtension 0x8d77ecac):
+#   max(clockExtension*2, clockExtension + preimageOracleChallengePeriod)
+#     <= faultGameMaxClockDuration
+# so the preimage challenge period MUST be compressed together with the clock —
+# the standard default is 86400s and leaves room for no compression at all.
+# Uncontested resolveClaim(0) unlocks after ~maxClockDuration/2 (~45s here).
 [globalDeployOverrides]
-proofMaturityDelaySeconds = 12
-disputeGameFinalityDelaySeconds = 6
+proofMaturityDelaySeconds = $PROOF_MATURITY_SECONDS
+disputeGameFinalityDelaySeconds = $DISPUTE_FINALITY_SECONDS
+preimageOracleChallengePeriod = $PREIMAGE_CHALLENGE_SECONDS
 faultGameClockExtension = 1
-faultGameMaxClockDuration = 60
+faultGameMaxClockDuration = $FAULT_GAME_MAX_CLOCK
 dangerouslyAllowCustomDisputeParameters = true
 EOF
   "$C2/op-deployer" --log.level info apply \
@@ -381,6 +424,8 @@ if step_run 6; then
     --sequencer.enabled \
     --sequencer.l1-confs 1 \
     --p2p.sequencer.key "$(cat "$C2/sequencer.key")" \
+    --rpc.port "$OP_NODE_PORT" \
+    $OP_NODE_EXTRA_FLAGS \
     --log.level info \
     --log.format json \
     > "$C2/op-node.log" 2>&1 &
@@ -414,10 +459,10 @@ if step_run 7; then
   nohup "$C2/op-batcher" \
     --l1-eth-rpc http://127.0.0.1:$ANVIL_PORT \
     --l2-eth-rpc http://127.0.0.1:$FISCO_WEB3 \
-    --rollup-rpc http://127.0.0.1:9545 \
+    --rollup-rpc http://127.0.0.1:$OP_NODE_PORT \
     --private-key "$BATCHER_KEY" \
-    --max-channel-duration 10 \
-    --rpc.port 8547 \
+    --max-channel-duration "$BATCHER_MAX_CHANNEL" \
+    --rpc.port "$OP_BATCHER_PORT" \
     --log.level debug \
     > "$C2/op-batcher.log" 2>&1 &
   echo $! > "$C2/op-batcher.pid"
