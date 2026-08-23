@@ -47,14 +47,14 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <array>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <string>
 #include <variant>
 #include <vector>
-#include <algorithm>
-#include <array>
-#include <limits>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -99,8 +99,8 @@ std::string decodeRevertMessage(std::string_view outputHex)
     {
         return kReverted;
     }
-    auto reason = std::string(reinterpret_cast<char const*>(bytes.data() + 68),
-        static_cast<std::size_t>(length));
+    auto reason = std::string(
+        reinterpret_cast<char const*>(bytes.data() + 68), static_cast<std::size_t>(length));
     return kReverted + ": " + reason;
 }
 }  // namespace
@@ -168,6 +168,23 @@ task::Task<void> EthEndpoint::mining(const Json::Value&, Json::Value& response)
 task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response)
 {
     Json::Value result = "0x0";
+    buildJsonContent(result, response);
+    co_return;
+}
+task::Task<void> EthEndpoint::setMaxDASize(const Json::Value& request, Json::Value& response)
+{
+    // miner_setMaxDASize(maxCanonTxSize, maxBlockGas): the OP Stack batcher's DA throttling
+    // calls this on every L2 endpoint and treats "method not found" as fatal ("either enable
+    // it or disable throttling"). op-geth's sequencer shrinks blocks/txs under throttle; the
+    // values are recorded here (see m_maxDATxSize/m_maxDABlockSize) until the engine's OP
+    // build path consumes them.
+    auto maxTxSize = fromQuantity(std::string(toView(request[0U])));
+    auto maxBlockSize = fromQuantity(std::string(toView(request[1U])));
+    m_maxDATxSize.store(maxTxSize, std::memory_order_relaxed);
+    m_maxDABlockSize.store(maxBlockSize, std::memory_order_relaxed);
+    WEB3_LOG(INFO) << LOG_BADGE("setMaxDASize") << LOG_KV("maxTxSize", maxTxSize)
+                   << LOG_KV("maxBlockSize", maxBlockSize);
+    Json::Value result = true;
     buildJsonContent(result, response);
     co_return;
 }

@@ -104,7 +104,13 @@ void bcos::rpc::combineBlockResponse(
         result["transactions"] = std::move(txHashesList);
     }
     result["uncles"] = Json::Value(Json::arrayValue);
-    result["mixHash"] = crypto::HashType().hexPrefixed();
+    // mixHash is the header's prevRandao slot. OP headers store the payload attributes'
+    // prevRandao there (op-node sets keccak256(L1 block hash)) and the blockHash covers it,
+    // so serving a fabricated zero breaks hash-recomputing clients (go-ethereum's ethclient,
+    // op-batcher, ...) — they derive a different hash and reject the chain ("block does not
+    // extend existing chain"). PBFT headers never write the tars field (empty -> zero h256),
+    // keeping their output byte-identical.
+    result["mixHash"] = blockHeader->prevRandao().hexPrefixed();
     // baseFeePerGas: OP headers (engine-built / newPayload-rebuilt) carry the real EIP-1559
     // value; PBFT headers never write the tars field (nullopt, or 0) and keep the legacy 0x0
     // so their output stays byte-identical — same pattern as gasLimit above.

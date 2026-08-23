@@ -25,6 +25,8 @@
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <json/json.h>
 
+#include <atomic>
+
 namespace bcos::rpc
 {
 
@@ -79,11 +81,18 @@ public:
         std::string_view blockTag);
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
+    task::Task<void> setMaxDASize(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
+
+    // Last values received via miner_setMaxDASize (the OP Stack batcher's DA throttling
+    // pushes these on every L2 endpoint; 0 = no throttle). Recorded and logged until the
+    // engine's OP build path consumes them — block building is unaffected in the interim.
+    std::atomic<uint64_t> m_maxDATxSize{0};
+    std::atomic<uint64_t> m_maxDABlockSize{0};
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 };
