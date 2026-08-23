@@ -95,3 +95,6 @@ CLAUDE.local.md
 docs/2026-*
 docs/op-*
 docs/opstack-*
+
+# Local devnet key residue (dfc6cd109 merge) — never track secrets
+opnode_p2p_priv.txt
