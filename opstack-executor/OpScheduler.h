@@ -769,7 +769,8 @@ private:
             // ①a: on the canonical scenario-B pass past genesis, the full two-layer rebuild is
             // SKIPPED — the incremental buildAndCollect in ⑤ computes the same root from the
             // block delta alone (gate: OpSchedulerTest.IncrementalMPTRootMatchesFullRebuild).
-            bool const incrementalRoot = persistTrieNodes && header.number() > 0;
+            bool const incrementalRoot =
+                persistTrieNodes && header.number() > 0 && !m_incrementalMptLatchedOff;
             result =
                 bcos::evm::engine::finalizeOpBlockResult(executor, view, header, execLedgerConfig,
                     cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr, incrementalRoot);
@@ -798,7 +799,41 @@ private:
                 {
                     auto delta = co_await ledger::mpt::buildAndCollect(
                         nodeStorage, parentRoot, view, /*l2Mode=*/true);
-                    result.stateRoot = delta.stateRoot;
+                    // Interim safety (root-divergence bug, 2026-08-23): cross-check the
+                    // incremental root against the full rebuild over the same view. The two
+                    // agree on every golden vector and the C3-shaped states, but DIVERGE on
+                    // the C2-fresh op-deployer allocs (a per-execution empty "ghost" account
+                    // enters the full walk but not the incremental delta scan, plus an
+                    // iteration-order sensitivity — full triage in
+                    // docs/2026-08-23-jovian-alignment-handoff.md). Until that is root-caused,
+                    // the battle-tested FULL rebuild stays authoritative: on disagreement we
+                    // adopt its root, latch ①a off for the process lifetime (later blocks
+                    // skip ⑤ entirely and finalize does the full build), and this block's
+                    // already-flushed node rows remain as harmless content-addressed orphans
+                    // (nothing resolves the discarded incremental root).
+                    bcos::evm::evmstate::Storage2State<ViewType> fullCheck(view);
+                    auto const fullRoot =
+                        bcos::evm::engine::detail::toBcosH256(bcos::evm::stateRootOf(fullCheck));
+                    if (delta.stateRoot == fullRoot) [[likely]]
+                    {
+                        result.stateRoot = delta.stateRoot;
+                    }
+                    else
+                    {
+                        m_incrementalMptLatchedOff = true;
+                        OP_SCHEDULER_LOG(WARNING)
+                            << LOG_DESC(
+                                   "①a incremental MPT root diverged from the full rebuild — "
+                                   "falling back to the full root and latching ①a off for "
+                                   "this process (historical eth_call/getProof serve "
+                                   "latest-only until the divergence is fixed; see the "
+                                   "Jovian alignment handoff doc)")
+                            << LOG_KV("block", header.number())
+                            << LOG_KV("incrementalRoot", delta.stateRoot.hexPrefixed())
+                            << LOG_KV("fullRoot", fullRoot.hexPrefixed())
+                            << LOG_KV("parentRoot", parentRoot.hexPrefixed());
+                        result.stateRoot = fullRoot;
+                    }
                 }
                 catch (const bcos::ledger::mpt::MPTInvariantViolation& e)
                 {
@@ -1331,6 +1366,11 @@ private:
     int64_t m_lastExecutedBlockNumber{-1};
     std::mutex m_commitMutex;
     int64_t m_lastCommittedBlockNumber{-1};
+    /// ①a kill-latch (root-divergence interim, see execute() ⑤): tripped once the incremental
+    /// MPT root disagrees with the full rebuild — all later blocks build the root the
+    /// battle-tested full-rebuild way and skip node persistence. Execute is single-flight
+    /// under m_executeMutex; atomic only for defensive simplicity.
+    std::atomic_bool m_incrementalMptLatchedOff{false};
     std::mutex m_pendingMutex;
     std::optional<PendingBlock> m_pending;
 };
