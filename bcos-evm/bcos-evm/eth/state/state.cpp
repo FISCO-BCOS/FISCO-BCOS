@@ -388,7 +388,15 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (tx.gas_limit > block_gas_left)
         return make_error_code(GAS_LIMIT_REACHED);
 
-    if (tx.max_gas_price < block.base_fee)
+    // op-geth parity (core/state_transition.go preCheck): eth_call/estimateGas run with
+    // NoBaseFee, where BOTH fee fields zero means "simulate unpriced" and the base-fee
+    // floor is skipped (skip_balance_check is exactly the RPC dry-run flag). Without this,
+    // foundry's default zero-gasPrice estimate dies in validation and the typed failure
+    // surfaces through the -fno-rtti boundary as an opaque -32603. A nonzero cap below
+    // the base fee is still rejected, for dry-runs and real transactions alike.
+    bool const unpricedDryRun =
+        skip_balance_check && tx.max_gas_price == 0 && tx.max_priority_gas_price == 0;
+    if (!unpricedDryRun && tx.max_gas_price < block.base_fee)
         return make_error_code(FEE_CAP_LESS_THAN_BLOCKS);
 
     // We need some information about the sender so lookup the account in the state.
