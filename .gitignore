@@ -89,3 +89,9 @@ CLAUDE.local.md
 .worktrees/
 .claude/worktrees
 .claude/agents
+
+# OP-stack session/design docs — untracked deliberately (files kept on disk; see
+# the c59a57fa8 precedent). Only FISCO_BCOS_Logo.svg / README_EN.md remain tracked.
+docs/2026-*
+docs/op-*
+docs/opstack-*
