@@ -45,6 +45,7 @@ public:
     using ConstPtr = std::shared_ptr<const Service>;
     Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
         bcos::group::GroupInfoFactory::Ptr _groupInfoFactory);
+    virtual ~Service() { stop(); }
 
     void start();
     void stop();
