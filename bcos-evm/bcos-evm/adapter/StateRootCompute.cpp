@@ -6,7 +6,8 @@
 
 namespace bcos::evm
 {
-evmone::hash256 accountStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage)
+bcos::ledger::mpt::TrieBuildResult accountStorageTrie(
+    const std::map<evmc::bytes32, evmc::bytes32>& storage)
 {
     // Secure-trie over one account's live slot map: key = keccak256(slot), value = rlp(trimmed
     // value). Same construction as the retired evmone mpt_hash.cpp:13-24 and
@@ -22,7 +23,12 @@ evmone::hash256 accountStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>&
             leaf, trimmedBigEndian(bcos::bytesConstRef{value.bytes, sizeof(value.bytes)}));
         entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
     }
-    auto result = bcos::ledger::mpt::computeTrieRoot(entries);
+    return bcos::ledger::mpt::computeTrieRoot(entries);
+}
+
+evmone::hash256 accountStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage)
+{
+    auto result = accountStorageTrie(storage);
     evmone::hash256 root{};
     std::memcpy(root.bytes, result.root.data(), sizeof(root.bytes));
     return root;

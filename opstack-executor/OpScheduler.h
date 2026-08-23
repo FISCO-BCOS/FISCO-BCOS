@@ -50,11 +50,18 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>  // TransactionSubmitResults(Ptr)
-#include <bcos-ledger/LedgerMethods.h>  // getCurrentBlockNumber / getBlockData CPO tag_invoke
+#include <bcos-framework/storage2/MultiLayerStorage.h>  // storage2::View (historical call stack)
+#include <bcos-framework/storage2/Storage.h>  // storage2::existsOne (M5 root-existence probe)
+#include <bcos-ledger/LedgerMethods.h>        // getCurrentBlockNumber / getBlockData CPO tag_invoke
+#include <bcos-ledger/mpt/Constants.h>        // emptyRootHash (empty-trie exemption, M5 probe)
+#include <bcos-ledger/mpt/Errors.h>  // MPTInvariantViolation / MPTDecodeError (classifyException)
+#include <bcos-ledger/mpt/MPTBuilder.h>  // buildAndCollect (①a incremental MPT)
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-storage/KeyPrefixes.h>  // storage2::mptNodeStateKey (M5 root-existence probe)
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
-#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>  // serial per-tx scheduler (Task 4)
+#include <bcos-transaction-scheduler/HistoricalCallStorage.h>  // HistoricalStateBackend (①b/③)
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>    // serial per-tx scheduler (Task 4)
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/IOServicePool.h>  // IOServicePool::Ptr (Task 4 ctor param)
@@ -172,8 +179,27 @@ public:
             {
                 cb(nullptr, co_await coCallLatest(std::move(tx)));
             }
+            catch (const bcos::evm::engine::OpStorageError& e)
+            {
+                // Storage faults stay generic (round-2 F4: schema/corruption detail is internal —
+                // full diagnostic to the node log, "internal error" wording to the RPC client;
+                // CallLatestStorageReadFaultFailsLoudly pins this). Validation/user errors keep
+                // their reason via e.what() in the catch below (CallInvalidReturnsError pins
+                // that). callAtBlock is different — its refusals are semantic codes
+                // (classifyException + rpcSafeReason).
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call failed (storage fault)") << LOG_KV("detail", e.what());
+                cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
+                       "eth_call failed: internal error (see node log)"),
+                    nullptr);
+            }
             catch (const std::exception& e)
             {
+                // The message (e.what()) is part of the latest-call API surface: validation
+                // reasons ("max fee per gas less than block base fee"...) must survive to the
+                // callback (CallInvalidReturnsError).
+                OP_SCHEDULER_LOG(WARNING) << LOG_DESC("eth_call failed")
+                                          << LOG_KV("detail", boost::diagnostic_information(e));
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError, e.what()),
                     nullptr);
             }
@@ -184,6 +210,56 @@ public:
                 // (RTTI enabled, ports/evmone) typed catches bind again and this stays silent.
                 cb(BCOS_ERROR_PTR(bcos::scheduler::SchedulerError::UnknownError,
                        "OpScheduler::call: unknown exception"),
+                    nullptr);
+            }
+        }());
+    }
+
+    /// eth_call pinned at @p blockNumber (OP historical call): the boundary checks and
+    /// refusals of BaselineScheduler::callAtBlock (same codes and boundary order; the
+    /// feature-gate message text is slightly shorter — see coCallAtBlock), then OP-semantics
+    /// execution on the block-N MPT via HistoricalStateBackend (coCallAtBlock). Requires the
+    /// block's trie nodes to be persisted (①a: OP finalize's incremental build flushes them
+    /// when feature_l2_ethereum_compat is on; genesis nodes come from Ledger::buildGenesisBlock).
+    void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
+        std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
+    {
+        task::wait([this, tx = std::move(transaction), blockNumber,
+                       cb = std::move(callback)]() mutable -> task::Task<void> {
+            try
+            {
+                auto [error, receipt] = co_await coCallAtBlock(std::move(tx), blockNumber);
+                cb(std::move(error), std::move(receipt));
+            }
+            catch (const std::exception& e)
+            {
+                // classifyException (not a hardcoded UnknownError): OpConsensusError /
+                // OpStorageError / mpt read-path faults keep their semantic codes
+                // (OpScheduler.h classifyException). RPC hygiene (round-2 F4): the full
+                // diagnostic goes to the node log, the RPC-bound message stays generic.
+                auto const code = classifyException(std::current_exception());
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
+                    << LOG_KV("detail", boost::diagnostic_information(e));
+                cb(BCOS_ERROR_PTR(
+                       code, fmt::format("eth_call at block {} failed: {} (see node log)",
+                                 blockNumber, rpcSafeReason(code))),
+                    nullptr);
+            }
+            catch (...)
+            {
+                // Same typed-catch bypass backstop as call() (wedprcrypto-linked binaries — see
+                // call()'s catch(...) comment): exceptions escape the typed catch; normalize
+                // through describeException/classifyException. The RPC-bound message is the SAME
+                // rpcSafeReason wording as the typed catch — which arm fires is unreliable, so
+                // the observable text must not depend on it.
+                auto const code = classifyException(std::current_exception());
+                OP_SCHEDULER_LOG(WARNING)
+                    << LOG_DESC("eth_call at block failed") << LOG_KV("block", blockNumber)
+                    << LOG_KV("detail", describeException(std::current_exception()));
+                cb(BCOS_ERROR_PTR(
+                       code, fmt::format("eth_call at block {} failed: {} (see node log)",
+                                 blockNumber, rpcSafeReason(code))),
                     nullptr);
             }
         }());
@@ -382,7 +458,15 @@ private:
 
             auto ledgerConfig = co_await loadLedgerConfig(view, number);
 
-            auto outcome = co_await execute(view, *blockHeader, transactions, *ledgerConfig);
+            // ①b: persist trie nodes only on the canonical pass (verify=false probe views are
+            // discarded — flushing them would be wasted work) and only on scenario-B chains
+            // (feature_l2_ethereum_compat), where the MPT is the complete state and
+            // callAtBlock serves historical eth_call from it.
+            bool const persistTrieNodes =
+                verify &&
+                ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
+            auto outcome =
+                co_await execute(view, *blockHeader, transactions, *ledgerConfig, persistTrieNodes);
 
             // finish: write the OP commitments into the executedHeader (skip MPT; never call
             // BlockHeader::hash() — the header is rebuilt from the announced payload).
@@ -573,9 +657,15 @@ private:
     /// configAt(m_forkFlags) (feature_op_jovian); executor = a per-block OpstackExecutor (one
     /// evmc::VM);
     /// ledgerConfig only needs evmcRevision.
+    /// @p persistTrieNodes (①a historical eth_call): when set (and number > 0), the stateRoot
+    /// comes from the incremental buildAndCollect over this block's delta (the full two-layer
+    /// rebuild is skipped) and its new trie nodes land as "/mpt/" rows in this block's mutable
+    /// layer — keeping the committed stateRoot resolvable by HistoricalStateBackend at any
+    /// later height. Block 0 is never executed by OP; genesis nodes are persisted by
+    /// Ledger::buildGenesisBlock, so no fallback branch exists here.
     task::Task<ExecuteOutcome> execute(ViewType& view, protocol::BlockHeader const& header,
         std::vector<protocol::Transaction::ConstPtr> const& transactions,
-        ledger::LedgerConfig const& ledgerConfig)
+        ledger::LedgerConfig const& ledgerConfig, bool persistTrieNodes)
     {
         namespace op = bcos::evm::opstack;
         namespace detail = bcos::evm::engine::detail;
@@ -654,7 +744,7 @@ private:
                 hashes, hashErr, daFootprintGasScalar);
 
             // ② Per-block context (fee NOT loaded here — lazily on the first NORMAL tx's prepare).
-            // blockGasLeft via narrowU256ToU64 (silent-truncation guard, same as coCallLatest).
+            // blockGasLeft via narrowU256ToU64 (silent-truncation guard, same as coCallOnView).
             OpBlockExecutionContext ctx{.fee = {},
                 .blockGasLeft = static_cast<int64_t>(
                     detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft")),
@@ -676,8 +766,54 @@ private:
                 view, executor, header, transactionsRefs, execLedgerConfig, ctx);
 
             // ④ Block-post finalize (hashErr check lives inside finalizeOpBlockResult).
-            result = bcos::evm::engine::finalizeOpBlockResult(executor, view, header,
-                execLedgerConfig, cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr);
+            // ①a: on the canonical scenario-B pass past genesis, the full two-layer rebuild is
+            // SKIPPED — the incremental buildAndCollect in ⑤ computes the same root from the
+            // block delta alone (gate: OpSchedulerTest.IncrementalMPTRootMatchesFullRebuild).
+            bool const incrementalRoot = persistTrieNodes && header.number() > 0;
+            result =
+                bcos::evm::engine::finalizeOpBlockResult(executor, view, header, execLedgerConfig,
+                    cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr, incrementalRoot);
+
+            // ⑤ Historical eth_call trie-node persistence (①a): keep the committed
+            // stateRoot resolvable by HistoricalStateBackend at any later height.
+            // buildAndCollect scans ONLY this block's delta layer (the view's top mutable
+            // layer — preBlockOpSteps/serial-execute/finalizeBlock writes), reads parent nodes
+            // through the view, commits both trie levels and flushes the new nodes itself; its
+            // root replaces the skipped full rebuild. PRECONDITION: the parent header must be
+            // COMMITTED (OP's single-slot m_pending never executes on a pending parent) and its
+            // trie nodes persisted — i.e. scenario B must be on since genesis; a chain that
+            // committed scenario-B blocks before node persistence existed (or activated the
+            // flag mid-chain) fails LOUDLY here with MPTInvariantViolation rather than
+            // rebuilding from an empty trie (BaselineScheduler's buildMPTStateRoot contract,
+            // including its block-1 diagnostic, BaselineScheduler.h:505-519). Block 0 needs no
+            // persistence here: OP never executes it — genesis nodes come from
+            // Ledger::buildGenesisBlock's l2EthereumCompat import (Ledger.cpp:2391).
+            if (incrementalRoot)
+            {
+                bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
+                auto parentBlock = co_await ledger::getBlockData(
+                    view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                auto const parentRoot = parentBlock->blockHeader()->stateRoot();
+                try
+                {
+                    auto delta = co_await ledger::mpt::buildAndCollect(
+                        nodeStorage, parentRoot, view, /*l2Mode=*/true);
+                    result.stateRoot = delta.stateRoot;
+                }
+                catch (const bcos::ledger::mpt::MPTInvariantViolation& e)
+                {
+                    // Named diagnosis (BaselineScheduler.h:505-519 contract): a missing node
+                    // under the parent root means scenario-B node persistence was not active
+                    // at the parent height — pre-①a chain, or feature_l2_ethereum_compat
+                    // activated mid-chain. Halting here is intended; rebuilding over an empty
+                    // trie would fork the stateRoot away from the announced header.
+                    throw bcos::evm::engine::OpStorageError(fmt::format(
+                        "OpScheduler: incremental MPT build at block {} failed — parent block "
+                        "{}'s state root {} has no persisted trie nodes (scenario B / "
+                        "feature_l2_ethereum_compat must be active since genesis): {}",
+                        header.number(), header.number() - 1, parentRoot.hex(), e.what()));
+                }
+            }
         }
         catch (const bcos::evm::engine::OpConsensusError&)
         {
@@ -849,8 +985,28 @@ private:
     }
 
 public:
+    /// Round-2 F4: the RPC-bound reason string per classified code. Both catch arms of call() /
+    /// callAtBlock must produce the SAME string for the same code — which arm fires is
+    /// unreliable in wedprcrypto-linked binaries (observed: an OpStorageError thrown after
+    /// the executor co_await escapes catch(std::exception&) yet classifyException still types
+    /// it; mechanism: the Rust libs' bundled runtime breaks libc++ base-class exception
+    /// matching binary-wide — precedent bcos-rpc/test/CMakeLists.txt:29-36, NOT -fno-rtti),
+    /// so the classification carries the semantics and this carries the wording.
+    static constexpr std::string_view rpcSafeReason(scheduler::SchedulerError code) noexcept
+    {
+        return code == scheduler::SchedulerError::OpStorageFault      ? "storage fault" :
+               code == scheduler::SchedulerError::OpConsensusRejected ? "consensus rejection" :
+                                                                        "internal error";
+    }
+
     // Exception classification: OpConsensusError→OpConsensusRejected / OpStorageError→
-    // OpStorageFault / other→UnknownError. Public: unit-tested directly (three-way mapping).
+    // OpStorageFault / MPT read-path faults (MPTInvariantViolation: missing node,
+    // MPTDecodeError: corrupt node — both mean the persisted trie is unreadable)→
+    // OpStorageFault / other→UnknownError. The mpt tier matters because Storage2State's
+    // poison ladder only catches its own read wrapper: a missing/corrupt node can escape
+    // as a raw mpt exception (e.g. from loadOpFeeParams' first trie walk), and without
+    // this tier it would surface as UnknownError instead of the storage-fault semantics.
+    // Public: unit-tested directly (ClassifyExceptionMapping).
     scheduler::SchedulerError classifyException(std::exception_ptr eptr) const
     {
         try
@@ -862,6 +1018,14 @@ public:
             return scheduler::SchedulerError::OpConsensusRejected;
         }
         catch (const bcos::evm::engine::OpStorageError&)
+        {
+            return scheduler::SchedulerError::OpStorageFault;
+        }
+        catch (const bcos::ledger::mpt::MPTInvariantViolation&)
+        {
+            return scheduler::SchedulerError::OpStorageFault;
+        }
+        catch (const bcos::ledger::mpt::MPTDecodeError&)
         {
             return scheduler::SchedulerError::OpStorageFault;
         }
@@ -894,7 +1058,11 @@ public:
         {
             return e.what();
         }
-        catch (const std::exception& e)
+        catch (const bcos::ledger::mpt::MPTInvariantViolation& e)
+        {
+            return e.what();
+        }
+        catch (const bcos::ledger::mpt::MPTDecodeError& e)
         {
             return e.what();
         }
@@ -942,12 +1110,72 @@ private:
     /// OP eth_call: fork the latest committed state, build a real OP block context (hand-built
     /// LedgerConfig), load the L1Block fee params, run OpstackExecutor::executeTransaction
     /// (injecting chainId/blockGasLeft/block hashes), then discard the fork (dry-run).
+    /// Shared call-execution tail of coCallLatest / coCallAtBlock (round-2 F1 dedup — the two
+    /// used to carry ~35 near-identical lines each, and the round-1 poison/sharedError fix had
+    /// to be written twice): load fee params with a poison check → blockGasLeft → block-hash
+    /// window → per-call executor → executeTransaction → loud sharedError/hashErr checks.
+    /// @p errTag is only the message-prefix discriminator ("call" vs "historical") — a
+    /// string_view; both call sites pass string literals, so it outlives the coroutine.
+    template <class AnyView>
+    task::Task<protocol::TransactionReceipt::Ptr> coCallOnView(AnyView& view,
+        protocol::BlockHeader const& header, protocol::Transaction const& transaction,
+        bcos::ledger::LedgerConfig const& ledgerConfig, std::string_view errTag)
+    {
+        namespace op = bcos::evm::opstack;
+        namespace detail = bcos::evm::engine::detail;
+
+        const auto& cfg = op::configAt(m_forkFlags);
+        bcos::evm::evmstate::Storage2State<AnyView> stateView(view);
+        auto fee = op::loadOpFeeParams(stateView);
+        // Storage2State swallows storage faults into the poison flag (its noexcept read
+        // contract) — without this check a corrupted read would degrade to zero fee params /
+        // absent accounts and the call would return a plausible-looking WRONG answer.
+        if (stateView.poisoned())
+            throw bcos::evm::engine::OpStorageError(fmt::format(
+                "OpScheduler: {} fee-param read fault: {}", errTag, stateView.firstError()));
+        const auto blockGasLeft = static_cast<int64_t>(
+            detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft"));
+
+        std::optional<std::string> hashErr;
+        detail::RecentBlockHashes<AnyView> hashes(
+            view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
+
+        // Construct the executor per call (one evmc::VM).
+        auto sharedError = std::make_shared<SharedErrorSlot>();
+        OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
+
+        auto receipt = co_await executor.executeTransaction(view, header, transaction,
+            /*contextID=*/0, ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
+
+        // The executor's internal Storage2State instances report read faults to sharedError
+        // (same poison contract) — fail the call loudly instead of returning a receipt built
+        // on swallowed zero-value reads.
+        // Stage-attribution invariant (round-3 S5): fee-param-stage read faults trip the poison
+        // check above; EXECUTION-stage faults (a missing/corrupt node hit by an intra-call SLOAD
+        // on the historical trie — CallAtBlockExecutionStageNodeMissingIsStorageFault) can only
+        // surface HERE, via sharedError. Both tiers must stay loud.
+        std::string firstError;
+        {
+            // SharedErrorSlot access contract (Storage2State.h): every read takes the mutex.
+            std::lock_guard lock(sharedError->mutex);
+            firstError = sharedError->message;
+        }
+        if (!firstError.empty())
+            throw bcos::evm::engine::OpStorageError(
+                fmt::format("OpScheduler: {} state read fault: {}", errTag, firstError));
+        if (hashErr.has_value())
+            // Block-hash lookup reads storage — a fault is OpStorageError (→ OpStorageFault via
+            // classifyException), matching the block path (OpBlockExecute.h finalizeOpBlockResult),
+            // not a bare runtime_error mapped to UnknownError (round-3 S1).
+            throw bcos::evm::engine::OpStorageError(
+                fmt::format("OpScheduler: {} block-hash lookup failed: {}", errTag, *hashErr));
+        co_return receipt;
+    }
+
     task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
         protocol::Transaction::Ptr transaction)
     {
         namespace op = bcos::evm::opstack;
-        namespace eth = bcos::executor_v1::eth;
-        namespace detail = bcos::evm::engine::detail;
 
         auto view = m_multiLayerStorage->fork();
         view.newMutable();
@@ -970,25 +1198,119 @@ private:
         ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(cfg.rev);
 
-        bcos::evm::evmstate::Storage2State<ViewType> stateView(view);
-        auto fee = op::loadOpFeeParams(stateView);
-        const auto blockGasLeft = static_cast<int64_t>(
-            detail::narrowU256ToU64(header.gasLimit(), "OpScheduler blockGasLeft"));
+        co_return co_await coCallOnView(view, header, *transaction, *ledgerConfig, "call");
+    }
 
-        std::optional<std::string> hashErr;
-        detail::RecentBlockHashes<ViewType> hashes(
-            view, header.number(), detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
+    /// OP historical eth_call (③ + ①b): execute @p transaction against the state block
+    /// @p blockNumber committed — the MPT at that block's header stateRoot — keeping the full
+    /// OP execution semantics of coCallLatest (same OpstackExecutor, hand-built LedgerConfig,
+    /// historical L1 fee params and block-hash window). The call's own writes land in a fresh
+    /// mutable layer over a HistoricalStateBackend (read-your-writes, nothing persisted).
+    ///
+    /// Boundary sequence mirrors BaselineScheduler::callAtBlock (same codes, same boundary
+    /// order; the feature-gate message drops Baseline's trailing "not completely committed"
+    /// clause): beyond-latest → InvalidBlockNumber; block == latest → the coCallLatest fast
+    /// path; non-scenario-B chain (no feature_l2_ethereum_compat) → InvalidStatus; a missing or
+    /// unpersisted state root → InvalidStatus (loud refusal, never a latest-state answer
+    /// dressed up as a historical one). Returns (Error, receipt) — the Error half carries
+    /// the refusal so callAtBlock's catch wrappers only see real exceptions.
+    task::Task<std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr>> coCallAtBlock(
+        protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber)
+    {
+        namespace op = bcos::evm::opstack;
 
-        // Construct the executor per call (one evmc::VM).
-        auto sharedError = std::make_shared<SharedErrorSlot>();
-        OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
+        auto latestView = m_multiLayerStorage->fork();
+        auto latestNumber =
+            co_await bcos::ledger::getCurrentBlockNumber(latestView, bcos::ledger::fromStorage);
+        // blockNumber < 0: refuse semantically (BaselineScheduler shares this hole — a negative
+        // number falls through to the storage read and fails unclassified); getBlockData on a
+        // negative height is not a meaningful lookup either way.
+        if (blockNumber < 0 || blockNumber > latestNumber)
+        {
+            co_return std::tuple{
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
+                    fmt::format("eth_call: block {} does not exist (latest: {})", blockNumber,
+                        latestNumber)),
+                protocol::TransactionReceipt::Ptr{nullptr}};
+        }
+        if (blockNumber == latestNumber)
+        {
+            // Fast path parity note (pre-existing BaselineScheduler deviation, documented not
+            // fixed): latestNumber is read once up front, so a commit landing between this read
+            // and coCallLatest's own fork makes "latest" here one height stale (benign TOCTOU —
+            // the call still executes on a committed state, just the previous one), and the
+            // latest view is forked twice (here + inside coCallLatest). Not worth diverging from
+            // the Baseline boundary order to fix.
+            co_return std::tuple{
+                Error::Ptr{nullptr}, co_await coCallLatest(std::move(transaction))};
+        }
 
-        auto receipt = co_await executor.executeTransaction(view, header, *transaction,
-            /*contextID=*/0, *ledgerConfig, /*call=*/true, fee, blockGasLeft, m_chainId, &hashes);
+        // OQ6 gate: only scenario B (feature_l2_ethereum_compat) commits the COMPLETE state to
+        // the trie; anywhere else a historical call could silently read dormant accounts as
+        // absent. Features are read at the pinned height from the latest view (SYS_CONFIG is
+        // pass-through metadata, not historicised state).
+        bcos::ledger::Features features;
+        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
+        if (!features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
+        {
+            co_return std::tuple{
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                    fmt::format("eth_call: historical call at block {} requires the "
+                                "full-fidelity MPT of an L2 Ethereum-compat chain "
+                                "(feature_l2_ethereum_compat, scenario B)",
+                        blockNumber)),
+                protocol::TransactionReceipt::Ptr{nullptr}};
+        }
 
-        if (hashErr.has_value())
-            throw std::runtime_error("OpScheduler: block-hash lookup failed: " + *hashErr);
-        co_return receipt;
+        auto block = co_await bcos::ledger::getBlockData(
+            latestView, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
+        // Keep the header Ptr alive: blockHeader() returns a fresh shared_ptr BY VALUE; binding a
+        // reference to it would dangle a temporary (same guard as coCallLatest).
+        auto blockHeader = block->blockHeader();
+        auto const& header = *blockHeader;
+        auto const stateRoot = header.stateRoot();
+        if (stateRoot == bcos::crypto::HashType{})
+        {
+            co_return std::tuple{BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                                     fmt::format("eth_call: no MPT state root recorded in block "
+                                                 "{}'s header",
+                                         blockNumber)),
+                protocol::TransactionReceipt::Ptr{nullptr}};
+        }
+        // Loud refusal when the root's trie nodes were never persisted (a chain that ran
+        // before ①b node persistence). The empty root needs no rows — it IS the empty trie.
+        if (stateRoot != bcos::ledger::mpt::emptyRootHash() &&
+            !co_await storage2::existsOne(latestView, storage2::mptNodeStateKey(stateRoot)))
+        {
+            co_return std::tuple{
+                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                    fmt::format("eth_call: block {}'s state root has no persisted MPT nodes "
+                                "(trie-node persistence was not yet active at that height)",
+                        blockNumber)),
+                protocol::TransactionReceipt::Ptr{nullptr}};
+        }
+
+        const auto& cfg = op::configAt(m_forkFlags);
+
+        auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
+        ledgerConfig->setBlockNumber(blockNumber);
+        ledgerConfig->setTimestamp(header.timestamp());
+        ledgerConfig->setFeatures(features);
+        ledgerConfig->setEVMCRevision(cfg.rev);
+
+        // The historical stack: a fresh writable layer over the read-through backend, so the
+        // call's own writes read back inside the call and die with the view (dry-run).
+        using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
+        HistoricalBackend historicalBackend(latestView, stateRoot);
+        storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
+            historicalView(std::addressof(historicalBackend));
+        historicalView.newMutable();
+        // The shared tail (coCallOnView) then loads the historical L1Block fee params through
+        // this view (poison-checked), builds the block-hash window, and runs the executor —
+        // a historical read that hits a missing trie node mid-execution surfaces via its
+        // sharedError check, not as a status-ok receipt built on swallowed zero values.
+        co_return std::tuple{Error::Ptr{nullptr}, co_await coCallOnView(historicalView, header,
+                                                      *transaction, *ledgerConfig, "historical")};
     }
 
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;

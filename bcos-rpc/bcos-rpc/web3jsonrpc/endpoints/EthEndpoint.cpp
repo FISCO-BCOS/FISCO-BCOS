@@ -1642,48 +1642,77 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     if (block->blockHeader()->baseFee().has_value())
     {
         // OP-stack execution path: its headers always carry baseFee (PBFT headers never write
-        // the tars field — the same discriminator gasPrice/feeHistory use). That path computes
-        // each block's stateRoot from the flat state at seal time and persists no MPT node
-        // rows, so the proof is served by REBUILDING the trie from the committed flat plane,
-        // gated on the requested block's root (generateProofFromFlat's RootMismatch check).
-        auto const& stateProvider = m_nodeService->stateStorageProvider();
-        if (!stateProvider) [[unlikely]]
+        // the tars field — the same discriminator gasPrice/feeHistory use). Pre-①a that path
+        // computed each block's stateRoot from the flat state at seal time and persisted no
+        // MPT node rows. With ①a (feature_l2_ethereum_compat: OpScheduler's incremental
+        // buildAndCollect at commit + the l2EthereumCompat genesis import) runtime blocks DO
+        // persist their trie nodes, so try the node-backed proof FIRST — it serves ANY height
+        // (historical tags included, which the one-version flat plane below cannot) and is
+        // O(path). Roots without rows (a chain segment produced before ①a landed) report
+        // BlockNotCommitted and fall through to the flat rebuild, preserving the latest-only
+        // contract for those segments.
+        bool servedFromNodes = false;
+        if (auto const mptReader = m_nodeService->mptNodeReader())
         {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InternalError, "Flat state reader not wired on this node"));
-        }
-        for (int attempt = 0;; ++attempt)
-        {
-            auto view = stateProvider();
-            auto opResult = co_await ledger::mpt::generateProofFromFlat(
-                *view, stateRoot, address, std::span<h256 const>(slots));
-            if (auto* built = std::get_if<ledger::mpt::EIP1186Proof>(&opResult))
+            auto const fullTrie = co_await ledger::getFeature(
+                *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
+            auto result = co_await ledger::mpt::generateProof(
+                *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
+            if (auto* built = std::get_if<ledger::mpt::EIP1186Proof>(&result))
             {
                 proof = std::move(*built);
-                break;
+                servedFromNodes = true;
             }
-            auto const code = std::get<ledger::mpt::ProofErrorCode>(opResult);
-            if (code == ledger::mpt::ProofErrorCode::RootMismatch && isLatest && attempt < 2)
+            else if (std::get<ledger::mpt::ProofErrorCode>(result) !=
+                     ledger::mpt::ProofErrorCode::BlockNotCommitted)
             {
-                // A block committed between the tag resolution and the view fork makes the
-                // header and the flat plane disagree by one version. Re-resolve and rebuild;
-                // an explicit older block/tag keeps failing — the flat plane holds exactly one
-                // state version (latest committed), and a mismatch there is the honest answer.
-                std::tie(blockNumber, isLatest) = co_await getBlockNumberByTag(blockTag);
-                auto reblock =
-                    co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER);
-                if (!reblock || !reblock->blockHeader()) [[unlikely]]
-                {
-                    BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
-                }
-                stateRoot = reblock->blockHeader()->stateRoot();
-                continue;
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    EthGetProofUnavailable, "Account not in trie (dormant in scenario A)"));
             }
-            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
-                code == ledger::mpt::ProofErrorCode::RootMismatch ?
-                    "Requested block state is not available (OP path serves the latest "
-                    "committed state only)" :
-                    "Account not in trie (dormant in scenario A)"));
+        }
+        if (!servedFromNodes)
+        {
+            // Flat-state fallback: rebuild the trie from the committed flat plane, gated on the
+            // requested block's root (generateProofFromFlat's RootMismatch check).
+            auto const& stateProvider = m_nodeService->stateStorageProvider();
+            if (!stateProvider) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InternalError, "Flat state reader not wired on this node"));
+            }
+            for (int attempt = 0;; ++attempt)
+            {
+                auto view = stateProvider();
+                auto opResult = co_await ledger::mpt::generateProofFromFlat(
+                    *view, stateRoot, address, std::span<h256 const>(slots));
+                if (auto* built = std::get_if<ledger::mpt::EIP1186Proof>(&opResult))
+                {
+                    proof = std::move(*built);
+                    break;
+                }
+                auto const code = std::get<ledger::mpt::ProofErrorCode>(opResult);
+                if (code == ledger::mpt::ProofErrorCode::RootMismatch && isLatest && attempt < 2)
+                {
+                    // A block committed between the tag resolution and the view fork makes the
+                    // header and the flat plane disagree by one version. Re-resolve and rebuild;
+                    // an explicit older block/tag keeps failing — the flat plane holds exactly one
+                    // state version (latest committed), and a mismatch there is the honest answer.
+                    std::tie(blockNumber, isLatest) = co_await getBlockNumberByTag(blockTag);
+                    auto reblock =
+                        co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER);
+                    if (!reblock || !reblock->blockHeader()) [[unlikely]]
+                    {
+                        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+                    }
+                    stateRoot = reblock->blockHeader()->stateRoot();
+                    continue;
+                }
+                BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                    code == ledger::mpt::ProofErrorCode::RootMismatch ?
+                        "Requested block state is not available (OP path serves the latest "
+                        "committed state only)" :
+                        "Account not in trie (dormant in scenario A)"));
+            }
         }
     }
     else

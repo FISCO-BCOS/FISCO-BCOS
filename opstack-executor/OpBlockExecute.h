@@ -138,12 +138,20 @@ template <class RawTxRange>
 /// leaf needs the EIP-2718 type byte — mirror of the per-tx loop's classification). hashErr is
 /// checked here (poisoned block-hash lookup → OpStorageError). **cumulativeGasUsed backfill is NOT
 /// in scope** (it stays in the per-tx loop / ExecuteContext::finish).
+///
+/// @p skipStateRootBuild (①a incremental MPT): when true, the full two-layer rebuild is
+/// skipped and the result's stateRoot is left EMPTY — the caller replaces it with the
+/// incremental buildAndCollect root over the block delta (OpScheduler::execute). Only legal
+/// when the caller's view top mutable layer is exactly this block's delta over a committed
+/// parent. When false the root is computed ROOT-ONLY (nodes never retained — node persistence
+/// lives in buildAndCollect / the genesis import, not here).
 template <class Storage, class RawTxRange>
 OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackExecutor& executor,
     Storage& view, bcos::protocol::BlockHeader const& header,
     bcos::ledger::LedgerConfig const& ledgerConfig, bcos::evm::opstack::OpForkConfig const& cfg,
     std::vector<bcos::protocol::TransactionReceipt::Ptr> const& receipts,
-    RawTxRange const& rawTxBytes, int64_t cumulative, std::optional<std::string> const& hashErr)
+    RawTxRange const& rawTxBytes, int64_t cumulative, std::optional<std::string> const& hashErr,
+    bool skipStateRootBuild = false)
 {
     namespace op = bcos::evm::opstack;
     namespace detail = bcos::evm::engine::detail;
@@ -182,12 +190,17 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
     if (bridge.poisoned())
         throw OpStorageError("poisoned: " + std::string(bridge.firstError()));
     auto seal = op::sealOpBlock(result, cfg, mpStorage);
-    auto root = bcos::evm::stateRootOf(bridge);
-    if (bridge.poisoned())
-        throw OpStorageError("poisoned after stateRootOf: " + std::string(bridge.firstError()));
+    bcos::h256 stateRoot;
+    if (!skipStateRootBuild)
+    {
+        auto const root = bcos::evm::stateRootOf(bridge);  // root-only; nodes not needed here
+        if (bridge.poisoned())
+            throw OpStorageError("poisoned after stateRootOf: " + std::string(bridge.firstError()));
+        stateRoot = detail::toBcosH256(root);
+    }
     auto txRoot = computeOpTxRoot(rawTxBytes);
-    return OpExecuteBlockResult{std::move(result.receipts), seal, detail::toBcosH256(root),
-        static_cast<uint64_t>(cumulative), txRoot};
+    return OpExecuteBlockResult{
+        std::move(result.receipts), seal, stateRoot, static_cast<uint64_t>(cumulative), txRoot};
 }
 
 // ---- block execution: block-pre steps + per-transaction execution ----

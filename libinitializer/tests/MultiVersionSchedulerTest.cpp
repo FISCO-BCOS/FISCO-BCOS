@@ -16,12 +16,18 @@ namespace
 {
 using bcos::scheduler::SchedulerInterface;
 
-// Minimal fake: records which fake handled a call() (id == 0 means not selected); no-op otherwise.
+// Minimal fake: records which fake handled a call()/callAtBlock() (id == 0 means not selected);
+// no-op otherwise. callAtBlock additionally records the forwarded block number — the whole point
+// of the MultiVersionScheduler override is that the height survives the passthrough.
 struct FakeScheduler : public SchedulerInterface
 {
     int id;
     std::shared_ptr<int> lastCallerId;  // shared across the 4 fakes; set by the selected one
-    explicit FakeScheduler(int i, std::shared_ptr<int> recorder) : id(i), lastCallerId(recorder) {}
+    std::shared_ptr<bcos::protocol::BlockNumber> lastCallAtBlockNumber;
+    explicit FakeScheduler(int i, std::shared_ptr<int> recorder,
+        std::shared_ptr<bcos::protocol::BlockNumber> blockRecorder = {})
+      : id(i), lastCallerId(recorder), lastCallAtBlockNumber(std::move(blockRecorder))
+    {}
     void executeBlock(bcos::protocol::Block::Ptr, bool,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> cb) override
     {
@@ -36,6 +42,14 @@ struct FakeScheduler : public SchedulerInterface
         std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb) override
     {
         *lastCallerId = id;
+        cb({}, nullptr);
+    }
+    void callAtBlock(bcos::protocol::Transaction::Ptr, bcos::protocol::BlockNumber blockNumber,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr)> cb) override
+    {
+        *lastCallerId = id;
+        if (lastCallAtBlockNumber)
+            *lastCallAtBlockNumber = blockNumber;
         cb({}, nullptr);
     }
     void preExecuteBlock(
@@ -64,11 +78,13 @@ struct FakeScheduler : public SchedulerInterface
     void reset(std::function<void(bcos::Error::Ptr)> cb) override { cb({}); }
 };
 
-std::array<bcos::scheduler::SchedulerInterface::Ptr, 4> fakes(std::shared_ptr<int> recorder)
+std::array<bcos::scheduler::SchedulerInterface::Ptr, 4> fakes(
+    std::shared_ptr<int> recorder, std::shared_ptr<bcos::protocol::BlockNumber> blockRecorder = {})
 {
-    return {std::make_shared<FakeScheduler>(0, recorder),
-        std::make_shared<FakeScheduler>(1, recorder), std::make_shared<FakeScheduler>(2, recorder),
-        std::make_shared<FakeScheduler>(3, recorder)};
+    return {std::make_shared<FakeScheduler>(0, recorder, blockRecorder),
+        std::make_shared<FakeScheduler>(1, recorder, blockRecorder),
+        std::make_shared<FakeScheduler>(2, recorder, blockRecorder),
+        std::make_shared<FakeScheduler>(3, recorder, blockRecorder)};
 }
 }  // namespace
 
@@ -92,6 +108,26 @@ BOOST_AUTO_TEST_CASE(Slot3Routing)
     mvs.setVersion(0, {});
     mvs.call(nullptr, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
     BOOST_CHECK_EQUAL(*recorder, 0);  // low version routes to the first slot, not OP
+}
+
+/// callAtBlock must reach the version-selected slot WITH its block number — without the
+/// MultiVersionScheduler override the interface default would silently drop the height and
+/// serve call() (the latest state), a wrong answer instead of an error.
+BOOST_AUTO_TEST_CASE(CallAtBlockRouting)
+{
+    auto recorder = std::make_shared<int>(-1);
+    auto blockRecorder = std::make_shared<bcos::protocol::BlockNumber>(-1);
+    bcos::scheduler_v1::MultiVersionScheduler mvs(fakes(recorder, blockRecorder));
+
+    mvs.setVersion(3, {});
+    mvs.callAtBlock(nullptr, 42, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 3);        // routed to the OP slot...
+    BOOST_CHECK_EQUAL(*blockRecorder, 42);  // ...with the height intact (not dropped to call())
+
+    mvs.setVersion(0, {});
+    mvs.callAtBlock(nullptr, 7, [](bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr) {});
+    BOOST_CHECK_EQUAL(*recorder, 0);
+    BOOST_CHECK_EQUAL(*blockRecorder, 7);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
