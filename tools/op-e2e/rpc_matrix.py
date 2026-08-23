@@ -242,20 +242,21 @@ def a2_blocks(rpc):
           f"header={g.get('withdrawalsRoot')} proof={sh}")
     check("genesis withdrawals []", g.get("withdrawals") == [], str(g.get("withdrawals")))
     # ── getProof e2e: historical block tag (B4-1, spec §6 #9 P1) ──
-    # Known limitation: this line only writes MPT trie nodes at genesis import
-    # (Ledger.cpp:2205); runtime blocks do not persist MPT state. getProof at
-    # non-genesis blocks returns -32602 or -32004 "Block stateRoot not in MPT
-    # node storage". We pin this error code as a documented scope boundary.
+    # Tightened 08-24: MPT-backed historical state reads are live (runtime blocks
+    # persist trie nodes), so both tags must SUCCEED and return a real account
+    # proof. The old dual acceptance (success or -32602/-32004 MPT-miss) pinned a
+    # scope boundary that no longer exists.
     for desc, tag in [("block 1", "0x1"), ("latest SENDER", "latest")]:
         addr = "0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693" if "SENDER" in desc else \
                "0x4200000000000000000000000000000000000015"
         try:
-            rpc.call("eth_getProof", [addr, [], tag])
-            check(f"getProof {desc} returns proof or structured error", True,
-                  f"getProof at {tag} returned unexpectedly")
+            p = rpc.call("eth_getProof", [addr, [], tag])
+            check(f"getProof {desc} succeeds with accountProof",
+                  isinstance(p, dict) and isinstance(p.get("accountProof"), list)
+                  and len(p["accountProof"]) > 0,
+                  f"keys={list(p)[:5] if isinstance(p, dict) else p}")
         except AssertionError as e:
-            check(f"getProof {desc} returns MPT-limited error code",
-                  "-32602" in str(e) or "-32004" in str(e), str(e)[:80])
+            check(f"getProof {desc} succeeds with accountProof", False, str(e)[:100])
     # ── OutputV0 cross-domain primitive (B3', spec §7) ──
     # op-node computes OutputRoot = keccak256(0x00×32 || stateRoot ||
     #   messagePasserStorageRoot || blockHash) from L2 block header fields.
