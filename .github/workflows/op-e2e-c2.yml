@@ -77,15 +77,16 @@ jobs:
           echo "fisco-bcos-air ready"
 
       - name: Clone optimism monorepo (pinned commit)
-        # Pin to op_contracts_commit from op-fork-pin.toml so builds are
-        # deterministic instead of tracking latest main.  The commit
-        # a7c88c8d636ceb9944ea0edaf7d033da258778ab is the op-contracts/v7.0.0
-        # (Karst) source that both op-deployer v0.7.1 and op-node v1.19.3
-        # were released from.
+        # Pinned to the e2e version manifest (tools/op-e2e/versions.json).
+        # setup_c2.sh enforces the manifest at the end of every run, so any
+        # other commit would abort the pipeline.  The commit
+        # 5f90f749caea14398554afb75062f7111b1fc554 is v1.19.2 plus the
+        # op-deployer ABI-alignment fix — the baseline the whole e2e suite
+        # (deposit/withdraw, portal 5.7.0 contract set) is validated against.
         run: |
           git clone --filter=blob:none --no-checkout \
             https://github.com/ethereum-optimism/optimism /tmp/optimism
-          git -C /tmp/optimism fetch --depth 1 origin a7c88c8d636ceb9944ea0edaf7d033da258778ab
+          git -C /tmp/optimism fetch --depth 1 origin 5f90f749caea14398554afb75062f7111b1fc554
           git -C /tmp/optimism checkout FETCH_HEAD
 
       - name: Cache Go modules
@@ -94,7 +95,7 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ runner.arch }}-build-a7c88c8d
+          key: go-${{ runner.os }}-${{ runner.arch }}-build-5f90f749
           restore-keys: |
             go-${{ runner.os }}-${{ runner.arch }}-build-
 
@@ -182,6 +183,29 @@ jobs:
             exit 1
           fi
           echo "WITHDRAWAL OK (MessagePassed nonce advanced)"
+
+      - name: eth_getProof assertion (OP flat-state path)
+        # eth_getProof on the OP path rebuilds the whole trie from the
+        # committed flat state (no persisted MPT nodes) — the endpoint answered
+        # -32004 before that path existed. Deep cryptographic verification
+        # (root anchoring, storage proofs) is covered by
+        # EthGetProofFlatStateTest; here we assert the live endpoint serves a
+        # well-formed proof for the MessagePasser predeploy.
+        run: |
+          PROOF=$(curl -s -m 10 -X POST http://127.0.0.1:8555 \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","method":"eth_getProof","params":["0x4200000000000000000000000000000000000016",[],"latest"],"id":1}')
+          echo "$PROOF" | head -c 300; echo
+          echo "$PROOF" | python3 -c '
+          import sys, json
+          r = json.load(sys.stdin)
+          if "error" in r:
+              sys.exit("eth_getProof error: " + str(r["error"]))
+          p = r["result"]
+          assert len(p["accountProof"]) > 0, "empty accountProof"
+          assert p["storageHash"] != "0x" + "0" * 64, "zero storageHash"
+          assert p["codeHash"] != "0x" + "0" * 64, "zero codeHash"
+          print("GETPROOF OK: accountProof nodes=%d storageHash=%s" % (len(p["accountProof"]), p["storageHash"]))'
 
       - name: Upload diagnostic logs on failure
         if: failure()
