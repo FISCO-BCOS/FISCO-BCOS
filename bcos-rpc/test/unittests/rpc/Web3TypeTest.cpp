@@ -510,9 +510,12 @@ BOOST_AUTO_TEST_CASE(testEIP7702Transaction)
 // EIP-7702 authorization yParity is a uint8 on op-geth's side: an encoding wider than one byte
 // is a decode rejection there (Go rlp ErrCanonSize), while the generic UnsignedIntegral decode
 // would fold wider payloads via fromBigEndian — accepting two encodings of one tx, i.e. a
-// block-hash ambiguity / consensus split. Mirrors op-alignment's OverWideAuthYParity guard
-// (readCanonicalScalar width=1). The value-RANGE case (yParity in [2,255]) is deliberately NOT
-// rejected at decode — EIP-7702 requires the authorization to be *skipped* at execution.
+// block-hash ambiguity / consensus split. The shared RLP width gate (RLPDecode.h: digits/8)
+// rejects payloads wider than the target type, so a >1-byte yParity fails decode with
+// "integer wider than target type". Canonicality (bare 0x00 for zero) is deliberately NOT
+// enforced at this display layer — 0x00 decodes to yParity 0, and the value-RANGE case
+// (yParity in [2,255]) is likewise accepted because EIP-7702 requires the authorization to be
+// *skipped* at execution, not rejected.
 BOOST_AUTO_TEST_CASE(authYParityOverWideRejected)
 {
     // Entry layout [chainId, address, nonce, yParity, r, s]; all other fields canonical zero /
@@ -538,19 +541,23 @@ BOOST_AUTO_TEST_CASE(authYParityOverWideRejected)
         return std::make_pair(std::move(e), out);
     };
 
-    // Over-wide: 0x82 0x01 0x00 = RLP string with 2-byte payload (value 256) → rejected.
+    // Over-wide: 0x82 0x01 0x00 = RLP string with 2-byte payload (value 256) → rejected by the
+    // shared width gate.
     {
         auto [e, out] = decodeEntry(makeEntry({0x82, 0x01, 0x00}));
         BOOST_CHECK(e != nullptr);
         if (e)
         {
-            BOOST_CHECK(e->errorMessage().find("wider than one byte") != std::string::npos);
+            BOOST_CHECK(e->errorMessage().find("wider than target type") != std::string::npos);
         }
     }
-    // Bare 0x00 is non-canonical (integer zero must be the empty item 0x80) → rejected.
+    // Bare 0x00 (non-canonical zero) is display-layer TOLERATED: it decodes to yParity 0. The
+    // consensus path enforces integer canonicality separately (decodeDepositEnvelope-style
+    // integerPayloadLength checks); this layer must only reject WIDTH.
     {
         auto [e, out] = decodeEntry(makeEntry({0x00}));
-        BOOST_CHECK(e != nullptr);
+        BOOST_REQUIRE(e == nullptr);
+        BOOST_CHECK_EQUAL(out.yParity, 0);
     }
     // Boundary: canonical single-item encodings still decode — 0x80 → 0, 0x01 → 1.
     {
