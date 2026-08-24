@@ -195,7 +195,8 @@ jobs:
         # 12s, finality delay 6s), so the whole claim runs in real time — the
         # L1 clock is NEVER warped (a warped clock permanently locks the
         # sequencer into noTxPool catch-up ~30min later).
-        # The finalized-head lag (~580 L2 blocks) makes this step take ~20 min;
+        # The fast profile (anvil 2s blocks, slots-in-an-epoch 1) keeps the
+        # finality lag to ~2 blocks, so the whole claim finishes in ~3 minutes;
         # acceptable for the scheduled/dispatch cadence of this workflow.
         run: |
           set -eo pipefail
@@ -215,8 +216,12 @@ jobs:
           import sys
           before, after = int(sys.argv[1]), int(sys.argv[2])
           delta = after - before
-          assert 10**18 - 5 * 10**16 <= delta <= 10**18, f"unexpected L1 delta {delta}"
-          print(f"CLAIM BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus gas)")
+          # The claim round includes bond recovery (withdraw_claim.py's two-step
+          # claimCredit after finalize), so the 0.08 ETH create-bond comes back:
+          # the delta is 1 ETH minus only the gas of ~7 L1 transactions. Any
+          # credit-accounting bug shows up as a delta outside [1 - 0.01, 1].
+          assert 10**18 - 10**16 <= delta <= 10**18, f"unexpected L1 delta {delta}"
+          print(f"CLAIM BALANCE ASSERT OK: delta={delta} wei (~1 ETH minus gas, bond recovered)")
           PY
           # No clock warps were used, so the sequencer must still accept txs
           # after the full claim — the failure mode that motivated compressed
