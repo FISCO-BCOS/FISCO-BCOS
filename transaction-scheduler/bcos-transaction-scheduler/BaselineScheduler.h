@@ -78,12 +78,18 @@ bcos::h256 calculateTransactionRoot(protocol::Block const& block, crypto::Hash c
  */
 std::chrono::milliseconds::rep current();
 
-template <class MultiLayerStorage,
-    executor_v1::TransactionExecutor<typename MultiLayerStorage::ViewType> Executor,
-    scheduler_v1::TransactionScheduler<typename MultiLayerStorage::ViewType, Executor,
-        std::vector<protocol::Transaction::ConstPtr>>
-        SchedulerImpl,
-    class Ledger>
+/// Constraints on the BaselineScheduler template arguments, kept as a named concept so
+/// that the out-of-line member definitions in BaselineScheduler-tpp.h can restate the
+/// (plain) template head in a single line instead of repeating the full constrained
+/// parameter list at every definition.
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+concept BaselineSchedulerParams =
+    executor_v1::TransactionExecutor<Executor, typename MultiLayerStorage::ViewType> &&
+    scheduler_v1::TransactionScheduler<SchedulerImpl, typename MultiLayerStorage::ViewType,
+        Executor, std::vector<protocol::Transaction::ConstPtr>>;
+
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 class BaselineScheduler : public scheduler::SchedulerInterface
 {
 private:

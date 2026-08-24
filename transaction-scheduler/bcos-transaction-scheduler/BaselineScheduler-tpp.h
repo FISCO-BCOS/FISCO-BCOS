@@ -60,7 +60,6 @@
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/iterator/operations.hpp>
 #include <range/v3/view/enumerate.hpp>
-#include <type_traits>
 
 namespace bcos::scheduler_v1
 {
@@ -242,21 +241,10 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     }
 }
 
-// Template head / qualified-name shorthands for the out-of-line definitions below:
-// restating the 4-parameter constrained template head before every member definition
-// would bury the code in boilerplate.
-#define BCOS_BASELINE_SCHEDULER_TEMPLATE                                                   \
-    template <class MultiLayerStorage,                                                     \
-        executor_v1::TransactionExecutor<typename MultiLayerStorage::ViewType> Executor,   \
-        scheduler_v1::TransactionScheduler<typename MultiLayerStorage::ViewType, Executor, \
-            std::vector<protocol::Transaction::ConstPtr>>                                  \
-            SchedulerImpl,                                                                 \
-        class Ledger>
-#define BCOS_BASELINE_SCHEDULER_T \
-    BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-task::Task<ledger::mpt::MPTDeltaLayer> BCOS_BASELINE_SCHEDULER_T::buildMPTStateRoot(
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+task::Task<ledger::mpt::MPTDeltaLayer>
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTStateRoot(
     typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
     ledger::LedgerConfig const& ledgerConfig)
 {
@@ -277,9 +265,11 @@ task::Task<ledger::mpt::MPTDeltaLayer> BCOS_BASELINE_SCHEDULER_T::buildMPTStateR
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
     co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 task::Task<std::tuple<bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool>>
-BCOS_BASELINE_SCHEDULER_T::coExecuteBlock(bcos::protocol::Block::Ptr block, bool verify)
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecuteBlock(
+    bcos::protocol::Block::Ptr block, bool verify)
 {
     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
@@ -509,9 +499,11 @@ BCOS_BASELINE_SCHEDULER_T::coExecuteBlock(bcos::protocol::Block::Ptr block, bool
             false};
     }
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 task::Task<std::tuple<Error::Ptr, ledger::LedgerConfig::Ptr>>
-BCOS_BASELINE_SCHEDULER_T::coCommitBlock(protocol::BlockHeader::Ptr header)
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitBlock(
+    protocol::BlockHeader::Ptr header)
 {
     ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().COMMIT_BLOCK);
@@ -736,10 +728,11 @@ BCOS_BASELINE_SCHEDULER_T::coCommitBlock(protocol::BlockHeader::Ptr header)
             BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message), nullptr};
     }
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-BCOS_BASELINE_SCHEDULER_T::BaselineScheduler(MultiLayerStorage& multiLayerStorage,
-    SchedulerImpl& schedulerImpl, Executor& executor, protocol::BlockFactory& blockFactory,
-    Ledger& ledger, txpool::TxPoolInterface& txPool,
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::BaselineScheduler(
+    MultiLayerStorage& multiLayerStorage, SchedulerImpl& schedulerImpl, Executor& executor,
+    protocol::BlockFactory& blockFactory, Ledger& ledger, txpool::TxPoolInterface& txPool,
     protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
     crypto::Hash const& hashImpl)
   : m_multiLayerStorage(multiLayerStorage),
@@ -751,13 +744,16 @@ BCOS_BASELINE_SCHEDULER_T::BaselineScheduler(MultiLayerStorage& multiLayerStorag
     m_transactionSubmitResultFactory(transactionSubmitResultFactory),
     m_hashImpl(hashImpl)
 {}
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-BCOS_BASELINE_SCHEDULER_T::~BaselineScheduler() noexcept
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::~BaselineScheduler() noexcept
 {
     m_asyncGroup.wait();
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::executeBlock(
+    bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)> callback)
 {
     task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
@@ -765,8 +761,10 @@ void BCOS_BASELINE_SCHEDULER_T::executeBlock(bcos::protocol::Block::Ptr block, b
         std::apply(callback, co_await self->coExecuteBlock(std::move(block), verify));
     }(this, std::move(block), verify, std::move(callback)));
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::commitBlock(protocol::BlockHeader::Ptr header,
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::commitBlock(
+    protocol::BlockHeader::Ptr header,
     std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr)> callback)
 {
     task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
@@ -774,14 +772,17 @@ void BCOS_BASELINE_SCHEDULER_T::commitBlock(protocol::BlockHeader::Ptr header,
         std::apply(callback, co_await self->coCommitBlock(std::move(blockHeader)));
     }(this, std::move(header), std::move(callback)));
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::status(
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::status(
     [[maybe_unused]] std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback)
 {
     callback({}, {});
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::call(protocol::Transaction::Ptr transaction,
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call(
+    protocol::Transaction::Ptr transaction,
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
     task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
@@ -789,8 +790,10 @@ void BCOS_BASELINE_SCHEDULER_T::call(protocol::Transaction::Ptr transaction,
         callback(nullptr, co_await self->coCallLatest(std::move(transaction)));
     }(this, std::move(transaction), std::move(callback)));
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-task::Task<protocol::TransactionReceipt::Ptr> BCOS_BASELINE_SCHEDULER_T::coCallLatest(
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+task::Task<protocol::TransactionReceipt::Ptr>
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCallLatest(
     protocol::Transaction::Ptr transaction)
 {
     auto view = m_multiLayerStorage.get().fork();
@@ -802,9 +805,10 @@ task::Task<protocol::TransactionReceipt::Ptr> BCOS_BASELINE_SCHEDULER_T::coCallL
     co_return co_await m_executor.get().executeTransaction(
         view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::callAtBlock(protocol::Transaction::Ptr transaction,
-    protocol::BlockNumber blockNumber,
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::callAtBlock(
+    protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
     std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
     task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
@@ -874,13 +878,16 @@ void BCOS_BASELINE_SCHEDULER_T::callAtBlock(protocol::Transaction::Ptr transacti
         }
     }(this, std::move(transaction), blockNumber, std::move(callback)));
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::reset([[maybe_unused]] std::function<void(Error::Ptr)> callback)
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::reset(
+    [[maybe_unused]] std::function<void(Error::Ptr)> callback)
 {
     callback(nullptr);
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::getCode(
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getCode(
     std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback)
 {
     task::wait([](decltype(this) self, std::string_view contract,
@@ -904,8 +911,9 @@ void BCOS_BASELINE_SCHEDULER_T::getCode(
         callback(nullptr, bcos::bytes(bytesView.begin(), bytesView.end()));
     }(this, contract, std::move(callback)));
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::getABI(
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getABI(
     std::string_view contract, std::function<void(Error::Ptr, std::string)> callback)
 {
     task::wait([](decltype(this) self, std::string_view contract,
@@ -928,8 +936,10 @@ void BCOS_BASELINE_SCHEDULER_T::getABI(
         callback(nullptr, std::string(abi->get()));
     }(this, contract, std::move(callback)));
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-task::Task<std::optional<bcos::storage::Entry>> BCOS_BASELINE_SCHEDULER_T::getPendingStorageAt(
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+task::Task<std::optional<bcos::storage::Entry>>
+BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getPendingStorageAt(
     std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
 {
     auto view = m_multiLayerStorage.get().fork();
@@ -939,30 +949,37 @@ task::Task<std::optional<bcos::storage::Entry>> BCOS_BASELINE_SCHEDULER_T::getPe
         view, address, ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
     co_return co_await account.storageEntry(key);
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
-    [[maybe_unused]] bool verify, [[maybe_unused]] std::function<void(Error::Ptr)> callback)
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::preExecuteBlock(
+    [[maybe_unused]] bcos::protocol::Block::Ptr block, [[maybe_unused]] bool verify,
+    [[maybe_unused]] std::function<void(Error::Ptr)> callback)
 {
     callback(nullptr);
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::stop() {};
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::registerTransactionNotifier(
-    std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
-        std::function<void(Error::Ptr)>)>
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop() {};
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl,
+    Ledger>::registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
+        bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
         txNotifier)
 {
     m_transactionNotifier = std::move(txNotifier);
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::registerBlockNumberNotifier(
-    std::function<void(bcos::protocol::BlockNumber)> blockNumberNotifier)
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl,
+    Ledger>::registerBlockNumberNotifier(std::function<void(bcos::protocol::BlockNumber)>
+        blockNumberNotifier)
 {
     m_blockNumberNotifier = std::move(blockNumberNotifier);
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::setMPTCommitObserver(
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setMPTCommitObserver(
     std::shared_ptr<ledger::mpt::CommitObserver> observer)
 {
     if (observer)
@@ -970,9 +987,10 @@ void BCOS_BASELINE_SCHEDULER_T::setMPTCommitObserver(
         m_mptCommitObserver = std::move(observer);
     }
 }
-BCOS_BASELINE_SCHEDULER_TEMPLATE
-void BCOS_BASELINE_SCHEDULER_T::setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {}
-#undef BCOS_BASELINE_SCHEDULER_TEMPLATE
-#undef BCOS_BASELINE_SCHEDULER_T
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setVersion(
+    int version, ledger::LedgerConfig::Ptr ledgerConfig)
+{}
 
 }  // namespace bcos::scheduler_v1
