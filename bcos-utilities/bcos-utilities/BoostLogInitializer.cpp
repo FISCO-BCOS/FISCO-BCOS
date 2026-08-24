@@ -19,11 +19,13 @@
  * @author: yujiechen
  */
 #include "BoostLogInitializer.h"
+#include "BoostLogCollector.h"
 #include "BoostLogThreadNameAttribute.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/RateCollector.h"
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>

@@ -18,6 +18,8 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <boost/algorithm/string.hpp>
+#include <boost/exception_ptr.hpp>
 
 using namespace bcos;
 using namespace security;

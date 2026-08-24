@@ -52,6 +52,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;

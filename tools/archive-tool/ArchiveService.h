@@ -32,6 +32,7 @@
 #include <functional>
 #include <future>
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 #define ARCHIVE_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ARCHIVE]"
 

@@ -1,5 +1,6 @@
 #include "SchedulerManager.h"
 #include <chrono>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::scheduler;
 

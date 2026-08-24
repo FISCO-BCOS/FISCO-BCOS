@@ -31,6 +31,7 @@
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <range/v3/algorithm/find.hpp>
+#include <boost/algorithm/string.hpp>
 
 using namespace bcos;
 using namespace bcos::storage;

@@ -56,6 +56,7 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <boost/algorithm/string.hpp>
 
 
 using namespace std;

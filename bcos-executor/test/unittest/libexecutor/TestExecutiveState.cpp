@@ -5,7 +5,6 @@
 #include "../mock/MockLedger.h"
 
 #include <boost/test/unit_test.hpp>
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 

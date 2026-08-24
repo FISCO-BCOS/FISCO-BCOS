@@ -29,6 +29,7 @@
 #include <range/v3/range/access.hpp>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::rpc
 {

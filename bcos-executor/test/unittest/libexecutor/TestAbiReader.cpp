@@ -32,8 +32,10 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
+using std::cout;
+using std::endl;
+using std::vector;
+using namespace std::string_view_literals;
 struct AbiReaderFixture
 {
     AbiReaderFixture() { hashImpl = std::make_shared<Keccak256>(); }

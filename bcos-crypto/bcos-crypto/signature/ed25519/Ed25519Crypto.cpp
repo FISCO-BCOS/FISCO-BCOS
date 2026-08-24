@@ -24,6 +24,7 @@
 #include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <memory>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::crypto;

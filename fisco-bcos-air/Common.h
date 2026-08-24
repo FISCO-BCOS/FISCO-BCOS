@@ -25,6 +25,7 @@
 #include <cstring>
 #include <ctime>
 #include <unistd.h>
+#include <boost/atomic.hpp>
 // clang-format on
 
 

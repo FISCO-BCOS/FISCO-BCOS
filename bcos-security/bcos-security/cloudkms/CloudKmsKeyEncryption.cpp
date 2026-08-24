@@ -27,6 +27,7 @@
 #include "bcos-utilities/FileUtility.h"
 #include "utils.h"
 #include <aws/core/Aws.h>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::security
 {

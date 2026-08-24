@@ -30,7 +30,7 @@ using intx::operator""_u256;
 
 namespace
 {
-constexpr auto kSender = 0x00000000000000000000000000000000000000aa_address;
+constexpr auto kSender7702 = 0x00000000000000000000000000000000000000aa_address;
 constexpr auto kDelegate = 0x00000000000000000000000000000000000000cc_address;
 
 // === 金值:eth-account 签出, 私钥 0x59c6995e...86dae88c7a8412f4603b6b78690d ===
@@ -67,8 +67,8 @@ RunWithAuthResult runWithAuth(
 
     state::Transaction tx;
     tx.type = state::Transaction::Type::set_code;  // EIP-7702 set-code tx
-    tx.sender = kSender;
-    tx.to = kSender;  // 自调用；重点在 auth 处理
+    tx.sender = kSender7702;
+    tx.to = kSender7702;  // 自调用；重点在 auth 处理
     tx.gas_limit = 200000;
     tx.max_gas_price = 1000;
     tx.max_priority_gas_price = 10;
@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -178,7 +178,7 @@ BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -288,7 +288,7 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -313,7 +313,7 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
 
     state::Transaction tx;
     tx.type = state::Transaction::Type::eip1559;
-    tx.sender = kSender;
+    tx.sender = kSender7702;
     tx.to = kAuthority;
     tx.gas_limit = 100000;
     tx.max_gas_price = 1000;
@@ -361,7 +361,7 @@ BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -390,7 +390,7 @@ BOOST_AUTO_TEST_CASE(HighSValueIsRejected)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -416,7 +416,7 @@ BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -452,7 +452,7 @@ BOOST_AUTO_TEST_CASE(NonceMaxIsRejected)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};
@@ -487,7 +487,7 @@ BOOST_AUTO_TEST_CASE(AuthorityWithNonDelegatedCodeIsSkipped)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0,
+    ts[kSender7702] = {.nonce = 0,
         .balance = 340282366920938463463374607431768211456_u256,
         .storage = {},
         .code = {}};

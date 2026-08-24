@@ -28,7 +28,7 @@ using namespace bcostars;
 using namespace bcos::consensus;
 using namespace bcos::initializer;
 
-Error PBFTServiceServer::asyncCheckBlock(
+bcostars::Error PBFTServiceServer::asyncCheckBlock(
     const Block& _block, tars::Bool&, tars::TarsCurrentPtr _current)
 {
     auto blockFactory = m_pbftInitializer->blockFactory();
@@ -42,7 +42,7 @@ Error PBFTServiceServer::asyncCheckBlock(
     return bcostars::Error();
 }
 
-Error PBFTServiceServer::asyncGetPBFTView(tars::Int64& _view, tars::TarsCurrentPtr _current)
+bcostars::Error PBFTServiceServer::asyncGetPBFTView(tars::Int64& _view, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
     m_pbftInitializer->pbft()->asyncGetPBFTView(
@@ -52,7 +52,7 @@ Error PBFTServiceServer::asyncGetPBFTView(tars::Int64& _view, tars::TarsCurrentP
     return bcostars::Error();
 }
 
-Error PBFTServiceServer::asyncNotifyConsensusMessage(std::string const& _uuid,
+bcostars::Error PBFTServiceServer::asyncNotifyConsensusMessage(std::string const& _uuid,
     const std::vector<tars::Char>& _nodeId, const std::vector<tars::Char>& _data,
     tars::TarsCurrentPtr _current)
 {
@@ -83,7 +83,7 @@ bcostars::Error PBFTServiceServer::asyncNotifyBlockSyncMessage(std::string const
 }
 
 
-Error PBFTServiceServer::asyncNotifyNewBlock(
+bcostars::Error PBFTServiceServer::asyncNotifyNewBlock(
     const LedgerConfig& _ledgerConfig, tars::TarsCurrentPtr _current)
 {
     _current->setResponse(false);
@@ -95,7 +95,7 @@ Error PBFTServiceServer::asyncNotifyNewBlock(
     return bcostars::Error();
 }
 
-Error PBFTServiceServer::asyncSubmitProposal(bool _containSysTxs,
+bcostars::Error PBFTServiceServer::asyncSubmitProposal(bool _containSysTxs,
     const bcostars::Block& _proposalData, tars::Int64 _proposalIndex,
     const std::vector<tars::Char>& _proposalHash, tars::TarsCurrentPtr _current)
 {

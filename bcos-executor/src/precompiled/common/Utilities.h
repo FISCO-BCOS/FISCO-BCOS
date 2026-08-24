@@ -32,6 +32,7 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/string.hpp>
 #include <boost/serialization/vector.hpp>
+#include <boost/algorithm/string.hpp>
 
 namespace bcos::precompiled
 {

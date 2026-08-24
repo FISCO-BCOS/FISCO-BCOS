@@ -20,6 +20,7 @@
  */
 #include "ElectionConfig.h"
 #include "bcos-utilities/BoostLog.h"
+#include <boost/thread/thread.hpp>
 
 using namespace bcos;
 using namespace bcos::election;

@@ -5,6 +5,7 @@
 #include <bcos-utilities/Error.h>
 #include <sstream>
 #include <stack>
+#include <list>
 
 namespace bcos::scheduler
 {

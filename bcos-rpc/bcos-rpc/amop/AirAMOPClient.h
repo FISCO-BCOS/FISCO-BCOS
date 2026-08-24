@@ -22,6 +22,7 @@
 #include "AMOPClient.h"
 
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::rpc
 {

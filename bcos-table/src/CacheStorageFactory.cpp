@@ -1,5 +1,6 @@
 #include "CacheStorageFactory.h"
 #include "StateStorage.h"
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::storage;
 

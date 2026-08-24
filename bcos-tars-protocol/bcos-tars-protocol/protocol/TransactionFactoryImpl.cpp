@@ -1,5 +1,6 @@
 #include "TransactionFactoryImpl.h"
 #include "../impl/TarsHashable.h"
+#include <bcos-utilities/BoostLog.h>
 
 bcostars::protocol::TransactionFactoryImpl::TransactionFactoryImpl(
     bcos::crypto::CryptoSuite::Ptr cryptoSuite)

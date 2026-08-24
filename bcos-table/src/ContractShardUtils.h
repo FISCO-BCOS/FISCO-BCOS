@@ -20,6 +20,7 @@
 
 #pragma once
 #include <bcos-table/src/StorageWrapper.h>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::storage
 {

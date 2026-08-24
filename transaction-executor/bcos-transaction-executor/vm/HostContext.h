@@ -58,6 +58,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/concept_archetype.hpp>
 #include <boost/container_hash/hash.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
@@ -71,6 +72,7 @@
 #include <range/v3/algorithm/fill.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <string_view>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::executor_v1::hostcontext
 {

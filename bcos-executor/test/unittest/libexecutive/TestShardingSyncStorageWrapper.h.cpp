@@ -28,8 +28,6 @@ namespace bcos
 {
 namespace test
 {
-using namespace std;
-
 BOOST_AUTO_TEST_SUITE(TestShardingSyncStorageWrapper)
 
 BOOST_AUTO_TEST_CASE(test_keyName)
