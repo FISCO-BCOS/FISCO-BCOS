@@ -215,6 +215,11 @@ def lifecycle(desc, *args, contains=None, nonzero=False, equals=None):
                          f"  argv: cast call {' '.join(map(str, args))}\n"
                          f"  stderr: {(r.stderr or '').strip()[:300]}")
     out = r.stdout
+    # cast never prints the "[N]" tuple form for single-value returns —
+    # normalize that pattern (e.g. contains="[0]") into a value comparison
+    # so every numeric lifecycle assert means what it says.
+    if contains is not None and re.fullmatch(r"\[\d+\]", str(contains)):
+        equals, contains = int(str(contains)[1:-1]), None
     if equals is not None:
         # cast prints uint8 returns bare ("0") or hex ("0x00") — never the
         # "[0]" tuple form; compare the parsed value.

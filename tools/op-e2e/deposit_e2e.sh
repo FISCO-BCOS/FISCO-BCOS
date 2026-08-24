@@ -39,7 +39,7 @@ TIP0=$(cast block-number --rpc-url "$L2")
 # receive(), which deposits to msg.sender (RECEIVE_DEFAULT_GAS_LIMIT 100k).
 cast send "$PORTAL" --value 1ether --private-key "$KEY" \
   --rpc-url "$L1" > /dev/null || die "depositETH (receive) send failed"
-log "depositETH(1 ETH) sent; waiting for derivation (<=180s)"
+log "depositETH(1 ETH) sent; waiting for derivation (<=300s)"
 
 python3 - "$L2" "$OPNODE" "$DEV1" "$L2_BEFORE" "$TIP0" <<'PY' || die "deposit phase-1 failed"
 import json, sys, time, urllib.request
@@ -49,7 +49,9 @@ def rpc(url, m, p):
         {"jsonrpc": "2.0", "method": m, "params": p, "id": 1}).encode(),
         headers={"Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(req, timeout=5))["result"]
-deadline = time.time() + 180
+# Derivation lag varies with batcher warm-up (observed: seconds to ~4min on
+# the compressed devnet) — the budget covers the variance.
+deadline = time.time() + 300
 while time.time() < deadline:
     try:
         bal = int(rpc(l2, "eth_getBalance", [dev1, "latest"]), 16)
@@ -108,7 +110,10 @@ def rpc(m, p):
         headers={"Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(req, timeout=5))["result"]
 def find_deposit(to, data_prefix):
-    deadline = time.time() + 240
+    # Variant deposits derive at a DETERMINISTIC L2 height (~206 on the
+    # compressed devnet) that can be ~5 min of wall time past the send —
+    # the budget must cover the height, not just the batch latency.
+    deadline = time.time() + 600
     seen_dump = []
     while time.time() < deadline:
         tip = int(rpc("eth_blockNumber", []), 16)

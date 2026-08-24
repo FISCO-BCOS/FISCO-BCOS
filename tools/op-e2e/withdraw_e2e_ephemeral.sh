@@ -7,12 +7,17 @@
 # -> L1->L2 deposit roundtrip leg -> L2->L1 withdraw closed loop -> adversarial
 # dispute scenarios (CONTEST=1 default) -> unconditional teardown.
 #
-# Budget: 5-8 min with CONTEST=1 (deploy ~2 min dominates); >10 min = investigate.
+# Budget: 5-8 min with CONTEST=1 (deploy ~2 min dominates; the L2 finalized
+# lag adds ~10 min — observed 1305s total); >30 min = investigate.
 # Ports 8749/8755/8766/22213/33400/9745/8747 stay clear of the shared C2
 # (85xx/95xx) and the C2b range (86xx/96xx) — never point this at /tmp/c2.
-# Requires /tmp/c2/op-deployer + /tmp/c2/op-node prebuilt (setup only
-# auto-builds op-batcher).
+# BIN_DIR: where to stage op-deployer/op-node/op-batcher from (defaults to
+# /tmp/c2 locally; CI points it at its own build staging). MATRIX=1 additionally
+# runs the rpc_matrix tier-1 suite against the instance before teardown
+# (funds the matrix sender first). CONTEST=0 skips the adversarial scenarios.
 set -euo pipefail
+
+BIN_DIR="${BIN_DIR:-/tmp/c2}"
 
 # cast honors the macOS system proxy; bypass it for all the localhost RPC this
 # runner performs (proxy-garbage responses surface as cast "parser error").
@@ -61,8 +66,8 @@ log "workspace: $WORKSPACE"
 # build per run wastes ~1min). chmod: a leftover 644 dest makes cp keep the
 # un-executable mode and the -x staging check fail.
 for bin in op-deployer op-node op-batcher; do
-    if [ -f "/tmp/c2/$bin" ]; then
-        cp "/tmp/c2/$bin" "$WORKSPACE/$bin"
+    if [ -f "$BIN_DIR/$bin" ]; then
+        cp "$BIN_DIR/$bin" "$WORKSPACE/$bin"
         chmod +x "$WORKSPACE/$bin"
     fi
 done
@@ -189,6 +194,22 @@ if [ "${CONTEST:-1}" = "1" ]; then
   # root provably rejects the real proof), so no interference with the
   # finalized state.
   python3 "$HERE/withdraw_claim.py" "$TX" --wait-finalized 0 --contest dishonest
+fi
+
+# ── phase 4 (optional): rpc_matrix tier-1 against the live instance ───────
+if [ "${MATRIX:-0}" = "1" ]; then
+  log "running rpc_matrix tier-1 against the instance"
+  cast send 0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693 --value 1ether \
+    --private-key "$KEY" --rpc-url "$C2_L2_WEB3" --chain-id "$CHAIN_ID" > /dev/null
+  B3_ETH_PORT=$EPH_WEB3 B3_ENGINE_PORT=$EPH_ENGINE \
+  B3A_JWT="$WORKSPACE/fisco/jwt.hex" \
+  B3_GENESIS="$WORKSPACE/fisco/config.genesis" \
+      python3 "$HERE/rpc_matrix.py" || \
+  { log "matrix failed once (known pending/latest block race) — retrying"; sleep 8; \
+    B3_ETH_PORT=$EPH_WEB3 B3_ENGINE_PORT=$EPH_ENGINE \
+    B3A_JWT="$WORKSPACE/fisco/jwt.hex" \
+    B3_GENESIS="$WORKSPACE/fisco/config.genesis" \
+        python3 "$HERE/rpc_matrix.py"; }
 fi
 
 # Post-claim advancement snapshot: sequencer and derivation both alive.
