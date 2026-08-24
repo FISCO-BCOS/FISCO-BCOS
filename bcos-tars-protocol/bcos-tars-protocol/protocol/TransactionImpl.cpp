@@ -23,6 +23,7 @@
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
 #include "Web3RawTransaction.h"
+#include <bcos-codec/rlp/Web3Transaction.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -30,10 +31,12 @@
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/BoostLog.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstring>
 #include <exception>
 #include <set>
+#include <stdexcept>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
@@ -90,154 +93,43 @@ bcos::crypto::HashType bcostars::protocol::TransactionImpl::hash() const
 bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
     bcos::bytesConstRef payload, bcos::bytesConstRef signature)
 {
-    // The byte-splice logic mirrors Web3Transaction::encode() / txHash() in
-    // bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3Transaction.h (the reference implementation used
-    // on the RPC ingress path). Keep the two in sync when adding new transaction types.
-    //
-    // NB: rlp free functions are fully qualified below -- TransactionImpl has member encode()/
-    // decode() that would otherwise shadow bcos::codec::rlp::encode()/decode() in this scope.
-
-    // Signature wire format (tars): r(32) || s(32) || yParity(1).
+    // Use the shared codec encoder (same path as RPC ingress txHash()) so typed /
+    // legacy shapes stay in one place. Signature wire format (tars): r(32)||s(32)||yParity(1).
     if (signature.size() != 65) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(std::invalid_argument(
             "invalid Web3 signature length, expect 65, got " + std::to_string(signature.size())));
     }
-    // RLP encodes integers with no leading zeros, so trim r/s before re-emitting them (this is
-    // exactly what Web3Transaction::encode() does via getSignatureRef()).
-    auto trimLeadingZeros = [](bcos::bytesConstRef in) {
-        size_t offset = 0;
-        while (offset < in.size() && in[offset] == 0)
-        {
-            ++offset;
-        }
-        return in.getCroppedData(offset);
-    };
-    auto const r = trimLeadingZeros(signature.getCroppedData(0, 32));
-    auto const s = trimLeadingZeros(signature.getCroppedData(32, 32));
-    auto const yParity = static_cast<uint64_t>(signature[64]);
-
-    auto throwDecode = [](std::string_view stage) {
-        BCOS_LOG(INFO) << LOG_DESC("reassemble raw Web3 transaction: decode failed")
-                       << LOG_KV("stage", stage);
-        BOOST_THROW_EXCEPTION(std::invalid_argument(
-            std::string("reassemble raw Web3 transaction: decode failed at ").append(stage)));
-    };
     if (payload.empty()) [[unlikely]]
     {
-        throwDecode("empty payload");
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("reassemble raw Web3 transaction: empty payload"));
     }
 
-    // decodeHeader crops the header off the cursor as it parses, so work over a mutable copy of
-    // the preimage bytes -- the underlying bytes are only read, never written.
+    // decodeFromPayload crops the cursor as it parses, so work over a mutable copy of the
+    // preimage bytes -- the underlying bytes are only read, never written.
     bcos::bytes buffer(payload.begin(), payload.end());
     bcos::bytesRef cursor(buffer.data(), buffer.size());
-
-    bcos::bytes full;
-    auto const firstByte = buffer[0];
-    if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
+    bcos::rpc::Web3Transaction w3{};
+    // The reassembled bytes (and therefore the canonical hash) depend on the decoder rejecting
+    // anything it cannot round-trip through encode (trailing typed-list items, malformed legacy
+    // trailers).
+    if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(cursor, w3);
+        decodeError != nullptr) [[unlikely]]
     {
-        // Typed transaction (EIP-2718: EIP-2930 / EIP-1559 / EIP-4844).
-        //   preimage = type || rlp([...fields])
-        //   full     = type || rlp([...fields, yParity, r, s])
-        // Every field byte is identical between the two; only the outer list header grows (it now
-        // covers three extra items) and the signature items are appended. So we reuse the field
-        // bytes verbatim and re-emit just the header + signature.
-        auto const txType = firstByte;
-        cursor = cursor.getCroppedData(1);  // drop the EIP-2718 type byte
-        auto [error, header] = bcos::codec::rlp::decodeHeader(cursor);
-        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
-        {
-            throwDecode("typed body");
-        }
-        bcos::bytesConstRef fields(cursor.data(), header.payloadLength);
-
-        bcos::bytes sig;
-        bcos::codec::rlp::encode(sig, yParity);  // typed txs carry the raw yParity (0/1), not an
-                                                 // EIP-155 v
-        bcos::codec::rlp::encode(sig, r);
-        bcos::codec::rlp::encode(sig, s);
-
-        full.push_back(txType);
-        bcos::codec::rlp::encodeHeader(full,
-            bcos::codec::rlp::Header{.isList = true, .payloadLength = fields.size() + sig.size()});
-        full.insert(full.end(), fields.begin(), fields.end());
-        full.insert(full.end(), sig.begin(), sig.end());
+        BCOS_LOG(INFO) << LOG_DESC("reassemble raw Web3 transaction: decode failed")
+                       << LOG_KV("msg", decodeError->errorMessage());
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("reassemble raw Web3 transaction: decode failed"));
     }
-    else
-    {
-        // Legacy transaction.
-        //   pre-EIP-155 preimage = rlp([nonce,gasPrice,gasLimit,to,value,data])            (6
-        //   items) EIP-155     preimage = rlp([nonce,gasPrice,gasLimit,to,value,data,chainId,0,0])
-        //   (9 items) full                 = rlp([nonce,gasPrice,gasLimit,to,value,data,v,r,s])
-        // The 6 leading field items are identical between preimage and full. EIP-155 replaces its
-        // trailing chainId,0,0 with v,r,s (v = chainId*2+35+yParity); pre-155 simply appends v,r,s
-        // (v = yParity+27). We locate the end of the 6 field items, reuse those bytes, and emit a
-        // fresh list header + v,r,s.
-        auto [error, header] = bcos::codec::rlp::decodeHeader(cursor);
-        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
-        {
-            throwDecode("legacy header");
-        }
-        auto const* fieldsStart = cursor.data();
-        bcos::bytesRef walker(cursor.data(), header.payloadLength);
-        for (int i = 0; i < 6; ++i)
-        {
-            auto [fieldError, fieldHeader] = bcos::codec::rlp::decodeHeader(walker);
-            if (fieldError || fieldHeader.payloadLength > walker.size()) [[unlikely]]
-            {
-                throwDecode("legacy field");
-            }
-            walker = walker.getCroppedData(fieldHeader.payloadLength);
-        }
-        auto const fieldsLength = static_cast<size_t>(walker.data() - fieldsStart);
-        bcos::bytesConstRef fields(fieldsStart, fieldsLength);
 
-        uint64_t v = 0;
-        if (fieldsLength == header.payloadLength)
-        {
-            // pre-EIP-155: exactly 6 items, nothing trailing
-            v = yParity + 27;
-        }
-        else
-        {
-            // EIP-155: item 7 is the signed chainId (items 8,9 are the 0,0 placeholders). Read
-            // chainId from the preimage itself -- that is the value the sender actually signed, so
-            // it is authoritative even though the whole tx arrived from an untrusted peer.
-            uint64_t chainId = 0;
-            if (auto chainIdError = bcos::codec::rlp::decode(walker, chainId)) [[unlikely]]
-            {
-                throwDecode("legacy chainId");
-            }
-            // The preimage must end with exactly chainId,0,0 -- reject 7/8-item lists and
-            // non-zero trailers rather than misreading item 7 of some other shape as a chainId.
-            for (int i = 0; i < 2; ++i)
-            {
-                uint64_t zero = 0;
-                if (auto zeroError = bcos::codec::rlp::decode(walker, zero); zeroError || zero != 0)
-                    [[unlikely]]
-                {
-                    throwDecode("legacy trailing zeros");
-                }
-            }
-            if (!walker.empty()) [[unlikely]]
-            {
-                throwDecode("legacy trailing garbage");
-            }
-            v = chainId * 2 + 35 + yParity;
-        }
+    w3.signatureR.assign(signature.begin(), signature.begin() + 32);
+    w3.signatureS.assign(signature.begin() + 32, signature.begin() + 64);
+    w3.signatureV = static_cast<uint64_t>(signature[64]);
 
-        bcos::bytes sig;
-        bcos::codec::rlp::encode(sig, v);
-        bcos::codec::rlp::encode(sig, r);
-        bcos::codec::rlp::encode(sig, s);
-
-        bcos::codec::rlp::encodeHeader(full,
-            bcos::codec::rlp::Header{.isList = true, .payloadLength = fields.size() + sig.size()});
-        full.insert(full.end(), fields.begin(), fields.end());
-        full.insert(full.end(), sig.begin(), sig.end());
-    }
-    return full;
+    bcos::bytes raw;
+    bcos::codec::rlp::encode(raw, w3);
+    return raw;
 }
 
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
@@ -247,7 +139,7 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     // unconditionally -- a wire-supplied value is never believed, even when a caller reaches
     // verify() without clearing it first (e.g. TransactionFactoryImpl::createTransaction skips
     // the hash-match check for non-BCOS types), so no caller discipline is required (FIB-New1).
-    // The recompute is a byte splice plus one keccak, cheap enough to always run.
+    // The recompute uses the shared codec (decodeFromPayload + txHash), cheap enough to always run.
     if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
         auto const canonicalTxHash = bcos::crypto::keccak256Hash(
@@ -374,6 +266,10 @@ void bcostars::protocol::TransactionImpl::clearSenderAndHash()
     // untrusted enough to warrant this: the P2P import path (TransactionSync) receives it from an
     // untrusted peer, and the RPC submit path (TxValidator::verify) only pre-wrote a value it can
     // cheaply recompute anyway. Harmless for BCOS transactions (the field is never populated).
+    // data.accessList / web3TypedTxKind are deliberately NOT cleared here: admission
+    // (web3TarsFieldsMatchSignedExtra) already rejected Tars vs signed-RLP disagreement, and
+    // execution reads the Tars fields as the fast path. Follow-up: RLPTransaction retires the
+    // Tars mirror entirely so this dual representation (and Web3TxConsistency) can go away.
     m_inner()->extraTransactionHash.clear();
     setTainted(true);
 }

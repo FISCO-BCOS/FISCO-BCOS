@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(Web3AccessListResolver_end_to_end_warm)
     BOOST_REQUIRE(bcos::codec::rlp::decode(bRef, w3) == nullptr);
     BOOST_CHECK(w3.type == bcos::rpc::TransactionType::EIP2930);
 
-    auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
+    auto tarsHolder = std::make_shared<bcostars::Transaction>(takeToTarsTransaction(w3));
     auto const txHash = w3.txHash();
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
     bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });

@@ -51,6 +51,26 @@
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
+// windows.h (pulled in transitively by Boost.Asio / Winsock) may redefine ERROR.
+// Re-clear after Boost includes so BCOS_LOG(ERROR) stays valid in every TU.
+#ifdef _WIN32
+#ifdef ERROR
+#undef ERROR
+#endif
+#ifdef TRACE
+#undef TRACE
+#endif
+#ifdef INFO
+#undef INFO
+#endif
+#ifdef WARNING
+#undef WARNING
+#endif
+#ifdef FATAL
+#undef FATAL
+#endif
+#endif
+
 // BCOS log format
 #ifndef LOG_BADGE
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"

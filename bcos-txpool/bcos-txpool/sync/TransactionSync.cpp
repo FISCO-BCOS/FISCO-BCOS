@@ -23,6 +23,7 @@
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-tars-protocol/protocol/Web3TxConsistency.h>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/zip.hpp>
 
@@ -455,6 +456,19 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                     {
                         continue;
                     }
+                    // Reject Tars accessList / web3TypedTxKind that disagree with signed RLP
+                    // before signature verify. Mark invalid and continue so good txs in the
+                    // same response are still imported; return false below so consensus can
+                    // re-fetch the poisoned hash from another peer.
+                    if (!bcostars::protocol::web3TarsFieldsMatchSignedExtra(*tx))
+                    {
+                        tx->setInvalid(true);
+                        SYNC_LOG(WARNING)
+                            << LOG_DESC("importDownloadedTxs: Web3 Tars fields disagree with RLP")
+                            << LOG_KV("index", i) << LOG_KV("hash", tx->hash().abridged());
+                        verifySuccess = false;
+                        continue;
+                    }
                     if (m_checkTransactionSignature)
                     {
                         // clear sender and hash so that verify() will recompute them. For Web3 tx
@@ -475,18 +489,24 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                 }
             }
         });
-    if (enforceImport && !verifySuccess)
-    {
-        return false;
-    }
     auto verifyT = utcTime() - startT;
     startT = utcTime();
-    // import the transactions into txpool
+    // Import good transactions first so a single invalid entry (poisoned Tars mirror,
+    // bad signature, or other verify failure) does not sink the whole batch. Invalid txs
+    // are skipped by batchVerifyAndSubmitTransaction / batchImportTxs; we still return
+    // false below on enforceImport so the caller can re-fetch unusable hashes.
     auto txpoolStorage = m_config->txpoolStorage();
     if (enforceImport)
     {
         if (!txpoolStorage->batchVerifyAndSubmitTransaction(
                 _verifiedProposal->blockHeader().toShared(), _txs))
+        {
+            return false;
+        }
+        // Any invalid entry means this peer's copy of that hash is unusable — fail so
+        // the caller can re-fetch from another peer. Applies to consistency and signature
+        // failures alike (broader than the Web3-only case, intentionally).
+        if (!verifySuccess)
         {
             return false;
         }

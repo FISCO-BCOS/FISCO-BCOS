@@ -21,15 +21,17 @@ file(GLOB HEADERS "*.h")
 
 aux_source_directory(bcos-codec/abi SRC_LIST)
 aux_source_directory(bcos-codec/scale SRC_LIST)
+aux_source_directory(bcos-codec/rlp SRC_LIST)
 
 find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(magic_enum CONFIG REQUIRED)
 
 add_library(codec ${SRC_LIST} ${HEADERS})
 target_include_directories(codec PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-codec>
 )
-target_link_libraries(codec PUBLIC bcos-crypto Microsoft.GSL::GSL)
+target_link_libraries(codec PUBLIC bcos-crypto Microsoft.GSL::GSL magic_enum::magic_enum)
 set_target_properties(codec PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)

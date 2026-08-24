@@ -48,7 +48,8 @@ target_include_directories(protocol-tars PUBLIC
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
 # `codec` carries the RLP headers TransactionImpl.cpp needs for the FIB-New1 canonical Web3
-# txHash recompute. release-3.17.0 spelled it ${CODEC_TARGET}; that variable went away with
+# txHash recompute, and for Web3TxConsistency admission checks against signed payloads.
+# release-3.17.0 spelled it ${CODEC_TARGET}; that variable went away with
 # TargetSettings.cmake (#5174), so it is named directly here.
 # `rlp-protocol` provides EthBlockHeader, which BlockHeaderImpl::calculateHash uses to
 # recompute the RLP hash for Ethereum-standard headers.

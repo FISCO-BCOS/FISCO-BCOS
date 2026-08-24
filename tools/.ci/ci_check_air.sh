@@ -197,7 +197,10 @@ prebuild_deps()
     LOG_INFO "Prebuilding console..."
     if [ ! -d "console/.git" ]; then
         rm -rf console
-        git clone --depth 1 https://github.com/FISCO-BCOS/console.git
+        git clone --depth 1 https://github.com/FISCO-BCOS/console.git || {
+            LOG_ERROR "git clone failed for console"
+            exit 1
+        }
         cd console
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
@@ -224,7 +227,10 @@ prebuild_deps()
     LOG_INFO "Prebuilding java-sdk..."
     if [ ! -d "java-sdk/.git" ]; then
         rm -rf java-sdk
-        git clone --depth 1 https://github.com/FISCO-BCOS/java-sdk.git
+        git clone --depth 1 https://github.com/FISCO-BCOS/java-sdk.git || {
+            LOG_ERROR "git clone failed for java-sdk"
+            exit 1
+        }
         cd java-sdk
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
@@ -251,7 +257,10 @@ prebuild_deps()
     LOG_INFO "Prebuilding java-sdk-demo..."
     if [ ! -d "java-sdk-demo/.git" ]; then
         rm -rf java-sdk-demo
-        git clone --depth 1 https://github.com/FISCO-BCOS/java-sdk-demo.git
+        git clone --depth 1 https://github.com/FISCO-BCOS/java-sdk-demo.git || {
+            LOG_ERROR "git clone failed for java-sdk-demo"
+            exit 1
+        }
         cd java-sdk-demo
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}

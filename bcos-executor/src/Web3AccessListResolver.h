@@ -8,17 +8,18 @@
 namespace bcos::executor
 {
 
-/// Resolved Web3 typed-tx metadata from protocol fields and/or extraTransactionBytes.
+/// Resolved Web3 typed-tx metadata from protocol (Tars) fields.
 struct Web3AccessListResolved
 {
     /// EIP-2718 envelope / typed kind (1 = EIP-2930). 0 = unset / not applicable.
     uint8_t web3TypedTxKind = 0;
-    /// Non-null only when an access list was decoded (may be empty for type-1 txs with no entries).
+    /// Non-null when the Tars access list has at least one entry. Empty lists stay nullptr
+    /// (downstream treats nullptr and empty the same).
     std::shared_ptr<const Eip2930AccessList> accessList;
 };
 
-/// Resolve Web3 access list from protocol fields (Tars fast path); fall back to
-/// extraTransactionBytes RLP for legacy or stripped txs.
+/// Resolve Web3 access list from protocol (Tars) fields. Admission already
+/// rejects Tars vs signed-RLP disagreement, so no RLP fallback is needed here.
 Web3AccessListResolved resolveWeb3AccessList(protocol::Transaction const& tx);
 
 }  // namespace bcos::executor

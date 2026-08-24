@@ -26,7 +26,8 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
-
+#include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-tars-protocol/protocol/Web3TxConsistency.h>
 #include <cctype>
 
 using namespace bcos;
@@ -72,6 +73,13 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
         {
             return TransactionStatus::InvalidChainId;
         }
+    }
+
+    // Tars data.accessList / web3TypedTxKind must match the signed RLP payload.
+    // Reject at admission — do not defer preference to execution.
+    if (!bcostars::protocol::web3TarsFieldsMatchSignedExtra(_tx))
+    {
+        return TransactionStatus::Malformed;
     }
 
     // should check the transaction signature first, because the sender of transaction will be force

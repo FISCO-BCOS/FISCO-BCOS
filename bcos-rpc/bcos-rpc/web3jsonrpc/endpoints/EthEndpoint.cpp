@@ -749,7 +749,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto encodeTxHash = web3Tx.txHash();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
+        [m_tx = takeToTarsTransaction(web3Tx)]() mutable { return &m_tx; });
 
 // for web3.eth.sendRawTransaction, return the hash of raw transaction
 #if 0

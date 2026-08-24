@@ -17,13 +17,19 @@
  */
 #include "Worker.h"
 
-#include "BoostLog.h"
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <chrono>
 #include <exception>
 #include <future>
+#include "BoostLog.h"
+
+// Unity builds may have already include-guarded BoostLog.h before windows.h landed in
+// another TU of the same amalgamation; re-clear here so BCOS_LOG(ERROR) is safe.
+#ifdef ERROR
+#undef ERROR
+#endif
 
 // windows.h -- dragged in by <boost/asio/...> above -- defines ERROR as 0, which turns the
 // BCOS_LOG(ERROR) calls below into bcos::LogLevel::0. BoostLog.h undefs it, but BoostLog.h is

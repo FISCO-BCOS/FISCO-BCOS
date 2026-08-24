@@ -28,9 +28,10 @@ namespace bcostars::protocol
 /// RLP list) from the signing payload (Transaction::extraTransactionBytes()) and the
 /// 65-byte r||s||yParity signature (Transaction::signatureData()).
 ///
-/// This is the byte-splice introduced for the canonical Web3 txHash recompute (FIB-New1);
-/// keccak256 of the returned bytes is that canonical hash. The Engine API getPayload path
-/// uses the returned bytes directly as the transaction wire form.
+/// Implemented by decoding the payload with the shared codec and re-encoding it with the
+/// signature attached, so the wire form matches the RPC ingress path exactly; keccak256 of the
+/// returned bytes is the canonical Web3 txHash (FIB-New1). The Engine API getPayload path uses
+/// the returned bytes directly as the transaction wire form.
 ///
 /// Throws std::invalid_argument when the payload is not a decodable Web3 signing payload
 /// or the signature is not 65 bytes.
