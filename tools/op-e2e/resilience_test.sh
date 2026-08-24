@@ -34,31 +34,20 @@ OP_NODE="${C2_OP_NODE:-http://127.0.0.1:$OP_NODE_PORT}"
 L2="${C2_L2_WEB3:-http://127.0.0.1:$FISCO_WEB3}"
 
 PASS=0; FAIL=0
+DIR="$(cd "$(dirname "$0")" && pwd)"
 ok()   { echo "  [ok] $*"; PASS=$((PASS+1)); }
 bad()  { echo "  [FAIL] $*"; FAIL=$((FAIL+1)); }
 section() { echo; echo "=== $* ==="; }
 
-# ---- observation helpers (curl+python; no cast dependency) ----
+# ---- observation helpers (c2lib CLI: one home for the family's polling idioms) ----
 heads() {  # prints "<unsafe> <safe> <finalized>" from op-node syncStatus
-  curl -s --noproxy '*' -m 5 -X POST -H 'Content-Type: application/json' \
-    -d '{"jsonrpc":"2.0","method":"optimism_syncStatus","params":[],"id":1}' \
-    "$OP_NODE" | python3 -c '
-import json,sys
-try:
-    s = json.load(sys.stdin)["result"]
-    print(s["unsafe_l2"]["number"], s["safe_l2"]["number"], s["finalized_l2"]["number"])
-except Exception:
-    print(-1, -1, -1)'
+  python3 "$DIR/c2lib.py" heads --url "$OP_NODE"
 }
 field() { heads | awk -v f="$1" "{print \$(f+1)}"; }
 
-wait_advance() {  # $1 field name (0=unsafe 1=safe), $2 baseline, $3 delta, $4 timeout_s
-  local deadline=$(( $(date +%s) + $4 )) cur
-  while [ "$(date +%s)" -lt "$deadline" ]; do
-    cur=$(field "$1"); [ "${cur:--1}" -ge "$(( $2 + $3 ))" ] 2>/dev/null && return 0
-    sleep 5
-  done
-  return 1
+wait_advance() {  # $1 field name (unsafe/safe), $2 baseline, $3 delta, $4 timeout_s
+  python3 "$DIR/c2lib.py" wait-advance --url "$OP_NODE" --field "$1" \
+    --baseline "$2" --delta "$3" --timeout "$4"
 }
 
 # ---- restart functions (mirror setup_c2.sh's invocations exactly) ----
@@ -117,7 +106,7 @@ pgrep -f "$C2/op-batcher" > /dev/null && ok "batcher restarted (pid $(cat "$C2/o
 sleep 70
 pgrep -f "$C2/op-batcher" > /dev/null && ok "batcher survived 70s (SIGHUP trap guard)" \
   || bad "batcher died within 70s — SIGHUP trap regression"
-if wait_advance 1 "$SAFE0" 3 240; then ok "safe advanced +3 after batcher restart"
+if wait_advance safe "$SAFE0" 3 240; then ok "safe advanced +3 after batcher restart"
 else bad "safe did not advance after batcher restart (baseline $SAFE0, now $(field 1))"; fi
 
 # ===================== scenario 2: FISCO =====================
@@ -134,7 +123,7 @@ sleep 5
 curl -s --noproxy '*' -m 5 -X POST -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' "$L2" | grep -q result \
   && ok "FISCO web3 back up" || bad "FISCO web3 not answering after restart"
-if wait_advance 0 "$U0" 3 300; then ok "L2 head advanced +3 after FISCO restart (op-node reconnected)"
+if wait_advance unsafe "$U0" 3 300; then ok "L2 head advanced +3 after FISCO restart (op-node reconnected)"
 else bad "head did not advance after FISCO restart (baseline $U0, now $(field 0))"; fi
 F1=$(field 2)
 [ "${F1:--1}" -ge "$F0" ] 2>/dev/null && ok "finalized did not regress ($F0 -> $F1)" \
@@ -158,7 +147,7 @@ done
 curl -s --noproxy '*' -m 3 -X POST -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"optimism_syncStatus","params":[],"id":1}' "$OP_NODE" | grep -q '"result"' \
   && ok "op-node RPC back up" || bad "op-node RPC not answering after restart"
-if wait_advance 0 "$U0" 3 300; then ok "L2 head advanced +3 after op-node restart (sequencer resumed)"
+if wait_advance unsafe "$U0" 3 300; then ok "L2 head advanced +3 after op-node restart (sequencer resumed)"
 else bad "head did not advance after op-node restart (baseline $U0, now $(field 0))"; fi
 read -r _ S1 F1 <<< "$(heads)"
 [ "${F1:--1}" -ge "$F0" ] 2>/dev/null && ok "finalized did not regress ($F0 -> $F1)" \

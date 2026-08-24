@@ -187,38 +187,55 @@ def output_at_finalized(min_block, wait_seconds=0):
 
 
 def call_ok(*args):
-    # cast-call exit status — True iff the simulation succeeds, i.e. a clock
-    # gate (game clock, proof maturity, finality delay) has expired. A revert
-    # here is an expected wait state, never an error.
-    return subprocess.run(["cast", "call", *args],
-                          capture_output=True).returncode == 0
+    # Deprecated shim — the implementation moved to c2lib (one home for the
+    # family's polling idioms); kept so external callers keep working.
+    import c2lib
+    return c2lib.call_ok(*args)
 
 
 def wait_until(desc, timeout, *args):
-    # Poll a cast-call simulation until it succeeds or the timeout (seconds)
-    # elapses. Timeouts are generous: they bound chain-clock waits, not checks.
-    # A CONTRACT REVERT is an expected wait state; anything else (cast parser
-    # error, transport failure, bad args) is a defect in the invocation itself
-    # — fail fast with the full command instead of burning the whole timeout
-    # polling a bug (the 08-24 finalize chase lost 600s per run to exactly
-    # that).
-    import subprocess, time
-    deadline = time.time() + timeout
-    last_err = ""
-    while time.time() < deadline:
-        r = subprocess.run(["cast", "call", *args], capture_output=True, text=True)
-        if r.returncode == 0:
-            return True
-        last_err = (r.stderr or "").strip().splitlines()
-        last_err = last_err[0][:160] if last_err else ""
-        if "execution reverted" not in (r.stderr or ""):
-            raise SystemExit(
-                f"{desc}: cast call failed for a NON-REVERT reason — this is a "
-                f"tool defect, not a clock gate.\n  argv: cast call "
-                + " ".join(map(repr, args)) + f"\n  stderr: {(r.stderr or '').strip()[-500:]}")
-        time.sleep(5)
-    print(f"!! {desc} not ready within {timeout}s (last revert: {last_err or 'none'})")
-    return False
+    # Shim over c2lib.wait_until (see c2lib.py for the fail-fast contract).
+    import c2lib
+    return c2lib.wait_until(desc, timeout, *args)
+
+
+def lifecycle(desc, *args, contains=None, nonzero=False, equals=None):
+    """Read-only state-machine assertion between claim-flow steps.
+
+    Runs `cast call` and asserts the view matches the expected lifecycle
+    stage: `contains` requires the (case-insensitive) substring in the output,
+    `nonzero` requires the first integer to be > 0 (createdAt / resolvedAt
+    style checks). Failing loud beats a downstream cryptic revert — the state
+    machine this walks is exactly what the portal's gate errors encode.
+    """
+    import re, subprocess
+    r = subprocess.run(["cast", "call", *args], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"lifecycle assert failed: {desc} (call reverted)\n"
+                         f"  argv: cast call {' '.join(map(str, args))}\n"
+                         f"  stderr: {(r.stderr or '').strip()[:300]}")
+    out = r.stdout
+    if equals is not None:
+        # cast prints uint8 returns bare ("0") or hex ("0x00") — never the
+        # "[0]" tuple form; compare the parsed value.
+        import re as _re
+        m = _re.search(r"0x[0-9a-fA-F]+|\d+", out)
+        if not m:
+            raise SystemExit(f"lifecycle assert failed: {desc}\n"
+                             f"  no numeric value in: {out.strip()[:200]}")
+        got = int(m.group(0), 16) if m.group(0).lower().startswith("0x") else int(m.group(0))
+        if got != equals:
+            raise SystemExit(f"lifecycle assert failed: {desc}\n"
+                             f"  expected {equals}, got {got}")
+    if contains is not None and contains.lower() not in out.lower():
+        raise SystemExit(f"lifecycle assert failed: {desc}\n"
+                         f"  expected to contain: {contains}\n  got: {out.strip()[:200]}")
+    if nonzero:
+        m = re.search(r"\d+", out)
+        if not m or int(m.group(0)) == 0:
+            raise SystemExit(f"lifecycle assert failed: {desc} (expected nonzero, "
+                             f"got: {out.strip()[:200]})")
+    print(f"  [lifecycle] {desc}")
 
 
 def rocksdb_table_prefix(table):
@@ -559,6 +576,10 @@ def main():
     game = cast("call", dgf,
                 f"gameAtIndex(uint256)(uint32,uint64,address)", str(game_index),
                 "--rpc-url", L1).split()[-1]
+    lifecycle("game IN_PROGRESS after create",
+              game, "status()(uint8)", "--rpc-url", L1, equals=0)
+    lifecycle("game createdAt set",
+              game, "createdAt()(uint64)", "--rpc-url", L1, nonzero=True)
 
     # 2. prove
     tx = (f"({w['nonce']},{w['sender']},{w['target']},{w['value']},"
@@ -581,6 +602,9 @@ def main():
     cast("send", portal, "--data", calldata, "--private-key", PROPOSER_KEY,
          "--rpc-url", L1)
     print("proven")
+    lifecycle("portal records the proof (game + timestamp)",
+              portal, "provenWithdrawals(bytes32,address)(address,uint64)",
+              w["withdrawalHash"], PROPOSER_ADDR, "--rpc-url", L1, contains=game)
 
     # 3. real-time waits on the compressed devnet timelines (game clock 60s,
     #    maturity 12s, finality delay 6s — set in setup_c2.sh's intent). No
@@ -595,6 +619,10 @@ def main():
     cast("send", game, "resolve()", "--private-key", PROPOSER_KEY,
          "--rpc-url", L1)
     print("game resolved (DEFENDER_WINS)")
+    lifecycle("game DEFENDER_WINS after resolve",
+              game, "status()(uint8)", "--rpc-url", L1, equals=2)
+    lifecycle("game resolvedAt set",
+              game, "resolvedAt()(uint64)", "--rpc-url", L1, nonzero=True)
     if not wait_until("proof maturity + finality delay", 600,
                       portal,
                       'finalizeWithdrawalTransaction((uint256,address,address,'
@@ -606,6 +634,9 @@ def main():
         'uint256,bytes))', tx, "--private-key", PROPOSER_KEY,
         "--rpc-url", L1)
     print("finalized:", fin.splitlines()[0] if fin else "?")
+    lifecycle("finalizedWithdrawals[wh] == true",
+              portal, "finalizedWithdrawals(bytes32)(bool)",
+              w["withdrawalHash"], "--rpc-url", L1, contains="true")
 
     # 4. bond recovery: the 0.08 ETH create-bond is claimable via a TWO-STEP
     #    claimCredit — the first call unlocks (starts the DelayedWETH countdown,
@@ -624,6 +655,9 @@ def main():
     cast("send", game, "claimCredit(address)", PROPOSER_ADDR,
          "--private-key", PROPOSER_KEY, "--rpc-url", L1)
     print("bond recovered (0.08 ETH back to the proposer)")
+    lifecycle("game credit drained after recovery",
+              game, "credit(address)(uint256)", PROPOSER_ADDR,
+              "--rpc-url", L1, contains="[0]")
 
 
 if __name__ == "__main__":
