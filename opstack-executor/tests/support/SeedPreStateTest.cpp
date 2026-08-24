@@ -123,4 +123,5 @@ BOOST_AUTO_TEST_CASE(RejectsOddLengthHex)
     BOOST_CHECK_THROW(opstack_test::jsonBytes("0x1"), std::runtime_error);
 }
 
+
 BOOST_AUTO_TEST_SUITE_END()

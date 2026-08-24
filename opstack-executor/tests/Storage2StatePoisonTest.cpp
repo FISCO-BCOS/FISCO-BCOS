@@ -38,8 +38,8 @@ using evmc::literals::operator""_address;
 constexpr evmc::address kPoisonAddr = 0x00000000000000000000000000000000deadc0de_address;
 
 /// A 32-byte storage-slot key whose value is NOT 32 bytes. Storage2State::fetchStorage validates
-/// the slot value length and throws std::length_error — a deterministic poison trigger needing
-/// no storage-backend fault injection.
+/// the slot value length (Storage2State.h) and throws std::length_error — a deterministic
+/// poison trigger needing no storage-backend fault injection.
 void seedCorruptSlot(MutableStorage& storage, evmc::address const& addr)
 {
     const std::string table = bcos::evm::evmstate::accountTableName(addr);
