@@ -1110,7 +1110,9 @@ BOOST_AUTO_TEST_CASE(TimeoutCleanupNotifiesResultWithEmptyReceipt)
     timeoutConfig->setBlockFactory(blockFactory);
 
     // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
-    auto sharedStorage = std::make_shared<MemoryStorage>(timeoutConfig);
+    // The io_context parameter is required (no default); the fixture's pool supplies it.
+    auto sharedStorage =
+        std::make_shared<MemoryStorage>(timeoutConfig, *ioServicePool->getIOService());
 
     auto tx = makeTx("timeout_empty_receipt", false);
     BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
