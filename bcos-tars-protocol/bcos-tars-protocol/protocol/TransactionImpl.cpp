@@ -22,6 +22,7 @@
 #include "TransactionImpl.h"
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
+#include "Web3RawTransaction.h"
 #include <bcos-codec/rlp/Web3Transaction.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
@@ -99,49 +100,36 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         BOOST_THROW_EXCEPTION(std::invalid_argument(
             "invalid Web3 signature length, expect 65, got " + std::to_string(signature.size())));
     }
-    // RLP encodes integers with no leading zeros, so trim r/s before re-emitting them (this is
-    // exactly what Web3Transaction::encode() does via getSignatureRef()).
-    auto trimLeadingZeros = [](bcos::bytesConstRef in) {
-        size_t offset = 0;
-        while (offset < in.size() && in[offset] == 0)
-        {
-            ++offset;
-        }
-        return in.getCroppedData(offset);
-    };
-    auto const r = trimLeadingZeros(signature.getCroppedData(0, 32));
-    auto const s = trimLeadingZeros(signature.getCroppedData(32, 32));
-    auto const yParity = static_cast<uint64_t>(signature[64]);
-
-    auto throwDecode = [](std::string_view stage) {
-        BCOS_LOG(INFO) << LOG_DESC("reassemble raw Web3 transaction: decode failed")
-                       << LOG_KV("stage", stage);
-        BOOST_THROW_EXCEPTION(std::invalid_argument(
-            std::string("reassemble raw Web3 transaction: decode failed at ").append(stage)));
-    };
     if (payload.empty()) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument("recompute canonical Web3 txHash: empty payload"));
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("reassemble raw Web3 transaction: empty payload"));
     }
 
+    // decodeFromPayload crops the cursor as it parses, so work over a mutable copy of the
+    // preimage bytes -- the underlying bytes are only read, never written.
     bcos::bytes buffer(payload.begin(), payload.end());
     bcos::bytesRef cursor(buffer.data(), buffer.size());
     bcos::rpc::Web3Transaction w3{};
-    // The canonical hash now depends on the decoder rejecting anything it cannot
-    // round-trip through encode (trailing typed-list items, malformed legacy trailers).
+    // The reassembled bytes (and therefore the canonical hash) depend on the decoder rejecting
+    // anything it cannot round-trip through encode (trailing typed-list items, malformed legacy
+    // trailers).
     if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(cursor, w3);
         decodeError != nullptr) [[unlikely]]
     {
-        BCOS_LOG(INFO) << LOG_DESC("recompute canonical Web3 txHash: decode failed")
+        BCOS_LOG(INFO) << LOG_DESC("reassemble raw Web3 transaction: decode failed")
                        << LOG_KV("msg", decodeError->errorMessage());
         BOOST_THROW_EXCEPTION(
-            std::invalid_argument("recompute canonical Web3 txHash: decode failed"));
+            std::invalid_argument("reassemble raw Web3 transaction: decode failed"));
     }
 
     w3.signatureR.assign(signature.begin(), signature.begin() + 32);
     w3.signatureS.assign(signature.begin() + 32, signature.begin() + 64);
     w3.signatureV = static_cast<uint64_t>(signature[64]);
-    return w3.txHash();
+
+    bcos::bytes raw;
+    bcos::codec::rlp::encode(raw, w3);
+    return raw;
 }
 
 void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
