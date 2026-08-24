@@ -22,7 +22,7 @@ L2="${C2_L2_WEB3:-http://127.0.0.1:8555}"
 KEY="${C2_DEV_KEY:-0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d}"  # DEV1
 CHAIN_ID="${C2_L2_CHAIN_ID:-914901}"
 
-BYTECODE=0x0x6080604052348015600e575f5ffd5b506102158061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061003f575f3560e01c80632e52d60614610043578063371303c014610061578063a169ce091461006b575b5f5ffd5b61004b610075565b60405161005891906100ee565b60405180910390f35b61006961007a565b005b610073610094565b005b5f5481565b60015f5f82825461008b9190610134565b92505081905550565b5f6100d4576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016100cb906101c1565b60405180910390fd5b565b5f819050919050565b6100e8816100d6565b82525050565b5f6020820190506101015f8301846100df565b92915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f61013e826100d6565b9150610149836100d6565b925082820190508082111561016157610160610107565b5b92915050565b5f82825260208201905092915050565b7f626f6f6d000000000000000000000000000000000000000000000000000000005f82015250565b5f6101ab600483610167565b91506101b682610177565b602082019050919050565b5f6020820190508181035f8301526101d88161019f565b905091905056fea2646970667358221220ba7e3e35ede08cd1edc60597958e25c65fa75444702899bab85496a98b12f93a64736f6c63430008220033
+BYTECODE=0x6080604052348015600e575f5ffd5b506102158061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061003f575f3560e01c80632e52d60614610043578063371303c014610061578063a169ce091461006b575b5f5ffd5b61004b610075565b60405161005891906100ee565b60405180910390f35b61006961007a565b005b610073610094565b005b5f5481565b60015f5f82825461008b9190610134565b92505081905550565b5f6100d4576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016100cb906101c1565b60405180910390fd5b565b5f819050919050565b6100e8816100d6565b82525050565b5f6020820190506101015f8301846100df565b92915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f61013e826100d6565b9150610149836100d6565b925082820190508082111561016157610160610107565b5b92915050565b5f82825260208201905092915050565b7f626f6f6d000000000000000000000000000000000000000000000000000000005f82015250565b5f6101ab600483610167565b91506101b682610177565b602082019050919050565b5f6020820190508181035f8301526101d88161019f565b905091905056fea2646970667358221220ba7e3e35ede08cd1edc60597958e25c65fa75444702899bab85496a98b12f93a64736f6c63430008220033
 
 receipt() {  # $1 tx hash -> "status gasUsed" via one RPC ("null null" if pending)
   curl -s --noproxy '*' -m 30 -X POST -H 'Content-Type: application/json' \
@@ -45,9 +45,12 @@ wait_receipt() {
 counter() { cast call "$1" "n()(uint256)" --rpc-url "$L2"; }
 
 echo "== 1. contract deployment (creation tx, 1559) =="
-# cast send --create waits for the receipt; --json carries contractAddress.
-ADDR=$(cast send --create "$BYTECODE" --private-key "$KEY" \
-  --rpc-url "$L2" --chain-id "$CHAIN_ID" --json \
+# cast send --create <code> --json: ALL flags must precede --create. cast >= 1.7.1
+# re-parses "--create" as a nested subcommand whose option set contains NO tx flags
+# (--private-key/--rpc-url after it are rejected as unknown arguments), so the
+# incantation below is the only ordering that works on current cast.
+ADDR=$(cast send --private-key "$KEY" --rpc-url "$L2" --chain-id "$CHAIN_ID" \
+  --json --create "$BYTECODE" \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["contractAddress"])')
 echo "  deployed at $ADDR"
 CODE=$(cast code "$ADDR" --rpc-url "$L2")
@@ -64,11 +67,13 @@ N2=$(counter "$ADDR")
   || { echo "  [FAIL] counter expected 1 then 2, got $N1 then $N2"; exit 1; }
 
 echo "== 3. boom() always reverts -> tx INCLUDED with status 0 =="
-# cast send exits nonzero on a reverted receipt, so capture with || true and
+# cast send estimates gas first and ABORTS before broadcasting when the estimate
+# reverts — an explicit --gas-limit skips the estimate so the tx actually lands.
+# cast send then exits nonzero on the reverted receipt, so capture with || true and
 # assert on the receipt itself — the WHOLE POINT is that the chain includes it.
-TX=$( { cast send "$ADDR" "boom()" --private-key "$KEY" --rpc-url "$L2" \
-    --chain-id "$CHAIN_ID" --json || true; } 2>/dev/null \
-  | python3 -c 'import sys,re; m=re.search(r"0x[0-9a-fA-F]{64}", sys.stdin.read()); print(m.group(0) if m else "")')
+TX=$( { cast send --gas-limit 200000 --private-key "$KEY" --rpc-url "$L2" \
+    --chain-id "$CHAIN_ID" --json "$ADDR" "boom()" || true; } 2>/dev/null \
+  | python3 -c 'import sys,re; m=re.search(r"\"transactionHash\":\"(0x[0-9a-fA-F]{64})\"", sys.stdin.read()); print(m.group(1) if m else "")')
 [ -n "$TX" ] || { echo "  [FAIL] could not extract boom() tx hash"; exit 1; }
 read -r STATUS GAS < <(wait_receipt "$TX")
 [ "$STATUS" = "0x0" ] && [ "$GAS" -gt 0 ] 2>/dev/null \
