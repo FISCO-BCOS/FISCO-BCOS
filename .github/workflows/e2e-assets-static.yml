@@ -1,0 +1,83 @@
+name: e2e-assets static checks
+# Fast, node-free sanity gates for the op-stack-e2e-tests asset repo
+# (genesis toolchain pytest + op-e2e Python/shell syntax + run_all gate
+# structure). The assets live in FISCO-BCOS/op-stack-e2e-tests and are
+# checked out (pinned) and symlinked into the historical in-tree paths, so
+# the checks are byte-identical to the pre-migration ones. CI triggers stay
+# in this repo; bump the pin together with workflow.yml / op-e2e-c2.yml.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  genesis-tooling:
+    name: opstack-genesis pytest
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: tools/opstack-genesis
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout op-stack-e2e-tests assets
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 2ef9d0c
+          path: e2e-tests
+      - name: Symlink e2e assets into in-tree paths
+        run: |
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python deps
+        # build-allocs.py imports pyyaml at module load, so the pytest suite
+        # (which loads it by path) needs pyyaml too. pytest runs the suite.
+        run: python3 -m pip install --upgrade pip pyyaml pytest
+      - name: Run pytest
+        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py -v
+
+  e2e-static:
+    name: op-e2e static checks (no node)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout op-stack-e2e-tests assets
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 2ef9d0c
+          path: e2e-tests
+      - name: Symlink e2e assets into in-tree paths
+        run: |
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+      - name: Python syntax check
+        run: |
+          for f in tools/op-e2e/*.py; do
+            python3 -m py_compile "$f" || exit 1
+          done
+          echo "All op-e2e Python files compile"
+      - name: Shell syntax check
+        run: |
+          for f in tools/op-e2e/*.sh; do
+            bash -n "$f" || exit 1
+          done
+          echo "All op-e2e shell scripts parse"
+      - name: run_all.sh gate structure sanity
+        run: |
+          # Every suite script referenced by the gate must exist.
+          grep -oE 'run_step [a-z0-9_]+' tools/op-e2e/run_all.sh | \
+            awk '{print $2}' | while read -r name; do
+            [ -f "tools/op-e2e/${name}.py" ] || { echo "::error::run_all.sh references missing ${name}.py"; exit 1; }
+          done
+          echo "run_all.sh references resolve"

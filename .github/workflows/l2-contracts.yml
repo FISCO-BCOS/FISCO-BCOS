@@ -1,20 +1,17 @@
 name: L2 contracts
 # Forge build/test + storage-layout drift gate for the OP-Stack L2 Solidity
-# suite, plus the build-allocs.py pytest suite. Path-filtered so it only runs
-# when the L2 artifacts (or this workflow) change — the heavy C++ matrix in
-# workflow.yml stays untouched.
+# suite. Path-filtered so it only runs when the L2 contracts (or this
+# workflow) change — the heavy C++ matrix in workflow.yml stays untouched.
+# The genesis-tooling / e2e-static checks moved to e2e-assets-static.yml
+# together with the op-stack-e2e-tests asset migration.
 on:
   push:
     paths:
       - "bcos-l2-contracts/**"
-      - "tools/opstack-genesis/**"
-      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
   pull_request:
     paths:
       - "bcos-l2-contracts/**"
-      - "tools/opstack-genesis/**"
-      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -162,50 +159,3 @@ jobs:
           done
           exit "$fail"
 
-  genesis-tooling:
-    name: opstack-genesis pytest
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: tools/opstack-genesis
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install Python deps
-        # build-allocs.py imports pyyaml at module load, so the pytest suite
-        # (which loads it by path) needs pyyaml too. pytest runs the suite.
-        run: python3 -m pip install --upgrade pip pyyaml pytest
-      - name: Run pytest
-        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py -v
-
-  e2e-static:
-    name: op-e2e static checks (no node)
-    runs-on: ubuntu-24.04
-    # Fast, node-free sanity gate for the op-e2e suite: Python and shell
-    # syntax, plus the run_all gate structure. Runs on any op-e2e /
-    # opstack-genesis change (the genesis tooling feeds the B3 chain).
-    steps:
-      - uses: actions/checkout@v4
-      - name: Python syntax check
-        run: |
-          for f in tools/op-e2e/*.py; do
-            python3 -m py_compile "$f" || exit 1
-          done
-          echo "All op-e2e Python files compile"
-      - name: Shell syntax check
-        run: |
-          for f in tools/op-e2e/*.sh; do
-            bash -n "$f" || exit 1
-          done
-          echo "All op-e2e shell scripts parse"
-      - name: run_all.sh gate structure sanity
-        run: |
-          # Every suite script referenced by the gate must exist.
-          grep -oE 'run_step [a-z0-9_]+' tools/op-e2e/run_all.sh | \
-            awk '{print $2}' | while read -r name; do
-            [ -f "tools/op-e2e/${name}.py" ] || { echo "::error::run_all.sh references missing ${name}.py"; exit 1; }
-          done
-          echo "run_all.sh references resolve"

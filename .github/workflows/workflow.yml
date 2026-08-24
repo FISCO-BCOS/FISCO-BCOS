@@ -122,12 +122,30 @@ jobs:
         run: |
           cd build
           cmake --build .
+      - name: Checkout op-stack-e2e-tests assets
+        # Black-box e2e drivers, genesis toolchain and t8n generator live in the
+        # standalone repo FISCO-BCOS/op-stack-e2e-tests (CI triggers stay here).
+        # Symlinked into the historical in-tree paths so scripts, CMake macros and
+        # the regen action below are unchanged. Pin = the asset-repo commit this
+        # repo's tests are verified against; bump deliberately.
+        if: matrix.os != 'windows-2025'
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 2ef9d0c
+          path: e2e-tests
+      - name: Symlink e2e assets into in-tree paths
+        if: matrix.os != 'windows-2025'
+        run: |
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
       - name: Regenerate opstack t8n vectors
         # The opstack t8n tests (opstack-executor-block-tests) read reference vectors
         # from the source tree at runtime; the JSON is git-ignored and regenerated here
         # from pinned op-geth before `ctest`. Windows builds with -DTESTS=OFF, so no tests.
         if: matrix.os != 'windows-2025'
-        uses: ./.github/actions/opstack-t8n-regen
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@2ef9d0c
       - name: Test
         if: matrix.os != 'windows-2025'
         run: |
@@ -322,10 +340,23 @@ jobs:
         run: |
           cd build
           cmake --build . --parallel 3
+      - name: Checkout op-stack-e2e-tests assets
+        # See the build-matrix job: e2e assets come from the standalone repo,
+        # symlinked into the in-tree paths for the regen action below.
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 2ef9d0c
+          path: e2e-tests
+      - name: Symlink e2e assets into in-tree paths
+        run: |
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
       - name: Regenerate opstack t8n vectors
         # ctest below includes opstack-executor-block-tests, which needs the t8n vectors
         # in the source tree at runtime (git-ignored, regenerated from pinned op-geth).
-        uses: ./.github/actions/opstack-t8n-regen
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@2ef9d0c
       - name: Run tests
         run: |
           cd build
@@ -487,6 +518,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           clean: false
+      - name: Checkout op-stack-e2e-tests assets
+        # e2e drivers live in the standalone asset repo; symlinked into the
+        # in-tree tools/ paths so the scripts below are unchanged.
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 2ef9d0c
+          path: e2e-tests
+      - name: Symlink e2e assets into in-tree paths
+        run: |
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
       - name: Download fisco-bcos-air artifact
         uses: actions/download-artifact@v4
         with:
