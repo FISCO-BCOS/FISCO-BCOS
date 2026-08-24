@@ -65,8 +65,8 @@ EXPECTED_CAPABILITIES = {
 # The one genuinely unimplemented version: routable, answers -38005, never advertised.
 UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4",)
 
-# The gas limit sent in payloadAttributes. See test_negative_cases / the note below: this
-# node currently IGNORES it and takes the gas limit from its own SystemConfig.
+# The gas limit sent in payloadAttributes. The node honours it verbatim as the built block's
+# gas limit (and as the block's execution budget) — see test_attributes_gas_limit_is_honored.
 ATTRS_GAS_LIMIT = "0x1c9c380"
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----
@@ -304,6 +304,13 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         _log_fail("executionPayload missing withdrawalsRoot (Isthmus V4 shape)")
         return False
 
+    # The gas limit the CL dictated in payloadAttributes must be the built block's.
+    if int(payload["gasLimit"], 16) != int(ATTRS_GAS_LIMIT, 16):
+        _log_fail(
+            f"built gasLimit {payload['gasLimit']} != the attribute we sent {ATTRS_GAS_LIMIT}"
+        )
+        return False
+
     # Unit check, wire side: the Engine boundary speaks Unix SECONDS in both directions.
     # This catches a ONE-SIDED break only (parse or serialize, not both): removing the
     # conversion from both cancels out on the wire and leaves this equality holding. The
@@ -415,18 +422,16 @@ def run_v2_block_flow() -> None:
     _log_pass()
 
 
-def test_attributes_gas_limit_is_ignored() -> None:
-    """KNOWN GAP pin: payloadAttributes.gasLimit does not reach the built block.
+def test_attributes_gas_limit_is_honored() -> None:
+    """payloadAttributes.gasLimit becomes the built block's gas limit.
 
     On OP Stack the CL relays the L1 SystemConfig gas limit in this attribute and op-geth
-    honours it verbatim (miner/worker.go prepareWork), rejecting the FCU outright when it
-    is absent (api_optimism.go checkOptimismPayloadAttributes). This node instead always
-    takes the gas limit from its own SystemConfig, so two builds that differ ONLY in the
-    attribute come out with the same gasLimit. Wiring the attribute in changes block
-    production and is left to the header-fields work; this check turns red the day it
-    happens, so the gap cannot be forgotten.
+    writes it verbatim into the header (miner/worker.go prepareWork). Two builds that
+    differ ONLY in the attribute must therefore come out with the gasLimit each asked for.
+    An absent attribute keeps falling back to this chain's own SystemConfig value, which is
+    what the vanilla V1/V2/V3 callers (and this node's built-in single-node CL) rely on.
     """
-    _log_test("payloadAttributes.gasLimit is ignored (known gap)")
+    _log_test("payloadAttributes.gasLimit is honored")
 
     head_hash = get_head_hash()
     fc_state = {
@@ -452,15 +457,18 @@ def test_attributes_gas_limit_is_ignored() -> None:
         result = rpc_result("engine_getPayloadV5", [payload_id])
         return result["executionPayload"]["gasLimit"]
 
+    second_sent = "0x2faf080"
     first = build_with(ATTRS_GAS_LIMIT)
-    second = build_with("0x2faf080")
-    if first != second:
+    second = build_with(second_sent)
+    # Compare numerically: the node serializes the quantity minimally, which need not be
+    # the exact hex spelling that was sent.
+    if int(first, 16) != int(ATTRS_GAS_LIMIT, 16) or int(second, 16) != int(second_sent, 16):
         _log_fail(
-            "payloadAttributes.gasLimit now affects the built block "
-            f"({first} vs {second}) — the known gap is closed, update this test"
+            "payloadAttributes.gasLimit did not reach the built block "
+            f"(sent {ATTRS_GAS_LIMIT}/{second_sent}, built {first}/{second})"
         )
         return
-    _log_info(f"built gasLimit = {first} for both attribute values (from SystemConfig)")
+    _log_info(f"built gasLimit = {first} / {second} for the two attribute values")
     _log_pass()
 
 
@@ -574,8 +582,8 @@ def main() -> int:
         # 6. The pre-Karst surface is still live.
         run_v2_block_flow()
 
-        # 7. Known gap: attributes.gasLimit does not reach the built block.
-        test_attributes_gas_limit_is_ignored()
+        # 7. attributes.gasLimit reaches the built block.
+        test_attributes_gas_limit_is_honored()
 
         # 8. Error semantics.
         test_negative_cases()

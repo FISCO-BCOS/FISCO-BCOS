@@ -1128,6 +1128,44 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 }
 
+// OP Stack: attributes.gasLimit is the L1 SystemConfig gas limit relayed by the CL, and
+// op-geth writes it verbatim into the built header (miner/worker.go:362-363). Two builds
+// differing ONLY in the attribute must come out with the gas limit each asked for; an
+// attribute-less build keeps falling back to this chain's own SystemConfig value.
+BOOST_AUTO_TEST_CASE(attributes_gas_limit_is_honored)
+{
+    constexpr std::uint64_t c_firstGasLimit = 30'000'000;
+    constexpr std::uint64_t c_secondGasLimit = 50'000'000;
+
+    auto buildWith = [](std::optional<std::uint64_t> gasLimit) {
+        MemPoolImpl memPool;
+        RealGlobalStateStorageFixture globalStateStorageFixture;
+        auto forkchoiceState = makeForkchoiceState();
+        setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+            c_initialBlockNumber, c_initialBlockNumber);
+        auto payloadAttributes = makeKarstPayloadAttributes();
+        payloadAttributes.gasLimit = gasLimit;
+        auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+        auto result =
+            task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+        BOOST_REQUIRE(result.payloadId.has_value());
+        auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 5));
+        BOOST_REQUIRE(payload);
+        return payload->executionPayload.gasLimit;
+    };
+
+    BOOST_CHECK_EQUAL(buildWith(c_firstGasLimit), u256(c_firstGasLimit));
+    BOOST_CHECK_EQUAL(buildWith(c_secondGasLimit), u256(c_secondGasLimit));
+    // Absent attribute: the value getLedgerConfig read from this chain's SystemConfig —
+    // 0 on the bare fixture, which has no tx_gas_limit row. What matters is that it is
+    // neither of the two attribute values, i.e. the attribute is the only thing that
+    // moved the built gas limit above.
+    auto fallback = buildWith(std::nullopt);
+    BOOST_CHECK_NE(fallback, u256(c_firstGasLimit));
+    BOOST_CHECK_NE(fallback, u256(c_secondGasLimit));
+}
+
 BOOST_AUTO_TEST_CASE(get_payload_v5_accepts_only_v3_builds)
 {
     MemPoolImpl memPool;

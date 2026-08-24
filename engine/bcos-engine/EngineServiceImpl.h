@@ -762,6 +762,28 @@ private:
         co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
         auto blockVersion = ledgerConfig.compatibilityVersion();
 
+        // OP Stack: attributes.gasLimit is the block gas limit the L1 SystemConfig dictates
+        // through the CL. op-geth writes it verbatim into header.GasLimit
+        // (miner/worker.go:362-363). Overriding ledgerConfig here — rather than only the
+        // header field — is what makes it the EXECUTION budget as well: the block gas limit
+        // reaches evmone through std::get<0>(ledgerConfig.gasLimit()) at
+        // EthereumExecutor.cpp:23 (BlockInfo::gas_limit) and HostContext::blockGasLimit(),
+        // both fed by the ledgerConfig passed to executeBlock below. The header and payload
+        // fields read the same tuple, so this single assignment carries all three.
+        //
+        // Absent = keep the chain's own SystemConfig value. op-geth's OP path rejects a nil
+        // gasLimit with -38003 (eth/catalyst/api_optimism.go:41-43), but that check guards
+        // attributes that are OP attributes by construction. Here the same PayloadAttributes
+        // struct also serves the vanilla V1/V2/V3 callers that never send the field — the
+        // built-in single-node CL (SingleNodeConsensus::produceBlock) and the V2/V3 cases in
+        // tools/engine_integration_test.sh — so rejecting on absence would stop block
+        // production on this node's own driver. Making it mandatory belongs with the
+        // OP-only attributes flavour, not with this shared struct.
+        if (payloadAttributes.gasLimit.has_value())
+        {
+            ledgerConfig.setGasLimit({*payloadAttributes.gasLimit, nextBlockNumber});
+        }
+
         // Fill gasLimit from ledger config (FISCO-BCOS does not use EIP-1559 baseFeePerGas,
         // and logsBloom is not part of BlockHeader hash computation in FISCO-BCOS).
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
