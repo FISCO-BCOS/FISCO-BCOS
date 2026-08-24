@@ -4,7 +4,7 @@
 // All six tests green -> spike holds (Task 5 entry condition); any failure -> spike does
 // not hold (Phase 1 converges to a pure baseline).
 //
-// Note: this file is an independent TU; spikeBlk()/baseTx() are copied from OpValidateTest.cpp
+// Note: this file is an independent TU; spikeBlk()/spikeBaseTx() are copied from OpValidateTest.cpp
 // and adapted to the OpTransitionTest.cpp pattern (spikeBlk() adds coinbase =
 // OP_SEQUENCER_FEE_VAULT so the priority tip lands in an assertable named vault).
 #include "OpTestReceiptFactory.h"
@@ -44,7 +44,7 @@ state::BlockInfo spikeBlk()
     return b;
 }
 
-state::Transaction baseTx()
+state::Transaction spikeBaseTx()
 {
     state::Transaction tx;
     tx.type = state::Transaction::Type::eip1559;
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(opValidate_zero_fee_passes_balance_check)
     // rejects
     auto isthmus = isthmusConfig();
     auto block = spikeBlk();
-    auto tx = baseTx();
+    auto tx = spikeBaseTx();
     evmc::bytes envelope{0x02};  // dummy non-empty suffices; no real signature needed
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
     BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(props));
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(opValidate_zero_balance_sender_rejected)
     evmone::test::TestState ts;  // no sender inserted → get_account balance=0
     auto isthmus = isthmusConfig();
     auto block = spikeBlk();
-    auto tx = baseTx();
+    auto tx = spikeBaseTx();
     evmc::bytes envelope{0x02};
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(props));
@@ -127,9 +127,9 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
                                                // is a C struct-derived class, not applicable)
     auto block = spikeBlk();
     test::TestBlockHashes hashes;
-    auto tx = baseTx();
-    tx.to = kRecipient;  // makes the "recipient balance +value" assertion meaningful (baseTx has no
-                         // to=CREATE)
+    auto tx = spikeBaseTx();
+    tx.to = kRecipient;  // makes the "recipient balance +value" assertion meaningful (spikeBaseTx
+                         // has no to=CREATE)
     tx.value = intx::uint256{12345};
     evmc::bytes envelope{0x02};
     auto props = opValidateFromState(ts, block, tx, envelope, isthmus, /*blockGasLeft=*/30000000);
@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
-    // ---- assertion-value derivation (from spikeBlk()/baseTx()/OpTransition.cpp:237-323) ----
+    // ---- assertion-value derivation (from spikeBlk()/spikeBaseTx()/OpTransition.cpp:237-323) ----
     //   spikeBlk().base_fee = 7; tx.max_gas_price = 1000, tx.max_priority_gas_price = 10
     //   priority = min(max_priority, max_gas - base_fee) = min(10, 993) = 10
     //   effective_gas_price = base_fee + priority = 17
@@ -162,8 +162,8 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_fee_writes_back_state)
 
     // sender net debit = gas_used * effective + value (L1/operator both 0; value is
     // transferred inside host.call).
-    BOOST_CHECK_EQUAL(
-        ts.at(kSpikeSender).balance, kSenderBalance - gasUsed * effective - intx::uint256{tx.value});
+    BOOST_CHECK_EQUAL(ts.at(kSpikeSender).balance,
+        kSenderBalance - gasUsed * effective - intx::uint256{tx.value});
     // recipient receives the transferred value.
     BOOST_CHECK_EQUAL(ts.at(kRecipient).balance, intx::uint256{tx.value});
     // the base_fee portion burns into OP_BASE_FEE_VAULT; the tip goes to coinbase (sequencer
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(opTransition_zero_base_fee_no_burn)
     auto block = spikeBlk();
     block.base_fee = 0;
     test::TestBlockHashes hashes;
-    auto tx = baseTx();
+    auto tx = spikeBaseTx();
     tx.to = kRecipient;
     tx.value = intx::uint256{12345};
     evmc::bytes envelope{0x02};

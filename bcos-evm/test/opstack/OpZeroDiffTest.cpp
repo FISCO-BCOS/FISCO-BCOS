@@ -127,8 +127,8 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
     BOOST_CHECK_EQUAL(props.operator_cost_at_gas_limit, intx::uint256{0});
 
     evmone::state::StateDiff opDiff;
-    const auto opTxR =
-        opTransition(ts, block, hashes, tx, cfg, vm, props, /*chainId=*/1, kOpTestReceiptFactory, opDiff);
+    const auto opTxR = opTransition(
+        ts, block, hashes, tx, cfg, vm, props, /*chainId=*/1, kOpTestReceiptFactory, opDiff);
     BOOST_REQUIRE_EQUAL(opTxR->status(), 0);
     const auto opGasUsed = static_cast<uint64_t>(opTxR->gasUsed());
 
@@ -152,22 +152,20 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
         BOOST_CHECK_MESSAGE(
             entryEq(opNonVault[i], ethNonVault[i]), "mismatch at non-vault index " << i);
 
-    BOOST_CHECK(
-        (nonVaultDeleted(opDiff)) == (nonVaultDeleted(ethReceipt.state_diff)));
+    BOOST_CHECK((nonVaultDeleted(opDiff)) == (nonVaultDeleted(ethReceipt.state_diff)));
 
     // fee=0 下四个 vault 因已有 stub code 不再被判为空账户删除
     for (const auto& v :
         {OP_BASE_FEE_VAULT, OP_L1_FEE_VAULT, OP_OPERATOR_FEE_VAULT, OP_SEQUENCER_FEE_VAULT})
     {
-        BOOST_CHECK_MESSAGE((std::count(opDiff.deleted_accounts.begin(),
-                                opDiff.deleted_accounts.end(), v)) == (0),
+        BOOST_CHECK_MESSAGE(
+            (std::count(opDiff.deleted_accounts.begin(), opDiff.deleted_accounts.end(), v)) == (0),
             "vault should not be deleted");
     }
 
     const auto baseVaultBal = balanceOf(opDiff, OP_BASE_FEE_VAULT);
     BOOST_REQUIRE(baseVaultBal.has_value());
-    BOOST_CHECK_EQUAL(
-        *baseVaultBal, intx::uint256{opGasUsed} * intx::uint256{block.base_fee});
+    BOOST_CHECK_EQUAL(*baseVaultBal, intx::uint256{opGasUsed} * intx::uint256{block.base_fee});
 
     // L1 / operator 费用为 0：不应出现在 eth diff；OP 侧若 touch 余额须仍为 0。
     if (const auto l1 = balanceOf(opDiff, OP_L1_FEE_VAULT))
