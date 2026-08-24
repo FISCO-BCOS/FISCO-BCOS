@@ -19,6 +19,7 @@
  */
 #include "EthReceipt.h"
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/lexical_cast.hpp>
 #include <cstring>
 
@@ -180,12 +181,36 @@ EthReceiptData toEthReceiptData(TransactionReceipt const& receipt, uint8_t txTyp
     // success and 0 for every failure.
     eth.status =
         (receipt.status() == static_cast<int32_t>(protocol::TransactionStatus::None)) ? 1 : 0;
-    eth.cumulativeGasUsed =
-        boost::lexical_cast<bcos::u256>(std::string(receipt.cumulativeGasUsed()));
+    // cumulativeGasUsed may be empty on legacy receipts / older executor versions;
+    // fail closed to 0 and surface the anomaly rather than throwing an uncaught
+    // bad_lexical_cast from the receiptsRoot computation path.
+    auto const cumStr = std::string(receipt.cumulativeGasUsed());
+    if (cumStr.empty())
+    {
+        eth.cumulativeGasUsed = 0;
+        BCOS_LOG(WARNING) << "toEthReceiptData: empty cumulativeGasUsed";
+    }
+    else
+    {
+        try
+        {
+            eth.cumulativeGasUsed = boost::lexical_cast<bcos::u256>(cumStr);
+        }
+        catch (boost::bad_lexical_cast const&)
+        {
+            eth.cumulativeGasUsed = 0;
+            BCOS_LOG(WARNING) << "toEthReceiptData: non-numeric cumulativeGasUsed: " << cumStr;
+        }
+    }
     auto const bloom = receipt.logsBloom();
     if (bloom.size() == eth.logsBloom.size())
     {
         std::memcpy(eth.logsBloom.data(), bloom.data(), bloom.size());
+    }
+    else
+    {
+        BCOS_LOG(WARNING) << "toEthReceiptData: logsBloom size mismatch: " << bloom.size()
+                          << " != " << eth.logsBloom.size();
     }
     eth.logs.reserve(receipt.logEntries().size());
     for (auto const& log : receipt.logEntries())

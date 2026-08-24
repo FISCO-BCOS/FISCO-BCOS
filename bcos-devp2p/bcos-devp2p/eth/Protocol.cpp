@@ -75,6 +75,9 @@ bcos::bytesRef takeListPayload(bcos::bytesRef& _view)
     {
         throw std::runtime_error("eth: expected an RLP list");
     }
+    // Precondition: decodeHeader already guarantees header.payloadLength <= the
+    // remaining input size (it fails with InputTooShort otherwise), so the two
+    // slices below are in-bounds.
     bcos::bytesRef payload(_view.data(), header.payloadLength);
     _view = bcos::bytesRef(
         _view.data() + header.payloadLength, _view.size() - header.payloadLength);
@@ -98,17 +101,9 @@ bcos::bytes takeBytes(bcos::bytesRef& _view)
 bcos::bytes takeRlpItem(bcos::bytesRef& _view)
 {
     size_t const originalSize = _view.size();
-    bcos::byte const* const originalData = _view.data();
     auto [error, header] = bcos::codec::rlp::decodeHeader(_view);
     if (error)
     {
-        std::cerr << "[eth] takeRlpItem decodeHeader fail: err=" << (error ? error->errorMessage() : "?")
-                  << " origSize=" << originalSize
-                  << " first="
-                  << (originalSize ? bcos::toHexStringWithPrefix(
-                                         bytesConstRef(originalData, std::min<size_t>(originalSize, 16)))
-                                   : std::string("empty"))
-                  << std::endl;
         throw std::runtime_error("eth: rlp item decode failed");
     }
     // decodeHeader consumed the item prefix; rebuild prefix + payload.
@@ -379,12 +374,25 @@ bcos::bytes encodeBlockBodies(BlockBodiesMessage const& _msg)
     {
         // Transactions / uncles / withdrawals are already-encoded RLP elements
         // (legacy txs are lists, typed txs are 0x01||payload bytes); splice them
-        // in directly — do NOT re-wrap them as strings.
+        // in directly — do NOT re-wrap legacy txs as strings.
         std::vector<bcos::bytes> txs;
         txs.reserve(body.transactions.size());
         for (auto const& tx : body.transactions)
         {
-            txs.push_back(tx);
+            if (!tx.empty() && tx.front() < 0xc0)
+            {
+                // Typed EIP-2718 tx (0xNN || rlp(payload)): geth's
+                // Transaction.EncodeRLP wraps the opaque bytes in an RLP string
+                // (rlp.Encode(w, buf.Bytes())), so the canonical wire form inside
+                // the BlockBodies transactions list is an RLP string — NOT bare
+                // type-byte + payload. Wrap to match geth byte-for-byte.
+                txs.push_back(rlpItem(bytesConstRef(tx.data(), tx.size())));
+            }
+            else
+            {
+                // Legacy tx: already a standalone RLP list — splice directly.
+                txs.push_back(tx);
+            }
         }
         std::vector<bcos::bytes> uncles;
         uncles.reserve(body.uncles.size());
