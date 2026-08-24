@@ -2,6 +2,7 @@
 #include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-rpc/jsonrpc/Common.h>  // WEB3_LOG
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
@@ -12,6 +13,28 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     {
         auto gasPrice = receipt.effectiveGasPrice();
         result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
+    }
+
+    // OP Stack deposit (0x7e): the tx JSON nonce must reflect the deposit's actual
+    // execution nonce (Regolith+ semantics — the deposit nonce lives in the receipt,
+    // deposits carry no nonce field of their own). The base combineTxResponse above
+    // emits 0x0; overwrite it with the receipt's depositNonce when present, so
+    // contract-address derivation (keccak(rlp([sender, nonce]))[12:]) and wallets see
+    // the value op-geth reports. Without the meta the deposit was never executed (or is
+    // a pre-Regolith block) and 0x0 stands.
+    if (auto extraBytes = tx.extraTransactionBytes();
+        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    {
+        if (auto meta = receipt.opStackMeta(); meta.has_value() && meta->deposit_nonce)
+        {
+            result["nonce"] = toQuantity(*meta->deposit_nonce);
+            // op-geth also surfaces depositReceiptVersion on the tx object
+            // (internal/ethapi/api.go:1210-1213); absent without the meta.
+            if (meta->deposit_receipt_version)
+            {
+                result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
+            }
+        }
     }
 }
 
@@ -87,20 +110,38 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         Web3Transaction web3Tx;
         auto extraBytesRef = bcos::bytesRef(const_cast<byte*>(tx.extraTransactionBytes().data()),
             tx.extraTransactionBytes().size());
-        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
+        if (auto error = codec::rlp::decodeFromPayload(extraBytesRef, web3Tx); error != nullptr)
+        {
+            // Undecodable web3 payload (corrupt extraTransactionBytes, or a tars mirror that
+            // diverged from the envelope): never serialize half-decoded state. Emit zeroed
+            // web3 fields instead (same posture as the deposit fallback above) and log once.
+            WEB3_LOG(WARNING) << LOG_DESC("TransactionResponse: undecodable web3 payload")
+                              << LOG_KV("hash", tx.hash().hexPrefixed())
+                              << LOG_KV("reason", error->errorMessage());
+            result["nonce"] = "0x0";
+            result["type"] = toQuantity(0);
+            result["value"] = "0x0";
+            result["chainId"] = toQuantity(0);
+            result["v"] = "0x0";
+            result["r"] = "0x0";
+            result["s"] = "0x0";
+            return;
+        }
         result["nonce"] = toQuantity(web3Tx.nonce);
         result["type"] = toQuantity(static_cast<uint8_t>(web3Tx.type));
         result["value"] = toQuantity(web3Tx.value);
-        if (web3Tx.type >= TransactionType::EIP2930)
+        // Use explicit range checks rather than `>=` so that Deposit (0x7e), which is numerically
+        // larger than all EIP types, is excluded from EIP-specific field output. EIP-7702 is a
+        // fee-market type with an access list, so the upper bound is EIP7702 (matching
+        // takeToTarsTransaction on the write side).
+        if (web3Tx.type >= TransactionType::EIP2930 && web3Tx.type <= TransactionType::EIP7702)
         {
             result["accessList"] = Json::arrayValue;
-            result["accessList"].resize(web3Tx.accessList.size());
             for (auto& accessList : web3Tx.accessList)
             {
                 Json::Value access = Json::objectValue;
                 access["address"] = accessList.account.hexPrefixed();
                 access["storageKeys"] = Json::arrayValue;
-                access["storageKeys"].resize(accessList.storageKeys.size());
                 for (const auto& j : accessList.storageKeys)
                 {
                     Json::Value storageKey = j.hexPrefixed();
@@ -109,25 +150,62 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
                 result["accessList"].append(std::move(access));
             }
         }
-        if (web3Tx.type >= TransactionType::EIP1559)
+        if (web3Tx.type >= TransactionType::EIP1559 && web3Tx.type <= TransactionType::EIP7702)
         {
             result["maxPriorityFeePerGas"] = toQuantity(web3Tx.maxPriorityFeePerGas);
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
-        if (web3Tx.type >= TransactionType::EIP4844)
+        // Legacy transactions encode v as the EIP-155 value chainId*2+35+parity (27+parity
+        // pre-EIP-155); typed transactions use the plain y-parity. Clients like op-geth's
+        // types.NewTx reject a legacy v < 35 when chainId is set, so the full value must be
+        // reconstructed from the stored parity byte — the storage layer keeps only the parity.
+        if (web3Tx.type == TransactionType::Legacy)
         {
-            result["maxFeePerBlobGas"] = web3Tx.maxFeePerBlobGas.str();
+            if (web3Tx.chainId.has_value() && web3Tx.chainId.value() != 0)
+            {
+                result["v"] =
+                    toQuantity(u256(web3Tx.chainId.value()) * 2 + 35 + tx.signatureData()[64]);
+            }
+            else
+            {
+                result["v"] = toQuantity(27 + tx.signatureData()[64]);
+            }
+        }
+        if (web3Tx.type == TransactionType::EIP4844)
+        {
+            result["maxFeePerBlobGas"] = toQuantity(web3Tx.maxFeePerBlobGas);
             result["blobVersionedHashes"] = Json::arrayValue;
-            result["blobVersionedHashes"].resize(web3Tx.blobVersionedHashes.size());
             for (const auto& blobVersionedHashe : web3Tx.blobVersionedHashes)
             {
                 Json::Value hash = blobVersionedHashe.hexPrefixed();
                 result["blobVersionedHashes"].append(std::move(hash));
             }
         }
+        if (web3Tx.type == TransactionType::EIP7702)
+        {
+            // geth parity: each entry serializes as
+            // {chainId, address, nonce, yParity, r, s} with hex-quantity scalars.
+            result["authorizationList"] = Json::arrayValue;
+            for (const auto& auth : web3Tx.authorizationList)
+            {
+                Json::Value entry = Json::objectValue;
+                entry["chainId"] = toQuantity(auth.chainId);
+                entry["address"] = auth.address.hexPrefixed();
+                entry["nonce"] = toQuantity(auth.nonce);
+                entry["yParity"] = toQuantity(auth.yParity);
+                entry["r"] = toQuantity(auth.r);
+                entry["s"] = toQuantity(auth.s);
+                result["authorizationList"].append(std::move(entry));
+            }
+        }
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
-    result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    // v: set for legacy transactions above (EIP-155 reconstruction); everything else
+    // reports the stored y-parity byte directly.
+    if (!result.isMember("v"))
+    {
+        result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    }
 }

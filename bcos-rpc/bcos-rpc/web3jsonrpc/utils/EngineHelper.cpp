@@ -331,6 +331,9 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
+        .blockAccessList = std::nullopt,
+        .slotNumber = std::nullopt,
+        .rawTransactions = std::nullopt,
         .withdrawalsRoot = std::nullopt,
     };
     if (ep.isMember("extraData"))
@@ -355,13 +358,23 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 InvalidParams, "Expected array of hex strings for executionPayload.transactions"));
         }
-        // Raw EIP-2718 bytes, hex-decoded verbatim. No transaction decoding happens
-        // here — getPayload must later return exactly these bytes.
+        // Raw EIP-2718 bytes, hex-decoded verbatim, kept in BOTH carriers:
+        //   - payload.transactions (EngineTransaction{raw, decoded=nullptr}) — the Engine-API
+        //     wire form; getPayload must later return exactly these raw bytes. No decoding
+        //     happens here — classification/decoding of the raw bytes is the dispatch table's
+        //     job (bcos-framework/engine/RawTransactionDispatch.h), matching upstream.
+        //   - payload.rawTransactions (vector<bytes>) — the OP path's sole tx carrier (raw
+        //     EIP-2718 envelope bytes incl. the 0x7E deposit), consumed by OpSchedulerSeam.
         payload.transactions.reserve(ep["transactions"].size());
+        payload.rawTransactions.emplace();
+        payload.rawTransactions->reserve(ep["transactions"].size());
         for (Json::ArrayIndex i = 0; i < ep["transactions"].size(); ++i)
         {
-            payload.transactions.push_back(bcos::engine::EngineTransaction{
-                .raw = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i),
+            auto txData = parseRawTransactionElement(ep["transactions"][i], "executionPayload", i);
+            payload.rawTransactions->push_back(txData);  // keep unconditionally: OP carrier is
+                                                         // decoupled from decode
+            payload.transactions.push_back(engine::EngineTransaction{
+                .raw = std::move(txData),
                 .decoded = nullptr,
             });
         }
@@ -822,5 +835,12 @@ void bcos::rpc::combineGetPayloadResponse(Json::Value& _result,
     if (_response->parentBeaconBlockRoot.has_value())
     {
         _result["parentBeaconBlockRoot"] = _response->parentBeaconBlockRoot->hexPrefixed();
+    }
+    // V4 (Prague payload shape): executionRequests is a required member of the response. This
+    // chain produces none (no deposit/consolidation requests), so an empty list is the honest
+    // payload — op-geth's own no-request blocks serialize the same shape.
+    if (version == engine::ApiVersion::V4)
+    {
+        _result["executionRequests"] = Json::Value(Json::arrayValue);
     }
 }

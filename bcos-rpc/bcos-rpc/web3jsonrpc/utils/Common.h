@@ -21,9 +21,36 @@
 #pragma once
 
 #include <bcos-rpc/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+
+#include <boost/algorithm/string/case_conv.hpp>
+#include <string>
+#include <string_view>
 
 namespace bcos::rpc
 {
+/// Normalize a protocol::LogEntry address view to 40-char lowercase hex (no 0x prefix).
+/// Producers are inconsistent: the OP execution path stores the 20 raw address bytes,
+/// while legacy paths store the ASCII hex string (with or without 0x). Length 20 is
+/// unambiguous (a hex-string form is 40/42 chars), so branch on it.
+inline std::string toLogAddressHex(std::string_view address)
+{
+    if (address.size() == 20)
+    {
+        auto hex = bcos::toHex(address);
+        boost::algorithm::to_lower(hex);
+        return hex;
+    }
+    std::string_view view = address;
+    if (view.starts_with("0x") || view.starts_with("0X"))
+    {
+        view.remove_prefix(2);
+    }
+    std::string hex{view};
+    boost::algorithm::to_lower(hex);
+    return hex;
+}
+
 constexpr const uint64_t LowestGasPrice{21000};
 constexpr const uint64_t LowestGasUsed{21000};
 enum Web3JsonRpcError : int32_t
