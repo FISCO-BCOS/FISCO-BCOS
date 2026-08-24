@@ -225,6 +225,15 @@ jobs:
             --rpc-url http://127.0.0.1:8555 --chain-id 914901 > /dev/null
           echo "POST-CLAIM TX OK — sequencer healthy after claim"
 
+      - name: Operational resilience triad (batcher/FISCO/op-node restarts)
+        # op-e2e actions/ parity: hard-kill each component mid-operation,
+        # restart it correctly, assert the chain self-heals — heads resume
+        # advancing and finalized never regresses. Guards the batcher SIGHUP
+        # trap (restart must survive 70s) and the FISCO same-data-dir restart
+        # contract (a data wipe + op-node restart pins finalized at 0 forever).
+        run: |
+          C2=/tmp/c2 bash tools/op-e2e/resilience_test.sh
+
       - name: eth_getProof assertion (OP flat-state path)
         # eth_getProof on the OP path rebuilds the whole trie from the
         # committed flat state (no persisted MPT nodes) — the endpoint answered
@@ -260,3 +269,127 @@ jobs:
             /tmp/c2/op-node.log
             /tmp/c2/fisco/nohup.out
           retention-days: 7
+
+  ephemeral-e2e:
+    # One-shot compressed devnet in a mktemp workspace running the FULL
+    # cross-domain battery: mode preflight (OP-stack vs eth/PBFT four-surface
+    # evidence), L1->L2 deposit (exact credit + calldata variants), L2->L1
+    # withdraw closed loop, both adversarial dispute scenarios (abandoned ->
+    # DEFENDER_WINS; dishonest -> CHALLENGER_WINS with the fake-root prove
+    # oracle), rpc_matrix tier-1 (61 checks), then unconditional teardown.
+    # Additive to c2-devnet (that job is untouched); prep steps intentionally
+    # duplicated rather than refactored into a composite action to keep this
+    # change conflict-free for concurrent work on this file.
+    name: Ephemeral cross-domain e2e (mode/deposit/withdraw/contest/matrix)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BIN_DIR: /tmp/eph-bin
+      FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Check runner architecture
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" != "x86_64" ]; then
+            echo "::error::ephemeral-e2e requires x86_64 runner (got $ARCH). workflow.yml only uploads x86_64 artifacts."
+            exit 1
+          fi
+
+      - name: Check workflow_run status
+        if: github.event_name == 'workflow_run'
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "::error::workflow.yml did not succeed (conclusion=${{ github.event.workflow_run.conclusion }})"
+            exit 1
+          fi
+
+      - name: Cache Foundry
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/forge
+          key: foundry-${{ runner.os }}-${{ runner.arch }}-bin-v1
+
+      - name: Install foundry
+        run: |
+          set -eo pipefail
+          FOUNDRY_VER=$(curl -fsSL "https://api.github.com/repos/foundry-rs/foundry/releases/latest" \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')
+          curl -fsSL "https://github.com/foundry-rs/foundry/releases/download/v${FOUNDRY_VER}/foundry_v${FOUNDRY_VER}_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin
+          forge --version && cast --version && anvil --version
+
+      - name: Download fisco-bcos-air from workflow.yml
+        run: |
+          RUN_ID=$(gh run list --workflow=workflow.yml --branch=master \
+            --status=success --limit=1 --json databaseId \
+            --jq '.[0].databaseId')
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "::error::No successful workflow.yml run found on main"
+            exit 1
+          fi
+          mkdir -p build/fisco-bcos-air
+          gh run download "$RUN_ID" \
+            -n fisco-bcos-ubuntu-24-x86_64 \
+            -D build/fisco-bcos-air/
+          chmod +x build/fisco-bcos-air/fisco-bcos
+
+      - name: Clone optimism monorepo (pinned commit)
+        run: |
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/ethereum-optimism/optimism /tmp/optimism
+          git -C /tmp/optimism fetch --depth 1 origin 5f90f749caea14398554afb75062f7111b1fc554
+          git -C /tmp/optimism checkout FETCH_HEAD
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ runner.arch }}-build-5f90f749
+          restore-keys: |
+            go-${{ runner.os }}-${{ runner.arch }}-build-
+
+      - name: Build op-deployer / op-node / op-batcher into BIN_DIR
+        run: |
+          mkdir -p "$BIN_DIR"
+          (cd /tmp/optimism/op-deployer && go build -o "$BIN_DIR/op-deployer" ./cmd/op-deployer)
+          (cd /tmp/optimism/op-node && go build -o "$BIN_DIR/op-node" ./cmd)
+          (cd /tmp/optimism/op-batcher && go build -o "$BIN_DIR/op-batcher" ./cmd)
+          ls -la "$BIN_DIR"
+
+      - name: Install python deps
+        run: |
+          python3 -m pip install --quiet pyyaml 2>/dev/null || \
+          pip3 install --quiet pyyaml 2>/dev/null || \
+          pip3 install --break-system-packages --quiet pyyaml 2>/dev/null || true
+          pip3 install --break-system-packages --quiet \
+            rlp 'eth-hash[pycryptodome]' trie 2>/dev/null || \
+          pip3 install --quiet rlp 'eth-hash[pycryptodome]' trie || true
+
+      - name: Run the ephemeral cross-domain e2e
+        env:
+          MONOREPO: /tmp/optimism
+          L2CONTRACTS: ${{ github.workspace }}/bcos-l2-contracts
+          OPGEN: ${{ github.workspace }}/tools/opstack-genesis
+          MATRIX: "1"
+        run: |
+          set -eo pipefail
+          bash tools/op-e2e/withdraw_e2e_ephemeral.sh 2>&1 | tee /tmp/eph-e2e.log
+          grep -q "FISCO OP-STACK CONFIRMED" /tmp/eph-e2e.log
+          grep -q "E2E ALL GREEN" /tmp/eph-e2e.log
+          grep -q "e2e green in" /tmp/eph-e2e.log
+
+      - name: Upload diagnostic log on failure
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ephemeral-e2e-log-${{ github.run_id }}
+          path: /tmp/eph-e2e.log
+          retention-days: 7
+
