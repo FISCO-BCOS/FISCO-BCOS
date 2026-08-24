@@ -15,6 +15,7 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
@@ -1072,6 +1073,94 @@ BOOST_AUTO_TEST_CASE(FIB54_ConcurrentBatchMarkTxs)
         BOOST_CHECK(storage.exists(tx->hash()));
     }
     BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
+}
+
+BOOST_AUTO_TEST_CASE(TimeoutCleanupNotifiesResultWithEmptyReceipt)
+{
+    // Reproduces the production issue reported as "sendTransaction returns status=0,
+    // blockNumber=0": a tx that sits in the pool past the expiry window without being
+    // sealed into a block is cleaned up by the seal-time expiry check inside
+    // batchSealTransactions(). removeInvalidTxs() then fires the submit callback with a
+    // TransactionSubmitResult whose status is TransactionPoolTimeout but whose embedded
+    // receipt is a default-constructed empty receipt (status=0, blockNumber=0, gasUsed=0).
+    // JsonRpcImpl_2_0::sendTransaction serializes status/blockNumber/gasUsed from the
+    // RECEIPT rather than from the result, so the client sees a bogus "status=0,
+    // blockNumber=0" success indistinguishable from a real execution.
+
+    // Production nodes (both AIR and MAX) wire ProtocolInitializer's
+    // bcostars::protocol::TransactionSubmitResultFactoryImpl, whose transactionReceipt()
+    // returns a non-null default receipt even when none was set. Reproduce that here —
+    // the bcos-protocol factory would return nullptr and mask the symptom.
+    auto tarsResultFactory =
+        std::make_shared<bcostars::protocol::TransactionSubmitResultFactoryImpl>();
+    auto timeoutConfig = std::make_shared<TxPoolConfig>(txValidator, tarsResultFactory, nullptr,
+        ledger, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024, /*checkSig*/ false);
+
+    // batchSealTransactions() needs a real BlockFactory
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
+    timeoutConfig->setBlockFactory(blockFactory);
+
+    // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
+    auto sharedStorage = std::make_shared<MemoryStorage>(timeoutConfig);
+
+    auto tx = makeTx("timeout_empty_receipt", false);
+    BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
+    BOOST_CHECK_EQUAL(sharedStorage->size(), 1U);
+
+    // Attach the submit callback through the AlreadyInTxPoolAndAccept shortcut: the tx is
+    // already in the pool without a callback, so verifyAndSubmitTransaction() registers the
+    // callback and returns immediately without running the validation chain (the mock
+    // validator needs no validateTransaction() stub).
+    bcos::protocol::TransactionSubmitResult::Ptr captured;
+    bool callbackFired = false;
+    auto attachResult = sharedStorage->verifyAndSubmitTransaction(
+        tx,
+        [&](bcos::Error::Ptr error, bcos::protocol::TransactionSubmitResult::Ptr result) {
+            BOOST_CHECK(error == nullptr);
+            callbackFired = true;
+            captured = std::move(result);
+        },
+        /*checkPoolLimit*/ false, /*lock*/ false);
+    BOOST_CHECK(attachResult == TransactionStatus::None);
+    BOOST_CHECK(tx->submitCallback());
+
+    // Age the tx past the default 10-minute expiry window, then run the seal-time expiry
+    // cleanup that a consensus node performs inside batchSealTransactions().
+    tx->setImportTime(
+        static_cast<int64_t>(utcTime()) - static_cast<int64_t>(TX_DEFAULT_EXPIRATION_TIME) - 1);
+
+    std::vector<protocol::TransactionMetaData::Ptr> txsList;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxsList;
+    sharedStorage->batchSealTransactions(txsList, sysTxsList, 100);
+
+    // The expired tx must not be sealed and must be dropped from the pool.
+    BOOST_CHECK(txsList.empty());
+    BOOST_CHECK_EQUAL(sharedStorage->size(), 0U);
+
+    // The callback fires exactly once with the timeout result.
+    BOOST_REQUIRE(callbackFired);
+    BOOST_REQUIRE(captured);
+    BOOST_CHECK_EQUAL(
+        captured->status(), static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
+
+    // The bug: the embedded receipt is an empty default receipt — a client serializing
+    // receipt.status()/blockNumber()/gasUsed() sees 0/0/0, indistinguishable from success.
+    auto receipt = captured->transactionReceipt();
+    BOOST_REQUIRE(receipt);
+    BOOST_CHECK_EQUAL(receipt->status(), 0);
+    BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
+    BOOST_CHECK(receipt->gasUsed() == 0);
+    BOOST_CHECK(receipt->logEntries().empty());
+    BOOST_CHECK(receipt->output().empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
