@@ -255,7 +255,16 @@ jobs:
           assert len(p["accountProof"]) > 0, "empty accountProof"
           assert p["storageHash"] != "0x" + "0" * 64, "zero storageHash"
           assert p["codeHash"] != "0x" + "0" * 64, "zero codeHash"
-          print("GETPROOF OK: accountProof nodes=%d storageHash=%s" % (len(p["accountProof"]), p["storageHash"]))'
+              print("GETPROOF OK: accountProof nodes=%d storageHash=%s" % (len(p["accountProof"]), p["storageHash"]))'
+
+      - name: L2 tx scenarios (contract creation + failed-tx inclusion)
+        # The two coverage gaps every other suite leaves open: contract
+        # DEPLOYMENT via an L2 tx (b3_contracts only runs on the B3
+        # single-node bed) and FAILED-tx inclusion (a reverting call must
+        # land in a block with status 0x0, not vanish). Deploys an embedded
+        # counter, inc()s twice, reverts once, asserts receipts and state.
+        run: |
+          bash tools/op-e2e/l2_tx_scenarios.sh
 
       - name: Upload diagnostic logs on failure
         if: failure()
