@@ -36,7 +36,7 @@ AesCtrCipher::AesCtrCipher(bytesConstRef _key, bytesConstRef _iv, Direction _dir
         EVP_CIPHER_CTX_free(m_ctx);
         throw std::invalid_argument("AesCtrCipher: key must be 16 or 32 bytes");
     }
-    if (_iv.size() != AES_BLOCK_SIZE)
+    if (_iv.size() != kAesBlockSize)
     {
         EVP_CIPHER_CTX_free(m_ctx);
         throw std::invalid_argument("AesCtrCipher: iv must be 16 bytes");

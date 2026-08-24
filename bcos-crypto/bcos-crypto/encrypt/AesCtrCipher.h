@@ -28,12 +28,16 @@ typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
 
 namespace bcos::crypto
 {
-constexpr size_t AES_BLOCK_SIZE = 16;
+// AES block size in bytes. Named kAesBlockSize (not AES_BLOCK_SIZE) because
+// OpenSSL's <openssl/aes.h> defines an AES_BLOCK_SIZE macro, and macros ignore
+// namespaces — a TU that includes openssl/aes.h before this header would break
+// the build.
+constexpr size_t kAesBlockSize = 16;
 
 // Round `size` up to the next multiple of the AES block size (16).
 inline size_t aesRoundUpToBlockSize(size_t _size)
 {
-    return (_size + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE * AES_BLOCK_SIZE;
+    return (_size + kAesBlockSize - 1) / kAesBlockSize * kAesBlockSize;
 }
 
 // Stateful AES-CTR stream cipher: the keystream continues across update()

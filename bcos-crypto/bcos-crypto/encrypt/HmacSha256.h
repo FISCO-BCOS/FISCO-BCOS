@@ -14,7 +14,9 @@
  *  limitations under the License.
  *
  * @file HmacSha256.h
- * @brief HMAC-SHA256 (RFC 2104) — required by RLPx ECIES and frame MACs.
+ * @brief HMAC-SHA256 (RFC 2104) — required by RLPx ECIES handshake message
+ *        authentication. (Note: the RLPx frame egress/ingress MACs are a
+ *        keccak-256 running state, not HMAC-SHA256.)
  * @date 2026/8/18
  */
 #pragma once
