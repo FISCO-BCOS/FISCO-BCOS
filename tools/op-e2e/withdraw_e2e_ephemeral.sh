@@ -14,7 +14,8 @@
 # BIN_DIR: where to stage op-deployer/op-node/op-batcher from (defaults to
 # /tmp/c2 locally; CI points it at its own build staging). MATRIX=1 additionally
 # runs the rpc_matrix tier-1 suite against the instance before teardown
-# (funds the matrix sender first). CONTEST=0 skips the adversarial scenarios.
+# (funds the matrix sender first). CONTEST=0 skips the adversarial scenarios;
+# XDM=1 adds the L2->L1 cross-domain-messaging relay leg.
 set -euo pipefail
 
 BIN_DIR="${BIN_DIR:-/tmp/c2}"
@@ -194,6 +195,12 @@ if [ "${CONTEST:-1}" = "1" ]; then
   # root provably rejects the real proof), so no interference with the
   # finalized state.
   python3 "$HERE/withdraw_claim.py" "$TX" --wait-finalized 0 --contest dishonest
+fi
+
+# ── phase 3.5 (optional): XDM L2->L1 relay leg ──────────────────────────────
+if [ "${XDM:-0}" = "1" ]; then
+  log "running the XDM L2->L1 relay leg"
+  bash "$HERE/xdm_e2e.sh"
 fi
 
 # ── phase 4 (optional): rpc_matrix tier-1 against the live instance ───────
