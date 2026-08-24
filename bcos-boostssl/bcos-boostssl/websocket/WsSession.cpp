@@ -478,6 +478,12 @@ void WsSession::asyncSendMessage(const WsMessage& _msg, Options _options, RespCa
 {
     auto seq = _msg.seq();
 
+    if (_msg.raw() != m_rawMessage)
+    {
+        if (_respFunc) { _respFunc(BCOS_ERROR_PTR(WsError::MessageEncodeError, "raw mode mismatch"), WsMessage(), nullptr); }
+        return;
+    }
+
     if (!isConnected())
     {
         WEBSOCKET_SESSION(WARNING)

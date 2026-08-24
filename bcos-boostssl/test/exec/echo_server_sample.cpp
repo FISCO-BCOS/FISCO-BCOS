@@ -109,12 +109,10 @@ int main(int argc, char** argv)
 
     wsService->start();
 
-    int i = 0;
     while (true)
     {
         // TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_BADGE(" [Main] ===>>>> ");
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        i++;
     }
 
     return EXIT_SUCCESS;

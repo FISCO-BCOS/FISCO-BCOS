@@ -97,12 +97,10 @@ int main(int argc, char** argv)
         });
     wsService->start();
 
-    int i = 0;
     while (true)
     {
         BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ");
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-        i++;
     }
 
     return EXIT_SUCCESS;

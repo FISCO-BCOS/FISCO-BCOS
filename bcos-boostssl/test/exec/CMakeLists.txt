@@ -21,3 +21,6 @@ target_link_libraries(boostssl-delay-perf PUBLIC bcos-boostssl bcos-utilities Op
 
 add_executable(boostssl-throughput-perf boostssl_throughput_perf.cpp)
 target_link_libraries(boostssl-throughput-perf PUBLIC bcos-boostssl bcos-utilities OpenSSL::SSL OpenSSL::Crypto)
+
+# smoke check: run the golden byte-identical assertion of msg_codec_perf on every CI run
+add_test(NAME msg-codec-perf-smoke COMMAND msg-codec-perf 1024 --fresh)
