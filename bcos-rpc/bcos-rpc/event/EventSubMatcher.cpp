@@ -31,10 +31,20 @@ uint32_t EventSubMatcher::matches(
     uint32_t count = 0;
     auto transactions = _block->transactions();
     auto receipts = _block->receipts();
-    for (auto [index, transaction, receipt] :
-        ::ranges::views::zip(::ranges::views::iota(0), transactions, receipts))
+    // TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted 0x7E deposits
+    // have no receipt, and the block fetch compacts the receipt list to the executed
+    // subset. Deposits form a prefix (OP payload ordering), so receipt i belongs to
+    // transaction i + (txCount - receiptCount); a plain zip would pair receipts with the
+    // deposit prefix and drop the executed tail. The offset is 0 for every block whose
+    // transactions all executed (legacy behavior unchanged).
+    auto const receiptCount = _block->receiptsSize();
+    auto const transactionCount = _block->transactionsSize();
+    auto const offset = transactionCount >= receiptCount ? transactionCount - receiptCount : 0;
+    for (std::size_t index = 0; index < receiptCount; index++)
     {
-        count += matches(_params, *receipt, *transaction, index, _result);
+        auto receipt = receipts[index];
+        auto transaction = transactions[index + offset];
+        count += matches(_params, *receipt, *transaction, index + offset, _result);
     }
 
     return count;

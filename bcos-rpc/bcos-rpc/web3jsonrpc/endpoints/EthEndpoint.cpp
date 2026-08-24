@@ -1098,10 +1098,41 @@ task::Task<void> EthEndpoint::getTransactionByHash(
     try
     {
         auto const txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
-        auto receipt = co_await ledger::getReceipt(*ledger, hash);
-        if (!receipt || !txs || txs->empty())
+        if (!txs || txs->empty())
         {
             result = Json::nullValue;
+            buildJsonContent(result, response);
+            co_return;
+        }
+        protocol::TransactionReceipt::Ptr receipt;
+        try
+        {
+            receipt = co_await ledger::getReceipt(*ledger, hash);
+        }
+        catch (std::exception const&)
+        {
+            receipt = nullptr;
+        }
+        if (!receipt)
+        {
+            // TEMPORARY (op-node interop breakpoint #3): a persisted-but-unexecuted
+            // 0x7E deposit has no receipt yet, so no block context can be resolved
+            // through it. Render the geth deposit shape with null block fields (the
+            // shape geth uses for pending transactions). Non-deposit receiptless
+            // hashes keep answering null.
+            auto const& tx = *txs->at(0);
+            if (engine::dispatchRawTransaction(tx.extraTransactionBytes()) ==
+                engine::RawTransactionKind::Deposit)
+            {
+                combineTxResponse(result, tx, 0, 0, crypto::HashType{});
+                result["blockHash"] = Json::nullValue;
+                result["blockNumber"] = Json::nullValue;
+                result["transactionIndex"] = Json::nullValue;
+            }
+            else
+            {
+                result = Json::nullValue;
+            }
             buildJsonContent(result, response);
             co_return;
         }
@@ -1143,8 +1174,25 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     }
     auto transactions = block->transactions();
     auto tx = transactions.at(transactionIndex);
-    auto receipt = co_await ledger::getReceipt(*ledger, tx->hash());
-    combineTxResponse(result, *tx, *receipt, hash);
+    protocol::TransactionReceipt::Ptr receipt;
+    try
+    {
+        receipt = co_await ledger::getReceipt(*ledger, tx->hash());
+    }
+    catch (std::exception const&)
+    {
+        receipt = nullptr;
+    }
+    if (receipt)
+    {
+        combineTxResponse(result, *tx, *receipt, hash);
+    }
+    else
+    {
+        // TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted deposits
+        // carry no receipt; the block context is already known here, so render from it.
+        combineTxResponse(result, *tx, transactionIndex, number, hash);
+    }
     buildJsonContent(result, response);
 }
 
@@ -1175,9 +1223,26 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
-        auto receipt = co_await ledger::getReceipt(*ledger, txHash);
         auto blockHash = block->blockHeader()->hash();
-        combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
+        protocol::TransactionReceipt::Ptr receipt;
+        try
+        {
+            receipt = co_await ledger::getReceipt(*ledger, txHash);
+        }
+        catch (std::exception const&)
+        {
+            receipt = nullptr;
+        }
+        if (receipt)
+        {
+            combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
+        }
+        else
+        {
+            // TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted
+            // deposits carry no receipt; the block context is already known here.
+            combineTxResponse(result, *(*tx)[0], transactionIndex, blockNumber, blockHash);
+        }
     }
     catch (std::exception const& e)
     {

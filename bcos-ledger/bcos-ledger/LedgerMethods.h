@@ -112,12 +112,24 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
     auto blockReceipts = block->receipts();
 
     // SYS_HASH_2_RECEIPT — encoded receipts keyed by tx hash.
+    //
+    // TEMPORARY (op-node interop breakpoint #3): the Engine commit path persists
+    // unexecuted forced deposits (0x7E) as transactions WITHOUT receipts, and OP payload
+    // ordering places them as a prefix of the transaction list. Receipt i therefore
+    // belongs to transaction i + (txCount - receiptCount). For every legacy caller the
+    // two counts are equal and the offset is 0 (unchanged behavior). Removed when
+    // deposit execution wiring generates real receipts.
+    auto const pairedTxCount = blockTxs ? blockTxs->size() : block->transactionsSize();
+    auto const receiptTxOffset = pairedTxCount >= block->receiptsSize() ?
+                                     pairedTxCount - block->receiptsSize() :
+                                     static_cast<size_t>(0);
     for (size_t i = 0; i < block->receiptsSize(); ++i)
     {
         bytes encodedReceipt;
         blockReceipts[i]->encode(encodedReceipt);
 
-        auto txHash = blockTxs ? blockTxs->at(i)->hash() : inlineTxs[i]->hash();
+        auto txHash = blockTxs ? blockTxs->at(i + receiptTxOffset)->hash() :
+                                 inlineTxs[i + receiptTxOffset]->hash();
 
         storage::Entry receiptEntry;
         receiptEntry.set(std::move(encodedReceipt));
@@ -257,6 +269,14 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                     }));
                 for (auto& receiptEntry : receipts)
                 {
+                    // TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted
+                    // deposits have a SYS_HASH_2_TX row but no SYS_HASH_2_RECEIPT row, so
+                    // a missing entry is legal for such blocks — skip it instead of
+                    // dereferencing an empty optional.
+                    if (!receiptEntry)
+                    {
+                        continue;
+                    }
                     auto field = receiptEntry->get();
                     auto receipt = blockFactory.receiptFactory()->createReceipt(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));

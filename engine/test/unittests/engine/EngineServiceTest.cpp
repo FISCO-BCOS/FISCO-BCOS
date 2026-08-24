@@ -17,10 +17,13 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/Ledger.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-table/src/StateStorage.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -315,6 +318,72 @@ PayloadAttributes makeKarstPayloadAttributes()
     payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
     return payloadAttributes;
 }
+
+/// One receipt per executed transaction — models a real scheduler's receipt count so the
+/// deposit-persistence tests can distinguish executed transactions (which get receipts)
+/// from persisted-but-unexecuted forced deposits (which do not).
+struct EchoScheduler
+{
+    template <class Storage, class Executor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
+        const protocol::BlockHeader&, ::ranges::input_range auto&& transactions,
+        const ledger::LedgerConfig&)
+    {
+        Keccak256 hasher;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        for ([[maybe_unused]] auto const& transaction : transactions)
+        {
+            auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+            receipt->calculateHash(hasher);
+            receipts.push_back(std::move(receipt));
+        }
+        co_return receipts;
+    }
+};
+
+/// Encode `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])` — a
+/// well-formed OP deposit envelope (same shape the RPC-side decodeDepositTransaction
+/// tests use).
+static bytes buildDepositRaw()
+{
+    bytes body;
+    bcos::codec::rlp::encode(
+        body, crypto::HashType("1111111111111111111111111111111111111111111111111111111111111111"));
+    bcos::codec::rlp::encode(body, Address("2222222222222222222222222222222222222222"));
+    bcos::codec::rlp::encode(body, Address("3333333333333333333333333333333333333333"));
+    bcos::codec::rlp::encode(body, u256(1000));                    // mint
+    bcos::codec::rlp::encode(body, u256(7));                       // value
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(21000));  // gas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));      // isSystemTx = false
+    bcos::codec::rlp::encode(body, bytes{0xde, 0xad, 0xbe, 0xef});
+    bytes raw;
+    raw.push_back(0x7e);
+    bcos::codec::rlp::encodeHeader(
+        raw, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    raw.insert(raw.end(), body.begin(), body.end());
+    return raw;
+}
+
+/// A real bcos::ledger::Ledger over an in-memory StateStorage, so newPayload's commit
+/// path exercises the genuine prewriteBlockToBuffer persistence (block tx-hash list +
+/// SYS_HASH_2_TX rows) instead of being skipped for lack of a ledger.
+struct LedgerBackedFixture
+{
+    std::shared_ptr<bcos::storage::StateStorage> ledgerStateStorage =
+        std::make_shared<bcos::storage::StateStorage>(nullptr, false);
+    bcos::protocol::BlockFactory::Ptr blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    std::shared_ptr<bcos::ledger::Ledger> ledger;
+
+    LedgerBackedFixture()
+    {
+        // asyncPrewriteBlock reads the running total transaction count from the ledger's
+        // own state storage; the table just has to exist (missing keys count as zero).
+        ledgerStateStorage->createTable(
+            std::string(bcos::ledger::SYS_CURRENT_STATE), std::string(bcos::ledger::SYS_VALUE));
+        ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, ledgerStateStorage, 100);
+    }
+};
 
 NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPayload)
 {
@@ -1239,6 +1308,142 @@ BOOST_AUTO_TEST_CASE(per_method_version_windows_and_unknown_payload)
         task::syncWait(engineService.newPayload(request, 5)), UnsupportedEngineApiVersion);
     BOOST_CHECK_THROW(
         task::syncWait(engineService.getPayload("0x01", 6)), UnsupportedEngineApiVersion);
+}
+
+// TEMPORARY contract (op-node interop breakpoint #3, smoke run 2026-08-19): a forced
+// 0x7E deposit IS persisted as a ledger transaction (op-node reads block N's tx[0] to
+// build block N+1) but is NOT executed — no receipt row exists until the execution-lane
+// wiring lands, at which point this test's receipt-side assertions flip.
+BOOST_AUTO_TEST_CASE(deposit_only_block_persists_transaction_without_receipt)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    LedgerBackedFixture ledgerFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    StubExecutor executor;
+    StubScheduler scheduler;
+    TestEngineServiceImpl engineService(memPool, globalStateStorageFixture.storage, executor,
+        scheduler, ledgerFixture.blockFactory, ledgerFixture.ledger);
+
+    auto const depositRaw = buildDepositRaw();
+    auto attributes = makePayloadAttributesV3();
+    attributes.noTxPool = true;
+    attributes.transactions = std::vector<std::string>{toHexStringWithPrefix(depositRaw)};
+
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    // SYS_HASH_2_TX has a row under the canonical hash keccak256(raw), decodable back to
+    // a transaction that carries the exact envelope bytes.
+    auto const txHash = bcos::crypto::keccak256Hash(bcos::ref(depositRaw));
+    auto txEntry = task::syncWait(bcos::storage2::readOne(globalStateStorageFixture.backendStorage,
+        bcos::executor_v1::StateKeyView{
+            ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)}));
+    BOOST_REQUIRE(txEntry.has_value());
+    auto txField = txEntry->get();
+    auto storedTx = ledgerFixture.blockFactory->transactionFactory()->createTransaction(
+        bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(txField.data()), txField.size()),
+        false, false, false);
+    BOOST_CHECK_EQUAL(storedTx->hash(), txHash);
+    auto storedRaw = storedTx->extraTransactionBytes();
+    BOOST_CHECK(bytes(storedRaw.begin(), storedRaw.end()) == depositRaw);
+
+    // No receipt row — the deposit was not executed (receiptsSize()==0 side).
+    auto receiptEntry =
+        task::syncWait(bcos::storage2::readOne(globalStateStorageFixture.backendStorage,
+            bcos::executor_v1::StateKeyView{
+                ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)}));
+    BOOST_CHECK(!receiptEntry.has_value());
+
+    // The committed block models exactly one transaction: its persisted tx-hash list
+    // (SYS_NUMBER_2_TXS) holds the deposit hash alone.
+    auto metaEntry =
+        task::syncWait(bcos::storage2::readOne(globalStateStorageFixture.backendStorage,
+            bcos::executor_v1::StateKeyView{
+                ledger::SYS_NUMBER_2_TXS, std::to_string(c_initialBlockNumber + 1)}));
+    BOOST_REQUIRE(metaEntry.has_value());
+    auto metaField = metaEntry->get();
+    auto metaBlock = ledgerFixture.blockFactory->createBlock(
+        bcos::bytesConstRef(
+            reinterpret_cast<const bcos::byte*>(metaField.data()), metaField.size()),
+        false, false);
+    BOOST_REQUIRE_EQUAL(metaBlock->transactionsMetaDataSize(), 1);
+    BOOST_CHECK_EQUAL(metaBlock->transactionHash(0), txHash);
+}
+
+// Mixed block: forced deposit (no receipt) + executed Web3 transaction (one receipt).
+// The receipt must be keyed under the WEB3 transaction's hash — the deposit prefix must
+// not shift the receipt/tx pairing in prewriteBlockToBuffer.
+BOOST_AUTO_TEST_CASE(deposit_prefix_block_keys_receipts_to_executed_transactions)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    LedgerBackedFixture ledgerFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("acacacacacacacacacac", 20);
+    auto poolTx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    StubExecutor executor;
+    EchoScheduler scheduler;
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, EchoScheduler>
+        engineService(memPool, globalStateStorageFixture.storage, executor, scheduler,
+            ledgerFixture.blockFactory, ledgerFixture.ledger);
+
+    auto const depositRaw = buildDepositRaw();
+    auto attributes = makePayloadAttributesV3();
+    attributes.transactions = std::vector<std::string>{toHexStringWithPrefix(depositRaw)};
+
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    // Deposit first (OP payload ordering), then the mempool transaction.
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 2);
+    BOOST_CHECK(payload->executionPayload.transactions[0].decoded == nullptr);
+    BOOST_CHECK(payload->executionPayload.transactions[1].decoded == poolTx);
+
+    globalStateStorageFixture.setBlockNumber(
+        payload->executionPayload.blockHash, c_initialBlockNumber + 1);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto const depositHash = bcos::crypto::keccak256Hash(bcos::ref(depositRaw));
+    // Both transactions persisted...
+    for (auto const& hash : {depositHash, poolTx->hash()})
+    {
+        auto txEntry =
+            task::syncWait(bcos::storage2::readOne(globalStateStorageFixture.backendStorage,
+                bcos::executor_v1::StateKeyView{
+                    ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(hash)}));
+        BOOST_REQUIRE(txEntry.has_value());
+    }
+    // ...but the single receipt belongs to the executed Web3 transaction, not the
+    // deposit occupying transaction index 0.
+    auto web3ReceiptEntry =
+        task::syncWait(bcos::storage2::readOne(globalStateStorageFixture.backendStorage,
+            bcos::executor_v1::StateKeyView{
+                ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(poolTx->hash())}));
+    BOOST_CHECK(web3ReceiptEntry.has_value());
+    auto depositReceiptEntry =
+        task::syncWait(bcos::storage2::readOne(globalStateStorageFixture.backendStorage,
+            bcos::executor_v1::StateKeyView{
+                ledger::SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(depositHash)}));
+    BOOST_CHECK(!depositReceiptEntry.has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

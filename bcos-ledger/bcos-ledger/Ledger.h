@@ -167,9 +167,14 @@ private:
     void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);
 
+    // allowMissing — TEMPORARY (op-node interop breakpoint #3): persisted-but-unexecuted
+    // deposit transactions have no SYS_HASH_2_RECEIPT row; asyncGetBlockDataByNumber
+    // passes true so eth_getBlockByHash/ByNumber can still assemble such blocks. Every
+    // other caller keeps the strict default (missing row = storage error).
     void asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)>
-            callback);
+            callback,
+        bool allowMissing = false);
 
     void getTxProof(const crypto::HashType& _txHash,
         std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);

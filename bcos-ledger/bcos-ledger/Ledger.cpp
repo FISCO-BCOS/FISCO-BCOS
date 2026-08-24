@@ -736,8 +736,9 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 if ((_blockFlag & RECEIPTS) != 0)
                 {
                     asyncBatchGetReceipts(
-                        hashesPtr, [block, finally](Error::Ptr&& error,
-                                       std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
+                        hashesPtr,
+                        [block, finally](Error::Ptr&& error,
+                            std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
                             for (auto& it : receipts)
                             {
                                 block->appendReceipt(it);
@@ -762,7 +763,8 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                             block->setLogsBloom(
                                 bcos::bytesConstRef(logsBloom.data(), logsBloom.size()));
                             finally(std::move(error));
-                        });
+                        },
+                        /*allowMissing=*/true);
                 }
                 if ((_blockFlag & TRANSACTIONS_HASH) != 0)
                 {
@@ -1586,10 +1588,12 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
 }
 
 void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
-    std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)> callback)
+    std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)> callback,
+    bool allowMissing)
 {
     getBlockStorage()->asyncGetRows(SYS_HASH_2_RECEIPT, *hashes,
-        [this, hashes, callback](auto&& error, std::vector<std::optional<Entry>>&& entries) {
+        [this, hashes, callback, allowMissing](
+            auto&& error, std::vector<std::optional<Entry>>&& entries) {
             if (error)
             {
                 LEDGER_LOG(DEBUG) << "Batch get receipt failed!"
@@ -1608,6 +1612,15 @@ void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> has
             {
                 if (!entry.has_value())
                 {
+                    if (allowMissing)
+                    {
+                        // TEMPORARY (op-node interop breakpoint #3): unexecuted deposit
+                        // transactions are persisted without receipts; skip the hole so
+                        // the surrounding block fetch still succeeds.
+                        LEDGER_LOG(DEBUG) << "Skip missing receipt entry: " << toHex((*hashes)[i]);
+                        ++i;
+                        continue;
+                    }
                     LEDGER_LOG(DEBUG) << "Get receipt with empty entry: " << toHex((*hashes)[i]);
                     callback(BCOS_ERROR_PTR(
                                  LedgerError::GetStorageError, "Batch get transaction failed"),
@@ -1782,7 +1795,13 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                 return;
             }
 
-            asyncBatchGetReceipts(std::make_shared<std::vector<std::string>>(_hashList),
+            // TEMPORARY (op-node interop breakpoint #3): allowMissing tolerates the
+            // receipt holes of persisted-but-unexecuted deposits. The compacted list
+            // (executed receipts in block order) is exactly the receiptsRoot preimage,
+            // so the merkle below stays correct; for fully-executed blocks the list is
+            // unchanged.
+            asyncBatchGetReceipts(
+                std::make_shared<std::vector<std::string>>(_hashList),
                 [this, cryptoSuite = this->m_blockFactory->cryptoSuite(), _onGetProof,
                     receiptHash = receiptHash, blockNumber](Error::Ptr&& _error,
                     std::vector<protocol::TransactionReceipt::Ptr>&& _receiptList) {
@@ -1810,7 +1829,8 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         << LOG_BADGE("getReceiptProof") << LOG_DESC("get merkle proof success")
                         << LOG_KV("receiptHash", receiptHash.hex());
                     _onGetProof(nullptr, std::move(merkleProofPtr));
-                });
+                },
+                /*allowMissing=*/true);
         });
 }
 

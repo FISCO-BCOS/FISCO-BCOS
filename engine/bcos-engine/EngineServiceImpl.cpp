@@ -17,8 +17,10 @@
  */
 
 #include "EngineServiceImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 
 namespace
 {
@@ -42,6 +44,28 @@ bcos::h256 bcos::engine::detail::syntheticHash(std::string_view seed)
     }
     hex.resize((c_hashBytes * 2) + 2);
     return bcos::h256(bcos::fromHex(hex));
+}
+
+bcos::protocol::Transaction::Ptr bcos::engine::detail::makeDepositLedgerTransaction(
+    bcos::bytesConstRef raw)
+{
+    // TEMPORARY (op-node interop breakpoint #3): ledger carrier for an unexecuted OP
+    // deposit. The full EIP-2718 envelope (0x7e || rlp(...)) goes into
+    // extraTransactionBytes — the field the Web3 RPC renderer decodes into the geth
+    // deposit shape (bcos-rpc TransactionResponse.cpp keys the deposit branch on its
+    // first byte) — and the canonical txHash keccak256(raw) into extraTransactionHash,
+    // which TransactionImpl::hash() returns for Web3-typed transactions and which
+    // matches the hash buildPayload feeds the transaction Merkle root for raw-only
+    // entries. No field-level decode happens here: the RPC layer already owns the
+    // read-side decode (decodeDepositTransaction) and the execution-lane wiring will
+    // own the executable decode.
+    auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>();
+    auto& inner = transaction->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.extraTransactionBytes.assign(raw.begin(), raw.end());
+    auto const hash = bcos::crypto::keccak256Hash(raw);
+    inner.extraTransactionHash.assign(hash.begin(), hash.end());
+    return transaction;
 }
 
 std::vector<std::string> bcos::engine::detail::supportedCapabilities()
