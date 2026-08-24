@@ -167,18 +167,24 @@ class EthereumHost : public evmc::Host
     std::vector<evm::Log> m_logs;
     // Stable copy of the tx blob hashes for get_tx_context (points into this).
     std::vector<bytes32> m_blobHashes;
+    // The node's chain id (EIP-155), surfaced to the EVM via get_tx_context's
+    // chain_id field. Used by the CHAINID opcode (e.g. EIP-712 domain
+    // separators baked into contract runtime code), so it must be the real
+    // chain's id, NOT a hard-coded 1.
+    uint64_t m_chainId;
 
 public:
     EthereumHost(evmc_revision rev, evmc::VM& vm, EthereumState<Storage>& state,
         EthBlockInfo const& block, BlockHashLookup blockHashLookup,
-        protocol::Transaction const& tx, EthCallParams const& callParams)
+        protocol::Transaction const& tx, EthCallParams const& callParams, uint64_t chainId)
       : m_rev{rev},
         m_vm{vm},
         m_state{state},
         m_block{block},
         m_blockHashLookup{std::move(blockHashLookup)},
         m_tx{tx},
-        m_callParams{callParams}
+        m_callParams{callParams},
+        m_chainId{chainId}
     {
         for (auto const& h : tx.blobVersionedHashes())
         {
@@ -634,7 +640,7 @@ evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
         m_block.timestamp,
         m_block.gas_limit,
         m_block.prev_randao,
-        0x01_bytes32,  // Chain ID is expected to be 1 (matches evmone).
+        intx::be::store<evmc::uint256be>(intx::uint256(static_cast<uint64_t>(m_chainId))),  // Chain ID (EIP-155).
         evmc::uint256be{base_fee},
         intx::be::store<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
         m_blobHashes.data(),

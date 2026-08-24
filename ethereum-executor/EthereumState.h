@@ -135,10 +135,18 @@ struct ReadAccount
 };
 }  // namespace eth_state_detail
 
-/// Remove all storage slots of an account (keeps only the fixed account fields).
+/// Remove ALL storage rows of an account — the storage slots AND the three core
+/// Ethereum fields (nonce/balance/codeHash).
 /// Used when an account self-destructs: its full state (including storage) must
 /// be cleared so that a later CREATE/CREATE2 at the same address is not treated
 /// as an EIP-7610 collision.
+///
+/// NOTE: this deletes EVERY row of the account table, including the three core
+/// Ethereum fields (nonce/balance/codeHash). The MPT builder (finalizeAccount)
+/// recognizes a tombstone exactly as "all three core rows deleted", so a
+/// self-destructed (or EIP-161 emptied) account must present DELETED_TYPE rows,
+/// not zero-valued rows — writing zeros would re-insert an empty account leaf
+/// into the trie and fork the state root.
 template <class Storage>
 task::Task<void> clearAccountStorage(
     Storage& storage, bcos::ledger::account::EVMAccount<Storage>& acc)
@@ -156,14 +164,7 @@ task::Task<void> clearAccountStorage(
         executor_v1::StateKeyView view(k);
         if (view.m_table != tableName)
             break;  // Left this account's table.
-        auto key = view.m_key;
-        if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
-            key != ACCOUNT_TABLE_FIELDS::CODE_HASH && key != ACCOUNT_TABLE_FIELDS::CODE &&
-            key != ACCOUNT_TABLE_FIELDS::ABI && key != ACCOUNT_TABLE_FIELDS::ALIVE &&
-            key != ACCOUNT_TABLE_FIELDS::FROZEN && key != ACCOUNT_TABLE_FIELDS::SHARD)
-        {
-            keysToRemove.emplace_back(k);
-        }
+        keysToRemove.emplace_back(k);
     }
     if (!keysToRemove.empty())
         co_await storage2::removeSome(storage, keysToRemove);
@@ -242,31 +243,40 @@ class EthereumState
 
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
-        if (!co_await evmAccount.exists())
-            co_return std::nullopt;
-
-        eth_state_detail::ReadAccount acc;
+        // Do NOT gate on SYS_TABLES existence alone: the PoW reward path writes
+        // the flat BALANCE row but (historically) never registers the account
+        // table, so an address that only ever received block rewards reads as
+        // non-existent through EVMAccount::exists() even though it holds a real
+        // balance. Prefer the flat fields: an account with a non-default nonce,
+        // balance or code hash exists regardless of the SYS_TABLES marker.
         auto nonceVal = co_await evmAccount.nonce();
-        if (nonceVal.has_value())
-            acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
-
-        acc.balance = evm::toIntxU256(co_await evmAccount.balance());
-
+        auto balance = co_await evmAccount.balance();
         auto codeHashVal = co_await evmAccount.codeHash();
+        bool hasCodeHash = false;
         {
             auto const* d = codeHashVal.data();
-            bool hasCodeHash = false;
             for (size_t i = 0; i < 32; ++i)
                 if (d[i] != 0)
                 {
                     hasCodeHash = true;
                     break;
                 }
-            if (hasCodeHash)
-                std::copy_n(d, sizeof(evmc_bytes32), acc.code_hash.bytes);
-            else
-                acc.code_hash = EthAccount::EMPTY_CODE_HASH;
         }
+        if (!nonceVal.has_value() && balance == 0 && !hasCodeHash)
+        {
+            co_return std::nullopt;  // no account at all
+        }
+
+        eth_state_detail::ReadAccount acc;
+        if (nonceVal.has_value())
+            acc.nonce = static_cast<uint64_t>(bcos::u256(nonceVal.value()));
+
+        acc.balance = evm::toIntxU256(balance);
+
+        if (hasCodeHash)
+            std::copy_n(codeHashVal.data(), sizeof(evmc_bytes32), acc.code_hash.bytes);
+        else
+            acc.code_hash = EthAccount::EMPTY_CODE_HASH;
 
         acc.has_storage = co_await hasStorageImpl(evmAccount);
         co_return acc;
@@ -665,15 +675,22 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
             co_await bcosAcc.create();
         co_await bcosAcc.setNonce(std::to_string(acc.nonce));
         co_await bcosAcc.setBalance(evm::toBcosU256(acc.balance));
-        if (acc.code_changed)
+        // ALWAYS write the codeHash row, not just on code_changed. A previous
+        // transaction in the same block may have self-destructed this address
+        // (clearAccountStorage deletes EVERY account row incl. codeHash as
+        // DELETED_TYPE) and a later transaction re-touched it as an EOA with
+        // code_changed == false. Without this unconditional write the flat
+        // state would carry a deleted codeHash row alongside a live balance/
+        // nonce — the MPT builder rejects exactly that shape
+        // ("core-field row deleted outside a tombstone") and the state root
+        // would fork. setCode() only touches SYS_CODE_BINARY when the hash is
+        // absent, so re-writing an unchanged contract's codeHash is a no-op
+        // there; for an EOA it (re)creates the row with emptyCodeHash.
+        // (The SYS_CODE_BINARY table is keyed by keccak256(code) — Ethereum
+        // consensus hashing; see the "Known limitation — code hash algorithm"
+        // note at the top of this file.)
         {
             bcos::bytes code(acc.code.begin(), acc.code.end());
-            // The host already computed keccak256(code) into acc.code_hash
-            // (Ethereum consensus hashing). This keys SYS_CODE_BINARY by
-            // keccak256 — see the "Known limitation — code hash algorithm"
-            // note in the file header: executor_version=2 targets keccak256
-            // chains only, and must not share the code-binary table with a
-            // v0/v1 layer using the chain's global (e.g. SM3) hash algorithm.
             bcos::bytes codeHash(acc.code_hash.bytes, acc.code_hash.bytes + sizeof(evmc_bytes32));
             co_await bcosAcc.setCode(std::move(code), std::string{}, bcos::h256(codeHash));
         }
