@@ -66,6 +66,11 @@ BOOST_AUTO_TEST_CASE(aes256CtrStateful)
     BOOST_CHECK(c1 == bytesConstRef(oneShot.data(), part1.size()).toBytes());
     BOOST_CHECK(
         c2 == bytesConstRef(oneShot.data() + part1.size(), part2.size()).toBytes());
+    // Absolute anchor for AES-256-CTR itself (openssl-verified; NIST SP 800-38A
+    // F.5.5 key, zero IV as used by RLPx): the two blocks above are
+    //   8ea94863ba8fe940fe7032d13083bf7e  3f38940a1579b3875e60c37ceb91dfb5
+    BOOST_CHECK_EQUAL(toHex(oneShot),
+        "8ea94863ba8fe940fe7032d13083bf7e3f38940a1579b3875e60c37ceb91dfb5");
 }
 
 // HMAC-SHA256 against RFC 4231 test case 2.
@@ -96,6 +101,12 @@ BOOST_AUTO_TEST_CASE(ecdhCopyX)
     auto s2 = secp256k1EcdhCopyX(pub1Ref, ref(priv2));
     BOOST_CHECK(s1 == s2);
     BOOST_CHECK_EQUAL(s1.size(), 32u);
+    // Known-answer anchor: the shared point's x-coordinate for these two keys,
+    // computed with an independent implementation (python ecdsa, SECP256k1). A
+    // symmetry-only assertion would stay green for a wrong copy-x (hashed
+    // compressed point, wrong endianness, wrong half).
+    BOOST_CHECK_EQUAL(toHex(s1),
+        "167ccc13ac5e8a26b131c3446030c60fbfac6aa8e31149d0869f93626a4cdf62");
 }
 
 // Secure random bytes differ and are non-trivial.
@@ -105,6 +116,47 @@ BOOST_AUTO_TEST_CASE(randomBytes)
     auto b = cryptoRandomBytes(32);
     BOOST_CHECK(a != b);
     BOOST_CHECK(std::any_of(a.begin(), a.end(), [](byte x) { return x != 0; }));
+}
+
+// The size checks in these primitives are the security boundary for peer-supplied
+// inputs (RLPx frames, ECIES), so the rejection paths must be covered.
+BOOST_AUTO_TEST_CASE(rejectsInvalidInputs)
+{
+    auto key16 = fromHex("2b7e151628aed2a6abf7158809cf4f3c");
+    auto iv16 = bytes(16, 0);
+    auto data = fromHex("0102030405");
+
+    // AES-CTR: key must be 16 or 32 bytes, IV exactly 16.
+    for (auto badKeyLen : {15u, 17u, 31u, 33u})
+    {
+        auto badKey = bytes(badKeyLen, 0xab);
+        BOOST_CHECK_THROW(aesCtrCrypt(ref(data), ref(badKey), ref(iv16)), std::invalid_argument);
+    }
+    for (auto badIvLen : {15u, 17u})
+    {
+        auto badIv = bytes(badIvLen, 0xcd);
+        BOOST_CHECK_THROW(aesCtrCrypt(ref(data), ref(key16), ref(badIv)), std::invalid_argument);
+    }
+
+    // ECDH: public key must be exactly 64 bytes, private key exactly 32.
+    auto priv32 = bytes(32, 0x11);
+    for (auto badPubLen : {63u, 65u})
+    {
+        auto badPub = bytes(badPubLen, 0x04);
+        BOOST_CHECK_THROW(
+            secp256k1EcdhCopyX(ref(badPub), ref(priv32)), std::invalid_argument);
+    }
+    for (auto badPrivLen : {31u, 33u})
+    {
+        auto badPriv = bytes(badPrivLen, 0x11);
+        auto pub = bytes(64, 0x02);
+        BOOST_CHECK_THROW(
+            secp256k1EcdhCopyX(ref(pub), ref(badPriv)), std::invalid_argument);
+    }
+    // Off-curve / out-of-field public key: parsing must reject it.
+    auto offCurvePub = bytes(64, 0x00);
+    BOOST_CHECK_THROW(
+        secp256k1EcdhCopyX(ref(offCurvePub), ref(priv32)), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

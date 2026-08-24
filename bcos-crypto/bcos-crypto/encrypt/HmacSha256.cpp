@@ -20,6 +20,7 @@
 #include "HmacSha256.h"
 
 #include <openssl/hmac.h>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -43,6 +44,12 @@ bytes hmacSha256Segments(bytesConstRef _key, std::vector<bytesConstRef> const& _
 
     bytes out(EVP_MAX_MD_SIZE);
     unsigned int outLen = 0;
+    // HMAC takes an int key length; reject sizes that would wrap and silently
+    // produce a wrong-length MAC.
+    if (_key.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        throw std::invalid_argument("hmacSha256: key too large");
+    }
     if (HMAC(EVP_sha256(), _key.data(), static_cast<int>(_key.size()), data.data(), data.size(),
             out.data(), &outLen) == nullptr)
     {

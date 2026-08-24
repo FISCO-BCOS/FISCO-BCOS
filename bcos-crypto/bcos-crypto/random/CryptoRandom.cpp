@@ -20,12 +20,19 @@
 #include "CryptoRandom.h"
 
 #include <openssl/rand.h>
+#include <limits>
 #include <stdexcept>
 
 namespace bcos::crypto
 {
 bytes cryptoRandomBytes(size_t _size)
 {
+    // RAND_bytes takes an int length; reject sizes that would wrap instead of
+    // silently returning uninitialized heap bytes.
+    if (_size > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        throw std::invalid_argument("cryptoRandomBytes: size too large");
+    }
     bytes out(_size);
     if (_size > 0 && RAND_bytes(out.data(), static_cast<int>(_size)) != 1)
     {

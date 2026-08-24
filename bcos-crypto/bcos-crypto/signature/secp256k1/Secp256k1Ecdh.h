@@ -28,7 +28,8 @@ namespace bcos::crypto
 // point without the 0x04 prefix, the FISCO convention) and `_privateKey`
 // (32 bytes). The hash function selects the output:
 //   - secp256k1EcdhCopyX: raw x-coordinate (RLPx ECIES KDF input)
-//   - secp256k1EcdhSha256: sha256(compressedPoint || x) (SEC1 default)
+//   - secp256k1EcdhSha256: libsecp256k1's default ECDH hash
+//     (sha256 of the 33-byte compressed point)
 bcos::bytes secp256k1EcdhCopyX(bytesConstRef _publicKey, bytesConstRef _privateKey);
 bcos::bytes secp256k1EcdhSha256(bytesConstRef _publicKey, bytesConstRef _privateKey);
 }  // namespace bcos::crypto

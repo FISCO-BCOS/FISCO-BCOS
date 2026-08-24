@@ -20,6 +20,7 @@
 #include "AesCtrCipher.h"
 
 #include <openssl/evp.h>
+#include <limits>
 #include <stdexcept>
 
 namespace bcos::crypto
@@ -62,6 +63,12 @@ AesCtrCipher::~AesCtrCipher()
 
 bytes AesCtrCipher::update(bytesConstRef _data)
 {
+    // EVP_*Update takes an int input length; reject sizes that would wrap and
+    // silently produce wrong-length ciphertext.
+    if (_data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        throw std::invalid_argument("AesCtrCipher::update: input too large");
+    }
     bytes out(_data.size());
     if (_data.empty())
     {
