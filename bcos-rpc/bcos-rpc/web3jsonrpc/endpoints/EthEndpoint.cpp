@@ -30,6 +30,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 
 #include <bcos-executor/src/Common.h>
+#include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -255,72 +256,15 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
 namespace
 {
 // OP-stack Holocene/Jovian next-baseFee prediction for eth_feeHistory's trailing entry.
-// Faithful port of the engine's authoritative copy (bcos::engine::detail::calcOpBaseFee,
-// EngineServiceImpl.cpp:386, mirroring op-geth consensus/misc/eip1559/eip1559.go); the
-// bcos-rpc layer cannot link bcos-engine, so the formula is duplicated — any change to one
-// copy MUST be mirrored in the other. Fork shape is self-describing from the parent's own
-// extraData: 9 bytes = Holocene (version||denominator||elasticity), 17 bytes = Jovian
-// (+ u64 minBaseFee floor).
-bcos::u256 predictNextBaseFee(bcos::protocol::BlockHeader const& parent)
+// predictNextBaseFee was a hand-mirrored port of the engine's calcOpBaseFee;
+// both layers now share ONE implementation: bcos-framework/engine/OpBaseFee.h
+// (linked by both bcos-engine and bcos-rpc). The RPC's fork detection stays
+// local — extraData length sniffing (>= 17 bytes => Jovian tail) — and feeds
+// the shared formula's parentIsJovian parameter.
+
+bool jovianFromExtraData(bcos::protocol::BlockHeader const& parent)
 {
-    auto const extra = parent.extraData();
-    uint64_t elasticity = 2;
-    uint64_t denominator = 8;
-    std::optional<bcos::u256> minBaseFee;
-    if (extra.size() >= 9)
-    {
-        auto readU32BE = [&extra](std::size_t off) {
-            return (static_cast<uint64_t>(extra[off]) << 24) |
-                   (static_cast<uint64_t>(extra[off + 1]) << 16) |
-                   (static_cast<uint64_t>(extra[off + 2]) << 8) |
-                   static_cast<uint64_t>(extra[off + 3]);
-        };
-        denominator = readU32BE(1);
-        elasticity = readU32BE(5);
-    }
-    if (extra.size() >= 17)
-    {
-        uint64_t floor = 0;
-        for (std::size_t i = 0; i < 8; ++i)
-        {
-            floor = (floor << 8) | static_cast<uint64_t>(extra[9 + i]);
-        }
-        minBaseFee = bcos::u256(floor);
-    }
-    const auto gasTarget = static_cast<uint64_t>(parent.gasLimit()) / elasticity;
-    // Jovian meters baseFee on max(gasUsed, DA footprint) — the DA footprint lives in the
-    // blobGasUsed header slot. Only read it when the Jovian tail is present.
-    auto gasMetered = static_cast<uint64_t>(parent.gasUsed());
-    if (minBaseFee.has_value() && parent.blobGasUsed().has_value() &&
-        static_cast<uint64_t>(*parent.blobGasUsed()) > gasMetered)
-    {
-        gasMetered = static_cast<uint64_t>(*parent.blobGasUsed());
-    }
-    const auto parentBaseFee = parent.baseFee().value_or(bcos::u256(0));
-    if (gasMetered == gasTarget)
-    {
-        return parentBaseFee;
-    }
-    bcos::u256 result;
-    if (gasMetered > gasTarget)
-    {
-        bcos::u256 deltaFee = parentBaseFee * (gasMetered - gasTarget);
-        deltaFee /= gasTarget;
-        deltaFee /= denominator;
-        result = parentBaseFee + (deltaFee > 0 ? deltaFee : bcos::u256(1));
-    }
-    else
-    {
-        bcos::u256 deltaFee = parentBaseFee * (gasTarget - gasMetered);
-        deltaFee /= gasTarget;
-        deltaFee /= denominator;
-        result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);
-    }
-    if (minBaseFee.has_value() && result < *minBaseFee)
-    {
-        result = *minBaseFee;
-    }
-    return result;
+    return parent.extraData().size() >= 17;
 }
 }  // namespace
 
@@ -428,7 +372,8 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
     // Trailing entry: the predicted base fee of newest+1 from newest's own header.
     if (newestHeader)
     {
-        result["baseFeePerGas"].append(toQuantity(predictNextBaseFee(*newestHeader)));
+        result["baseFeePerGas"].append(toQuantity(
+            bcos::engine::calcOpBaseFee(*newestHeader, jovianFromExtraData(*newestHeader))));
     }
     buildJsonContent(result, response);
     co_return;

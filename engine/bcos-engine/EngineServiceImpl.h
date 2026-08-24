@@ -46,6 +46,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
@@ -118,14 +119,10 @@ bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 std::optional<std::string> validateOpNewPayloadRequest(
     const NewPayloadRequest& request, bool jovianActive);
 
-/// Compute expected baseFeePerGas from the parent header.
-/// Mirrors op-geth consensus/misc/eip1559/eip1559.go:CalcBaseFee, including Holocene extraData
-/// elasticity/denominator, Jovian blobGasUsed substitution, and Jovian minBaseFee floor.
-/// `parentIsJovian` is feature-driven (feature_op_jovian, constant across blocks); the minimal
-/// loop is Isthmus+-only, so the Holocene+ extraData decode always applies (no isthmus flag).
-/// Reads the parent header's accessors: `extraData()` (Holocene/Jovian params), `gasLimit()`,
-/// `gasUsed()`, `blobGasUsed()`, `baseFee()` (optional fields must use `.value()`).
-bcos::u256 calcOpBaseFee(const bcos::protocol::BlockHeader& parent, bool parentIsJovian);
+/// Compute expected baseFeePerGas from the parent header — the shared
+/// implementation lives in bcos-framework/engine/OpBaseFee.h (one copy for the
+/// engine AND the RPC's eth_feeHistory prediction; included at the top).
+/// `parentIsJovian` is feature-driven (feature_op_jovian).
 
 /// Populate the OP header's 3 post-merge constants (ommersHash/difficulty/nonce) into a header —
 /// the values live in EngineServiceImpl.cpp's anonymous namespace. The header's own
@@ -752,7 +749,7 @@ private:
                 bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
                 auto parentHeader =
                     m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-                baseFee = detail::calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
+                baseFee = calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
             }
         }
 
@@ -1571,7 +1568,7 @@ private:
             // config.IsJovian(parent.Time) for the feature-flag-era chain.
             {
                 auto expectedBaseFee =
-                    detail::calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
+                    calcOpBaseFee(*parentHeader, m_scheduler.get().isJovianActive());
                 if (payload.baseFeePerGas != expectedBaseFee)
                 {
                     co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
