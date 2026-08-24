@@ -758,6 +758,12 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
     }
     auto encodeTxHash = web3Tx.txHash();
+    // Capture the chainId decoded from the SIGNED envelope BEFORE takeToTarsTransaction moves
+    // web3Tx away (kyonRay R4 #3): re-walking the raw bytes via web3ChainIdFromEnvelope would
+    // duplicate the decoder and invite drift — the walker is uint64 while the decoder is u256,
+    // so a chainId above 2^64-1 would decode fine here but read as nullopt in the walker. The
+    // walker stays for the P2P/tars path where only a Transaction is available (part 4b).
+    auto const web3ChainId = web3Tx.chainId;
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
@@ -804,7 +810,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             // and consume the sender's nonce (EIP-155 replay-protection bypass). op-geth
             // always has a genesis chainId, so it has no such open default. Only pre-EIP-155
             // legacy (no chainId in the envelope) is exempt — there is nothing to compare.
-            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
+            auto const envelopeChainId = web3ChainId;
             if (envelopeChainId.has_value() ||
                 bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
             {
@@ -828,8 +834,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
-            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
-            if (envelopeChainId.has_value() && bcos::u256(*envelopeChainId) != *expected)
+            auto const envelopeChainId = web3ChainId;
+            if (envelopeChainId.has_value() && *envelopeChainId != *expected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
                                   << LOG_KV("txChainId", tx->chainId())
