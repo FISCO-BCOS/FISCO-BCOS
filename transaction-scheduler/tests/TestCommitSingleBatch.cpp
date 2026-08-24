@@ -67,7 +67,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include "bcos-transaction-scheduler/BaselineScheduler-tpp.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -274,35 +274,36 @@ public:
         // so these rows MUST travel in the same single backend merge as the
         // block's state rows — which is exactly what the key-set assertions pin.
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
-            .AlwaysDo([](storage::StorageInterface::Ptr storage, protocol::ConstTransactionsPtr,
-                          protocol::Block::ConstPtr block,
-                          std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>) {
-                auto header = block->blockHeader();
-                auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
-                auto hash = header->hash();
-                auto hashView =
-                    std::string_view(reinterpret_cast<const char*>(hash.data()), hash.SIZE);
+            .AlwaysDo(
+                [](storage::StorageInterface::Ptr storage, protocol::ConstTransactionsPtr,
+                    protocol::Block::ConstPtr block,
+                    std::function<void(std::string, Error::Ptr&&)> callback, bool,
+                    std::optional<ledger::Features>, std::optional<bcos::crypto::HashType>, bool) {
+                    auto header = block->blockHeader();
+                    auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
+                    auto hash = header->hash();
+                    auto hashView =
+                        std::string_view(reinterpret_cast<const char*>(hash.data()), hash.SIZE);
 
-                storage::Entry hashEntry;
-                hashEntry.set(hash.asBytes());
-                storage->asyncSetRow(ledger::SYS_NUMBER_2_HASH, blockNumberStr,
-                    std::move(hashEntry), [](Error::UniquePtr) {});
+                    storage::Entry hashEntry;
+                    hashEntry.set(hash.asBytes());
+                    storage->asyncSetRow(ledger::SYS_NUMBER_2_HASH, blockNumberStr,
+                        std::move(hashEntry), [](Error::UniquePtr) {});
 
-                storage::Entry hash2NumberEntry;
-                hash2NumberEntry.set(blockNumberStr);
-                storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER, hashView,
-                    std::move(hash2NumberEntry), [](Error::UniquePtr) {});
+                    storage::Entry hash2NumberEntry;
+                    hash2NumberEntry.set(blockNumberStr);
+                    storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER, hashView,
+                        std::move(hash2NumberEntry), [](Error::UniquePtr) {});
 
-                bytes headerBuffer;
-                header->encode(headerBuffer);
-                storage::Entry number2HeaderEntry;
-                number2HeaderEntry.set(std::move(headerBuffer));
-                storage->asyncSetRow(ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr,
-                    std::move(number2HeaderEntry), [](Error::UniquePtr) {});
+                    bytes headerBuffer;
+                    header->encode(headerBuffer);
+                    storage::Entry number2HeaderEntry;
+                    number2HeaderEntry.set(std::move(headerBuffer));
+                    storage->asyncSetRow(ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr,
+                        std::move(number2HeaderEntry), [](Error::UniquePtr) {});
 
-                callback({}, nullptr);
-            });
+                    callback({}, nullptr);
+                });
         using HashView =
             ::ranges::any_view<h256, ::ranges::category::mask | ::ranges::category::sized>;
         fakeit::When(Method(mockTxPool, getTransactions)).AlwaysDo([](HashView) {

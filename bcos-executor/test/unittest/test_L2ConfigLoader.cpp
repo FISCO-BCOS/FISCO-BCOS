@@ -24,7 +24,6 @@
  * defensive paths (missing key, zero chainId, value overflow).
  */
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/L2ConfigLoader.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>

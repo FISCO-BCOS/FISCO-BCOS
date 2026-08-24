@@ -10,6 +10,7 @@
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/move.hpp>
 
 namespace bcos::rpc

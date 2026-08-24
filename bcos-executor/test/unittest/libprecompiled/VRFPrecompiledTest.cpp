@@ -22,14 +22,11 @@
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/CryptoPrecompiled.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <json/json.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::crypto;

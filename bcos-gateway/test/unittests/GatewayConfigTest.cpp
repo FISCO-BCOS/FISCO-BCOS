@@ -22,10 +22,8 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/algorithm/string/join.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace gateway;
 using namespace bcos::test;

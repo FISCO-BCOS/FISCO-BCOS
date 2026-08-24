@@ -24,7 +24,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/RateLimiter.h>
 #include <string>
 
 using namespace bcos;
@@ -45,19 +44,16 @@ void usage()
     std::exit(0);
 }
 
-void sendMessage(std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsService> _wsService,
-    std::shared_ptr<RateLimiter> _rateLimiter)
+void sendMessage(WsMessage& _msg, std::shared_ptr<WsService> _wsService)
 {
     while (true)
     {
-        _rateLimiter->acquire(1, true);
-        auto seq = _wsService->messageFactory()->newSeq();
-        _msg->setSeq(seq);
+        auto seq = newSeq();
+        _msg.setSeq(seq);
         auto startT = utcTime();
-        auto msgSize = _msg->payload().size();
+        auto msgSize = _msg.payload().size();
         _wsService->asyncSendMessage(_msg, Options(-1),
-            [msgSize, startT](Error ::Ptr _error, std::shared_ptr<boostssl::MessageFace>,
-                std::shared_ptr<WsSession> _session) {
+            [msgSize, startT](Error ::Ptr _error, WsMessage, std::shared_ptr<WsSession> _session) {
                 (void)_session;
                 if (_error && _error->errorCode() != 0)
                 {
@@ -129,8 +125,6 @@ int main(int argc, char** argv)
     auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
-    auto sessionFactory = std::make_shared<WsSessionFactory>();
-    wsInitializer->setSessionFactory(sessionFactory);
 
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
@@ -138,11 +132,10 @@ int main(int argc, char** argv)
     wsService->start();
 
     // construct message
-    auto msg = std::dynamic_pointer_cast<WsMessage>(wsService->messageFactory()->buildMessage());
-    msg->setPacketType(999);
+    WsMessage msg;
+    msg.setPacketType(999);
     std::string randStr(payLoadSize, 'a');
-    msg->setPayload(bytes(randStr.begin(), randStr.end()));
-    auto rateLimiter = std::make_shared<RateLimiter>(packetQPS);
-    sendMessage(msg, wsService, rateLimiter);
+    msg.setPayload(bytes(randStr.begin(), randStr.end()));
+    sendMessage(msg, wsService);
     return EXIT_SUCCESS;
 }

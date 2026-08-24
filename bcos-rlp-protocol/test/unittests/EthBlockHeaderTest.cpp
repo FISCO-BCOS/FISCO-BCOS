@@ -41,7 +41,7 @@ static bcos::protocol::BlockHeader::Ptr makeEthHeader(
     auto tars = std::make_shared<bcostars::BlockHeader>();
     auto& data = tars->data;
     data.blockNumber = 77;
-    data.timestamp = 1700000000;
+    data.timestamp = 1700000000000LL;  // internal domain: milliseconds (whole seconds)
     data.gasLimit = "30000000";
     data.gasUsed = "21000";
     data.coinbase.assign(20, static_cast<char>(0xab));
@@ -93,7 +93,8 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     // header -> Eth
     EthBlockHeader ethHeader(*header);
     BOOST_CHECK_EQUAL(ethHeader.data().number, 77);
-    BOOST_CHECK_EQUAL(ethHeader.data().timestamp, 1700000000);
+    // The bridge struct mirrors the internal millisecond domain; only the RLP bytes are seconds.
+    BOOST_CHECK_EQUAL(ethHeader.data().timestamp, 1700000000000LL);
     BOOST_CHECK_EQUAL(ethHeader.data().gasLimit, u256(30000000));
     BOOST_CHECK_EQUAL(ethHeader.data().gasUsed, u256(21000));
     BOOST_CHECK_EQUAL(ethHeader.data().uncleHash,
@@ -114,7 +115,8 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     ethError = EthBlockHeader::toEthBlockHeader(decodedEth, bcos::ref(rlp));
     BOOST_CHECK(!ethError);
     BOOST_CHECK_EQUAL(decodedEth.data().number, 77);
-    BOOST_CHECK_EQUAL(decodedEth.data().timestamp, 1700000000);
+    // rlpDecode converts the wire's seconds back into internal milliseconds.
+    BOOST_CHECK_EQUAL(decodedEth.data().timestamp, 1700000000000LL);
     BOOST_CHECK_EQUAL(decodedEth.data().gasLimit, u256(30000000));
     BOOST_CHECK_EQUAL(decodedEth.data().gasUsed, u256(21000));
     BOOST_CHECK(decodedEth.data().baseFee.has_value());
@@ -141,7 +143,7 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     ethError = EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
     BOOST_CHECK(!ethError);
     BOOST_CHECK_EQUAL(decodedHeader->number(), 77);
-    BOOST_CHECK_EQUAL(decodedHeader->timestamp(), 1700000000);
+    BOOST_CHECK_EQUAL(decodedHeader->timestamp(), 1700000000000LL);
     BOOST_CHECK_EQUAL(decodedHeader->gasLimit(), u256(30000000));
     BOOST_CHECK_EQUAL(decodedHeader->gasUsed(), u256(21000));
     // The converted header must be marked as an Eth header
@@ -407,6 +409,22 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsNegativeScalars)
     BOOST_CHECK(error != nullptr);
 }
 
+// A wire-supplied sub-second millisecond timestamp on an otherwise-valid ETH-version header
+// must be rejected by validateHeader on the calculateRLPHash path (Error return, not the
+// rlpEncode throw), keeping BlockHeaderImpl::calculateHash's clear-on-failure promise intact.
+BOOST_AUTO_TEST_CASE(validateHeaderRejectsSubSecondTimestamp)
+{
+    auto header = makeEthHeader();
+    auto impl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
+    BOOST_REQUIRE(impl != nullptr);
+    impl->inner().data.timestamp = 1700000000001LL;  // ms not divisible by 1000
+
+    bcos::Error::UniquePtr error;
+    BOOST_CHECK_NO_THROW(error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header));
+    BOOST_REQUIRE(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+}
+
 // Real mainnet golden vector: Ethereum block #19800000 (Cancun era, 20-item header).
 // Fields are the actual on-chain values; the expected hash is the block hash published on
 // the chain (0x95d7f597…), independently verified to equal keccak256(rlp(header)). This is
@@ -418,7 +436,9 @@ BOOST_AUTO_TEST_CASE(goldenMainnetCancunHeader)
     BOOST_REQUIRE(impl != nullptr);
     auto& data = impl->inner().data;
     data.blockNumber = 19800000;
-    data.timestamp = 1714865051;
+    // On-chain seconds 1714865051, stored in the internal millisecond domain; the RLP
+    // bridge divides back to seconds, so the golden hash/bytes below stay byte-identical.
+    data.timestamp = 1714865051000LL;
     data.gasLimit = "30000000";
     data.gasUsed = "8020412";
     data.baseFee = "5007423601";
@@ -632,6 +652,31 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderClearsResidual)
     BOOST_CHECK(reused->ethBlockVersion() == EthBlockVersion::PRE_LONDON);
 }
 
+// A wire header whose seconds timestamp would overflow int64 milliseconds must be rejected
+// by the decode bridge (rlpDecode) before its x1000 conversion, surfacing through
+// decodeTarsHeader as an error (regression for the seconds->ms bridge).
+BOOST_AUTO_TEST_CASE(decodeTarsHeaderRejectsOverflowingTimestamp)
+{
+    // Re-encode a valid header's fields with a hostile timestamp: 2^63 encodes fine as a
+    // uint64 RLP scalar but has no int64 millisecond representation.
+    auto header = makeEthHeader();
+    EthBlockHeader ethHeader(*header);
+    auto const& d = ethHeader.data();
+    constexpr uint64_t hostileTimestamp = 0x8000000000000000ULL;
+
+    bytes rlp;
+    codec::rlp::encode(rlp, d.parentInfo.blockHash, d.uncleHash, d.coinbase, d.stateRoot, d.txsRoot,
+        d.receiptsRoot, bcos::bytesConstRef(d.logsBloom.data(), d.logsBloom.size()), d.difficulty,
+        static_cast<uint64_t>(d.number), d.gasLimit, d.gasUsed, hostileTimestamp, d.extraData,
+        d.prevRandao, d.nonce, d.baseFee, d.withdrawalsHash, d.blobGasUsed, d.excessBlobGas,
+        d.parentBeaconRoot, d.requestsHash);
+
+    auto decodedHeader = makeEthHeader();
+    auto error = EthBlockHeader::decodeTarsHeader(decodedHeader, bcos::ref(rlp));
+    BOOST_REQUIRE(error != nullptr);
+    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+}
+
 // An invalid Eth header: calculateHash clears dataHash, so hash() must throw
 // EmptyBlockHeaderHash (regression for the FIB-130 clear-on-failure behaviour).
 BOOST_AUTO_TEST_CASE(calculateHashClearsOnInvalid)
@@ -644,6 +689,34 @@ BOOST_AUTO_TEST_CASE(calculateHashClearsOnInvalid)
     bcos::crypto::Keccak256 keccak;
     BOOST_CHECK_NO_THROW(impl->calculateHash(keccak));
     BOOST_CHECK_THROW(header->hash(), std::exception);
+}
+
+// decodeTarsHeader pins ethBlockVersion to NON_ETH explicitly instead of relying on the tars
+// default 0 happening to equal it. The pin holds even when the destination header carried a
+// real ETH version before the decode. Internal timestamps are milliseconds for every version
+// (the RLP surface is seconds, converted unconditionally by rlpDecode/rlpEncode), so the
+// decoded header's timestamp equals the ms source's and the seconds↔ms round-trip reproduces
+// the input RLP byte-for-byte regardless of the pinned version.
+BOOST_AUTO_TEST_CASE(decodeTarsHeaderPinsNonEthVersion)
+{
+    auto source = makeEthHeader(EthBlockVersion::PRAGUE);
+    EthBlockHeader sourceBridge(*source);
+    bytes rlp;
+    sourceBridge.rlpEncode(rlp);
+
+    auto decoded = makeEthHeader(EthBlockVersion::PRAGUE);  // nonzero version pre-decode
+    bcos::Error::UniquePtr error;
+    error = EthBlockHeader::decodeTarsHeader(decoded, bcos::ref(rlp));
+    BOOST_CHECK(!error);
+    BOOST_CHECK(decoded->ethBlockVersion() == EthBlockVersion::NON_ETH);
+    BOOST_CHECK_EQUAL(decoded->timestamp(), source->timestamp());
+
+    // Re-encoding the decoded header must reproduce the input RLP: ×1000 on decode, /1000 on
+    // encode — the unconditional inverse pair at the RLP bridge.
+    EthBlockHeader roundTrip(*decoded);
+    bytes reencoded;
+    roundTrip.rlpEncode(reencoded);
+    BOOST_CHECK(reencoded == rlp);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

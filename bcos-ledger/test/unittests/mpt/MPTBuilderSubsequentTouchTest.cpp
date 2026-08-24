@@ -565,6 +565,46 @@ BOOST_AUTO_TEST_CASE(UnclassifiedRowFieldThrowsInBothModes)
         UnknownAccountRowField);
 }
 
+BOOST_AUTO_TEST_CASE(DeleteLastLeafThenInsertNewSlotRecomputesStorageRoot)
+{
+    // Regression (el-sync, block 1971298): the storage trie holds exactly ONE slot. The same
+    // block clears it (SSTORE 0 -> trie empties to monostate) and then writes a DIFFERENT slot.
+    // mergeTrie's phase-2 short-circuit must NOT return the prior root just because the fresh
+    // leaf created by the insert wasn't marked dirty — otherwise the storageRoot silently stays
+    // the old one and the state root forks (the pre-fix bug wrote priorRoot back).
+    NodeStorage storage;
+    auto const addr = makeAddress(0x1F);
+    std::map<bcos::h256, bcos::bytes> const priorSlots{{slotKey(0x00), bcos::bytes{0x10}}};
+    Account prior;
+    prior.nonce = 1;
+    prior.storageRoot = buildStorageTrie(storage, priorSlots);
+    auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
+
+    // This block: clear the only slot 0x00 (all-zero write = delete), then write slot 0x01.
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("2"));
+    writeFlatRow(view, accountSlotKey(addr, slotKey(0x00)), slotEntry(bcos::bytes{0x00, 0x00}));
+    writeFlatRow(view, accountSlotKey(addr, slotKey(0x01)), slotEntry(bcos::bytes{0x22}));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    // The storage trie must now hold ONLY the new slot — never the prior root, never empty.
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(addr));
+    BOOST_REQUIRE(updated.has_value());
+    BOOST_CHECK(updated->storageRoot != prior.storageRoot);
+    BOOST_CHECK(updated->storageRoot == storageRootOracle({{slotKey(0x01), bcos::bytes{0x22}}}));
+
+    Trie<NodeStorage> storageTrie(storage, updated->storageRoot);
+    auto newSlot = bcos::task::syncWait(storageTrie.get(slotKeyHash(slotKey(0x01))));
+    BOOST_REQUIRE(newSlot.has_value());
+    BOOST_CHECK(*newSlot == encodeStorageValue(bcos::ref(bcos::bytes{0x22})));
+    auto oldSlot = bcos::task::syncWait(storageTrie.get(slotKeyHash(slotKey(0x00))));
+    BOOST_CHECK(!oldSlot.has_value());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::test

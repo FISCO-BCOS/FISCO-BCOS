@@ -92,6 +92,12 @@ public:
     std::string const& groupId() const;
     size_t blockLimit() const;
 
+    /// OP-Stack Jovian fork selection: enabled iff `feature_op_jovian` is set in the genesis
+    /// [features] section (the FISCO-native feature-flag mechanism — replaces the former
+    /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
+    /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
+    bool opJovianActive() const;
+
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
     int const& keyIndex() const;
@@ -183,6 +189,12 @@ public:
     int32_t web3CorsMaxAge() const;
     bool web3CorsAllowCredentials() const;
     bool web3SyncTransaction() const;
+
+    // blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
+    // point to. Default 0 — PBFT has no finalization window (a committed block is already
+    // final), so safe/finalized equal "latest" unless an operator opts into a lag.
+    uint32_t web3SafeBlockDepth() const;
+    uint32_t web3FinalizedBlockDepth() const;
 
     // thread pool configuration
     size_t ioThreadCount() const;
@@ -346,8 +358,11 @@ protected:
         std::string const& _defaultValue = "", bool _require = true);
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
-private:
+    // [features] section loader — exposed to the LoaderProbe test harness like the other
+    // per-section loaders (feature_op_jovian drives OP-Stack fork selection).
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
+
+private:
     void loadAlloc(boost::property_tree::ptree const& ptree);
 
     // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
@@ -491,6 +506,10 @@ private:
     int32_t m_web3CorsMaxAge = 86400;
     bool m_web3CorsAllowCredentials = true;
     bool m_web3SyncTransaction = false;
+    // blockTag semantics: "safe"/"finalized" point latest - depth blocks behind. Default 0
+    // (= "latest"): PBFT commits are final, so no lag unless the operator configures one.
+    uint32_t m_web3SafeBlockDepth = 0;
+    uint32_t m_web3FinalizedBlockDepth = 0;
 
     // thread pool configuration
     size_t m_ioThreadCount{};

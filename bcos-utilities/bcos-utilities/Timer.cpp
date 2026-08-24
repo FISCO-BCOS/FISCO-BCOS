@@ -22,8 +22,8 @@
 #include "BoostLog.h"
 #include <boost/asio/dispatch.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-#include <cassert>
 #include <chrono>
+#include <cassert>
 
 using namespace bcos;
 

@@ -63,7 +63,7 @@ public:
     void subscribeEvent(EventSubTask::Ptr _task, Callback _callback);
 
 public:
-    void onRecvEventSubMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+    void onRecvEventSubMessage(bcos::boostssl::ws::WsMessage _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
 
 public:
@@ -91,14 +91,6 @@ public:
 
     void setService(bcos::cppsdk::service::Service::Ptr _service) { m_service = _service; }
     bcos::cppsdk::service::Service::Ptr service() const { return m_service; }
-    void setMessageFactory(std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> _messageFactory)
-    {
-        m_messagefactory = _messageFactory;
-    }
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> messageFactory() const
-    {
-        return m_messagefactory;
-    }
 
     boostssl::ws::WsConfig::ConstPtr config() const { return m_config; }
     void setConfig(boostssl::ws::WsConfig::ConstPtr _config) { m_config = _config; }
@@ -128,8 +120,6 @@ private:
     // timer
     std::shared_ptr<bcos::Timer> m_timer;
     boost::asio::io_context* m_ioContext;
-    // message factory
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> m_messagefactory;
     // websocket service
     bcos::cppsdk::service::Service::Ptr m_service;
     //

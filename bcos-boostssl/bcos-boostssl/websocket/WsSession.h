@@ -18,7 +18,6 @@
  * @date 2021-07-28
  */
 #pragma once
-#include "bcos-boostssl/interfaces/MessageFace.h"
 #include "bcos-boostssl/websocket/WsError.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
@@ -54,7 +53,7 @@ public:
 public:
     explicit WsSession(IOServicePool::Ptr ioServicePool);
 
-    virtual ~WsSession() noexcept;
+    ~WsSession() noexcept;
 
     void drop(boostssl::ws::WsError _reason);
 
@@ -64,9 +63,9 @@ public:
     // start WsSession as server
     void startAsServer(bcos::boostssl::http::HttpRequest _httpRequest);
 
-    virtual void onMessage(bcos::boostssl::MessageFace::Ptr _message);
+    void onMessage(WsMessage _message);
 
-    virtual bool isConnected();
+    bool isConnected();
     /**
      * @brief: async send message
      * @param _msg: message
@@ -74,8 +73,8 @@ public:
      * @param _respCallback: callback
      * @return void:
      */
-    virtual void asyncSendMessage(std::shared_ptr<boostssl::MessageFace> _msg,
-        Options _options = Options(), RespCallBack _respCallback = RespCallBack());
+    void asyncSendMessage(const WsMessage& _msg, Options _options = Options(),
+        RespCallBack _respCallback = RespCallBack());
 
 
     std::string endPoint() const;
@@ -90,8 +89,9 @@ public:
     void setRecvMessageHandler(WsRecvMessageHandler _recvMessageHandler);
     const WsRecvMessageHandler& recvMessageHandler();
 
-    std::shared_ptr<MessageFaceFactory> messageFactory();
-    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory);
+    // whether messages on this session use the raw wire format (fixed per service)
+    bool rawMessage() const { return m_rawMessage; }
+    void setRawMessage(bool _rawMessage) { m_rawMessage = _rawMessage; }
 
     std::shared_ptr<boost::asio::io_context> ioc() const;
     void setIoc(std::shared_ptr<boost::asio::io_context> _ioc);
@@ -124,25 +124,27 @@ public:
         RespCallBack respCallBack;
         std::shared_ptr<boost::asio::steady_timer> timer;
     };
-    virtual void addRespCallback(const std::string& _seq, CallBack::Ptr _callback);
+    void addRespCallback(const std::string& _seq, CallBack::Ptr _callback);
     CallBack::Ptr getAndRemoveRespCallback(
-        const std::string& _seq, std::shared_ptr<MessageFace> _message = nullptr);
-    virtual void onRespTimeout(const boost::system::error_code& _error, const std::string& _seq);
+        const std::string& _seq, const WsMessage* _message = nullptr);
+    void onRespTimeout(const boost::system::error_code& _error, const std::string& _seq);
 
-    virtual void onWsAccept(boost::beast::error_code _ec);
+    void onWsAccept(boost::beast::error_code _ec);
 
-    virtual void asyncRead();
-    virtual void asyncWrite(std::shared_ptr<bcos::bytes> _buffer);
+    struct Message;
 
-    virtual void send(std::shared_ptr<bcos::bytes> _buffer);
+    void asyncRead();
+    void asyncWrite(std::shared_ptr<Message> _message);
+
+    void send(std::shared_ptr<Message> _message);
 
     // async read
-    virtual void onReadPacket();
+    void onReadPacket();
     void onWritePacket();
 
     struct Message
     {
-        std::shared_ptr<bcos::bytes> buffer;
+        bcos::bytes buffer;
     };
 
 protected:
@@ -177,8 +179,8 @@ protected:
     WsDisconnectHandler m_disconnectHandler;
     WsRecvMessageHandler m_recvMessageHandler;
 
-    // message factory
-    std::shared_ptr<MessageFaceFactory> m_messageFactory;
+    // raw wire format flag
+    bool m_rawMessage = false;
 
     // ioc
     std::shared_ptr<boost::asio::io_context> m_ioc;
@@ -186,17 +188,6 @@ protected:
     mutable bcos::Mutex x_writeQueue;
     std::priority_queue<std::shared_ptr<Message>> m_writeQueue;
     std::atomic_bool m_writing = {false};
-};
-
-class WsSessionFactory
-{
-public:
-    using Ptr = std::shared_ptr<WsSessionFactory>;
-    WsSessionFactory() = default;
-    virtual ~WsSessionFactory() = default;
-
-public:
-    virtual WsSession::Ptr createSession(IOServicePool::Ptr ioServicePool);
 };
 
 }  // namespace bcos::boostssl::ws

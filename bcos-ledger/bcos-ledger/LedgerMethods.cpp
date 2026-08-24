@@ -9,7 +9,8 @@
 
 bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& ledger,
     bcos::protocol::ConstTransactionsPtr transactions, bcos::protocol::Block::ConstPtr block,
-    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage)
+    bool withTransactionsAndReceipts, storage::StorageInterface::Ptr storage,
+    std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces)
 {
     struct Awaitable
     {
@@ -18,6 +19,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         decltype(block) m_block;
         bool m_withTransactionsAndReceipts{};
         decltype(storage) m_storage;
+        std::optional<bcos::crypto::HashType> m_blockHashOverride;
+        bool m_writeNonces{true};
         Error::Ptr m_error;
 
         constexpr static bool await_ready() noexcept { return false; }
@@ -32,7 +35,7 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
                     }
                     handle.resume();
                 },
-                m_withTransactionsAndReceipts, std::nullopt);
+                m_withTransactionsAndReceipts, std::nullopt, m_blockHashOverride, m_writeNonces);
         }
         void await_resume()
         {
@@ -48,6 +51,8 @@ bcos::task::Task<void> bcos::ledger::prewriteBlockToStorage(LedgerInterface& led
         .m_block = std::move(block),
         .m_withTransactionsAndReceipts = withTransactionsAndReceipts,
         .m_storage = std::move(storage),
+        .m_blockHashOverride = std::move(blockHashOverride),
+        .m_writeNonces = writeNonces,
         .m_error = {}};
     co_await awaitable;
 }
@@ -486,8 +491,7 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
         sysConfig.getOrDefault(ledger::SystemConfig::balance_transfer, "0").first != "0");
 
     int executorVersion = 0;
-    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version);
-        versionConfig)
+    if (auto versionConfig = sysConfig.get(ledger::SystemConfig::executor_version); versionConfig)
     {
         executorVersion = boost::lexical_cast<int>(versionConfig.value().first);
         ledgerConfig.setExecutorVersion(executorVersion);
@@ -536,6 +540,27 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
     }
 
     co_return features;
+}
+
+bcos::task::Task<bool> bcos::ledger::tag_invoke(ledger::tag_t<getFeature> /*unused*/,
+    LedgerInterface& ledger, ledger::Features::Flag flag, protocol::BlockNumber blockNumber)
+{
+    // Single-flag read: Ledger overrides fetchFeature with one SYS_CONFIG row instead of
+    // fetchAllFeatures' scan of every feature key (~60 rows). Used by the historical
+    // state-read path (feature_l2_ethereum_compat) which needs exactly one flag; degrades
+    // to false (scenario A) on any failure, the same honest default as getFeatures'
+    // empty-set fallback.
+    try
+    {
+        co_return co_await ledger.fetchFeature(flag, blockNumber);
+    }
+    catch (...)
+    {
+        LEDGER2_LOG(DEBUG) << LOG_DESC("fetch feature failed")
+                           << LOG_KV("flag", magic_enum::enum_name(flag))
+                           << LOG_KV("msg", boost::current_exception_diagnostic_information());
+        co_return false;
+    }
 }
 
 bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> bcos::ledger::tag_invoke(

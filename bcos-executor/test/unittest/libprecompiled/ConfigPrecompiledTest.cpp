@@ -22,6 +22,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-framework/storage/Serialize.h>
+#include <boost/test/unit_test.hpp>
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
 

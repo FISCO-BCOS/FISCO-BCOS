@@ -49,10 +49,17 @@ public:
      * @param block the block to commit
      * @param callback trigger this callback when write is finished
      */
+    // Default arguments live ONLY on this interface declaration. Virtual default arguments
+    // resolve by the STATIC type at the call site and the compiler does not check that an
+    // override's defaults agree — duplicating them per-override lets a later edit to one
+    // silently change behaviour depending on which pointer type the caller holds. Callers
+    // invoking through a concrete class must pass every argument explicitly.
     virtual void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr block,
-        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
-        std::optional<bcos::ledger::Features> features) = 0;
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts = true,
+        std::optional<bcos::ledger::Features> features = std::nullopt,
+        std::optional<bcos::crypto::HashType> blockHashOverride = std::nullopt,
+        bool writeNonces = true) = 0;
 
     /**
      * @brief async store txs in block when tx pool verify
@@ -212,6 +219,17 @@ public:
     virtual task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber _blockNumber)
     {
         co_return bcos::ledger::Features{};  // Return an empty SystemConfigs object
+    }
+
+    /// Read ONE feature flag's enabled state at @p _blockNumber. The default implementation
+    /// derives it from fetchAllFeatures (correct but reads every feature key); production
+    /// Ledger overrides with a single SYS_CONFIG read (round-2 Finding E: the historical
+    /// state-read path needs exactly feature_l2_ethereum_compat, not a ~61-key scan).
+    virtual task::Task<bool> fetchFeature(
+        bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
+    {
+        auto features = co_await fetchAllFeatures(_blockNumber);
+        co_return features.get(_flag);
     }
 
     virtual bcos::storage::StorageInterface::Ptr getStateStorage()

@@ -20,7 +20,6 @@
 #include "GenesisFeatureFlagsHelper.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -32,7 +31,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
-#include <bcos-table/src/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>

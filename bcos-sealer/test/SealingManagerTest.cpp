@@ -12,15 +12,11 @@
 #include "bcos-sealer/SealerConfig.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/TransactionMetaData.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
-#include <atomic>
-#include <chrono>
-#include <thread>
 
 namespace bcos::test
 {

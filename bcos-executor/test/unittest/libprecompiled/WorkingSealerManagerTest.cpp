@@ -9,9 +9,8 @@
 #include "precompiled/common/VRFInfo.h"
 #include "precompiled/common/WorkingSealerManagerImpl.h"
 #include <bcos-framework/storage/Serialize.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <range/v3/algorithm/is_sorted.hpp>
+#include <boost/test/tools/old/interface.hpp>
 
 namespace bcos::test
 {

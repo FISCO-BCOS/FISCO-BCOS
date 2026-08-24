@@ -19,14 +19,10 @@
  */
 
 #include "AuthManagerPrecompiled.h"
-#include "../../vm/HostContext.h"
 #include "CommitteeBin.h"
 #include "ContractAuthMgrPrecompiled.h"
 #include "bcos-codec/scale/Scale.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/serialization/vector.hpp>
 
 using namespace bcos;

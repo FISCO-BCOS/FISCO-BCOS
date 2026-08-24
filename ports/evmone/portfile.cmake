@@ -37,9 +37,11 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/debug/lib/cmake/evmone"
 )
 
-# 4. Install evmc headers (evmone's build doesn't install them)
-file(INSTALL "${SOURCE_PATH}/evmc/include/evmc/"
-    DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmc")
+# 4. The vendored evmc headers are installed by the separate `evmc` port, not here. They are
+#    needed by bcos-framework, which is built even when FULLNODE=OFF and therefore without
+#    evmone; shipping them from this port made them unavailable to that configuration. Two ports
+#    installing the same files is rejected by vcpkg, so this port must not install them as well.
+#    evmone's own build is unaffected -- it compiles against the copy in its source tree.
 
 # 4a. Install evmone precompiles static library because evmone.a depends on it transitively.
 # Use platform-aware library name: .lib on Windows, .a on Unix.

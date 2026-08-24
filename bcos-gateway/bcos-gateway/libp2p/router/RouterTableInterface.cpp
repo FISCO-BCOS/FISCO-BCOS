@@ -1,5 +1,4 @@
 #include "RouterTableInterface.h"
-#include "../Common.h"
 
 std::string bcos::gateway::RouterTableEntryInterface::printDstNode() const
 {

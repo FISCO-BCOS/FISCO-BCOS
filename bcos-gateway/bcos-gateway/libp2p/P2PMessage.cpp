@@ -18,14 +18,11 @@
  * @date 2021-05-04
  */
 
-#include <range/v3/view/map.hpp>
-#include <range/v3/view/transform.hpp>
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-utilities/ZstdCompress.h"
-#include <boost/asio/detail/socket_ops.hpp>
 #include <utility>
 
 using namespace bcos;

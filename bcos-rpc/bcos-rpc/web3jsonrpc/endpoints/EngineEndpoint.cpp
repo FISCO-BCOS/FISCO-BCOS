@@ -23,7 +23,6 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -58,6 +57,14 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     auto const& capsArray = request[0u];
     for (auto const& cap : capsArray)
     {
+        // This is the FIRST Engine method a CL calls, and asString() throws
+        // Json::LogicError on an array/object element — which the RPC entry point turns
+        // into -32603 carrying boost's diagnostic string back to the caller.
+        if (!cap.isString())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                InvalidParams, "engine_exchangeCapabilities expects an array of method names"));
+        }
         remoteCaps.push_back(cap.asString());
     }
 
@@ -68,6 +75,28 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
         result.append(cap);
     }
     buildJsonContent(result, response);
+}
+
+void EngineEndpoint::buildUnimplementedVersionError(
+    std::string_view method, Json::Value& response) const
+{
+    // -38005 Unsupported fork for a method version this node does not implement at all
+    // (currently only forkchoiceUpdatedV4: the service layer's forkchoice window tops out
+    // at V3, see isForkchoiceVersionSupported). This is NOT a declaration that older
+    // versions are incompatible: every version that IS implemented stays served, so a
+    // pre-Karst CL — the v1 Engine API harness kept alive by unsafe_allow_v1_executor, or
+    // a stock Lodestar driving V1-V3 — keeps working.
+    //
+    // Built inline instead of through buildJsonError(request, ...) because a handler only
+    // ever receives the params array, never the request envelope: the JSON-RPC id is
+    // stamped onto the handler's response by the dispatcher
+    // (Web3JsonRpcImpl::handleRequest, `result["id"] = _request["id"]`), the same way it
+    // is for buildEngineNotAvailableError above and for every successful response.
+    Json::Value error(Json::objectValue);
+    error["code"] = EngineError::UnsupportedFork;
+    error["message"] = std::string(method) + " is not yet supported";
+    response["jsonrpc"] = "2.0";
+    response["error"] = std::move(error);
 }
 
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV1(
@@ -90,10 +119,8 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
 
 task::Task<void> EngineEndpoint::forkchoiceUpdatedV4(const Json::Value&, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_forkchoiceUpdatedV4 is not yet supported", response);
+    // Prague forkchoiceUpdated shape; not implemented (Karst builds payloads on V3).
+    buildUnimplementedVersionError("engine_forkchoiceUpdatedV4", response);
     co_return;
 }
 
@@ -135,13 +162,20 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
     co_await handleGetPayload(engine::ApiVersion::V3, request, response);
 }
 
-task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value&, Json::Value& response)
+task::Task<void> EngineEndpoint::getPayloadV4(const Json::Value& request, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_getPayloadV4 is not yet supported", response);
-    co_return;
+    // Isthmus getPayload — a pre-Karst version, and served like every other one. The whole
+    // stack below already handles V4: isGetPayloadVersionSupported spans V1-V5,
+    // isGetPayloadVersionCompatible has its own V4 window, handleGetPayload fills
+    // executionRequests for V4+, and combineGetPayloadResponse renders the V4 shape.
+    // Refusing it here while serving newPayloadV4 would be the same fork-narrowing this
+    // node no longer does.
+    co_await handleGetPayload(engine::ApiVersion::V4, request, response);
+}
+
+task::Task<void> EngineEndpoint::getPayloadV5(const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetPayload(engine::ApiVersion::V5, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleGetPayload(
@@ -154,9 +188,37 @@ task::Task<void> EngineEndpoint::handleGetPayload(
         co_return;
     }
 
+    if (request.size() < 1 || !request[0u].isString())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "engine_getPayload expects [payloadId]"));
+    }
     engine::PayloadID payloadId = request[0u].asString();
-    auto engineResult =
-        co_await engineService->getPayload(payloadId, static_cast<uint32_t>(version));
+    engine::GetPayloadResult engineResult;
+    try
+    {
+        engineResult =
+            co_await engineService->getPayload(payloadId, static_cast<uint32_t>(version));
+    }
+    catch (engine::UnknownPayload const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
+            "Unknown payload: no build process identified by the given payloadId"));
+    }
+    catch (engine::IncompatiblePayloadVersion const&)
+    {
+        // The build behind this payloadId is outside the requested method's version
+        // window: either a version mismatch between the forkchoiceUpdated that built it
+        // and the getPayload asking for it, or a re-query AFTER the payload was committed
+        // through newPayload (a commit rewrites the cache entry with the newPayload
+        // version — PayloadEntry::version, EngineServiceImpl.h — so it no longer matches
+        // getPayloadV5's V3-build window). The mapping is -38005 to match op-geth, whose
+        // getPayload helper answers engine.UnsupportedFork when the payloadId's encoded
+        // build version is outside the method's allowed set (eth/catalyst/api.go:531-533,
+        // GetPayloadV5 allowing only PayloadV3).
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
+            "Unsupported fork: payload was built by a different method version"));
+    }
     if (!engineResult)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnknownPayload,
@@ -183,13 +245,9 @@ task::Task<void> EngineEndpoint::newPayloadV3(const Json::Value& request, Json::
     co_await handleNewPayload(engine::ApiVersion::V3, request, response);
 }
 
-task::Task<void> EngineEndpoint::newPayloadV4(const Json::Value&, Json::Value& response)
+task::Task<void> EngineEndpoint::newPayloadV4(const Json::Value& request, Json::Value& response)
 {
-    // V4 not yet implemented (Prague fork)
-    Json::Value request;
-    buildJsonError(request, EngineError::UnsupportedFork,
-        "engine_newPayloadV4 is not yet supported", response);
-    co_return;
+    co_await handleNewPayload(engine::ApiVersion::V4, request, response);
 }
 
 task::Task<void> EngineEndpoint::handleNewPayload(

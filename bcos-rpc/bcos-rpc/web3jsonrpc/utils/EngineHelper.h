@@ -33,7 +33,22 @@ namespace bcos::rpc
 ///        Kept inline in the header because it is small and on hot paths.
 inline bcos::h256 parseH256(std::string_view hex)
 {
-    auto bytes = fromHex(hex);
+    bcos::bytes bytes;
+    try
+    {
+        bytes = fromHex(hex);
+    }
+    catch (bcos::BadHexCharacter const&)
+    {
+        // fromHex reports malformed input as BadHexCharacter (a bcos::Exception, not a
+        // bcos::Error): DataConvertUtility.h wraps the unhex call in catch(...) and
+        // rethrows it as that type. The RPC entry point would surface it as InternalError,
+        // but a client input error must map to InvalidParams instead. Caught by that exact
+        // type rather than std::exception so the one failure raised outside that funnel —
+        // the output buffer's reserve() — still propagates as the internal error it is.
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Expected hex string for h256 value"));
+    }
     if (bytes.size() != 32)
     {
         BOOST_THROW_EXCEPTION(
@@ -49,7 +64,17 @@ inline bcos::h256 parseH256(std::string_view hex)
 ///        Kept inline in the header because it is small and on hot paths.
 inline bcos::Address parseAddress(std::string_view hex)
 {
-    auto bytes = fromHex(hex);
+    bcos::bytes bytes;
+    try
+    {
+        bytes = fromHex(hex);
+    }
+    catch (bcos::BadHexCharacter const&)
+    {
+        // Same InvalidParams mapping as parseH256: malformed hex is a client error.
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Expected hex string for address value"));
+    }
     if (bytes.size() != 20)
     {
         BOOST_THROW_EXCEPTION(

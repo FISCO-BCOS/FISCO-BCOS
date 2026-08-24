@@ -29,7 +29,6 @@
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontServiceFactory.h>
-#include <bcos-tars-protocol/tars/LightNode.h>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 #include <utility>
 

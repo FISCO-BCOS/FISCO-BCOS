@@ -212,6 +212,9 @@ BOOST_AUTO_TEST_CASE(feature)
         // inserting it mid-list would move every feature_ flag's bit. This list mirrors
         // declaration order, so it follows the enum, not the other way round.
         "bugfix_nonce_ordering",
+        // feature_op_jovian = 60 (OP-Stack Jovian fork semantics), appended after the last
+        // feature_/bugfix_ per the mirror-declaration-order rule above.
+        "feature_op_jovian",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());

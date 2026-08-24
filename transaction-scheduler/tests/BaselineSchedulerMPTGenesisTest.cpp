@@ -27,13 +27,12 @@
 // feature_flags Entry slot Ledger's genesis verification requires in the
 // SystemConfig predeploy alloc (quoted include resolves relative to this file).
 #include "../../bcos-ledger/test/unittests/ledger/GenesisFeatureFlagsHelper.h"
-#include "bcos-ledger/mpt/Account.h"
 #include "bcos-ledger/mpt/Constants.h"
 #include "bcos-ledger/mpt/HashBuilder.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/algorithm/hex.hpp>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 namespace
 {
 using namespace bcos;

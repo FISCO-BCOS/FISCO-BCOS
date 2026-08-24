@@ -36,9 +36,10 @@ using namespace bcos::boostssl::context;
 
 void usage()
 {
-    std::cerr << "Usage: msg_codec_test payload_length\n"
+    std::cerr << "Usage: msg_codec_test payload_length [--fresh]\n"
               << "Example:\n"
-              << "    ./msg_codec_test 1024\n";
+              << "    ./msg_codec_test 1024\n"
+              << "    ./msg_codec_test 1024 --fresh   # new buffer per encode\n";
     std::exit(0);
 }
 
@@ -51,15 +52,40 @@ int main(int argc, char** argv)
     }
 
     uint16_t payloadLength = atoi(argv[1]);
+    // fresh-buffer mode matches the production send path (WsSession::asyncSendMessage
+    // allocates a brand-new buffer per send); the default warm-buffer mode reuses one
+    // buffer so steady-state hits retained capacity on both old and new encode.
+    bool freshBuffer = (argc > 2 && std::string(argv[2]) == "--fresh");
 
-    BCOS_LOG(INFO) << LOG_DESC("Msg Codec Test") << LOG_KV("payload length", payloadLength);
+    BCOS_LOG(INFO) << LOG_DESC("Msg Codec Test") << LOG_KV("payload length", payloadLength)
+                   << LOG_KV("fresh buffer", freshBuffer);
 
     std::string str(payloadLength, 'a');
-    auto messageFactory = std::make_shared<WsMessageFactory>();
     // construct message
-    auto msg = std::dynamic_pointer_cast<WsMessage>(messageFactory->buildMessage());
+    WsMessage msg;
+    msg.setPayload(bytes(str.begin(), str.end()));
 
-    msg->setPayload(bytes(str.begin(), str.end()));
+    // reference encode: every measured iteration must produce byte-identical output,
+    // so the benchmark doubles as a golden smoke check against silent regressions
+    bcos::bytes reference;
+    if (!msg.encode(reference))
+    {
+        BCOS_LOG(ERROR) << LOG_DESC("Msg Codec Test") << LOG_DESC("reference encode failed");
+        return EXIT_FAILURE;
+    }
+
+    // golden check: encode once into a fresh buffer and compare against the
+    // reference before timing, so the per-iteration byte comparison does not
+    // add O(payload) work inside the measured loop
+    {
+        bcos::bytes check;
+        if (!msg.encode(check) || check != reference)
+        {
+            BCOS_LOG(ERROR) << LOG_DESC("Msg Codec Test")
+                            << LOG_DESC("encode output mismatch with reference");
+            return EXIT_FAILURE;
+        }
+    }
 
     auto startPoint = std::chrono::high_resolution_clock::now();
     auto lastReport = std::chrono::high_resolution_clock::now();
@@ -67,7 +93,11 @@ int main(int argc, char** argv)
     auto buffer = std::make_shared<bcos::bytes>();
     while (true)
     {
-        msg->encode(*buffer);
+        if (freshBuffer)
+        {
+            buffer = std::make_shared<bcos::bytes>();
+        }
+        msg.encode(*buffer);
         lastEncodeC++;
 
         auto now = std::chrono::high_resolution_clock::now();

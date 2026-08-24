@@ -1,8 +1,6 @@
 #include "TxPoolServiceClient.h"
 
 #include <memory>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/transform.hpp>
 #include <utility>
 
 bcostars::TxPoolServiceClient::TxPoolServiceClient(bcostars::TxPoolServicePrx _proxy,

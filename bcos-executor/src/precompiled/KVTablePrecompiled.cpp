@@ -1,8 +1,3 @@
-#include <range/v3/algorithm/copy.hpp>
-#include <range/v3/algorithm/find.hpp>
-#include <range/v3/algorithm/result_types.hpp>
-#include <range/v3/range_fwd.hpp>
-#include <range/v3/view/drop.hpp>
 /**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -27,13 +22,7 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Exceptions.h"
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos;

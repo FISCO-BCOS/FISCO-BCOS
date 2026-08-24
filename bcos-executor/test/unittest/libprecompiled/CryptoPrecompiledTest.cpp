@@ -26,6 +26,7 @@
 #include "bcos-executor/src/executive/LedgerCache.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

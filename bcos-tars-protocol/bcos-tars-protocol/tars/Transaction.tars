@@ -54,5 +54,13 @@ module bcostars {
         11 optional vector<byte>    extraTransactionHash; // hash(rlp(10|3)); real transaction hash
         /// bcos::rpc::TransactionType (0=Legacy, 1=EIP2930, 2=EIP1559, 3=EIP4844); only when type==1 (Web3)
         12 optional byte            web3TypedTxKind;
+        /// deposit-only (0x7e) tx metadata (OP Stack); only when web3TypedTxKind==0x7e.
+        /// In the outer struct (not TransactionData) so BCOS tx hashes are unaffected.
+        /// WARNING: these mirrors are display-only and unauthenticated — the signature binds
+        /// only extraTransactionBytes; execution MUST re-derive sourceHash/mint/isSystemTx
+        /// from the envelope, never trust the tars mirrors from an untrusted peer.
+        13 optional string          sourceHash;          // deposit source hash(hex)
+        14 optional string          mint;                // deposit mint(hex string)
+        15 optional byte            isSystemTransaction; // bool flag
     };
 };

@@ -18,13 +18,8 @@
  * @date 2021-07-28
  */
 #pragma once
-#include "bcos-boostssl/websocket/Common.h"
-#include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <memory>
 #include <string>
 #include <utility>
@@ -33,45 +28,48 @@ void CHECK_OFFSET(uint64_t offset, uint64_t length);
 
 namespace bcos::boostssl::ws
 {
-// the message format for ws protocol
-class WsMessage : public boostssl::MessageFace
+// The message for ws protocol, two wire formats are supported:
+// - header mode(default): version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
+// - raw mode: payload(N) only, e.g. for web3 websocket connections.
+// The mode is fixed at construction and never changes during the message lifetime.
+class WsMessage
 {
 public:
     // version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
     const static size_t MESSAGE_MIN_LENGTH;
 
     using Ptr = std::shared_ptr<WsMessage>;
-    WsMessage();
+
+    explicit WsMessage(bool _raw = false);
     WsMessage(const WsMessage&) = delete;
     WsMessage& operator=(const WsMessage&) = delete;
-    WsMessage(WsMessage&&) = delete;
-    WsMessage& operator=(WsMessage&&) = delete;
-    ~WsMessage() override;
+    WsMessage(WsMessage&&) = default;
+    WsMessage& operator=(WsMessage&&) = default;
+    ~WsMessage();
 
+    bool raw() const { return m_raw; }
 
-    uint16_t version() const override;
-    void setVersion(uint16_t /*unused*/) override;
-    uint16_t packetType() const override;
-    void setPacketType(uint16_t _packetType) override;
+    uint16_t version() const;
+    void setVersion(uint16_t /*unused*/);
+    uint16_t packetType() const;
+    void setPacketType(uint16_t _packetType);
     int16_t status() const;
     void setStatus(int16_t _status);
-    std::string const& seq() const override;
-    void setSeq(std::string _seq) override;
-    bytesConstRef payload() const override;
-    void setPayload(bcos::bytes _payload) override;
-    uint16_t ext() const override;
-    void setExt(uint16_t _ext) override;
+    std::string const& seq() const;
+    void setSeq(std::string _seq);
+    bytesConstRef payload() const;
+    void setPayload(bcos::bytes _payload);
+    uint16_t ext() const;
+    void setExt(uint16_t _ext);
 
+    bool encode(bcos::bytes& _buffer) const;
+    int64_t decode(bytesConstRef _buffer);
 
-    bool encode(bcos::bytes& _buffer) override;
-    int64_t decode(bytesConstRef _buffer) override;
-
-    bool isRespPacket() const override;
-    void setRespPacket() override;
-
-    uint32_t length() const override;
+    bool isRespPacket() const;
+    void setRespPacket();
 
 private:
+    bool m_raw = false;
     uint16_t m_version = 0;
     uint16_t m_packetType = 0;
     std::string m_seq;
@@ -79,21 +77,9 @@ private:
     bcos::bytes m_payload;
 
     int16_t m_status = 0;
-    uint32_t m_length = 0;
 };
 
-class WsMessageFactory : public boostssl::MessageFaceFactory
-{
-public:
-    using Ptr = std::shared_ptr<WsMessageFactory>;
-    WsMessageFactory() = default;
-    WsMessageFactory(const WsMessageFactory&) = delete;
-    WsMessageFactory& operator=(const WsMessageFactory&) = delete;
-    WsMessageFactory(WsMessageFactory&&) = delete;
-    WsMessageFactory& operator=(WsMessageFactory&&) = delete;
-    ~WsMessageFactory() override = default;
-
-    boostssl::MessageFace::Ptr buildMessage() override;
-};
+// generate a 32-char hex seq string
+std::string newSeq();
 
 }  // namespace bcos::boostssl::ws

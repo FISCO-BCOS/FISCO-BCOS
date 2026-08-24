@@ -20,10 +20,8 @@
  */
 #include "TxValidator.h"
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
-#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"

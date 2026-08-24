@@ -1,13 +1,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
-#include "bcos-framework/txpool/Constant.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include "unittests/common/RPCFixture.h"
-#include <bcos-framework/protocol/Transaction.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 

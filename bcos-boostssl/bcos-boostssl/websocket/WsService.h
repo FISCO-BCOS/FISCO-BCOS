@@ -21,7 +21,6 @@
 
 #include "bcos-utilities/NewTimer.h"
 #include <bcos-boostssl/httpserver/HttpServer.h>
-#include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsConnector.h>
@@ -30,40 +29,35 @@
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/dispatch.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/thread/thread.hpp>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 namespace bcos::boostssl::ws
 {
 using WsSessions = std::vector<std::shared_ptr<WsSession>>;
-using MsgHandler =
-    std::function<void(std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<WsSession>)>;
+using MsgHandler = std::function<void(WsMessage, std::shared_ptr<WsSession>)>;
 using ConnectHandler = std::function<void(std::shared_ptr<WsSession>)>;
 using DisconnectHandler = std::function<void(std::shared_ptr<WsSession>)>;
-using HandshakeHandler = std::function<void(
-    bcos::Error::Ptr, std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<WsSession>)>;
 
 class WsService : public std::enable_shared_from_this<WsService>
 {
 public:
     using Ptr = std::shared_ptr<WsService>;
     explicit WsService();
-    virtual ~WsService();
+    ~WsService();
 
-    virtual void start();
-    virtual void stop();
-    virtual void reconnect();
-    virtual void reportConnectedNodes();
+    void start();
+    void stop();
+    void reconnect();
+    void reportConnectedNodes();
 
     std::shared_ptr<std::vector<std::shared_ptr<
         std::promise<std::tuple<boost::beast::error_code, std::string, std::string>>>>>
@@ -80,34 +74,28 @@ public:
     void removeSession(const std::string& _endPoint);
     WsSessions sessions();
 
-    virtual void onConnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
-    virtual void onDisconnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
+    void onConnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
+    void onDisconnect(bcos::Error::Ptr _error, std::shared_ptr<WsSession> _session);
 
-    virtual void onRecvMessage(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session);
+    void onRecvMessage(WsMessage _msg, std::shared_ptr<WsSession> _session);
 
-    virtual void asyncSendMessage(std::shared_ptr<boostssl::MessageFace> _msg,
+    void asyncSendMessage(const WsMessage& _msg, Options _options = Options(),
+        RespCallBack _respFunc = RespCallBack());
+    void asyncSendMessage(const WsSessions& _ss, const WsMessage& _msg,
         Options _options = Options(), RespCallBack _respFunc = RespCallBack());
-    virtual void asyncSendMessage(const WsSessions& _ss,
-        std::shared_ptr<boostssl::MessageFace> _msg, Options _options = Options(),
-        RespCallBack _respFunc = RespCallBack());
-    virtual void asyncSendMessage(const std::set<std::string>& _endPoints,
-        std::shared_ptr<boostssl::MessageFace> _msg, Options _options = Options(),
-        RespCallBack _respFunc = RespCallBack());
+    void asyncSendMessage(const std::set<std::string>& _endPoints, const WsMessage& _msg,
+        Options _options = Options(), RespCallBack _respFunc = RespCallBack());
 
-    virtual void asyncSendMessageByEndPoint(const std::string& _endPoint,
-        std::shared_ptr<boostssl::MessageFace> _msg, Options _options = Options(),
-        RespCallBack _respFunc = RespCallBack());
+    void asyncSendMessageByEndPoint(const std::string& _endPoint, const WsMessage& _msg,
+        Options _options = Options(), RespCallBack _respFunc = RespCallBack());
 
-    virtual void broadcastMessage(std::shared_ptr<boostssl::MessageFace> _msg);
-    virtual void broadcastMessage(
-        const WsSession::Ptrs& _ss, std::shared_ptr<boostssl::MessageFace> _msg);
+    void broadcastMessage(const WsMessage& _msg);
+    void broadcastMessage(const WsSession::Ptrs& _ss, const WsMessage& _msg);
 
-    std::shared_ptr<MessageFaceFactory> messageFactory();
-    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory);
+    // whether messages of this service use the raw wire format (fixed per service)
+    bool rawMessage() const noexcept { return m_rawMessage; }
+    void setRawMessage(bool _rawMessage) noexcept { m_rawMessage = _rawMessage; }
 
-    std::shared_ptr<WsSessionFactory> sessionFactory();
-    void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory);
     int32_t waitConnectFinishTimeout() const;
     void setWaitConnectFinishTimeout(int32_t _timeout);
 
@@ -130,15 +118,9 @@ public:
 
     bool registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler);
 
-    MsgHandler getMsgHandler(uint16_t _type);
-
-    bool eraseMsgHandler(uint16_t _msgType);
-
     void registerConnectHandler(ConnectHandler _connectHandler);
 
     void registerDisconnectHandler(DisconnectHandler _disconnectHandler);
-
-    void registerHandshakeHandler(HandshakeHandler _handshakeHandler);
 
     void setReconnectedPeers(EndPointsPtr _reconnectedPeers);
     EndPointsPtr reconnectedPeers() const;
@@ -148,8 +130,8 @@ private:
 
     int32_t m_waitConnectFinishTimeout = 30000;
 
-    // MessageFaceFactory
-    std::shared_ptr<MessageFaceFactory> m_messageFactory;
+    // raw wire format flag for all messages of this service
+    bool m_rawMessage = false;
     // listen host port
     std::string m_listenHost = "";
     uint16_t m_listenPort = 0;
@@ -176,7 +158,8 @@ private:
     mutable boost::shared_mutex x_mutex;
     // all active sessions
     std::unordered_map<std::string, std::shared_ptr<WsSession>> m_sessions;
-    // type => handler
+    // type => handler, sparse map indexed by packet type: registered types are not dense
+    // (e.g. WS_RAW_MESSAGE_TYPE(0xffff)), a flat array would waste memory on empty slots
     std::unordered_map<uint16_t, MsgHandler> m_msgType2Method;
     mutable SharedMutex x_msgTypeHandlers;
     // connected handlers, the handers will be called after ws protocol handshake
@@ -185,11 +168,6 @@ private:
     // disconnected handlers, the handers will be called when ws session
     // disconnected
     std::vector<DisconnectHandler> m_disconnectHandlers;
-    // handshake handlers, the handers will be called when ws session
-    // disconnected
-    std::vector<HandshakeHandler> m_handshakeHandlers;
-    // sessionFactory
-    WsSessionFactory::Ptr m_sessionFactory;
 
     IOServicePool::Ptr m_ioservicePool;
 

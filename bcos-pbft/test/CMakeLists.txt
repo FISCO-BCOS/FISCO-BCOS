@@ -41,6 +41,8 @@ disable_container_overflow_for_tests(
     FIB120_PBFTProposalDecodeBounds/decode_rejects_excessive_nodeList_FIB123
     FIB120_PBFTProposalDecodeBounds/decode_rejects_signatureList_larger_than_nodeList_FIB120
     FIB120_PBFTProposalDecodeBounds/decode_rejects_signatureList_smaller_than_nodeList_FIB120
+    FIB121ProofSurvivalTest/mutateAfterSetReflectedAtEncode
+    FIB121ProofSurvivalTest/proofSurvivesViewChangeEmbedding
     FIB122_PBFTProposalSubmessageOwnership/decode_then_decode_no_double_free
     FIB122_PBFTProposalSubmessageOwnership/decode_followed_by_proposal_access
     FIB124NewViewPrePrepareCrosscheckTest/testViewChangeFLowWithPrecommitProposals

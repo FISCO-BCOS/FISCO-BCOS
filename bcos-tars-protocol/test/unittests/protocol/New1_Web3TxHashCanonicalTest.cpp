@@ -29,7 +29,6 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>

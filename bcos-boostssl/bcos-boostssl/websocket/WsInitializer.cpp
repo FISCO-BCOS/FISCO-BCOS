@@ -18,7 +18,6 @@
  * @date 2021-09-29
  */
 #include <bcos-boostssl/context/ContextBuilder.h>
-#include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConfig.h>
@@ -38,16 +37,6 @@ using namespace bcos::boostssl::context;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
-std::shared_ptr<MessageFaceFactory> WsInitializer::messageFactory() const
-{
-    return m_messageFactory;
-}
-
-void WsInitializer::setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
-{
-    m_messageFactory = std::move(_messageFactory);
-}
-
 std::shared_ptr<WsConfig> WsInitializer::config() const
 {
     return m_config;
@@ -58,31 +47,9 @@ void WsInitializer::setConfig(std::shared_ptr<WsConfig> _config)
     m_config = std::move(_config);
 }
 
-std::shared_ptr<WsSessionFactory> WsInitializer::sessionFactory()
-{
-    return m_sessionFactory;
-}
-
-void WsInitializer::setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
-{
-    m_sessionFactory = std::move(_sessionFactory);
-}
-
 void WsInitializer::initWsService(WsService::Ptr _wsService)
 {
     std::shared_ptr<WsConfig> _config = m_config;
-
-    auto messageFactory = m_messageFactory;
-    if (!messageFactory)
-    {
-        messageFactory = std::make_shared<WsMessageFactory>();
-    }
-
-    auto sessionFactory = m_sessionFactory;
-    if (!sessionFactory)
-    {
-        sessionFactory = std::make_shared<WsSessionFactory>();
-    }
 
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
     if (!m_ioServicePool)
@@ -211,8 +178,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
 
     _wsService->setConfig(_config);
     _wsService->setConnector(connector);
-    _wsService->setMessageFactory(messageFactory);
-    _wsService->setSessionFactory(sessionFactory);
+    _wsService->setRawMessage(m_rawMessage);
 
     WEBSOCKET_INITIALIZER(INFO)
         << LOG_BADGE("initWsService") << LOG_DESC("initializer for websocket service")

@@ -38,35 +38,62 @@ using WsHandshakeSucHandler = std::function<void(bcos::boostssl::ws::WsSession::
 using BlockNotifierCallback = std::function<void(const std::string&, int64_t)>;
 using BlockNotifierCallbacks = std::vector<BlockNotifierCallback>;
 
-class Service : public bcos::boostssl::ws::WsService
+class Service : public std::enable_shared_from_this<Service>
 {
 public:
     using Ptr = std::shared_ptr<Service>;
     using ConstPtr = std::shared_ptr<const Service>;
     Service(bcos::group::GroupInfoCodec::Ptr _groupInfoCodec,
         bcos::group::GroupInfoFactory::Ptr _groupInfoFactory);
+    virtual ~Service() { stop(); }
 
-    // ---------------------overide begin------------------------------------
+    void start();
+    void stop();
 
-    void start() override;
-    void stop() override;
-
-    void onConnect(
-        bcos::Error::Ptr _error, std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
-
-    void onDisconnect(
-        bcos::Error::Ptr _error, std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
-
-    void onRecvMessage(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
-        std::shared_ptr<bcos::boostssl::ws::WsSession> _session) override;
-    // ---------------------overide end -------------------------------------
+    bcos::boostssl::ws::WsService::Ptr wsService() const { return m_wsService; }
 
     void waitForConnectionEstablish();
 
+    // register a message handler, messages received before the handshake with
+    // the node is complete are discarded with a warning log
+    bool registerMsgHandler(uint16_t _type, bcos::boostssl::ws::MsgHandler _msgHandler);
+
+    // ---------------------forward to the inner WsService begin--------------
+    void registerDisconnectHandler(bcos::boostssl::ws::DisconnectHandler _disconnectHandler)
+    {
+        m_wsService->registerDisconnectHandler(std::move(_disconnectHandler));
+    }
+
+    bcos::boostssl::ws::WsSessions sessions() { return m_wsService->sessions(); }
+
+    void asyncSendMessage(const bcos::boostssl::ws::WsMessage& _msg,
+        bcos::boostssl::ws::Options _options = bcos::boostssl::ws::Options(),
+        bcos::boostssl::ws::RespCallBack _respFunc = bcos::boostssl::ws::RespCallBack())
+    {
+        m_wsService->asyncSendMessage(_msg, _options, std::move(_respFunc));
+    }
+
+    void asyncSendMessageByEndPoint(const std::string& _endPoint,
+        const bcos::boostssl::ws::WsMessage& _msg,
+        bcos::boostssl::ws::Options _options = bcos::boostssl::ws::Options(),
+        bcos::boostssl::ws::RespCallBack _respFunc = bcos::boostssl::ws::RespCallBack())
+    {
+        m_wsService->asyncSendMessageByEndPoint(_endPoint, _msg, _options, std::move(_respFunc));
+    }
+
+    void broadcastMessage(const bcos::boostssl::ws::WsMessage& _msg)
+    {
+        m_wsService->broadcastMessage(_msg);
+    }
+
+    bcos::boostssl::ws::WsConfig::Ptr config() const noexcept { return m_wsService->config(); }
+
+    int32_t waitConnectFinishTimeout() const { return m_wsService->waitConnectFinishTimeout(); }
+    // ---------------------forward to the inner WsService end----------------
 
     // ---------------------send message begin-------------------------------
     virtual void asyncSendMessageByGroupAndNode(const std::string& _group, const std::string& _node,
-        std::shared_ptr<bcos::boostssl::MessageFace> _msg, bcos::boostssl::ws::Options _options,
+        const bcos::boostssl::ws::WsMessage& _msg, bcos::boostssl::ws::Options _options,
         bcos::boostssl::ws::RespCallBack _respFunc);
     // ---------------------oversend message begin----------------------------
 
@@ -154,6 +181,14 @@ public:
     }
 
 private:
+    // wire connect/disconnect handlers to the inner WsService, only once per
+    // start/stop cycle (WsService::stop() clears all registered handlers)
+    void wireEventHandlers();
+
+private:
+    bcos::boostssl::ws::WsService::Ptr m_wsService;
+    bool m_handlersWired = false;
+
     uint32_t m_wsHandshakeTimeout = 10000;  // 10s
     std::atomic<uint32_t> m_handshakeSucCount = 0;
     //

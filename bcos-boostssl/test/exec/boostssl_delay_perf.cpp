@@ -103,7 +103,7 @@ void workAsClient(
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-delay-perf-client");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);
@@ -112,10 +112,10 @@ void workAsClient(
 
 
     std::string strMsg(msgSize, 'a');
-    auto msg = wsService->messageFactory()->buildMessage();
-    msg->setPacketType(DELAY_PERF_MSGTYPE);
-    msg->setPayload(bytes(strMsg.begin(), strMsg.end()));
-    // msg->setSeq(wsService->messageFactory()->newSeq());
+    WsMessage msg;
+    msg.setPacketType(DELAY_PERF_MSGTYPE);
+    msg.setPayload(bytes(strMsg.begin(), strMsg.end()));
+    // msg.setSeq(newSeq());
 
     uint64_t nSucC = 0;
     uint64_t nFailedC = 0;
@@ -133,10 +133,10 @@ void workAsClient(
             std::cerr << "\t...process: " << ((double)i / echoC) * 100 << "%" << std::endl;
         }
 
-        msg->setSeq(wsService->messageFactory()->newSeq());
+        msg.setSeq(newSeq());
         wsService->asyncSendMessage(msg, Options(-1),
-            [&p, &nFailedC, &nSucC](Error::Ptr _error, std::shared_ptr<MessageFace> _msg,
-                std::shared_ptr<WsSession> _session) {
+            [&p, &nFailedC, &nSucC](
+                Error::Ptr _error, WsMessage _msg, std::shared_ptr<WsSession> _session) {
                 (void)_error;
                 (void)_session;
                 (void)_msg;
@@ -185,25 +185,23 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl)
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("boostssl-delay-perf-server");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
 
-    wsService->registerMsgHandler(DELAY_PERF_MSGTYPE,
-        [](std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession> _session) {
+    wsService->registerMsgHandler(
+        DELAY_PERF_MSGTYPE, [](WsMessage _msg, std::shared_ptr<WsSession> _session) {
             _session->asyncSendMessage(_msg);
         });
 
     wsService->start();
 
-    int i = 0;
     while (true)
     {
         // std::cerr << " boostssl deplay perf server working ..." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-        i++;
     }
 }
 

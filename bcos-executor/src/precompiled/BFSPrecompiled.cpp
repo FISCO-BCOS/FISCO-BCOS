@@ -29,8 +29,6 @@
 #include "bcos-tool/BfsFileFactory.h"
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
 #include <queue>
 

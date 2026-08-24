@@ -18,14 +18,12 @@
  * @date 2023/8/2
  */
 
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/key/KeyImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-tool/TreeTopology.h>
-#include <boost/test/unit_test.hpp>
 
+#include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::crypto;

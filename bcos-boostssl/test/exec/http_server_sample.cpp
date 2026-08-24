@@ -79,28 +79,28 @@ int main(int argc, char** argv)
         config->setContextConfig(contextConfig);
     }
 
-    auto wsService = std::make_shared<ws::WsService>("TEST");
+    auto wsService = std::make_shared<ws::WsService>();
     auto wsInitializer = std::make_shared<WsInitializer>();
 
     wsInitializer->setConfig(config);
     wsInitializer->initWsService(wsService);
 
     auto server = wsService->httpServer();
-    server->setHttpReqHandler([](const bcos::boostssl::http::HttpRequest& _req,
-                                  std::function<void(bcos::bytes, boost::beast::http::status)> _callback) {
-        BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_KV("request", _req.body())
-                       << LOG_KV("method", std::string(_req.method_string()))
-                       << LOG_KV("target", std::string(_req.target()));
-        _callback(bcos::bytes(_req.begin(), _req.end()), boost::beast::http::status::ok);
+    server->setHttpReqHandler(
+        [](const bcos::boostssl::http::HttpRequest& _req,
+            std::function<void(bcos::bytes, boost::beast::http::status)> _callback) {
+            BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_KV("request", _req.body())
+                           << LOG_KV("method", std::string(_req.method_string()))
+                           << LOG_KV("target", std::string(_req.target()));
+            _callback(bcos::bytes(_req.body().begin(), _req.body().end()),
+                boost::beast::http::status::ok);
         });
     wsService->start();
 
-    int i = 0;
     while (true)
     {
         BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ");
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-        i++;
     }
 
     return EXIT_SUCCESS;

@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <optional>
@@ -42,9 +43,17 @@ enum class ApiVersion : std::uint8_t
     V2 = 2,
     V3 = 3,
     V4 = 4,
+    V5 = 5,
 };
 
 using PayloadID = std::string;
+
+/// Engine API error conditions shared by the service implementation and the RPC
+/// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
+/// -38001, the two version mismatches -> -38005 Unsupported fork.
+DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
+DERIVE_BCOS_EXCEPTION(UnknownPayload);
+DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 
 struct WithdrawalV1
 {
@@ -130,6 +139,9 @@ struct ExecutionPayload
     u256 gasUsed = 0;
     u256 baseFeePerGas = 0;
     h256 blockHash;
+    /// Transaction envelopes: each `EngineTransaction::raw` carries the EIP-2718
+    /// encoded bytes (including the OP 0x7E deposit envelope). Single authoritative
+    /// carrier for both generic and OP engine paths.
     std::vector<EngineTransaction> transactions;
     bytes extraData;
     Address feeRecipient;
@@ -144,6 +156,10 @@ struct ExecutionPayload
     // Required by ExecutionPayloadV3/V4.
     std::optional<u256> blobGasUsed;
     std::optional<u256> excessBlobGas;
+
+    // Required by ExecutionPayloadV4.
+    std::optional<bytes> blockAccessList = std::nullopt;
+    std::optional<std::uint64_t> slotNumber = std::nullopt;
 
     // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
     // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value
@@ -188,19 +204,24 @@ struct ForkchoiceUpdatedResult
 
 struct GetPayloadData
 {
-    // Required by engine_getPayloadV1/V2/V3/V4/V6.
+    // Required by engine_getPayloadV1/V2/V3/V4/V5.
     ExecutionPayload executionPayload;
 
-    // Required by engine_getPayloadV2/V3/V4/V6.
+    // Required by engine_getPayloadV2/V3/V4/V5.
     u256 blockValue = 0;
 
-    // Required by engine_getPayloadV3/V4.
+    // Required by engine_getPayloadV3/V4/V5. getPayloadV5 answers the Osaka BlobsBundleV2
+    // (execution-apis osaka.md), which has the same three-array shape as V1 and differs
+    // only in that `proofs` carries cell proofs. OP L2 forbids blob transactions entirely,
+    // so all three arrays are always empty and BlobsBundleV1 covers both response shapes;
+    // a distinct V2 type would carry no distinct data.
     std::optional<BlobsBundleV1> blobsBundle;
 
-    // Required by engine_getPayloadV3/V4/V6.
+    // Required by engine_getPayloadV3/V4/V5.
     bool shouldOverrideBuilder = false;
 
-    // Required by engine_getPayloadV4/V6.
+    // Required by engine_getPayloadV4/V5. Karst carries no execution-layer requests, so
+    // getPayloadV5 responds with an empty array.
     std::optional<std::vector<bytes>> executionRequests;
 
     // OP Stack getPayload response extension: the beacon root the payload was built

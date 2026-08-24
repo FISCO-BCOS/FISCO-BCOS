@@ -19,10 +19,8 @@
  */
 #include "RouterTableImpl.h"
 #include "../Common.h"
-#include "../P2PSession.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-utilities/BoostLog.h"
-#include <boost/algorithm/string/join.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;

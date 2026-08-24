@@ -23,6 +23,12 @@ find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(TBB REQUIRED)
 
+# LedgerConfig.h includes <evmc/evmc.hpp> — evmone installs the evmc headers. Header-only usage:
+# the seven framework sources reference no evmone symbol, and linking evmone on a STATIC target
+# would land libevmone.a on every consumer's link line regardless of PUBLIC/PRIVATE — so no
+# evmone find_package/link at all; the include dirs propagate PUBLIC-ly from evmone's interface
+# (a generate-time genex; the target is created by the root's find_package(evmone) in FULLNODE
+# builds, which also creates blst via its config's find_dependency(blst) — later calls no-op).
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
     bcos-framework/ledger/L2ConfigLoader.cpp
@@ -33,6 +39,10 @@ set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/storage/Entry.cpp)
 
 add_library(bcos-framework STATIC ${BCOS_FRAMEWORK_SOURCES})
+if(FULLNODE)
+    target_include_directories(bcos-framework PUBLIC
+        $<TARGET_PROPERTY:evmone::evmone,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
 target_include_directories(bcos-framework PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)

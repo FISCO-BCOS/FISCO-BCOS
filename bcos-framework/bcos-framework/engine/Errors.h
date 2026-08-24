@@ -1,5 +1,5 @@
-/*
- *  Copyright (C) 2021 FISCO BCOS.
+/**
+ *  Copyright (C) 2024 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,12 +14,15 @@
  *  limitations under the License.
  */
 
-#include <bcos-boostssl/interfaces/MessageFace.h>
-#include <algorithm>
+#pragma once
 
-std::string bcos::boostssl::MessageFaceFactory::newSeq()
+#include <bcos-utilities/Exceptions.h>
+
+namespace bcos::engine
 {
-    std::string seq = boost::uuids::to_string(boost::uuids::random_generator()());
-    seq.erase(std::remove(seq.begin(), seq.end(), '-'), seq.end());
-    return seq;
-}
+/// JSON-RPC -32603 "Internal error": an OP block execution failure the error-classification table
+/// attributes to the storage layer rather than to the block. Must never be reported as INVALID --
+/// a storage fault is not a consensus verdict on the payload. Lives in bcos-framework (not the
+/// engine library) so opstack-executor can throw it without depending on bcos-engine.
+DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
+}  // namespace bcos::engine

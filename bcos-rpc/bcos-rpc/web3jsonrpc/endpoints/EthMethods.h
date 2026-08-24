@@ -40,6 +40,7 @@ enum class EthMethod
     engine_getPayloadV2,
     engine_getPayloadV3,
     engine_getPayloadV4,
+    engine_getPayloadV5,
     engine_newPayloadV1,
     engine_newPayloadV2,
     engine_newPayloadV3,
