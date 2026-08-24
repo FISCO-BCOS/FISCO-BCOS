@@ -40,16 +40,23 @@ namespace bcos::ledger
 using MerkleProof = std::vector<crypto::HashType>;
 
 /// Parse the web3 chain-id system-config string as u256. nullopt on a corrupted value (non
-/// numeric, empty, or an unparsed remainder) — the single shared parse for the three config
-/// consumers (TxValidator::validateChainId [lands with part 4b, PR #5477], EthEndpoint's
+/// numeric, empty, negative, or an unparsed remainder) — the single shared parse for the three
+/// config consumers (TxValidator::validateChainId [lands with part 4b, PR #5477], EthEndpoint's
 /// chainId gate, LedgerMethods::loadChainConfig [part 4b]) so width semantics and error
-/// behavior cannot drift. Note: boost::
+/// behavior cannot drift. Note: the envelope side (web3ChainIdFromEnvelope / Web3TxHandler
+/// decodes) is uint64-capped with the RLP width gate, so in practice chainIds > 2^64-1 are
+/// rejected at decode (fail-closed) — the u256 parse here exists so a misconfigured
+/// over-wide value never silently matches; real chains are far below the cap. Also note: boost::
 /// multiprecision's u256 stream-in ACCEPTS a negative sign and wraps modulo 2^256 (probe-
-/// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw) — fail-closed at the gates,
-/// which compare against the node's real chainId, so a wrapped value never matches and the
-/// affected config rejects every tx rather than accepting a wrong-chain one.
+/// verified: lexical_cast<u256>("-5") returns 2^256-5, no throw); a leading '-' is rejected
+/// explicitly here so a mistyped negative config surfaces as a clear per-config error instead
+/// of a wrapped value that fail-closes confusingly at every tx gate.
 [[nodiscard]] inline std::optional<u256> parseWeb3ChainId(std::string_view chainIdStr)
 {
+    if (!chainIdStr.empty() && chainIdStr[0] == '-') [[unlikely]]
+    {
+        return std::nullopt;
+    }
     try
     {
         return boost::lexical_cast<u256>(chainIdStr);
