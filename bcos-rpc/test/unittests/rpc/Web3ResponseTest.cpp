@@ -568,8 +568,103 @@ BOOST_AUTO_TEST_CASE(combineTxResponseBlob4844)
     combineTxResponse(
         result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12, bcos::crypto::HashType{});
 
-    BOOST_CHECK(result.isMember("blobVersionedHashes"));
-    BOOST_CHECK(result.isMember("maxFeePerBlobGas"));
+    // Length- and value-pinned: a reintroduced resize()+append() on blobVersionedHashes (the
+    // 2N-array bug class) or reverting maxFeePerBlobGas to decimal .str() fails these.
+    BOOST_REQUIRE(result.isMember("blobVersionedHashes"));
+    BOOST_REQUIRE_EQUAL(result["blobVersionedHashes"].size(), 1u);
+    BOOST_CHECK_EQUAL(result["blobVersionedHashes"][0].asString(),
+        "0xc6bdd1de713471bd6cfa62dd8b5a5b42969ed09e26212d3377f3f8426d8ec210");
+    BOOST_REQUIRE(result.isMember("maxFeePerBlobGas"));
+    BOOST_CHECK_EQUAL(result["maxFeePerBlobGas"].asString(), "0x3");
+}
+
+// Positive serialization test for the EIP-2930 accessList and EIP-7702 authorizationList
+// branches of combineTxResponse (TransactionResponse.cpp:82-148). A wrong key name or a
+// hex-prefix/quantity drift on either list would pass a coverage-by-absence test — these
+// assertions pin the exact output shape the write side (takeToTarsTransaction) mirrors.
+BOOST_AUTO_TEST_CASE(combineTxResponseAccessAndAuthLists)
+{
+    // EIP-2930: accessList {address, storageKeys} with hex-prefixed keys.
+    {
+        bcos::rpc::Web3Transaction web3Tx;
+        web3Tx.type = bcos::rpc::TransactionType::EIP2930;
+        web3Tx.chainId = 1;
+        web3Tx.nonce = 0;
+        web3Tx.maxPriorityFeePerGas = bcos::u256(1);
+        web3Tx.maxFeePerGas = bcos::u256(2);
+        web3Tx.gasLimit = 21000;
+        web3Tx.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+        web3Tx.value = bcos::u256(0);
+        web3Tx.accessList = {{bcos::Address("0xde0b295669a9fd93d5f28d9ec85e40f4cb697bae"),
+            {bcos::crypto::HashType(
+                "0x0000000000000000000000000000000000000000000000000000000000000003")}}};
+        web3Tx.signatureR = bcos::bytes(32, 0x11);
+        web3Tx.signatureS = bcos::bytes(32, 0x22);
+        web3Tx.signatureV = 0;
+
+        auto tarsTx = web3Tx.takeToTarsTransaction();
+        bcos::h256 arbitraryHash(
+            "0303030303030303030303030303030303030303030303030303030303030303");
+        tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+        bcostars::protocol::TransactionImpl txImpl(
+            [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+
+        Json::Value result = Json::objectValue;
+        combineTxResponse(
+            result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12, bcos::crypto::HashType{});
+
+        BOOST_REQUIRE(result.isMember("accessList"));
+        BOOST_REQUIRE(result["accessList"].isArray());
+        BOOST_REQUIRE_EQUAL(result["accessList"].size(), 1u);
+        BOOST_CHECK_EQUAL(result["accessList"][0]["address"].asString(),
+            "0xde0b295669a9fd93d5f28d9ec85e40f4cb697bae");
+        BOOST_REQUIRE(result["accessList"][0]["storageKeys"].isArray());
+        BOOST_REQUIRE_EQUAL(result["accessList"][0]["storageKeys"].size(), 1u);
+        BOOST_CHECK_EQUAL(result["accessList"][0]["storageKeys"][0].asString(),
+            "0x0000000000000000000000000000000000000000000000000000000000000003");
+    }
+
+    // EIP-7702: authorizationList {chainId, address, nonce, yParity, r, s} — hex-quantity
+    // scalars, hex-prefixed address.
+    {
+        bcos::rpc::Web3Transaction web3Tx;
+        web3Tx.type = bcos::rpc::TransactionType::EIP7702;
+        web3Tx.chainId = 1;
+        web3Tx.nonce = 0;
+        web3Tx.maxPriorityFeePerGas = bcos::u256(1);
+        web3Tx.maxFeePerGas = bcos::u256(2);
+        web3Tx.gasLimit = 21000;
+        web3Tx.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+        web3Tx.value = bcos::u256(0);
+        web3Tx.authorizationList = {
+            {bcos::u256(0x1234), bcos::Address("0xaaaa0000000000000000000000000000000000bb"),
+                /*nonce=*/7, /*yParity=*/1, bcos::u256(0x101), bcos::u256(0x202)}};
+        web3Tx.signatureR = bcos::bytes(32, 0x11);
+        web3Tx.signatureS = bcos::bytes(32, 0x22);
+        web3Tx.signatureV = 0;
+
+        auto tarsTx = web3Tx.takeToTarsTransaction();
+        bcos::h256 arbitraryHash(
+            "0404040404040404040404040404040404040404040404040404040404040404");
+        tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+        bcostars::protocol::TransactionImpl txImpl(
+            [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+
+        Json::Value result = Json::objectValue;
+        combineTxResponse(
+            result, txImpl, /*transactionIndex=*/3u, /*blockNumber=*/12, bcos::crypto::HashType{});
+
+        BOOST_REQUIRE(result.isMember("authorizationList"));
+        BOOST_REQUIRE(result["authorizationList"].isArray());
+        BOOST_REQUIRE_EQUAL(result["authorizationList"].size(), 1u);
+        auto const& auth = result["authorizationList"][0];
+        BOOST_CHECK_EQUAL(auth["chainId"].asString(), "0x1234");
+        BOOST_CHECK_EQUAL(auth["address"].asString(), "0xaaaa0000000000000000000000000000000000bb");
+        BOOST_CHECK_EQUAL(auth["nonce"].asString(), "0x7");
+        BOOST_CHECK_EQUAL(auth["yParity"].asString(), "0x1");
+        BOOST_CHECK_EQUAL(auth["r"].asString(), "0x101");
+        BOOST_CHECK_EQUAL(auth["s"].asString(), "0x202");
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

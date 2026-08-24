@@ -25,8 +25,9 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian (checkEip2Signature reuse, review #5429 S)
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian
 #include <limits>
+#include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <utility>
 
@@ -34,23 +35,29 @@ namespace bcos
 {
 namespace
 {
-// EIP-2 canonical-s guard. The secp256k1 group order n and its half. A signature with s > n/2 is
-// "malleable": flipping s -> n - s recovers the same sender and executes byte-for-byte
-// identically, so op-geth rejects it at both admission and block processing. Without this check a
-// mixed-deployment OP chain would silently fork.
-const u256 c_secp256k1n("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
-const u256 c_secp256k1nOver2 = c_secp256k1n / 2;
+// EIP-2 canonical-s guard: s > n/2 is "malleable" — flipping s -> n - s recovers the same
+// sender, so op-geth rejects it at both admission and block processing. Threshold shared via
+// Secp256k1Crypto.h (c_secp256k1n / c_secp256k1nOver2).
 
 /// Returns a decode error if r/s fall outside EIP-2's valid range (r,s in [1, n-1], s <= n/2),
 /// else nullptr. r/s are the raw 32-byte big-endian scalars (already zero-padded by the handler).
 bcos::Error::UniquePtr checkEip2Signature(
     bcos::bytes const& signatureR, bcos::bytes const& signatureS)
 {
+    // Width gate first: padSignature only zero-pads shorter input, and fromBigEndian truncates
+    // wider input — without this a 33-byte 0x00||r would pass the range check below on truncation,
+    // where op-geth rejects >256-bit scalars at RLP decode.
+    if (signatureR.size() > 32 || signatureS.size() > 32)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
+            "EIP-2: invalid signature (r/s wider than 32 bytes)");
+    }
     // r/s are raw 32-byte big-endian scalars — decode in place instead of round-tripping through a
     // "0x"+hex string + u256 parse (4 heap allocations per tx on the shared decode funnel).
     const u256 r = bcos::fromBigEndian<u256>(signatureR);
     const u256 s = bcos::fromBigEndian<u256>(signatureS);
-    if (r == 0 || r >= c_secp256k1n || s == 0 || s >= c_secp256k1n || s > c_secp256k1nOver2)
+    if (r == 0 || r >= bcos::crypto::c_secp256k1n || s == 0 || s >= bcos::crypto::c_secp256k1n ||
+        s > bcos::crypto::c_secp256k1nOver2)
     {
         return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
             "EIP-2: invalid signature (r/s out of [1,n-1], or s exceeds secp256k1n/2 — "
@@ -120,10 +127,10 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
             codec::rlp::DecodingError::InputTooLong, "Trailing bytes after RLP list");
     }
     // EIP-2: reject malleable (high-s) signatures at decode time. This member is the shared funnel
-    // for BOTH OP paths — eth_sendRawTransaction (EthEndpoint.cpp) and engine newPayload
-    // (opEnvelopeToTars) — so the check covers admission AND block processing, matching op-geth.
-    // Deposits (0x7e) are unsigned; the EIP-7702 authorization entries are gated separately
-    // (Eip7702Recover.h) and left untouched here.
+    // for BOTH OP paths — eth_sendRawTransaction (EthEndpoint.cpp) and engine newPayload (the
+    // decode path feeding block execution, part 5/5) — so the check covers admission AND block
+    // processing, matching op-geth. Deposits (0x7e) are unsigned; the EIP-7702 authorization
+    // entries are gated separately (Eip7702Recover.h) and left untouched here.
     if (err == nullptr && withSig && type != TransactionType::Deposit)
     {
         err = checkEip2Signature(signatureR, signatureS);
@@ -155,25 +162,23 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         tarsTx.sourceHash = sourceHash.hex();
         tarsTx.sender.assign(from.begin(), from.end());
         // 0x-prefixed, matching the read side u256(...) (parsed in TransactionImpl.cpp mint())
-        tarsTx.mint = "0x" + mint.str(0, std::ios_base::hex);
+        tarsTx.mint = bcos::toQuantity(mint);
         tarsTx.isSystemTransaction = isSystemTx ? 1 : 0;
-        // Full 0x7E envelope (encode()). extraTransactionHash is NOT filled here — the
-        // canonical txHash path (TransactionImpl::calculateHash) does not yet handle 0x7e;
-        // deposits are unsigned and rejected at eth_sendRawTransaction (see EthEndpoint.cpp).
+        // Full 0x7E envelope (encode()); extraTransactionHash = keccak of it verbatim so
+        // deposits are indexable by hash (eth_getTransactionByHash/Receipt) like any other tx.
         auto encoded = encode();
         tarsTx.extraTransactionBytes.reserve(encoded.size());
         ::ranges::move(encoded, std::back_inserter(tarsTx.extraTransactionBytes));
+        auto const hash = bcos::crypto::keccak256Hash(bcos::ref(encoded));
+        tarsTx.extraTransactionHash.assign(hash.begin(), hash.end());
         // Generic fields (so consumers on the tars generic read path don't see empty values)
         tarsTx.data.to = to.has_value() ? to->hexPrefixed() : "";
-        tarsTx.data.input.assign(data.begin(), data.end());
-        tarsTx.data.value = "0x" + value.str(0, std::ios_base::hex);
+        tarsTx.data.input.reserve(data.size());
+        ::ranges::move(data, std::back_inserter(tarsTx.data.input));
+        tarsTx.data.value = bcos::toQuantity(value);
         tarsTx.data.gasLimit = gasLimit;
         tarsTx.data.nonce = "0x0";  // deposit nonce is always 0
         tarsTx.data.chainID = "0";
-        // Raw EIP-2718 envelope as submitted (OP block building reuses it verbatim; empty when
-        // the tx entered via block derivation rather than eth_sendRawTransaction).
-        tarsTx.rawTransactionBytes.assign(
-            this->rawTransactionBytes.begin(), this->rawTransactionBytes.end());
         return tarsTx;
     }
     bcostars::Transaction tarsTx{};
@@ -269,11 +274,6 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     tarsTx.data.nonce = toQuantity(this->nonce);
     tarsTx.data.chainID = std::to_string(this->chainId.value_or(0));
 
-    // Raw EIP-2718 envelope as submitted (OP block building reuses it verbatim; empty when
-    // the tx entered via block derivation rather than eth_sendRawTransaction).
-    tarsTx.rawTransactionBytes.assign(
-        this->rawTransactionBytes.begin(), this->rawTransactionBytes.end());
-
     // dataHash and sender left empty — TxValidator::verify() computes them
     return tarsTx;
 }
@@ -311,6 +311,19 @@ std::string Web3Transaction::sender() const
 std::string Web3Transaction::toString() const noexcept
 {
     std::stringstream stringstream{};
+    // sender() runs EC recovery, which throws InvalidSignature when the (r,s) pair is not on
+    // the curve — legal input for a tx that only passed the range checks at decode. A display
+    // helper must not let that escape the noexcept border (std::terminate at the TRACE log
+    // call site in EthEndpoint).
+    std::string senderText;
+    try
+    {
+        senderText = this->sender();
+    }
+    catch (const std::exception&)
+    {
+        senderText = "unrecoverable";
+    }
     stringstream << " chainId: " << this->chainId.value_or(0) << " hash:" << this->txHash().hex()
                  << " type: " << static_cast<uint16_t>(this->type)
                  << " to: " << this->to.value_or(Address()).hex() << " data: " << toHex(this->data)
@@ -320,7 +333,7 @@ std::string Web3Transaction::toString() const noexcept
                  << " maxFeePerGas: " << this->maxFeePerGas
                  << " maxFeePerBlobGas: " << this->maxFeePerBlobGas
                  << " blobVersionedHashes: " << this->blobVersionedHashes
-                 << " sender: " << this->sender() << " signatureR: " << toHex(this->signatureR)
+                 << " sender: " << senderText << " signatureR: " << toHex(this->signatureR)
                  << " signatureS: " << toHex(this->signatureS)
                  << " signatureV: " << this->signatureV;
     return stringstream.str();
@@ -340,9 +353,10 @@ size_t length(Web3Transaction const& tx) noexcept
 void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
 {
     // Delegate to the handler. Move the returned vector into `out` to avoid a double allocation:
-    // the handler already reserves internally and returns a complete buffer; copying it into out
-    // would allocate a second time. Callers pass an empty `out` (the previous append semantics
-    // matched move for the empty case), so move-assign preserves compatibility.
+    // the handler returns a complete buffer; copying it into out would allocate a second time.
+    // (Each handler reserves the exact encoded size up front — header() already computes the
+    // payload length, so encode grows into a pre-sized buffer.)
+    // Callers always pass an empty `out`, so move-assign is safe.
     out = handlerFor(tx.type).encode(tx);
 }
 
@@ -369,30 +383,6 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
     if (auto e = decode(in, nonce); e != nullptr)
     {
         return e;
-    }
-    // EIP-7702 yParity width guard: op-geth decodes yParity as a Go uint8 — an encoding wider
-    // than one byte is a decode rejection (Go rlp ErrCanonSize), and a bare 0x00 is
-    // non-canonical (integer zero must be the empty item 0x80). The generic UnsignedIntegral
-    // decode folds wider payloads via fromBigEndian (silent truncation), which would accept two
-    // encodings of the same tx — a block-hash ambiguity / consensus split vs op-geth. The
-    // 0x81 xx (xx<0x80) single-byte non-canonical form is already rejected by decodeHeader.
-    // Mirrors op-alignment's decodeAuthYParityScalar (readCanonicalScalar width=1).
-    if (in.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooShort, "Input data is too short");
-    }
-    if (in[0] == 0x00)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::NonCanonicalSize,
-            "Non-canonical authorization yParity: bare 0x00 (zero must be the empty item 0x80)");
-    }
-    if (in[0] >= 0x82)
-    {
-        // covers short-string headers promising >=2 payload bytes, long-string headers, and
-        // list headers (the generic decode would reject lists anyway, but with the wrong class
-        // of acceptance for wide scalars).
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedLength, "Authorization yParity wider than one byte");
     }
     if (auto e = decode(in, out.yParity); e != nullptr)
     {

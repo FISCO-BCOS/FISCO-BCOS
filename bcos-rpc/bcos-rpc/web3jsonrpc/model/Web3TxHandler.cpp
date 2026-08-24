@@ -79,6 +79,9 @@ struct LegacyTxHandler : Web3TxHandler
             // EIP-155: chainId and the two trailing 0 placeholders
             head.payloadLength += codec::rlp::length(tx.chainId.value()) + 2;
         }
+        // header() already computed the exact payload size; reserve it so the incremental
+        // encode(out, ...) appends never reallocate (hot path: takeToTarsTransaction per tx).
+        out.reserve(codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.nonce);
         // for legacy tx, it means gas price
@@ -108,7 +111,9 @@ struct LegacyTxHandler : Web3TxHandler
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
-        codec::rlp::encodeHeader(out, header(tx));
+        auto head = header(tx);
+        out.reserve(codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.nonce);
         // for legacy tx, it means gas price
         codec::rlp::encode(out, tx.maxFeePerGas);
@@ -157,8 +162,11 @@ struct LegacyTxHandler : Web3TxHandler
         if (!head.isList)
         {
             return BCOS_ERROR_UNIQUE_PTR(
-                codec::rlp::DecodingError::UnexpectedList, "Unexpected list");
+                codec::rlp::DecodingError::UnexpectedList, "legacy tx: expected RLP list");
         }
+        // Fields must stay within the declared list payload (op-geth ListEnd parity).
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         out.type = TransactionType::Legacy;
         bcos::Error::UniquePtr decodeError = nullptr;
         if (decodeError = codec::rlp::decodeItems(in, out.nonce, out.maxPriorityFeePerGas);
@@ -241,51 +249,56 @@ struct LegacyTxHandler : Web3TxHandler
         }
         else
         {
-            // The bytes may arrive in either layout: the signing preimage's tail is
-            // (chainId, 0, 0) — the txpool stage stores encodeForSign output — while sealed
-            // OP blocks overwrite the field with the full wire envelope whose tail is
-            // (v, r, s) (buildOpBlock, for L1 pricing over the real envelope). RLP encodes
-            // the integer 0 as an empty payload and secp256k1 r/s are never zero, so an
-            // empty-empty trailer uniquely identifies the preimage; anything else is a wire
-            // envelope whose item 7 is the EIP-155 v.
             if (in.empty())
             {
-                out.chainId = std::nullopt;  // pre-EIP-155: 6 items, no trailer
+                // Pre-EIP-155 6-field signing preimage: no chainId tail at all.
+                out.chainId = std::nullopt;
             }
             else
             {
-                uint64_t item7 = 0;
-                bcos::bytes item8, item9;
-                if (decodeError = codec::rlp::decodeItems(in, item7, item8, item9);
+                // chainId is decoded as uint64 (narrower than EIP-155's u256) — the shared
+                // RLP UnsignedIntegral width gate (RLPDecode.h) rejects payloads >8 bytes, so
+                // chainIds >2^64-1 are rejected at decode rather than silently truncated. This
+                // narrower accept set covers all production chains; op-geth uses uint256.Int.
+                uint64_t chainId = 0;
+                decodeError = codec::rlp::decode(in, chainId);
+                if (decodeError != nullptr)
+                {
+                    return decodeError;
+                }
+                out.chainId.emplace(chainId);
+                // An EIP-155 signing preimage ends with (chainId, 0, 0): consume the two empty
+                // r/s placeholders. The tail must be exactly 2 items — a 7/8-field preimage
+                // (chainId without both placeholders) is malformed (op-geth preimages are 6 or 9
+                // fields), so there is no "placeholders optional" leniency.
+                bcos::bytes placeholderR;
+                bcos::bytes placeholderS;
+                if (decodeError = codec::rlp::decodeItems(in, placeholderR, placeholderS);
                     decodeError != nullptr)
                 {
                     return decodeError;
                 }
-                if (item8.empty() && item9.empty())
+                if (!placeholderR.empty() || !placeholderS.empty())
                 {
-                    out.chainId.emplace(item7);
+                    return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                        "legacy signing preimage: non-empty r/s placeholders in EIP-155 tail");
                 }
-                else if (item7 == 27 || item7 == 28)
-                {
-                    out.chainId = std::nullopt;  // pre-EIP-155 wire envelope
-                }
-                else if (item7 < 35)
-                {
-                    return BCOS_ERROR_UNIQUE_PTR(
-                        codec::rlp::DecodingError::InvalidVInSignature, "Invalid V in signature");
-                }
-                else
-                {
-                    out.chainId.emplace((item7 - 35) >> 1);  // EIP-155 wire envelope
-                }
-                // signatureV/R/S deliberately left unset: no-sig readers source the
-                // signature from the tars signature blob, which is authoritative.
             }
         }
         if (withSig)
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // ListEnd parity (op-geth List/ListEnd): fields must consume exactly the declared
+        // payload — over-consumption (fields crossing the boundary) AND under-consumption
+        // (trailing bytes inside the payload) are both rejected here (data() is null only
+        // after a failed decode).
+        if (in.data() != nullptr &&
+            in.data() - payloadStart != static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "legacy tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -313,8 +326,10 @@ struct EIP2930TxHandler : Web3TxHandler
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = headerTxBase(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP2930));
-        codec::rlp::encodeHeader(out, headerTxBase(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         // for EIP2930 it means gasPrice
@@ -339,8 +354,10 @@ struct EIP2930TxHandler : Web3TxHandler
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = header(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP2930));
-        codec::rlp::encodeHeader(out, header(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         // for EIP2930 it means gasPrice
@@ -401,6 +418,9 @@ struct EIP2930TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // Fields must stay within the declared list payload (op-geth ListEnd parity).
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -443,14 +463,8 @@ struct EIP2930TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig || !in.empty())
+        if (withSig)
         {
-            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig
-            // decode may meet them too: sealed OP blocks store the full envelope in
-            // extraTransactionBytes (buildOpBlock overwrite) while the txpool stage stores
-            // the signing preimage — consuming the optional trailer lets both layouts pass
-            // the dispatcher's trailing-bytes check. The consumed values are scratch for
-            // no-sig readers, which source the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
@@ -462,10 +476,24 @@ struct EIP2930TxHandler : Web3TxHandler
                     "typed tx y_parity must be 0 or 1");
             }
         }
+        // Return the first decode error before ListEnd parity — if decodeItems(v,r,s)
+        // failed, the cursor may be mid-field and ListEnd would report a misleading
+        // "fields exceed payload" instead of the real root cause.
+        if (decodeError != nullptr)
+        {
+            return decodeError;
+        }
         if (withSig)
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart != static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP2930 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -493,8 +521,10 @@ struct EIP1559TxHandler : Web3TxHandler
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = headerTxBase(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP1559));
-        codec::rlp::encodeHeader(out, headerTxBase(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         codec::rlp::encode(out, tx.maxPriorityFeePerGas);
@@ -520,8 +550,10 @@ struct EIP1559TxHandler : Web3TxHandler
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = header(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP1559));
-        codec::rlp::encodeHeader(out, header(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         codec::rlp::encode(out, tx.maxPriorityFeePerGas);
@@ -581,6 +613,9 @@ struct EIP1559TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // Fields must stay within the declared list payload (op-geth ListEnd parity).
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -625,14 +660,8 @@ struct EIP1559TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig || !in.empty())
+        if (withSig)
         {
-            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig
-            // decode may meet them too: sealed OP blocks store the full envelope in
-            // extraTransactionBytes (buildOpBlock overwrite) while the txpool stage stores
-            // the signing preimage — consuming the optional trailer lets both layouts pass
-            // the dispatcher's trailing-bytes check. The consumed values are scratch for
-            // no-sig readers, which source the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
@@ -644,10 +673,24 @@ struct EIP1559TxHandler : Web3TxHandler
                     "typed tx y_parity must be 0 or 1");
             }
         }
+        // Return the first decode error before ListEnd parity — if decodeItems(v,r,s)
+        // failed, the cursor may be mid-field and ListEnd would report a misleading
+        // "fields exceed payload" instead of the real root cause.
+        if (decodeError != nullptr)
+        {
+            return decodeError;
+        }
         if (withSig)
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart != static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP1559 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -734,6 +777,9 @@ struct DepositTxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "deposit: expected RLP list");
         }
+        // Fields must stay within the declared list payload (op-geth ListEnd parity).
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         // Check and propagate errors on every field decode (must not swallow silently)
         if (auto err = codec::rlp::decode(in, out.sourceHash); err != nullptr)
             return err;  // h256
@@ -757,6 +803,12 @@ struct DepositTxHandler : Web3TxHandler
                 return err;
             out.to.emplace(addr);
         }
+        // Width note: this layer is display-grade — mint/value/gas go through the shared RLP
+        // UnsignedIntegral width gate (RLPDecode.h: payloadLength > digits/8 → UnexpectedLength),
+        // so over-wide integers are REJECTED here too, matching the consensus path's accept set
+        // (no silent truncation). Only non-canonical prefixes (leading zeros / bare 0x00) remain
+        // display-layer-tolerant; the consensus path additionally rejects those via
+        // decodeDepositEnvelope (OpstackExecutor.h, integerPayloadLength canonicality checks).
         if (auto err = codec::rlp::decode(in, out.mint); err != nullptr)
             return err;  // u256
         if (auto err = codec::rlp::decode(in, out.value); err != nullptr)
@@ -768,7 +820,8 @@ struct DepositTxHandler : Web3TxHandler
         // string). Byte semantics are required: empty string 0x80 → false (op-geth RLP nil);
         // single byte 0x01 → true; anything else is an error.
         {
-            bcos::bytes raw{};
+            // Zero-copy view into the input (not bcos::bytes, which heap-allocates per decode).
+            bcos::bytesRef raw{};
             if (auto err = codec::rlp::decode(in, raw); err != nullptr)
                 return err;
             if (raw.empty())
@@ -788,6 +841,13 @@ struct DepositTxHandler : Web3TxHandler
         if (auto err = codec::rlp::decode(in, out.data); err != nullptr)
             return err;  // bytes
         out.nonce = 0;   // deposit nonce is always 0
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart != static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "deposit tx: fields exceed the declared RLP list payload length");
+        }
         return nullptr;
     }
 };
@@ -816,8 +876,10 @@ struct EIP4844TxHandler : Web3TxHandler
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = headerTxBase(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP4844));
-        codec::rlp::encodeHeader(out, headerTxBase(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         codec::rlp::encode(out, tx.maxPriorityFeePerGas);
@@ -845,8 +907,10 @@ struct EIP4844TxHandler : Web3TxHandler
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = header(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP4844));
-        codec::rlp::encodeHeader(out, header(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         codec::rlp::encode(out, tx.maxPriorityFeePerGas);
@@ -908,6 +972,9 @@ struct EIP4844TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // Fields must stay within the declared list payload (op-geth ListEnd parity).
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -958,14 +1025,8 @@ struct EIP4844TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig || !in.empty())
+        if (withSig)
         {
-            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig
-            // decode may meet them too: sealed OP blocks store the full envelope in
-            // extraTransactionBytes (buildOpBlock overwrite) while the txpool stage stores
-            // the signing preimage — consuming the optional trailer lets both layouts pass
-            // the dispatcher's trailing-bytes check. The consumed values are scratch for
-            // no-sig readers, which source the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
@@ -977,10 +1038,24 @@ struct EIP4844TxHandler : Web3TxHandler
                     "typed tx y_parity must be 0 or 1");
             }
         }
+        // Return the first decode error before ListEnd parity — if decodeItems(v,r,s)
+        // failed, the cursor may be mid-field and ListEnd would report a misleading
+        // "fields exceed payload" instead of the real root cause.
+        if (decodeError != nullptr)
+        {
+            return decodeError;
+        }
         if (withSig)
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart != static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP4844 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -1009,8 +1084,10 @@ struct EIP7702TxHandler : Web3TxHandler
     bcos::bytes encodeForSign(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = headerTxBase(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP7702));
-        codec::rlp::encodeHeader(out, headerTxBase(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         codec::rlp::encode(out, tx.maxPriorityFeePerGas);
@@ -1037,8 +1114,10 @@ struct EIP7702TxHandler : Web3TxHandler
     bcos::bytes encode(const Web3Transaction& tx) const override
     {
         bcos::bytes out;
+        auto head = header(tx);
+        out.reserve(1 + codec::rlp::lengthOfLength(head.payloadLength) + head.payloadLength);
         out.push_back(static_cast<bcos::byte>(TransactionType::EIP7702));
-        codec::rlp::encodeHeader(out, header(tx));
+        codec::rlp::encodeHeader(out, head);
         codec::rlp::encode(out, tx.chainId.value_or(0));
         codec::rlp::encode(out, tx.nonce);
         codec::rlp::encode(out, tx.maxPriorityFeePerGas);
@@ -1099,6 +1178,9 @@ struct EIP7702TxHandler : Web3TxHandler
             return BCOS_ERROR_UNIQUE_PTR(
                 codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
         }
+        // Fields must stay within the declared list payload (op-geth ListEnd parity).
+        bcos::byte* const payloadStart = in.data();
+        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         if (auto error = codec::rlp::decodeItems(in, chainId, out.nonce, out.maxPriorityFeePerGas);
             error != nullptr)
@@ -1148,14 +1230,8 @@ struct EIP7702TxHandler : Web3TxHandler
         }
 
         bcos::Error::UniquePtr decodeError = nullptr;
-        if (withSig || !in.empty())
+        if (withSig)
         {
-            // withSig decodes the wire envelope's trailing (yParity, r, s). The no-sig
-            // decode may meet them too: sealed OP blocks store the full envelope in
-            // extraTransactionBytes (buildOpBlock overwrite) while the txpool stage stores
-            // the signing preimage — consuming the optional trailer lets both layouts pass
-            // the dispatcher's trailing-bytes check. The consumed values are scratch for
-            // no-sig readers, which source the signature from the tars signature blob.
             decodeError =
                 codec::rlp::decodeItems(in, out.signatureV, out.signatureR, out.signatureS);
             // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
@@ -1167,10 +1243,24 @@ struct EIP7702TxHandler : Web3TxHandler
                     "typed tx y_parity must be 0 or 1");
             }
         }
+        // Return the first decode error before ListEnd parity — if decodeItems(v,r,s)
+        // failed, the cursor may be mid-field and ListEnd would report a misleading
+        // "fields exceed payload" instead of the real root cause.
+        if (decodeError != nullptr)
+        {
+            return decodeError;
+        }
         if (withSig)
         {
             // rehandle signature and chainId
             padSignature(out.signatureR, out.signatureS);
+        }
+        // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
+        if (in.data() != nullptr &&
+            in.data() - payloadStart != static_cast<std::ptrdiff_t>(payloadLength))
+        {
+            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnexpectedListElements,
+                "EIP7702 tx: fields exceed the declared RLP list payload length");
         }
         return decodeError;
     }
@@ -1199,13 +1289,16 @@ Web3TxHandler& handlerFor(TransactionType type)
         return deposit;
     case TransactionType::EIP7702:
         return eip7702;
+    default:
+        break;
     }
-    // Unknown TransactionType: this is a programming error — a new enum value was added
-    // without updating this switch. Return a no-op sentinel handler instead of falling back
-    // to Legacy (which would silently decode/encode as wrong transaction format producing
-    // garbage fields). encode/encodeForSign return empty bytes (fail-safe), and decode
-    // returns UnsupportedTransactionType error.
-    BCOS_LOG(FATAL) << "handlerFor: unhandled TransactionType " << static_cast<int>(type)
+    // Unknown TransactionType: a new enum value was added without updating this switch. Return a
+    // no-op sentinel handler instead of falling back to Legacy (which would silently decode/encode
+    // as the wrong format producing garbage fields); encode/encodeForSign return empty bytes
+    // (fail-safe) and decode returns UnsupportedTransactionType.
+    // ERROR, not FATAL: the fatal level makes the log sink call std::abort(), which would kill
+    // the process instead of degrading to the fail-safe sentinel below.
+    BCOS_LOG(ERROR) << "handlerFor: unhandled TransactionType " << static_cast<int>(type)
                     << " — update the switch to handle the new type";
     static struct : Web3TxHandler
     {

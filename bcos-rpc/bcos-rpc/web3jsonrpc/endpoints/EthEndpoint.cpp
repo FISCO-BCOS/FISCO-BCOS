@@ -40,6 +40,7 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>  // isTypedWeb3Envelope (envelope-sourced chainId gate)
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -49,6 +50,7 @@
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <array>
@@ -436,7 +438,7 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
-    // Round-2 Finding K: an empty state root (block 0 / empty blocks / pre-MPT blocks) is a
+    // An empty state root (block 0 / empty blocks / pre-MPT blocks) is a
     // legal "no accounts" root, not a missing node row — skip the root-presence check and let
     // MPTReadView (which handles emptyRootHash as "no accounts") plus the scenario flag decide
     // how absence reads: scenario B -> zero; scenario A -> honest dormant-account error.
@@ -971,9 +973,9 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto bytesRef = bcos::ref(rawTxBytes);
     // Authoritative first-byte dispatch (RawTransactionDispatch.h). FISCO's OP policy rejects
     // blob (type-3) at the gate — op-geth's decodeTyped accepts them, so this is a deliberate
-    // acceptance divergence, not a reference check (see the OpScheduler.h type-byte gate note).
-    // Deposits (0x7e) can only be injected by the consensus layer through the Engine API, never
-    // through the public transaction pool.
+    // acceptance divergence, not a reference check (see the blob-rejection note in
+    // RawTransactionDispatch.h). Deposits (0x7e) can only be injected by the consensus layer
+    // through the Engine API, never through the public transaction pool.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
@@ -990,13 +992,10 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
-    // Keep the exact submitted envelope bytes: OP block building (sequencer) must re-execute
-    // the transaction on the raw bytes the user signed, not a re-serialization from fields.
-    // decode() consumes bytesRef, so copy from the pre-decode buffer.
-    web3Tx.rawTransactionBytes = rawTxBytes;
-    // op-geth rejects Deposit (0x7e) from eth_sendRawTransaction
-    // (ErrTxTypeNotSupported); deposits only enter via the derivation/engine
-    // path, never from a client RPC submission.
+    // Defense-in-depth: the first-byte dispatch above already rejects 0x7e, and decode cannot
+    // produce type==Deposit from any other first byte. op-geth likewise rejects Deposit from
+    // eth_sendRawTransaction (ErrTxTypeNotSupported); deposits only enter via the
+    // derivation/engine path, never from a client RPC submission.
     if (web3Tx.type == TransactionType::Deposit) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
@@ -1043,14 +1042,32 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         if (auto chainIdConfig = co_await ledger::getSystemConfig(
                 *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID))
         {
-            auto [chainId, _] = chainIdConfig.value();
-            // Legacy txs carry an empty/"0" chainId and are exempt (matches
-            // TxValidator::validateChainId).
-            if (!tx->chainId().empty() && tx->chainId() != "0" && tx->chainId() != chainId)
+            auto [chainIdStr, _] = chainIdConfig.value();
+            // Validate against the SIGNED envelope like TxValidator::validateChainId: typed
+            // txs get no "0" exemption (op-geth modernSigner); only pre-EIP-155 legacy (no
+            // chainId in the envelope) is exempt — a deliberate divergence (geth/op-geth
+            // default rejects unprotected txs at the RPC layer; part 5 adds the config gate).
+            // Parse as u256 via the shared helper (ledger::parseWeb3ChainId); a corrupted
+            // config rejects the tx.
+            auto expected = ledger::parseWeb3ChainId(chainIdStr);
+            if (!expected.has_value())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+            auto const envelopeChainId = tx->web3ChainIdFromEnvelope();
+            if (envelopeChainId.has_value() && bcos::u256(*envelopeChainId) != *expected)
             {
                 WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
                                   << LOG_KV("txChainId", tx->chainId())
-                                  << LOG_KV("nodeChainId", chainId);
+                                  << LOG_KV("nodeChainId", chainIdStr);
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
+            }
+            // Same typed-envelope guard as TxValidator::validateChainId: a typed tx whose
+            // chainId field cannot be parsed (nullopt) gets no "0" exemption — a malformed
+            // typed envelope is rejected here rather than deferring to signature recovery.
+            if (!envelopeChainId.has_value() &&
+                bcos::rlp::protocol::isTypedWeb3Envelope(tx->extraTransactionBytes()))
+            {
                 BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
             }
         }

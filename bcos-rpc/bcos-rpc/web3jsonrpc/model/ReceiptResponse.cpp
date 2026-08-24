@@ -34,6 +34,9 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     auto blockNumber = receipt.blockNumber();
     result["blockNumber"] = toQuantity(blockNumber);
     auto from = toHex(tx.sender());
+    // EIP-55 checksum needs keccak256(address) per recipient; RPC read path (not consensus),
+    // so the 3-4 hashes per receipt are acceptable — caching here would need shared-state
+    // synchronization for a marginal win (see review Finding J).
     toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);
     if (tx.to().empty())
@@ -65,8 +68,6 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["logs"] = Json::arrayValue;
     auto* mutableReceipt = std::addressof(receipt);
     auto receiptLog = mutableReceipt->takeLogEntries();
-    Logs logs;
-    logs.reserve(receiptLog.size());
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
@@ -89,10 +90,6 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         log["transactionHash"] = txHashHex;
         log["removed"] = false;
         result["logs"].append(std::move(log));
-        rpc::Log logObj{.address = receiptLog[i].takeAddress(),
-            .topics = receiptLog[i].takeTopics(),
-            .data = receiptLog[i].takeData()};
-        logs.push_back(std::move(logObj));
     }
     result["logsBloom"] = toHexStringWithPrefix(receipt.logsBloom());
     // EIP-2718 tx type: for a Web3 tx the authoritative kind is the `web3TypedTxKind` tars slot,
@@ -106,7 +103,9 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     auto type = TransactionType::Legacy;
     if (tx.type() == bcos::protocol::TransactionType::Web3Transaction)
     {
-        type = static_cast<TransactionType>(tx.web3TypedTxKind());
+        // web3TypedTxKind is a display-grade mirror byte — value-domain check rather than a bare
+        // static_cast so a forged/unknown kind renders as Legacy instead of a garbage number.
+        type = magic_enum::enum_cast<TransactionType>(tx.web3TypedTxKind()).value_or(type);
     }
     result["type"] = toQuantity(static_cast<uint64_t>(type));
     // OP extension fields (aligned with op-geth MarshalReceipt). Empty opStackMeta → no output
