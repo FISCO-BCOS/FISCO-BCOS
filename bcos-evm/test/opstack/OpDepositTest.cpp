@@ -21,7 +21,7 @@ namespace
 {
 constexpr auto kFrom = 0x00000000000000000000000000000000000000cc_address;
 
-state::BlockInfo blk()
+state::BlockInfo blkDeposit()
 {
     state::BlockInfo b;
     b.number = 1;
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(SuccessMintsAndAdvancesNonce)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
     BOOST_CHECK_EQUAL(r->status(), 0);
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
     BOOST_CHECK_NE(r->status(), 0);
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(EntryFailureChargesFullGasLimitButKeepsMint)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
     BOOST_CHECK_EQUAL(r->status(), 1);
@@ -162,7 +162,7 @@ BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce)
         .data = initCode};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
     // 地址须由「执行前」nonce（5）派生，而非 host.call 内部已 bump 过的 6。
@@ -196,7 +196,7 @@ BOOST_AUTO_TEST_CASE(SystemTxIsBlockError)
         .data = {}};
     evmone::state::StateDiff diff;  // never written: is_system_tx throws before the out-param is
                                     // touched
-    BOOST_CHECK_THROW(runDeposit(ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000,
+    BOOST_CHECK_THROW(runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000,
                           kOpTestReceiptFactory, diff),
         std::runtime_error);
 }
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(RefundLowersDepositGasUsed)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21206);
 }
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(RefundIsCappedAtOneFifthOfGasUsed)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     constexpr int64_t kPreRefund = 41024;
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), kPreRefund - kPreRefund / 5);
@@ -283,7 +283,7 @@ BOOST_AUTO_TEST_CASE(DepositReceiptCarriesLogsBloom)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(r->logEntries().size(), 1u);
     // round-trip: recompute the bloom from the FISCO LogEntry back to evmone Logs and compare
     // with the bloom the receipt carries.
@@ -320,7 +320,7 @@ BOOST_AUTO_TEST_CASE(RevertedDepositHasEmptyLogsAndZeroBloom)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_NE(r->status(), 0);
     // 钉住"代码确实执行到 LOG 后再 REVERT"而非入口级失败：入口失败收满 gasLimit(100000)，
     // LOG 后 REVERT 的实际消耗远低于此（对照 EvmRevertKeepsMintAndChargesActualGas）。
@@ -358,7 +358,7 @@ BOOST_AUTO_TEST_CASE(DepositResolvesEip7702Delegation)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(ts.at(kEoa).storage.at(0x00_bytes32), 0x01_bytes32);
@@ -388,7 +388,7 @@ BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21000);
 }
@@ -415,7 +415,7 @@ BOOST_AUTO_TEST_CASE(DepositWarmsSenderPerEip2929)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21104);
 }
@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651)
         .storage = {},
         .code = evmc::from_hex("41315000").value()};  // COINBASE BALANCE POP STOP
     test::TestBlockHashes hashes;
-    auto b = blk();
+    auto b = blkDeposit();
     b.coinbase = 0x00000000000000000000000000000000000000c1_address;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
@@ -476,7 +476,7 @@ BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500)
             .is_system_tx = false,
             .data = {}};
         evmone::state::StateDiff diff;
-        const auto r = runDeposit(ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000,
+        const auto r = runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000,
             kOpTestReceiptFactory, diff);
         BOOST_CHECK_EQUAL(r->status(), 0);
         return receiptGasUsed(*r);
@@ -502,7 +502,7 @@ BOOST_AUTO_TEST_CASE(BridgeDepositSpendsMintedValue)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(ts.at(kTo).balance, intx::uint256{60});
@@ -529,7 +529,7 @@ BOOST_AUTO_TEST_CASE(ValueFundedByPreexistingBalanceWithoutMint)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(ts.at(kTo).balance, intx::uint256{60});
@@ -554,7 +554,7 @@ BOOST_AUTO_TEST_CASE(ValueFundedJointlyByBalanceAndMint)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(ts.at(kTo).balance, intx::uint256{60});
@@ -582,7 +582,7 @@ BOOST_AUTO_TEST_CASE(SenderWithCodeIsAllowed)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
 }
 
@@ -605,7 +605,7 @@ BOOST_AUTO_TEST_CASE(ValueOverPostMintBalanceFailsWithFullGasLimit)
         .data = {}};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 1);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 100000);
@@ -630,7 +630,7 @@ BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetIsBlockError)
         .is_system_tx = false,
         .data = {}};
     evmone::state::StateDiff diff;
-    BOOST_CHECK_THROW(runDeposit(ts, blk(), hashes, dep, isthmusConfig(), vm, 1234,
+    BOOST_CHECK_THROW(runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234,
                           /*blockGasLeft=*/50000, kOpTestReceiptFactory, diff),
         std::runtime_error);
 }
@@ -651,7 +651,7 @@ BOOST_AUTO_TEST_CASE(GasLimitExactlyBlockBudgetIsAccepted)
         .is_system_tx = false,
         .data = {}};
     evmone::state::StateDiff diff;
-    const auto r = runDeposit(ts, blk(), hashes, dep, isthmusConfig(), vm, 1234,
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234,
         /*blockGasLeft=*/60000, kOpTestReceiptFactory, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21000);
@@ -676,7 +676,7 @@ BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing)
         .data = evmc::from_hex("00").value()};
     evmone::state::StateDiff diff;
     const auto r = runDeposit(
-        ts, blk(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
+        ts, blkDeposit(), hashes, dep, isthmusConfig(), vm, 1234, 30000000, kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 1);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21000);  // 处理级失败收 gasLimit（此处恰 21000）

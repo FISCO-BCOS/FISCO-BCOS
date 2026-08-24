@@ -24,7 +24,7 @@ using intx::operator""_u256;
 
 namespace
 {
-constexpr auto kSender = 0x00000000000000000000000000000000000000aa_address;
+constexpr auto kSenderZeroDiff = 0x00000000000000000000000000000000000000aa_address;
 constexpr auto kDest = 0x00000000000000000000000000000000000000bb_address;
 constexpr auto kFunding = 340282366920938463463374607431768211456_u256;
 
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = kFunding, .storage = {}, .code = {}};
+    ts[kSenderZeroDiff] = {.nonce = 0, .balance = kFunding, .storage = {}, .code = {}};
     ts[kDest] = {};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
 
     state::Transaction tx;
     tx.type = state::Transaction::Type::eip1559;
-    tx.sender = kSender;
+    tx.sender = kSenderZeroDiff;
     tx.to = kDest;
     tx.gas_limit = 100000;
     tx.max_gas_price = 1000;
