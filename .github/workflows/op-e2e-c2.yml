@@ -74,19 +74,31 @@ jobs:
         run: |
           # Prefer a workflow.yml build of THIS ref — a pre-merge dispatch must
           # execute the branch's code, and master's binary predates the OP-stack
-          # work. On master itself (post-merge schedule/workflow_run) the first
-          # query already IS the master query; other refs fall through to master.
+          # work. Only the ubuntu-24.04 leg uploads this artifact, so the ref
+          # lookup is keyed on ARTIFACT EXISTENCE rather than whole-run success:
+          # requiring the full matrix (windows/macos legs) to conclude would
+          # needlessly delay — or, on a flaky non-ubuntu leg, permanently block —
+          # the download. On master itself the first query already is the master
+          # query; other refs fall through to the latest successful master build.
           RUN_ID=$(gh run list --workflow=workflow.yml \
-            --branch="$REF_NAME" --status=success --limit=1 \
+            --branch="$REF_NAME" --limit=1 \
             --json databaseId --jq '.[0].databaseId')
-          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful workflow.yml run on ref '$REF_NAME' — falling back to master"
+          ARTIFACT_READY=""
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            if gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" \
+              --jq '.artifacts[] | select(.name == "fisco-bcos-ubuntu-24-x86_64" and .expired == false) | .id' \
+              | grep -q .; then
+              ARTIFACT_READY=1
+            fi
+          fi
+          if [ -z "$ARTIFACT_READY" ]; then
+            echo "No usable artifact on ref '$REF_NAME' — falling back to master"
             RUN_ID=$(gh run list --workflow=workflow.yml --branch=master \
               --status=success --limit=1 --json databaseId \
               --jq '.[0].databaseId')
           fi
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "::error::No successful workflow.yml run found on '$REF_NAME' or master"
+            echo "::error::No workflow.yml build with a usable artifact on '$REF_NAME' or master"
             exit 1
           fi
           echo "Downloading from workflow.yml run $RUN_ID"
@@ -367,19 +379,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          # Same ref-first policy as c2-devnet: pre-merge dispatches must run
-          # the branch's binary; master's predates the OP-stack work.
+          # Same ref-first, artifact-existence policy as c2-devnet: pre-merge
+          # dispatches must run the branch's binary (master's predates the
+          # OP-stack work), and only the ubuntu-24.04 leg uploads this artifact,
+          # so whole-matrix success is neither necessary nor worth waiting for.
           RUN_ID=$(gh run list --workflow=workflow.yml \
-            --branch="$REF_NAME" --status=success --limit=1 \
+            --branch="$REF_NAME" --limit=1 \
             --json databaseId --jq '.[0].databaseId')
-          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful workflow.yml run on ref '$REF_NAME' — falling back to master"
+          ARTIFACT_READY=""
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            if gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" \
+              --jq '.artifacts[] | select(.name == "fisco-bcos-ubuntu-24-x86_64" and .expired == false) | .id' \
+              | grep -q .; then
+              ARTIFACT_READY=1
+            fi
+          fi
+          if [ -z "$ARTIFACT_READY" ]; then
+            echo "No usable artifact on ref '$REF_NAME' — falling back to master"
             RUN_ID=$(gh run list --workflow=workflow.yml --branch=master \
               --status=success --limit=1 --json databaseId \
               --jq '.[0].databaseId')
           fi
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "::error::No successful workflow.yml run found on '$REF_NAME' or master"
+            echo "::error::No workflow.yml build with a usable artifact on '$REF_NAME' or master"
             exit 1
           fi
           echo "Downloading from workflow.yml run $RUN_ID"
