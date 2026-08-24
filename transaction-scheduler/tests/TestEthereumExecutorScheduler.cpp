@@ -859,8 +859,8 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup throwingLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             throw std::runtime_error("simulated storage failure");
         };
-        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(throwingLookup), *tx, callParams, 1};
+        eth::EthereumHost<EEMutableStorage> host{
+            EVMC_SHANGHAI, vm, state, block, std::move(throwingLookup), *tx, callParams, 1};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -871,8 +871,8 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup zeroLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             return evmc::bytes32{};
         };
-        eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(zeroLookup), *tx, callParams, 1};
+        eth::EthereumHost<EEMutableStorage> host{
+            EVMC_SHANGHAI, vm, state, block, std::move(zeroLookup), *tx, callParams, 1};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -1215,14 +1215,16 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
 // op_engine_rpc, so this — not the v1 escape hatch the integration script drives — is the
 // configuration external CLs talk to.
 //
-// What it pins is a known defect, deliberately: buildPayload stamps withdrawalsRoot with a
-// zero PLACEHOLDER (EngineServiceImpl.h, TODO(C4 header fields)) instead of the
-// L2ToL1MessagePasser storage root, getPayloadV5 serves that zero, and newPayloadV4 accepts
-// it because validateExecutionPayload can only check presence. Nothing about the executor
-// version changes that — buildPayload has no executor-version branch. When C4 computes the
-// real root this test MUST fail and be rewritten to assert the computed value; until then it
-// keeps the gap visible instead of letting the v2 path look covered.
-BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
+// What it pins is the withdrawalsRoot a v2 node actually serves. Isthmus defines it as the
+// L2ToL1MessagePasser storage root; this fixture writes no slot for that predeploy, so the
+// answer must be the EMPTY TRIE root — NOT a zero h256, which is what buildPayload used to
+// stamp as a placeholder and which no Ethereum client would ever produce. The value-level
+// vectors (2-3 seeded slots against an offline reference) live one layer down in
+// AccountStorageRootSuite and in EngineServiceTest; what this case adds is that the same
+// value reaches the wire through the production assembly (real EthereumExecutor +
+// SchedulerSerialImpl, executor_version = 2) and survives the FCU V3 -> getPayloadV5 ->
+// newPayloadV4 round trip.
+BOOST_AUTO_TEST_CASE(engineServiceKarstServesEmptyWithdrawalsRoot)
 {
     task::syncWait([&, this]() -> task::Task<void> {
         auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEngineKarst");
@@ -1270,16 +1272,19 @@ BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
 
         auto payload = co_await engineService.getPayload(*fcResult.payloadId, 5);
         BOOST_REQUIRE(payload);
-        // The zero placeholder, served verbatim to the CL by a v2 node.
+        // The real value for an L2ToL1MessagePasser with no slots: the empty trie root.
         BOOST_REQUIRE(payload->executionPayload.withdrawalsRoot.has_value());
-        BOOST_CHECK_EQUAL(*payload->executionPayload.withdrawalsRoot, bcos::h256{});
+        BOOST_CHECK_EQUAL(
+            *payload->executionPayload.withdrawalsRoot, bcos::ledger::mpt::emptyRootHash());
+        BOOST_CHECK_NE(*payload->executionPayload.withdrawalsRoot, bcos::h256{});
 
         bcos::engine::NewPayloadRequest request;
         request.executionPayload = payload->executionPayload;
         request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
         request.executionRequests = std::vector<bcos::bytes>{};
         auto status = co_await engineService.newPayload(request, 4);
-        // Rubber-stamped: presence is all newPayloadV4 can check today.
+        // Accepted on presence alone: validateExecutionPayload still cannot re-derive a
+        // submitted payload's root, so an externally supplied withdrawalsRoot is unchecked.
         BOOST_CHECK_EQUAL(static_cast<int>(status.status),
             static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
     }());

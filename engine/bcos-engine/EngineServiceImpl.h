@@ -31,6 +31,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/AccountStorageRoot.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -59,6 +60,12 @@ namespace bcos::engine
 {
 // UnsupportedEngineApiVersion / UnknownPayload / IncompatiblePayloadVersion moved to
 // bcos-framework/engine/Types.h so the RPC endpoint can map them to Engine error codes.
+/// The L2ToL1MessagePasser predeploy. Isthmus defines the block header's withdrawalsRoot as
+/// this account's storage root; mirrors bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER, spelled
+/// out here because bcos-engine does not link bcos-evm.
+inline const bcos::Address c_l2ToL1MessagePasser{
+    std::string_view{"4200000000000000000000000000000000000016"}, bcos::Address::FromHex};
+
 DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
@@ -729,30 +736,10 @@ private:
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
-            // Isthmus payload shape (V4/V5, fed by forkchoiceUpdatedV3 on Karst): the
-            // field must be present so getPayloadV5 -> newPayloadV4 round-trips.
-            //
-            // TODO(C4 header fields): this is a zero PLACEHOLDER, not a computed value.
-            // On OP Stack withdrawalsRoot is the storage root of the L2ToL1MessagePasser
-            // predeploy and is what L1 withdrawal proofs are checked against, so until
-            // the real header wiring lands, validateExecutionPayload can only check that
-            // the field is present — never that its value is right, and a malicious CL
-            // submitting a zero root is indistinguishable from this node's own builds.
-            //
-            // This is a KNOWN UNCONTAINED gap, not a test-harness-only one. The
-            // [op_engine_rpc] guard in libinitializer/Initializer.cpp REQUIRES
-            // executor_version >= 2 (it throws for executor_version < 2 unless the
-            // test-only escape hatch unsafe_allow_v1_executor is set); it does not keep
-            // this code off a production endpoint. EngineServiceInitializer::build
-            // instantiates this same template for the v2 EthereumExecutor, so the
-            // intended production configuration — executor_version >= 2 with
-            // [op_engine_rpc] enabled — serves exactly this placeholder: FCU V3 stamps it
-            // here, getPayloadV5 serializes it, and newPayloadV4 accepts it on presence
-            // alone. Until C4 computes and verifies the real L2ToL1MessagePasser storage
-            // root, no L1 withdrawal proof may be taken against a root produced by this
-            // node. The v2 instantiation serving the zero root is pinned by
-            // TestEthereumExecutorScheduler/engineServiceKarstServesZeroWithdrawalsRoot,
-            // which has to be updated when the real value lands.
+            // Isthmus payload shape (V4/V5, fed by forkchoiceUpdatedV3 on Karst): the field
+            // must be present so getPayloadV5 -> newPayloadV4 round-trips. Presence is all
+            // that is decided here — fillWithdrawalsRoot() computes the value once the
+            // block's transactions have run, on either return path below.
             executionPayload.withdrawalsRoot = h256{};
         }
 
@@ -810,6 +797,7 @@ private:
             executionPayload.receiptsRoot = h256{};
             executionPayload.gasUsed = 0;
             executionPayload.blockHash = emptyHeader->hash();
+            co_await fillWithdrawalsRoot(executionPayload, view);
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
                 .header = std::move(emptyHeader),
                 .receipts = {}};
@@ -932,10 +920,28 @@ private:
         executionPayload.blockHash = blockHeader->hash();
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
         executionPayload.logsBloom = logsBloom;
+        co_await fillWithdrawalsRoot(executionPayload, view);
 
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(blockHeader),
             .receipts = std::move(receipts)};
+    }
+
+    /// Isthmus (OP Stack) withdrawalsRoot: the storage root of the L2ToL1MessagePasser
+    /// predeploy, which is what L1 withdrawal proofs are checked against (op-geth
+    /// params/protocol_params.go:31, block_validator.go:190-198). Runs after the block's
+    /// transactions so a withdrawal initiated in THIS block is already in the root; @p view
+    /// is the executed fork view, so committed slots and this block's writes are both seen.
+    ///
+    /// No-op for a payload whose shape has no such field (V1/V2 builds leave it nullopt),
+    /// which is what keeps this one call usable on both return paths of buildPayload.
+    task::Task<void> fillWithdrawalsRoot(ExecutionPayload& executionPayload, ViewType& view) const
+    {
+        if (executionPayload.withdrawalsRoot.has_value())
+        {
+            executionPayload.withdrawalsRoot =
+                co_await ledger::mpt::accountStorageRootFromFlat(view, c_l2ToL1MessagePasser);
+        }
     }
 
     /// Compute state root by iterating over storage and XOR-ing entry hashes.

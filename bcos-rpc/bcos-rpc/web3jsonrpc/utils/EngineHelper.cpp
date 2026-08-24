@@ -743,8 +743,9 @@ Json::Value bcos::rpc::serializeExecutionPayload(
     // V4+ only (Isthmus): a required field of the payload shape, never emitted in V1-V3.
     // Absence here is an internal invariant violation, not a client error: every payload
     // that can reach a V4+ serialization was either built locally (buildPayload sets the
-    // field for V3+ builds, currently to the documented zero placeholder — see
-    // EngineServiceImpl.h) or parsed from a V4 request (where the field is mandatory).
+    // field for V3+ builds, to the L2ToL1MessagePasser storage root — see
+    // EngineServiceImpl.h fillWithdrawalsRoot) or parsed from a V4 request (where the field
+    // is mandatory).
     // Fail loudly rather than emitting a zero root the CL would take for a real
     // L2ToL1MessagePasser storage root.
     if (version >= engine::ApiVersion::V4)
