@@ -19,11 +19,11 @@
 
 #pragma once
 
+#include "Errors.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <optional>
@@ -48,12 +48,7 @@ enum class ApiVersion : std::uint8_t
 
 using PayloadID = std::string;
 
-/// Engine API error conditions shared by the service implementation and the RPC
-/// endpoint layer, which maps them to Engine API error codes: UnknownPayload ->
-/// -38001, the two version mismatches -> -38005 Unsupported fork.
-DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
-DERIVE_BCOS_EXCEPTION(UnknownPayload);
-DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+// Exceptions moved to Errors.h — included above.
 
 struct WithdrawalV1
 {
@@ -160,6 +155,18 @@ struct ExecutionPayload
     // Required by ExecutionPayloadV4.
     std::optional<bytes> blockAccessList = std::nullopt;
     std::optional<std::uint64_t> slotNumber = std::nullopt;
+
+    /// OP-mode carrier fields (op-validator-loop design §4.2/§5.2). Both are optional and unread
+    /// by the generic (non-OP) engine path — zero behavioral change for existing callers.
+    /// - rawTransactions: the block's transactions as raw EIP-2718 envelope bytes (typed tx
+    ///   MarshalBinary() output, including the OP 0x7E deposit envelope). This is the OP path's
+    ///   only transaction carrier consumed by `bcos::evm::engine::OpSchedulerSeam::executeOpBlock`
+    ///   (via its `rawTxBytes` parameter) — `transactions` above (bcos::protocol::Transactions)
+    ///   is the generic-path carrier and is not populated/read on the OP path.
+    /// - withdrawalsRoot: OP Isthmus+ extends the payload with an explicit withdrawals-root field
+    ///   (= MessagePasser storage root) that cannot be derived from the (always-empty)
+    ///   `withdrawals` list above — op-geth's NewPayloadV4 requires it on OP chains (design §5.2).
+    std::optional<std::vector<bytes>> rawTransactions;
 
     // Required by ExecutionPayloadV4/V5 (OP Stack, Isthmus onwards): storage root of
     // the L2ToL1MessagePasser predeploy. May carry a placeholder until real-value

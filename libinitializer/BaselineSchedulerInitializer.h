@@ -44,9 +44,9 @@ public:
         std::shared_ptr<Executor> transactionExecutor, bool notifyTransactions = true)
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
-            Executor, SchedulerType, ledger::LedgerInterface>>(
-            storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
-            *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+            Executor, SchedulerType, ledger::LedgerInterface>>(storageInitializer->storage(),
+            *scheduler, *transactionExecutor, *blockFactory, *ledger, *txpool,
+            *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
         if (notifyTransactions)
         {
             baselineScheduler->registerTransactionNotifier(

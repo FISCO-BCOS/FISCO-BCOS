@@ -26,12 +26,19 @@ namespace bcos::engine
 /// engine library) so opstack-executor can throw it without depending on bcos-engine.
 DERIVE_BCOS_EXCEPTION(OpExecutionInternalError);
 
-// Engine API errors for EngineErrorMapper — forward reference: the mapper lands with
-// split C (#5521); until then only InvalidForkchoiceState has a throw site. Do not
-// redeclare Types.h's UnknownPayload / IncompatiblePayloadVersion. -38002 forkchoice,
-// -38005 unsupported fork, -38003 attributes.
+// Engine API exceptions (bcos-framework so RPC can map them without linking bcos-engine).
+DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
+DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
 DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
 DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+DERIVE_BCOS_EXCEPTION(UnknownPayload);
+DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+
+/// JSON-RPC -38005: Isthmus+ payloads require V4.
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
+
+/// JSON-RPC -38003: OP forkchoiceUpdated refused the payload attributes.
 DERIVE_BCOS_EXCEPTION(UnsupportedOpPayloadAttributes);
+
+DERIVE_BCOS_EXCEPTION(OpPayloadBuildingUnsupported);
 }  // namespace bcos::engine

@@ -15,8 +15,7 @@ namespace bcos::initializer
 using GlobalStateMutableStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
         bcos::executor_v1::StateValue,
-        bcos::storage2::memory_storage::ORDERED |
-            bcos::storage2::memory_storage::LOGICAL_DELETION>;
+        bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::LOGICAL_DELETION>;
 
 using GlobalStateCacheStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
@@ -28,17 +27,15 @@ using GlobalStateCheckpointStorage =
         bcos::executor_v1::StateValue, bcos::storage2::rocksdb::StateKeyResolver,
         bcos::storage2::rocksdb::StateValueResolver>;
 
-using GlobalStateStorage =
-    bcos::storage2::MultiLayerStorage<GlobalStateMutableStorage, GlobalStateCacheStorage,
-        GlobalStateCheckpointStorage>;
+using GlobalStateStorage = bcos::storage2::MultiLayerStorage<GlobalStateMutableStorage,
+    GlobalStateCacheStorage, GlobalStateCheckpointStorage>;
 
 class GlobalStateStorageInitializer
 {
 public:
     using Ptr = std::shared_ptr<GlobalStateStorageInitializer>;
 
-    explicit GlobalStateStorageInitializer(
-        std::string const& storageRootPath,
+    explicit GlobalStateStorageInitializer(std::string const& storageRootPath,
         bcos::storage2::rocksdb::RocksDBCheckpointOption const& rocksDBOption = {});
 
     static Ptr build(std::string const& storageRootPath,
