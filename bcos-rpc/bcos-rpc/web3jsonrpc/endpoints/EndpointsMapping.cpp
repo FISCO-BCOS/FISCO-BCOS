@@ -83,6 +83,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_mining)] = &Endpoints::mining;
     m_handlers[methodString(EthMethod::eth_hashrate)] = &Endpoints::hashrate;
     m_handlers[methodString(EthMethod::eth_gasPrice)] = &Endpoints::gasPrice;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     m_handlers[methodString(EthMethod::eth_accounts)] = &Endpoints::accounts;
     m_handlers[methodString(EthMethod::eth_blockNumber)] = &Endpoints::blockNumber;
     m_handlers[methodString(EthMethod::eth_getBalance)] = &Endpoints::getBalance;
@@ -116,6 +117,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    m_handlers[methodString(EthMethod::miner_setMaxDASize)] = &Endpoints::setMaxDASize;
     // clang-format on
 }
 
