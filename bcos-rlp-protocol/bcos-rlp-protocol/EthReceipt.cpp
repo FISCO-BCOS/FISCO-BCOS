@@ -183,12 +183,15 @@ EthReceiptData toEthReceiptData(TransactionReceipt const& receipt, uint8_t txTyp
         (receipt.status() == static_cast<int32_t>(protocol::TransactionStatus::None)) ? 1 : 0;
     // cumulativeGasUsed may be empty on legacy receipts / older executor versions;
     // fail closed to 0 and surface the anomaly rather than throwing an uncaught
-    // bad_lexical_cast from the receiptsRoot computation path.
+    // bad_lexical_cast from the receiptsRoot computation path. The empty case is a
+    // property of the data (a whole block of legacy receipts would otherwise log one
+    // WARNING per receipt, i.e. a per-block flood), so it is traced at TRACE level;
+    // a non-numeric value is a genuine data fault and stays at WARNING.
     auto const cumStr = std::string(receipt.cumulativeGasUsed());
     if (cumStr.empty())
     {
         eth.cumulativeGasUsed = 0;
-        BCOS_LOG(WARNING) << "toEthReceiptData: empty cumulativeGasUsed";
+        BCOS_LOG(TRACE) << "toEthReceiptData: empty cumulativeGasUsed";
     }
     else
     {

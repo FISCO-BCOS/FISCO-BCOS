@@ -16,6 +16,13 @@
  * @file EthReceipt.h
  * @brief Ethereum transaction-receipt RLP codec (EIP-2718 typed + legacy status/postState)
  * @date 2026/8/18
+ *
+ * NOTE on eth/69 (EIP-7642): the RECEIPTS MESSAGE (GetReceipts/Receipts, eth codes
+ * 0x0f/0x10) was redefined in eth/69 to [request-id, lastBlockIncomplete, [[receipt, ...], ...]]
+ * with the bloom filter removed. This codec produces the receipt encoding used INSIDE
+ * blocks and the receipts trie (status/type + bloom + logs) — that form is unchanged
+ * and correct for those uses. When the devp2p layer wires GetReceipts/Receipts for an
+ * eth/69 peer, it must build the eth/69 MESSAGE format around this per-receipt encoding.
  */
 #pragma once
 

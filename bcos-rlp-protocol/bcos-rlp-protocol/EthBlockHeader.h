@@ -54,9 +54,10 @@ struct EthBlockHeaderData
     bcos::Address coinbase;
     bcos::h64 nonce;
     int64_t number{0};
-    // Always MILLISECONDS — mirrors the internal BlockHeader domain for every version.
-    // The RLP surface always carries seconds; rlpEncode (/1000) and rlpDecode (×1000)
-    // convert unconditionally at that bridge.
+    // WIRE seconds (the domain of the EthBlockHeaderData codec, of EthBlockBody and of the
+    // devp2p sync layer). EthBlockHeader::m_data mirrors the internal BlockHeader and is
+    // MILLISECONDS instead — that ms↔s conversion happens ONLY at the EthBlockHeader
+    // rlpEncode/rlpDecode bridge (/1000 on encode, ×1000 on decode), never in the codec.
     int64_t timestamp{0};
 
     // Optional fields (16–23)
